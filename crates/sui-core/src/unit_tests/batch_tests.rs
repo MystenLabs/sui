@@ -350,9 +350,8 @@ async fn test_batch_manager_drop_out_of_order() {
             .run_batch_service_once(4, Duration::from_millis(10000))
             .await
     });
-    // Send transactions out of order
-    let mut rx = authority_state.subscribe_batch();
 
+    // Send transactions out of order
     let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
     let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
     let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
@@ -366,7 +365,8 @@ async fn test_batch_manager_drop_out_of_order() {
     t2.notify();
 
     // Give a chance to send signals
-    tokio::task::yield_now().await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+    let mut rx = authority_state.subscribe_batch();
     // Still nothing has arrived out of order
     assert_eq!(rx.len(), 0);
 
@@ -374,23 +374,33 @@ async fn test_batch_manager_drop_out_of_order() {
     t0.notify();
 
     // Get transactions in order then batch.
-    assert!(matches!(
-        rx.recv().await.unwrap(),
-        UpdateItem::Transaction((0, _))
-    ));
+    let tx0 = rx.recv().await.expect("expect tx0");
+    assert!(
+        matches!(tx0, UpdateItem::Transaction((0, _))),
+        "expect tx 0, got: {:?}",
+        tx0
+    );
 
-    assert!(matches!(
-        rx.recv().await.unwrap(),
-        UpdateItem::Transaction((1, _))
-    ));
-    assert!(matches!(
-        rx.recv().await.unwrap(),
-        UpdateItem::Transaction((2, _))
-    ));
-    assert!(matches!(
-        rx.recv().await.unwrap(),
-        UpdateItem::Transaction((3, _))
-    ));
+    let tx1 = rx.recv().await.expect("expect tx1");
+    assert!(
+        matches!(tx1, UpdateItem::Transaction((1, _))),
+        "expect tx 1, got: {:?}",
+        tx1
+    );
+
+    let tx2 = rx.recv().await.expect("expect tx2");
+    assert!(
+        matches!(tx2, UpdateItem::Transaction((2, _))),
+        "expect tx 2, got: {:?}",
+        tx2
+    );
+
+    let tx3 = rx.recv().await.expect("expect tx3");
+    assert!(
+        matches!(tx3, UpdateItem::Transaction((3, _))),
+        "expect tx 3, got: {:?}",
+        tx3
+    );
 
     // Then we (eventually) get a batch
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));

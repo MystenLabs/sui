@@ -162,13 +162,14 @@ pub struct AuthorityMetrics {
     handle_consensus_duration_mcs: IntCounter,
     verify_narwhal_transaction_duration_mcs: IntCounter,
 
-    pub follower_items_streamed: IntCounter,
-    pub follower_items_loaded: IntCounter,
+    pub follower_extra_txes_streamed: IntCounter,
+    pub follower_txes_streamed: IntCounter,
+    pub follower_batches_streamed: IntCounter,
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
     pub follower_start_seq_num: Histogram,
+    pub follower_handle_batch_streaming_time_spent: Histogram,
 
-    // TODO: consolidate these into GossipMetrics
     // (issue: https://github.com/MystenLabs/sui/issues/3926)
     pub gossip_queued_count: IntCounter,
     pub gossip_sync_count: IntCounter,
@@ -198,7 +199,8 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 15., 20., 25., 30.,
+    45., 60., 90.,
 ];
 
 impl AuthorityMetrics {
@@ -325,15 +327,21 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            follower_items_streamed: register_int_counter_with_registry!(
-                "follower_items_streamed",
-                "Number of transactions/signed batches streamed to followers",
+            follower_extra_txes_streamed: register_int_counter_with_registry!(
+                "follower_extra_txes_streamed",
+                "Number of extra transactions streamed in the beginning of a batch",
                 registry,
             )
             .unwrap(),
-            follower_items_loaded: register_int_counter_with_registry!(
-                "follower_items_loaded",
-                "Number of transactions/signed batches loaded from db to be streamed to followers",
+            follower_txes_streamed: register_int_counter_with_registry!(
+                "follower_txes_streamed",
+                "Number of transactions streamed to followers",
+                registry,
+            )
+            .unwrap(),
+            follower_batches_streamed: register_int_counter_with_registry!(
+                "follower_batches_streamed",
+                "Number of signed batches streamed to followers",
                 registry,
             )
             .unwrap(),
@@ -353,6 +361,13 @@ impl AuthorityMetrics {
                 "follower_start_seq_num",
                 "The start seq number this validator receives from fullnodes node_sync/follower process",
                 follower_seq_num_buckets,
+                registry,
+            )
+            .unwrap(),
+            follower_handle_batch_streaming_time_spent: register_histogram_with_registry!(
+                "follower_handle_batch_streaming_time_spent",
+                "Time spent in handle_batch_streaming, in sec",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

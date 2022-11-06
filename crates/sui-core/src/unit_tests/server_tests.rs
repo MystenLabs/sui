@@ -11,7 +11,7 @@ use crate::{
     safe_client::SafeClientMetrics,
 };
 use futures::StreamExt;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use sui_types::{
     base_types::{dbg_addr, dbg_object_id, ExecutionDigests},
     batch::UpdateItem,
@@ -161,43 +161,42 @@ async fn test_subscription() {
 
     println!("TEST2: Sending realtime.");
 
-    let req = BatchInfoRequest {
-        start: Some(101),
-        length: 11,
-    };
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    let mut resp = client.handle_batch_stream(req).await.unwrap();
-
     println!("TEST2: Send request.");
 
-    let mut num_batches = 0;
-    let mut num_transactions = 0;
-
-    while let Some(data) = resp.next().await {
-        let item = data.unwrap();
-        match item {
-            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                num_batches += 1;
-                if signed_batch.data().next_sequence_number >= 112 {
-                    break;
+    let mut unique_batches = HashSet::new();
+    let mut unique_txes = HashSet::new();
+    let mut latest_seq = 101;
+    loop {
+        let req = BatchInfoRequest {
+            start: Some(latest_seq),
+            length: 11,
+        };
+        println!("Request {:?}", req);
+        let mut resp = client.handle_batch_stream(req).await.unwrap();
+        while let Some(data) = resp.next().await {
+            let item = data.unwrap();
+            match item {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    unique_batches.insert(signed_batch.data().transactions_digest);
+                    if signed_batch.data().next_sequence_number >= 112 {
+                        break;
+                    }
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                    println!("Received {seq}");
+                    unique_txes.insert(seq);
+                    latest_seq = seq;
                 }
             }
-            BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                println!("Received {seq}");
-                num_transactions += 1;
-            }
         }
+        if latest_seq >= 119 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
-    assert_eq!(3, num_batches);
-
-    // On Linux, this is 20 because the batch forms continuously from 100 to 109,
-    // and then from 110 to 119.
-    // while On Mac, this is 15 because the batch stops at 105, and then restarts
-    // from 106 to 114.
-    // TODO: Figure out why.
-    assert!(num_transactions == 15 || num_transactions == 20);
+    assert_eq!(3, unique_batches.len());
+    assert_eq!(20, unique_txes.len());
 
     _handle2.await.expect("Finished sending");
     println!("TEST2: Finished.");
@@ -232,9 +231,8 @@ async fn test_subscription() {
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
-        println!("Send item {i}");
+        println!("Send item {i}, seq: {}", &ticket.seq());
         i += 1;
-        tokio::time::sleep(Duration::from_millis(17)).await;
 
         // Then we wait to receive
         if let Some(data) = resp.next().await {
@@ -251,6 +249,8 @@ async fn test_subscription() {
                     num_transactions += 1;
                 }
             }
+        } else {
+            println!("stream is closed");
         }
         ticket.notify();
     }
@@ -299,7 +299,7 @@ async fn test_subscription_safe_client() {
         .await
         .expect("Problem launching subsystem.");
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
@@ -383,6 +383,8 @@ async fn test_subscription_safe_client() {
         length: 11,
     };
 
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
     let mut stream1 = _master_safe_client
         .handle_batch_stream(req)
         .await
@@ -455,6 +457,7 @@ async fn test_subscription_safe_client() {
     }
 
     // Then we wait to receive
+    tokio::time::sleep(Duration::from_millis(2000)).await;
     while let Some(data) = stream1.next().await {
         match data.expect("Bad response") {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {

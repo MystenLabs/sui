@@ -74,6 +74,8 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
 
                     Some(Err( err )) => panic!("{}", err),
                     None => {
+                        // Give time to let validators make new batches
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                         info!(?max_seq, "Restarting Batch");
                         stream = Box::pin(
                                 state

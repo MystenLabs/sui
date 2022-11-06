@@ -11,6 +11,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
+use crate::authority::AuthorityMetrics;
 use crate::authority::AuthorityStore;
 use crate::scoped_counter;
 
@@ -272,6 +273,10 @@ impl crate::authority::AuthorityState {
         request: BatchInfoRequest,
     ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
         let metrics = self.metrics.clone();
+        let _timer_guard = self
+            .metrics
+            .follower_handle_batch_streaming_time_spent
+            .start_timer();
         metrics.follower_connections.inc();
 
         let follower_connections_concurrent_guard =
@@ -293,6 +298,8 @@ impl crate::authority::AuthorityState {
             }
         };
 
+        error!("request.start: {:?}, start: {}", request.start, start);
+
         let end = start + request.length;
 
         let batch = self
@@ -309,7 +316,7 @@ impl crate::authority::AuthorityState {
             return Err(SuiError::BatchErrorSender);
         }
 
-        let (seq, signed_batch) = batch.unwrap();
+        let (actual_start_seq, signed_batch) = batch.unwrap();
 
         #[derive(PartialEq)]
         enum NextItemToPublish {
@@ -333,15 +340,17 @@ impl crate::authority::AuthorityState {
             // will be closed
             pending_batch: Option<SignedBatch>,
             db: Arc<AuthorityStore>,
+            metrics: Arc<AuthorityMetrics>,
         }
 
         let local_state = BatchStreamingLocals {
             _guard: follower_connections_concurrent_guard,
-            next_tx_seq: seq,
-            next_batch_seq: seq + 1,
+            next_tx_seq: actual_start_seq,
+            next_batch_seq: actual_start_seq + 1,
             next_item: NextItemToPublish::Batch,
             pending_batch: Some(signed_batch),
             db: self.db(),
+            metrics,
         };
 
         // Construct the stream
@@ -350,15 +359,19 @@ impl crate::authority::AuthorityState {
                 if local_state.pending_batch.is_some()
                     && local_state.next_item == NextItemToPublish::Batch
                 {
-                    // We already publihsed all txns for this pending batch, now is the time to
+                    // We already published all txns for this pending batch, now is the time to
                     // publish the batch
                     let batch = local_state.pending_batch.unwrap();
                     local_state.pending_batch = None;
+                    local_state.metrics.follower_batches_streamed.inc();
                     return Some((
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(batch))),
                         local_state,
                     ));
                 } else if local_state.next_item == NextItemToPublish::Transaction {
+                    // TODO: (?) we could have read the entire set of transactions in this batch up to `end`.
+                    // But assuming the recent transactions are very hot and hopefully they can be found in
+                    // rocksdb cache.
                     let tx: Option<(TxSequenceNumber, ExecutionDigests)> = local_state
                         .db
                         .perpetual_tables
@@ -373,6 +386,10 @@ impl crate::authority::AuthorityState {
                             // We read all txns for this batch, time to publish the batch
                             local_state.next_item = NextItemToPublish::Batch;
                         }
+                        local_state.metrics.follower_txes_streamed.inc();
+                        if seq < start {
+                            local_state.metrics.follower_extra_txes_streamed.inc();
+                        }
                         return Some((
                             Ok(BatchInfoResponseItem(UpdateItem::Transaction((
                                 seq, digest,
@@ -385,6 +402,7 @@ impl crate::authority::AuthorityState {
                         return None;
                     }
                 } else {
+                    // Prepare the next batch
                     if local_state.next_tx_seq >= end {
                         return None;
                     }
@@ -408,6 +426,13 @@ impl crate::authority::AuthorityState {
                         local_state.next_item = NextItemToPublish::Transaction;
                         local_state.next_batch_seq = next_seq_num + 1;
                     } else {
+                        // If the request is from a full node, and it is up to date with
+                        // the most recent signed batch, close the stream
+                        if request.start.is_some() {
+                            return None;
+                        }
+                        // If the request is from a validator, we wait and fullfill the streaming
+                        // with asked length.
                         // sleep and come back to check if the next batch is ready
                         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                         continue;
