@@ -10,11 +10,14 @@ malloc_size_of_is_0!(ed25519_consensus::Signature);
 malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381PublicKey);
 malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381Signature);
 malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381AggregateSignature);
+malloc_size_of_is_0!(fastcrypto::bls12381::min_pk::BLS12381PublicKey);
+malloc_size_of_is_0!(fastcrypto::bls12381::min_pk::BLS12381Signature);
+malloc_size_of_is_0!(fastcrypto::bls12381::min_pk::BLS12381AggregateSignature);
 malloc_size_of_is_0!(fastcrypto::ed25519::Ed25519PublicKey);
 malloc_size_of_is_0!(fastcrypto::ed25519::Ed25519Signature);
 impl MallocSizeOf for fastcrypto::ed25519::Ed25519AggregateSignature {
     fn size_of(&self, ops: &mut crate::MallocSizeOfOps) -> usize {
-        self.0.size_of(ops)
+        self.sigs.size_of(ops)
     }
 }
 
