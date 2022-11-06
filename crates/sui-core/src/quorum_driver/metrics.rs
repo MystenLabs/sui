@@ -21,6 +21,13 @@ pub struct QuorumDriverMetrics {
     pub(crate) latency_sec_wait_for_effects_cert: Histogram,
 
     pub(crate) current_requests_in_flight: IntGauge,
+
+    pub(crate) total_err_process_tx_responses_with_nonzero_conflicting_transactions: IntCounter,
+    pub(crate) total_attempts_retrying_conflicting_transaction: IntCounter,
+    pub(crate) total_successful_attempts_retrying_conflicting_transaction: IntCounter,
+    pub(crate) total_times_conflicting_transaction_already_finalized_when_retrying: IntCounter,
+
+    pub(crate) total_equivocation_detected: IntCounter,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -90,6 +97,36 @@ impl QuorumDriverMetrics {
             current_requests_in_flight: register_int_gauge_with_registry!(
                 "current_requests_in_flight",
                 "Current number of requests being processed in QuorumDriver",
+                registry,
+            )
+            .unwrap(),
+            total_err_process_tx_responses_with_nonzero_conflicting_transactions: register_int_counter_with_registry!(
+                "quorum_driver_total_err_process_tx_responses_with_nonzero_conflicting_transactions",
+                "Total number of err process_tx responses with non empty conflicting transactions",
+                registry,
+            )
+            .unwrap(),
+            total_attempts_retrying_conflicting_transaction: register_int_counter_with_registry!(
+                "quorum_driver_total_attempts_trying_conflicting_transaction",
+                "Total number of attempts to retry a conflicting transaction",
+                registry,
+            )
+            .unwrap(),
+            total_successful_attempts_retrying_conflicting_transaction: register_int_counter_with_registry!(
+                "quorum_driver_total_successful_attempts_trying_conflicting_transaction",
+                "Total number of successful attempts to retry a conflicting transaction",
+                registry,
+            )
+            .unwrap(),
+            total_times_conflicting_transaction_already_finalized_when_retrying: register_int_counter_with_registry!(
+                "quorum_driver_total_times_conflicting_transaction_already_finalized_when_retrying",
+                "Total number of times the conflicting transaction is already finalized when retrying",
+                registry,
+            )
+            .unwrap(),
+            total_equivocation_detected: register_int_counter_with_registry!(
+                "quorum_driver_total_equivocation_detected",
+                "Total number of equivocations that are detected",
                 registry,
             )
             .unwrap(),

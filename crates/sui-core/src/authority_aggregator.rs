@@ -352,6 +352,10 @@ impl<A> AuthorityAggregator<A> {
         })
     }
 
+    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A>> {
+        self.authority_clients.get(name)
+    }
+
     pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
     where
         A: Clone,
@@ -902,7 +906,7 @@ where
             //
             // The most efficient process from the network's point of view is to do one request at
             // a time, however if the first validator that the client contacts is unavailable or
-            // slow, the client must wait for the serial_authority_request_timeout period to elapse
+            // slow, the client must wait for the serial_authority_request_interval period to elapse
             // before starting its next request.
             //
             // So, this process is designed as a compromise between these two extremes.
@@ -1614,6 +1618,9 @@ where
             // Tally of stake for good vs bad responses.
             good_stake: StakeUnit,
             bad_stake: StakeUnit,
+            // If there are conflicting transactions, we note them down and may attempt to retry
+            conflicting_tx_digests:
+                BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
         }
 
         let state = ProcessTransactionState::default();
@@ -1696,8 +1703,20 @@ where
                             // authorities we just stop, as there is no hope to finish.
                             Err(err) => {
                                 // We have an error here.
-                                // Append to the list off errors
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction: {:?}", err);
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
+
+                                if let SuiError::ObjectLockConflict {
+                                    obj_ref,
+                                    pending_transaction,
+                                } = err {
+                                    let (lock_records, total_stake) = state.conflicting_tx_digests
+                                        .entry(pending_transaction)
+                                        .or_insert((Vec::new(), 0));
+                                    lock_records.push((name, obj_ref));
+                                    *total_stake += weight;
+                                }
+
+                                // Append to the list of errors
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1727,7 +1746,7 @@ where
                                     );
                                 }
                                 state.errors.push(
-                                    SuiError::UnexectedResultFromValidatorHandleTransaction {
+                                    SuiError::UnexpectedResultFromValidatorHandleTransaction {
                                         err: format!("{:?}", ret),
                                     },
                                 );
@@ -1751,15 +1770,11 @@ where
                             self.metrics.num_bad_stake.observe(state.bad_stake as f64);
 
                             let unique_errors: HashSet<_> = state.errors.into_iter().collect();
-                            // If no authority succeeded and all authorities returned the same error,
-                            // return that error.
-                            if unique_errors.len() == 1 && state.good_stake == 0 {
-                                return Err(unique_errors.into_iter().next().unwrap());
-                            } else {
-                                return Err(SuiError::QuorumNotReached {
-                                    errors: unique_errors.into_iter().collect(),
-                                });
-                            }
+                            return Err(SuiError::QuorumFailedToProcessTransaction {
+                                good_stake: state.good_stake,
+                                errors: unique_errors.into_iter().collect(),
+                                conflicting_tx_digests: state.conflicting_tx_digests,
+                            });
                         }
 
                         // If we have a certificate, then finish, otherwise continue.
@@ -1792,7 +1807,9 @@ where
         state
             .certificate
             .ok_or(SuiError::QuorumFailedToProcessTransaction {
+                good_stake: state.good_stake,
                 errors: state.errors,
+                conflicting_tx_digests: state.conflicting_tx_digests,
             })
     }
 
@@ -2119,6 +2136,8 @@ where
         .await
     }
 
+    /// This function tries to fetch CertifiedTransaction from any validators.
+    /// Returns Error if certificate cannot be found in any validators.
     pub async fn handle_cert_info_request(
         &self,
         digest: &TransactionDigest,
@@ -2141,6 +2160,7 @@ where
                     {
                         Ok(resp)
                     } else {
+                        // TODO change this error to TransactionCertificateNotFound
                         // handle_transaction_info_request returns success even if it doesn't have
                         // any data.
                         Err(SuiError::TransactionNotFound { digest: *digest })
@@ -2195,6 +2215,55 @@ where
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
             "handle_transaction_and_effects_info_request".to_string(),
+        )
+        .await
+    }
+
+    /// This function tries to get SignedTransaction OR CertifiedTransaction from
+    /// an given list of validators who are supposed to know about it.
+    pub async fn handle_transaction_info_request_from_some_validators(
+        &self,
+        tx_digest: &TransactionDigest,
+        // authorities known to have the transaction info we are requesting.
+        validators: &BTreeSet<AuthorityName>,
+        timeout_total: Option<Duration>,
+    ) -> SuiResult<(
+        Option<VerifiedSignedTransaction>,
+        Option<VerifiedCertificate>,
+    )> {
+        self.quorum_once_with_timeout(
+            None,
+            Some(validators),
+            |authority, client| {
+                Box::pin(async move {
+                    let response = client
+                        .handle_transaction_info_request(TransactionInfoRequest {
+                            transaction_digest: *tx_digest,
+                        })
+                        .await?;
+                    if let Some(certified_transaction) = response.certified_transaction {
+                        return Ok((None, Some(certified_transaction)));
+                    }
+
+                    if let Some(signed_transaction) = response.signed_transaction {
+                        return Ok((Some(signed_transaction), None));
+                    }
+
+                    // This validator could not give the transaction info, but it is supposed to know about the transaction.
+                    // This could also happen on epoch change boundary.
+                    warn!(name=?authority, ?tx_digest, "Validator failed to give info about a transaction, it's either byzantine or just went through an epoch change");
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority,
+                        reason: format!(
+                            "Validator claimed to know about tx {:?} but did not return it when queried",
+                            tx_digest,
+                        )
+                    })
+                })
+            },
+            Duration::from_secs(2),
+            timeout_total,
+            "handle_transaction_info_request_from_some_validators".to_string(),
         )
         .await
     }
