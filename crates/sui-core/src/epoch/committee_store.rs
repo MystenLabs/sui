@@ -27,7 +27,7 @@ pub struct CommitteeStore {
 
 // These functions are used to initialize the DB tables
 fn committee_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 
 impl CommitteeStore {

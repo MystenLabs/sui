@@ -112,10 +112,10 @@ pub struct LockServiceImpl {
 
 // These functions are used to initialize the DB tables
 fn transaction_lock_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 fn tx_sequence_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority

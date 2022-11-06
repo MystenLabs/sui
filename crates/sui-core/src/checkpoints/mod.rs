@@ -151,21 +151,21 @@ pub struct CheckpointStoreTables {
 
 // These functions are used to initialize the DB tables
 fn transactions_to_checkpoint_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 fn extra_transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 
 fn checkpoints_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 fn local_fragments_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 
 fn locals_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 
 impl CheckpointStoreTables {

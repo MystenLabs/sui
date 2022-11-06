@@ -147,6 +147,7 @@ pub struct AuthorityPerpetualTables<S> {
     //    that the WAL indicates the tx is not written yet. This fixes the root cause of the issue,
     //    which is that we currently exit early if effects have been written.
     /// A sequence on all executed certificates and effects.
+    #[default_options_override_fn = "executed_sequence_table_default_config"]
     pub executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
 
     /// A sequence of batches indexing into the sequence of executed transactions.
@@ -261,14 +262,17 @@ pub struct ExecutionIndicesWithHash {
 
 // These functions are used to initialize the DB tables
 fn objects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 fn transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 fn certificates_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
 }
 fn effects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    default_db_options(None, None, None).1
+}
+fn executed_sequence_table_default_config() -> DBOptions {
+    default_db_options(None, None, Some(512)).1
 }

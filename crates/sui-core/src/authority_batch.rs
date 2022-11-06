@@ -374,9 +374,10 @@ impl crate::authority::AuthorityState {
                         .db
                         .perpetual_tables
                         .executed_sequence
-                        .iter()
-                        .skip_to(&local_state.next_tx_seq)
-                        .map(|mut o| o.next())
+                        .get(&local_state.next_tx_seq)
+                        // .iter()
+                        // .skip_to(&local_state.next_tx_seq)
+                        // .map(|mut o| o.next())
                         .unwrap_or_default();
                     if let Some((seq, digest)) = tx {
                         local_state.next_tx_seq = seq + 1;

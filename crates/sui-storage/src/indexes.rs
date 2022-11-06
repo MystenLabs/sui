@@ -57,25 +57,25 @@ pub struct IndexStore {
 
 // These functions are used to initialize the DB tables
 fn transactions_seq_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options(None, Some(1_000_000), None).0
 }
 fn transactions_from_addr_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options(None, Some(1_000_000), None).0
 }
 fn transactions_to_addr_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options(None, Some(1_000_000), None).0
 }
 fn transactions_by_input_object_id_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options(None, Some(1_000_000), None).0
 }
 fn transactions_by_mutated_object_id_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options(None, Some(1_000_000), None).0
 }
 fn transactions_by_move_function_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options(None, Some(1_000_000), None).0
 }
 fn timestamps_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).1
+    default_db_options(None, Some(1_000_000), None).1
 }
 
 impl IndexStore {

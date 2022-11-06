@@ -21,6 +21,7 @@ use typed_store::rocks::{default_db_options as default_rocksdb_options, DBOption
 pub fn default_db_options(
     db_options: Option<Options>,
     cache_capacity: Option<usize>,
+    point_lookup_cache_size_mb: Option<u64>,
 ) -> (DBOptions, DBOptions) {
     let mut db_options = db_options
         .map(|o| DBOptions { options: o })
@@ -34,7 +35,7 @@ pub fn default_db_options(
     }
 
     // The table cache is locked for updates and this determines the number
-    // of shareds, ie 2^10. Increase in case of lock contentions.
+    // of shards, ie 2^10. Increase in case of lock contentions.
     let row_cache =
         rocksdb::Cache::new_lru_cache(cache_capacity.unwrap_or(300_000)).expect("Cache is ok");
     db_options.options.set_row_cache(&row_cache);
@@ -44,9 +45,9 @@ pub fn default_db_options(
         .set_compression_type(rocksdb::DBCompressionType::None);
 
     let mut point_lookup = db_options.clone();
-    point_lookup
-        .options
-        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
+    point_lookup.options.optimize_for_point_lookup(
+        point_lookup_cache_size_mb.unwrap_or(64 /* 64MB (default is 8) */),
+    );
     point_lookup.options.set_memtable_whole_key_filtering(true);
 
     (db_options, point_lookup)
