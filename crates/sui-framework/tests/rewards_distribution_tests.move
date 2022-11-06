@@ -68,26 +68,31 @@ module sui::rewards_distribution_tests {
         // need to advance epoch so validator's staking starts counting
         governance_test_utils::advance_epoch(scenario);
 
-        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 200, scenario);
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
         governance_test_utils::advance_epoch(scenario);
 
-        advance_epoch_with_reward_amounts(0, 120, scenario);
+        // 10 SUI rewards for each 100 SUI of stake
+        advance_epoch_with_reward_amounts(0, 130, scenario);
         governance_test_utils::advance_epoch(scenario); 
         assert_validator_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
         undelegate(DELEGATOR_ADDR_1, 0, 0, 100, scenario);
-        assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 110, 0);
-
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 600, scenario);
-
-        advance_epoch_with_reward_amounts(0, 120, scenario);
+        // 10 SUI rewards for each 110 SUI of stake
+        advance_epoch_with_reward_amounts(0, 130, scenario); 
+        assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 120, 0); // 20 SUI of rewards received
         governance_test_utils::advance_epoch(scenario); 
         assert_validator_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
         undelegate(DELEGATOR_ADDR_2, 0, 0, 100, scenario);
-        assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0);
+        governance_test_utils::advance_epoch(scenario); 
+        assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0); // 20 SUI of rewards received
 
-        undelegate(DELEGATOR_ADDR_2, 0, 0, 545, scenario);
-        assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 730, 0);
+        // 10 SUI rewards for each 120 SUI of stake
+        advance_epoch_with_reward_amounts(0, 160, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, 0, 500, scenario); 
+        governance_test_utils::advance_epoch(scenario); 
+        // compared to at line 87, additional 600 SUI of principal and 50 SUI of rewards withdrawn to Coin<SUI>
+        assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 770, 0); 
         test_scenario::end(scenario_val);
     }
 

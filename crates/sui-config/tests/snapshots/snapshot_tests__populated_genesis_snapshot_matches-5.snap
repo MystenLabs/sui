@@ -217,14 +217,13 @@ validators:
       delegation_staking_pool:
         validator_address: 21b60aa9a8cb189ccbe20461dbfad2202fdef55b
         starting_epoch: 1
-        epoch_starting_sui_balance: 0
-        epoch_starting_delegation_token_supply: 0
         sui_balance: 0
         rewards_pool:
           value: 0
         delegation_token_supply:
           value: 0
         pending_delegations: []
+        pending_withdraws: []
       commission_rate: 0
   pending_validators: []
   pending_removals: []
@@ -428,6 +427,8 @@ validators:
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
+  pending_delegation_switches:
+    contents: []
 treasury_cap:
   value: 100000000000001
 storage_fund:

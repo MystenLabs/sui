@@ -642,7 +642,7 @@ If the sender represents an active validator, the request will be processed at t
 
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_switch_delegation">request_switch_delegation</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, delegation: <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, new_validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_switch_delegation">request_switch_delegation</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, new_validator_address: <b>address</b>, switch_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -653,12 +653,15 @@ If the sender represents an active validator, the request will be processed at t
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_switch_delegation">request_switch_delegation</a>(
     self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    delegation: Delegation,
+    delegation: &<b>mut</b> Delegation,
     staked_sui: &<b>mut</b> StakedSui,
     new_validator_address: <b>address</b>,
+    switch_pool_token_amount: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <a href="validator_set.md#0x2_validator_set_request_switch_delegation">validator_set::request_switch_delegation</a>(&<b>mut</b> self.validators, delegation, staked_sui, new_validator_address, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_switch_delegation">validator_set::request_switch_delegation</a>(
+        &<b>mut</b> self.validators, delegation, staked_sui, new_validator_address, switch_pool_token_amount, ctx
+    );
 }
 </code></pre>
 
