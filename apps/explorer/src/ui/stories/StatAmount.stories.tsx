@@ -15,7 +15,6 @@ const data = {
     currency: SUI_TYPE_ARG,
     dollarAmount: 123.56,
     date: 'June 24, 2012, 2:34 PM',
-    
 };
 
 export const Default: StoryObj<StatAmountProps> = {
