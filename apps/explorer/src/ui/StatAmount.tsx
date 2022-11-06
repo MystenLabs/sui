@@ -3,6 +3,8 @@
 
 import { SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 
+import { numberSuffix } from '../utils/numberUtil';
+
 import { CoinFormat, formatBalance } from '~/hooks/useFormatCoin';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
@@ -22,7 +24,7 @@ export function StatAmount({
     currency = SUI_TYPE_ARG,
     dollarAmount,
     date,
-    full = true,
+    full,
 }: StatAmountProps) {
     const formattedAmount = formatBalance(
         amount,
@@ -56,7 +58,7 @@ export function StatAmount({
             </div>
             {dollarAmount && (
                 <Text variant="bodySmall" weight="semibold">
-                    ${dollarAmount}
+                    ${numberSuffix(dollarAmount)}
                 </Text>
             )}
         </div>

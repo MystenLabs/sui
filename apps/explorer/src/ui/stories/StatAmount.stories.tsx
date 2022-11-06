@@ -11,10 +11,11 @@ export default {
 } as Meta;
 
 const data = {
-    amount: 1234n,
+    amount: 9007199254740991n,
     currency: SUI_TYPE_ARG,
-    dollarAmount: 1234.56,
+    dollarAmount: 123.56,
     date: 'June 24, 2012, 2:34 PM',
+    
 };
 
 export const Default: StoryObj<StatAmountProps> = {
