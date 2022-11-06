@@ -28,7 +28,7 @@ use tracing::{debug, info, trace, warn};
 
 // How long must a follower task run for for us to clear the exponential backoff for that peer?
 const CLEAR_BACKOFF_DURATION: Duration = Duration::from_secs(30);
-const MIN_RECONNECTION_DELAY: Duration = Duration::from_millis(500);
+const MIN_RECONNECTION_DELAY: Duration = Duration::from_millis(1500);
 const NUM_ITEMS_PER_REQUEST: u64 = 1000;
 const DRAIN_RESULTS_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -463,6 +463,8 @@ mod test {
         let net = Arc::new(agg);
 
         execute_transactions(&net, &transactions).await;
+        // Give time to let validators to make batch
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
         {
             debug!("testing follow_one_peer");
@@ -553,9 +555,9 @@ mod test {
             monitor_task.abort();
 
             let ivs = intervals.lock().unwrap();
-            // The follow should restart at least this many times because it is configured to fail
+            // The follower should restart at least this many times because it is configured to fail
             // after every 2 items.
-            assert_eq!(ivs.len(), 7);
+            assert_eq!(ivs.len(), 6);
 
             // The exact delay times due to backoff are non-deterministic, so we can't test them
             // exactly, but we should verify that the final interval is at least 30 seconds long.
