@@ -8,6 +8,7 @@ import { LOCK_ALARM_NAME } from './Alarms';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
+import { IS_SESSION_STORAGE_SUPPORTED } from './keyring/VaultStorage';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 
@@ -44,17 +45,19 @@ Browser.alarms.onAlarm.addListener((alarm) => {
     }
 });
 
-Keyring.on('lockedStatusUpdate', async (isLocked) => {
-    if (!isLocked) {
-        const allTabs = await Browser.tabs.query({});
-        for (const aTab of allTabs) {
-            if (aTab.id) {
-                try {
-                    await Browser.tabs.sendMessage(aTab.id, MSG_CONNECT);
-                } catch (e) {
-                    // not all tabs have the cs installed
+if (!IS_SESSION_STORAGE_SUPPORTED) {
+    Keyring.on('lockedStatusUpdate', async (isLocked) => {
+        if (!isLocked) {
+            const allTabs = await Browser.tabs.query({});
+            for (const aTab of allTabs) {
+                if (aTab.id) {
+                    try {
+                        await Browser.tabs.sendMessage(aTab.id, MSG_CONNECT);
+                    } catch (e) {
+                        // not all tabs have the cs installed
+                    }
                 }
             }
         }
-    }
-});
+    });
+}
