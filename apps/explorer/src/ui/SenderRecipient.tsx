@@ -14,7 +14,6 @@ const isCoinTransfer = cva(
         variants: {
             senderRecipient: {
                 true: 'before:content-[url()] before:border-2 before:border-[#a0b6c3] before:overflow-y-hidden before:absolute before:h-[calc(55%)] before:w-[15px] before:border-r-[transparent] before:border-t-[transparent] before:mt-1 before:ml-[-16px] before:rounded-l before:border-dotted',
-                false: '',
             },
         },
     }
@@ -113,8 +112,7 @@ export function SenderRecipient({
     return (
         <div className="flex flex-col justify-start h-full text-sui-grey-75 gap-2">
             <Heading as="h4" variant="heading4" weight="semibold">
-                {' '}
-                Sender {senderRecipient && '& Recipient'}{' '}
+                Sender {senderRecipient && '& Recipient'}
             </Heading>
             <div className={isCoinTransfer({ senderRecipient })}>
                 <SenderRecipientAddress isSender address={sender} />
@@ -133,7 +131,7 @@ export function SenderRecipient({
                                 weight="semibold"
                             >
                                 Recipient
-                                {multipleRecipientsList.length > 1 && 's'}{' '}
+                                {multipleRecipientsList.length > 1 && 's'}
                             </Heading>
                         </div>
                         {multipleRecipientsList?.map((recipient, index) => (
