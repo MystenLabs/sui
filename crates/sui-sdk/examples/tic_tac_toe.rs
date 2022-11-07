@@ -34,7 +34,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
-        client: SuiClient::new(&opts.rpc_server_url, None).await?,
+        client: SuiClient::new(&opts.rpc_server_url, None, None).await?,
         keystore,
     };
 

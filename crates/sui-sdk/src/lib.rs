@@ -93,10 +93,24 @@ struct ServerInfo {
 }
 
 impl RpcClient {
-    pub async fn new(http: &str, ws: Option<&str>) -> Result<Self, anyhow::Error> {
-        let http = HttpClientBuilder::default().build(http)?;
+    pub async fn new(
+        http: &str,
+        ws: Option<&str>,
+        request_timeout: Option<Duration>,
+    ) -> Result<Self, anyhow::Error> {
+        let mut http_builder = HttpClientBuilder::default();
+        if let Some(request_timeout) = request_timeout {
+            http_builder = http_builder.request_timeout(request_timeout);
+        }
+        let http = http_builder.build(http)?;
+
         let ws = if let Some(url) = ws {
-            Some(WsClientBuilder::default().build(url).await?)
+            let mut ws_builder = WsClientBuilder::default();
+            if let Some(request_timeout) = request_timeout {
+                ws_builder = ws_builder.request_timeout(request_timeout);
+            }
+            let ws = ws_builder.build(url).await?;
+            Some(ws)
         } else {
             None
         };
@@ -151,8 +165,12 @@ impl RpcClient {
 }
 
 impl SuiClient {
-    pub async fn new(http_url: &str, ws_url: Option<&str>) -> Result<Self, anyhow::Error> {
-        let rpc = RpcClient::new(http_url, ws_url).await?;
+    pub async fn new(
+        http_url: &str,
+        ws_url: Option<&str>,
+        request_timeout: Option<Duration>,
+    ) -> Result<Self, anyhow::Error> {
+        let rpc = RpcClient::new(http_url, ws_url, request_timeout).await?;
         let api = Arc::new(rpc);
         let read_api = Arc::new(ReadApi { api: api.clone() });
         let quorum_driver = QuorumDriver { api: api.clone() };

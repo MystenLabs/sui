@@ -13,7 +13,10 @@ pub struct FaucetMetrics {
     pub(crate) total_requests_received: IntCounter,
     pub(crate) total_requests_succeeded: IntCounter,
     pub(crate) current_requests_in_flight: IntGauge,
+    pub(crate) current_executions_in_flight: IntGauge,
     pub(crate) process_latency: Histogram,
+    pub(crate) total_available_coins: IntGauge,
+    pub(crate) total_discarded_coins: IntGauge,
 }
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
@@ -40,10 +43,28 @@ impl FaucetMetrics {
                 registry,
             )
             .unwrap(),
+            current_executions_in_flight: register_int_gauge_with_registry!(
+                "current_executions_in_flight",
+                "Current number of transactions being executed in Faucet",
+                registry,
+            )
+            .unwrap(),
             process_latency: register_histogram_with_registry!(
                 "process_latency",
                 "Latency of processing a Faucet request",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_available_coins: register_int_gauge_with_registry!(
+                "total_available_coins",
+                "Total number of available coins in queue",
+                registry,
+            )
+            .unwrap(),
+            total_discarded_coins: register_int_gauge_with_registry!(
+                "total_discarded_coins",
+                "Total number of discarded coins",
                 registry,
             )
             .unwrap(),
