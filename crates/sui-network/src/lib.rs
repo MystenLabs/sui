@@ -5,6 +5,7 @@ use mysten_network::config::Config;
 use std::time::Duration;
 
 pub mod api;
+pub mod discovery;
 pub mod utils;
 
 pub use tonic;
