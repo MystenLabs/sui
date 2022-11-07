@@ -412,7 +412,7 @@ predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
-primitive-types = { version = "0.12", features = ["impl-codec", "impl-serde", "std"] }
+primitive-types = { version = "0.10", features = ["impl-codec", "impl-serde", "std"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["proc-macro", "span-locations"] }
 prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
@@ -1093,7 +1093,7 @@ predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
-primitive-types = { version = "0.12", features = ["impl-codec", "impl-serde", "std"] }
+primitive-types = { version = "0.10", features = ["impl-codec", "impl-serde", "std"] }
 proc-macro-crate = { version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
 proc-macro-error-attr = { version = "1", default-features = false }
