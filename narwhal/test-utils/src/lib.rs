@@ -10,11 +10,14 @@ use config::{
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use fastcrypto::{
     hash::{Digest, Hash as _},
-    traits::{KeyPair as _, Signer as _},
+    traits::{AllowedRng, KeyPair as _, Signer as _},
 };
 use indexmap::IndexMap;
 use multiaddr::Multiaddr;
-use rand::{rngs::OsRng, Rng};
+use rand::{
+    rngs::{OsRng, StdRng},
+    thread_rng, Rng, SeedableRng,
+};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     num::NonZeroUsize,
@@ -110,7 +113,7 @@ macro_rules! test_new_certificates_channel {
 ////////////////////////////////////////////////////////////////
 
 pub fn random_key() -> KeyPair {
-    KeyPair::generate(&mut OsRng)
+    KeyPair::generate(&mut thread_rng())
 }
 
 ////////////////////////////////////////////////////////////////
@@ -619,13 +622,17 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
     pub fn build(mut self) -> CommitteeFixture {
         let authorities = (0..self.committee_size.get())
             .map(|_| {
-                AuthorityFixture::generate(&mut self.rng, self.number_of_workers, |host| {
-                    if self.randomize_ports {
-                        get_available_port(host)
-                    } else {
-                        0
-                    }
-                })
+                AuthorityFixture::generate(
+                    StdRng::from_rng(&mut self.rng).unwrap(),
+                    self.number_of_workers,
+                    |host| {
+                        if self.randomize_ports {
+                            get_available_port(host)
+                        } else {
+                            0
+                        }
+                    },
+                )
             })
             .collect();
 
@@ -754,8 +761,11 @@ impl CommitteeFixture {
 
     /// Add a new authority to the commit by randoming generating a key
     pub fn add_authority(&mut self) {
-        let authority =
-            AuthorityFixture::generate(OsRng, NonZeroUsize::new(4).unwrap(), get_available_port);
+        let authority = AuthorityFixture::generate(
+            StdRng::from_rng(OsRng).unwrap(),
+            NonZeroUsize::new(4).unwrap(),
+            get_available_port,
+        );
         self.authorities.push(authority)
     }
 
@@ -863,7 +873,7 @@ impl AuthorityFixture {
 
     fn generate<R, P>(mut rng: R, number_of_workers: NonZeroUsize, mut get_port: P) -> Self
     where
-        R: rand::RngCore + rand::CryptoRng,
+        R: AllowedRng,
         P: FnMut(&str) -> u16,
     {
         let keypair = KeyPair::generate(&mut rng);
@@ -915,12 +925,12 @@ impl WorkerFixture {
             .unwrap()
     }
 
-    fn generate<R, P>(mut rng: R, id: WorkerId, mut get_port: P) -> Self
+    fn generate<R, P>(rng: R, id: WorkerId, mut get_port: P) -> Self
     where
         R: rand::RngCore + rand::CryptoRng,
         P: FnMut(&str) -> u16,
     {
-        let keypair = NetworkKeyPair::generate(&mut rng);
+        let keypair = NetworkKeyPair::generate(&mut StdRng::from_rng(rng).unwrap());
         let worker_name = keypair.public().clone();
         let host = "127.0.0.1";
         let worker_address = format!("/ip4/{}/tcp/{}/http", host, get_port(host))
@@ -953,7 +963,7 @@ pub fn test_network(keypair: NetworkKeyPair, address: &Multiaddr) -> anemo::Netw
 }
 
 pub fn random_network() -> anemo::Network {
-    let network_key = NetworkKeyPair::generate(&mut OsRng);
+    let network_key = NetworkKeyPair::generate(&mut StdRng::from_rng(OsRng).unwrap());
     let address = "/ip4/127.0.0.1/udp/0".parse().unwrap();
     test_network(network_key, &address)
 }
