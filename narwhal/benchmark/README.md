@@ -23,7 +23,7 @@ bench_params = {
     'mem_profiling': False
 }
 ```
-They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (transactions per second, or tx/s) at which the clients submit transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes ('faults`), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes; this ensures the transactions of a client are all different.
+They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (transactions per second, or tx/s) at which the clients submit transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes (`faults`), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes; this ensures the transactions of a client are all different.
 
 The benchmarking script will deploy as many clients as workers and divide the input rate equally amongst each client. For instance, if you configure the testbed with four nodes, one worker per node, and an input rate of 1,000 tx/s (as in the example above), the scripts will deploy four clients each submitting transactions to one node at a rate of 250 tx/s. When the parameter `faults` is set to `f > 0`, the last `f` nodes and clients are not booted; the system will thus run with `n-f` nodes (and `n-f` clients).
 
