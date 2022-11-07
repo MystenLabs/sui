@@ -175,7 +175,7 @@ async fn request_gas(
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    WalletContext::new(&wallet_conf).await
+    WalletContext::new(&wallet_conf, Some(Duration::from_secs(10))).await
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {
