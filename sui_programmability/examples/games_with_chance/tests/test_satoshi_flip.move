@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module randomness::test_satoshi_flip {
+module games_with_chance::test_satoshi_flip {
     // imports
     use std::hash::sha3_256;
 
@@ -12,7 +12,7 @@ module randomness::test_satoshi_flip {
     use sui::test_scenario;
     use sui::tx_context::TxContext;
 
-    use randomness::satoshi_flip::{Self, Game};
+    use games_with_chance::satoshi_flip::{Self, Game};
 
 
     const EWrongPlayerA: u64 = 0;
@@ -35,7 +35,7 @@ module randomness::test_satoshi_flip {
         let world = @0x1EE7; // needed only for beginning the test_scenario
         let playerA = @0xBAE;
         let playerB = @0xFAB;
-        let secret = vector[1,0,0,1,1,1,0,0,1,0,0,1,0,1];
+        let secret = b"supersecret";
         let secret_hash = sha3_256(secret);
         let min_bet = 100;
 
@@ -99,7 +99,7 @@ module randomness::test_satoshi_flip {
 
             //check the game's outcome
             assert!(!satoshi_flip::is_playerB_winner(game), EWrongOutcome);
-            assert!(satoshi_flip::secret(game) == vector[1,0,0,1,1,1,0,0,1,0,0,1,0,1], EWrongOutcome);
+            assert!(satoshi_flip::secret(game) == b"supersecret", EWrongOutcome);
             assert!(satoshi_flip::guess(game) == 0, EWrongOutcome);
 
             test_scenario::return_shared(game_val);
@@ -112,7 +112,7 @@ module randomness::test_satoshi_flip {
         let world = @0x1EE7; // needed only for beginning the test_scenario
         let playerA = @0xBAE;
         let playerB = @0xFAB;
-        let secret: vector<u8> = vector[1,0,0,1,1,1,0,0,1,0,0,1,0,1];
+        let secret = b"supersecret";
         let secret_hash = sha3_256(secret);
         let min_bet = 100;
 
@@ -177,7 +177,7 @@ module randomness::test_satoshi_flip {
 
             //check the game's outcome
             assert!(satoshi_flip::is_playerB_winner(game), EWrongOutcome);
-            assert!(satoshi_flip::secret(game) == vector[1,0,0,1,1,1,0,0,1,0,0,1,0,1], EWrongOutcome);
+            assert!(satoshi_flip::secret(game) == b"supersecret", EWrongOutcome);
             assert!(satoshi_flip::guess(game) == 1, EWrongOutcome);
 
             test_scenario::return_shared(game_val);

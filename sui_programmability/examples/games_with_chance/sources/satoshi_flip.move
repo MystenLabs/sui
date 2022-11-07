@@ -1,4 +1,4 @@
-module randomness::satoshi_flip {
+module games_with_chance::satoshi_flip {
     // imports
     use std::option::{Self, Option};
     use std::hash::sha3_256;
@@ -11,7 +11,6 @@ module randomness::satoshi_flip {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use std::debug;
     
     /* Terminology
         playerA: The player who picks the secret
@@ -165,9 +164,9 @@ module randomness::satoshi_flip {
         if (option::is_some<BetData>(&mut game.bet_data)){
             // extract balances and guess
             let BetData {stake, guess} = option::extract(&mut game.bet_data);
-            debug::print(vector::borrow(&secret, 0));
-            let won = &guess == vector::borrow(&secret, 0);
-            debug::print(&won);
+            let first_byte = vector::borrow(&secret, 0);
+            let won = guess == *first_byte % 2;
+
             if (won) {
                 let outcome = Outcome {
                     secret,
@@ -246,7 +245,6 @@ module randomness::satoshi_flip {
             // calculate the wins = profit + stake
             balance::join(&mut stake, profit);
             // pay the wins
-            debug::print(&stake);
             transfer::transfer(coin::from_balance(stake, ctx), playerB);
             // return the rest back to playerA
             transfer::transfer(coin::from_balance(max_bet, ctx), playerA);
