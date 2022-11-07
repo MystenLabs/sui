@@ -1,11 +1,11 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusOutput,
 };
+use crate::{metrics::ConsensusMetrics, CommittedSubDag};
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::BTreeSet, sync::Arc};
@@ -55,7 +55,7 @@ impl ConsensusProtocol for Bullshark {
         state: &mut ConsensusState,
         consensus_index: SequenceNumber,
         certificate: Certificate,
-    ) -> StoreResult<Vec<ConsensusOutput>> {
+    ) -> StoreResult<Vec<CommittedSubDag>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
         let mut consensus_index = consensus_index;
@@ -142,7 +142,7 @@ impl ConsensusProtocol for Bullshark {
 
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
-        let mut sequence = Vec::new();
+        let mut committed_sub_dags = Vec::new();
 
         // TODO: duplicated in tusk.rs
         for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
@@ -150,6 +150,7 @@ impl ConsensusProtocol for Bullshark {
             .rev()
         {
             debug!("Previous Leader {:?} has enough support", leader);
+            let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
@@ -179,6 +180,11 @@ impl ConsensusProtocol for Bullshark {
                     &consensus_index, &digest
                 );
             }
+
+            committed_sub_dags.push(CommittedSubDag {
+                certificates: sequence,
+                leader: leader.clone(),
+            });
         }
 
         // record the last time we got a successful leader election
@@ -202,13 +208,14 @@ impl ConsensusProtocol for Bullshark {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        debug!("Total committed certificates: {}", sequence.len());
+        let total_commits: usize = committed_sub_dags.iter().map(|x| x.len()).sum();
+        debug!("Total committed certificates: {}", total_commits);
 
         self.metrics
             .committed_certificates
-            .observe(sequence.len() as f64);
+            .observe(total_commits as f64);
 
-        Ok(sequence)
+        Ok(committed_sub_dags)
     }
 
     fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {

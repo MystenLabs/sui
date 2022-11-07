@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, ConsensusOutput, SequenceNumber,
+    utils, CommittedSubDag, ConsensusOutput, SequenceNumber,
 };
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
@@ -30,7 +30,7 @@ impl ConsensusProtocol for Tusk {
         state: &mut ConsensusState,
         consensus_index: SequenceNumber,
         certificate: Certificate,
-    ) -> StoreResult<Vec<ConsensusOutput>> {
+    ) -> StoreResult<Vec<CommittedSubDag>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
         let mut consensus_index = consensus_index;
@@ -83,11 +83,14 @@ impl ConsensusProtocol for Tusk {
 
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
-        let mut sequence = Vec::new();
+        let mut committed_sub_dags = Vec::new();
+
         for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
             .iter()
             .rev()
         {
+            let mut sequence = Vec::new();
+
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
                 let digest = x.digest();
@@ -112,6 +115,11 @@ impl ConsensusProtocol for Tusk {
                     &digest,
                 )?;
             }
+
+            committed_sub_dags.push(CommittedSubDag {
+                certificates: sequence,
+                leader: leader.clone(),
+            });
         }
 
         // Log the latest committed round of every authority (for debug).
@@ -121,7 +129,7 @@ impl ConsensusProtocol for Tusk {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        Ok(sequence)
+        Ok(committed_sub_dags)
     }
 
     fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {

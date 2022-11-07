@@ -15,7 +15,7 @@ use crate::metrics::ExecutorMetrics;
 use crate::notifier::Notifier;
 use async_trait::async_trait;
 use config::{Committee, SharedWorkerCache};
-use consensus::ConsensusOutput;
+use consensus::{CommittedSubDag, ConsensusOutput};
 use crypto::PublicKey;
 use network::P2pNetwork;
 
@@ -75,7 +75,7 @@ impl Executor {
         committee: Committee,
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
-        rx_sequence: metered_channel::Receiver<ConsensusOutput>,
+        rx_sequence: metered_channel::Receiver<Box<CommittedSubDag>>,
         registry: &Registry,
         restored_consensus_output: Vec<ConsensusOutput>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>

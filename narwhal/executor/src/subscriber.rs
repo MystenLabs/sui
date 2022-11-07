@@ -4,7 +4,7 @@ use crate::notifier::BatchIndex;
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics};
 
 use config::{Committee, SharedWorkerCache, WorkerId};
-use consensus::ConsensusOutput;
+use consensus::{CommittedSubDag, ConsensusOutput};
 use crypto::{NetworkPublicKey, PublicKey};
 
 use futures::stream::FuturesOrdered;
@@ -40,7 +40,7 @@ pub struct Subscriber<Network> {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive sequenced consensus messages.
-    rx_sequence: metered_channel::Receiver<ConsensusOutput>,
+    rx_sequence: metered_channel::Receiver<Box<CommittedSubDag>>,
     /// Ordered batches for the consumer
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     /// The metrics handler
@@ -60,7 +60,7 @@ pub fn spawn_subscriber(
     worker_cache: SharedWorkerCache,
     committee: Committee,
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    rx_sequence: metered_channel::Receiver<ConsensusOutput>,
+    rx_sequence: metered_channel::Receiver<Box<CommittedSubDag>>,
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<ConsensusOutput>,
@@ -128,12 +128,14 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
         loop {
             tokio::select! {
                 // Receive the ordered sequence of consensus messages from a consensus node.
-                Some(message) = self.rx_sequence.recv(), if waiting.len() < Self::MAX_PENDING_PAYLOADS => {
+                Some(sub_dag) = self.rx_sequence.recv(), if waiting.len() < Self::MAX_PENDING_PAYLOADS => {
                     // We can schedule more then MAX_PENDING_PAYLOADS payloads but
                     // don't process more consensus messages when more
                     // then MAX_PENDING_PAYLOADS is pending
-                    for future in self.fetcher.fetch_payloads(message) {
-                        waiting.push_back(future);
+                    for certificate in sub_dag.certificates {
+                        for future in self.fetcher.fetch_payloads(certificate) {
+                            waiting.push_back(future);
+                        }
                     }
                 },
 

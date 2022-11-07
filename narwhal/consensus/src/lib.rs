@@ -33,3 +33,17 @@ pub struct ConsensusOutput {
     /// The (global) index associated with this certificate.
     pub consensus_index: SequenceNumber,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct CommittedSubDag {
+    /// The sequence of committed certificates.
+    pub certificates: Vec<ConsensusOutput>,
+    /// The leader certificate responsible of committing this sub-dag.
+    pub leader: Certificate,
+}
+
+impl CommittedSubDag {
+    pub fn len(&self) -> usize {
+        self.certificates.len()
+    }
+}
