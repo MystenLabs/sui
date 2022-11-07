@@ -22,6 +22,10 @@ use types::{
     Round, StoreResult, Timestamp,
 };
 
+#[cfg(test)]
+#[path = "tests/consensus_tests.rs"]
+pub mod consensus_tests;
+
 /// The representation of the DAG in memory.
 pub type Dag = HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate)>>;
 
@@ -67,11 +71,6 @@ impl ConsensusState {
         cert_store: CertificateStore,
         gc_depth: Round,
     ) -> Self {
-        // We return a bool here which is always true to use as a "recovery token". This
-        // allows us to ensure that the primary is spawned only after the
-        // consensus is guaranteed to be in a state where it can process messages it
-        // receives from the primary when the primary starts up. We do this by passing the
-        // recovery token generated here and checking it before the primary spawn method.
         let last_committed_round = *recover_last_committed
             .iter()
             .max_by(|a, b| a.1.cmp(b.1))
@@ -83,7 +82,12 @@ impl ConsensusState {
         }
         metrics.recovered_consensus_state.inc();
 
-        let dag = Self::construct_dag_from_cert_store(cert_store, last_committed_round, gc_depth);
+        let dag = Self::construct_dag_from_cert_store(
+            cert_store,
+            last_committed_round,
+            &recover_last_committed,
+            gc_depth,
+        );
 
         Self {
             last_committed_round,
@@ -97,30 +101,25 @@ impl ConsensusState {
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
         last_committed_round: Round,
+        last_committed: &HashMap<PublicKey, Round>,
         gc_depth: Round,
     ) -> Dag {
         let mut dag: Dag = HashMap::new();
+        let min_round = last_committed_round.saturating_sub(gc_depth);
+
         info!(
-            "Recreating dag from last committed round: {}",
-            last_committed_round
+            "Recreating dag from last committed round: {}, min_round: {}",
+            last_committed_round, min_round
         );
 
-        let min_round = last_committed_round.saturating_sub(gc_depth);
         // get all certificates at a round > min_round
-        let cert_map = cert_store.after_round(min_round + 1).unwrap();
+        let certificates = cert_store.after_round(min_round + 1).unwrap();
 
-        let num_certs = cert_map.len();
-        for (digest, cert) in cert_map.into_iter().map(|c| (c.digest(), c)) {
-            let inner = dag.get_mut(&cert.header.round);
-            match inner {
-                Some(m) => {
-                    m.insert(cert.header.author.clone(), (digest, cert.clone()));
-                }
-                None => {
-                    dag.entry(cert.header.round)
-                        .or_insert_with(HashMap::new)
-                        .insert(cert.header.author.clone(), (digest, cert.clone()));
-                }
+        let mut num_certs = 0;
+        for cert in &certificates {
+            if Self::try_insert_in_dag(&mut dag, last_committed, cert).is_ok() {
+                info!("Inserted certificate: {:?}", cert);
+                num_certs += 1;
             }
         }
         info!(
@@ -133,25 +132,35 @@ impl ConsensusState {
     }
 
     #[allow(clippy::result_unit_err)]
-    pub fn try_insert(&mut self, certificate: Certificate) -> Result<(), ()> {
-        let last_committed = self
-            .last_committed
+    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<(), ()> {
+        Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
+    }
+
+    #[allow(clippy::result_unit_err)]
+    fn try_insert_in_dag(
+        dag: &mut Dag,
+        last_committed: &HashMap<PublicKey, Round>,
+        certificate: &Certificate,
+    ) -> Result<(), ()> {
+        let last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
             .unwrap_or_default();
-        if certificate.round() < last_committed {
+        if certificate.round() < last_committed_round {
             debug!(
                 "Ignoring certificate {:?} as it is past last committed round for this origin {}",
-                certificate, last_committed
+                certificate, last_committed_round
             );
-            Err(())
-        } else {
-            self.dag
-                .entry(certificate.round())
-                .or_insert_with(HashMap::new)
-                .insert(certificate.origin(), (certificate.digest(), certificate));
-            Ok(())
+            return Err(());
         }
+
+        dag.entry(certificate.round())
+            .or_insert_with(HashMap::new)
+            .insert(
+                certificate.origin(),
+                (certificate.digest(), certificate.clone()),
+            );
+        Ok(())
     }
 
     /// Update and clean up internal state base on committed certificates.
