@@ -92,10 +92,10 @@ impl Executor {
 
         // Spawn the subscriber.
         let subscriber_handle = spawn_subscriber(
-            name,
+            name.clone(),
             network,
             worker_cache,
-            committee,
+            committee.clone(),
             tx_reconfigure.subscribe(),
             rx_sequence,
             tx_notifier,
@@ -103,7 +103,8 @@ impl Executor {
             restored_consensus_output,
         );
 
-        let notifier_handler = Notifier::spawn(rx_notifier, execution_state, arc_metrics);
+        let notifier_handler =
+            Notifier::spawn(name, committee, rx_notifier, execution_state, arc_metrics);
 
         // Return the handle.
         info!("Consensus subscriber successfully started");

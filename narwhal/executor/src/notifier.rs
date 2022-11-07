@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
+use config::Committee;
 use consensus::ConsensusOutput;
+use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use sui_metrics::spawn_monitored_task;
@@ -18,6 +20,8 @@ pub struct BatchIndex {
 }
 
 pub struct Notifier<State: ExecutionState> {
+    name: PublicKey,
+    committee: Committee,
     rx_notifier: metered_channel::Receiver<(BatchIndex, Batch)>,
     callback: State,
     metrics: Arc<ExecutorMetrics>,
@@ -25,11 +29,15 @@ pub struct Notifier<State: ExecutionState> {
 
 impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
     pub fn spawn(
+        name: PublicKey,
+        committee: Committee,
         rx_notifier: metered_channel::Receiver<(BatchIndex, Batch)>,
         callback: State,
         metrics: Arc<ExecutorMetrics>,
     ) -> JoinHandle<()> {
         let notifier = Notifier {
+            name,
+            committee,
             rx_notifier,
             callback,
             metrics,
@@ -63,9 +71,8 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             }
             // this is temporary
             // we will get explicit signal from consensus on where is commit boundary in the future
-            if index.batch_index + 1
-                == index.consensus_output.certificate.header.payload.len() as u64
-            {
+            let round = index.consensus_output.certificate.round();
+            if self.committee.leader(round) == self.name {
                 self.callback
                     .notify_commit_boundary(&index.consensus_output)
                     .await;
