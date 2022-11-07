@@ -1,0 +1,86 @@
+name: publish crates
+on:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    # Needed to get around problems when running this script and package version does not change
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - mysten-network
+          - name-variant
+          - telemetry-subscribers
+          - typed-store
+          - typed-store-derive
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - id: check
+        run: |
+          set +e
+          ./scripts/is_version_already_uploaded.sh ${{ matrix.package }}
+          export EXIT_CODE="$?"
+          set -e
+          if [[ "$EXIT_CODE" == "7" ]]; then
+            echo '::set-output name=is_new_version::no'
+          elif [[ "$EXIT_CODE" == "0" ]]; then
+            echo '::set-output name=is_new_version::yes'
+          else
+            # Unexpected outcome, indicates a bug.
+            exit "$EXIT_CODE"
+          fi
+      - name: Check semver
+        # Only run the semver script if the version changed, otherwise it errors out
+        if: steps.check.outputs.is_new_version == 'yes'
+        uses: obi1kenobi/cargo-semver-checks-action@v1
+        with:
+          crate-name: ${{ matrix.package }}
+          version-tag-prefix: ${{ matrix.package }}-v
+      - name: Tag the version
+        if: steps.check.outputs.is_new_version == 'yes'
+        run: |
+          set -euxo pipefail
+          export CURRENT_VERSION="$(./scripts/get_current_version.sh ${{ matrix.package}})"
+          git tag "${{ matrix.package}}-v$CURRENT_VERSION"
+          git push origin "${{ matrix.package}}-v$CURRENT_VERSION"
+      - uses: actions-rs/toolchain@v1
+        if: steps.check.outputs.is_new_version == 'yes'
+      - name: Publish packages
+        if: steps.check.outputs.is_new_version == 'yes'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p ${{ matrix.package }}

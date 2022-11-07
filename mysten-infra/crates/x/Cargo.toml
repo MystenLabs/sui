@@ -1,0 +1,12 @@
+[package]
+name = "x"
+version = "0.1.0"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.58"
+clap = { version = "4.0.8", features = ["derive"] }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e" }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e" }
