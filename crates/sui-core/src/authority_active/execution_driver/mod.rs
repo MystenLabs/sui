@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
+};
 use std::{collections::HashSet, sync::Arc};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tracing::{debug, error, info};
@@ -16,6 +20,36 @@ use tap::TapFallible;
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+#[derive(Clone)]
+pub struct ExecutionDriverMetrics {
+    executed_transactions: IntCounter,
+    pending_transactions: IntGauge,
+}
+
+impl ExecutionDriverMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            executed_transactions: register_int_counter_with_registry!(
+                "execution_driver_executed_transactions",
+                "Cumulative number of transaction executed by execution driver",
+                registry,
+            )
+            .unwrap(),
+            pending_transactions: register_int_gauge_with_registry!(
+                "execution_driver_pending_transaction",
+                "Number of current pending transactions for execution driver",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = Registry::new();
+        Self::new(&registry)
+    }
+}
 
 pub trait PendCertificateForExecution {
     fn add_pending_certificates(
@@ -178,6 +212,11 @@ where
     // Get the pending transactions
     let pending_transactions = active_authority.state.database.get_pending_digests()?;
 
+    active_authority
+        .execution_driver_metrics
+        .pending_transactions
+        .set(pending_transactions.len() as i64);
+
     let (pending_sequenced, pending_transactions, indexes_to_delete) =
         sort_and_partition_pending_certs(pending_transactions);
 
@@ -199,6 +238,10 @@ where
         match result_stream.next().await.unwrap() {
             Ok(_) => {
                 debug!(?seq, ?digest, "serial certificate execution complete");
+                active_authority
+                    .execution_driver_metrics
+                    .executed_transactions
+                    .inc();
                 active_authority
                     .state
                     .database
@@ -228,10 +271,10 @@ where
         // zip results back together with seq
         .zip(stream::iter(pending_transactions.iter()))
         // filter out errors
-        .filter_map(|(result, (idx, digest))| async move {
+        .filter_map(|(result, (idx, tx_digest))| async move {
             result
-                .tap_err(|e| info!(?idx, ?digest, "certificate execution failed: {}", e))
-                .tap_ok(|_| debug!(?idx, ?digest, "certificate execution complete"))
+                .tap_err(|e| info!(?idx, ?tx_digest, "certificate execution failed: {}", e))
+                .tap_ok(|_| debug!(?idx, ?tx_digest, "certificate execution complete"))
                 .ok()
                 .map(|_| idx)
         })
@@ -241,6 +284,11 @@ where
     let pending_count = pending_transactions.len();
     let executed_count = executed.len();
     debug!(?pending_count, ?executed_count, "execute_pending completed");
+
+    active_authority
+        .execution_driver_metrics
+        .executed_transactions
+        .inc_by(executed_count as u64);
 
     // Now update the pending store.
     active_authority
