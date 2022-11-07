@@ -142,6 +142,7 @@ pub fn run_move_unit_tests(
             ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
+        None,
         compute_coverage,
         &mut std::io::stdout(),
     )
