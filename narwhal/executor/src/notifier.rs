@@ -69,8 +69,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     )
                     .await;
             }
-            // this is temporary
-            // we will get explicit signal from consensus on where is commit boundary in the future
+
             let round = index.consensus_output.certificate.round();
             if self.committee.leader(round) == self.name {
                 self.callback
