@@ -1,0 +1,35 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// similar to dynamic_field_tests but over multiple transactions, as this uses a different code path
+// test remove with the wrong value type
+
+//# init --addresses a=0x0 --accounts A
+
+//# publish
+module a::m {
+
+use sui::dynamic_field::{add, remove};
+use sui::object;
+use sui::tx_context::{sender, TxContext};
+
+struct Obj has key {
+    id: object::UID,
+}
+
+entry fun t1(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    add<u64, u64>(&mut id, 0, 0);
+    sui::transfer::transfer(Obj { id }, sender(ctx))
+}
+
+entry fun t2(obj: &mut Obj) {
+    remove<u64, u8>(&mut obj.id, 0);
+}
+
+
+}
+
+//# run a::m::t1 --sender A
+
+//# run a::m::t2 --sender A --args object(106)

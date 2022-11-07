@@ -3,6 +3,7 @@
 .container {
     display: flex;
     flex-flow: column nowrap;
+    min-height: 100%;
 }
 
 .item {
@@ -19,6 +20,16 @@
     }
 }
 
-.btn {
+.actions-container {
+    display: flex;
+    flex-flow: column nowrap;
+    margin-top: 23px;
+    gap: 15px;
     flex: 1;
+}
+
+.faucet-info {
+    position: sticky;
+    margin-top: 5px;
+    bottom: 0;
 }

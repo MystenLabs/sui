@@ -6,38 +6,89 @@ import {
   extractMutableReference,
   extractStructTag,
   getObjectReference,
+  getSharedObjectInitialVersion,
+  ID_STRUCT_NAME,
   isSharedObject,
   isValidSuiAddress,
+  MOVE_STDLIB_ADDRESS,
   normalizeSuiObjectId,
+  ObjectId,
+  OBJECT_MODULE_NAME,
   SuiJsonValue,
   SuiMoveNormalizedType,
+  SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
-import { bcs, CallArg, ObjectArg } from '../../types/sui-bcs';
+import { bcs, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
+import { shouldUseOldSharedObjectAPI } from './local-txn-data-serializer';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
 
+const STD_ASCII_MODULE_NAME = 'ascii';
+const STD_ASCII_STRUCT_NAME = 'String';
+
+const STD_UTF8_MODULE_NAME = 'string';
+const STD_UTF8_STRUCT_NAME = 'String';
+
+const RESOLVED_SUI_ID = {
+  address: SUI_FRAMEWORK_ADDRESS,
+  module: OBJECT_MODULE_NAME,
+  name: ID_STRUCT_NAME,
+};
+
+const RESOLVED_ASCII_STR = {
+  address: MOVE_STDLIB_ADDRESS,
+  module: STD_ASCII_MODULE_NAME,
+  name: STD_ASCII_STRUCT_NAME,
+};
+const RESOLVED_UTF8_STR = {
+  address: MOVE_STDLIB_ADDRESS,
+  module: STD_UTF8_MODULE_NAME,
+  name: STD_UTF8_STRUCT_NAME,
+};
+
 const isTypeFunc = (type: string) => (t: any) => typeof t === type;
+const isSameStruct = (a: any, b: any) =>
+  a.address === b.address && a.module === b.module && a.name === b.name;
 
 export class CallArgSerializer {
   constructor(private provider: Provider) {}
 
+  async extractObjectIds(txn: MoveCallTransaction): Promise<ObjectId[]> {
+    const args = await this.serializeMoveCallArguments(txn);
+    return args
+      .map((arg) =>
+        'ObjVec' in arg
+          ? Array.from(arg.ObjVec).map((a) => ({
+              Object: a,
+            }))
+          : arg
+      )
+      .flat()
+      .map((arg) => {
+        if ('Object' in arg) {
+          const objectArg = arg.Object;
+          if ('Shared_Deprecated' in objectArg) {
+            return objectArg.Shared_Deprecated;
+          } else if ('Shared' in objectArg) {
+            return objectArg.Shared.objectId;
+          } else {
+            return objectArg.ImmOrOwned.objectId;
+          }
+        }
+        return null;
+      })
+      .filter((a) => a != null) as ObjectId[];
+  }
+
   async serializeMoveCallArguments(
     txn: MoveCallTransaction
   ): Promise<CallArg[]> {
-    const normalized = await this.provider.getNormalizedMoveFunction(
-      normalizeSuiObjectId(txn.packageObjectId),
+    const userParams = await this.extractNormalizedFunctionParams(
+      txn.packageObjectId,
       txn.module,
       txn.function
     );
-    const params = normalized.parameters;
-    // Entry functions can have a mutable reference to an instance of the TxContext
-    // struct defined in the TxContext module as the last parameter. The caller of
-    // the function does not need to pass it in as an argument.
-    const hasTxContext = params.length > 0 && this.isTxContext(params.at(-1)!);
-    const userParams = hasTxContext
-      ? params.slice(0, params.length - 1)
-      : params;
 
     if (userParams.length !== txn.arguments.length) {
       throw new Error(
@@ -52,10 +103,54 @@ export class CallArgSerializer {
     );
   }
 
+  /**
+   * Deserialize Call Args used in `Transaction` into `SuiJsonValue` arguments
+   */
+  async deserializeCallArgs(txn: MoveCallTx): Promise<SuiJsonValue[]> {
+    const userParams = await this.extractNormalizedFunctionParams(
+      txn.Call.package.objectId,
+      txn.Call.module,
+      txn.Call.function
+    );
+
+    return Promise.all(
+      userParams.map(async (param, i) =>
+        this.deserializeCallArg(param, txn.Call.arguments[i])
+      )
+    );
+  }
+
+  private async extractNormalizedFunctionParams(
+    packageId: ObjectId,
+    module: string,
+    functionName: string
+  ) {
+    const normalized = await this.provider.getNormalizedMoveFunction(
+      normalizeSuiObjectId(packageId),
+      module,
+      functionName
+    );
+    const params = normalized.parameters;
+    // Entry functions can have a mutable reference to an instance of the TxContext
+    // struct defined in the TxContext module as the last parameter. The caller of
+    // the function does not need to pass it in as an argument.
+    const hasTxContext = params.length > 0 && this.isTxContext(params.at(-1)!);
+    return hasTxContext ? params.slice(0, params.length - 1) : params;
+  }
+
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
-    if (isSharedObject(object)) {
-      return { Shared: objectId };
+    const version = await this.provider.getRpcApiVersion();
+
+    if (shouldUseOldSharedObjectAPI(version)) {
+      if (isSharedObject(object)) {
+        return { Shared_Deprecated: objectId };
+      }
+    } else {
+      const initialSharedVersion = getSharedObjectInitialVersion(object);
+      if (initialSharedVersion) {
+        return { Shared: { objectId, initialSharedVersion } };
+      }
     }
 
     return { ImmOrOwned: getObjectReference(object)! };
@@ -65,21 +160,75 @@ export class CallArgSerializer {
     expectedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue
   ): Promise<CallArg> {
+    const serType = this.getPureSerializationType(expectedType, argVal);
+    if (serType !== undefined) {
+      return {
+        Pure: bcs.ser(serType, argVal).toBytes(),
+      };
+    }
+
     const structVal = extractStructTag(expectedType);
     if (structVal != null) {
       if (typeof argVal !== 'string') {
         throw new Error(
-          `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${argVal}`
+          `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${JSON.stringify(
+            argVal,
+            null,
+            2
+          )}`
         );
       }
       return { Object: await this.newObjectArg(argVal) };
     }
 
-    let serType = this.getPureSerializationType(expectedType, argVal);
+    if (
+      typeof expectedType === 'object' &&
+      'Vector' in expectedType &&
+      typeof expectedType.Vector === 'object' &&
+      'Struct' in expectedType.Vector
+    ) {
+      if (!Array.isArray(argVal)) {
+        throw new Error(
+          `Expect ${argVal} to be a array, received ${typeof argVal}`
+        );
+      }
+      return {
+        ObjVec: await Promise.all(
+          argVal.map((arg) => this.newObjectArg(arg as string))
+        ),
+      };
+    }
 
-    return {
-      Pure: bcs.ser(serType, argVal).toBytes(),
-    };
+    throw new Error(
+      `Unknown call arg type ${JSON.stringify(expectedType, null, 2)} ` +
+        `for value ${JSON.stringify(argVal, null, 2)}`
+    );
+  }
+
+  private extractIdFromObjectArg(arg: ObjectArg) {
+    if ('ImmOrOwned' in arg) {
+      return arg.ImmOrOwned.objectId;
+    } else if ('Shared' in arg) {
+      return arg.Shared.objectId;
+    }
+    // TODO: remove after DevNet 0.13.0
+    return arg.Shared_Deprecated;
+  }
+
+  private async deserializeCallArg(
+    expectedType: SuiMoveNormalizedType,
+    argVal: CallArg
+  ): Promise<SuiJsonValue> {
+    if ('Object' in argVal) {
+      return this.extractIdFromObjectArg(argVal.Object);
+    } else if ('ObjVec' in argVal) {
+      return Array.from(argVal.ObjVec).map((o) =>
+        this.extractIdFromObjectArg(o)
+      );
+    }
+
+    const serType = this.getPureSerializationType(expectedType, undefined);
+    return bcs.de(serType!, Uint8Array.from(argVal.Pure));
   }
 
   /**
@@ -92,13 +241,22 @@ export class CallArgSerializer {
   private getPureSerializationType(
     normalizedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue | undefined
-  ): string {
-    const allowedTypes = ['Address', 'Bool', 'U8', 'U32', 'U64', 'U128'];
+  ): string | undefined {
+    const allowedTypes = [
+      'Address',
+      'Bool',
+      'U8',
+      'U16',
+      'U32',
+      'U64',
+      'U128',
+      'U256',
+    ];
     if (
       typeof normalizedType === 'string' &&
       allowedTypes.includes(normalizedType)
     ) {
-      if (normalizedType in ['U8', 'U32', 'U64', 'U128']) {
+      if (normalizedType in ['U8', 'U16', 'U32', 'U64', 'U128', 'U256']) {
         this.checkArgVal(isTypeFunc('number'), argVal, 'number');
       } else if (normalizedType === 'Bool') {
         this.checkArgVal(isTypeFunc('boolean'), argVal, 'boolean');
@@ -112,16 +270,23 @@ export class CallArgSerializer {
       return normalizedType.toLowerCase();
     } else if (typeof normalizedType === 'string') {
       throw new Error(
-        `${MOVE_CALL_SER_ERROR} unknown pure normalized type ${normalizedType}`
+        `${MOVE_CALL_SER_ERROR} unknown pure normalized type ${JSON.stringify(
+          normalizedType,
+          null,
+          2
+        )}`
       );
     }
 
     if ('Vector' in normalizedType) {
-      if (typeof argVal === 'string' && normalizedType.Vector === 'U8') {
+      if (
+        (argVal === undefined || typeof argVal === 'string') &&
+        normalizedType.Vector === 'U8'
+      ) {
         return 'string';
       }
 
-      if (!Array.isArray(argVal)) {
+      if (argVal !== undefined && !Array.isArray(argVal)) {
         throw new Error(
           `Expect ${argVal} to be a array, received ${typeof argVal}`
         );
@@ -129,18 +294,25 @@ export class CallArgSerializer {
       const innerType = this.getPureSerializationType(
         normalizedType.Vector,
         // undefined when argVal is empty
-        argVal[0]
+        argVal ? argVal[0] : undefined
       );
-      const res = `vector<${innerType}>`;
-      // TODO: can we get rid of this call and make it happen automatically?
-      bcs.registerVectorType(res, innerType);
-      return res;
+      if (innerType === undefined) {
+        return undefined;
+      }
+      return `vector<${innerType}>`;
     }
 
-    // TODO: update this once we support vector of object ids
-    throw new Error(
-      `${MOVE_CALL_SER_ERROR} unknown normalized type ${normalizedType}`
-    );
+    if ('Struct' in normalizedType) {
+      if (isSameStruct(normalizedType.Struct, RESOLVED_ASCII_STR)) {
+        return 'string';
+      } else if (isSameStruct(normalizedType.Struct, RESOLVED_UTF8_STR)) {
+        return 'utf8string';
+      } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
+        return 'address';
+      }
+    }
+
+    return undefined;
   }
 
   private checkArgVal(

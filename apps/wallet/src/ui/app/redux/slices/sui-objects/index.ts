@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getExecutionStatusType,
     getObjectExistsResponse,
+    getObjectId,
+    getTimestampFromTransactionResponse,
     getTotalGasUsed,
     getTransactionDigest,
+    getObjectVersion,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -30,12 +34,31 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     void,
     AppThunkConfig
 >('sui-objects/fetch-all', async (_, { getState, extra: { api } }) => {
-    const address = getState().account.address;
+    const state = getState();
+    const {
+        account: { address },
+    } = state;
     const allSuiObjects: SuiObject[] = [];
     if (address) {
         const allObjectRefs =
             await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
-        const objectIDs = allObjectRefs.map((anObj) => anObj.objectId);
+        const objectIDs = allObjectRefs
+            .filter((anObj) => {
+                const fetchedVersion = getObjectVersion(anObj);
+                const storedObj = suiObjectsAdapterSelectors.selectById(
+                    state,
+                    getObjectId(anObj)
+                );
+                const storedVersion = storedObj
+                    ? getObjectVersion(storedObj.reference)
+                    : null;
+                const objOutdated = fetchedVersion !== storedVersion;
+                if (!objOutdated && storedObj) {
+                    allSuiObjects.push(storedObj);
+                }
+                return objOutdated;
+            })
+            .map((anObj) => anObj.objectId);
         objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
         const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
         for (const objRes of allObjRes) {
@@ -67,9 +90,8 @@ export const batchFetchObject = createAsyncThunk<
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
     async (_, { extra: { api, keypairVault }, dispatch }) => {
-        await ExampleNFT.mintExampleNFT(
-            api.getSignerInstance(keypairVault.getKeyPair())
-        );
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        await ExampleNFT.mintExampleNFT(signer);
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
 );
@@ -88,20 +110,20 @@ export const transferSuiNFT = createAsyncThunk<
 >(
     'transferSuiNFT',
     async (data, { extra: { api, keypairVault }, dispatch }) => {
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
         const txn = await ExampleNFT.TransferNFT(
-            api.getSignerInstance(keypairVault.getKeyPair()),
+            signer,
             data.nftId,
             data.recipientAddress,
             data.transferCost
         );
 
         await dispatch(fetchAllOwnedAndRequiredObjects());
-        const txnDigest = getTransactionDigest(txn.certificate);
         const txnResp = {
-            timestamp_ms: txn?.timestamp_ms,
-            status: txn?.effects?.status?.status,
+            timestamp_ms: getTimestampFromTransactionResponse(txn),
+            status: getExecutionStatusType(txn),
             gasFee: txn ? getTotalGasUsed(txn) : 0,
-            txId: txnDigest,
+            txId: getTransactionDigest(txn),
         };
 
         return txnResp as NFTTxResponse;

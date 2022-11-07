@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
-use signature::Signature;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use tap::TapFallible;
 
+use fastcrypto::encoding::Base64;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
@@ -22,15 +22,17 @@ use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
-use sui_types::crypto::{SignableBytes, SignatureScheme};
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::committee::EpochId;
+use sui_types::crypto::{sha3_hash, SignableBytes};
+use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
-use sui_types::query::{Ordering, TransactionQuery};
-use sui_types::sui_serde::Base64;
+use sui_types::query::TransactionQuery;
 
-use crate::api::RpcReadApiServer;
-use crate::api::{RpcFullNodeReadApiServer, MAX_RESULT_SIZE};
+use tracing::debug;
+
+use crate::api::RpcFullNodeReadApiServer;
+use crate::api::{cap_page_limit, RpcReadApiServer};
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
@@ -88,7 +90,10 @@ impl RpcReadApiServer for ReadApi {
             .state
             .get_object_read(&object_id)
             .await
-            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| {
+                debug!(?object_id, "Failed to get object: {:?}", e);
+                anyhow!("{e}")
+            })?
             .try_into()?)
     }
 
@@ -113,7 +118,11 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        let (cert, effects) = self.state.get_transaction(digest).await?;
+        let (cert, effects) = self
+            .state
+            .get_transaction(digest)
+            .await
+            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
         Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
@@ -135,22 +144,11 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
-    async fn dry_run_transaction(
-        &self,
-        tx_bytes: Base64,
-        sig_scheme: SignatureScheme,
-        signature: Base64,
-        pub_key: Base64,
-    ) -> RpcResult<SuiTransactionEffects> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
-        let flag = vec![sig_scheme.flag()];
-        let signature =
-            Signature::from_bytes(&[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat())
-                .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature);
-        let txn_digest = *txn.digest();
-
-        Ok(self.state.dry_run_transaction(&txn, txn_digest).await?)
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
+        let tx_data =
+            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let txn_digest = TransactionDigest::new(sha3_hash(&tx_data));
+        Ok(self.state.dry_exec_transaction(tx_data, txn_digest).await?)
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -265,19 +263,15 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
-        order: Ordering,
+        descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
-        let limit = limit.unwrap_or(MAX_RESULT_SIZE);
-
-        if limit == 0 {
-            Err(anyhow!("Page result limit must be larger then 0."))?;
-        }
-        let reverse = order == Ordering::Descending;
+        let limit = cap_page_limit(limit)?;
+        let descending = descending_order.unwrap_or_default();
 
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_transactions(query, cursor, Some(limit + 1), reverse)?;
+            .get_transactions(query, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
         let next_cursor = data.get(limit).cloned();
@@ -296,6 +290,13 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .await
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
+    }
+
+    async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<CommitteeInfoResponse> {
+        Ok(self
+            .state
+            .handle_committee_info_request(&CommitteeInfoRequest { epoch })
+            .map_err(|e| anyhow!("{e}"))?)
     }
 }
 

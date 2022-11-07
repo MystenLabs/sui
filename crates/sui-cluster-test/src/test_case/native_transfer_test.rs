@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    helper::{ObjectChecker, TransferObjectEventChecker},
+    helper::{CoinBalanceChangeEventChecker, ObjectChecker},
     TestCaseImpl, TestContext,
 };
 use async_trait::async_trait;
@@ -11,11 +11,11 @@ use sui_json_rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    event::TransferType,
     object::Owner,
     SUI_FRAMEWORK_OBJECT_ID,
 };
 use tracing::info;
+
 pub struct NativeTransferTest;
 
 #[async_trait]
@@ -56,6 +56,7 @@ impl TestCaseImpl for NativeTransferTest {
             signer,
             recipient_addr,
             obj_to_transfer,
+            "transfer_object",
         )
         .await;
 
@@ -74,6 +75,7 @@ impl TestCaseImpl for NativeTransferTest {
             signer,
             recipient_addr,
             obj_to_transfer,
+            "transfer_sui",
         )
         .await;
         Ok(())
@@ -88,24 +90,38 @@ impl NativeTransferTest {
         signer: SuiAddress,
         recipient: SuiAddress,
         obj_to_transfer_id: ObjectID,
+        method: &str,
     ) {
         let events = &mut effects.events;
         assert_eq!(
             events.len(),
-            1,
-            "Expect one event emitted, but got {}",
+            3,
+            "Expect three event emitted, but got {}",
             events.len()
         );
-        let event = events.remove(0);
-
-        TransferObjectEventChecker::new()
+        CoinBalanceChangeEventChecker::new()
             .package_id(SUI_FRAMEWORK_OBJECT_ID)
-            .transaction_module("native".into())
+            .transaction_module("gas".into())
             .sender(signer)
-            .recipient(Owner::AddressOwner(recipient))
-            .object_id(obj_to_transfer_id)
-            .type_(TransferType::Coin)
-            .check(&event);
+            .owner(Owner::AddressOwner(signer))
+            .coin_type("0x2::sui::SUI")
+            .check(&events.remove(0));
+        CoinBalanceChangeEventChecker::new()
+            .package_id(SUI_FRAMEWORK_OBJECT_ID)
+            .transaction_module(method.into())
+            .sender(signer)
+            .owner(Owner::AddressOwner(signer))
+            .coin_object_id(obj_to_transfer_id)
+            .coin_type("0x2::sui::SUI")
+            .check(&events.remove(0));
+        CoinBalanceChangeEventChecker::new()
+            .package_id(SUI_FRAMEWORK_OBJECT_ID)
+            .transaction_module(method.into())
+            .sender(signer)
+            .owner(Owner::AddressOwner(recipient))
+            .coin_object_id(obj_to_transfer_id)
+            .coin_type("0x2::sui::SUI")
+            .check(&events.remove(0));
 
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync(vec![tx_cert.transaction_digest], 5)

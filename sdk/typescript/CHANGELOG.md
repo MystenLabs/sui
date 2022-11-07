@@ -1,5 +1,45 @@
 # @mysten/sui.js
 
+## 0.15.0
+
+### Minor Changes
+
+- c27933292: Update the type of the `endpoint` field in JsonRpcProvider from string to object
+
+### Patch Changes
+
+- c27933292: Add util function for faucet
+- 90898d366: Support passing utf8 and ascii string
+- c27933292: Add constants for default API endpoints
+- Updated dependencies [1591726e8]
+- Updated dependencies [1591726e8]
+  - @mysten/bcs@0.4.0
+
+## 0.14.0
+
+### Minor Changes
+
+- 8b4bea5e2: Remove gateway related APIs
+- e45b188a8: Introduce PaySui and PayAllSui native transaction types to TS SDK.
+
+### Patch Changes
+
+- e86f8bc5e: Add `getRpcApiVersion` to Provider interface
+- b4a8ee9bf: Support passing a vector of objects in LocalTxnBuilder
+- ef3571dc8: Fix gas selection bug for a vector of objects
+- cccfe9315: Add deserialization util method to LocalTxnDataSerializer
+- 2dc594ef7: Introduce getCoinDenominationInfo, which returns denomination info of a coin, now only supporting SUI coin.
+- 4f0c611ff: Protocol change to add 'initial shared version' to shared object references.
+
+## 0.13.0
+
+### Minor Changes
+
+- 1d036d459: Transactions query pagination and merge all getTransactions\* methods
+- b11b69262: Add gas selection to LocalTxnSerializer
+- b11b69262: Deprecate Gateway related APIs
+- b11b69262: Add rpcAPIVersion to JsonRpcProvider to support multiple RPC API Versions
+
 ## 0.12.0
 
 ### Minor Changes

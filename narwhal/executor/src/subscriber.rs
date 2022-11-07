@@ -12,7 +12,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 
 use network::P2pNetwork;
-use network::PrimaryToWorkerRpc;
+use network::WorkerRpc;
 
 use anyhow::bail;
 use prometheus::IntGauge;
@@ -20,9 +20,10 @@ use std::future::Future;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},
@@ -30,7 +31,7 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
-use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification};
+use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification, Timestamp};
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
@@ -38,8 +39,8 @@ use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotific
 pub struct Subscriber<Network> {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    /// A channel to receive consensus messages.
-    rx_consensus: metered_channel::Receiver<ConsensusOutput>,
+    /// A channel to receive sequenced consensus messages.
+    rx_sequence: metered_channel::Receiver<ConsensusOutput>,
     /// Ordered batches for the consumer
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     /// The metrics handler
@@ -59,12 +60,12 @@ pub fn spawn_subscriber(
     worker_cache: SharedWorkerCache,
     committee: Committee,
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    rx_consensus: metered_channel::Receiver<ConsensusOutput>,
+    rx_sequence: metered_channel::Receiver<ConsensusOutput>,
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<ConsensusOutput>,
 ) -> JoinHandle<()> {
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         // This is ugly but has to be done this way for now
         // Currently network incorporate both server and client side of RPC interface
         // To construct server side we need to set up routes first, which requires starting Primary
@@ -83,7 +84,7 @@ pub fn spawn_subscriber(
         };
         let subscriber = Subscriber {
             rx_reconfigure,
-            rx_consensus,
+            rx_sequence,
             metrics,
             tx_notifier,
             fetcher,
@@ -106,14 +107,14 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
     ) -> SubscriberResult<()> {
         // It's important to have the futures in ordered fashion as we want
         // to guarantee that will deliver to the executor the certificates
-        // in the same order we received from rx_consensus. So it doesn't
+        // in the same order we received from rx_sequence. So it doesn't
         // mater if we somehow managed to fetch the batches from a later
         // certificate. Unless the earlier certificate's payload has been
         // fetched, no later certificate will be delivered.
         let mut waiting = FuturesOrdered::new();
 
         // First handle any consensus output messages that were restored due to a restart.
-        // This needs to happen before we start listening on rx_consensus and receive messages sequenced after these.
+        // This needs to happen before we start listening on rx_sequence and receive messages sequenced after these.
         for message in restored_consensus_output {
             let futures = self.fetcher.fetch_payloads(message);
             for future in futures {
@@ -127,7 +128,7 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
         loop {
             tokio::select! {
                 // Receive the ordered sequence of consensus messages from a consensus node.
-                Some(message) = self.rx_consensus.recv(), if waiting.len() < Self::MAX_PENDING_PAYLOADS => {
+                Some(message) = self.rx_sequence.recv(), if waiting.len() < Self::MAX_PENDING_PAYLOADS => {
                     // We can schedule more then MAX_PENDING_PAYLOADS payloads but
                     // don't process more consensus messages when more
                     // then MAX_PENDING_PAYLOADS is pending
@@ -165,6 +166,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     /// Returns ordered vector of futures for downloading individual payloads for certificate
     /// Order of futures returned follows order of payloads in the certificate
     /// See fetch_payload for more details
+    #[instrument(level = "debug", skip_all, fields(certificate = % deliver.certificate.digest()))]
     fn fetch_payloads(
         &self,
         deliver: ConsensusOutput,
@@ -173,8 +175,23 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             .subscriber_current_round
             .set(deliver.certificate.round() as i64);
         self.metrics.subscriber_processed_certificates.inc();
-        debug!("Fetching payload for {:?}", deliver);
-        let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
+        self.metrics.subscriber_certificate_latency.observe(
+            deliver
+                .certificate
+                .metadata
+                .created_at
+                .elapsed()
+                .as_secs_f64(),
+        );
+
+        let num_of_batches = deliver.certificate.header.payload.len();
+        if num_of_batches == 0 {
+            debug!("No batches to fetch, payload is empty");
+            return vec![];
+        }
+
+        let mut ret = Vec::with_capacity(num_of_batches);
+
         let deliver = Arc::new(deliver);
         for (batch_index, (digest, worker_id)) in
             deliver.certificate.header.payload.iter().enumerate()
@@ -188,11 +205,12 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 batch_index: batch_index as u64,
             };
             workers.shuffle(&mut ThreadRng::default());
+
             debug!("Scheduling fetching batch {}", digest);
-            ret.push(
-                self.fetch_payload(*digest, *worker_id, workers)
-                    .map(move |batch| (batch_index, batch)),
-            );
+            let fut = self
+                .fetch_payload(*digest, *worker_id, workers)
+                .map(move |batch| (batch_index, batch));
+            ret.push(monitored_future!(fut));
         }
 
         ret
@@ -393,16 +411,16 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
 mod tests {
     use super::*;
     use crypto::NetworkKeyPair;
+    use fastcrypto::hash::Hash;
     use fastcrypto::traits::KeyPair;
-    use fastcrypto::Hash;
     use rand::rngs::StdRng;
     use std::collections::HashMap;
 
     #[tokio::test]
     pub async fn test_fetcher() {
         let mut network = TestSubscriberNetwork::new();
-        let batch1 = Batch(vec![vec![1]]);
-        let batch2 = Batch(vec![vec![2]]);
+        let batch1 = Batch::new(vec![vec![1]]);
+        let batch2 = Batch::new(vec![vec![2]]);
         network.put(&[1, 2], batch1.clone());
         network.put(&[2, 3], batch2.clone());
         let fetcher = Fetcher {

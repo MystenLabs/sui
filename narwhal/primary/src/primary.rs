@@ -2,27 +2,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_synchronizer::{
-        handler::BlockSynchronizerHandler,
-        responses::{AvailabilityResponse, CertificateDigestsResponse},
-        BlockSynchronizer,
-    },
+    block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::BlockWaiter,
     certificate_waiter::CertificateWaiter,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
-    helper::Helper,
-    metrics::{initialise_metrics, PrimaryMetrics},
-    payload_receiver::PayloadReceiver,
+    metrics::initialise_metrics,
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockRemover, CertificatesResponse, PayloadAvailabilityResponse,
+    BlockRemover,
 };
 
 use anemo::{types::PeerInfo, PeerId};
-use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::CallbackLayer,
+    trace::TraceLayer,
+};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
@@ -35,20 +33,27 @@ use multiaddr::Protocol;
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
-use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
+    net::Ipv4Addr,
+    sync::Arc,
+};
 use storage::{CertificateStore, ProposerStore};
 use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{error, info};
 pub use types::PrimaryMessage;
 use types::{
-    error::DagError,
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, Certificate, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage,
-    WorkerToPrimary, WorkerToPrimaryServer,
+    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderDigest, LatestHeaderRequest, LatestHeaderResponse, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
+    Round, RoundVoteDigestPair, WorkerInfoResponse, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -86,8 +91,8 @@ impl Primary {
         proposer_store: ProposerStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
-        tx_consensus: Sender<Certificate>,
-        rx_consensus: Receiver<Certificate>,
+        tx_new_certificates: Sender<Certificate>,
+        rx_committed_certificates: Receiver<Certificate>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -108,11 +113,6 @@ impl Primary {
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
         let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
-        let (tx_others_digests, rx_others_digests) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_others_digests,
-            &primary_channel_metrics.tx_others_digests_total,
-        );
         let (tx_our_digests, rx_our_digests) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_our_digests,
@@ -128,15 +128,15 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
-        let (tx_sync_headers, rx_sync_headers) = channel_with_total(
+        let (tx_header_waiter, rx_header_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_sync_headers,
-            &primary_channel_metrics.tx_sync_headers_total,
+            &primary_channel_metrics.tx_header_waiter,
+            &primary_channel_metrics.tx_header_waiter_total,
         );
-        let (tx_sync_certificates, rx_sync_certificates) = channel_with_total(
+        let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_sync_certificates,
-            &primary_channel_metrics.tx_sync_certificates_total,
+            &primary_channel_metrics.tx_certificate_waiter,
+            &primary_channel_metrics.tx_certificate_waiter_total,
         );
         let (tx_headers_loopback, rx_headers_loopback) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -144,7 +144,7 @@ impl Primary {
             &primary_channel_metrics.tx_headers_loopback_total,
         );
         let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
-            CHANNEL_CAPACITY,
+            1, // Only one inflight item is possible.
             &primary_channel_metrics.tx_certificates_loopback,
             &primary_channel_metrics.tx_certificates_loopback_total,
         );
@@ -153,20 +153,10 @@ impl Primary {
             &primary_channel_metrics.tx_primary_messages,
             &primary_channel_metrics.tx_primary_messages_total,
         );
-        let (tx_helper_requests, rx_helper_requests) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_helper_requests,
-            &primary_channel_metrics.tx_helper_requests_total,
-        );
         let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
             &primary_channel_metrics.tx_block_synchronizer_commands_total,
-        );
-        let (tx_availability_responses, rx_availability_responses) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_availability_responses,
-            &primary_channel_metrics.tx_availability_responses_total,
         );
         let (tx_state_handler, rx_state_handler) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -176,14 +166,13 @@ impl Primary {
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
-        // TODO: this (tx_committed_certificates, rx_consensus) channel pair name is highly counterintuitive: see initialization in node and rename(?)
         let committed_certificates_gauge = tx_committed_certificates.gauge().clone();
         primary_channel_metrics.replace_registered_committed_certificates_metric(
             registry,
             Box::new(committed_certificates_gauge),
         );
 
-        let new_certificates_gauge = tx_consensus.gauge().clone();
+        let new_certificates_gauge = tx_new_certificates.gauge().clone();
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
@@ -207,32 +196,44 @@ impl Primary {
             .unwrap();
         let primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             tx_primary_messages: tx_primary_messages.clone(),
-            tx_helper_requests,
-            tx_availability_responses,
+            certificate_store: certificate_store.clone(),
+            payload_store: payload_store.clone(),
+            proposer_store: proposer_store.clone(),
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
-            tx_others_digests,
-            tx_state_handler,
+            payload_store: payload_store.clone(),
             our_workers,
-            metrics: node_metrics.clone(),
         });
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 
+        let our_worker_peer_ids = worker_cache
+            .load()
+            .our_workers(&name)
+            .unwrap()
+            .into_iter()
+            .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
+        let worker_to_primary_router = anemo::Router::new()
+            .add_rpc_service(worker_service)
+            // Add an Authorization Layer to ensure that we only service requests from our workers
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                our_worker_peer_ids,
+            )));
+
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
-            .add_rpc_service(worker_service);
+            .merge(worker_to_primary_router);
 
         let service = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_client_and_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
@@ -264,9 +265,8 @@ impl Primary {
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.clone(),
+            network.downgrade(),
             network_connection_metrics,
-            tx_reconfigure.subscribe(),
         );
 
         let primaries = committee
@@ -294,12 +294,13 @@ impl Primary {
                 .primary_network_admin_server_port
         );
 
-        network::admin::start_admin_server(
+        let admin_handles = network::admin::start_admin_server(
             parameters
                 .network_admin_server
                 .primary_network_admin_server_port,
             network.clone(),
             tx_reconfigure.subscribe(),
+            Some(tx_state_handler),
         );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
@@ -308,8 +309,8 @@ impl Primary {
             &committee.load(),
             certificate_store.clone(),
             payload_store.clone(),
-            /* tx_header_waiter */ tx_sync_headers,
-            /* tx_certificate_waiter */ tx_sync_certificates,
+            tx_header_waiter,
+            tx_certificate_waiter,
             dag.clone(),
         );
 
@@ -336,35 +337,29 @@ impl Primary {
             vote_digest_store,
             synchronizer,
             signature_service.clone(),
-            tx_consensus_round_updates.subscribe(),
+            rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_primaries */ rx_primary_messages,
-            /* rx_header_waiter */ rx_headers_loopback,
-            /* rx_certificate_waiter */ rx_certificates_loopback,
-            /* rx_proposer */ rx_headers,
-            tx_consensus,
-            /* tx_proposer */ tx_parents,
+            rx_primary_messages,
+            rx_headers_loopback,
+            rx_certificates_loopback,
+            rx_headers,
+            tx_new_certificates,
+            tx_parents,
             node_metrics.clone(),
             core_primary_network,
         );
 
-        // Receives batch digests from other workers. They are only used to validate headers.
-        let payload_receiver_handle = PayloadReceiver::spawn(
-            payload_store.clone(),
-            /* rx_workers */ rx_others_digests,
-        );
-
         let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
             tx_block_synchronizer_commands,
-            tx_primary_messages,
+            tx_primary_messages.clone(),
             certificate_store.clone(),
             parameters
                 .block_synchronizer
                 .handler_certificate_deliver_timeout,
         ));
 
-        // Indicator variable for the gRPC server
+        // Indicator variable for components to operate in internal vs external consensus modes.
         let internal_consensus = dag.is_none();
 
         // Responsible for finding missing blocks (certificates) and fetching
@@ -376,7 +371,6 @@ impl Primary {
             worker_cache.clone(),
             tx_reconfigure.subscribe(),
             rx_block_synchronizer_commands,
-            rx_availability_responses,
             block_synchronizer_network,
             payload_store.clone(),
             certificate_store.clone(),
@@ -393,13 +387,12 @@ impl Primary {
             worker_cache.clone(),
             certificate_store.clone(),
             payload_store.clone(),
-            tx_consensus_round_updates.subscribe(),
+            rx_consensus_round_updates.clone(),
             parameters.gc_depth,
-            parameters.sync_retry_delay,
-            parameters.sync_retry_nodes,
             tx_reconfigure.subscribe(),
-            /* rx_synchronizer */ rx_sync_headers,
-            /* tx_core */ tx_headers_loopback,
+            rx_header_waiter,
+            tx_headers_loopback,
+            tx_primary_messages,
             node_metrics.clone(),
             header_waiter_primary_network,
         );
@@ -407,13 +400,15 @@ impl Primary {
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
         let certificate_waiter_handle = CertificateWaiter::spawn(
+            name.clone(),
             (**committee.load()).clone(),
+            P2pNetwork::new(network.clone()),
             certificate_store.clone(),
             rx_consensus_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_synchronizer */ rx_sync_certificates,
-            /* tx_core */ tx_certificates_loopback,
+            rx_certificate_waiter,
+            tx_certificates_loopback,
             node_metrics.clone(),
         );
 
@@ -429,23 +424,10 @@ impl Primary {
             parameters.max_header_delay,
             network_model,
             tx_reconfigure.subscribe(),
-            /* rx_core */ rx_parents,
-            /* rx_workers */ rx_our_digests,
-            /* tx_core */ tx_headers,
+            rx_parents,
+            rx_our_digests,
+            tx_headers,
             node_metrics,
-        );
-
-        // The `Helper` is dedicated to reply to certificates & payload availability requests
-        // from other primaries.
-        let helper_primary_network = P2pNetwork::new(network.clone());
-        let helper_handle = Helper::spawn(
-            name.clone(),
-            (**committee.load()).clone(),
-            certificate_store.clone(),
-            payload_store.clone(),
-            tx_reconfigure.subscribe(),
-            rx_helper_requests,
-            helper_primary_network,
         );
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
@@ -453,10 +435,11 @@ impl Primary {
             name.clone(),
             committee.clone(),
             worker_cache.clone(),
-            rx_consensus,
+            rx_committed_certificates,
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
+            P2pNetwork::new(network.clone()),
         );
 
         let consensus_api_handle = if !internal_consensus {
@@ -512,15 +495,15 @@ impl Primary {
 
         let mut handles = vec![
             core_handle,
-            payload_receiver_handle,
             block_synchronizer_handle,
             header_waiter_handle,
             certificate_waiter_handle,
             proposer_handle,
-            helper_handle,
             state_handler_handle,
             connection_monitor_handle,
         ];
+
+        handles.extend(admin_handles);
 
         if let Some(h) = consensus_api_handle {
             handles.push(h);
@@ -534,8 +517,32 @@ impl Primary {
 #[derive(Clone)]
 struct PrimaryReceiverHandler {
     tx_primary_messages: Sender<PrimaryMessage>,
-    tx_helper_requests: Sender<PrimaryMessage>,
-    tx_availability_responses: Sender<AvailabilityResponse>,
+    certificate_store: CertificateStore,
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    proposer_store: ProposerStore,
+}
+
+#[allow(clippy::result_large_err)]
+impl PrimaryReceiverHandler {
+    fn find_next_round(
+        &self,
+        origin: &PublicKey,
+        current_round: Round,
+        skip_rounds: &BTreeSet<Round>,
+    ) -> Result<Option<Round>, anemo::rpc::Status> {
+        let mut current_round = current_round;
+        while let Some(round) = self
+            .certificate_store
+            .next_round_number(origin, current_round)
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
+        {
+            if !skip_rounds.contains(&round) {
+                return Ok(Some(round));
+            }
+            current_round = round;
+        }
+        Ok(None)
+    }
 }
 
 #[async_trait]
@@ -545,102 +552,179 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
+        self.tx_primary_messages
+            .try_send(message)
+            .map(|_| anemo::Response::new(()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    }
 
-        match message {
-            PrimaryMessage::CertificatesRequest(_, _)
-            | PrimaryMessage::CertificatesBatchRequest { .. }
-            | PrimaryMessage::PayloadAvailabilityRequest { .. } => self
-                .tx_helper_requests
-                .try_send(message)
-                .map_err(DagError::from),
-
-            PrimaryMessage::CertificatesRangeResponse {
-                certificate_ids,
-                from,
-            } => self
-                .tx_availability_responses
-                .try_send(AvailabilityResponse::CertificateDigest(
-                    CertificateDigestsResponse {
-                        certificate_ids,
-                        from,
-                    },
-                ))
-                .map_err(DagError::from),
-            PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
-                .tx_availability_responses
-                .try_send(AvailabilityResponse::Certificate(CertificatesResponse {
-                    certificates,
-                    from,
-                }))
-                .map_err(DagError::from),
-            PrimaryMessage::PayloadAvailabilityResponse {
-                payload_availability,
-                from,
-            } => self
-                .tx_availability_responses
-                .try_send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
-                    block_ids: payload_availability.to_vec(),
-                    from,
-                }))
-                .map_err(DagError::from),
-
-            _ => self
-                .tx_primary_messages
-                .try_send(message)
-                .map_err(DagError::from),
+    async fn get_certificates(
+        &self,
+        request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        let digests = request.into_body().digests;
+        if digests.is_empty() {
+            return Ok(anemo::Response::new(GetCertificatesResponse {
+                certificates: Vec::new(),
+            }));
         }
-        .map(|_| anemo::Response::new(()))
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+
+        // TODO [issue #195]: Do some accounting to prevent bad nodes from monopolizing our resources.
+        let certificates = self.certificate_store.read_all(digests).map_err(|e| {
+            anemo::rpc::Status::internal(format!("error while retrieving certificates: {e}"))
+        })?;
+        Ok(anemo::Response::new(GetCertificatesResponse {
+            certificates: certificates.into_iter().flatten().collect(),
+        }))
+    }
+
+    async fn fetch_certificates(
+        &self,
+        request: anemo::Request<FetchCertificatesRequest>,
+    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        let request = request.into_body();
+        let mut response = FetchCertificatesResponse {
+            certificates: Vec::new(),
+        };
+        if request.max_items == 0 {
+            return Ok(anemo::Response::new(response));
+        }
+
+        // Use a min-queue for (round, authority) to keep track of the next certificate to fetch.
+        //
+        // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
+        // and avoids the pathological case of iterating through many missing rounds of a downed authority.
+        let (lower_bound, skip_rounds) = request.get_bounds();
+        let mut fetch_queue = BinaryHeap::new();
+        for (origin, rounds) in &skip_rounds {
+            let next_round = self.find_next_round(origin, lower_bound, rounds)?;
+            if let Some(r) = next_round {
+                fetch_queue.push(Reverse((r, origin.clone())));
+            }
+        }
+
+        // Iteratively pop the next smallest (Round, Authority) pair, and push to min-heap the next
+        // higher round of the same authority that should not be skipped.
+        // The process ends when there are no more pairs in the min-heap.
+        while let Some(Reverse((round, origin))) = fetch_queue.pop() {
+            match self
+                .certificate_store
+                .read_by_index(origin.clone(), round)
+                .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
+            {
+                Some(cert) => {
+                    response.certificates.push(cert);
+                    let next_round =
+                        self.find_next_round(&origin, round, skip_rounds.get(&origin).unwrap())?;
+                    if let Some(r) = next_round {
+                        fetch_queue.push(Reverse((r, origin.clone())));
+                    }
+                }
+                None => continue,
+            };
+            if response.certificates.len() == request.max_items {
+                break;
+            }
+            assert!(response.certificates.len() < request.max_items);
+        }
+
+        // The requestor should be able to process certificates returned in this order without
+        // any missing parents.
+        Ok(anemo::Response::new(response))
+    }
+
+    async fn get_payload_availability(
+        &self,
+        request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        let digests = request.into_body().certificate_digests;
+        let certificates = self
+            .certificate_store
+            .read_all(digests.to_owned())
+            .map_err(|e| {
+                anemo::rpc::Status::internal(format!("error reading certificates: {e:?}"))
+            })?;
+
+        let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
+        for (id, certificate_option) in digests.into_iter().zip(certificates) {
+            // Find batches only for certificates that exist.
+            if let Some(certificate) = certificate_option {
+                let payload_available = match self
+                    .payload_store
+                    .read_all(certificate.header.payload)
+                    .await
+                {
+                    Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
+                    Err(err) => {
+                        // Assume that we don't have the payloads available,
+                        // otherwise an error response should be sent back.
+                        error!("Error while retrieving payloads: {err}");
+                        false
+                    }
+                };
+                result.push((id, payload_available));
+            } else {
+                // We don't have the certificate available in first place,
+                // so we can't even look up the batches.
+                result.push((id, false));
+            }
+        }
+
+        Ok(anemo::Response::new(PayloadAvailabilityResponse {
+            payload_availability: result,
+        }))
+    }
+
+    async fn get_latest_header(
+        &self,
+        _request: anemo::Request<LatestHeaderRequest>,
+    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
+        let latest_header = self.proposer_store.get_last_proposed().map_err(|e| {
+            anemo::rpc::Status::internal(format!(
+                "error fetching latest proposed header from store: {e}"
+            ))
+        })?;
+        Ok(anemo::Response::new(LatestHeaderResponse {
+            header: latest_header,
+        }))
     }
 }
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_our_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_others_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_state_handler: Sender<ReconfigureNotification>,
+    tx_our_digests: Sender<(BatchDigest, WorkerId, u64)>,
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
-    metrics: Arc<PrimaryMetrics>,
 }
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
-    async fn send_message(
+    async fn report_our_batch(
         &self,
-        request: anemo::Request<WorkerPrimaryMessage>,
+        request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
+        self.tx_our_digests
+            .send((
+                message.digest,
+                message.worker_id,
+                message.metadata.created_at,
+            ))
+            .await
+            .map(|_| anemo::Response::new(()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    }
 
-        match message {
-            WorkerPrimaryMessage::OurBatch(digest, worker_id) => {
-                self.metrics
-                    .batches_received
-                    .with_label_values(&[&worker_id.to_string(), "our_batch"])
-                    .inc();
-                self.tx_our_digests
-                    .send((digest, worker_id))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
-            }
-            WorkerPrimaryMessage::OthersBatch(digest, worker_id) => {
-                self.metrics
-                    .batches_received
-                    .with_label_values(&[&worker_id.to_string(), "others_batch"])
-                    .inc();
-                self.tx_others_digests
-                    .send((digest, worker_id))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
-            }
-            WorkerPrimaryMessage::Reconfigure(notification) => self
-                .tx_state_handler
-                .send(notification)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-        }
-        .map(|_| anemo::Response::new(()))
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    async fn report_others_batch(
+        &self,
+        request: anemo::Request<WorkerOthersBatchMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
+        self.payload_store
+            .async_write((message.digest, message.worker_id), 0u8)
+            .await;
+        Ok(anemo::Response::new(()))
     }
 
     async fn worker_info(

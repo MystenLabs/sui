@@ -4,27 +4,24 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::{path::Path, str::FromStr};
 
-use move_package::BuildConfig;
-
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::test_utils::to_sender_signed_transaction;
-use sui_framework::build_move_package_to_bytes;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
-use sui_json_rpc::api::{
-    RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
+use sui_json_rpc::api::TransactionExecutionApiClient;
+use sui_json_rpc::api::{RpcReadApiClient, RpcTransactionBuilderClient};
+use sui_json_rpc_types::{
+    GetObjectDataResponse, SuiExecuteTransactionResponse, SuiTransactionResponse, TransactionBytes,
 };
-use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionResponse, TransactionBytes};
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::FileBasedKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::SuiClient;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
-use sui_types::query::{Ordering, TransactionQuery};
-use sui_types::sui_serde::Base64;
+use sui_types::object::Owner;
+use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::TestClusterBuilder;
 
@@ -32,14 +29,13 @@ use test_utils::network::TestClusterBuilder;
 async fn test_get_objects() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_gateway_rpc_port(port)
+        .set_fullnode_rpc_port(port)
         .build()
         .await?;
 
     let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
 
-    http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     assert_eq!(5, objects.len());
     Ok(())
@@ -49,12 +45,12 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_gateway_rpc_port(port)
+        .set_fullnode_rpc_port(port)
         .build()
         .await?;
     let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
-    http_client.sync_account_state(*address).await?;
+
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     let transaction_bytes: TransactionBytes = http_client
@@ -72,12 +68,17 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
-    let tx_response = http_client
-        .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
+    let tx_response: SuiExecuteTransactionResponse = http_client
+        .execute_transaction(
+            tx_bytes,
+            sig_scheme,
+            signature_bytes,
+            pub_key,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
         .await?;
 
-    let effect = tx_response.effects;
-    assert_eq!(2, effect.mutated.len());
+    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.mutated.len() == 2);
 
     Ok(())
 }
@@ -86,22 +87,18 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 async fn test_publish() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_gateway_rpc_port(port)
+        .set_fullnode_rpc_port(port)
         .build()
         .await?;
     let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
-    http_client.sync_account_state(*address).await?;
+
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
-    let compiled_modules = build_move_package_to_bytes(
-        Path::new("../../sui_programmability/examples/fungible_tokens"),
-        BuildConfig::default(),
-    )?
-    .iter()
-    .map(|bytes| Base64::from_bytes(bytes))
-    .collect::<Vec<_>>();
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
+        .get_package_base64();
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
@@ -113,9 +110,15 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let tx_response = http_client
-        .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
+        .execute_transaction(
+            tx_bytes,
+            sig_scheme,
+            signature_bytes,
+            pub_key,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
         .await?;
-    assert_eq!(6, tx_response.effects.created.len());
+    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 6);
     Ok(())
 }
 
@@ -123,12 +126,12 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 async fn test_move_call() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_gateway_rpc_port(port)
+        .set_fullnode_rpc_port(port)
         .build()
         .await?;
     let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
-    http_client.sync_account_state(*address).await?;
+
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
     let coin = &objects[1];
@@ -163,10 +166,15 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let tx_response = http_client
-        .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
+        .execute_transaction(
+            tx_bytes,
+            sig_scheme,
+            signature_bytes,
+            pub_key,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
         .await?;
-    let effect = tx_response.effects;
-    assert_eq!(1, effect.created.len());
+    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 1);
     Ok(())
 }
 
@@ -174,12 +182,11 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_gateway_rpc_port(port)
+        .set_fullnode_rpc_port(port)
         .build()
         .await?;
     let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
-    http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     for oref in objects {
@@ -195,19 +202,17 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_gateway_rpc_port(port)
+        .set_fullnode_rpc_port(port)
         .build()
         .await?;
     let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
 
-    http_client.sync_account_state(*address).await?;
-
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas_id = objects.last().unwrap().object_id;
 
     // Make some transactions
-    let mut tx_responses = Vec::new();
+    let mut tx_responses: Vec<SuiExecuteTransactionResponse> = Vec::new();
     for oref in &objects[..objects.len() - 1] {
         let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
@@ -220,7 +225,13 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
         let response = http_client
-            .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
+            .execute_transaction(
+                tx_bytes,
+                sig_scheme,
+                signature_bytes,
+                pub_key,
+                ExecuteTransactionRequestType::WaitForLocalExecution,
+            )
             .await?;
 
         tx_responses.push(response);
@@ -237,7 +248,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
         assert!(tx_responses.iter().any(
-            |effects| effects.effects.transaction_digest == response.effects.transaction_digest
+            |resp| matches!(resp, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
         ))
     }
 
@@ -254,7 +265,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    let client = SuiClient::new_rpc_client(&format!("http://{}", addr), None).await?;
+    let client = SuiClient::new(&format!("http://{}", addr), None).await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();
@@ -290,16 +301,16 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get_recent_transactions with smaller range
     let tx = client
-        .full_node_api()
-        .get_transactions(TransactionQuery::All, None, Some(3), Ordering::Descending)
+        .read_api()
+        .get_transactions(TransactionQuery::All, None, Some(3), Some(true))
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
 
     // test get all transactions paged
     let first_page = client
-        .full_node_api()
-        .get_transactions(TransactionQuery::All, None, Some(5), Ordering::Ascending)
+        .read_api()
+        .get_transactions(TransactionQuery::All, None, Some(5), None)
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
@@ -307,13 +318,8 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get all transactions in ascending order
     let second_page = client
-        .full_node_api()
-        .get_transactions(
-            TransactionQuery::All,
-            first_page.next_cursor,
-            None,
-            Ordering::Ascending,
-        )
+        .read_api()
+        .get_transactions(TransactionQuery::All, first_page.next_cursor, None, None)
         .await
         .unwrap();
     assert_eq!(15, second_page.data.len());
@@ -325,8 +331,8 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get 10 latest transactions paged
     let latest = client
-        .full_node_api()
-        .get_transactions(TransactionQuery::All, None, Some(10), Ordering::Descending)
+        .read_api()
+        .get_transactions(TransactionQuery::All, None, Some(10), Some(true))
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
@@ -336,12 +342,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get from address txs in ascending order
     let address_txs_asc = client
-        .full_node_api()
+        .read_api()
         .get_transactions(
             TransactionQuery::FromAddress(cluster.accounts[0]),
             None,
             None,
-            Ordering::Ascending,
+            None,
         )
         .await
         .unwrap();
@@ -349,12 +355,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get from address txs in descending order
     let address_txs_desc = client
-        .full_node_api()
+        .read_api()
         .get_transactions(
             TransactionQuery::FromAddress(cluster.accounts[0]),
             None,
             None,
-            Ordering::Descending,
+            Some(true),
         )
         .await
         .unwrap();
@@ -367,8 +373,8 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get_recent_transactions
     let tx = client
-        .full_node_api()
-        .get_transactions(TransactionQuery::All, None, Some(20), Ordering::Descending)
+        .read_api()
+        .get_transactions(TransactionQuery::All, None, Some(20), Some(true))
         .await
         .unwrap();
     assert_eq!(20, tx.data.len());
@@ -384,6 +390,125 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             .transaction_digest
             == response.effects.transaction_digest))
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(get_available_port())
+        .build()
+        .await
+        .unwrap();
+    let client = cluster.wallet.client;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut tx_responses = Vec::new();
+
+    for address in cluster.accounts.iter() {
+        let objects = client
+            .read_api()
+            .get_objects_owned_by_address(*address)
+            .await
+            .unwrap();
+        let gas_id = objects.last().unwrap().object_id;
+
+        // Make some transactions
+        for oref in &objects[..objects.len() - 1] {
+            let data = client
+                .transaction_builder()
+                .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+                .await?;
+            let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
+
+            let response = client
+                .quorum_driver()
+                .execute_transaction(
+                    tx,
+                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                )
+                .await
+                .unwrap();
+
+            tx_responses.push(response);
+        }
+    }
+
+    // test get all events ascending
+    let page1 = client
+        .event_api()
+        .get_events(EventQuery::All, Some((2, 0).into()), Some(3), None)
+        .await
+        .unwrap();
+    assert_eq!(3, page1.data.len());
+    assert_eq!(Some((5, 0).into()), page1.next_cursor);
+    let page2 = client
+        .event_api()
+        .get_events(EventQuery::All, Some((5, 0).into()), Some(20), None)
+        .await
+        .unwrap();
+    assert_eq!(15, page2.data.len());
+    assert_eq!(None, page2.next_cursor);
+
+    // test get all events descending
+    let page1 = client
+        .event_api()
+        .get_events(EventQuery::All, None, Some(3), Some(true))
+        .await
+        .unwrap();
+    assert_eq!(3, page1.data.len());
+    assert_eq!(Some((16, 0).into()), page1.next_cursor);
+    let page2 = client
+        .event_api()
+        .get_events(EventQuery::All, Some((16, 0).into()), None, Some(true))
+        .await
+        .unwrap();
+    assert_eq!(17, page2.data.len());
+    assert_eq!(None, page2.next_cursor);
+
+    // test get sender events
+    let page = client
+        .event_api()
+        .get_events(
+            EventQuery::Sender(cluster.accounts[0]),
+            None,
+            Some(10),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(4, page.data.len());
+
+    // test get recipient events
+    let page = client
+        .event_api()
+        .get_events(
+            EventQuery::Recipient(Owner::AddressOwner(cluster.accounts[1])),
+            None,
+            Some(10),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(4, page.data.len());
+
+    let object = client
+        .read_api()
+        .get_objects_owned_by_address(cluster.accounts[2])
+        .await
+        .unwrap()
+        .last()
+        .unwrap()
+        .object_id;
+
+    // test get object events
+    let page = client
+        .event_api()
+        .get_events(EventQuery::Object(object), None, Some(10), None)
+        .await
+        .unwrap();
+    assert_eq!(4, page.data.len());
 
     Ok(())
 }

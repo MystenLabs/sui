@@ -13,7 +13,7 @@ module test::m {
     use sui::object::{Self, UID};
 
     struct S has key { id: UID }
-    struct Child has key { id: UID }
+    struct Child has key, store { id: UID }
 
     public entry fun mint_s(ctx: &mut TxContext) {
         let id = object::new(ctx);
@@ -22,7 +22,7 @@ module test::m {
 
     public entry fun mint_child(s: &mut S, ctx: &mut TxContext) {
         let id = object::new(ctx);
-        transfer::transfer_to_object(Child { id }, s);
+        sui::dynamic_object_field::add(&mut s.id, 0, Child { id });
     }
 }
 

@@ -8,12 +8,15 @@ use rocksdb::MultiThreaded;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use strum_macros::EnumString;
-use sui_core::authority::authority_store_tables::AuthorityStoreTables;
+use sui_core::authority::authority_store_tables::{AuthorityEpochTables, AuthorityPerpetualTables};
 use sui_core::checkpoints::CheckpointStoreTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
-use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::{
+    base_types::EpochId,
+    crypto::{AuthoritySignInfo, EmptySignInfo},
+};
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -33,25 +36,29 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options(None, None).0, &path)
-        .map_err(|e| e.into())
-        .map(|q| {
-            q.iter()
-                .filter_map(|s| {
-                    // The `default` table is not used
-                    if s != "default" {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
+    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
+        &default_db_options(None, None).0.options,
+        &path,
+    )
+    .map_err(|e| e.into())
+    .map(|q| {
+        q.iter()
+            .filter_map(|s| {
+                // The `default` table is not used
+                if s != "default" {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
 }
 
 // TODO: condense this using macro or trait dyn skills
 pub fn dump_table(
     store_name: StoreName,
+    epoch: Option<EpochId>,
     db_path: PathBuf,
     table_name: &str,
     page_size: u16,
@@ -59,13 +66,39 @@ pub fn dump_table(
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match store_name {
         StoreName::Validator => {
-            AuthorityStoreTables::<AuthoritySignInfo>::get_read_only_handle(db_path, None, None)
-                .dump(table_name, page_size, page_number)
+            let epoch_tables = AuthorityEpochTables::<AuthoritySignInfo>::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::<AuthoritySignInfo>::open_readonly(epoch, &db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            } else {
+                AuthorityPerpetualTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            }
         }
-        StoreName::Gateway => AuthorityStoreTables::<EmptySignInfo>::get_read_only_handle(
-            db_path, None, None,
-        )
-        .dump(table_name, page_size, page_number),
+        StoreName::Gateway => {
+            let epoch_tables = AuthorityEpochTables::<EmptySignInfo>::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::<EmptySignInfo>::open_readonly(epoch, &db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            } else {
+                AuthorityPerpetualTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            }
+        }
         StoreName::Index => IndexStore::get_read_only_handle(db_path, None, None).dump(
             table_name,
             page_size,
@@ -97,7 +130,8 @@ pub fn dump_table(
 
 #[cfg(test)]
 mod test {
-    use sui_core::authority::authority_store_tables::AuthorityStoreTables;
+    use sui_core::authority::authority_store_tables::AuthorityEpochTables;
+    use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_types::crypto::AuthoritySignInfo;
 
     use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
@@ -107,16 +141,39 @@ mod test {
         let primary_path = tempfile::tempdir()?.into_path();
 
         // Open the DB for writing
-        let _: AuthorityStoreTables<AuthoritySignInfo> =
-            AuthorityStoreTables::open_tables_read_write(primary_path.clone(), None, None);
+        let _: AuthorityEpochTables<AuthoritySignInfo> =
+            AuthorityEpochTables::open(0, &primary_path, None);
+        let _: AuthorityPerpetualTables<AuthoritySignInfo> =
+            AuthorityPerpetualTables::open(&primary_path, None);
 
-        // Get all the tables
-        let tables = list_tables(primary_path.clone()).unwrap();
+        // Get all the tables for AuthorityEpochTables
+        let tables = {
+            let mut epoch_tables = list_tables(AuthorityEpochTables::<AuthoritySignInfo>::path(
+                0,
+                &primary_path,
+            ))
+            .unwrap();
+            let mut perpetual_tables = list_tables(
+                AuthorityPerpetualTables::<AuthoritySignInfo>::path(&primary_path),
+            )
+            .unwrap();
+            epoch_tables.append(&mut perpetual_tables);
+            epoch_tables
+        };
 
         let mut missing_tables = vec![];
         for t in tables {
             println!("{}", t);
-            if dump_table(StoreName::Validator, primary_path.clone(), &t, 0, 0).is_err() {
+            if dump_table(
+                StoreName::Validator,
+                Some(0),
+                primary_path.clone(),
+                &t,
+                0,
+                0,
+            )
+            .is_err()
+            {
                 missing_tables.push(t);
             }
         }

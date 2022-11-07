@@ -9,7 +9,7 @@ import Search from '../search/Search';
 
 import styles from './Header.module.css';
 
-const Header = () => {
+function Header() {
     return (
         <header>
             <Link
@@ -30,6 +30,6 @@ const Header = () => {
             </div>
         </header>
     );
-};
+}
 
 export default Header;

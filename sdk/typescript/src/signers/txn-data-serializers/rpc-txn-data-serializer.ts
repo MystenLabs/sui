@@ -12,16 +12,20 @@ import {
   TransferObjectTransaction,
   TransferSuiTransaction,
   PayTransaction,
+  PaySuiTransaction,
+  PayAllSuiTransaction,
   PublishTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
 
 /**
  * This is a temporary implementation of the `TxnDataSerializer` class
- * that uses the Sui Gateway RPC API to serialize a transaction into BCS bytes.
- * This class will be deprecated once we support BCS serialization in TypeScript.
- * It is not safe to use this class in production because one cannot authenticate
- * the encoding.
+ * that uses the Sui Fullnode RPC API to serialize a transaction into BCS bytes. We will
+ * deprecate this implementation once `LocalTxnDataSerializer` stabilizes.
+ *
+ * Prefer to use `LocalTxnDataSerializer` instead for better performance and safety, otherwise
+ * this needs to be used with a trusted fullnode and it is recommended to verify the returned
+ * BCS bytes matches the input.
  */
 export class RpcTxnDataSerializer implements TxnDataSerializer {
   private client: JsonRpcClient;
@@ -102,6 +106,48 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     } catch (err) {
       throw new Error(
         `Error executing Pay transaction: ${err} with args ${JSON.stringify(t)}`
+      );
+    }
+  }
+
+  async newPaySui(
+    signerAddress: SuiAddress,
+    t: PaySuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_paySui',
+        [signerAddress, t.inputCoins, t.recipients, t.amounts, t.gasBudget],
+        isTransactionBytes,
+        this.skipDataValidation
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(
+        `Error executing PaySui transaction: ${err} with args ${JSON.stringify(
+          t
+        )}`
+      );
+    }
+  }
+
+  async newPayAllSui(
+    signerAddress: SuiAddress,
+    t: PayAllSuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_payAllSui',
+        [signerAddress, t.inputCoins, t.recipient, t.gasBudget],
+        isTransactionBytes,
+        this.skipDataValidation
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(
+        `Error executing PayAllSui transaction: ${err} with args ${JSON.stringify(
+          t
+        )}`
       );
     }
   }

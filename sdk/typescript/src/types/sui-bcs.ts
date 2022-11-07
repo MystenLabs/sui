@@ -1,27 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs, decodeStr, encodeStr } from '@mysten/bcs';
-import { Buffer } from 'buffer';
+import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
 import { SuiObjectRef } from './objects';
 
+const bcs = new BCS(getSuiMoveConfig());
+
 bcs
-  .registerVectorType('vector<u8>', 'u8')
-  .registerVectorType('vector<u64>', 'u64')
-  .registerVectorType('vector<u128>', 'u128')
-  .registerVectorType('vector<vector<u8>>', 'vector<u8>')
-  .registerAddressType('ObjectID', 20)
-  .registerAddressType('SuiAddress', 20)
-  .registerAddressType('address', 20)
   .registerType(
     'utf8string',
     (writer, str) => {
-      let bytes = Array.from(Buffer.from(str));
+      const bytes = Array.from(new TextEncoder().encode(str));
       return writer.writeVec(bytes, (writer, el) => writer.write8(el));
     },
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
-      return Buffer.from(bytes).toString('utf-8');
+      return new TextDecoder().decode(new Uint8Array(bytes));
     }
   )
   .registerType(
@@ -37,7 +31,7 @@ bcs
   );
 
 bcs.registerStructType('SuiObjectRef', {
-  objectId: 'ObjectID',
+  objectId: 'address',
   version: 'u64',
   digest: 'ObjectDigest',
 });
@@ -55,7 +49,7 @@ export type TransferObjectTx = {
 };
 
 bcs.registerStructType('TransferObjectTx', {
-  recipient: 'SuiAddress',
+  recipient: 'address',
   object_ref: 'SuiObjectRef',
 });
 
@@ -80,22 +74,46 @@ export type PayTx = {
   };
 };
 
+export type PaySuiTx = {
+  PaySui: {
+    coins: SuiObjectRef[];
+    recipients: string[];
+    amounts: number[];
+  };
+};
+
+export type PayAllSuiTx = {
+  PayAllSui: {
+    coins: SuiObjectRef[];
+    recipient: string;
+  };
+};
+
 bcs
-  .registerVectorType('vector<SuiAddress>', 'SuiAddress')
-  .registerVectorType('vector<SuiObjectRef>', 'SuiObjectRef')
   .registerStructType('PayTx', {
     coins: 'vector<SuiObjectRef>',
-    recipients: 'vector<SuiAddress>',
+    recipients: 'vector<address>',
     amounts: 'vector<u64>',
   });
 
-bcs.registerEnumType('Option<u64>', {
+bcs.registerStructType('PaySuiTx', {
+  coins: 'vector<SuiObjectRef>',
+  recipients: 'vector<address>',
+  amounts: 'vector<u64>',
+});
+
+bcs.registerStructType('PayAllSuiTx', {
+  coins: 'vector<SuiObjectRef>',
+  recipient: 'address',
+});
+
+bcs.registerEnumType('Option<T>', {
   None: null,
-  Some: 'u64',
+  Some: 'T',
 });
 
 bcs.registerStructType('TransferSuiTx', {
-  recipient: 'SuiAddress',
+  recipient: 'address',
   amount: 'Option<u64>',
 });
 
@@ -130,9 +148,23 @@ bcs.registerStructType('PublishTx', {
 // ========== Move Call Tx ===========
 
 /**
+ * A reference to a shared object.
+ */
+export type SharedObjectRef = {
+  /** Hex code as string representing the object id */
+  objectId: string;
+
+  /** The version the object was shared at */
+  initialSharedVersion: number;
+};
+
+/**
  * An object argument.
  */
-export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
+export type ObjectArg =
+  | { ImmOrOwned: SuiObjectRef }
+  | { Shared: SharedObjectRef }
+  | { Shared_Deprecated: string };
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -141,9 +173,12 @@ export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
  *
  * Example:
  * ```js
- * let arg1: CallArg = { Object: { Shared: '5460cf92b5e3e7067aaace60d88324095fd22944' } };
+ * let arg1: CallArg = { Object: { Shared: {
+ *   objectId: '5460cf92b5e3e7067aaace60d88324095fd22944',
+ *   initialSharedVersion: 1,
+ * } } };
  * let arg2: CallArg = { Pure: bcs.set(bcs.STRING, 100000).toBytes() };
- * let arg3: CallArg = { Object: { ImmOrOwnedObject: {
+ * let arg3: CallArg = { Object: { ImmOrOwned: {
  *   objectId: '4047d2e25211d87922b6650233bd0503a6734279',
  *   version: 1,
  *   digest: 'bCiANCht4O9MEUhuYjdRCqRPZjr2rJ8MfqNiwyhmRgA='
@@ -153,16 +188,24 @@ export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
-export type CallArg = { Pure: ArrayLike<number> } | { Object: ObjectArg };
+export type CallArg =
+  | { Pure: ArrayLike<number> }
+  | { Object: ObjectArg }
+  | { ObjVec: ArrayLike<ObjectArg> };
 
 bcs
+  .registerStructType('SharedObjectRef', {
+    objectId: 'address',
+    initialSharedVersion: 'u64',
+  })
   .registerEnumType('ObjectArg', {
     ImmOrOwned: 'SuiObjectRef',
-    Shared: 'ObjectID',
+    Shared: 'SharedObjectRef',
   })
   .registerEnumType('CallArg', {
     Pure: 'vector<u8>',
     Object: 'ObjectArg',
+    ObjVec: 'vector<ObjectArg>',
   });
 
 /**
@@ -186,7 +229,10 @@ export type TypeTag =
   | { address: null }
   | { signer: null }
   | { vector: TypeTag }
-  | { struct: StructTag };
+  | { struct: StructTag }
+  | { u16: null }
+  | { u32: null }
+  | { u256: null }  ;
 
 bcs
   .registerEnumType('TypeTag', {
@@ -198,10 +244,12 @@ bcs
     signer: null,
     vector: 'TypeTag',
     struct: 'StructTag',
+    u16: null,
+    u32: null,
+    u256: null,
   })
-  .registerVectorType('vector<TypeTag>', 'TypeTag')
   .registerStructType('StructTag', {
-    address: 'SuiAddress',
+    address: 'address',
     module: 'string',
     name: 'string',
     typeParams: 'vector<TypeTag>',
@@ -223,7 +271,6 @@ export type MoveCallTx = {
 };
 
 bcs
-  .registerVectorType('vector<CallArg>', 'CallArg')
   .registerStructType('MoveCallTx', {
     package: 'SuiObjectRef',
     module: 'string',
@@ -237,6 +284,8 @@ bcs
 export type Transaction =
   | MoveCallTx
   | PayTx
+  | PaySuiTx
+  | PayAllSuiTx
   | PublishTx
   | TransferObjectTx
   | TransferSuiTx;
@@ -247,6 +296,8 @@ bcs.registerEnumType('Transaction', {
   Call: 'MoveCallTx',
   TransferSui: 'TransferSuiTx',
   Pay: 'PayTx',
+  PaySui: 'PaySuiTx',
+  PayAllSui: 'PayAllSuiTx',
 });
 /**
  * Transaction kind - either Batch or Single.
@@ -259,14 +310,13 @@ export type TransactionKind =
   | { Batch: Transaction[] };
 
 bcs
-  .registerVectorType('vector<Transaction>', 'Transaction')
   .registerEnumType('TransactionKind', {
     Single: 'Transaction',
     Batch: 'vector<Transaction>',
   });
 
 /**
- * The TransactionData to be signed and sent to the Gateway service.
+ * The TransactionData to be signed and sent to the RPC service.
  *
  * Field `sender` is made optional as it can be added during the signing
  * process and there's no need to define it sooner.
@@ -281,10 +331,55 @@ export type TransactionData = {
 
 bcs.registerStructType('TransactionData', {
   kind: 'TransactionKind',
-  sender: 'SuiAddress',
+  sender: 'address',
   gasPayment: 'SuiObjectRef',
   gasPrice: 'u64',
   gasBudget: 'u64',
 });
+
+// ========== Deprecated ===========
+
+/**
+ * Temporary support for older protocol types that don't require an initial
+ * shared version to be provided when referring to a shared object.  Remove
+ * after the devnet launch that adds support for the new protocol.
+ */
+bcs
+  .registerEnumType('ObjectArg_Deprecated', {
+    ImmOrOwned: 'SuiObjectRef',
+    Shared_Deprecated: 'address',
+  })
+  .registerEnumType('CallArg_Deprecated', {
+    Pure: 'vector<u8>',
+    Object: 'ObjectArg_Deprecated',
+    ObjVec: 'vector<ObjectArg_Deprecated>',
+  })
+  .registerStructType('MoveCallTx_Deprecated', {
+    package: 'SuiObjectRef',
+    module: 'string',
+    function: 'string',
+    typeArguments: 'vector<TypeTag>',
+    arguments: 'vector<CallArg_Deprecated>',
+  })
+  .registerEnumType('Transaction_Deprecated', {
+    TransferObject: 'TransferObjectTx',
+    Publish: 'PublishTx',
+    Call: 'MoveCallTx_Deprecated',
+    TransferSui: 'TransferSuiTx',
+    Pay: 'PayTx',
+    PaySui: 'PaySuiTx',
+    PayAllSui: 'PayAllSuiTx',
+  })
+  .registerEnumType('TransactionKind_Deprecated', {
+    Single: 'Transaction_Deprecated',
+    Batch: 'vector<Transaction_Deprecated>',
+  })
+  .registerStructType('TransactionData_Deprecated', {
+    kind: 'TransactionKind_Deprecated',
+    sender: 'address',
+    gasPayment: 'SuiObjectRef',
+    gasPrice: 'u64',
+    gasBudget: 'u64',
+  });
 
 export { bcs };

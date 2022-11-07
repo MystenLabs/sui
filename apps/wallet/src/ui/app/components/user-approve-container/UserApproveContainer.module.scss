@@ -10,6 +10,7 @@
 .scroll-body {
     flex: 1;
     padding: 25px;
+    padding-bottom: 0;
 }
 
 .origin-container {
@@ -31,6 +32,7 @@
     font-size: 18px;
     line-height: 18px;
     font-weight: 600;
+    text-transform: capitalize;
 }
 
 .origin {
@@ -65,9 +67,8 @@
 
 .actions {
     padding: 15px 25px 25px;
-    background: white;
+    background: colors.$white;
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 0 44px rgba(0 0 0 / 15%);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -85,7 +86,7 @@
     justify-content: center;
     padding: 14px 20px;
     gap: 10px;
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 14px;
     line-height: 17px;
     font-weight: 600;
@@ -104,7 +105,8 @@
         color: colors.$white;
 
         & i {
-            color: #adcadd;
+            color: #e1f3ff;
+            font-weight: 300;
         }
     }
 
@@ -117,12 +119,22 @@
         }
     }
 
+    &.loading {
+        background-color: colors.$sui-steel-blue;
+        color: colors.$white;
+
+        .loader {
+            border-color: colors.$white;
+        }
+    }
+
     &.reject {
-        background: #fae4e4;
+        background: colors.$error-light;
         color: colors.$error;
 
         & i {
-            color: #d28a8a;
+            color: colors.$error;
+            font-weight: 300;
         }
     }
 }

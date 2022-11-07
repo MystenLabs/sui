@@ -114,6 +114,7 @@
         font-size: 14px;
         line-height: 100%;
         color: colors.$gray-90;
+        word-break: break-all;
     }
 
     .explorer-link {
@@ -157,7 +158,7 @@
 .success {
     .response-card,
     .response-card::after {
-        background-color: colors.$receipt-card-bg-success;
+        background-color: colors.$success-light;
     }
 
     .status-icon {
@@ -234,5 +235,6 @@
 
     .label {
         text-transform: capitalize;
+        word-break: break-all;
     }
 }

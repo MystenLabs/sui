@@ -73,10 +73,6 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci
-      - name: narwhal celo crypto tests
-        run: |
-          cargo nextest run --features celo --profile ci -p narwhal-crypto
-          cargo test --doc --features celo -p narwhal-crypto
       - name: Doctests
         run: |
           cargo test --doc
@@ -98,11 +94,10 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
+      - uses: arduino/setup-protoc@v1
       - name: cargo build
         run: |
           cargo build --all-features
-      # Ensure there are no uncommitted changes in the repo after running tests
-      - run: scripts/changed-files.sh
         shell: bash
 
 

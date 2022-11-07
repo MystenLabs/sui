@@ -10,14 +10,13 @@ publish = false
 async-trait = "0.1.57"
 base64 = "0.13.0"
 bincode = "1.3.3"
-blake2 = "0.9"
 bytes = "1.2.1"
 dashmap = "5.4.0"
 derive_builder = "0.11.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 mockall = "0.11.2"
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", rev = "cd46f279aac3a0b58f9be20f87fb08cbd8d7eea7" }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "87c2cf04f4d9c7ef1f157ddbe68af15269ae9424" }
 prometheus = "0.13.2"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
@@ -27,7 +26,7 @@ roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_with = "2.0.1"
 signature = "1.6.1"
-store = {  version = "0.1.0", package = "typed-store"}
+store = {  version = "0.4.0", package = "typed-store"}
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
@@ -38,21 +37,24 @@ config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 dag = { path = "../dag", package = "narwhal-dag" }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo.workspace = true
 workspace-hack.workspace = true
+once_cell = "1.16.0"
 
 [dev-dependencies]
 criterion = "0.3.6"
 hex = "0.4.3"
-serde_test = "1.0.144"
+serde_test = "1.0.147"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
+
+[target.'cfg(not(target_env = "msvc"))'.build-dependencies]
+protobuf-src = "1.1.0"
 
 [build-dependencies]
 prost-build = "0.11.1"
-protobuf-src = "1.1.0"
 rustversion = "1.0.9"
 tonic-build = { version = "0.8.2", features = [ "prost", "transport" ] }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo-build.workspace = true
 
 [features]
 default = []

@@ -14,8 +14,19 @@ export const unlockWallet = createAsyncThunk<
 });
 
 export const lockWallet = createAsyncThunk<void, void, AppThunkConfig>(
-    'wallet-unlock-wallet',
+    'wallet-lock-wallet',
     async (_, { extra: { background } }) => {
         await background.lockWallet();
+    }
+);
+
+export const setKeyringLockTimeout = createAsyncThunk<
+    void,
+    { timeout: number },
+    AppThunkConfig
+>(
+    'wallet-set-keyring-lock-timeout',
+    async ({ timeout }, { extra: { background } }) => {
+        await background.setKeyringLockTimeout(timeout);
     }
 );

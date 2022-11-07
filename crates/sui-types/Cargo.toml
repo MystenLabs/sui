@@ -8,10 +8,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-bcs = "0.1.3"
+bincode = "1.3.3"
+bcs = "0.1.4"
 byteorder = "1.4.3"
 itertools = "0.10.5"
-once_cell = "1.14.0"
+once_cell = "1.16"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
@@ -23,14 +24,12 @@ tracing = "0.1"
 hex = "0.4.3"
 serde_bytes = "0.11.7"
 serde_json = "1.0.83"
-serde_with = "1.14.0"
+serde_with = "2.0.1"
 serde_repr = "0.1"
 signature = "1.6.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-base64ct = { version = "1.5.2", features = ["std", "alloc"] }
 zeroize = "1.5.7"
-hkdf = "0.12.3"
 digest = "0.10.3"
 schemars ="0.8.10"
 tonic = "0.8"
@@ -39,8 +38,6 @@ strum_macros = "^0.24"
 roaring = "0.10.1"
 enum_dispatch = "^0.3"
 eyre = "0.6.8"
-bip32 = "0.4.0"
-slip10_ed25519 = "0.1.3"
 
 name-variant.workspace = true
 typed-store.workspace = true
@@ -59,6 +56,7 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
 workspace-hack.workspace = true
+proptest = "1.0.0"
 
 [dev-dependencies]
 bincode = "1.3.3"

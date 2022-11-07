@@ -3,6 +3,7 @@
 use super::cluster::{new_wallet_context_from_cluster, Cluster};
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::env;
 use std::sync::Arc;
 use sui_faucet::{Faucet, FaucetResponse, SimpleFaucet};
 use sui_types::base_types::{encode_bytes_hex, SuiAddress};
@@ -66,8 +67,14 @@ impl FaucetClient for RemoteFaucetClient {
         let data = HashMap::from([("recipient", encode_bytes_hex(request_address))]);
         let map = HashMap::from([("FixedAmountRequest", data)]);
 
+        let auth_header = match env::var("FAUCET_AUTH_HEADER") {
+            Ok(val) => val,
+            _ => "".to_string(),
+        };
+
         let response = reqwest::Client::new()
             .post(&gas_url)
+            .header("Authorization", auth_header)
             .json(&map)
             .send()
             .await
@@ -101,7 +108,7 @@ impl FaucetClient for LocalFaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let receipt = self
             .simple_faucet
-            .send(Uuid::new_v4(), request_address, &[100000; 5])
+            .send(Uuid::new_v4(), request_address, &[200000; 5])
             .await
             .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
 

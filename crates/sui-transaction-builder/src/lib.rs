@@ -25,7 +25,7 @@ use sui_types::messages::{
     TransactionKind, TransferObject,
 };
 use sui_types::move_package::MovePackage;
-use sui_types::object::Object;
+use sui_types::object::{Object, Owner};
 use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID};
 
 #[async_trait]
@@ -41,6 +41,7 @@ pub trait DataReader {
     ) -> Result<GetRawObjectDataResponse, anyhow::Error>;
 }
 
+#[derive(Clone)]
 pub struct TransactionBuilder(pub Arc<dyn DataReader + Sync + Send>);
 
 impl TransactionBuilder {
@@ -135,16 +136,75 @@ impl TransactionBuilder {
             .iter()
             .map(|id| self.get_object_ref(*id))
             .collect();
-        let coins = join_all(handles)
+        let coin_refs = join_all(handles)
             .await
             .into_iter()
-            .map(|c| c.unwrap())
-            .collect();
+            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         let gas = self
             .select_gas(signer, gas, gas_budget, input_coins)
             .await?;
-        let data = TransactionData::new_pay(signer, coins, recipients, amounts, gas, gas_budget);
+        let data =
+            TransactionData::new_pay(signer, coin_refs, recipients, amounts, gas, gas_budget);
         Ok(data)
+    }
+
+    pub async fn pay_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+
+        let handles: Vec<_> = input_coins
+            .into_iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+        let coin_refs = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
+        // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
+        let gas_object_ref = coin_refs[0];
+        Ok(TransactionData::new_pay_sui(
+            signer,
+            coin_refs,
+            recipients,
+            amounts,
+            gas_object_ref,
+            gas_budget,
+        ))
+    }
+
+    pub async fn pay_all_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipient: SuiAddress,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+
+        let handles: Vec<_> = input_coins
+            .into_iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+
+        let coin_refs = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
+        // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
+        let gas_object_ref = coin_refs[0];
+        Ok(TransactionData::new_pay_all_sui(
+            signer,
+            coin_refs,
+            recipient,
+            gas_object_ref,
+            gas_budget,
+        ))
     }
 
     pub async fn move_call(
@@ -228,10 +288,16 @@ impl TransactionBuilder {
         let obj_ref = obj.compute_object_reference();
         let owner = obj.owner;
         objects.insert(id, obj);
-        Ok(if owner.is_shared() {
-            ObjectArg::SharedObject(id)
-        } else {
-            ObjectArg::ImmOrOwnedObject(obj_ref)
+        Ok(match owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+            },
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                ObjectArg::ImmOrOwnedObject(obj_ref)
+            }
         })
     }
 
@@ -306,6 +372,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: consolidate this with Pay transactions
     pub async fn split_coin(
         &self,
         signer: SuiAddress,
@@ -337,6 +404,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: consolidate this with Pay transactions
     pub async fn split_coin_equal(
         &self,
         signer: SuiAddress,
@@ -368,6 +436,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: consolidate this with Pay transactions
     pub async fn merge_coins(
         &self,
         signer: SuiAddress,
@@ -458,6 +527,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: we should add retrial to reduce the transaction building error rate
     async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         Ok(self
             .0

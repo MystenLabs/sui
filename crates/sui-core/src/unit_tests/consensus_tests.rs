@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_types::Transactions;
@@ -12,8 +13,7 @@ use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     gas_coin::GasCoin,
     messages::{
-        CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, SignatureAggregator,
-        TransactionData,
+        CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, TransactionData,
     },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
@@ -38,7 +38,10 @@ pub fn test_shared_object() -> Object {
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
     let content = GasCoin::new(shared_object_id, 10);
     let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
-    Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    let owner = Owner::Shared {
+        initial_shared_version: obj.version(),
+    };
+    Object::new_move(obj, owner, TransactionDigest::genesis())
 }
 
 /// Fixture: a few test certificates containing a shared object.
@@ -46,7 +49,11 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
     let (sender, keypair) = test_account_keys().pop().unwrap();
 
     let mut certificates = Vec::new();
-    let shared_object_id = test_shared_object().id();
+    let shared_object = test_shared_object();
+    let shared_object_arg = ObjectArg::SharedObject {
+        id: shared_object.id(),
+        initial_shared_version: shared_object.version(),
+    };
     for gas_object in test_gas_objects() {
         // Make a sample transaction.
         let module = "object_basics";
@@ -62,7 +69,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             gas_object.compute_object_reference(),
             /* args */
             vec![
-                CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
+                CallArg::Object(shared_object_arg),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
@@ -77,11 +84,12 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .await
             .unwrap();
         let vote = response.signed_transaction.unwrap();
-        let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
-            .unwrap()
-            .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
-            .unwrap()
-            .unwrap();
+        let certificate = CertifiedTransaction::new_with_auth_sign_infos(
+            transaction,
+            vec![vote.auth_sign_info.clone()],
+            &authority.committee.load(),
+        )
+        .unwrap();
         certificates.push(certificate);
     }
     certificates
@@ -103,15 +111,9 @@ async fn listen_to_sequenced_transaction() {
 
     // Set the shared object locks.
     state
-        .handle_consensus_transaction(
-            // TODO [2533]: use this once integrating Narwhal reconfiguration
-            &narwhal_consensus::ConsensusOutput {
-                certificate: narwhal_types::Certificate::default(),
-                consensus_index: narwhal_types::SequenceNumber::default(),
-            },
-            Default::default(),
+        .handle_consensus_transaction(VerifiedSequencedConsensusTransaction::new_test(
             ConsensusTransaction::new_certificate_message(&state.name, certificate),
-        )
+        ))
         .await
         .unwrap();
 
@@ -157,7 +159,6 @@ async fn submit_transaction_to_consensus() {
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
         consensus_address.clone(),
-        committee,
         tx_consensus_listener,
         /* timeout */ Duration::from_secs(5),
         metrics,
@@ -183,15 +184,9 @@ async fn submit_transaction_to_consensus() {
 
             // Set the shared object locks.
             state_guard
-                .handle_consensus_transaction(
-                    // TODO [2533]: use this once integrating Narwhal reconfiguration
-                    &narwhal_consensus::ConsensusOutput {
-                        certificate: narwhal_types::Certificate::default(),
-                        consensus_index: narwhal_types::SequenceNumber::default(),
-                    },
-                    Default::default(),
+                .handle_consensus_transaction(VerifiedSequencedConsensusTransaction::new_test(
                     ConsensusTransaction::new_certificate_message(&name, *certificate),
-                )
+                ))
                 .await
                 .unwrap();
 
@@ -200,6 +195,8 @@ async fn submit_transaction_to_consensus() {
             replier.0.send(result).unwrap();
         }
     });
+
+    let certificate = certificate.verify(&committee).unwrap();
 
     // Submit the transaction and ensure the submitter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

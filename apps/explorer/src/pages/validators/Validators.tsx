@@ -3,26 +3,26 @@
 
 import {
     Base64DataBuffer,
-    type GetObjectDataResponse,
     isSuiMoveObject,
     isSuiObject,
+    type JsonRpcProvider,
+    type GetObjectDataResponse,
 } from '@mysten/sui.js';
-import { useState, useContext, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
-import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
-import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
 
+import { useRpc } from '~/hooks/useRpc';
 import { Heading } from '~/ui/Heading';
+import { TableCard } from '~/ui/TableCard';
 
 const textDecoder = new TextDecoder();
 
@@ -106,8 +106,10 @@ function instanceOfValidatorState(object: any): object is ValidatorState {
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
-export function getValidatorState(network: string): Promise<ValidatorState> {
-    return rpc(network)
+export function getValidatorState(
+    rpc: JsonRpcProvider
+): Promise<ValidatorState> {
+    return rpc
         .getObject(VALIDATORS_OBJECT_ID)
         .then((objState: GetObjectDataResponse) => {
             if (
@@ -123,7 +125,7 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
         });
 }
 
-const ValidatorPageResult = (): JSX.Element => {
+function ValidatorPageResult() {
     const { state } = useLocation();
 
     if (instanceOfValidatorState(state)) {
@@ -135,7 +137,7 @@ const ValidatorPageResult = (): JSX.Element => {
     ) : (
         <ValidatorPageAPI />
     );
-};
+}
 
 export function processValidators(set: Validator[]) {
     return set.map((av, i) => {
@@ -161,7 +163,7 @@ export function getTabFooter(count: number) {
     };
 }
 
-function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
+function ValidatorsPage({ state }: { state: ValidatorState }) {
     const validatorsData = processValidators(
         state.validators.fields.active_validators
     );
@@ -175,15 +177,15 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                     <Longtext
                         text={validator.address}
                         alttext={truncate(validator.address, 14)}
-                        category={'addresses'}
-                        isLink={true}
+                        category="addresses"
+                        isLink
                     />
                 ),
                 pubkeyBytes: (
                     <Longtext
                         text={validator.pubkeyBytes}
                         alttext={truncate(validator.pubkeyBytes, 14)}
-                        category={'addresses'}
+                        category="addresses"
                         isLink={false}
                     />
                 ),
@@ -215,7 +217,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 Validators
             </Heading>
             <div className="mt-8">
-                <TableCard tabledata={tableData} />
+                <TableCard data={tableData.data} columns={tableData.columns} />
                 <TabFooter stats={getTabFooter(validatorsData.length).stats}>
                     <Longtext
                         text=""
@@ -229,18 +231,16 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     );
 }
 
-export const ValidatorLoadFail = (): JSX.Element => {
-    return (
-        <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
-    );
-};
+export function ValidatorLoadFail() {
+    return <ErrorResult id="" errorMsg="Validator data could not be loaded" />;
+}
 
-export const ValidatorPageAPI = (): JSX.Element => {
+export function ValidatorPageAPI() {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
-        getValidatorState(network)
+        getValidatorState(rpc)
             .then((objState: ValidatorState) => {
                 setObjectState(objState);
                 setLoadState('loaded');
@@ -249,7 +249,7 @@ export const ValidatorPageAPI = (): JSX.Element => {
                 console.error(error);
                 setLoadState('fail');
             });
-    }, [network]);
+    }, [rpc]);
 
     if (loadState === 'loaded') {
         return <ValidatorsPage state={showObjectState as ValidatorState} />;
@@ -261,7 +261,7 @@ export const ValidatorPageAPI = (): JSX.Element => {
         return <ValidatorLoadFail />;
     }
 
-    return <div>"Something went wrong"</div>;
-};
+    return <div>Something went wrong</div>;
+}
 
 export { ValidatorPageResult };

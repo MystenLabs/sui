@@ -7,6 +7,8 @@ import Browser from 'webextension-polyfill';
 import Item from './item';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import Button from '_app/shared/button';
+import FaucetMessageInfo from '_app/shared/faucet/message-info';
+import FaucetRequestButton from '_app/shared/faucet/request-button';
 import { lockWallet } from '_app/wallet/actions';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
@@ -60,22 +62,21 @@ function MenuList() {
                     subtitle={'v' + version}
                 />
             </div>
-            <div className={st.container}>
-                <div className={st.item}>
-                    <Button
-                        mode="secondary"
-                        size="large"
-                        className={st.btn}
-                        onClick={async () => {
-                            await dispatch(lockWallet()).unwrap();
-                            navigate('/locked', { replace: true });
-                        }}
-                    >
-                        <Icon icon={SuiIcons.Lock} />
-                        Lock Wallet
-                    </Button>
-                </div>
+            <div className={st.actionsContainer}>
+                <FaucetRequestButton mode="secondary" />
+                <Button
+                    mode="secondary"
+                    size="large"
+                    onClick={async () => {
+                        await dispatch(lockWallet()).unwrap();
+                        navigate('/locked', { replace: true });
+                    }}
+                >
+                    <Icon icon={SuiIcons.Lock} />
+                    Lock Wallet
+                </Button>
             </div>
+            <FaucetMessageInfo className={st.faucetInfo} />
         </div>
     );
 }

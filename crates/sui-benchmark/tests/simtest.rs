@@ -8,7 +8,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
     use sui_config::SUI_KEYSTORE_FILENAME;
-    use sui_core::test_utils::test_authority_aggregator;
+    use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
     use test_utils::{
         messages::get_gas_object_with_wallet_context, network::init_cluster_builder_env_aware,
     };
@@ -17,6 +17,7 @@ mod test {
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
         workloads::make_combination_workload,
+        LocalValidatorAggregatorProxy, ValidatorProxy,
     };
 
     use sui_macros::sim_test;
@@ -76,10 +77,15 @@ mod test {
             1,  // transfer_object_weight
         )];
 
-        let aggregator = Arc::new(test_authority_aggregator(swarm.config()));
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(swarm.config())
+            .build()
+            .unwrap();
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(aggregator)),
+        );
 
         for w in workloads.iter_mut() {
-            w.workload.init(aggregator.clone()).await;
+            w.workload.init(proxy.clone()).await;
         }
 
         let driver = BenchDriver::new(5);
@@ -96,7 +102,7 @@ mod test {
 
         let show_progress = interval.is_unbounded();
         let stats = driver
-            .run(workloads, aggregator, &registry, show_progress, interval)
+            .run(workloads, proxy, &registry, show_progress, interval)
             .await
             .unwrap();
 

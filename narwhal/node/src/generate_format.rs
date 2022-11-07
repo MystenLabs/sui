@@ -3,8 +3,8 @@
 use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
 use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
+    hash::Hash,
     traits::{KeyPair as _, Signer},
-    Digest, Hash,
 };
 use multiaddr::Multiaddr;
 use rand::{prelude::StdRng, SeedableRng};
@@ -12,9 +12,9 @@ use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, WorkerPrimaryMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage,
+    Batch, BatchDigest, Certificate, CertificateDigest, HeaderBuilder, HeaderDigest, Metadata,
+    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -71,20 +71,16 @@ fn get_registry() -> Result<Registry> {
     let certificates: Vec<Certificate> = Certificate::genesis(&committee);
 
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
-    let mut header = Header {
-        author: kp.public().clone(),
-        round: 1,
-        payload: (0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect(),
-        parents: certificates.iter().map(|x| x.digest()).collect(),
-        ..Header::default()
-    };
+    let header_builder = HeaderBuilder::default();
+    let header = header_builder
+        .author(kp.public().clone())
+        .epoch(0)
+        .round(1)
+        .payload((0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect())
+        .parents(certificates.iter().map(|x| x.digest()).collect())
+        .build(&kp)
+        .unwrap();
 
-    let header_digest = header.digest();
-    header = Header {
-        id: header_digest,
-        signature: kp.sign(Digest::from(header_digest).as_ref()),
-        ..header
-    };
     let worker_pk = network_keys[0].public().clone();
     let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
     let signature = keys[0].sign(certificate.digest().as_ref());
@@ -111,6 +107,15 @@ fn get_registry() -> Result<Registry> {
     );
     tracer.trace_value(&mut samples, &worker_index)?;
 
+    let our_batch = WorkerOurBatchMessage {
+        digest: BatchDigest([0u8; 32]),
+        worker_id: 0,
+        metadata: Metadata { created_at: 0 },
+    };
+    let others_batch = WorkerOthersBatchMessage {
+        digest: BatchDigest([0u8; 32]),
+        worker_id: 0,
+    };
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
@@ -124,6 +129,8 @@ fn get_registry() -> Result<Registry> {
     let shutdown = WorkerReconfigureMessage {
         message: ReconfigureNotification::Shutdown,
     };
+    tracer.trace_value(&mut samples, &our_batch)?;
+    tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
     tracer.trace_value(&mut samples, &epoch_change)?;
     tracer.trace_value(&mut samples, &update_committee)?;
@@ -135,8 +142,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<HeaderDigest>(&samples)?;
     tracer.trace_type::<CertificateDigest>(&samples)?;
 
-    // The final entry points that we must document
-    tracer.trace_type::<WorkerPrimaryMessage>(&samples)?;
     tracer.registry()
 }
 

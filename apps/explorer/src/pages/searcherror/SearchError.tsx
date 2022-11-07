@@ -8,7 +8,7 @@ import ErrorResult from '../../components/error-result/ErrorResult';
 const addressErrEnd =
     'must be a hex string encoding 20 bytes, with or without the "0x" prefix.';
 
-const SearchError = () => {
+function SearchError() {
     const { category, id } = useParams();
 
     let msg = 'unknown';
@@ -32,6 +32,6 @@ const SearchError = () => {
     }
 
     return <ErrorResult id={id} errorMsg={msg} />;
-};
+}
 
 export default SearchError;

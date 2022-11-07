@@ -9,6 +9,9 @@
 
 pub mod bullshark;
 pub mod consensus;
+#[cfg(test)]
+#[path = "tests/consensus_utils.rs"]
+pub mod consensus_utils;
 pub mod dag;
 pub mod metrics;
 pub mod tusk;
@@ -23,7 +26,7 @@ use types::{Certificate, SequenceNumber};
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
 
 /// The output format of the consensus.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ConsensusOutput {
     /// The sequenced certificate.
     pub certificate: Certificate,

@@ -62,6 +62,7 @@ function AppsPlayGround() {
                       icon: isConnected.favIcon || app.icon,
                       // instance where the origin has a trailing slash and the app.link does not
                       link: isConnected.origin,
+                      pageLink: isConnected.pagelink,
                   }
                 : {}),
         };

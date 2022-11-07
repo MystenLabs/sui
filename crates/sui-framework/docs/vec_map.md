@@ -104,16 +104,6 @@ An entry in the map
 ## Constants
 
 
-<a name="0x2_vec_map_EIndexOutOfBounds"></a>
-
-Trying to access an element of the map at an invalid index
-
-
-<pre><code><b>const</b> <a href="vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="0x2_vec_map_EKeyAlreadyExists"></a>
 
 This key already exists in the map
@@ -130,6 +120,16 @@ This key does not exist in the map
 
 
 <pre><code><b>const</b> <a href="vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_vec_map_EIndexOutOfBounds"></a>
+
+Trying to access an element of the map at an invalid index
+
+
+<pre><code><b>const</b> <a href="vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
 </code></pre>
 
 

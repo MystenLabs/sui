@@ -4,6 +4,7 @@
 use self::db_dump::{dump_table, list_tables, StoreName};
 use clap::Parser;
 use std::path::PathBuf;
+use sui_types::base_types::EpochId;
 
 pub mod db_dump;
 
@@ -29,6 +30,13 @@ pub struct Dump {
     /// The page number to dump
     #[clap(long = "page-num")]
     page_number: usize,
+
+    // TODO: We should load this automatically from the system object in AuthorityPerpetualTables.
+    // This is very difficult to do right now because you can't share code between
+    // AuthorityPerpetualTables and AuthorityEpochTablesReadonly.
+    /// The epoch to use when loading AuthorityEpochTables.
+    #[clap(long = "epoch")]
+    epoch: Option<EpochId>,
 }
 
 pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
@@ -36,6 +44,7 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         DbToolCommand::ListTables => print_db_all_tables(db_path),
         DbToolCommand::Dump(d) => print_all_entries(
             d.store_name,
+            d.epoch,
             db_path,
             &d.table_name,
             d.page_size,
@@ -51,12 +60,13 @@ pub fn print_db_all_tables(db_path: PathBuf) -> anyhow::Result<()> {
 
 pub fn print_all_entries(
     store: StoreName,
+    epoch: Option<EpochId>,
     path: PathBuf,
     table_name: &str,
     page_size: u16,
     page_number: usize,
 ) -> anyhow::Result<()> {
-    for (k, v) in dump_table(store, path, table_name, page_size, page_number)? {
+    for (k, v) in dump_table(store, epoch, path, table_name, page_size, page_number)? {
         println!("{:>100?}: {:?}", k, v);
     }
     Ok(())

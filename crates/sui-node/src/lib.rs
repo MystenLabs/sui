@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo_tower::callback::CallbackLayer;
+use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
 use futures::TryFutureExt;
 use mysten_network::server::ServerBuilder;
+use narwhal_network::metrics::MetricsMakeCallbackHandler;
+use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
@@ -20,7 +24,7 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::{gossip::GossipMetrics, ActiveAuthority},
+    authority_active::ActiveAuthority,
     authority_client::{
         make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
@@ -39,7 +43,9 @@ use sui_storage::{
 };
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
+use tower::ServiceBuilder;
 use tracing::{error, info, warn};
+use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
@@ -52,6 +58,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
+use sui_metrics::spawn_monitored_task;
 use sui_types::crypto::KeypairTraits;
 
 pub mod admin;
@@ -64,7 +71,7 @@ pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<HttpServerHandle>,
     _ws_subscription_service: Option<WsServerHandle>,
-    _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
+    _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     _execute_driver_handle: tokio::task::JoinHandle<()>,
@@ -73,6 +80,8 @@ pub struct SuiNode {
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     _prometheus_registry: Registry,
+
+    _p2p_network: anemo::Network,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -88,11 +97,15 @@ impl SuiNode {
             "Initializing sui-node listening on {}", config.network_address
         );
 
+        // Initialize metrics to track db usage before creating any stores
+        DBMetrics::init(&prometheus_registry);
+        sui_metrics::init_metrics(&prometheus_registry);
+
         let genesis = config.genesis()?;
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None)?);
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &committee,
@@ -133,11 +146,18 @@ impl SuiNode {
             .websocket_address
             .map(|_| Arc::new(TransactionStreamer::new()));
 
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            config.db_path().join("node_sync_db"),
+            None,
+            None,
+        ));
+
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
                 secret,
                 store,
+                node_sync_store,
                 committee_store.clone(),
                 index_store.clone(),
                 event_store,
@@ -177,16 +197,10 @@ impl SuiNode {
             network_metrics.clone(),
         );
 
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            config.db_path().join("node_sync_db"),
-            None,
-            None,
-        ));
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
-            node_sync_store,
             net.clone(),
-            GossipMetrics::new(&prometheus_registry),
+            &prometheus_registry,
             network_metrics.clone(),
         )?);
 
@@ -206,18 +220,17 @@ impl SuiNode {
         let batch_subsystem_handle = {
             // Start batch system so that this node can be followed
             let batch_state = state.clone();
-            tokio::task::spawn(async move {
+            spawn_monitored_task!(async move {
                 batch_state
                     .run_batch_service(1000, Duration::from_secs(1))
                     .await
-                    .map_err(Into::into)
             })
         };
 
         let post_processing_subsystem_handle =
             if index_store.is_some() || config.enable_event_processing {
                 let indexing_state = state.clone();
-                Some(tokio::task::spawn(async move {
+                Some(spawn_monitored_task!(async move {
                     indexing_state
                         .run_tx_post_processing_process()
                         .await
@@ -243,10 +256,6 @@ impl SuiNode {
             }
             active_authority.clone().spawn_node_sync_process().await;
             None
-        } else if config.enable_gossip {
-            // TODO: get degree from config file.
-            let degree = 4;
-            Some(active_authority.clone().spawn_gossip_process(degree).await)
         } else {
             None
         };
@@ -290,7 +299,48 @@ impl SuiNode {
                 .map_err(|err| anyhow!(err.to_string()))?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
-            tokio::spawn(server.serve().map_err(Into::into))
+            spawn_monitored_task!(server.serve().map_err(Into::into))
+        };
+
+        let p2p_network = {
+            let inbound_network_metrics =
+                NetworkMetrics::new("sui", "inbound", &prometheus_registry);
+            let outbound_network_metrics =
+                NetworkMetrics::new("sui", "outbound", &prometheus_registry);
+            let network_connection_metrics =
+                NetworkConnectionMetrics::new("sui", &prometheus_registry);
+
+            let routes = anemo::Router::new();
+
+            let service = ServiceBuilder::new()
+                .layer(TraceLayer::new_for_server_errors())
+                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                    Arc::new(inbound_network_metrics),
+                )))
+                .service(routes);
+
+            let outbound_layer = ServiceBuilder::new()
+                .layer(TraceLayer::new_for_client_and_server_errors())
+                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                    Arc::new(outbound_network_metrics),
+                )))
+                .into_inner();
+
+            let network = anemo::Network::bind(config.p2p_config.listen_address)
+                .server_name("sui")
+                .private_key(config.network_key_pair.copy().private().0.to_bytes())
+                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
+                .outbound_request_layer(outbound_layer)
+                .start(service)?;
+            info!("P2p network started on {}", network.local_addr());
+
+            let _connection_monitor_handle =
+                narwhal_network::connectivity::ConnectionMonitor::spawn(
+                    network.downgrade(),
+                    network_connection_metrics,
+                );
+
+            network
         };
 
         let (json_rpc_service, ws_subscription_service) = build_http_servers(
@@ -314,6 +364,7 @@ impl SuiNode {
             active: active_authority,
             transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
+            _p2p_network: p2p_network,
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
@@ -374,7 +425,8 @@ pub async fn build_http_servers(
         return Ok((None, None));
     }
 
-    let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
+    let mut server =
+        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
@@ -400,7 +452,8 @@ pub async fn build_http_servers(
 
     let ws_server_handle = match config.websocket_address {
         Some(ws_addr) => {
-            let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
+            let mut server =
+                JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), true, prometheus_registry)?;
             if let Some(tx_streamer) = state.transaction_streamer.clone() {
                 server.register_module(TransactionStreamingApiImpl::new(
                     state.clone(),

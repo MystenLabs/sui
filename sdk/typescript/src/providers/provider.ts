@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
+import { HttpHeaders } from '../rpc/client';
 import {
+  CoinDenominationInfoResponse,
   GetObjectDataResponse,
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  SuiTransactionResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -22,13 +23,41 @@ import {
   TransactionDigest,
   ObjectId,
   SuiAddress,
+  EventQuery,
+  EventId,
   ObjectOwner,
-  SuiEvents, PaginatedTransactionDigests, TransactionQuery, Ordering,
+  SuiEvents,
+  PaginatedTransactionDigests,
+  TransactionQuery,
+  PaginatedEvents,
+  RpcApiVersion,
+  FaucetResponse,
+  Order,
 } from '../types';
 
 ///////////////////////////////
 // Exported Abstracts
 export abstract class Provider {
+  // API Version
+  /**
+   * Fetch and cache the RPC API version number
+   *
+   * @return the current version of the RPC API that the provider is
+   * connected to, or undefined if any error occurred
+   */
+  abstract getRpcApiVersion(): Promise<RpcApiVersion | undefined>;
+
+  // Faucet
+  /**
+   * Request gas tokens from a faucet server
+   * @param recipient the address for receiving the tokens
+   * @param httpHeaders optional request headers
+   */
+  abstract requestSuiFromFaucet(
+    recipient: SuiAddress,
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse>;
+
   // Objects
   /**
    * Get all objects owned by an address
@@ -86,6 +115,25 @@ export abstract class Provider {
   ): Promise<GetObjectDataResponse[]>;
 
   /**
+   * Method to look up denomination of a specific type of coin.
+   * TODO: now only SUI coins are supported, will scale to other types
+   * based on their definitions in Move.
+   *
+   * @param coin_type coin type, e.g., '0x2::sui::SUI'
+   * @return denomination info of the coin including,
+   * coin type, the same as input coin type
+   * basic unit, the min unit of the coin, e.g., MIST;
+   * canonical unit, the commonly used unit, e.g., SUI;
+   * denomination, the value of 1 canonical over 1 basic unit,
+   * for example 1_000_000_000 = 1 SUI / 1 MIST;
+   * decimal number, the number of zeros in the denomination,
+   * e.g., 9 here for SUI coin.
+   */
+  abstract getCoinDenominationInfo(
+    coin_type: string
+  ): CoinDenominationInfoResponse;
+
+  /**
    * Get details about an object
    */
   abstract getObject(objectId: string): Promise<GetObjectDataResponse>;
@@ -111,10 +159,10 @@ export abstract class Provider {
    * Get transactions for a given query criteria
    */
   abstract getTransactions(
-      query: TransactionQuery,
-      cursor: TransactionDigest | null,
-      limit: number | null,
-      order: Ordering
+    query: TransactionQuery,
+    cursor: TransactionDigest | null,
+    limit: number | null,
+    order: Order
   ): Promise<PaginatedTransactionDigests>;
 
   /**
@@ -122,13 +170,6 @@ export abstract class Provider {
    * NOTE: this method may get deprecated after DevNet
    */
   abstract getTotalTransactionNumber(): Promise<number>;
-
-  abstract executeTransaction(
-    txnBytes: string,
-    signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string
-  ): Promise<SuiTransactionResponse>;
 
   /**
    * This is under development endpoint on Fullnode that will eventually
@@ -187,12 +228,26 @@ export abstract class Provider {
     structName: string
   ): Promise<SuiMoveNormalizedStruct>;
 
-  abstract syncAccountState(address: string): Promise<any>;
+  /**
+   * Get events for a given query criteria
+   * @param query - the event query criteria.
+   * @param cursor - optional paging cursor
+   * @param limit - maximum number of items per page
+   * @param order - event query ordering
+   */
+  abstract getEvents(
+      query: EventQuery,
+      cursor: EventId | null,
+      limit: number | null,
+      order: Order,
+  ): Promise<PaginatedEvents>;
 
   /**
    * Get events for one transaction
    * @param digest transaction digest to search by
    * @param count max result count
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByTransaction(
     digest: TransactionDigest,
@@ -201,11 +256,13 @@ export abstract class Provider {
 
   /**
    * Get events emitted from within the specified Move module
-   * @param package_ Move package object ID
+   * @param packageId Move package object ID
    * @param module Move module name
    * @param count max result count
    * @param startTime start of time range
    * @param endTime end of time range, exclusive
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByModule(
     packageId: ObjectId,
@@ -221,6 +278,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
@@ -235,6 +294,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsBySender(
     sender: SuiAddress,
@@ -249,6 +310,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
@@ -263,6 +326,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByObject(
     object: ObjectId,
@@ -276,6 +341,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByTimeRange(
     count: number,

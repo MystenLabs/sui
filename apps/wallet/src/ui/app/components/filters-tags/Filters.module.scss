@@ -20,6 +20,7 @@
         &.active {
             background: v.use(v.$colors-nav-item-highlighted-color);
             color: colors.$white;
+            border: 1px solid transparent;
         }
     }
 }

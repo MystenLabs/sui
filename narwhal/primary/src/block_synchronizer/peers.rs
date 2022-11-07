@@ -1,29 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crypto::PublicKey;
-use fastcrypto::Hash;
+use crypto::NetworkPublicKey;
+use fastcrypto::hash::Hash;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng};
 use std::collections::HashMap;
 
 #[derive(Clone)]
-pub struct Peer<Value: Hash + Clone> {
-    pub name: PublicKey,
+pub struct Peer<Value: Hash<{ crypto::DIGEST_LENGTH }> + Clone> {
+    pub name: NetworkPublicKey,
 
     /// Those are the values that we got from the peer and that is able
     /// to serve.
-    pub values_able_to_serve: HashMap<<Value as Hash>::TypedDigest, Value>,
+    pub values_able_to_serve:
+        HashMap<<Value as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest, Value>,
 
     /// Those are the assigned values after a re-balancing event
-    assigned_values: HashMap<<Value as Hash>::TypedDigest, Value>,
+    assigned_values: HashMap<<Value as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest, Value>,
 }
 
-impl<Value: Hash + Clone> Peer<Value> {
-    pub fn new(name: PublicKey, values_able_to_serve: Vec<Value>) -> Self {
-        let certs: HashMap<<Value as Hash>::TypedDigest, Value> = values_able_to_serve
-            .into_iter()
-            .map(|c| (c.digest(), c))
-            .collect();
+impl<Value: Hash<{ crypto::DIGEST_LENGTH }> + Clone> Peer<Value> {
+    pub fn new(name: NetworkPublicKey, values_able_to_serve: Vec<Value>) -> Self {
+        let certs: HashMap<<Value as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest, Value> =
+            values_able_to_serve
+                .into_iter()
+                .map(|c| (c.digest(), c))
+                .collect();
 
         Peer {
             name,
@@ -48,9 +50,9 @@ impl<Value: Hash + Clone> Peer<Value> {
 /// the re-balancing process is not guaranteed to be atomic and
 /// thread safe which could lead to potential issues if used in
 /// such environment.
-pub struct Peers<Value: Hash + Clone> {
+pub struct Peers<Value: Hash<{ crypto::DIGEST_LENGTH }> + Clone> {
     /// A map with all the peers assigned on this pool.
-    peers: HashMap<PublicKey, Peer<Value>>,
+    peers: HashMap<NetworkPublicKey, Peer<Value>>,
 
     /// When true, it means that the values have been assigned to peers and no
     /// more mutating operations can be applied
@@ -59,13 +61,13 @@ pub struct Peers<Value: Hash + Clone> {
     /// Keeps all the unique values in the map so we don't
     /// have to recompute every time they are needed by
     /// iterating over the peers.
-    unique_values: HashMap<<Value as Hash>::TypedDigest, Value>,
+    unique_values: HashMap<<Value as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest, Value>,
 
     /// An rng used to shuffle the list of peers
     rng: SmallRng,
 }
 
-impl<Value: Hash + Clone> Peers<Value> {
+impl<Value: Hash<{ crypto::DIGEST_LENGTH }> + Clone> Peers<Value> {
     pub fn new(rng: SmallRng) -> Self {
         Self {
             peers: HashMap::new(),
@@ -76,7 +78,7 @@ impl<Value: Hash + Clone> Peers<Value> {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn peers(&self) -> &HashMap<PublicKey, Peer<Value>> {
+    pub fn peers(&self) -> &HashMap<NetworkPublicKey, Peer<Value>> {
         &self.peers
     }
 
@@ -88,11 +90,11 @@ impl<Value: Hash + Clone> Peers<Value> {
         self.unique_values.values().cloned().collect()
     }
 
-    pub fn contains_peer(&mut self, name: &PublicKey) -> bool {
+    pub fn contains_peer(&mut self, name: &NetworkPublicKey) -> bool {
         self.peers.contains_key(name)
     }
 
-    pub fn add_peer(&mut self, name: PublicKey, available_values: Vec<Value>) {
+    pub fn add_peer(&mut self, name: NetworkPublicKey, available_values: Vec<Value>) {
         self.ensure_not_rebalanced();
 
         // update the unique values
@@ -138,7 +140,10 @@ impl<Value: Hash + Clone> Peers<Value> {
     /// 1) Will filter only the peers that value dictated by the
     /// provided `value_id`
     /// 2) Will pick a peer in random to assign the value to
-    fn peer_to_assign_value(&mut self, value_id: <Value as Hash>::TypedDigest) -> Peer<Value> {
+    fn peer_to_assign_value(
+        &mut self,
+        value_id: <Value as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest,
+    ) -> Peer<Value> {
         // step 1 - find the peers who have this id
         let peers_with_value: Vec<Peer<Value>> = self
             .peers
@@ -160,7 +165,10 @@ impl<Value: Hash + Clone> Peers<Value> {
 
     // Deletes the value identified by the provided id from the list of
     // available values from all the peers.
-    fn delete_values_from_peers(&mut self, id: <Value as Hash>::TypedDigest) {
+    fn delete_values_from_peers(
+        &mut self,
+        id: <Value as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest,
+    ) {
         for (_, peer) in self.peers.iter_mut() {
             peer.values_able_to_serve.remove(&id);
         }
@@ -177,9 +185,11 @@ impl<Value: Hash + Clone> Peers<Value> {
 #[cfg(test)]
 mod tests {
     use crate::block_synchronizer::peers::Peers;
-    use blake2::{digest::Update, VarBlake2b};
-    use crypto::KeyPair;
-    use fastcrypto::{traits::KeyPair as _, Digest, Hash, DIGEST_LEN};
+    use crypto::NetworkKeyPair;
+    use fastcrypto::{
+        hash::{Digest, Hash, HashFunction},
+        traits::KeyPair as _,
+    };
     use rand::{
         rngs::{SmallRng, StdRng},
         SeedableRng,
@@ -236,7 +246,7 @@ mod tests {
             let mut peers = Peers::<MockCertificate>::new(SmallRng::from_entropy());
 
             for _ in 0..test.num_of_peers {
-                let key_pair = KeyPair::generate(&mut rng);
+                let key_pair = NetworkKeyPair::generate(&mut rng);
                 peers.add_peer(key_pair.public().clone(), mock_certificates.clone());
             }
 
@@ -321,7 +331,7 @@ mod tests {
             let mut peers = Peers::<MockCertificate>::new(SmallRng::from_entropy());
 
             for peer_index in 0..test.num_of_peers {
-                let key_pair = KeyPair::generate(&mut rng);
+                let key_pair = NetworkKeyPair::generate(&mut rng);
                 let peer_name = key_pair.public().clone();
                 let mut mock_certificates = Vec::new();
 
@@ -374,9 +384,9 @@ mod tests {
     struct MockCertificate(u8);
 
     #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-    pub struct MockDigest([u8; DIGEST_LEN]);
+    pub struct MockDigest([u8; crypto::DIGEST_LENGTH]);
 
-    impl From<MockDigest> for Digest {
+    impl From<MockDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
         fn from(hd: MockDigest) -> Self {
             Digest::new(hd.0)
         }
@@ -394,17 +404,12 @@ mod tests {
         }
     }
 
-    impl Hash for MockCertificate {
+    impl Hash<{ crypto::DIGEST_LENGTH }> for MockCertificate {
         type TypedDigest = MockDigest;
 
         fn digest(&self) -> MockDigest {
             let v = self.0.borrow();
-
-            let hasher_update = |hasher: &mut VarBlake2b| {
-                hasher.update([*v].as_ref());
-            };
-
-            MockDigest(fastcrypto::blake2b_256(hasher_update))
+            MockDigest(crypto::DefaultHashFunction::digest([*v].as_ref()).digest)
         }
     }
 }

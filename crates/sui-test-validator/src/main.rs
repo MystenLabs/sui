@@ -9,14 +9,13 @@ use axum::{
 };
 use clap::Parser;
 use http::{Method, StatusCode};
-use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
 use sui_cluster_test::{
     cluster::{Cluster, LocalNewCluster},
     config::{ClusterTestOpt, Env},
     faucet::{FaucetClient, FaucetClientFactory},
 };
-use sui_types::base_types::SuiAddress;
+use sui_faucet::{FaucetRequest, FixedAmountRequest};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -56,7 +55,6 @@ async fn main() -> Result<()> {
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
-        gateway_address: Some(format!("127.0.0.1:{}", args.gateway_rpc_port)),
         fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
         websocket_address: Some(format!("127.0.0.1:{}", args.websocket_rpc_port)),
         faucet_address: None,
@@ -90,7 +88,7 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
 
     let app = Router::new()
         .route("/", get(health))
-        .route("/faucet", post(faucet_request))
+        .route("/gas", post(faucet_request))
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
@@ -114,27 +112,19 @@ async fn health() -> &'static str {
     "OK"
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct FaucetRequest {
-    pub recipient: SuiAddress,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct FaucetResponse {
-    pub ok: bool,
-}
-
 async fn faucet_request(
     Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
-    let result = state.faucet.request_sui_coins(payload.recipient).await;
+    let result = match payload {
+        FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
+            state.faucet.request_sui_coins(recipient).await
+        }
+    };
+
     if !result.transferred_gas_objects.is_empty() {
-        (StatusCode::OK, Json(FaucetResponse { ok: true }))
+        (StatusCode::CREATED, Json(result))
     } else {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(FaucetResponse { ok: false }),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(result))
     }
 }

@@ -8,6 +8,7 @@ use axum::{
     Router,
 };
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use sui_metrics::spawn_monitored_task;
 use telemetry_subscribers::FilterHandle;
 use tracing::info;
 
@@ -28,7 +29,7 @@ pub fn start_admin_server(port: u16, filter_handle: FilterHandle) {
         "starting admin server"
     );
 
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         axum::Server::bind(&socket_address)
             .serve(app.into_make_service())
             .await

@@ -7,7 +7,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SuiEvents, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, Pay, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, GenericAuthoritySignature, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, PaginatedTransactionDigests, TransactionQuery, Ordering, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PayTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, CoinDenominationInfoResponse, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, Order, MoveEvent, PublishEvent, CoinBalanceChangeEvent, TransferObjectEvent, MutateObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventQuery, EventId, PaginatedEvents, EventType, BalanceChangeType, SuiEventFilter, SuiEventEnvelope, SuiEvents, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, Pay, PaySui, PayAllSui, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, GenericAuthoritySignature, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, PaginatedTransactionDigests, TransactionQuery, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PayTx, PaySuiTx, PayAllSuiTx, PublishTx, SharedObjectRef, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData, RpcApiVersion, FaucetCoinInfo, FaucetResponse } from "./index";
 
 export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
     return (
@@ -34,7 +34,10 @@ export function isObjectOwner(obj: any, _argumentName?: string): obj is ObjectOw
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isTransactionDigest(obj.SingleOwner) as boolean ||
+            (obj.Shared !== null &&
+                typeof obj.Shared === "object" ||
+                typeof obj.Shared === "function") &&
+            isSuiMoveTypeParameterIndex(obj.Shared.initial_shared_version) as boolean ||
             obj === "Shared" ||
             obj === "Immutable")
     )
@@ -109,6 +112,18 @@ export function isSuiMoveObject(obj: any, _argumentName?: string): obj is SuiMov
         (typeof obj.has_public_transfer === "undefined" ||
             obj.has_public_transfer === false ||
             obj.has_public_transfer === true)
+    )
+}
+
+export function isCoinDenominationInfoResponse(obj: any, _argumentName?: string): obj is CoinDenominationInfoResponse {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.coinType) as boolean &&
+        (typeof obj.basicUnit === "undefined" ||
+            isTransactionDigest(obj.basicUnit) as boolean) &&
+        isSuiMoveTypeParameterIndex(obj.decimalNumber) as boolean
     )
 }
 
@@ -396,6 +411,13 @@ export function isSequenceNumber(obj: any, _argumentName?: string): obj is Seque
     )
 }
 
+export function isOrder(obj: any, _argumentName?: string): obj is Order {
+    return (
+        (obj === "ascending" ||
+            obj === "descending")
+    )
+}
+
 export function isMoveEvent(obj: any, _argumentName?: string): obj is MoveEvent {
     return (
         (obj !== null &&
@@ -423,6 +445,23 @@ export function isPublishEvent(obj: any, _argumentName?: string): obj is Publish
     )
 }
 
+export function isCoinBalanceChangeEvent(obj: any, _argumentName?: string): obj is CoinBalanceChangeEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageId) as boolean &&
+        isTransactionDigest(obj.transactionModule) as boolean &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isObjectOwner(obj.owner) as boolean &&
+        isBalanceChangeType(obj.changeType) as boolean &&
+        isTransactionDigest(obj.coinType) as boolean &&
+        isTransactionDigest(obj.coinObjectId) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.version) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.amount) as boolean
+    )
+}
+
 export function isTransferObjectEvent(obj: any, _argumentName?: string): obj is TransferObjectEvent {
     return (
         (obj !== null &&
@@ -432,11 +471,23 @@ export function isTransferObjectEvent(obj: any, _argumentName?: string): obj is 
         isTransactionDigest(obj.transactionModule) as boolean &&
         isTransactionDigest(obj.sender) as boolean &&
         isObjectOwner(obj.recipient) as boolean &&
+        isTransactionDigest(obj.objectType) as boolean &&
         isTransactionDigest(obj.objectId) as boolean &&
-        isSuiMoveTypeParameterIndex(obj.version) as boolean &&
-        isTransactionDigest(obj.type) as boolean &&
-        (obj.amount === null ||
-            isSuiMoveTypeParameterIndex(obj.amount) as boolean)
+        isSuiMoveTypeParameterIndex(obj.version) as boolean
+    )
+}
+
+export function isMutateObjectEvent(obj: any, _argumentName?: string): obj is MutateObjectEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageId) as boolean &&
+        isTransactionDigest(obj.transactionModule) as boolean &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isTransactionDigest(obj.objectType) as boolean &&
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.version) as boolean
     )
 }
 
@@ -448,7 +499,8 @@ export function isDeleteObjectEvent(obj: any, _argumentName?: string): obj is De
         isTransactionDigest(obj.packageId) as boolean &&
         isTransactionDigest(obj.transactionModule) as boolean &&
         isTransactionDigest(obj.sender) as boolean &&
-        isTransactionDigest(obj.objectId) as boolean
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.version) as boolean
     )
 }
 
@@ -461,7 +513,9 @@ export function isNewObjectEvent(obj: any, _argumentName?: string): obj is NewOb
         isTransactionDigest(obj.transactionModule) as boolean &&
         isTransactionDigest(obj.sender) as boolean &&
         isObjectOwner(obj.recipient) as boolean &&
-        isTransactionDigest(obj.objectId) as boolean
+        isTransactionDigest(obj.objectType) as boolean &&
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.version) as boolean
     )
 }
 
@@ -478,7 +532,15 @@ export function isSuiEvent(obj: any, _argumentName?: string): obj is SuiEvent {
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
+            isCoinBalanceChangeEvent(obj.coinBalanceChange) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
             isTransferObjectEvent(obj.transferObject) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isMutateObjectEvent(obj.mutateObject) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
@@ -508,15 +570,88 @@ export function isMoveEventField(obj: any, _argumentName?: string): obj is MoveE
     )
 }
 
+export function isEventQuery(obj: any, _argumentName?: string): obj is EventQuery {
+    return (
+        (obj === "All" ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.Transaction) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            (obj.MoveModule !== null &&
+                typeof obj.MoveModule === "object" ||
+                typeof obj.MoveModule === "function") &&
+            isTransactionDigest(obj.MoveModule.package) as boolean &&
+            isTransactionDigest(obj.MoveModule.module) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.MoveEvent) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isEventType(obj.EventType) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.Sender) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isObjectOwner(obj.Recipient) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.Object) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            (obj.TimeRange !== null &&
+                typeof obj.TimeRange === "object" ||
+                typeof obj.TimeRange === "function") &&
+            isSuiMoveTypeParameterIndex(obj.TimeRange.start_time) as boolean &&
+            isSuiMoveTypeParameterIndex(obj.TimeRange.end_time) as boolean)
+    )
+}
+
+export function isEventId(obj: any, _argumentName?: string): obj is EventId {
+    return (
+        typeof obj === "string"
+    )
+}
+
+export function isPaginatedEvents(obj: any, _argumentName?: string): obj is PaginatedEvents {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSuiEvents(obj.data) as boolean &&
+        (obj.nextCursor === null ||
+            isTransactionDigest(obj.nextCursor) as boolean)
+    )
+}
+
 export function isEventType(obj: any, _argumentName?: string): obj is EventType {
     return (
         (obj === "MoveEvent" ||
             obj === "Publish" ||
             obj === "TransferObject" ||
+            obj === "MutateObject" ||
+            obj === "CoinBalanceChange" ||
             obj === "DeleteObject" ||
             obj === "NewObject" ||
             obj === "EpochChange" ||
             obj === "Checkpoint")
+    )
+}
+
+export function isBalanceChangeType(obj: any, _argumentName?: string): obj is BalanceChangeType {
+    return (
+        (obj === "Gas" ||
+            obj === "Pay" ||
+            obj === "Receive")
     )
 }
 
@@ -663,6 +798,39 @@ export function isPay(obj: any, _argumentName?: string): obj is Pay {
     )
 }
 
+export function isPaySui(obj: any, _argumentName?: string): obj is PaySui {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        Array.isArray(obj.coins) &&
+        obj.coins.every((e: any) =>
+            isSuiObjectRef(e) as boolean
+        ) &&
+        Array.isArray(obj.recipients) &&
+        obj.recipients.every((e: any) =>
+            isTransactionDigest(e) as boolean
+        ) &&
+        Array.isArray(obj.amounts) &&
+        obj.amounts.every((e: any) =>
+            isSuiMoveTypeParameterIndex(e) as boolean
+        )
+    )
+}
+
+export function isPayAllSui(obj: any, _argumentName?: string): obj is PayAllSui {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        Array.isArray(obj.coins) &&
+        obj.coins.every((e: any) =>
+            isSuiObjectRef(e) as boolean
+        ) &&
+        isTransactionDigest(obj.recipient) as boolean
+    )
+}
+
 export function isExecuteTransactionRequestType(obj: any, _argumentName?: string): obj is ExecuteTransactionRequestType {
     return (
         (obj === "ImmediateReturn" ||
@@ -676,10 +844,12 @@ export function isTransactionKindName(obj: any, _argumentName?: string): obj is 
     return (
         (obj === "Publish" ||
             obj === "TransferObject" ||
+            obj === "Pay" ||
             obj === "Call" ||
             obj === "TransferSui" ||
             obj === "ChangeEpoch" ||
-            obj === "Pay")
+            obj === "PaySui" ||
+            obj === "PayAllSui")
     )
 }
 
@@ -708,7 +878,15 @@ export function isSuiTransactionKind(obj: any, _argumentName?: string): obj is S
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isPay(obj.Pay) as boolean)
+            isPay(obj.Pay) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isPaySui(obj.PaySui) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isPayAllSui(obj.PayAllSui) as boolean)
     )
 }
 
@@ -976,13 +1154,6 @@ export function isTransactionQuery(obj: any, _argumentName?: string): obj is Tra
     )
 }
 
-export function isOrdering(obj: any, _argumentName?: string): obj is Ordering {
-    return (
-        (obj === "Ascending" ||
-            obj === "Descending")
-    )
-}
-
 export function isMoveCall(obj: any, _argumentName?: string): obj is MoveCall {
     return (
         (obj !== null &&
@@ -1235,6 +1406,45 @@ export function isPayTx(obj: any, _argumentName?: string): obj is PayTx {
     )
 }
 
+export function isPaySuiTx(obj: any, _argumentName?: string): obj is PaySuiTx {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        (obj.PaySui !== null &&
+            typeof obj.PaySui === "object" ||
+            typeof obj.PaySui === "function") &&
+        Array.isArray(obj.PaySui.coins) &&
+        obj.PaySui.coins.every((e: any) =>
+            isSuiObjectRef(e) as boolean
+        ) &&
+        Array.isArray(obj.PaySui.recipients) &&
+        obj.PaySui.recipients.every((e: any) =>
+            isTransactionDigest(e) as boolean
+        ) &&
+        Array.isArray(obj.PaySui.amounts) &&
+        obj.PaySui.amounts.every((e: any) =>
+            isSuiMoveTypeParameterIndex(e) as boolean
+        )
+    )
+}
+
+export function isPayAllSuiTx(obj: any, _argumentName?: string): obj is PayAllSuiTx {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        (obj.PayAllSui !== null &&
+            typeof obj.PayAllSui === "object" ||
+            typeof obj.PayAllSui === "function") &&
+        Array.isArray(obj.PayAllSui.coins) &&
+        obj.PayAllSui.coins.every((e: any) =>
+            isSuiObjectRef(e) as boolean
+        ) &&
+        isTransactionDigest(obj.PayAllSui.recipient) as boolean
+    )
+}
+
 export function isPublishTx(obj: any, _argumentName?: string): obj is PublishTx {
     return (
         (obj !== null &&
@@ -1250,6 +1460,16 @@ export function isPublishTx(obj: any, _argumentName?: string): obj is PublishTx 
     )
 }
 
+export function isSharedObjectRef(obj: any, _argumentName?: string): obj is SharedObjectRef {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.initialSharedVersion) as boolean
+    )
+}
+
 export function isObjectArg(obj: any, _argumentName?: string): obj is ObjectArg {
     return (
         ((obj !== null &&
@@ -1259,7 +1479,11 @@ export function isObjectArg(obj: any, _argumentName?: string): obj is ObjectArg 
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isTransactionDigest(obj.Shared) as boolean)
+            isSharedObjectRef(obj.Shared) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.Shared_Deprecated) as boolean)
     )
 }
 
@@ -1275,7 +1499,14 @@ export function isCallArg(obj: any, _argumentName?: string): obj is CallArg {
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isObjectArg(obj.Object) as boolean)
+            isObjectArg(obj.Object) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            (obj.ObjVec !== null &&
+                typeof obj.ObjVec === "object" ||
+                typeof obj.ObjVec === "function") &&
+            isSuiMoveTypeParameterIndex(obj.ObjVec.length) as boolean)
     )
 }
 
@@ -1327,7 +1558,19 @@ export function isTypeTag(obj: any, _argumentName?: string): obj is TypeTag {
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isStructTag(obj.struct) as boolean)
+            isStructTag(obj.struct) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            obj.u16 === null ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            obj.u32 === null ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            obj.u256 === null)
     )
 }
 
@@ -1358,6 +1601,8 @@ export function isTransaction(obj: any, _argumentName?: string): obj is Transact
         (isTransferObjectTx(obj) as boolean ||
             isTransferSuiTx(obj) as boolean ||
             isPayTx(obj) as boolean ||
+            isPaySuiTx(obj) as boolean ||
+            isPayAllSuiTx(obj) as boolean ||
             isPublishTx(obj) as boolean ||
             isMoveCallTx(obj) as boolean)
     )
@@ -1390,5 +1635,38 @@ export function isTransactionData(obj: any, _argumentName?: string): obj is Tran
         isSuiMoveTypeParameterIndex(obj.gasPrice) as boolean &&
         isTransactionKind(obj.kind) as boolean &&
         isSuiObjectRef(obj.gasPayment) as boolean
+    )
+}
+
+export function isRpcApiVersion(obj: any, _argumentName?: string): obj is RpcApiVersion {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSuiMoveTypeParameterIndex(obj.major) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.minor) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.patch) as boolean
+    )
+}
+
+export function isFaucetCoinInfo(obj: any, _argumentName?: string): obj is FaucetCoinInfo {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSuiMoveTypeParameterIndex(obj.amount) as boolean &&
+        isTransactionDigest(obj.id) as boolean &&
+        isTransactionDigest(obj.transfer_tx_digest) as boolean
+    )
+}
+
+export function isFaucetResponse(obj: any, _argumentName?: string): obj is FaucetResponse {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isFaucetCoinInfo(obj.transferred_gas_objects) as boolean &&
+        (obj.error === null ||
+            isTransactionDigest(obj.error) as boolean)
     )
 }

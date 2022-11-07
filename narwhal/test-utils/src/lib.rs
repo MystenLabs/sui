@@ -9,8 +9,8 @@ use config::{
 };
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use fastcrypto::{
+    hash::{Digest, Hash as _},
     traits::{KeyPair as _, Signer as _},
-    Digest, Hash as _,
 };
 use indexmap::IndexMap;
 use multiaddr::Multiaddr;
@@ -25,13 +25,13 @@ use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header, HeaderBuilder,
-    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round, SequenceNumber,
-    Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage,
-    WorkerInfoResponse, WorkerMessage, WorkerPrimaryMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker,
-    WorkerToWorkerServer,
+    Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
+    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -39,7 +39,8 @@ pub mod cluster;
 pub const VOTES_CF: &str = "votes";
 pub const HEADERS_CF: &str = "headers";
 pub const CERTIFICATES_CF: &str = "certificates";
-pub const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
+pub const CERTIFICATE_DIGEST_BY_ROUND_CF: &str = "certificate_digest_by_round";
+pub const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &str = "certificate_digest_by_origin";
 pub const PAYLOAD_CF: &str = "payload";
 
 pub fn temp_dir() -> std::path::PathBuf {
@@ -150,7 +151,7 @@ pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
         .map(|_v| transaction())
         .collect();
 
-    Batch(transactions)
+    Batch::new(transactions)
 }
 
 // Fixture
@@ -196,49 +197,31 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
 
         Ok(anemo::Response::new(()))
     }
-}
 
-pub struct WorkerToPrimaryMockServer {
-    sender: Sender<WorkerPrimaryMessage>,
-}
-
-impl WorkerToPrimaryMockServer {
-    pub fn spawn(
-        keypair: NetworkKeyPair,
-        address: Multiaddr,
-    ) -> (Receiver<WorkerPrimaryMessage>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
-        let (sender, receiver) = channel(1);
-        let service = WorkerToPrimaryServer::new(Self { sender });
-
-        let routes = anemo::Router::new().add_rpc_service(service);
-        let network = anemo::Network::bind(addr)
-            .server_name("narwhal")
-            .private_key(keypair.private().0.to_bytes())
-            .start(routes)
-            .unwrap();
-        info!("starting network on: {}", network.local_addr());
-        (receiver, network)
-    }
-}
-
-#[async_trait]
-impl WorkerToPrimary for WorkerToPrimaryMockServer {
-    async fn send_message(
+    async fn get_certificates(
         &self,
-        request: anemo::Request<types::WorkerPrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        self.sender.send(message).await.unwrap();
-
-        Ok(anemo::Response::new(()))
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+    async fn fetch_certificates(
+        &self,
+        _request: anemo::Request<FetchCertificatesRequest>,
+    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 
-    async fn worker_info(
+    async fn get_payload_availability(
         &self,
-        _request: anemo::Request<()>,
-    ) -> Result<anemo::Response<WorkerInfoResponse>, anemo::rpc::Status> {
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn get_latest_header(
+        &self,
+        _request: anemo::Request<LatestHeaderRequest>,
+    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -296,13 +279,6 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         Ok(anemo::Response::new(()))
     }
 
-    async fn request_batch(
-        &self,
-        _request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        tracing::error!("Not implemented PrimaryToWorkerMockServer::request_batch");
-        Err(anemo::rpc::Status::internal("Unimplemented"))
-    }
     async fn delete_batches(
         &self,
         _request: anemo::Request<WorkerDeleteBatchesMessage>,
@@ -313,26 +289,17 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
 }
 
 pub struct WorkerToWorkerMockServer {
-    msg_sender: Sender<WorkerMessage>,
-    batch_request_sender: Sender<WorkerBatchRequest>,
+    batch_sender: Sender<WorkerBatchMessage>,
 }
 
 impl WorkerToWorkerMockServer {
     pub fn spawn(
         keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (
-        Receiver<WorkerMessage>,
-        Receiver<WorkerBatchRequest>,
-        anemo::Network,
-    ) {
+    ) -> (Receiver<WorkerBatchMessage>, anemo::Network) {
         let addr = network::multiaddr_to_address(&address).unwrap();
-        let (msg_sender, msg_receiver) = channel(1);
-        let (batch_request_sender, batch_request_receiver) = channel(1);
-        let service = WorkerToWorkerServer::new(Self {
-            msg_sender,
-            batch_request_sender,
-        });
+        let (batch_sender, batch_receiver) = channel(1);
+        let service = WorkerToWorkerServer::new(Self { batch_sender });
 
         let routes = anemo::Router::new().add_rpc_service(service);
         let network = anemo::Network::bind(addr)
@@ -341,34 +308,28 @@ impl WorkerToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (msg_receiver, batch_request_receiver, network)
+        (batch_receiver, network)
     }
 }
 
 #[async_trait]
 impl WorkerToWorker for WorkerToWorkerMockServer {
-    async fn send_message(
+    async fn report_batch(
         &self,
-        request: anemo::Request<WorkerMessage>,
+        request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 
-        self.msg_sender.send(message).await.unwrap();
+        self.batch_sender.send(message).await.unwrap();
 
         Ok(anemo::Response::new(()))
     }
-    async fn request_batches(
+    async fn request_batch(
         &self,
-        request: anemo::Request<WorkerBatchRequest>,
-    ) -> Result<anemo::Response<WorkerBatchResponse>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        self.batch_request_sender.send(message).await.unwrap();
-
-        // For testing stub, just always reply with no batches.
-        Ok(anemo::Response::new(WorkerBatchResponse {
-            batches: vec![],
-        }))
+        _request: anemo::Request<RequestBatchRequest>,
+    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        tracing::error!("Not implemented WorkerToWorkerMockServer::request_batch");
+        Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 }
 
@@ -378,7 +339,7 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
 // Fixture
 pub fn batch() -> Batch {
-    Batch(vec![transaction(), transaction()])
+    Batch::new(vec![transaction(), transaction()])
 }
 
 /// generate multiple fixture batches. The number of generated batches
@@ -400,7 +361,7 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
         transactions.push(transaction());
     }
 
-    Batch(transactions)
+    Batch::new(transactions)
 }
 
 const BATCHES_CF: &str = "batches";
@@ -539,31 +500,19 @@ pub fn make_signed_certificates(
     )
 }
 
-// Creates an unsigned certificate from its given round, origin and parents,
-// Note: the certificate is unsigned
+// Creates a badly signed certificate from its given round, origin and parents,
+// Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate(
     committee: &Committee,
     origin: PublicKey,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let certificate = Certificate::new_unsigned(
-        committee,
-        Header {
-            author: origin,
-            round,
-            parents,
-            payload: fixture_payload(1),
-            ..Header::default()
-        },
-        Vec::new(),
-    )
-    .unwrap();
-    (certificate.digest(), certificate)
+    mock_certificate_with_epoch(committee, origin, round, 0, parents)
 }
 
-// Creates an unsigned certificate from its given round, epoch, origin, and parents,
-// Note: the certificate is unsigned
+// Creates a badly signed certificate from its given round, epoch, origin, and parents,
+// Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate_with_epoch(
     committee: &Committee,
     origin: PublicKey,
@@ -571,19 +520,16 @@ pub fn mock_certificate_with_epoch(
     epoch: Epoch,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let certificate = Certificate::new_unsigned(
-        committee,
-        Header {
-            author: origin,
-            round,
-            epoch,
-            parents,
-            payload: fixture_payload(1),
-            ..Header::default()
-        },
-        Vec::new(),
-    )
-    .unwrap();
+    let header_builder = HeaderBuilder::default();
+    let header = header_builder
+        .author(origin)
+        .round(round)
+        .epoch(epoch)
+        .parents(parents)
+        .payload(fixture_payload(1))
+        .build(&KeyPair::generate(&mut rand::thread_rng()))
+        .unwrap();
+    let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
     (certificate.digest(), certificate)
 }
 
@@ -745,7 +691,15 @@ impl CommitteeFixture {
 
         self.authorities
             .iter()
-            .map(|a| a.header(&committee))
+            .map(|a| a.header_with_round(&committee, 1))
+            .collect()
+    }
+
+    pub fn headers_next_round(&self) -> Vec<Header> {
+        let committee = self.committee();
+        self.authorities
+            .iter()
+            .map(|a| a.header_with_round(&committee, 2))
             .collect()
     }
 
@@ -827,6 +781,14 @@ impl AuthorityFixture {
         self.network_keypair.copy()
     }
 
+    pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
+        anemo::Network::bind(network::multiaddr_to_address(&self.address).unwrap())
+            .server_name("narwhal")
+            .private_key(self.network_keypair().private().0.to_bytes())
+            .start(router)
+            .unwrap()
+    }
+
     pub fn address(&self) -> &Multiaddr {
         &self.address
     }
@@ -870,6 +832,14 @@ impl AuthorityFixture {
     pub fn header(&self, committee: &Committee) -> Header {
         self.header_builder(committee)
             .payload(Default::default())
+            .build(&self.keypair)
+            .unwrap()
+    }
+
+    pub fn header_with_round(&self, committee: &Committee, round: Round) -> Header {
+        self.header_builder(committee)
+            .payload(Default::default())
+            .round(round)
             .build(&self.keypair)
             .unwrap()
     }

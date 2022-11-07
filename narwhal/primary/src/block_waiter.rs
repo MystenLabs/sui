@@ -4,12 +4,12 @@ use crate::block_synchronizer::handler::Handler;
 use anyhow::Result;
 use config::SharedWorkerCache;
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::{
     stream::{FuturesOrdered, StreamExt as _},
     FutureExt,
 };
-use network::{P2pNetwork, PrimaryToWorkerRpc};
+use network::{P2pNetwork, WorkerRpc};
 use std::{collections::HashSet, sync::Arc};
 
 use tracing::{debug, instrument};
@@ -181,7 +181,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
             if let Ok(certificate) = result {
                 results.push((certificate.digest(), Some(certificate)));
             } else {
-                results.push((result.err().unwrap().block_id(), None));
+                results.push((result.err().unwrap().digest(), None));
             }
         }
 

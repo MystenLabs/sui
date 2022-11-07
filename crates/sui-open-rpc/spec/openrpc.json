@@ -2,7 +2,7 @@
   "openrpc": "1.2.6",
   "info": {
     "title": "Sui JSON-RPC",
-    "description": "Sui JSON-RPC API for interaction with the Sui network gateway.",
+    "description": "Sui JSON-RPC API for interaction with Sui Full node.",
     "contact": {
       "name": "Mysten Labs",
       "url": "https://mystenlabs.com",
@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.6.1"
+    "version": "0.15.0"
   },
   "methods": [
     {
@@ -152,27 +152,6 @@
       "params": [
         {
           "name": "tx_bytes",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "sig_scheme",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SignatureScheme"
-          }
-        },
-        {
-          "name": "signature",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "pub_key",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -362,10 +341,9 @@
                       "recipient": {
                         "AddressOwner": "0x436ce7a9254b30d253e4567ccafa5f36ce84c80a"
                       },
+                      "objectType": "0x2::example::Object",
                       "objectId": "0xa8bc9be64e0d5ae796884274aef3005ae6733809",
-                      "version": 2,
-                      "type": "ToAddress",
-                      "amount": 100
+                      "version": 2
                     }
                   }
                 ]
@@ -378,54 +356,17 @@
       ]
     },
     {
-      "name": "sui_getEventsByModule",
+      "name": "sui_getCommitteeInfo",
       "tags": [
         {
-          "name": "Event Read API"
+          "name": "Full Node API"
         }
       ],
-      "description": "Return events emitted in a specified Move module",
+      "description": "Return the committee information for the asked epoch",
       "params": [
         {
-          "name": "package",
-          "description": "the Move package ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "module",
-          "description": "the module name",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
+          "name": "epoch",
+          "description": "The epoch of interest. If None, default to the latest epoch",
           "schema": {
             "type": "integer",
             "format": "uint64",
@@ -434,87 +375,40 @@
         }
       ],
       "result": {
-        "name": "Vec<SuiEventEnvelope>",
+        "name": "CommitteeInfoResponse",
         "required": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
+          "$ref": "#/components/schemas/CommitteeInfoResponse"
         }
-      },
-      "examples": [
-        {
-          "name": "Return the Events emitted in a specified Move module",
-          "params": [
-            {
-              "name": "package",
-              "value": "0x0000000000000000000000000000000000000002"
-            },
-            {
-              "name": "module",
-              "value": "devnet_nft"
-            },
-            {
-              "name": "count",
-              "value": 5
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "GoMyiLnqV1c1MhJGwS9EkxttHEOO7T3JRHoA8ljFNyo=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xbb4fa19d228beca5e98850f2ce11afc4f84c7657",
-                    "recipient": {
-                      "AddressOwner": "0x86a866efa6db5c1bd60446af9ce59a85cd194e47"
-                    },
-                    "objectId": "0x15701e55e66b092d67b54aea5028bed04c46a29b",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
+      }
     },
     {
-      "name": "sui_getEventsByMoveEventStructName",
+      "name": "sui_getEvents",
       "tags": [
         {
           "name": "Event Read API"
         }
       ],
-      "description": "Return events with the given move event struct name",
+      "description": "Return list of events for a specified query criteria.",
       "params": [
         {
-          "name": "move_event_struct_name",
-          "description": "the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params",
+          "name": "query",
+          "description": "the event query criteria.",
           "required": true,
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/EventQuery"
           }
         },
         {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/EventID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -522,524 +416,18 @@
           }
         },
         {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "type": "boolean"
           }
         }
       ],
       "result": {
-        "name": "Vec<SuiEventEnvelope>",
+        "name": "EventPage",
         "required": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events with the given move event struct name",
-          "params": [
-            {
-              "name": "move_event_struct_name",
-              "value": "0x2::devnet_nft::MintNFTEvent"
-            },
-            {
-              "name": "count",
-              "value": 5
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "Qp8yq31APG+JGGF++uG5kzKW9bGyGdGE1/49WxDMsXY=",
-                "event": {
-                  "moveEvent": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "devnet_nft",
-                    "sender": "0x9421e7ad826ba13aca8ae41316644f06759b4506",
-                    "type": "0x2::devnet_nft::MintNFTEvent",
-                    "bcs": ""
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByObject",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events associated with the given object",
-      "params": [
-        {
-          "name": "object",
-          "description": "the object ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events associated with the given object",
-          "params": [
-            {
-              "name": "object",
-              "value": "0xbdec549c7cdea06bc4a1d339a22521eea933b889"
-            },
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "Hnzx5pqSWf6SSK4iYkU0ID0UN6/6LVAMVDOv7Tpy9Nc=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x23806221284475899703e19ebb71f5c98a509494",
-                    "recipient": {
-                      "AddressOwner": "0x26a361970c65a5b12c43805d0d6f5402a7ad0da5"
-                    },
-                    "objectId": "0xbdec549c7cdea06bc4a1d339a22521eea933b889",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByRecipient",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events associated with the given recipient",
-      "params": [
-        {
-          "name": "recipient",
-          "description": "the recipient",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Owner"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events associated with the given recipient",
-          "params": [
-            {
-              "name": "recipient",
-              "value": {
-                "AddressOwner": "0x8581e7115f3d762b5057bc2a187b79e31a5ccbc4"
-              }
-            },
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "wUUUMKe4LH83LUD79mCF/BXIPwVp2iPHKgRBmv+aIs0=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x6ad5da5d137026b83f3be64dd6dc76f3cca22375",
-                    "recipient": {
-                      "AddressOwner": "0x8581e7115f3d762b5057bc2a187b79e31a5ccbc4"
-                    },
-                    "objectId": "0x74eecfc5ce1ef691c14c027b6aa764377981bafd",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsBySender",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events associated with the given sender.",
-      "params": [
-        {
-          "name": "sender",
-          "description": "the sender's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events associated with the given sender",
-          "params": [
-            {
-              "name": "sender",
-              "value": "0xbbe4b8234b099cdfb3277c5e4df7b72c366bb7c7"
-            },
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "ag3RA2mE7vqHXAJ9hiitgpf1DLGgMmNwShD64Ng0IWE=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xbbe4b8234b099cdfb3277c5e4df7b72c366bb7c7",
-                    "recipient": {
-                      "AddressOwner": "0x45e3e1415579352c128b4d1a2f42fdfbc9c5a73a"
-                    },
-                    "objectId": "0x441193e99ab6cc2a92f7d37948898292d7042041",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByTimeRange",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events emitted in [start_time, end_time) interval",
-      "params": [
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events emitted in [start_time, end_time) interval",
-          "params": [
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "F0wkDp/8VWs3RGkz+ly2X30lhxEwW2Y+JPGhkiKKevI=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x636a37efd526f38da079eb35644961e93c869b16",
-                    "recipient": {
-                      "AddressOwner": "0x53a8771e448930bc95a0369fad43a9870a2e5878"
-                    },
-                    "objectId": "0x91825debff541cf4e08b5c5f7296ff9840e6f0b1",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByTransaction",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events emitted by the given transaction.",
-      "params": [
-        {
-          "name": "digest",
-          "description": "digest of the transaction, as base-64 encoded string",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
+          "$ref": "#/components/schemas/Page_for_EventEnvelope_and_EventID"
         }
       },
       "examples": [
@@ -1047,36 +435,48 @@
           "name": "Return the Events emitted by a transaction",
           "params": [
             {
-              "name": "digest",
-              "value": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw="
+              "name": "query",
+              "value": {
+                "Transaction": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY="
+              }
             },
             {
-              "name": "count",
-              "value": 2
+              "name": "cursor",
+              "value": "10:0"
+            },
+            {
+              "name": "limit",
+              "value": 1
+            },
+            {
+              "name": "descending_order",
+              "value": false
             }
           ],
           "result": {
             "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xd084dad8fc6cc86a71b0df0c98c5b71c4184d9b2",
-                    "recipient": {
-                      "AddressOwner": "0xdee7c7ff955697fe2b704c9540a3846e9298b75d"
-                    },
-                    "objectId": "0xb725c1ee3027b783ea689e1a38eb476c6efc44ed",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+            "value": {
+              "data": [
+                {
+                  "timestamp": 0,
+                  "txDigest": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY=",
+                  "event": {
+                    "transferObject": {
+                      "packageId": "0x0000000000000000000000000000000000000002",
+                      "transactionModule": "native",
+                      "sender": "0x9cce11a3b6afff14a4ab2421d0159ef1e7486655",
+                      "recipient": {
+                        "AddressOwner": "0xc677ed804f82f1c8587b98d64c00bfb46c3843bd"
+                      },
+                      "objectType": "0x2::example::Object",
+                      "objectId": "0x8bf6ccfa7c65a86138698cd1fdcac3dce8d8c7ce",
+                      "version": 2
+                    }
                   }
                 }
-              }
-            ]
+              ],
+              "nextCursor": "1000:5"
+            }
           }
         }
       ]
@@ -1619,36 +1019,36 @@
           "params": [
             {
               "name": "digest",
-              "value": "uxOHcuhV6U5kCALu9QneZ9vrtpz7H3I+4N5Ul6FhssA="
+              "value": "xmv8C2f3SEpgnEVYBqNVqaU9J97LIT8tr5komO51YwE="
             }
           ],
           "result": {
             "name": "Result",
             "value": {
               "certificate": {
-                "transactionDigest": "uxOHcuhV6U5kCALu9QneZ9vrtpz7H3I+4N5Ul6FhssA=",
+                "transactionDigest": "xmv8C2f3SEpgnEVYBqNVqaU9J97LIT8tr5komO51YwE=",
                 "data": {
                   "transactions": [
                     {
                       "TransferObject": {
-                        "recipient": "0x147089dc4318fdd400db67364ef350c952676d85",
+                        "recipient": "0x7a91f631760853934d383634bcf7c32655009a61",
                         "objectRef": {
-                          "objectId": "0x7dc37fae7d93298a1245c31b420688c1686cb4d1",
+                          "objectId": "0xf1de0eae420a2e4ae1bb772ab2dd5d5a7dfa949c",
                           "version": 2,
-                          "digest": "GEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzk="
+                          "digest": "LrMQvKkSTl8vOM5znqrLtmAGiIBOB4RIn5D3+GbMKd8="
                         }
                       }
                     }
                   ],
-                  "sender": "0x5dda0fa4ae8d2847867cbfd38415b94f463bf383",
+                  "sender": "0x62f11641df72c5714275daa62d90a4b9393a7936",
                   "gasPayment": {
-                    "objectId": "0x356d17180dd82e93a483c5ab5f01a29887a1d95e",
+                    "objectId": "0x0ef06908e7a54900f279be4c6a101e9a3af5c807",
                     "version": 2,
-                    "digest": "W1SLYW2mOwzgfYFuie97mjghd7RCK7qif35iXqMZqgo="
+                    "digest": "ARL4CGSLNu+/je6KGoLeRtlQTpahEIoXjvdvVsOZYzo="
                   },
                   "gasBudget": 1000
                 },
-                "txSignature": "ADqIpkgJvv+wPwl+sKQsKR7l8tlOPSbGfjV893tYgLv4F29x0akCOKgjeO+EIHOhyGsdYmRcCWocIjZL/uYJewT1qXbcqEN2KhcrL9bJkWIQLsraKhFVaRudjBWPU1WhRQ==",
+                "txSignature": "AP0UmXpSTkXNuX+D7uiI908AYHSdPloIJc7BWGGC+1ZVqIwWaqYmYmnaJ1TYyrf3Xh1ZLbehp08cFWiSsYaKnQRqyhLtgKnHnWhcn29OfWPVM+1V64qSaQ1T7WG7+dB9iA==",
                 "authSignInfo": {
                   "epoch": 0,
                   "signature": "",
@@ -1673,37 +1073,37 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "VX3EKq7+64wVTX3cRWuK6qMTLHQDUx3JjoP24ZjS19E=",
+                "transactionDigest": "sdpjc86U+dldylpA9OF2mRjuv5+64AvTjleHL0UiRGg=",
                 "mutated": [
                   {
                     "owner": {
-                      "AddressOwner": "0x5dda0fa4ae8d2847867cbfd38415b94f463bf383"
+                      "AddressOwner": "0x62f11641df72c5714275daa62d90a4b9393a7936"
                     },
                     "reference": {
-                      "objectId": "0x356d17180dd82e93a483c5ab5f01a29887a1d95e",
+                      "objectId": "0x0ef06908e7a54900f279be4c6a101e9a3af5c807",
                       "version": 2,
-                      "digest": "W1SLYW2mOwzgfYFuie97mjghd7RCK7qif35iXqMZqgo="
+                      "digest": "ARL4CGSLNu+/je6KGoLeRtlQTpahEIoXjvdvVsOZYzo="
                     }
                   },
                   {
                     "owner": {
-                      "AddressOwner": "0x147089dc4318fdd400db67364ef350c952676d85"
+                      "AddressOwner": "0x7a91f631760853934d383634bcf7c32655009a61"
                     },
                     "reference": {
-                      "objectId": "0x7dc37fae7d93298a1245c31b420688c1686cb4d1",
+                      "objectId": "0xf1de0eae420a2e4ae1bb772ab2dd5d5a7dfa949c",
                       "version": 2,
-                      "digest": "GEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzk="
+                      "digest": "LrMQvKkSTl8vOM5znqrLtmAGiIBOB4RIn5D3+GbMKd8="
                     }
                   }
                 ],
                 "gasObject": {
                   "owner": {
-                    "ObjectOwner": "0x5dda0fa4ae8d2847867cbfd38415b94f463bf383"
+                    "ObjectOwner": "0x62f11641df72c5714275daa62d90a4b9393a7936"
                   },
                   "reference": {
-                    "objectId": "0x356d17180dd82e93a483c5ab5f01a29887a1d95e",
+                    "objectId": "0x0ef06908e7a54900f279be4c6a101e9a3af5c807",
                     "version": 2,
-                    "digest": "W1SLYW2mOwzgfYFuie97mjghd7RCK7qif35iXqMZqgo="
+                    "digest": "ARL4CGSLNu+/je6KGoLeRtlQTpahEIoXjvdvVsOZYzo="
                   }
                 },
                 "events": [
@@ -1711,14 +1111,13 @@
                     "transferObject": {
                       "packageId": "0x0000000000000000000000000000000000000002",
                       "transactionModule": "native",
-                      "sender": "0x5dda0fa4ae8d2847867cbfd38415b94f463bf383",
+                      "sender": "0x62f11641df72c5714275daa62d90a4b9393a7936",
                       "recipient": {
-                        "AddressOwner": "0x147089dc4318fdd400db67364ef350c952676d85"
+                        "AddressOwner": "0x7a91f631760853934d383634bcf7c32655009a61"
                       },
-                      "objectId": "0x7dc37fae7d93298a1245c31b420688c1686cb4d1",
-                      "version": 2,
-                      "type": "ToAddress",
-                      "amount": 100
+                      "objectType": "0x2::example::Object",
+                      "objectId": "0xf1de0eae420a2e4ae1bb772ab2dd5d5a7dfa949c",
+                      "version": 2
                     }
                   }
                 ]
@@ -1764,11 +1163,10 @@
           }
         },
         {
-          "name": "order",
-          "description": "Transaction query ordering",
-          "required": true,
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
           "schema": {
-            "$ref": "#/components/schemas/Ordering"
+            "type": "boolean"
           }
         }
       ],
@@ -1786,31 +1184,31 @@
             {
               "name": "query",
               "value": {
-                "InputObject": "0xb10c0046e293c08cec0f40783d9ac4bf4abb4d7f"
+                "InputObject": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c74"
               }
             },
             {
               "name": "cursor",
-              "value": 10
+              "value": "A1MdyY6D9uGY0tfRe6kd3H5xfPcIyTcGDwQEhzbsM/s="
             },
             {
               "name": "limit",
               "value": 100
             },
             {
-              "name": "order",
-              "value": "Ascending"
+              "name": "descending_order",
+              "value": false
             }
           ],
           "result": {
             "name": "Result",
             "value": {
               "data": [
-                "e6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YA=",
-                "T4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9w=",
-                "6NjHzoY/MT2j29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYQ="
+                "4fwXyBRwidxDGP3UANtnNk7zUMlSZ22FfcN/rn2TKYo=",
+                "EkXDG0IGiMFobLTRNW0XGA3YLpOkg8WrXwGimIeh2V4=",
+                "W1SLYW2mOwzgfYFuie97mjghd7RCK7qif35iXqMZqgo="
               ],
-              "nextCursor": "zMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GU="
+              "nextCursor": "GEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzk="
             }
           }
         }
@@ -2012,6 +1410,7 @@
           "name": "Transaction Builder API"
         }
       ],
+      "description": "Send Coin<T> to a list of addresses, where `T` can be any coin type, following a list of amounts, The object specified in the `gas` field will be used to pay the gas fee for the transaction. The gas object can not appear in `input_coins`. If the gas object is not specified, the RPC server will auto-select one.",
       "params": [
         {
           "name": "signer",
@@ -2061,6 +1460,132 @@
           "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_payAllSui",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Send all SUI coins to one recipient. This is for SUI coin only and does not require a separate gas coin object. Specifically, what pay_all_sui does are: 1. accumulate all SUI from input coins and deposit all SUI to the first input coin 2. transfer the updated first coin to the recipient and also use this first coin as gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost. 4. all other input coins other than the first are deleted.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "input_coins",
+          "description": "the Sui coins to be used in this transaction, including the coin for gas payment.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "recipient",
+          "description": "the recipient address,",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_paySui",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Send SUI coins to a list of addresses, following a list of amounts. This is for SUI coin only and does not require a separate gas coin object. Specifically, what pay_sui does are: 1. debit each input_coin to create new coin following the order of amounts and assign it to the corresponding recipient. 2. accumulate all residual SUI from input coins left and deposit all SUI to the first input coin, then use the first input coin as the gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost 4. all other input coints other than the first one are deleted.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "input_coins",
+          "description": "the Sui coins to be used in this transaction, including the coin for gas payment.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "recipients",
+          "description": "the recipients' addresses, the length of this vector must be the same as amounts.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        },
+        {
+          "name": "amounts",
+          "description": "the amounts to be transferred to recipients, following the same order",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
           }
         },
         {
@@ -2494,6 +2019,14 @@
   ],
   "components": {
     "schemas": {
+      "AuthorityPublicKeyBytes": {
+        "description": "Defines the compressed version of the public key that we pass around in Sui",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
+      },
       "AuthorityQuorumSignInfo": {
         "description": "Represents at least a quorum (could be more) of authority signatures. STRONG_THRESHOLD indicates whether to use the quorum threshold for quorum check. When STRONG_THRESHOLD is true, the quorum is valid when the total stake is at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false, the quorum is valid when the total stake is at least the validity threshold (f+1) of the committee.",
         "type": "object",
@@ -2515,6 +2048,14 @@
             "$ref": "#/components/schemas/Base64"
           }
         }
+      },
+      "BalanceChangeType": {
+        "type": "string",
+        "enum": [
+          "Gas",
+          "Pay",
+          "Receive"
+        ]
       },
       "Base64": {
         "type": "string"
@@ -2574,6 +2115,40 @@
           },
           "transactionEffectsDigest": {
             "$ref": "#/components/schemas/TransactionEffectsDigest"
+          }
+        }
+      },
+      "CommitteeInfoResponse": {
+        "type": "object",
+        "required": [
+          "epoch"
+        ],
+        "properties": {
+          "committee_info": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/AuthorityPublicKeyBytes"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -2714,122 +2289,53 @@
             "additionalProperties": false
           },
           {
-            "description": "Transfer objects to new address / wrap in another object / coin",
+            "description": "Coin balance changing event",
             "type": "object",
             "required": [
-              "transferObject"
+              "coinBalanceChange"
             ],
             "properties": {
-              "transferObject": {
+              "coinBalanceChange": {
                 "type": "object",
                 "required": [
-                  "objectId",
+                  "amount",
+                  "changeType",
+                  "coinObjectId",
+                  "coinType",
+                  "owner",
                   "packageId",
-                  "recipient",
                   "sender",
                   "transactionModule",
-                  "type",
                   "version"
                 ],
                 "properties": {
                   "amount": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "uint64",
-                    "minimum": 0.0
+                    "type": "integer",
+                    "format": "int128"
                   },
-                  "objectId": {
+                  "changeType": {
+                    "$ref": "#/components/schemas/BalanceChangeType"
+                  },
+                  "coinObjectId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "coinType": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "$ref": "#/components/schemas/Owner"
                   },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "recipient": {
-                    "$ref": "#/components/schemas/Owner"
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionModule": {
                     "type": "string"
-                  },
-                  "type": {
-                    "$ref": "#/components/schemas/TransferType"
                   },
                   "version": {
                     "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Delete object",
-            "type": "object",
-            "required": [
-              "deleteObject"
-            ],
-            "properties": {
-              "deleteObject": {
-                "type": "object",
-                "required": [
-                  "objectId",
-                  "packageId",
-                  "sender",
-                  "transactionModule"
-                ],
-                "properties": {
-                  "objectId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "packageId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionModule": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "New object creation",
-            "type": "object",
-            "required": [
-              "newObject"
-            ],
-            "properties": {
-              "newObject": {
-                "type": "object",
-                "required": [
-                  "objectId",
-                  "packageId",
-                  "recipient",
-                  "sender",
-                  "transactionModule"
-                ],
-                "properties": {
-                  "objectId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "packageId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "recipient": {
-                    "$ref": "#/components/schemas/Owner"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionModule": {
-                    "type": "string"
                   }
                 }
               }
@@ -2862,6 +2368,174 @@
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object / coin",
+            "type": "object",
+            "required": [
+              "transferObject"
+            ],
+            "properties": {
+              "transferObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "objectType",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Object mutated.",
+            "type": "object",
+            "required": [
+              "mutateObject"
+            ],
+            "properties": {
+              "mutateObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "objectType",
+                  "packageId",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Delete object",
+            "type": "object",
+            "required": [
+              "deleteObject"
+            ],
+            "properties": {
+              "deleteObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "packageId",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New object creation",
+            "type": "object",
+            "required": [
+              "newObject"
+            ],
+            "properties": {
+              "newObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "objectType",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -3075,17 +2749,225 @@
           }
         ]
       },
+      "EventID": {
+        "type": "string"
+      },
+      "EventQuery": {
+        "oneOf": [
+          {
+            "description": "Return all events.",
+            "type": "string",
+            "enum": [
+              "All"
+            ]
+          },
+          {
+            "description": "Return events emitted by the given transaction.",
+            "type": "object",
+            "required": [
+              "Transaction"
+            ],
+            "properties": {
+              "Transaction": {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events emitted in a specified Move module",
+            "type": "object",
+            "required": [
+              "MoveModule"
+            ],
+            "properties": {
+              "MoveModule": {
+                "type": "object",
+                "required": [
+                  "module",
+                  "package"
+                ],
+                "properties": {
+                  "module": {
+                    "description": "the module name",
+                    "type": "string"
+                  },
+                  "package": {
+                    "description": "the Move package ID",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/ObjectID"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events with the given move event struct name",
+            "type": "object",
+            "required": [
+              "MoveEvent"
+            ],
+            "properties": {
+              "MoveEvent": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "EventType"
+            ],
+            "properties": {
+              "EventType": {
+                "$ref": "#/components/schemas/EventType"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by sender address.",
+            "type": "object",
+            "required": [
+              "Sender"
+            ],
+            "properties": {
+              "Sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by recipient address.",
+            "type": "object",
+            "required": [
+              "Recipient"
+            ],
+            "properties": {
+              "Recipient": {
+                "$ref": "#/components/schemas/Owner"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events associated with the given object",
+            "type": "object",
+            "required": [
+              "Object"
+            ],
+            "properties": {
+              "Object": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events emitted in [start_time, end_time] interval",
+            "type": "object",
+            "required": [
+              "TimeRange"
+            ],
+            "properties": {
+              "TimeRange": {
+                "type": "object",
+                "required": [
+                  "end_time",
+                  "start_time"
+                ],
+                "properties": {
+                  "end_time": {
+                    "description": "right endpoint of time interval, exclusive",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "start_time": {
+                    "description": "left endpoint of time interval, inclusive",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "EventType": {
         "description": "Auto-generated discriminant enum variants",
-        "type": "string",
-        "enum": [
-          "MoveEvent",
-          "Publish",
-          "TransferObject",
-          "DeleteObject",
-          "NewObject",
-          "EpochChange",
-          "Checkpoint"
+        "oneOf": [
+          {
+            "description": "Transaction level event Move-specific event",
+            "type": "string",
+            "enum": [
+              "MoveEvent"
+            ]
+          },
+          {
+            "description": "Module published",
+            "type": "string",
+            "enum": [
+              "Publish"
+            ]
+          },
+          {
+            "description": "Coin balance changing event",
+            "type": "string",
+            "enum": [
+              "CoinBalanceChange"
+            ]
+          },
+          {
+            "description": "Epoch change",
+            "type": "string",
+            "enum": [
+              "EpochChange"
+            ]
+          },
+          {
+            "description": "New checkpoint",
+            "type": "string",
+            "enum": [
+              "Checkpoint"
+            ]
+          },
+          {
+            "description": "Object level event Transfer objects to new address / wrap in another object",
+            "type": "string",
+            "enum": [
+              "TransferObject"
+            ]
+          },
+          {
+            "description": "Object level event Object mutated.",
+            "type": "string",
+            "enum": [
+              "MutateObject"
+            ]
+          },
+          {
+            "description": "Delete object",
+            "type": "string",
+            "enum": [
+              "DeleteObject"
+            ]
+          },
+          {
+            "description": "New object creation",
+            "type": "string",
+            "enum": [
+              "NewObject"
+            ]
+          }
         ]
       },
       "ExecuteTransactionRequestType": {
@@ -3194,7 +3076,19 @@
             ],
             "properties": {
               "SharedMoveObject": {
-                "$ref": "#/components/schemas/ObjectID"
+                "type": "object",
+                "required": [
+                  "id",
+                  "initial_shared_version"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "initial_shared_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -3566,22 +3460,8 @@
           "ByValue"
         ]
       },
-      "Ordering": {
-        "type": "string",
-        "enum": [
-          "Ascending",
-          "Descending"
-        ]
-      },
       "Owner": {
         "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "Shared",
-              "Immutable"
-            ]
-          },
           {
             "description": "Object is exclusively owned by a single address, and is mutable.",
             "type": "object",
@@ -3607,8 +3487,65 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "description": "Object is shared, can be used by any address, and is mutable.",
+            "type": "object",
+            "required": [
+              "Shared"
+            ],
+            "properties": {
+              "Shared": {
+                "type": "object",
+                "required": [
+                  "initial_shared_version"
+                ],
+                "properties": {
+                  "initial_shared_version": {
+                    "description": "The version at which the object became shared",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/SequenceNumber"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Object is immutable, and hence ownership doesn't matter.",
+            "type": "string",
+            "enum": [
+              "Immutable"
+            ]
           }
         ]
+      },
+      "Page_for_EventEnvelope_and_EventID": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventEnvelope"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "Page_for_TransactionDigest_and_TransactionDigest": {
         "type": "object",
@@ -3635,6 +3572,65 @@
         }
       },
       "Pay": {
+        "type": "object",
+        "required": [
+          "amounts",
+          "coins",
+          "recipients"
+        ],
+        "properties": {
+          "amounts": {
+            "description": "The amounts each recipient will receive. Must be the same length as amounts",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "coins": {
+            "description": "The coins to be used for payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "recipients": {
+            "description": "The addresses that will receive payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        }
+      },
+      "PayAllSui": {
+        "description": "Send all SUI coins to one recipient. only for SUI coin and does not require a separate gas coin object either. Specifically, what pay_all_sui does are: 1. accumulate all SUI from input coins and deposit all SUI to the first input coin 2. transfer the updated first coin to the recipient and also use this first coin as gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost. 4. all other input coins other than the first are deleted.",
+        "type": "object",
+        "required": [
+          "coins",
+          "recipient"
+        ],
+        "properties": {
+          "coins": {
+            "description": "The coins to be used for payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "recipient": {
+            "description": "The addresses that will receive payment",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            ]
+          }
+        }
+      },
+      "PaySui": {
+        "description": "Send SUI coins to a list of addresses, following a list of amounts. only for SUI coin and does not require a separate gas coin object. Specifically, what pay_sui does are: 1. debit each input_coin to create new coin following the order of amounts and assign it to the corresponding recipient. 2. accumulate all residual SUI from input coins left and deposit all SUI to the first input coin, then use the first input coin as the gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost 4. all other input coints other than the first one are deleted.",
         "type": "object",
         "required": [
           "amounts",
@@ -4003,8 +3999,11 @@
             "enum": [
               "Bool",
               "U8",
+              "U16",
+              "U32",
               "U64",
               "U128",
+              "U256",
               "Address",
               "Signer"
             ]
@@ -4458,6 +4457,32 @@
             "additionalProperties": false
           },
           {
+            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
+            "type": "object",
+            "required": [
+              "PaySui"
+            ],
+            "properties": {
+              "PaySui": {
+                "$ref": "#/components/schemas/PaySui"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
+            "type": "object",
+            "required": [
+              "PayAllSui"
+            ],
+            "properties": {
+              "PayAllSui": {
+                "$ref": "#/components/schemas/PayAllSui"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Publish a new Move module",
             "type": "object",
             "required": [
@@ -4514,12 +4539,14 @@
       "TransactionQuery": {
         "oneOf": [
           {
+            "description": "All transaction hashes.",
             "type": "string",
             "enum": [
               "All"
             ]
           },
           {
+            "description": "Query by move function.",
             "type": "object",
             "required": [
               "MoveFunction"
@@ -4552,6 +4579,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by input object.",
             "type": "object",
             "required": [
               "InputObject"
@@ -4564,6 +4592,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by mutated object.",
             "type": "object",
             "required": [
               "MutatedObject"
@@ -4576,6 +4605,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by sender address.",
             "type": "object",
             "required": [
               "FromAddress"
@@ -4588,6 +4618,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by recipient address.",
             "type": "object",
             "required": [
               "ToAddress"
@@ -4649,14 +4680,6 @@
             "$ref": "#/components/schemas/SuiAddress"
           }
         }
-      },
-      "TransferType": {
-        "type": "string",
-        "enum": [
-          "Coin",
-          "ToAddress",
-          "ToObject"
-        ]
       },
       "TypeTag": {
         "type": "string"

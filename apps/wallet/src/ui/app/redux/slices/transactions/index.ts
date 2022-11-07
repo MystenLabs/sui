@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject } from '@mysten/sui.js';
+import { getTransactionDigest, isSuiMoveObject } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -17,7 +17,7 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import type {
     SuiAddress,
     SuiMoveObject,
-    SuiTransactionResponse,
+    SuiExecuteTransactionResponse,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -27,7 +27,7 @@ type SendTokensTXArgs = {
     amount: bigint;
     recipientAddress: SuiAddress;
 };
-type TransactionResult = SuiTransactionResponse;
+type TransactionResult = SuiExecuteTransactionResponse;
 
 export const sendTokens = createAsyncThunk<
     TransactionResult,
@@ -48,16 +48,19 @@ export const sendTokens = createAsyncThunk<
                     isSuiMoveObject(anObj.data) && anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
+
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+
         const response =
             Coin.getCoinSymbol(tokenTypeArg) === 'SUI'
                 ? await Coin.transferSui(
-                      api.getSignerInstance(keypairVault.getKeyPair()),
+                      signer,
                       coins,
                       amount,
                       recipientAddress
                   )
                 : await Coin.transferCoin(
-                      api.getSignerInstance(keypairVault.getKeyPair()),
+                      signer,
                       coins,
                       amount,
                       recipientAddress
@@ -66,7 +69,7 @@ export const sendTokens = createAsyncThunk<
         // TODO: better way to sync latest objects
         dispatch(fetchAllOwnedAndRequiredObjects());
         // TODO: is this correct? Find a better way to do it
-        return response as TransactionResult;
+        return response;
     }
 );
 
@@ -111,12 +114,12 @@ export const StakeTokens = createAsyncThunk<
             validatorAddress
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
-        return response as TransactionResult;
+        return response;
     }
 );
 
 const txAdapter = createEntityAdapter<TransactionResult>({
-    selectId: (tx) => tx.certificate.transactionDigest,
+    selectId: (tx) => getTransactionDigest(tx),
 });
 
 export const txSelectors = txAdapter.getSelectors(

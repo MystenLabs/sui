@@ -6,6 +6,7 @@ use futures::Stream;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
 use sui_types::filter::Filter;
@@ -37,7 +38,7 @@ where
         };
         let mut rx = rx;
         let subscribers = streamer.subscribers.clone();
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             while let Some(data) = rx.recv().await {
                 Self::send_to_all_subscribers(subscribers.clone(), data).await;
             }
@@ -52,7 +53,7 @@ where
             }
             let data = data.clone();
             let subscribers = subscribers.clone();
-            tokio::spawn(async move {
+            spawn_monitored_task!(async move {
                 match subscriber.send(data).await {
                     Ok(_) => {
                         debug!("Sending Move event to subscriber [{id}].")

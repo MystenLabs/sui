@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Batch, BatchDigest};
-use blake2::digest::Update;
 
+use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -11,24 +11,10 @@ use thiserror::Error;
 #[path = "tests/batch_serde.rs"]
 mod batch_serde;
 
-/// Unsolicited messages exchanged between workers.
-#[allow(clippy::large_enum_variant)]
+/// Used by workers to send a new batch.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum WorkerMessage {
-    /// Used by workers to send a new batch.
-    Batch(Batch),
-}
-
-/// Used by workers to request batches from other workers.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WorkerBatchRequest {
-    pub digests: Vec<BatchDigest>,
-}
-
-/// Used by workers to provide batches to other workers.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WorkerBatchResponse {
-    pub batches: Vec<Batch>,
+pub struct WorkerBatchMessage {
+    pub batch: Batch,
 }
 
 /// Used by primary to ask worker for the request.
@@ -42,10 +28,13 @@ pub struct RequestBatchResponse {
     pub batch: Option<Batch>,
 }
 
+pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
+pub type PrimaryResponse = Option<tokio::sync::oneshot::Sender<()>>;
+
 /// Hashes a serialized batch message without deserializing it into a batch.
 ///
 /// See the test `test_batch_and_serialized`, which guarantees that the output of this
-/// function remains the same as the [`fastcrypto::Hash::digest`] result you would get from [`Batch`].
+/// function remains the same as the [`fastcrypto::hash::Hash::digest`] result you would get from [`Batch`].
 /// See also the micro-benchmark `batch_digest`, which checks the performance of this is
 /// identical to hashing a serialized batch.
 ///
@@ -54,7 +43,7 @@ pub struct RequestBatchResponse {
 /// TODO: update batch hashing to reflect hashing fixed sequences of transactions, see #87.
 pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, DigestError> {
     let sbm = sbm.as_ref();
-    let mut offset = 4; // skip the enum variant selector
+    let mut offset = 0;
     let num_transactions = u64::from_le_bytes(
         sbm[offset..offset + 8]
             .try_into()
@@ -67,9 +56,9 @@ pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, Di
         transactions.push(tx_ref);
         offset = new_offset;
     }
-    Ok(BatchDigest::new(fastcrypto::blake2b_256(|hasher| {
-        transactions.iter().for_each(|tx| hasher.update(tx))
-    })))
+    Ok(BatchDigest::new(
+        crypto::DefaultHashFunction::digest_iterator(transactions.iter()).into(),
+    ))
 }
 
 #[derive(Debug, Error)]

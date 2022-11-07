@@ -26,14 +26,7 @@ async function main() {
   await Promise.all(
     GUARD_FILES.map(async (fileName) => {
       const file = await readFile(fileName, 'utf-8');
-      writeFile(
-        fileName,
-        LICENSE +
-          file.replace(
-            /import { BN } from ".*";\n/g,
-            'import { BN } from "bn.js";\nimport { Buffer } from "buffer";\n'
-          )
-      );
+      writeFile(fileName, LICENSE + file);
     })
   );
 }

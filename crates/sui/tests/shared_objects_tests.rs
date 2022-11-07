@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-use sui_core::authority::GatewayStore;
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };
 use sui_types::object::OBJECT_START_VERSION;
-use test_utils::authority::{get_client, test_authority_aggregator};
+use test_utils::authority::get_client;
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -88,7 +85,11 @@ async fn call_shared_object_contract() {
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // Ensure the value of the counter is `0`.
     let transaction = move_transaction(
@@ -97,7 +98,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -112,7 +113,7 @@ async fn call_shared_object_contract() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
@@ -126,7 +127,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -162,7 +163,11 @@ async fn shared_object_flood() {
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // Ensure the value of the counter is `0`.
     let transaction = move_transaction(
@@ -171,7 +176,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -186,7 +191,7 @@ async fn shared_object_flood() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
@@ -200,7 +205,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -237,7 +242,11 @@ async fn shared_object_sync() {
     )
     .await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // Check that the counter object only exist in the first validator, but not the rest.
     get_client(&configs.validator_set()[0])
@@ -267,7 +276,7 @@ async fn shared_object_sync() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
@@ -279,23 +288,8 @@ async fn shared_object_sync() {
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
-    // Let's submit the transaction to the out-of-date authorities.
-    // Right now grpc doesn't send back the error message in a recoverable way.
-    // Ideally we expect Err(SuiError::SharedObjectLockingFailure(_)).
-    let _err = submit_shared_object_transaction(
-        increment_counter_transaction.clone(),
-        &configs.validator_set()[1..],
-    )
-    .await
-    .unwrap_err();
-
-    // Now send the missing certificates to the outdated authorities. We also re-send
-    // the transaction to the first authority who should simply ignore it.
-    let effects =
-        submit_single_owner_transaction(create_counter_transaction, configs.validator_set()).await;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-
-    // Now we can try again with the shared-object transaction who failed before.
+    // Submit transactions to out-of-date authorities.
+    // It will succeed because we share owned object certificates through narwhal
     let effects = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.validator_set()[1..],
@@ -338,108 +332,5 @@ async fn replay_shared_object_transaction() {
         // Ensure the sequence number of the shared object did not change.
         let ((_, seq, _), _) = effects.created[0];
         assert_eq!(seq, OBJECT_START_VERSION);
-    }
-}
-
-// TODO [gateway-deprecation] remove test case
-#[sim_test]
-async fn shared_object_on_gateway() {
-    let mut gas_objects = test_gas_objects();
-
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let committee_store = handles[0].with(|h| h.state().committee_store().clone());
-    let clients = test_authority_aggregator(&configs, committee_store);
-    let path = tempfile::tempdir().unwrap().into_path();
-    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
-    let gateway = Arc::new(
-        GatewayState::new_with_authorities(gateway_store, clients, GatewayMetrics::new_for_tests())
-            .unwrap(),
-    );
-
-    // Publish the move package to all authorities and get the new package ref.
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
-
-    // Send a transaction to create a counter.
-    let create_counter_transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_ref,
-        /* arguments */ Vec::default(),
-    );
-    let resp = gateway
-        .execute_transaction(create_counter_transaction)
-        .await
-        .unwrap();
-    let effects = resp.effects;
-    let shared_object_id = effects.created[0].reference.object_id;
-    // We need to have one gas object left for the final value check.
-    let last_gas_object = gas_objects.pop().unwrap();
-    let increment_amount = gas_objects.len();
-
-    // It may happen that no authorities manage to get their transaction sequenced by consensus
-    // (we may be unlucky and consensus may drop all our transactions). It would have been nice
-    // to only filter "timeout" errors, but the game way simply returns `anyhow::Error`, this
-    // will be fixed by issue #1717. Note that the gateway has an internal retry mechanism but
-    // it is not an infinite loop.
-    let mut retry = 10;
-    loop {
-        let futures: Vec<_> = gas_objects
-            .iter()
-            .cloned()
-            .map(|gas_object| {
-                let g = gateway.clone();
-                let increment_counter_transaction = move_transaction(
-                    gas_object,
-                    "counter",
-                    "increment",
-                    package_ref,
-                    /* arguments */
-                    vec![CallArg::Object(ObjectArg::SharedObject(shared_object_id))],
-                );
-                async move { g.execute_transaction(increment_counter_transaction).await }
-            })
-            .collect();
-
-        let replies: Vec<_> = futures::future::join_all(futures)
-            .await
-            .into_iter()
-            .collect();
-        assert_eq!(replies.len(), increment_amount);
-        if replies.iter().all(|result| result.is_ok()) {
-            break;
-        }
-        if retry == 0 {
-            unreachable!("Failed after 10 retries. Latest replies: {:?}", replies);
-        }
-        retry -= 1;
-    }
-
-    let assert_value_transaction = move_transaction(
-        last_gas_object,
-        "counter",
-        "assert_value",
-        package_ref,
-        vec![
-            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
-            CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
-        ],
-    );
-
-    // Same problem may happen here (consensus may drop transactions).
-    loop {
-        let result = gateway
-            .clone()
-            .execute_transaction(assert_value_transaction.clone())
-            .await;
-        if let Ok(response) = result {
-            let effects = response.effects;
-            assert!(effects.status.is_ok());
-            break;
-        }
     }
 }

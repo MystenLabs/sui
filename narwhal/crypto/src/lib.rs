@@ -8,7 +8,10 @@
     rust_2021_compatibility
 )]
 
-use fastcrypto::{bls12381, ed25519};
+use fastcrypto::{
+    bls12381, ed25519,
+    hash::{Blake2b256, HashFunction},
+};
 
 // This re-export allows using the trait-defined APIs
 pub use fastcrypto::traits;
@@ -26,30 +29,17 @@ pub use fastcrypto::traits;
 // to change all four aliases to point to concrete types that work with each other. Failure to do
 // so will result in a ton of compilation errors, and worse: it will not make sense!
 
-pub type PublicKey = bls12381::BLS12381PublicKey;
-pub type Signature = bls12381::BLS12381Signature;
-pub type AggregateSignature = bls12381::BLS12381AggregateSignature;
-pub type PrivateKey = bls12381::BLS12381PrivateKey;
-pub type KeyPair = bls12381::BLS12381KeyPair;
-
-// Example to use BLS12-377 instead:
-// #[cfg(feature = "celo")]
-// pub type PublicKey = bls12377::BLS12377PublicKey;
-// #[cfg(feature = "celo")]
-// pub type Signature = bls12377::BLS12377Signature;
-// #[cfg(feature = "celo")]
-// pub type PrivateKey = bls12377::BLS12377PrivateKey;
-// #[cfg(feature = "celo")]
-// pub type KeyPair = bls12377::BLS12377KeyPair;
+pub type PublicKey = bls12381::min_sig::BLS12381PublicKey;
+pub type Signature = bls12381::min_sig::BLS12381Signature;
+pub type AggregateSignature = bls12381::min_sig::BLS12381AggregateSignature;
+pub type PrivateKey = bls12381::min_sig::BLS12381PrivateKey;
+pub type KeyPair = bls12381::min_sig::BLS12381KeyPair;
 
 pub type NetworkPublicKey = ed25519::Ed25519PublicKey;
 pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
 
 ////////////////////////////////////////////////////////////////////////
 
-#[cfg(all(test, feature = "celo"))]
-#[path = "tests/bls12377_tests.rs"]
-pub mod bls12377_tests;
-
-#[cfg(feature = "celo")]
-pub mod bls12377;
+// Type alias selecting the default hash function for the code base.
+pub type DefaultHashFunction = Blake2b256;
+pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;

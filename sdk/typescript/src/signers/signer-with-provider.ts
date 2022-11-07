@@ -4,12 +4,13 @@
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
+import { HttpHeaders } from '../rpc/client';
 import { Base64DataBuffer } from '../serialization/base64';
 import {
   ExecuteTransactionRequestType,
+  FaucetResponse,
   SuiAddress,
   SuiExecuteTransactionResponse,
-  SuiTransactionResponse,
 } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
@@ -17,6 +18,8 @@ import {
   MoveCallTransaction,
   MergeCoinTransaction,
   PayTransaction,
+  PaySuiTransaction,
+  PayAllSuiTransaction,
   SplitCoinTransaction,
   TransferObjectTransaction,
   TransferSuiTransaction,
@@ -49,69 +52,39 @@ export abstract class SignerWithProvider implements Signer {
   ///////////////////
   // Sub-classes MAY override these
 
+  /**
+   * Request gas tokens from a faucet server and send to the signer
+   * address
+   * @param httpHeaders optional request headers
+   */
+  async requestSuiFromFaucet(
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    return this.provider.requestSuiFromFaucet(
+      await this.getAddress(),
+      httpHeaders
+    );
+  }
+
   constructor(provider?: Provider, serializer?: TxnDataSerializer) {
     this.provider = provider || new VoidProvider();
     let endpoint = '';
     let skipDataValidation = false;
     if (this.provider instanceof JsonRpcProvider) {
-      endpoint = this.provider.endpoint;
-      skipDataValidation = this.provider.skipDataValidation;
+      endpoint = this.provider.endpoints.fullNode;
+      skipDataValidation = this.provider.options.skipDataValidation!;
     }
     this.serializer =
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
   /**
-   * Sign a transaction and submit to the Gateway for execution
-   */
-  async signAndExecuteTransaction(
-    transaction: Base64DataBuffer | SignableTransaction
-  ): Promise<SuiTransactionResponse> {
-    // Handle submitting raw transaction bytes:
-    if (
-      transaction instanceof Base64DataBuffer ||
-      transaction.kind === 'bytes'
-    ) {
-      const txBytes =
-        transaction instanceof Base64DataBuffer
-          ? transaction
-          : new Base64DataBuffer(transaction.data);
-
-      const sig = await this.signData(txBytes);
-      return await this.provider.executeTransaction(
-        txBytes.toString(),
-        sig.signatureScheme,
-        sig.signature.toString(),
-        sig.pubKey.toString()
-      );
-    }
-
-    switch (transaction.kind) {
-      case 'moveCall':
-        return this.executeMoveCall(transaction.data);
-      case 'transferSui':
-        return this.transferSui(transaction.data);
-      case 'transferObject':
-        return this.transferObject(transaction.data);
-      case 'mergeCoin':
-        return this.mergeCoin(transaction.data);
-      case 'splitCoin':
-        return this.splitCoin(transaction.data);
-      case 'pay':
-        return this.pay(transaction.data);
-      default:
-        throw new Error(
-          `Unknown transaction kind: "${(transaction as any).kind}"`
-        );
-    }
-  }
-
-  /**
-   * @experimental Sign a transaction and submit to the Fullnode for execution
+   * Sign a transaction and submit to the Fullnode for execution. Only exists
+   * on Fullnode
    */
   async signAndExecuteTransactionWithRequestType(
     transaction: Base64DataBuffer | SignableTransaction,
-    requestType: ExecuteTransactionRequestType
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     // Handle submitting raw transaction bytes:
     if (
@@ -152,6 +125,12 @@ export abstract class SignerWithProvider implements Signer {
         return this.splitCoinWithRequestType(transaction.data, requestType);
       case 'pay':
         return this.payWithRequestType(transaction.data, requestType);
+      case 'paySui':
+        return this.paySuiWithRequestType(transaction.data, requestType);
+      case 'payAllSui':
+        return this.payAllSuiWithRequestType(transaction.data, requestType);
+      case 'publish':
+        return this.publishWithRequestType(transaction.data, requestType);
       default:
         throw new Error(
           `Unknown transaction kind: "${(transaction as any).kind}"`
@@ -160,111 +139,8 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * Trigger gateway to sync account state related to the address,
-   * based on the account state on validators.
-   */
-  async syncAccountState(): Promise<any> {
-    const address = await this.getAddress();
-    return await this.provider.syncAccountState(address);
-  }
-
-  /**
-   * Serialize and Sign a `TransferObject` transaction and submit to the Gateway for execution
-   */
-  async transferObject(
-    transaction: TransferObjectTransaction
-  ): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newTransferObject(
-      signerAddress,
-      transaction
-    );
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /**
-   * Serialize and Sign a `TransferSui` transaction and submit to the Gateway for execution
-   */
-  async transferSui(
-    transaction: TransferSuiTransaction
-  ): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newTransferSui(
-      signerAddress,
-      transaction
-    );
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /**
-   * Serialize and Sign a `Pay` transaction and submit to the Gateway for execution
-   */
-  async pay(transaction: PayTransaction): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newPay(signerAddress, transaction);
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /**
-   * Serialize and Sign a `MergeCoin` transaction and submit to the Gateway for execution
-   */
-  async mergeCoin(
-    transaction: MergeCoinTransaction
-  ): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newMergeCoin(
-      signerAddress,
-      transaction
-    );
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /**
-   * Serialize and Sign a `SplitCoin` transaction and submit to the Gateway for execution
-   */
-  async splitCoin(
-    transaction: SplitCoinTransaction
-  ): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newSplitCoin(
-      signerAddress,
-      transaction
-    );
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /**
-   * Serialize and Sign a `MoveCall` transaction and submit to the Gateway for execution
-   */
-  async executeMoveCall(
-    transaction: MoveCallTransaction
-  ): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newMoveCall(
-      signerAddress,
-      transaction
-    );
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /**
-   * Publish a Move package on chain
-   * @param transaction See {@link PublishTransaction}
-   */
-  async publish(
-    transaction: PublishTransaction
-  ): Promise<SuiTransactionResponse> {
-    const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newPublish(
-      signerAddress,
-      transaction
-    );
-    return await this.signAndExecuteTransaction(txBytes);
-  }
-
-  /* ---------------------------- Experimental API ---------------------------- */
-  /**
-   * @experimental Serialize and sign a `TransferObject` transaction and submit to the Fullnode
+   *
+   * Serialize and sign a `TransferObject` transaction and submit to the Fullnode
    * for execution
    */
   async transferObjectWithRequestType(
@@ -283,7 +159,8 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Serialize and sign a `TransferSui` transaction and submit to the Fullnode
+   *
+   * Serialize and sign a `TransferSui` transaction and submit to the Fullnode
    * for execution
    */
   async transferSuiWithRequestType(
@@ -302,7 +179,8 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
+   *
+   * Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
    */
   async payWithRequestType(
     transaction: PayTransaction,
@@ -317,7 +195,41 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Serialize and sign a `MergeCoin` transaction and submit to the Fullnode
+   * Serialize and Sign a `PaySui` transaction and submit to the fullnode for execution
+   */
+  async paySuiWithRequestType(
+    transaction: PaySuiTransaction,
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+  ): Promise<SuiExecuteTransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPaySui(signerAddress, transaction);
+    return await this.signAndExecuteTransactionWithRequestType(
+      txBytes,
+      requestType
+    );
+  }
+
+  /**
+   * Serialize and Sign a `PayAllSui` transaction and submit to the fullnode for execution
+   */
+  async payAllSuiWithRequestType(
+    transaction: PayAllSuiTransaction,
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+  ): Promise<SuiExecuteTransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPayAllSui(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransactionWithRequestType(
+      txBytes,
+      requestType
+    );
+  }
+
+  /**
+   *
+   * Serialize and sign a `MergeCoin` transaction and submit to the Fullnode
    * for execution
    */
   async mergeCoinWithRequestType(
@@ -336,7 +248,8 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Serialize and sign a `SplitCoin` transaction and submit to the Fullnode
+   *
+   * Serialize and sign a `SplitCoin` transaction and submit to the Fullnode
    * for execution
    */
   async splitCoinWithRequestType(
@@ -355,7 +268,7 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Serialize and sign a `MoveCall` transaction and submit to the Fullnode
+   * Serialize and sign a `MoveCall` transaction and submit to the Fullnode
    * for execution
    */
   async executeMoveCallWithRequestType(
@@ -374,7 +287,8 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Serialize and sign a `Publish` transaction and submit to the Fullnode
+   *
+   * Serialize and sign a `Publish` transaction and submit to the Fullnode
    * for execution
    */
   async publishWithRequestType(

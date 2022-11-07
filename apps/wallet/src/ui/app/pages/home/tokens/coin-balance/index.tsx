@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo, useMemo } from 'react';
-import { useIntl } from 'react-intl';
+import { memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import { useMiddleEllipsis } from '_hooks';
-import { Coin } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import Icon, { SuiIcons } from '_components/icon';
+import { useFormatCoin } from '_hooks';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import st from './CoinBalance.module.scss';
 
@@ -19,28 +19,47 @@ export type CoinProps = {
 };
 
 function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
-    const symbol = useMemo(() => Coin.getCoinSymbol(type), [type]);
-    const intl = useIntl();
-    const balanceFormatted = useMemo(
-        () => intl.formatNumber(balance, balanceFormatOptions),
-        [intl, balance]
-    );
+    const [formatted, symbol] = useFormatCoin(balance, type);
+    const icon = type === GAS_TYPE_ARG ? SuiIcons.SuiLogoIcon : SuiIcons.Tokens;
 
-    const shortenType = useMiddleEllipsis(type, 30);
+    const navigate = useNavigate();
+
+    // TODO: use a different logic to differentiate between view types
+    const coinDetail = useCallback(() => {
+        if (mode !== 'row-item') return;
+
+        navigate(`/tokens/details?type=${encodeURIComponent(type)}`);
+    }, [mode, navigate, type]);
+
     return (
-        <div className={cl(st.container, st[mode])}>
-            <div className={cl(st.valuesContainer, st[mode])}>
-                <span className={cl(st.value, st[mode])}>
-                    {balanceFormatted}
-                </span>
+        <div
+            className={cl(
+                st.container,
+                st[mode],
+                mode === 'row-item' && st.coinBalanceBtn
+            )}
+            onClick={coinDetail}
+            role="button"
+        >
+            {mode === 'row-item' ? (
+                <>
+                    <Icon
+                        icon={icon}
+                        className={cl(st.coinIcon, {
+                            [st.sui]: type === GAS_TYPE_ARG,
+                        })}
+                    />
+                    <div className={cl(st.coinNameContainer, st[mode])}>
+                        <span className={st.coinName}>
+                            {symbol.toLocaleLowerCase()}
+                        </span>
+                        <span className={st.coinSymbol}>{symbol}</span>
+                    </div>
+                </>
+            ) : null}
+            <div className={cl(st.valueContainer, st[mode])}>
+                <span className={cl(st.value, st[mode])}>{formatted}</span>
                 <span className={cl(st.symbol, st[mode])}>{symbol}</span>
-            </div>
-            <div className={cl(st.typeActionsContainer, st[mode])}>
-                {mode === 'row-item' ? (
-                    <span className={st.type} title={type}>
-                        {shortenType}
-                    </span>
-                ) : null}
             </div>
         </div>
     );

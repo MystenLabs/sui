@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
-    crypto::{AccountKeystore, FileBasedKeystore, Keystore},
     types::{
         base_types::{ObjectID, SuiAddress},
         messages::Transaction,
@@ -14,7 +14,7 @@ use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_rpc_client("https://fullnode.devnet.sui.io:443", None).await?;
+    let sui = SuiClient::new("https://fullnode.devnet.sui.io:443", None).await?;
     // Load keystore from ~/.sui/sui_config/sui.keystore
     let keystore_path = match dirs::home_dir() {
         Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),
@@ -39,7 +39,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let transaction_response = sui
         .quorum_driver()
         .execute_transaction(
-            Transaction::new(transfer_tx, signature),
+            Transaction::new(transfer_tx, signature).verify()?,
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

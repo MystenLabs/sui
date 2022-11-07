@@ -2,27 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    type GetTxnDigestsResponse,
+    type JsonRpcProvider,
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import * as Sentry from '@sentry/react';
+import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useEffect, useState, useContext, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
-import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
-import { NetworkContext } from '../../context';
-import theme from '../../styles/theme.module.css';
-import {
-    DefaultRpcClient as rpc,
-    type Network,
-} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
-import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
 import {
     type TxnData,
@@ -32,29 +24,17 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
+import { useRpc } from '~/hooks/useRpc';
+import { Banner } from '~/ui/Banner';
+import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
-const DEFAULT_PAGI_TYPE = 'more button';
+const DEFAULT_PAGINATION_TYPE = 'more button';
 
 type PaginationType = 'more button' | 'pagination' | 'none';
-
-const initState: {
-    loadState: string;
-    latestTx: TxnData[];
-    totalTxcount?: number;
-    txPerPage?: number;
-    truncateLength?: number;
-    paginationtype?: PaginationType;
-} = {
-    loadState: 'pending',
-    latestTx: [],
-    totalTxcount: 0,
-    txPerPage: NUMBER_OF_TX_PER_PAGE,
-    truncateLength: TRUNCATE_LENGTH,
-    paginationtype: 'pagination',
-};
 
 function generateStartEndRange(
     txCount: number,
@@ -87,62 +67,61 @@ const getRecentTransactionsStatic = (): Promise<TxnData[]> => {
 
 // TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
-    network: Network | string,
+    rpc: JsonRpcProvider,
     totalTx: number,
     txNum: number,
     pageNum?: number
 ): Promise<TxnData[]> {
-    try {
-        // If static env, use static data
-        if (IS_STATIC_ENV) {
-            return getRecentTransactionsStatic();
-        }
-        // Get the latest transactions
-        // Instead of getRecentTransactions, use getTransactionCount
-        // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
-        // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
-        const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
-            generateStartEndRange(totalTx, txNum, pageNum);
-
-        // TODO: Add error page
-        // If paged tx value is less than 0, out of range
-        if (endGatewayTxSeqNumber < 0) {
-            throw new Error('Invalid transaction number');
-        }
-        return (await rpc(network)
-            .getTransactionDigestsInRange(
-                startGatewayTxSeqNumber,
-                endGatewayTxSeqNumber
-            )
-            .then((res: GetTxnDigestsResponse) =>
-                getDataOnTxDigests(network, res)
-            )) as TxnData[];
-    } catch (error) {
-        throw error;
+    // If static env, use static data
+    if (IS_STATIC_ENV) {
+        return getRecentTransactionsStatic();
     }
+    // Get the latest transactions
+    // Instead of getRecentTransactions, use getTransactionCount
+    // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
+    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
+    const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
+        generateStartEndRange(totalTx, txNum, pageNum);
+
+    // TODO: Add error page
+    // If paged tx value is less than 0, out of range
+    if (endGatewayTxSeqNumber < 0) {
+        throw new Error('Invalid transaction number');
+    }
+    const transactionDigests = await rpc.getTransactionDigestsInRange(
+        startGatewayTxSeqNumber,
+        endGatewayTxSeqNumber
+    );
+
+    // result returned by getTransactionDigestsInRange is in ascending order
+    const transactionData = await getDataOnTxDigests(
+        rpc,
+        [...transactionDigests].reverse()
+    );
+
+    // TODO: Don't force the type here:
+    return transactionData as TxnData[];
 }
 
-type RecentTx = {
-    count?: number;
+type Props = {
     paginationtype?: PaginationType;
     txPerPage?: number;
     truncateLength?: number;
 };
 
-function LatestTxCard({ ...data }: RecentTx) {
-    const {
-        count = 0,
-        truncateLength = TRUNCATE_LENGTH,
-        paginationtype = DEFAULT_PAGI_TYPE,
-    } = data;
+// Transactions frequently update, so we consider them stale after 10 seconds:
+const TRANSACTION_STALE_TIME = 10 * 1000;
 
+export function LatestTxCard({
+    truncateLength = TRUNCATE_LENGTH,
+    paginationtype = DEFAULT_PAGINATION_TYPE,
+    txPerPage: initialTxPerPage,
+}: Props) {
     const [txPerPage, setTxPerPage] = useState(
-        data.txPerPage || NUMBER_OF_TX_PER_PAGE
+        initialTxPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [results, setResults] = useState(initState);
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     const [searchParams, setSearchParams] = useSearchParams();
 
     const [pageIndex, setPageIndex] = useState(
@@ -157,73 +136,55 @@ function LatestTxCard({ ...data }: RecentTx) {
         [setSearchParams]
     );
 
-    // update the page index when the user clicks on the pagination buttons
-    useEffect(() => {
-        let isMounted = true;
-        // If pageIndex is greater than maxTxPage, set to maxTxPage
-        const maxTxPage = Math.ceil(count / txPerPage);
-        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
+    const countQuery = useQuery(
+        ['transactions', 'count'],
+        () => {
+            return rpc.getTotalTransactionNumber();
+        },
+        {
+            staleTime: TRANSACTION_STALE_TIME,
+        }
+    );
 
-        getRecentTransactions(network, count, txPerPage, pg)
-            .then(async (resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
-                setResults({
-                    loadState: 'loaded',
-                    latestTx: resp,
-                    totalTxcount: count,
-                });
-            })
-            .catch((err) => {
-                setResults({
-                    ...initState,
-                    loadState: 'fail',
-                });
-                setIsLoaded(false);
-                console.error(
-                    'Encountered error when fetching recent transactions',
-                    err
-                );
-                Sentry.captureException(err);
-            });
-        return () => {
-            isMounted = false;
-        };
-    }, [count, network, pageIndex, setSearchParams, txPerPage]);
+    const transactionQuery = useQuery(
+        ['transactions', { total: countQuery.data, txPerPage, pageIndex }],
+        async () => {
+            const { data: count } = countQuery;
 
-    if (results.loadState === 'pending') {
-        return (
-            <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
-            </div>
-        );
-    }
+            if (!count) {
+                throw new Error('No transactions found');
+            }
 
-    if (!isLoaded && results.loadState === 'fail') {
-        return (
-            <ErrorResult
-                id=""
-                errorMsg="There was an issue getting the latest transactions"
-            />
-        );
-    }
+            // If pageIndex is greater than maxTxPage, set to maxTxPage
+            const maxTxPage = Math.ceil(count / txPerPage);
+            const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
 
-    if (results.loadState === 'loaded' && !results.latestTx.length) {
-        return <ErrorResult id="" errorMsg="No Transactions Found" />;
-    }
+            return getRecentTransactions(rpc, count, txPerPage, pg);
+        },
+        {
+            enabled: countQuery.isFetched,
+            keepPreviousData: true,
+            staleTime: TRANSACTION_STALE_TIME,
+        }
+    );
 
-    const recentTx = genTableDataFromTxData(results.latestTx, truncateLength);
+    const recentTx = useMemo(
+        () =>
+            transactionQuery.data
+                ? genTableDataFromTxData(transactionQuery.data, truncateLength)
+                : null,
+        [transactionQuery.data, truncateLength]
+    );
 
     const stats = {
-        count,
+        count: countQuery?.data || 0,
         stats_text: 'Total transactions',
     };
 
     const PaginationWithStatsOrStatsWithLink =
         paginationtype === 'pagination' ? (
             <Pagination
-                totalItems={count}
+                totalItems={countQuery?.data || 0}
                 itemsPerPage={txPerPage}
                 updateItemsPerPage={setTxPerPage}
                 onPagiChangeFn={handlePageChange}
@@ -238,6 +199,22 @@ function LatestTxCard({ ...data }: RecentTx) {
             </TabFooter>
         );
 
+    if (countQuery.isError) {
+        return (
+            <Banner variant="error" fullWidth>
+                No transactions found.
+            </Banner>
+        );
+    }
+
+    if (transactionQuery.isError) {
+        return (
+            <Banner variant="error" fullWidth>
+                There was an issue getting the latest transactions.
+            </Banner>
+        );
+    }
+
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
             <TabGroup size="lg">
@@ -246,7 +223,34 @@ function LatestTxCard({ ...data }: RecentTx) {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <TableCard tabledata={recentTx} />
+                        {recentTx ? (
+                            <TableCard
+                                refetching={transactionQuery.isPreviousData}
+                                data={recentTx.data}
+                                columns={recentTx.columns}
+                            />
+                        ) : (
+                            <PlaceholderTable
+                                rowCount={15}
+                                rowHeight="16px"
+                                colHeadings={[
+                                    'Time',
+                                    'Type',
+                                    'Transaction ID',
+                                    'Addresses',
+                                    'Amount',
+                                    'Gas',
+                                ]}
+                                colWidths={[
+                                    '85px',
+                                    '100px',
+                                    '120px',
+                                    '204px',
+                                    '90px',
+                                    '38px',
+                                ]}
+                            />
+                        )}
                         {paginationtype !== 'none' &&
                             PaginationWithStatsOrStatsWithLink}
                     </TabPanel>
@@ -255,5 +259,3 @@ function LatestTxCard({ ...data }: RecentTx) {
         </div>
     );
 }
-
-export default LatestTxCard;

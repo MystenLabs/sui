@@ -25,6 +25,7 @@ pub struct Project {
 
 impl Project {
     pub fn new(
+        version: &str,
         title: &str,
         description: &str,
         contact_name: &str,
@@ -33,7 +34,6 @@ impl Project {
         license: &str,
         license_url: &str,
     ) -> Self {
-        let version = env!("CARGO_PKG_VERSION").to_owned();
         let openrpc = "1.2.6".to_string();
         Self {
             openrpc,
@@ -49,7 +49,7 @@ impl Project {
                     name: license.to_string(),
                     url: Some(license_url.to_string()),
                 }),
-                version,
+                version: version.to_owned(),
                 ..Default::default()
             },
             methods: vec![],

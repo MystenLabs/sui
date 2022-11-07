@@ -51,25 +51,35 @@ export class JsonRpcClient {
         try {
           let res: Response = await fetch(url, options);
           const text = await res.text();
-          const result = JSON.stringify(
-            LosslessJSON.parse(text, (key, value) => {
-              if (value == null) {
+          let result;
+          // wrapping this with try/catch because LosslessJSON
+          // returns error when parsing some struct.
+          // TODO: remove the usage of LosslessJSON once
+          // https://github.com/MystenLabs/sui/issues/2328 is done
+          try {
+            result = JSON.stringify(
+              LosslessJSON.parse(text, (key, value) => {
+                if (value == null) {
+                  return value;
+                }
+
+                // TODO: This is a bad hack, we really shouldn't be doing this here:
+                if (key === 'balance' && typeof value === 'number') {
+                  return value.toString();
+                }
+
+                try {
+                  if (value.isLosslessNumber) return value.valueOf();
+                } catch {
+                  return value.toString();
+                }
                 return value;
-              }
+              })
+            );
+          } catch (e) {
+            result = text;
+          }
 
-              // TODO: This is a bad hack, we really shouldn't be doing this here:
-              if (key === 'balance' && typeof value === 'number') {
-                return value.toString();
-              }
-
-              try {
-                if (value.isLosslessNumber) return value.valueOf();
-              } catch {
-                return value.toString();
-              }
-              return value;
-            })
-          );
           if (res.ok) {
             callback(null, result);
           } else {

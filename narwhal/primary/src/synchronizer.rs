@@ -5,7 +5,7 @@ use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::Dag;
 use crypto::PublicKey;
-use fastcrypto::Hash as _;
+use fastcrypto::hash::Hash as _;
 use std::{collections::HashMap, sync::Arc};
 use storage::CertificateStore;
 use store::Store;
@@ -102,10 +102,10 @@ impl Synchronizer {
             return Ok(false);
         }
 
-        self.tx_header_waiter
-            .send(WaiterMessage::SyncBatches(missing, header.clone()))
-            .await
-            .expect("Failed to send sync batch request");
+        // Ok to drop header if its payloads are missing and HeaderWaiter is overloaded.
+        let _ = self
+            .tx_header_waiter
+            .try_send(WaiterMessage::SyncBatches(missing, header.clone()));
         Ok(true)
     }
 
@@ -136,17 +136,17 @@ impl Synchronizer {
             return Ok(parents);
         }
 
-        self.tx_header_waiter
-            .send(WaiterMessage::SyncParents(missing, header.clone()))
-            .await
-            .expect("Failed to send sync parents request");
+        // Ok to drop header if its parents are missing and HeaderWaiter is overloaded.
+        let _ = self
+            .tx_header_waiter
+            .try_send(WaiterMessage::SyncParents(missing, header.clone()));
         Ok(Vec::new())
     }
 
-    /// Check whether we have seen all the ancestors of the certificate. If we don't, send the
-    /// certificate to the `CertificateWaiter` which will trigger re-processing once we have
-    /// all the missing data.
-    pub async fn deliver_certificate(&mut self, certificate: &Certificate) -> DagResult<bool> {
+    /// Checks whether we have seen all the ancestors of the certificate. If we don't, send the
+    /// certificate to the `CertificateWaiter` which will trigger range fetching of missing
+    /// certificates.
+    pub async fn check_parents(&mut self, certificate: &Certificate) -> DagResult<bool> {
         for digest in &certificate.header.parents {
             if self.genesis.iter().any(|(x, _)| x == digest) {
                 continue;

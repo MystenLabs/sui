@@ -7,10 +7,12 @@
     rust_2021_compatibility
 )]
 
+use base_types::SequenceNumber;
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{StructTag, TypeTag},
 };
+use object::OBJECT_START_VERSION;
 
 use base_types::ObjectID;
 
@@ -21,6 +23,7 @@ pub mod balance;
 pub mod base_types;
 pub mod batch;
 pub mod coin;
+pub mod collection_types;
 pub mod committee;
 pub mod crypto;
 pub mod event;
@@ -57,6 +60,7 @@ pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(2);
 
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
+pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 const fn get_hex_address_two() -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];

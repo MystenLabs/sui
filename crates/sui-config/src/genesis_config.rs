@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{utils, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
+use std::collections::{BTreeMap, BTreeSet};
+
 use anyhow::Result;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::{BTreeMap, BTreeSet};
+use tracing::info;
+
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{
@@ -14,10 +16,10 @@ use sui_types::crypto::{
 };
 use sui_types::object::Object;
 use sui_types::sui_serde::KeyPairBase64;
-use tracing::info;
 
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
+use crate::{utils, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
 
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
@@ -204,6 +206,14 @@ impl GenesisConfig {
         )
     }
 
+    pub fn for_local_testing_with_addresses(addresses: Vec<SuiAddress>) -> Self {
+        Self::custom_genesis_with_addresses(
+            DEFAULT_NUMBER_OF_AUTHORITIES,
+            addresses,
+            DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
+        )
+    }
+
     pub fn custom_genesis(
         num_authorities: usize,
         num_accounts: usize,
@@ -225,6 +235,38 @@ impl GenesisConfig {
             }
             accounts.push(AccountConfig {
                 address: None,
+                gas_objects: objects,
+                gas_object_ranges: Some(Vec::new()),
+            })
+        }
+
+        Self {
+            accounts,
+            ..Default::default()
+        }
+    }
+
+    pub fn custom_genesis_with_addresses(
+        num_authorities: usize,
+        addresses: Vec<SuiAddress>,
+        num_objects_per_account: usize,
+    ) -> Self {
+        assert!(
+            num_authorities > 0,
+            "num_authorities should be larger than 0"
+        );
+
+        let mut accounts = Vec::new();
+        for address in addresses {
+            let mut objects = Vec::new();
+            for _ in 0..num_objects_per_account {
+                objects.push(ObjectConfig {
+                    object_id: ObjectID::random(),
+                    gas_value: DEFAULT_GAS_AMOUNT,
+                })
+            }
+            accounts.push(AccountConfig {
+                address: Some(address),
                 gas_objects: objects,
                 gas_object_ranges: Some(Vec::new()),
             })

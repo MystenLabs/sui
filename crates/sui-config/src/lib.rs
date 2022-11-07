@@ -15,6 +15,7 @@ pub mod gateway;
 pub mod genesis;
 pub mod genesis_config;
 pub mod node;
+pub mod p2p;
 mod swarm;
 pub mod utils;
 

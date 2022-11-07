@@ -3,16 +3,20 @@
 
 use std::cmp::max;
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use tracing::debug;
+use tracing::{debug, error};
 
 use sui_types::base_types::ExecutionDigests;
 use sui_types::committee::StakeUnit;
-use sui_types::messages_checkpoint::{CheckpointProposalSummary, CheckpointSequenceNumber};
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages_checkpoint::{
+    CheckpointFragment, CheckpointFragmentMessage, CheckpointProposalSummary,
+    CheckpointSequenceNumber, PartialCheckpointFragment,
+};
 use sui_types::{
     base_types::AuthorityName,
     committee::Committee,
+    fp_ensure,
     messages::CertifiedTransaction,
-    messages_checkpoint::CheckpointFragment,
     waypoint::{GlobalCheckpoint, WaypointError},
 };
 
@@ -55,6 +59,11 @@ pub struct InProgressSpanGraph {
     /// fragments.
     proposals_used: HashMap<AuthorityName, CheckpointProposalSummary>,
 
+    partial_fragments: BTreeMap<
+        (CheckpointSequenceNumber, AuthorityName, AuthorityName),
+        PartialCheckpointFragment,
+    >,
+
     /// The max stake we have seen so far in a span tree.
     max_weight_seen: StakeUnit,
 }
@@ -94,6 +103,58 @@ impl InProgressSpanGraph {
         }
         self.nodes[next_name]
     }
+
+    fn add_to_partial_fragment(
+        &mut self,
+        message: CheckpointFragmentMessage,
+        committee: &Committee,
+    ) -> SuiResult<Option<CheckpointFragment>> {
+        let key = message.message_key();
+        match message {
+            CheckpointFragmentMessage::Header(header) => {
+                fp_ensure!(
+                    !self.partial_fragments.contains_key(&key),
+                    SuiError::from("Partial fragment already exists")
+                );
+                self.partial_fragments
+                    .insert(key, PartialCheckpointFragment::new(*header));
+                debug!(
+                    cp_seq=?key.0,
+                    proposer=?key.1.concise(),
+                    other=?key.2.concise(),
+                    "New partial fragment created.",
+                );
+                Ok(None)
+            }
+            CheckpointFragmentMessage::Chunk(chunk) => {
+                if let Some(partial) = self.partial_fragments.get_mut(&key) {
+                    let chunk_id = chunk.chunk_id;
+                    partial.add_chunk(*chunk)?;
+                    debug!(
+                        cp_seq=?key.0,
+                        proposer=?key.1.concise(),
+                        other=?key.2.concise(),
+                        ?chunk_id,
+                        "Fragment chunk added."
+                    );
+                    if partial.is_complete() {
+                        let partial = self.partial_fragments.remove(&key).unwrap();
+                        let fragment = partial.to_fragment()?;
+                        fragment.verify(committee)?;
+                        debug!(
+                            cp_seq=?fragment.proposer_sequence_number(),
+                            "A checkpoint fragment is complete",
+                        );
+                        Ok(Some(fragment))
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    Err(SuiError::from("Partial fragment doesn't exist"))
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -102,10 +163,10 @@ pub struct CompletedSpanGraph {
 }
 
 impl SpanGraph {
-    pub fn mew(
+    pub fn new(
         committee: &Committee,
         next_checkpoint: CheckpointSequenceNumber,
-        fragments: &[CheckpointFragment],
+        fragments: Vec<CheckpointFragmentMessage>,
     ) -> Self {
         let mut span = Self::default();
         for frag in fragments {
@@ -117,9 +178,16 @@ impl SpanGraph {
         span
     }
 
-    /// Reset the span graph back to Uninitialized.
-    pub fn reset(&mut self) {
-        *self = Self::Uninitialized;
+    pub fn new_for_testing(
+        committee: &Committee,
+        next_checkpoint: CheckpointSequenceNumber,
+        fragments: Vec<CheckpointFragment>,
+    ) -> Self {
+        let chunks: Vec<_> = fragments
+            .into_iter()
+            .flat_map(|frag| frag.to_message_chunks())
+            .collect();
+        Self::new(committee, next_checkpoint, chunks)
     }
 
     /// Add a new fragment to the span graph and checks whether it can construct a connected
@@ -139,24 +207,30 @@ impl SpanGraph {
         &mut self,
         committee: &Committee,
         next_checkpoint: CheckpointSequenceNumber,
-        frag: &CheckpointFragment,
+        message: CheckpointFragmentMessage,
     ) {
         if matches!(&self, Self::Uninitialized) {
             self.initialize(committee, next_checkpoint);
         }
         if let Self::InProgress(span) = self {
-            debug!(
-                next_cp_seq=span.next_checkpoint,
-                frag_seq=frag.proposer.summary.sequence_number,
-                proposer=?frag.proposer.authority(),
-                other=?frag.other.authority(),
-                "Trying to add a new checkpoint fragment to the span graph.",
-            );
-
             // Ignore if the fragment is for a different checkpoint.
-            if frag.proposer.summary.sequence_number != span.next_checkpoint {
+            if message.proposer_sequence_number() != span.next_checkpoint {
                 return;
             }
+
+            let frag = match span.add_to_partial_fragment(message, committee) {
+                Err(err) => {
+                    error!(
+                        "Failed to add partial fragment to the span graph: {:?}",
+                        err
+                    );
+                    return;
+                }
+                Ok(Some(frag)) => frag,
+                Ok(None) => {
+                    return;
+                }
+            };
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
@@ -211,15 +285,15 @@ impl SpanGraph {
         matches!(self, Self::Completed(_))
     }
 
-    pub fn construct_checkpoint(&self) -> FragmentReconstruction {
+    pub fn construct_checkpoint(&self) -> SuiResult<FragmentReconstruction> {
         if let Self::Completed(span) = &self {
             let mut global = GlobalCheckpoint::new();
             let mut extra_transactions = BTreeMap::new();
             let mut active_links = span.active_links.clone();
             while let Some(link) = active_links.pop_front() {
-                match global.insert(link.diff.clone()) {
+                match global.insert(link.data.diff.clone()) {
                     Ok(_) | Err(WaypointError::NothingToDo) => {
-                        extra_transactions.extend(link.certs.clone());
+                        extra_transactions.extend(link.data.certs.clone());
                     }
                     Err(WaypointError::CannotConnect) => {
                         // Reinsert the fragment at the end
@@ -235,12 +309,14 @@ impl SpanGraph {
                 }
             }
 
-            FragmentReconstruction {
+            Ok(FragmentReconstruction {
                 global,
                 extra_transactions,
-            }
+            })
         } else {
-            unreachable!("construct_checkpoint should only be called after completion check");
+            Err(SuiError::from(
+                "Not yet enough fragments to construct checkpoint",
+            ))
         }
     }
 
@@ -253,6 +329,7 @@ impl SpanGraph {
             next_checkpoint,
             fragments_used: Vec::new(),
             proposals_used: HashMap::new(),
+            partial_fragments: BTreeMap::new(),
             max_weight_seen: 0,
         })
     }

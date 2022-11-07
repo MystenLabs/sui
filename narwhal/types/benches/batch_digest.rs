@@ -3,10 +3,10 @@
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use narwhal_types as types;
 use rand::Rng;
-use types::{serialized_batch_digest, Batch, WorkerMessage};
+use types::{serialized_batch_digest, Batch, WorkerBatchMessage};
 
 pub fn batch_digest(c: &mut Criterion) {
     let mut digest_group = c.benchmark_group("Batch digests");
@@ -20,8 +20,10 @@ pub fn batch_digest(c: &mut Criterion) {
                 .map(|_| rand::thread_rng().gen())
                 .collect::<Vec<u8>>()
         };
-        let batch = Batch((0..size).map(|_| tx_gen()).collect::<Vec<_>>());
-        let message = WorkerMessage::Batch(batch.clone());
+        let batch = Batch::new((0..size).map(|_| tx_gen()).collect::<Vec<_>>());
+        let message = WorkerBatchMessage {
+            batch: batch.clone(),
+        };
         let serialized_batch = bincode::serialize(&message).unwrap();
 
         digest_group.throughput(Throughput::Bytes(512 * size as u64));

@@ -18,16 +18,20 @@ import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { isSuiMoveObject } from './index.guard';
 
-export const SUI_PACKAGE_ID = '0x2';
-export const COIN_TYPE = `${SUI_PACKAGE_ID}::coin::Coin`;
+export const SUI_FRAMEWORK_ADDRESS = '0x2';
+export const MOVE_STDLIB_ADDRESS = '0x1';
+export const OBJECT_MODULE_NAME = 'object';
+export const UID_STRUCT_NAME = 'UID';
+export const ID_STRUCT_NAME = 'ID';
+export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
+
+export const COIN_TYPE = `${SUI_FRAMEWORK_ADDRESS}::coin::Coin`;
 
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';
 export const PAY_JOIN_COIN_FUNC_NAME = 'join';
-const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
-
-export const SUI_TYPE_ARG = '0x2::sui::SUI';
+export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
@@ -41,9 +45,14 @@ export class Coin {
     return Coin.getType(data)?.startsWith(COIN_TYPE) ?? false;
   }
 
+  static getCoinType(type: string) {
+    const [, res] = type.match(COIN_TYPE_ARG_REGEX) ?? [];
+    return res || null;
+  }
+
   static getCoinTypeArg(obj: ObjectData) {
-    const res = Coin.getType(obj)?.match(COIN_TYPE_ARG_REGEX);
-    return res ? res[1] : null;
+    const type = Coin.getType(obj);
+    return type ? Coin.getCoinType(type) : null;
   }
 
   static isSUI(obj: ObjectData) {
@@ -87,6 +96,24 @@ export class Coin {
       coins.filter(
         (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount
       )
+    );
+  }
+
+  /**
+   * Convenience method for select an arbitrary coin object that has a balance greater than or
+   * equal to `amount`
+   *
+   * @param amount coin balance
+   * @param exclude object ids of the coins to exclude
+   * @return an arbitray coin with balance greater than or equal to `amount
+   */
+  static selectCoinWithBalanceGreaterThanOrEqual(
+    coins: ObjectDataFull[],
+    amount: bigint,
+    exclude: ObjectId[] = []
+  ): ObjectDataFull | undefined {
+    return coins.find(
+      (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount
     );
   }
 

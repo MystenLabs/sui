@@ -3,15 +3,17 @@
 
 import "./App.css";
 import { useMemo } from "react";
-import { Wallet, WalletProvider } from "@mysten/wallet-adapter-react";
-import { SuiWalletAdapter } from "@mysten/wallet-adapter-all-wallets";
-import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
+import { WalletProvider } from "@mysten/wallet-adapter-react";
+import { WalletStandardAdapterProvider, UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-all-wallets";
 import { WalletWrapper } from "@mysten/wallet-adapter-react-ui";
 import { TestButton } from "./TestButton";
 
 function App() {
   const adapters = useMemo(
-    () => [new SuiWalletAdapter(), new WalletStandardAdapterProvider()],
+    () => [
+      new WalletStandardAdapterProvider(),
+      new UnsafeBurnerWalletAdapter(),
+    ],
     []
   );
 

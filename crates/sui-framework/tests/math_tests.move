@@ -18,12 +18,31 @@ module sui::math_tests {
         assert!(math::min(100, 10) == 10, 2);
         assert!(math::min(0, 0) == 0, 3);
     }
+    
+    #[test]
+    fun test_pow() {
+        assert!(math::pow(1, 0) == 1, 0);
+        assert!(math::pow(3, 1) == 3, 0);
+        assert!(math::pow(2, 10) == 1024, 0);
+        assert!(math::pow(10, 6) == 1000000, 0);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_pow_overflow() {
+        math::pow(10, 100);
+    }
 
     #[test]
     fun test_perfect_sqrt() {
         let i = 0;
         while (i < 1000) {
             assert!(math::sqrt(i * i) == i, 1);
+            i = i + 1;
+        };
+        let i = 0xFFFFFFFFFu128;
+        while (i < 0xFFFFFFFFFu128 + 1) {
+            assert!(math::sqrt_u128(i * i) == i, 1);
             i = i + 1;
         }
     }

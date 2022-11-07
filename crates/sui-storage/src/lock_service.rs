@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, error, info, trace, warn};
-use typed_store::rocks::{DBBatch, DBMap};
+use typed_store::rocks::{DBBatch, DBMap, DBOptions};
 use typed_store::traits::Map;
 use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
@@ -77,6 +77,10 @@ enum LockServiceQueries {
         objects: Vec<ObjectRef>,
         resp: oneshot::Sender<SuiResult>,
     },
+    GetTxSequence {
+        tx: TransactionDigest,
+        resp: oneshot::Sender<Result<Option<TxSequenceNumber>, SuiError>>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,10 +111,10 @@ pub struct LockServiceImpl {
 }
 
 // These functions are used to initialize the DB tables
-fn transaction_lock_table_default_config() -> Options {
+fn transaction_lock_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
-fn tx_sequence_table_default_config() -> Options {
+fn tx_sequence_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 
@@ -421,6 +425,11 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
+                LockServiceQueries::GetTxSequence { tx, resp } => {
+                    if let Err(_e) = resp.send(self.get_tx_sequence(tx)) {
+                        warn!("Could not respond to sender, sender dropped!");
+                    }
+                }
             }
         }
         info!("LockService queries loop stopped, the sender on other end hung up/dropped");
@@ -586,6 +595,28 @@ impl LockService {
         .await
     }
 
+    pub async fn get_tx_sequence(
+        &self,
+        tx: TransactionDigest,
+    ) -> SuiResult<Option<TxSequenceNumber>> {
+        block_on_future_in_sim(async move {
+            let (os_sender, os_receiver) =
+                oneshot::channel::<Result<Option<TxSequenceNumber>, SuiError>>();
+            self.inner
+                .query_sender()
+                .send(LockServiceQueries::GetTxSequence {
+                    tx,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
+    }
+
     pub async fn create_locks_for_genesis_objects(&self, objects: Vec<ObjectRef>) -> SuiResult {
         block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
@@ -687,9 +718,9 @@ mod tests {
         LockService::new(path, None).expect("Could not create LockService")
     }
 
-    #[test]
+    #[tokio::test]
     // Test acquire_locks() and initialize_locks()
-    fn test_lockdb_acquire_init_multiple() {
+    async fn test_lockdb_acquire_init_multiple() {
         let ls = init_lockservice_db();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
@@ -750,8 +781,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_lockdb_remove_multiple() {
+    #[tokio::test]
+    async fn test_lockdb_remove_multiple() {
         let ls = init_lockservice_db();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
@@ -833,8 +864,8 @@ mod tests {
             .all(|r| matches!(r, Err(SuiError::ObjectLockConflict { .. }))));
     }
 
-    #[test]
-    fn test_lockdb_relock_at_new_epoch() {
+    #[tokio::test]
+    async fn test_lockdb_relock_at_new_epoch() {
         let ls = init_lockservice_db();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());

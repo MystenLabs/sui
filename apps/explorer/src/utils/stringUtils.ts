@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiAddress } from '@mysten/sui.js';
-import type BN from 'bn.js';
 
 const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
 const SUI_ADDRESS_LENGTH = 20;
@@ -20,11 +19,6 @@ export function hexToAscii(hex: string) {
 
 export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
-
-export const handleCoinType = (str: string): string =>
-    str === '0x2::coin::Coin<0x2::sui::SUI>'
-        ? 'SUI'
-        : str.match(/^([a-zA-Z0-9:]*)<([a-zA-Z0-9:]*)>$/)?.[2] || str;
 
 export const findIPFSvalue = (url: string): string | undefined =>
     url.match(/^ipfs:\/\/(.*)/)?.[1];
@@ -94,11 +88,8 @@ export async function genFileTypeMsg(
         });
 }
 
-export const alttextgen = (value: number | string | boolean | BN): string =>
+export const alttextgen = (value: number | string | boolean): string =>
     truncate(String(value), 19);
-
-export const presentBN = (amount: bigint) =>
-    amount.toString().replace(/(\d)(?=(\d{3})+$)/g, '$1,');
 
 // TODO: Use version of this function from the SDK when it is exposed.
 export function normalizeSuiAddress(

@@ -13,33 +13,45 @@ use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
+use fastcrypto::{
+    encoding::{Base64, Encoding},
+    traits::ToFromBytes,
+};
 use move_core_types::language_storage::TypeTag;
-use move_package::BuildConfig;
+use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use tracing::info;
 
-use sui_framework::build_move_package_to_bytes;
+use sui_framework::build_move_package;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
-use sui_sdk::crypto::AccountKeystore;
+use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
-use sui_sdk::{ClientType, SuiClient};
-use sui_types::crypto::SignatureScheme;
-use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::crypto::SignableBytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::Transaction,
+    messages::{Transaction, VerifiedTransaction},
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{
+    crypto::{Signature, SignatureScheme},
+    messages::TransactionData,
+};
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig};
+#[cfg(msim)]
+use sui_sdk::embedded_gateway::SuiClient;
+#[cfg(not(msim))]
+use sui_sdk::SuiClient;
+
+use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -58,16 +70,29 @@ pub enum SuiClientCommands {
         address: Option<SuiAddress>,
         /// The RPC server URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
+        #[clap(long)]
+        env: Option<String>,
+    },
+    /// Add new Sui environment.
+    #[clap(name = "new-env")]
+    NewEnv {
+        #[clap(long)]
+        alias: String,
         #[clap(long, value_hint = ValueHint::Url)]
-        rpc: Option<String>,
-        /// The pubsub Websocket server URL
+        rpc: String,
         #[clap(long, value_hint = ValueHint::Url)]
         ws: Option<String>,
     },
+    /// List all Sui environments
+    Envs,
 
     /// Default address used for commands when none specified
     #[clap(name = "active-address")]
     ActiveAddress,
+
+    /// Default environment used for commands when none specified
+    #[clap(name = "active-env")]
+    ActiveEnv,
 
     /// Get object info
     #[clap(name = "object")]
@@ -92,7 +117,7 @@ pub enum SuiClientCommands {
 
         /// Package build options
         #[clap(flatten)]
-        build_config: BuildConfig,
+        build_config: MoveBuildConfig,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -179,7 +204,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         amount: Option<u64>,
     },
-    /// Pay SUI to recipients following specified amounts, with input coins.
+    /// Pay coins to recipients following specified amounts, with input coins.
     /// Length of recipients must be the same as that of amounts.
     #[clap(name = "pay")]
     Pay {
@@ -191,7 +216,7 @@ pub enum SuiClientCommands {
         #[clap(long, multiple_occurrences = false, multiple_values = true)]
         recipients: Vec<SuiAddress>,
 
-        /// The amounts to be transferred, following the order of recipients.
+        /// The amounts to be paid, following the order of recipients.
         #[clap(long, multiple_occurrences = false, multiple_values = true)]
         amounts: Vec<u64>,
 
@@ -200,15 +225,48 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas: Option<ObjectID>,
 
-        /// Gas budget for this transfer
+        /// Gas budget for this transaction
         #[clap(long)]
         gas_budget: u64,
     },
-    /// Synchronize client state with authorities.
-    #[clap(name = "sync")]
-    SyncClientState {
+
+    /// Pay SUI coins to recipients following following specified amounts, with input coins.
+    /// Length of recipients must be the same as that of amounts.
+    /// The input coins also include the coin for gas payment, so no extra gas coin is required.
+    #[clap(name = "pay_sui")]
+    PaySui {
+        /// The input coins to be used for pay recipients, including the gas coin.
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        input_coins: Vec<ObjectID>,
+
+        /// The recipient addresses, must be of same length as amounts.
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        recipients: Vec<SuiAddress>,
+
+        /// The amounts to be paid, following the order of recipients.
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        amounts: Vec<u64>,
+
+        /// Gas budget for this transaction
         #[clap(long)]
-        address: Option<SuiAddress>,
+        gas_budget: u64,
+    },
+
+    /// Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost.
+    /// The input coins also include the coin for gas payment, so no extra gas coin is required.
+    #[clap(name = "pay_all_sui")]
+    PayAllSui {
+        /// The input coins to be used for pay recipients, including the gas coin.
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        input_coins: Vec<ObjectID>,
+
+        /// The recipient address.
+        #[clap(long, multiple_occurrences = false)]
+        recipient: SuiAddress,
+
+        /// Gas budget for this transaction
+        #[clap(long)]
+        gas_budget: u64,
     },
 
     /// Obtain the Addresses managed by the client.
@@ -301,6 +359,45 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: Option<u64>,
     },
+
+    /// Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere.
+    #[clap(name = "serialize-transfer-sui")]
+    SerializeTransferSui {
+        /// Recipient address
+        #[clap(long)]
+        to: SuiAddress,
+
+        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
+        #[clap(long)]
+        sui_coin_object_id: ObjectID,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// The amount to transfer, if not specified, the entire coin object will be transferred.
+        #[clap(long)]
+        amount: Option<u64>,
+    },
+
+    /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
+    ExecuteSignedTx {
+        /// Base64 encoded of the transaction data.
+        #[clap(long)]
+        tx_data: String,
+
+        /// Signature scheme used to sign the transaction.
+        #[clap(long)]
+        scheme: SignatureScheme,
+
+        /// Public key that the signature can be verified with.
+        #[clap(long)]
+        pubkey: String,
+
+        /// Base64 encoded signature committed to the transaction data.
+        #[clap(long)]
+        signature: String,
+    },
 }
 
 impl SuiClientCommands {
@@ -318,7 +415,15 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package_to_bytes(&package_path, build_config)?;
+                let compiled_modules = build_move_package(
+                    &package_path,
+                    BuildConfig {
+                        config: build_config,
+                        run_bytecode_verifier: true,
+                        print_diags_to_stderr: true,
+                    },
+                )?
+                .get_package_bytes();
                 let data = context
                     .client
                     .transaction_builder()
@@ -326,7 +431,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 SuiClientCommandResult::Publish(response)
@@ -369,7 +474,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -396,7 +501,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -438,7 +543,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -449,6 +554,82 @@ impl SuiClientCommands {
                     ));
                 }
                 SuiClientCommandResult::Pay(cert, effects)
+            }
+
+            SuiClientCommands::PaySui {
+                input_coins,
+                recipients,
+                amounts,
+                gas_budget,
+            } => {
+                ensure!(
+                    !input_coins.is_empty(),
+                    "PaySui transaction requires a non-empty list of input coins"
+                );
+                ensure!(
+                    !recipients.is_empty(),
+                    "PaySui transaction requires a non-empty list of recipient addresses"
+                );
+                ensure!(
+                    recipients.len() == amounts.len(),
+                    format!(
+                        "Found {:?} recipient addresses, but {:?} recipient amounts",
+                        recipients.len(),
+                        amounts.len()
+                    ),
+                );
+                let signer = context.get_object_owner(&input_coins[0]).await?;
+                let data = context
+                    .client
+                    .transaction_builder()
+                    .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
+                    .await?;
+                let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
+                let response = context
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .await?;
+
+                let cert = response.certificate;
+                let effects = response.effects;
+                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!(
+                        "Error executing PaySui transaction: {:#?}",
+                        effects.status
+                    ));
+                }
+                SuiClientCommandResult::PaySui(cert, effects)
+            }
+
+            SuiClientCommands::PayAllSui {
+                input_coins,
+                recipient,
+                gas_budget,
+            } => {
+                ensure!(
+                    !input_coins.is_empty(),
+                    "PayAllSui transaction requires a non-empty list of input coins"
+                );
+                let signer = context.get_object_owner(&input_coins[0]).await?;
+                let data = context
+                    .client
+                    .transaction_builder()
+                    .pay_all_sui(signer, input_coins, recipient, gas_budget)
+                    .await?;
+
+                let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
+                let response = context
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .await?;
+
+                let cert = response.certificate;
+                let effects = response.effects;
+                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!(
+                        "Error executing PayAllSui transaction: {:#?}",
+                        effects.status
+                    ));
+                }
+                SuiClientCommandResult::PayAllSui(cert, effects)
             }
 
             SuiClientCommands::Addresses => {
@@ -472,16 +653,6 @@ impl SuiClientCommands {
                 SuiClientCommandResult::Objects(address_object)
             }
 
-            SuiClientCommands::SyncClientState { address } => {
-                let address = address.unwrap_or(context.active_address()?);
-                context
-                    .client
-                    .wallet_sync_api()
-                    .sync_account_state(address)
-                    .await?;
-
-                SuiClientCommandResult::SyncClientState
-            }
             SuiClientCommands::NewAddress {
                 key_scheme,
                 derivation_path,
@@ -535,7 +706,7 @@ impl SuiClientCommands {
                 };
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
             }
@@ -553,28 +724,26 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 SuiClientCommandResult::MergeCoin(response)
             }
-            SuiClientCommands::Switch { address, rpc, ws } => {
-                if let Some(addr) = address {
-                    if !context.config.keystore.addresses().contains(&addr) {
-                        return Err(anyhow!("Address {} not managed by wallet", addr));
+            SuiClientCommands::Switch { address, env } => {
+                match (address, &env) {
+                    (None, Some(env)) => {
+                        Self::switch_env(&mut context.config, env)?;
                     }
-                    context.config.active_address = Some(addr);
-                }
-
-                Self::switch_server(&mut context.config, &rpc, &ws)?;
-
-                if Option::is_none(&address) && Option::is_none(&rpc) && Option::is_none(&ws) {
-                    return Err(anyhow!(
-                        "No address or RPC url specified. Please Specify one."
-                    ));
+                    (Some(addr), None) => {
+                        if !context.config.keystore.addresses().contains(&addr) {
+                            return Err(anyhow!("Address {} not managed by wallet", addr));
+                        }
+                        context.config.active_address = Some(addr);
+                    }
+                    _ => return Err(anyhow!("No address or env specified. Please Specify one.")),
                 }
                 context.config.save()?;
-                SuiClientCommandResult::Switch(SwitchResponse { address, rpc, ws })
+                SuiClientCommandResult::Switch(SwitchResponse { address, env })
             }
             SuiClientCommands::ActiveAddress => {
                 SuiClientCommandResult::ActiveAddress(context.active_address().ok())
@@ -615,30 +784,80 @@ impl SuiClientCommands {
                 let object_read = context.client.read_api().get_parsed_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
+
+            SuiClientCommands::SerializeTransferSui {
+                to,
+                sui_coin_object_id: object_id,
+                gas_budget,
+                amount,
+            } => {
+                let from = context.get_object_owner(&object_id).await?;
+
+                let data = context
+                    .client
+                    .transaction_builder()
+                    .transfer_sui(from, object_id, gas_budget, to, amount)
+                    .await?;
+                SuiClientCommandResult::SerializeTransferSui(data.to_base64())
+            }
+
+            SuiClientCommands::ExecuteSignedTx {
+                tx_data,
+                scheme,
+                pubkey,
+                signature,
+            } => {
+                let data = TransactionData::from_signable_bytes(
+                    &Base64::try_from(tx_data)
+                        .map_err(|e| anyhow!(e))?
+                        .to_vec()
+                        .map_err(|e| anyhow!(e))?,
+                )?;
+                let signed_tx = Transaction::new(
+                    data,
+                    Signature::from_bytes(
+                        &[
+                            vec![scheme.flag()],
+                            Base64::decode(signature.as_str()).map_err(|e| anyhow!(e))?,
+                            Base64::decode(pubkey.as_str()).map_err(|e| anyhow!(e))?,
+                        ]
+                        .concat(),
+                    )?,
+                )
+                .verify()?;
+
+                let response = context.execute_transaction(signed_tx).await?;
+                SuiClientCommandResult::ExecuteSignedTx(response)
+            }
+            SuiClientCommands::NewEnv { alias, rpc, ws } => {
+                if context.config.envs.iter().any(|env| env.alias == alias) {
+                    return Err(anyhow!(
+                        "Environment config with name [{alias}] already exists."
+                    ));
+                }
+                let env = SuiEnv { alias, rpc, ws };
+
+                // Check urls are valid and server is reachable
+                env.create_rpc_client().await?;
+                context.config.envs.push(env.clone());
+                context.config.save()?;
+                SuiClientCommandResult::NewEnv(env)
+            }
+            SuiClientCommands::ActiveEnv => {
+                SuiClientCommandResult::ActiveEnv(context.config.active_env.clone())
+            }
+            SuiClientCommands::Envs => SuiClientCommandResult::Envs(
+                context.config.envs.clone(),
+                context.config.active_env.clone(),
+            ),
         });
         ret
     }
 
-    pub fn switch_server(
-        config: &mut SuiClientConfig,
-        rpc: &Option<String>,
-        ws: &Option<String>,
-    ) -> Result<(), anyhow::Error> {
-        if let Some(rpc) = rpc {
-            let ws = match &config.client_type {
-                ClientType::RPC(_, Some(ws)) => Some(ws.clone()),
-                _ => None,
-            };
-            config.client_type = ClientType::RPC(rpc.clone(), ws);
-        }
-
-        if let Some(ws) = ws {
-            let rpc = match &config.client_type {
-                ClientType::RPC(rpc, _) => rpc.clone(),
-                _ => return Err(anyhow!("RPC server address must be defined")),
-            };
-            config.client_type = ClientType::RPC(rpc, Some(ws.clone()));
-        }
+    pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
+        let env = Some(env.into());
+        ensure!(config.get_env(&env).is_some(), "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command.");
+        config.active_env = env;
         Ok(())
     }
 }
@@ -656,8 +875,11 @@ impl WalletContext {
                 config_path
             ))
         })?;
+        #[cfg(not(msim))]
+        let client = config.get_active_env()?.create_rpc_client().await?;
+        #[cfg(msim)]
+        let client = sui_sdk::embedded_gateway::SuiClient::new(&config_path.parent().unwrap())?;
 
-        let client = config.client_type.init().await?;
         let config = config.persisted(config_path);
         let context = Self { config, client };
         Ok(context)
@@ -764,7 +986,7 @@ impl WalletContext {
     /// This function is compatible with both fullnode and an embedded gateway
     pub async fn execute_transaction(
         &self,
-        tx: Transaction,
+        tx: VerifiedTransaction,
     ) -> anyhow::Result<SuiTransactionResponse> {
         let tx_digest = *tx.digest();
 
@@ -794,10 +1016,6 @@ impl WalletContext {
                 "Failed to execute transaction {tx_digest:?} with error {err:?}"
             )),
         }
-    }
-
-    pub fn switch_client(&mut self, new_client: SuiClient) {
-        self.client = new_client;
     }
 }
 
@@ -832,6 +1050,12 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::Pay(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
+            SuiClientCommandResult::PaySui(cert, effects) => {
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            }
+            SuiClientCommandResult::PayAllSui(cert, effects) => {
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            }
             SuiClientCommandResult::Addresses(addresses) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
@@ -849,7 +1073,7 @@ impl Display for SuiClientCommandResult {
                     let owner_type = match oref.owner {
                         Owner::AddressOwner(_) => "AddressOwner",
                         Owner::ObjectOwner(_) => "object_owner",
-                        Owner::Shared => "Shared",
+                        Owner::Shared { .. } => "Shared",
                         Owner::Immutable => "Immutable",
                     };
                     writeln!(
@@ -921,6 +1145,34 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}\n", "Successfully created an ExampleNFT:".bold())?;
                 writeln!(writer, "{}", object)?;
             }
+            SuiClientCommandResult::ExecuteSignedTx(response) => {
+                write!(
+                    writer,
+                    "{}",
+                    write_cert_and_effects(&response.certificate, &response.effects)?
+                )?;
+                if let Some(parsed_resp) = &response.parsed_data {
+                    writeln!(writer, "{}", parsed_resp)?;
+                }
+            }
+            SuiClientCommandResult::SerializeTransferSui(res) => {
+                write!(writer, "{}", res)?;
+            }
+            SuiClientCommandResult::ActiveEnv(env) => {
+                write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
+            }
+            SuiClientCommandResult::NewEnv(env) => {
+                writeln!(writer, "Added new Sui env [{}] to config.", env.alias)?;
+            }
+            SuiClientCommandResult::Envs(envs, active) => {
+                for env in envs {
+                    write!(writer, "{} => {}", env.alias, env.rpc)?;
+                    if Some(env.alias.as_str()) == active.as_deref() {
+                        write!(writer, " (active)")?;
+                    }
+                    writeln!(writer)?;
+                }
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -957,7 +1209,7 @@ pub async fn call_move(
         )
         .await?;
     let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
-    let transaction = Transaction::new(data, signature);
+    let transaction = Transaction::new(data, signature).verify()?;
 
     let response = context.execute_transaction(transaction).await?;
     let cert = response.certificate;
@@ -1038,6 +1290,8 @@ pub enum SuiClientCommandResult {
     ),
     TransferSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Pay(SuiCertifiedTransaction, SuiTransactionEffects),
+    PaySui(SuiCertifiedTransaction, SuiTransactionEffects),
+    PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
@@ -1047,29 +1301,29 @@ pub enum SuiClientCommandResult {
     MergeCoin(SuiTransactionResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
+    ActiveEnv(Option<String>),
+    Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
+    SerializeTransferSui(String),
+    ExecuteSignedTx(SuiTransactionResponse),
+    NewEnv(SuiEnv),
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub struct SwitchResponse {
     /// Active address
     pub address: Option<SuiAddress>,
-    pub rpc: Option<String>,
-    pub ws: Option<String>,
+    pub env: Option<String>,
 }
 
 impl Display for SwitchResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         if let Some(addr) = self.address {
-            writeln!(writer, "Active address switched to {}", addr)?;
+            writeln!(writer, "Active address switched to {addr}")?;
         }
-        if let Some(rpc) = &self.rpc {
-            writeln!(writer, "Active RPC server switched to {}", rpc)?;
-        }
-
-        if let Some(ws) = &self.ws {
-            writeln!(writer, "Active Websocket server switched to {}", ws)?;
+        if let Some(env) = &self.env {
+            writeln!(writer, "Active environment switched to [{env}]")?;
         }
         write!(f, "{}", writer)
     }

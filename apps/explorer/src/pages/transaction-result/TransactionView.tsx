@@ -12,6 +12,7 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -22,25 +23,33 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
-import { type LinkObj, TxAddresses } from '../../components/table/TableCard';
-import { presentBN } from '../../utils/stringUtils';
+import {
+    type LinkObj,
+    TxAddresses,
+} from '../../components/transaction-card/TxCardUtils';
+import { convertNumberToDate } from '../../utils/timeUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
-import TxResultHeader from './TxResultHeader';
 
 import type { DataType, Category } from './TransactionResultType';
 import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
+    Pay,
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
 } from '@mysten/sui.js';
+import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
+import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
+import { Banner } from '~/ui/Banner';
+import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -58,7 +67,7 @@ function generateMutatedCreated(tx: TxDataProps) {
             ? [
                   {
                       label: 'Updated',
-                      links: tx.mutated.map((obj) => obj.objectId),
+                      links: tx.mutated,
                   },
               ]
             : []),
@@ -66,7 +75,7 @@ function generateMutatedCreated(tx: TxDataProps) {
             ? [
                   {
                       label: 'Created',
-                      links: tx.created.map((obj) => obj.objectId),
+                      links: tx.created,
                   },
               ]
             : []),
@@ -156,7 +165,7 @@ type TxItemView = {
     titleStyle?: string;
     content: {
         label?: string | number | any;
-        value: string | number;
+        value: ReactNode;
         link?: boolean;
         category?: string;
         monotypeClass?: boolean;
@@ -206,13 +215,13 @@ function ItemView({ data }: { data: TxItemView }) {
                                 )}
                             >
                                 {links.length > 1 && (
-                                    <TxAddresses content={links}></TxAddresses>
+                                    <TxAddresses content={links} />
                                 )}
                                 {item.link ? (
                                     <Longtext
                                         text={item.value as string}
                                         category={item.category as Category}
-                                        isLink={true}
+                                        isLink
                                         copyButton="16"
                                     />
                                 ) : item.href ? (
@@ -234,32 +243,76 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
+const isPayType = (
+    txdetails: SuiTransactionKind
+): txdetails is { Pay: Pay } => {
+    return 'Pay' in txdetails;
+};
+
+function GasAmount({ amount }: { amount: bigint | number }) {
+    const [formattedAmount, symbol] = useFormatCoin(
+        amount,
+        SUI_TYPE_ARG,
+        CoinFormat.FULL
+    );
+
+    return (
+        <div className="flex items-center gap-1 h-full">
+            <div className="text-sui-grey-90 flex items-baseline gap-0.5">
+                <Text variant="body">{formattedAmount}</Text>
+                <Text variant="subtitleSmall">{symbol}</Text>
+            </div>
+            <Text variant="bodySmall">
+                <div className="text-sui-grey-65 flex items-center">
+                    (
+                    <div className="flex items-baseline gap-0.5">
+                        <div>{amount.toLocaleString()}</div>
+                        <Text variant="subtitleSmall">MIST</Text>
+                    </div>
+                    )
+                </div>
+            </Text>
+        </div>
+    );
+}
+
+const convertAmounts = (
+    amounts: (number | bigint | null)[]
+): bigint[] | undefined =>
+    amounts.every((amount) => amount)
+        ? amounts.map((amount) => BigInt(amount!))
+        : undefined;
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
-    const amount = getTransferSuiAmount(txdetails);
+    const amounts = isPayType(txdetails)
+        ? convertAmounts(txdetails.Pay.amounts)
+        : convertAmounts([getTransferSuiAmount(txdetails)]);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
-    const recipient =
-        getTransferObjectTransaction(txdetails) ||
-        getTransferSuiTransaction(txdetails);
-    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
-    const txHeaderData = {
-        txId: txdata.txId,
-        status: txdata.status,
-        txKindName: txKindName,
-        ...(txdata.txError ? { error: txdata.txError } : {}),
-    };
+    const recipient =
+        getTransferObjectTransaction(txdetails)?.recipient ||
+        getTransferSuiTransaction(txdetails)?.recipient;
+
+    const recipients = isPayType(txdetails)
+        ? txdetails.Pay.recipients
+        : recipient
+        ? [recipient]
+        : undefined;
+
+    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
     const txEventData = txdata.events?.map(eventToDisplay);
 
-    let eventTitles: string[] = [];
-    const txEventDisplay = txEventData?.map((ed) => {
-        if (!ed) return <div></div>;
+    let eventTitles: [string, string][] = [];
+    const txEventDisplay = txEventData?.map((ed, index) => {
+        if (!ed) return <div />;
 
-        eventTitles.push(ed.top.title);
+        let key = ed.top.title + index;
+        eventTitles.push([ed.top.title, key]);
         return (
-            <div className={styles.txgridcomponent} key={ed.top.title}>
+            <div className={styles.txgridcomponent} key={key}>
                 <ItemView data={ed.top as TxItemView} />
                 {ed.fields && <ItemView data={ed.fields as TxItemView} />}
             </div>
@@ -267,8 +320,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     });
 
     let eventTitlesDisplay = eventTitles.map((et) => (
-        <div key={et} className={styles.eventtitle}>
-            <Longtext text={et} category={'unknown'} isLink={false} />
+        <div key={et[1]} className={styles.eventtitle}>
+            <Longtext text={et[0]} category="unknown" isLink={false} />
         </div>
     ));
 
@@ -312,12 +365,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const sendreceive = {
         sender: sender,
-        ...(txdata.timestamp_ms
-            ? {
-                  timestamp_ms: txdata.timestamp_ms,
-              }
-            : {}),
-        recipient: [...(recipient?.recipient ? [recipient.recipient] : [])],
+        recipient: recipients,
+        amount: amounts,
+        objects: txdata.created,
     };
     const GasStorageFees = {
         title: 'Gas & Storage Fees',
@@ -328,12 +378,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                 link: true,
             },
             {
-                label: 'Gas Fees',
-                value: txdata.gasFee,
+                label: 'Gas Budget',
+                value: <GasAmount amount={txdata.data.gasBudget} />,
             },
             {
-                label: 'Gas Budget',
-                value: txdata.data.gasBudget,
+                label: 'Total Gas Fee',
+                value: <GasAmount amount={txdata.gasFee} />,
             },
             //TODO: Add Storage Fees
         ],
@@ -390,7 +440,18 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     return (
         <div className={cl(styles.txdetailsbg)}>
-            <TxResultHeader data={txHeaderData} />
+            <div className="mt-5 mb-10">
+                <PageHeader
+                    type={txKindName}
+                    title={txdata.txId}
+                    status={txdata.status}
+                />
+                {txdata.txError && (
+                    <div className="mt-2">
+                        <Banner variant="error">{txdata.txError}</Banner>
+                    </div>
+                )}
+            </div>
             <TabGroup size="lg">
                 <TabList>
                     <Tab>Details</Tab>
@@ -420,18 +481,24 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     styles.txsender,
                                 ])}
                             >
-                                {amount !== null && (
-                                    <div className={styles.amountbox}>
-                                        <div>Amount</div>
-                                        <div>
-                                            {presentBN(amount)}
-                                            <sup>SUI</sup>
-                                        </div>
-                                    </div>
+                                {txdata.timestamp_ms && (
+                                    <h3
+                                        data-testid="transaction-timestamp"
+                                        className={styles.datetime}
+                                    >
+                                        {convertNumberToDate(
+                                            txdata.timestamp_ms
+                                        )}
+                                    </h3>
                                 )}
-                                <div className={styles.txaddress}>
-                                    <SendReceiveView data={sendreceive} />
-                                </div>
+                                <SendReceiveView
+                                    sender={sendreceive.sender}
+                                    recipient={sendreceive.recipient}
+                                    amount={sendreceive.amount}
+                                    objects={sendreceive.objects.map(
+                                        (obj) => obj.objectId
+                                    )}
+                                />
                             </section>
 
                             <section
@@ -465,16 +532,18 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             <ItemView data={GasStorageFees} />
                         </div>
                     </TabPanel>
-                    <TabPanel>
-                        <div className={styles.txevents}>
-                            <div className={styles.txeventsleft}>
-                                {eventTitlesDisplay}
+                    {hasEvents && (
+                        <TabPanel>
+                            <div className={styles.txevents}>
+                                <div className={styles.txeventsleft}>
+                                    {eventTitlesDisplay}
+                                </div>
+                                <div className={styles.txeventsright}>
+                                    {txEventDisplay}
+                                </div>
                             </div>
-                            <div className={styles.txeventsright}>
-                                {txEventDisplay}
-                            </div>
-                        </div>
-                    </TabPanel>
+                        </TabPanel>
+                    )}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
                             <ItemView data={transactionSignatureData} />

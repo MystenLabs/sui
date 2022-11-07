@@ -2,13 +2,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
+use crate::{
+    base_types::*,
+    committee::{EpochId, StakeUnit},
+    messages::ExecutionFailureStatus,
+    object::Owner,
+};
 use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 use thiserror::Error;
+use tonic::Status;
 use typed_store::rocks::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
@@ -43,17 +49,13 @@ macro_rules! exit_main {
     };
 }
 
-const VALIDATOR_HALTED_ERROR_MSG: &str =
-    "Validator temporarily stopped processing transactions due to epoch change";
-const MISSING_COMMITTEE_ERROR_MSG: &str = "Missing committee information for epoch";
-
 /// Custom error type for Sui.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
     #[error("Error checking transaction input objects: {:?}", errors)]
-    ObjectErrors { errors: Vec<SuiError> },
+    TransactionInputObjectsErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
     #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
@@ -76,8 +78,11 @@ pub enum SuiError {
     SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
-    #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]
-    MissingObjectOwner {
+    #[error(
+        "Object {child_id:?} is owned by object {parent_id:?}. \
+        Objects owned by other objects cannot be used as input arguments."
+    )]
+    InvalidChildObjectArgument {
         child_id: ObjectID,
         parent_id: ObjectID,
     },
@@ -113,12 +118,32 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Transaction processing failed: {err}")]
-    ErrorWhileProcessingTransactionTransaction { err: String },
-    #[error("Confirmation transaction processing failed: {err}")]
-    ErrorWhileProcessingConfirmationTransaction { err: String },
+    #[error("Unexpected validator response from handle_transaction: {err}")]
+    UnexpectedResultFromValidatorHandleTransaction { err: String },
+    #[error("Transaction certificate processing failed: {err}")]
+    ErrorWhileProcessingCertificate { err: String },
     #[error(
-    "Failed to execute certificate on a quorum of validators, cause by : {:#?}",
+        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
+        conflicting_tx_digests,
+        errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
+    )]
+    QuorumFailedToProcessTransaction {
+        good_stake: StakeUnit,
+        errors: Vec<SuiError>,
+        conflicting_tx_digests:
+            BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+    },
+    #[error(
+        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects, but retried a conflicting transaction {:?}, success: {}",
+        conflicting_tx_digest,
+        conflicting_tx_retry_success
+    )]
+    QuorumFailedToProcessTransactionWithConflictingTransactionRetried {
+        conflicting_tx_digest: TransactionDigest,
+        conflicting_tx_retry_success: bool,
+    },
+    #[error(
+    "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
@@ -192,6 +217,8 @@ pub enum SuiError {
     ClientIoError { error: String },
     #[error("Cannot transfer immutable object.")]
     TransferImmutableError,
+    #[error("Wrong initial version given for shared object")]
+    SharedObjectStartingVersionMismatch,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
@@ -227,7 +254,7 @@ pub enum SuiError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
-    #[error("Failed to build Move modules: {error:?}.")]
+    #[error("Failed to build Move modules: {error}.")]
     ModuleBuildFailure { error: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
@@ -292,16 +319,23 @@ pub enum SuiError {
     },
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
-    #[error("Could not find the referenced object {:?}.", object_id)]
-    ObjectNotFound { object_id: ObjectID },
     #[error(
-        "Could not find the referenced object {:?} at version {:?}",
+        "Could not find the referenced object {:?} at version {:?}.",
         object_id,
         version
     )]
-    ObjectVersionNotFound {
+    ObjectNotFound {
         object_id: ObjectID,
-        version: SequenceNumber,
+        version: Option<SequenceNumber>,
+    },
+    #[error(
+        "Transaction involving Shared Object {:?} at version {:?} is not ready for execution because prior transactions have yet to execute.",
+        object_id,
+        version_not_ready
+    )]
+    SharedObjectPriorVersionsPendingExecution {
+        object_id: ObjectID,
+        version_not_ready: SequenceNumber,
     },
     #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
     ObjectSequenceNumberTooHigh {
@@ -341,6 +375,15 @@ pub enum SuiError {
     StorageError(#[from] TypedStoreError),
     #[error("Non-RocksDB Storage error: {0}")]
     GenericStorageError(String),
+    #[error(
+        "Attempted to access {object} through parent {given_parent}, \
+        but it's actual parent is {actual_owner}"
+    )]
+    InvalidChildObjectAccess {
+        object: ObjectID,
+        given_parent: ObjectID,
+        actual_owner: Owner,
+    },
 
     #[error("Missing fields/data in storage error: {0}")]
     StorageMissingFieldError(String),
@@ -364,12 +407,6 @@ pub enum SuiError {
     #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
     TransactionOrchestratorLocalExecutionError { error: String },
 
-    #[error(
-    "Failed to achieve quorum between authorities, cause by : {:#?}",
-    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
-    )]
-    QuorumNotReached { errors: Vec<SuiError> },
-
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
@@ -384,7 +421,7 @@ pub enum SuiError {
     #[error("Too many authority errors were detected for {}: {:?}", action, errors)]
     TooManyIncorrectAuthorities {
         errors: Vec<(AuthorityName, SuiError)>,
-        action: &'static str,
+        action: String,
     },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
@@ -422,7 +459,7 @@ pub enum SuiError {
     InvalidPrivateKey,
 
     // Epoch related errors.
-    #[error("{VALIDATOR_HALTED_ERROR_MSG}")]
+    #[error("Validator temporarily stopped processing transactions due to epoch change")]
     ValidatorHaltedAtEpochEnd,
     #[error("Inconsistent state detected during epoch change: {:?}", error)]
     InconsistentEpochState { error: String },
@@ -432,7 +469,10 @@ pub enum SuiError {
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
     #[error("{1} - {0}")]
-    RpcError(String, &'static str),
+    RpcError(String, String),
+
+    #[error("Error when calling executeTransaction rpc endpoint: {:?}", error)]
+    RpcExecuteTransactionError { error: String },
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
@@ -449,11 +489,17 @@ pub enum SuiError {
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
 
-    #[error("{MISSING_COMMITTEE_ERROR_MSG} {0}")]
+    #[error("Missing committee information for epoch {0}")]
     MissingCommitteeAtEpoch(EpochId),
 
     #[error("Failed to get supermajority's consensus on committee information for minimal epoch: {minimal_epoch}")]
     FailedToGetAgreedCommitteeFromMajority { minimal_epoch: EpochId },
+
+    #[error("Empty input coins for Pay related transaction")]
+    EmptyInputCoins,
+
+    #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object.")]
+    UnexpectedGasPaymentObject,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -487,9 +533,24 @@ impl From<SubscriberError> for SuiError {
     }
 }
 
-impl From<tonic::Status> for SuiError {
-    fn from(status: tonic::Status) -> Self {
-        Self::RpcError(status.message().to_owned(), status.code().description())
+impl From<Status> for SuiError {
+    fn from(status: Status) -> Self {
+        let result = bincode::deserialize::<SuiError>(status.details());
+        if let Ok(sui_error) = result {
+            sui_error
+        } else {
+            Self::RpcError(
+                status.message().to_owned(),
+                status.code().description().to_owned(),
+            )
+        }
+    }
+}
+
+impl From<SuiError> for Status {
+    fn from(error: SuiError) -> Self {
+        let bytes = bincode::serialize(&error).unwrap();
+        Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
     }
 }
 
@@ -509,9 +570,8 @@ impl From<&str> for SuiError {
 
 impl SuiError {
     pub fn indicates_epoch_change(&self) -> bool {
-        let err_str = self.to_string();
-        err_str.contains(VALIDATOR_HALTED_ERROR_MSG)
-            || err_str.contains(MISSING_COMMITTEE_ERROR_MSG)
+        matches!(self, SuiError::ValidatorHaltedAtEpochEnd)
+            || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
     }
 }
 

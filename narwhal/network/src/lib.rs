@@ -10,6 +10,7 @@
 #![allow(clippy::async_yields_async)]
 
 pub mod admin;
+pub mod anemo_ext;
 mod bounded_executor;
 pub mod connectivity;
 pub mod metrics;
@@ -21,7 +22,10 @@ pub use crate::{
     bounded_executor::BoundedExecutor,
     p2p::P2pNetwork,
     retry::RetryConfig,
-    traits::{Lucky, LuckyNetwork, PrimaryToWorkerRpc, ReliableNetwork, UnreliableNetwork},
+    traits::{
+        Lucky, LuckyNetwork, PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork,
+        UnreliableNetwork, WorkerRpc,
+    },
 };
 
 /// This adapter will make a [`tokio::task::JoinHandle`] abort its handled task when the handle is dropped.

@@ -13,6 +13,30 @@ use typed_store::traits::Map;
 
 use parking_lot::Mutex;
 
+pub struct TransactionNotifierMetrics {
+    low_watermark: IntGauge,
+    high_watermark: IntGauge,
+}
+
+impl TransactionNotifierMetrics {
+    pub fn new(registry: &prometheus::Registry) -> TransactionNotifierMetrics {
+        Self {
+            low_watermark: register_int_gauge_with_registry!(
+                "low_watermark",
+                "Low watermark sequence number",
+                registry,
+            )
+            .unwrap(),
+            high_watermark: register_int_gauge_with_registry!(
+                "high_watermark",
+                "High watermark sequence number",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct TransactionNotifier {
     state: Arc<AuthorityStore>,
     low_watermark: AtomicU64,
@@ -24,6 +48,7 @@ pub struct TransactionNotifier {
     /// this.
     is_paused: AtomicBool,
     inner: Mutex<LockedNotifier>,
+    notifier_metrics: TransactionNotifierMetrics,
 }
 
 struct LockedNotifier {
@@ -33,7 +58,10 @@ struct LockedNotifier {
 
 impl TransactionNotifier {
     /// Create a new transaction notifier for the authority store
-    pub fn new(state: Arc<AuthorityStore>) -> SuiResult<TransactionNotifier> {
+    pub fn new(
+        state: Arc<AuthorityStore>,
+        registry: &prometheus::Registry,
+    ) -> SuiResult<TransactionNotifier> {
         let seq = state.next_sequence_number()?;
         Ok(TransactionNotifier {
             state,
@@ -49,11 +77,29 @@ impl TransactionNotifier {
                 high_watermark: seq,
                 live_tickets: BTreeSet::new(),
             }),
+            notifier_metrics: TransactionNotifierMetrics::new(registry),
         })
     }
 
     pub fn low_watermark(&self) -> TxSequenceNumber {
         self.low_watermark.load(Ordering::SeqCst)
+    }
+
+    pub fn notify(&self, seq: u64) {
+        let mut inner = self.inner.lock();
+        inner.live_tickets.remove(&seq);
+
+        // The new low watermark is either the lowest outstanding ticket
+        // or the high watermark.
+        let new_low_watermark = *inner
+            .live_tickets
+            .iter()
+            .next()
+            .unwrap_or(&inner.high_watermark);
+
+        self.low_watermark
+            .store(new_low_watermark, Ordering::SeqCst);
+        self.notify.notify_one();
     }
 
     pub fn pause(&self) {
@@ -99,6 +145,12 @@ impl TransactionNotifier {
         let seq = inner.high_watermark;
         inner.high_watermark += 1;
         inner.live_tickets.insert(seq);
+        self.notifier_metrics
+            .low_watermark
+            .set(self.low_watermark().try_into().unwrap());
+        self.notifier_metrics
+            .high_watermark
+            .set(inner.high_watermark.try_into().unwrap());
         Ok(TransactionNotifierTicket {
             transaction_notifier: self.clone(),
             seq,
@@ -156,7 +208,7 @@ impl TransactionNotifier {
                     if let Ok(iter) = transaction_notifier
                         .clone()
                         .state
-                        .tables
+                        .perpetual_tables
                         .executed_sequence
                         .iter()
                         .skip_to(&next_seq)
@@ -226,21 +278,7 @@ impl TransactionNotifierTicket {
         self.seq
     }
     pub fn notify(self) {
-        let mut inner = self.transaction_notifier.inner.lock();
-        inner.live_tickets.remove(&self.seq);
-
-        // The new low watermark is either the lowest outstanding ticket
-        // or the high watermark.
-        let new_low_watermark = *inner
-            .live_tickets
-            .iter()
-            .next()
-            .unwrap_or(&inner.high_watermark);
-
-        self.transaction_notifier
-            .low_watermark
-            .store(new_low_watermark, Ordering::SeqCst);
-        self.transaction_notifier.notify.notify_one();
+        self.transaction_notifier.notify(self.seq);
     }
 }
 
@@ -261,9 +299,11 @@ mod tests {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let store = Arc::new(AuthorityStore::open(&path, None));
+        let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
 
-        let notifier = Arc::new(TransactionNotifier::new(store.clone()).unwrap());
+        let notifier = Arc::new(
+            TransactionNotifier::new(store.clone(), &prometheus::Registry::default()).unwrap(),
+        );
 
         // TEST 1: Happy sequence
 

@@ -5,8 +5,10 @@ services:
     image: mysten/sui-rosetta-devnet
     ports:
       - "9002:9002"
+      - "9000:9000"
     expose:
       - "9002"
+      - "9000"
     working_dir: /sui/devnet
     command:
       - /bin/bash

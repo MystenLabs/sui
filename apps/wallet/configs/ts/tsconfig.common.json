@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "target": "es6",
+        "target": "es2020",
         "module": "esnext",
         "allowJs": true,
         "skipLibCheck": true,

@@ -5,9 +5,13 @@ import { useParams } from 'react-router-dom';
 
 import styles from './OtherDetails.module.css';
 
-const OtherDetails = () => {
+function OtherDetails() {
     const { term } = useParams();
-    return <div className={styles.explain}>Search results for "{term}"</div>;
-};
+    return (
+        <div className={styles.explain}>
+            Search results for &ldquo;{term}&rdquo;
+        </div>
+    );
+}
 
 export default OtherDetails;

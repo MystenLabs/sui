@@ -47,7 +47,7 @@ export function getOwnerStr(owner: ObjectOwner | string): string {
     if (typeof owner === 'object') {
         if ('AddressOwner' in owner) return owner.AddressOwner;
         if ('ObjectOwner' in owner) return owner.ObjectOwner;
-        if ('SingleOwner' in owner) return owner.SingleOwner;
+        if ('Shared' in owner) return 'Shared';
     }
     return owner;
 }
@@ -56,10 +56,17 @@ export const checkIsPropertyType = (value: any) =>
     ['number', 'string'].includes(typeof value);
 
 export const extractName = (
-    contents: object | undefined
+    contents: Record<string, any> | undefined
 ): string | undefined => {
-    if (!contents) return undefined;
-    return Object.entries(contents)
-        .filter(([key, _]) => key === 'name')
-        .map(([_, value]) => value)?.[0];
+    if (!contents || !('name' in contents)) return undefined;
+    const name = contents.name;
+
+    if (typeof name === 'string') {
+        return name;
+    }
+
+    // Dynamic fields
+    if (typeof name === 'object' && typeof name?.fields?.name === 'string') {
+        return name?.fields?.name;
+    }
 };

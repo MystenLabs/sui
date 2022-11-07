@@ -14,7 +14,7 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
 
-use sui_types::sui_serde::Base64;
+use fastcrypto::encoding::Base64;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
@@ -112,6 +112,35 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         Ok(TransactionBytes::from_data(data)?)
     }
 
+    async fn pay_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .builder
+            .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
+    async fn pay_all_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipient: SuiAddress,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .builder
+            .pay_all_sui(signer, input_coins, recipient, gas_budget)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
     async fn publish(
         &self,
         sender: SuiAddress,
@@ -121,7 +150,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
     ) -> RpcResult<TransactionBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
-            .map(|data| data.to_vec())
+            .map(|data| data.to_vec().map_err(|e| anyhow::anyhow!(e)))
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .builder

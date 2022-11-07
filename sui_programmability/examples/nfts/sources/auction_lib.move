@@ -160,14 +160,6 @@ module nfts::auction_lib {
         transfer::transfer(obj, recipient)
     }
 
-    /// exposes transfer::transfer_to_object_id
-    public fun transfer_to_object_id<T: key + store>(
-        obj: Auction<T>,
-        owner_id: &mut UID,
-    ) {
-        transfer::transfer_to_object_id(obj, owner_id)
-    }
-
     public fun share_object<T: key + store>(obj: Auction<T>) {
         transfer::share_object(obj)
     }

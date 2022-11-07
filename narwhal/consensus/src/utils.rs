@@ -19,7 +19,8 @@ where
 {
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
-    for r in (state.last_committed_round + 2..leader.round())
+    assert_eq!(leader.round() % 2, 0);
+    for r in (state.last_committed_round + 2..=leader.round() - 2)
         .rev()
         .step_by(2)
     {

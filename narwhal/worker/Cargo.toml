@@ -9,11 +9,10 @@ publish = false
 [dependencies]
 async-trait = "0.1.57"
 bincode = "1.3.3"
-blake2 = "0.9"
 byteorder = "1.4.3"
 bytes = "1.2.1"
 futures = "0.3.24"
-multiaddr = "0.14.0"
+multiaddr = "0.15.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.144", features = ["derive"] }
 tap = "1.0.1"
@@ -33,8 +32,10 @@ types = { path = "../types", package = "narwhal-types" }
 mysten-network.workspace = true
 prometheus = "0.13.2"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+sui-metrics = { path = "../../crates/sui-metrics" }
+
+anemo.workspace = true
+anemo-tower.workspace = true
 anyhow = "1.0.65"
 
 store.workspace = true

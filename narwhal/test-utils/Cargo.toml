@@ -10,14 +10,13 @@ publish = false
 arc-swap = { version = "1.5.1", features = ["serde"] }
 base64 = "0.13.0"
 bincode = "1.3.3"
-blake2 = "0.9"
 bytes = "1.2.1"
 derive_builder = "0.11.2"
 fdlimit = "0.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 itertools = "0.10.5"
-multiaddr = "0.14.0"
+multiaddr = "0.15.0"
 prometheus = "0.13.2"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
@@ -37,11 +36,13 @@ primary = { path = "../primary", package = "narwhal-primary" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
+storage = { path = "../storage", package = "narwhal-storage" }
 mysten-network.workspace = true
 
-store = { version = "0.1.0", package = "typed-store"}
+store = { version = "0.4.0", package = "typed-store"}
 workspace-hack.workspace = true
 telemetry-subscribers.workspace = true
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo.workspace = true
 tower = { version = "0.4.13", features = ["full"] }
+once_cell = "1.16.0"

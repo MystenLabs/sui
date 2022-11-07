@@ -61,17 +61,6 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
             }
             headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
             mode={mode === 'import' ? 'box' : 'plain'}
-            goBackOnClick={
-                mode === 'forgot'
-                    ? () => {
-                          if (step > 0) {
-                              setStep((step) => step - 1);
-                          } else {
-                              navigate(-1);
-                          }
-                      }
-                    : undefined
-            }
         >
             {StepForm ? (
                 <StepForm

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState, useContext } from 'react';
+import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -10,6 +11,8 @@ import { ReactComponent as ContentCopyIcon24 } from '../../assets/SVGIcons/24px/
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import ExternalLink from '../external-link/ExternalLink';
+
+import type { ReactNode } from 'react';
 
 import styles from './Longtext.module.css';
 
@@ -20,6 +23,7 @@ function Longtext({
     alttext = '',
     copyButton = 'none',
     showIconButton = false,
+    extra,
 }: {
     text: string;
     category:
@@ -33,26 +37,24 @@ function Longtext({
     alttext?: string;
     copyButton?: '16' | '24' | 'none';
     showIconButton?: boolean;
+    extra?: ReactNode;
 }) {
-    const [isCopyIcon, setCopyIcon] = useState(true);
-
     const [pleaseWait, setPleaseWait] = useState(false);
     const [network] = useContext(NetworkContext);
     const navigate = useNavigate();
 
     const handleCopyEvent = useCallback(() => {
         navigator.clipboard.writeText(text);
-        setCopyIcon(false);
-        setTimeout(() => setCopyIcon(true), 1000);
-    }, [setCopyIcon, text]);
+        toast.success('Copied!');
+    }, [text]);
 
-    let icon;
-    let iconButton = <></>;
+    let icon = null;
+    let iconButton = null;
 
     if (copyButton !== 'none') {
         if (pleaseWait) {
             icon = <div className={styles.copied}>&#8987; Please Wait</div>;
-        } else if (isCopyIcon) {
+        } else {
             icon = (
                 <div
                     className={
@@ -67,15 +69,7 @@ function Longtext({
                     )}
                 </div>
             );
-        } else {
-            icon = (
-                <span className={styles.copied}>
-                    <span>&#10003;</span> <span>Copied</span>
-                </span>
-            );
         }
-    } else {
-        icon = <></>;
     }
 
     if (showIconButton) {
@@ -135,6 +129,7 @@ function Longtext({
     return (
         <div className={styles.longtextwrapper}>
             {textComponent}
+            {extra ? <div className={styles.extra}>{extra}</div> : null}
             {icon}
         </div>
     );

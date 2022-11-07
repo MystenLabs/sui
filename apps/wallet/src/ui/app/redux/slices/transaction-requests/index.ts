@@ -3,6 +3,9 @@
 
 import {
     Base64DataBuffer,
+    getCertifiedTransaction,
+    getTransactionEffects,
+    LocalTxnDataSerializer,
     type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
@@ -11,7 +14,13 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import type { SuiTransactionResponse } from '@mysten/sui.js';
+import type {
+    SuiTransactionResponse,
+    SignableTransaction,
+    SuiExecuteTransactionResponse,
+    MoveCallTransaction,
+    UnserializedSignableTransaction,
+} from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { RootState } from '_redux/RootReducer';
@@ -56,6 +65,57 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
     }
 );
 
+export const deserializeTxn = createAsyncThunk<
+    {
+        txRequestID: string;
+        unSerializedTxn: UnserializedSignableTransaction | null;
+    },
+    { serializedTxn: string; id: string },
+    AppThunkConfig
+>(
+    'deserialize-transaction',
+    async (data, { dispatch, extra: { api, keypairVault } }) => {
+        const { id, serializedTxn } = data;
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const localSerializer = new LocalTxnDataSerializer(signer.provider);
+        const txnBytes = new Base64DataBuffer(serializedTxn);
+
+        //TODO: Error handling - either show the error or use the serialized txn
+        const deserializeTx =
+            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+                txnBytes
+            )) as UnserializedSignableTransaction;
+
+        const deserializeData = deserializeTx?.data as MoveCallTransaction;
+        const normalized = {
+            ...deserializeData,
+            gasBudget: Number(deserializeData.gasBudget.toString(10)),
+            gasPayment: '0x' + deserializeData.gasPayment,
+            arguments: deserializeData.arguments.map((d) => '0x' + d),
+        };
+
+        if (deserializeTx && normalized) {
+            dispatch(
+                loadTransactionResponseMetadata({
+                    txRequestID: id,
+                    objectId: normalized.packageObjectId,
+                    moduleName: normalized.module,
+                    functionName: normalized.function,
+                })
+            );
+        }
+
+        return {
+            txRequestID: id,
+            unSerializedTxn:
+                ({
+                    ...deserializeTx,
+                    data: normalized,
+                } as UnserializedSignableTransaction) || null,
+        };
+    }
+);
+
 export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
@@ -80,20 +140,43 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                if (txRequest.tx.type === 'v2') {
-                    txResult = await signer.signAndExecuteTransaction(
-                        txRequest.tx.data
-                    );
-                } else if (txRequest.tx.type === 'move-call') {
-                    txResult = await signer.executeMoveCall(txRequest.tx.data);
+                let response: SuiExecuteTransactionResponse;
+                if (
+                    txRequest.tx.type === 'v2' ||
+                    txRequest.tx.type === 'move-call'
+                ) {
+                    const txn: SignableTransaction =
+                        txRequest.tx.type === 'move-call'
+                            ? {
+                                  kind: 'moveCall',
+                                  data: txRequest.tx.data,
+                              }
+                            : txRequest.tx.data;
+
+                    response =
+                        await signer.signAndExecuteTransactionWithRequestType(
+                            txn
+                        );
                 } else if (txRequest.tx.type === 'serialized-move-call') {
                     const txBytes = new Base64DataBuffer(txRequest.tx.data);
-                    txResult = await signer.signAndExecuteTransaction(txBytes);
+                    response =
+                        await signer.signAndExecuteTransactionWithRequestType(
+                            txBytes
+                        );
                 } else {
                     throw new Error(
                         `Either tx or txBytes needs to be defined.`
                     );
                 }
+
+                txResult = {
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    certificate: getCertifiedTransaction(response)!,
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    effects: getTransactionEffects(response)!,
+                    timestamp_ms: null,
+                    parsed_data: null,
+                };
             } catch (e) {
                 tsResultError = (e as Error).message;
             }
@@ -110,7 +193,11 @@ export const respondToTransactionRequest = createAsyncThunk<
 
 const slice = createSlice({
     name: 'transaction-requests',
-    initialState: txRequestsAdapter.getInitialState({ initialized: false }),
+    initialState: txRequestsAdapter.getInitialState({
+        initialized: false,
+        // show serialized txn if deserialization fails
+        deserializeTxnFailed: false,
+    }),
     reducers: {
         setTransactionRequests: (
             state,
@@ -119,6 +206,7 @@ const slice = createSlice({
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore
             txRequestsAdapter.setAll(state, payload);
+            state.deserializeTxnFailed = false;
             state.initialized = true;
         },
     },
@@ -135,6 +223,22 @@ const slice = createSlice({
                 });
             }
         );
+
+        build.addCase(deserializeTxn.rejected, (state, { payload }) => {
+            state.deserializeTxnFailed = true;
+        });
+
+        build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
+            const { txRequestID, unSerializedTxn } = payload;
+            if (unSerializedTxn) {
+                txRequestsAdapter.updateOne(state, {
+                    id: txRequestID,
+                    changes: {
+                        unSerializedTxn: unSerializedTxn || null,
+                    },
+                });
+            }
+        });
 
         build.addCase(
             respondToTransactionRequest.fulfilled,

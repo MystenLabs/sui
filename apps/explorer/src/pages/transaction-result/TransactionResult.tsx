@@ -7,44 +7,28 @@ import {
     getExecutionStatusError,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import {
-    DefaultRpcClient as rpc,
-    type Network,
-} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
 import TransactionView from './TransactionView';
 
 import type {
-    CertifiedTransaction,
     SuiTransactionResponse,
-    ExecutionStatusType,
     TransactionEffects,
     SuiObjectRef,
-    SuiEvent,
 } from '@mysten/sui.js';
 
-type TxnState = CertifiedTransaction & {
-    loadState: string;
-    txId: string;
-    status: ExecutionStatusType;
-    gasFee: number;
-    txError: string;
-    mutated: SuiObjectRef[];
-    created: SuiObjectRef[];
-    events?: SuiEvent[];
-    timestamp_ms: number | null;
-};
+import { useRpc } from '~/hooks/useRpc';
+
 // TODO: update state to include Call types
 // TODO: clean up duplicate fields
-const initState: TxnState = {
+const initState: DataType = {
+    transaction: null,
     loadState: 'pending',
     txId: '',
     data: {
@@ -68,22 +52,6 @@ const initState: TxnState = {
     events: [],
 };
 
-function fetchTransactionData(
-    txId: string | undefined,
-    network: Network | string
-): Promise<SuiTransactionResponse> {
-    try {
-        if (!txId) {
-            throw new Error('No Txid found');
-        }
-        return rpc(network)
-            .getTransactionWithEffects(txId)
-            .then((txEff: SuiTransactionResponse) => txEff);
-    } catch (error) {
-        throw error;
-    }
-}
-
 const getCreatedOrMutatedData = (
     txEffects: TransactionEffects,
     contentType: 'created' | 'mutated'
@@ -93,25 +61,28 @@ const getCreatedOrMutatedData = (
         : [];
 };
 
-const FailedToGetTxResults = ({ id }: { id: string }) => (
-    <ErrorResult
-        id={id}
-        errorMsg={
-            !id
-                ? "Can't search for a transaction without a digest"
-                : 'Data could not be extracted for the following specified transaction ID'
-        }
-    />
-);
+function FailedToGetTxResults({ id }: { id: string }) {
+    return (
+        <ErrorResult
+            id={id}
+            errorMsg={
+                !id
+                    ? "Can't search for a transaction without a digest"
+                    : 'Data could not be extracted for the following specified transaction ID'
+            }
+        />
+    );
+}
 
 const transformTransactionResponse = (
     txObj: SuiTransactionResponse,
     id: string
-): TxnState => {
+): DataType => {
     return {
         ...txObj.certificate,
+        transaction: txObj,
         status: getExecutionStatusType(txObj)!,
-        gasFee: getTotalGasUsed(txObj),
+        gasFee: getTotalGasUsed(txObj)!,
         txError: getExecutionStatusError(txObj) ?? '',
         txId: id,
         loadState: 'loaded',
@@ -122,14 +93,15 @@ const transformTransactionResponse = (
     };
 };
 
-const TransactionResultAPI = ({ id }: { id: string }) => {
+function TransactionResultAPI({ id }: { id: string }) {
     const [showTxState, setTxState] = useState(initState);
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
         if (id == null) {
             return;
         }
-        fetchTransactionData(id, network)
+
+        rpc.getTransactionWithEffects(id)
             .then((txObj) => {
                 setTxState(transformTransactionResponse(txObj, id));
             })
@@ -140,7 +112,7 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
                     loadState: 'fail',
                 });
             });
-    }, [id, network]);
+    }, [id, rpc]);
 
     // TODO update Loading screen
     if (showTxState.loadState === 'pending') {
@@ -151,31 +123,25 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
         );
     }
     if (id && showTxState.loadState === 'loaded') {
-        return <TransactionResultLoaded txData={showTxState} />;
+        return <TransactionView txdata={showTxState} />;
     }
     // For Batch transactions show error
     // TODO update Error screen and account for Batch transactions
 
     return <FailedToGetTxResults id={id} />;
-};
+}
 
 const TransactionResultStatic = ({ id }: { id: string }) => {
     const entry = findDataFromID(id, undefined);
     try {
         return (
-            <TransactionResultLoaded
-                txData={transformTransactionResponse(entry, id)}
-            />
+            <TransactionView txdata={transformTransactionResponse(entry, id)} />
         );
     } catch (error) {
         console.error(error);
         Sentry.captureException(error);
         return <FailedToGetTxResults id={id} />;
     }
-};
-
-const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
-    return <TransactionView txdata={txData} />;
 };
 
 function TransactionResult() {
@@ -193,8 +159,8 @@ function TransactionResult() {
 
     if (checkStateHasData(state) && id) {
         return (
-            <TransactionResultLoaded
-                txData={transformTransactionResponse(state.data, id)}
+            <TransactionView
+                txdata={transformTransactionResponse(state.data, id)}
             />
         );
     }
@@ -207,7 +173,7 @@ function TransactionResult() {
         );
     }
 
-    return <ErrorResult id={id} errorMsg={'ID not a valid string'} />;
+    return <ErrorResult id={id} errorMsg="ID not a valid string" />;
 }
 
 export default TransactionResult;

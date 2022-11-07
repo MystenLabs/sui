@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
-import TableCard from '../../components/table/TableCard';
-import { NetworkContext } from '../../context';
 import {
     getValidatorState,
     processValidators,
@@ -13,9 +11,11 @@ import {
     type ValidatorState,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
-import theme from '../../styles/theme.module.css';
 import { truncate } from '../../utils/stringUtils';
 
+import { useRpc } from '~/hooks/useRpc';
+import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
 
 export const STATE_DEFAULT: ValidatorState = {
@@ -48,16 +48,16 @@ export const STATE_DEFAULT: ValidatorState = {
     },
 };
 
-export const TopValidatorsCardStatic = (): JSX.Element => {
+export function TopValidatorsCardStatic() {
     return <TopValidatorsCard state={mockState as ValidatorState} />;
-};
+}
 
-export const TopValidatorsCardAPI = (): JSX.Element => {
+export function TopValidatorsCardAPI() {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
-        getValidatorState(network)
+        getValidatorState(rpc)
             .then((objState: ValidatorState) => {
                 setObjectState(objState);
                 setLoadState('loaded');
@@ -66,22 +66,52 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
                 console.log(error);
                 setLoadState('fail');
             });
-    }, [network]);
+    }, [rpc]);
 
     if (loadState === 'loaded') {
         return <TopValidatorsCard state={showObjectState as ValidatorState} />;
     }
     if (loadState === 'pending') {
-        return <div className={theme.pending}>loading validator info...</div>;
+        return (
+            <div data-testid="validators-table">
+                <TabGroup>
+                    <TabList>
+                        <Tab>Top Validators</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <div title="Top Validators">
+                                <PlaceholderTable
+                                    rowCount={4}
+                                    rowHeight="13px"
+                                    colHeadings={[
+                                        '#',
+                                        'Name',
+                                        'Address',
+                                        'Pubkey Bytes',
+                                    ]}
+                                    colWidths={[
+                                        '25px',
+                                        '135px',
+                                        '220px',
+                                        '220px',
+                                    ]}
+                                />
+                            </div>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
+            </div>
+        );
     }
     if (loadState === 'fail') {
         return <ValidatorLoadFail />;
     }
 
-    return <div>"Something went wrong"</div>;
-};
+    return <div>Something went wrong</div>;
+}
 
-function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
+function TopValidatorsCard({ state }: { state: ValidatorState }) {
     const validatorsData = processValidators(
         state.validators.fields.active_validators
     );
@@ -97,15 +127,15 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 <Longtext
                     text={validator.address}
                     alttext={truncate(validator.address, 14)}
-                    category={'addresses'}
-                    isLink={true}
+                    category="addresses"
+                    isLink
                 />
             ),
             pubkeyBytes: (
                 <Longtext
                     text={validator.pubkeyBytes}
                     alttext={truncate(validator.pubkeyBytes, 14)}
-                    category={'addresses'}
+                    category="addresses"
                     isLink={false}
                 />
             ),
@@ -138,7 +168,10 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <TableCard tabledata={tableData} />
+                        <TableCard
+                            data={tableData.data}
+                            columns={tableData.columns}
+                        />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>

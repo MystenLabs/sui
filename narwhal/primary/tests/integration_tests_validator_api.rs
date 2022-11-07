@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
-use fastcrypto::{traits::KeyPair as _, Hash};
+use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
 use node::NodeStorage;
@@ -52,10 +52,10 @@ async fn test_get_collections() {
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir());
 
-    let mut header_ids = Vec::new();
+    let mut header_digests = Vec::new();
     // Blocks/Collections
-    let mut collection_ids = Vec::new();
-    let mut missing_block = CertificateDigest::new([0; 32]);
+    let mut collection_digests = Vec::new();
+    let mut missing_certificate = CertificateDigest::new([0; 32]);
 
     // Generate headers
     for n in 0..5 {
@@ -68,8 +68,8 @@ async fn test_get_collections() {
             .unwrap();
 
         let certificate = fixture.certificate(&header);
-        let block_id = certificate.digest();
-        collection_ids.push(block_id);
+        let digest = certificate.digest();
+        collection_digests.push(digest);
 
         // Write the certificate
         store.certificate_store.write(certificate.clone()).unwrap();
@@ -77,22 +77,25 @@ async fn test_get_collections() {
         // Write the header
         store
             .header_store
-            .write(header.clone().id, header.clone())
+            .async_write(header.clone().digest(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_digests.push(header.clone().digest());
 
         // Write the batches to payload store
         store
             .payload_store
-            .write_all(vec![((batch.clone().digest(), worker_id), 0)])
+            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
             .await
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store.batch_store.write(batch.digest(), batch.clone()).await;
+            store
+                .batch_store
+                .async_write(batch.digest(), batch.clone())
+                .await;
         } else {
-            missing_block = block_id;
+            missing_certificate = digest;
         }
     }
 
@@ -163,7 +166,7 @@ async fn test_get_collections() {
 
     // Test get 1 collection
     let request = tonic::Request::new(GetCollectionsRequest {
-        collection_ids: vec![collection_ids[0].into()],
+        collection_ids: vec![collection_digests[0].into()],
     });
     let response = client.get_collections(request).await.unwrap();
     let actual_result = response.into_inner().result;
@@ -177,7 +180,7 @@ async fn test_get_collections() {
 
     // Test get 5 collections
     let request = tonic::Request::new(GetCollectionsRequest {
-        collection_ids: collection_ids.iter().map(|&c_id| c_id.into()).collect(),
+        collection_ids: collection_digests.iter().map(|&c_id| c_id.into()).collect(),
     });
     let response = client.get_collections(request).await.unwrap();
     let actual_result = response.into_inner().result;
@@ -212,7 +215,7 @@ async fn test_get_collections() {
     };
 
     assert_eq!(
-        &CertificateDigestProto::from(missing_block),
+        &CertificateDigestProto::from(missing_certificate),
         actual_missing_collection.unwrap()
     );
 }
@@ -241,9 +244,9 @@ async fn test_remove_collections() {
 
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir());
-    let mut header_ids = Vec::new();
+    let mut header_digests = Vec::new();
     // Blocks/Collections
-    let mut collection_ids = Vec::new();
+    let mut collection_digests = Vec::new();
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
@@ -263,8 +266,8 @@ async fn test_remove_collections() {
             .unwrap();
 
         let certificate = fixture.certificate(&header);
-        let block_id = certificate.digest();
-        collection_ids.push(block_id);
+        let digest = certificate.digest();
+        collection_digests.push(digest);
 
         // Write the certificate
         store.certificate_store.write(certificate.clone()).unwrap();
@@ -273,20 +276,23 @@ async fn test_remove_collections() {
         // Write the header
         store
             .header_store
-            .write(header.clone().id, header.clone())
+            .async_write(header.clone().digest(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_digests.push(header.clone().digest());
 
         // Write the batches to payload store
         store
             .payload_store
-            .write_all(vec![((batch.clone().digest(), worker_id), 0)])
+            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
             .await
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store.batch_store.write(batch.digest(), batch.clone()).await;
+            store
+                .batch_store
+                .async_write(batch.digest(), batch.clone())
+                .await;
         }
     }
 
@@ -325,7 +331,7 @@ async fn test_remove_collections() {
 
     // Test remove 1 collection without spawning worker. Should result in a timeout error
     // when trying to remove batches.
-    let block_to_be_removed = collection_ids.remove(0);
+    let block_to_be_removed = collection_digests.remove(0);
     let request = tonic::Request::new(RemoveCollectionsRequest {
         collection_ids: vec![block_to_be_removed.into()],
     });
@@ -391,7 +397,7 @@ async fn test_remove_collections() {
     // Test remove remaining collections, one collection has its batches intentionally
     // missing but it should not return any errors.
     let request = tonic::Request::new(RemoveCollectionsRequest {
-        collection_ids: collection_ids.iter().map(|&c_id| c_id.into()).collect(),
+        collection_ids: collection_digests.iter().map(|&c_id| c_id.into()).collect(),
     });
     let response = client.remove_collections(request).await.unwrap();
     let actual_result = response.into_inner();
@@ -401,7 +407,7 @@ async fn test_remove_collections() {
     assert_eq!(
         store
             .certificate_store
-            .read_all(collection_ids.clone())
+            .read_all(collection_digests.clone())
             .unwrap()
             .iter()
             .filter(|c| c.is_some())
@@ -413,7 +419,7 @@ async fn test_remove_collections() {
     // Test removing collections again after they have all been removed, no error
     // returned.
     let request = tonic::Request::new(RemoveCollectionsRequest {
-        collection_ids: collection_ids.iter().map(|&c_id| c_id.into()).collect(),
+        collection_ids: collection_digests.iter().map(|&c_id| c_id.into()).collect(),
     });
     let response = client.remove_collections(request).await.unwrap();
     let actual_result = response.into_inner();
@@ -434,7 +440,7 @@ async fn test_read_causal_signed_certificates() {
     let primary_store_1 = NodeStorage::reopen(temp_dir());
     let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
 
-    let mut collection_ids: Vec<CertificateDigest> = Vec::new();
+    let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
@@ -467,7 +473,7 @@ async fn test_read_causal_signed_certificates() {
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
-    collection_ids.extend(
+    collection_digests.extend(
         certificates
             .iter()
             .map(|c| c.digest())
@@ -588,7 +594,7 @@ async fn test_read_causal_signed_certificates() {
     // Test read causal for existing collection in Primary 1
     // Collection is from round 1 so we expect BFT 1 + 0 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(ReadCausalRequest {
-        collection_id: Some(collection_ids[1].into()),
+        collection_id: Some(collection_digests[1].into()),
     });
 
     let response = client.read_causal(request).await.unwrap();
@@ -611,7 +617,7 @@ async fn test_read_causal_signed_certificates() {
     // to handle retrieving the missing collection from Primary 2 before completing the
     // request for read causal.
     let request = tonic::Request::new(ReadCausalRequest {
-        collection_id: Some(collection_ids[0].into()),
+        collection_id: Some(collection_digests[0].into()),
     });
 
     let response = client.read_causal(request).await.unwrap();
@@ -620,6 +626,8 @@ async fn test_read_causal_signed_certificates() {
 
 #[tokio::test]
 async fn test_read_causal_unsigned_certificates() {
+    telemetry_subscribers::init_for_testing();
+
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -646,7 +654,7 @@ async fn test_read_causal_unsigned_certificates() {
     let primary_store_1 = NodeStorage::reopen(temp_dir());
     let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
 
-    let mut collection_ids: Vec<CertificateDigest> = Vec::new();
+    let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
@@ -683,7 +691,7 @@ async fn test_read_causal_unsigned_certificates() {
             .collect::<Vec<PublicKey>>(),
     );
 
-    collection_ids.extend(
+    collection_digests.extend(
         certificates
             .iter()
             .map(|c| c.digest())
@@ -790,7 +798,7 @@ async fn test_read_causal_unsigned_certificates() {
     // Test read causal for existing collection in Primary 1
     // Collection is from round 1 so we expect BFT 1 + 0 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(ReadCausalRequest {
-        collection_id: Some(collection_ids[1].into()),
+        collection_id: Some(collection_digests[1].into()),
     });
 
     let response = client.read_causal(request).await.unwrap();
@@ -814,14 +822,18 @@ async fn test_read_causal_unsigned_certificates() {
     // request for read causal. However because these certificates were not signed
     // they will not pass validation during fetch.
     let request = tonic::Request::new(ReadCausalRequest {
-        collection_id: Some(collection_ids[0].into()),
+        collection_id: Some(collection_digests[0].into()),
     });
 
     let status = client.read_causal(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Error when trying to synchronize block headers: BlockNotFound"));
+    assert!(
+        status
+            .message()
+            .contains("Error when trying to synchronize block headers: BlockNotFound"),
+        "Saw unexpected status message: {}",
+        status.message()
+    );
 }
 
 /// Here we test the ability on our code to synchronize missing certificates
@@ -897,7 +909,7 @@ async fn test_get_collections_with_missing_certificates() {
     batches_map.insert(certificate_1.digest(), batch_1);
     batches_map.insert(certificate_2.digest(), batch_2);
 
-    let block_ids = vec![certificate_1.digest(), certificate_2.digest()];
+    let digests = vec![certificate_1.digest(), certificate_2.digest()];
 
     // Spawn the primary 1 (which will be the one that we'll interact with)
     let (tx_new_certificates_1, rx_new_certificates_1) =
@@ -1012,11 +1024,11 @@ async fn test_get_collections_with_missing_certificates() {
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(parameters_1.clone());
 
-    let collection_ids = block_ids;
+    let collection_digests = digests;
 
     // Test get collections
     let request = tonic::Request::new(GetCollectionsRequest {
-        collection_ids: collection_ids.iter().map(|&c_id| c_id.into()).collect(),
+        collection_ids: collection_digests.iter().map(|&c_id| c_id.into()).collect(),
     });
     let response = client.get_collections(request).await.unwrap();
     let actual_result = response.into_inner().result;
@@ -1047,7 +1059,7 @@ async fn test_get_collections_with_missing_certificates() {
 
                 if let Some(expected_batch) = batches_map.get(&id) {
                     assert_eq!(
-                        result_transactions, *expected_batch.0,
+                        result_transactions, *expected_batch.transactions,
                         "Batch payload doesn't match"
                     );
                 } else {
@@ -1090,16 +1102,18 @@ async fn fixture_certificate(
     certificate_store.write(certificate.clone()).unwrap();
 
     // Write the header
-    header_store.write(header.clone().id, header.clone()).await;
+    header_store
+        .async_write(header.clone().digest(), header.clone())
+        .await;
 
     // Write the batches to payload store
     payload_store
-        .write_all(vec![((batch_digest, worker_id), 0)])
+        .sync_write_all(vec![((batch_digest, worker_id), 0)])
         .await
         .expect("couldn't store batches");
 
     // Add a batch to the workers store
-    batch_store.write(batch_digest, batch.clone()).await;
+    batch_store.async_write(batch_digest, batch.clone()).await;
 
     (certificate, batch)
 }

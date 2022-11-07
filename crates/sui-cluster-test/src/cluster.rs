@@ -5,14 +5,11 @@ use async_trait::async_trait;
 use clap::*;
 use std::net::SocketAddr;
 use sui::client_commands::WalletContext;
-use sui::config::SuiClientConfig;
+use sui::config::{SuiClientConfig, SuiEnv};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::Config;
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::FileBasedKeystore;
-use sui_sdk::crypto::Keystore;
-use sui_sdk::ClientType;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
@@ -71,7 +68,7 @@ pub struct RemoteRunningCluster {
 impl Cluster for RemoteRunningCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let (fullnode_url, faucet_url) = match options.env {
-            Env::DevNet => (
+            Env::Devnet => (
                 String::from(DEVNET_FULLNODE_ADDR),
                 String::from(DEVNET_FAUCET_ADDR),
             ),
@@ -79,7 +76,7 @@ impl Cluster for RemoteRunningCluster {
                 String::from(STAGING_FULLNODE_ADDR),
                 String::from(STAGING_FAUCET_ADDR),
             ),
-            Env::Continuous => (
+            Env::Ci => (
                 String::from(CONTINUOUS_FULLNODE_ADDR),
                 String::from(CONTINUOUS_FAUCET_ADDR),
             ),
@@ -145,12 +142,6 @@ impl Cluster for LocalNewCluster {
         // Let the faucet account hold 1000 gas objects on genesis
         let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
 
-        let gateway_port = options.gateway_address.as_ref().map(|addr| {
-            addr.parse::<SocketAddr>()
-                .expect("Unable to parse gateway address")
-                .port()
-        });
-
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
@@ -166,9 +157,6 @@ impl Cluster for LocalNewCluster {
 
         let mut cluster_builder = TestClusterBuilder::new().set_genesis_config(genesis_config);
 
-        if let Some(rpc_port) = gateway_port {
-            cluster_builder = cluster_builder.set_gateway_rpc_port(rpc_port);
-        }
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
         }
@@ -269,8 +257,13 @@ pub async fn new_wallet_context_from_cluster(
         .unwrap();
     SuiClientConfig {
         keystore,
-        client_type: ClientType::RPC(fullnode_url.into(), None),
+        envs: vec![SuiEnv {
+            alias: "localnet".to_string(),
+            rpc: fullnode_url.into(),
+            ws: None,
+        }],
         active_address: Some(address),
+        active_env: Some("localnet".to_string()),
     }
     .persisted(&wallet_config_path)
     .save()

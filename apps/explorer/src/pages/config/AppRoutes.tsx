@@ -12,7 +12,7 @@ import TransactionResult from '../transaction-result/TransactionResult';
 import Transactions from '../transactions/Transactions';
 import { ValidatorPageResult } from '../validators/Validators';
 
-const AppRoutes = () => {
+function AppRoutes() {
     return (
         <Routes>
             <Route path="/" element={<Home />} />
@@ -23,9 +23,9 @@ const AppRoutes = () => {
             <Route path="/validators" element={<ValidatorPageResult />} />
             <Route path="/search-result/:id" element={<SearchResult />} />
             <Route path="/error/:category/:id" element={<SearchError />} />
-            <Route path="*" element={<Navigate to="/" replace={true} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
     );
-};
+}
 
 export default AppRoutes;

@@ -17,21 +17,44 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transaction', async () => {
-    const resp = await toolbox.provider.getTransactions("All",null,1, "Descending");
+    const resp = await toolbox.provider.getTransactions(
+      'All',
+      null,
+      1,
+      true
+    );
     const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
     expect(txn.certificate.transactionDigest).toEqual(digest);
   });
 
   it('Get Transactions', async () => {
-    const resp = await toolbox.provider.getTransactionsForAddress(toolbox.address());
+    const resp = await toolbox.provider.getTransactionsForAddress(
+      toolbox.address(),
+      false
+    );
     expect(resp.length).to.greaterThan(0);
 
-    const allTransactions = await toolbox.provider.getTransactions("All",null,10, "Ascending");
+    const allTransactions = await toolbox.provider.getTransactions(
+      'All',
+      null,
+      10,
+      false
+    );
     expect(allTransactions.data.length).to.greaterThan(0);
 
-    const resp2 = await toolbox.provider.getTransactions({ToAddress:toolbox.address()},null,null, "Ascending");
-    const resp3 = await toolbox.provider.getTransactions({FromAddress:toolbox.address()},null,null, "Ascending");
+    const resp2 = await toolbox.provider.getTransactions(
+      { ToAddress: toolbox.address() },
+      null,
+      null,
+      false
+    );
+    const resp3 = await toolbox.provider.getTransactions(
+      { FromAddress: toolbox.address() },
+      null,
+      null,
+      false
+    );
     expect([...resp2.data, ...resp3.data]).toEqual(resp);
   });
 });

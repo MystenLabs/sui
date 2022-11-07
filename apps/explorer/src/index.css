@@ -1,11 +1,4 @@
-@import 'vanilla-cookieconsent/dist/cookieconsent.css';
-
-/*
- * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
- * We currently disable the CSS reset and expect components to adapt accordingly.
- * When we fix this, we should use the following as a CSS reset: @tailwind base;
- */
-
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -21,8 +14,19 @@
     src: url('./assets/Fonts/SpaceMono-Regular.ttf') format('truetype');
 }
 
+/* Define some colors as CSS variables for use outside of the Tailwind class context: */
+:root {
+    --success-light: theme('colors.success.light');
+    --success-dark: theme('colors.success.dark');
+    --warning-light: theme('colors.warning.light');
+    --warning-dark: theme('colors.warning.dark');
+    --issue-light: theme('colors.issue.light');
+    --issue-dark: theme('colors.issue.dark');
+    --sui-steel: theme('colors.sui.steel.DEFAULT');
+}
+
 body {
-    @apply m-0 text-offblack;
+    @apply m-0 text-offblack font-sans;
 }
 
 input:focus,

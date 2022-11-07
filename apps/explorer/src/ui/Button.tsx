@@ -3,13 +3,13 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import ButtonOrLink, { type ButtonOrLinkProps } from './utils/ButtonOrLink';
+import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 const buttonStyles = cva(
     [
         'inline-flex items-center justify-center',
         // TODO: Remove when CSS reset is applied.
-        'cursor-pointer font-sans no-underline',
+        'cursor-pointer no-underline',
     ],
     {
         variants: {

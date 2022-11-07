@@ -1,17 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use crate::metrics::PrimaryChannelMetrics;
+use super::{NetworkModel, Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
+use crate::{common::create_db_stores, metrics::PrimaryChannelMetrics, PayloadToken};
 use arc_swap::ArcSwap;
-use config::Parameters;
+use bincode::Options;
+use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use fastcrypto::traits::KeyPair;
+use crypto::PublicKey;
+use fastcrypto::{hash::Hash, traits::KeyPair};
+use itertools::Itertools;
 use node::NodeStorage;
 use prometheus::Registry;
-use std::{sync::Arc, time::Duration};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeSet, HashMap, HashSet},
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Duration,
+};
+use storage::{CertificateStore, ProposerStore};
+use store::rocks::DBMap;
+use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
-use types::ReconfigureNotification;
+use types::{
+    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    PayloadAvailabilityRequest, PrimaryToPrimary, ReconfigureNotification, Round,
+};
 use worker::{metrics::initialise_metrics, Worker};
 
 #[tokio::test]
@@ -237,4 +252,316 @@ async fn get_network_peers_from_admin_server() {
     // Assert peer ids are correct
     let expected_peer_ids = vec![&primary_1_peer_id, &worker_1_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
+}
+
+#[tokio::test]
+async fn test_fetch_certificates_handler() {
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let committee = fixture.committee();
+
+    let (tx_primary_messages, _) = test_utils::test_channel!(1);
+    let (_, certificate_store, payload_store) = create_db_stores();
+    let handler = PrimaryReceiverHandler {
+        tx_primary_messages,
+        certificate_store: certificate_store.clone(),
+        payload_store: payload_store.clone(),
+        proposer_store: ProposerStore::new_for_tests(),
+    };
+
+    let mut current_round: Vec<_> = Certificate::genesis(&committee)
+        .into_iter()
+        .map(|cert| cert.header)
+        .collect();
+    let mut headers = vec![];
+    let total_rounds = 4;
+    for i in 0..total_rounds {
+        let parents: BTreeSet<_> = current_round
+            .into_iter()
+            .map(|header| fixture.certificate(&header).digest())
+            .collect();
+        (_, current_round) = fixture.headers_round(i, &parents);
+        headers.extend(current_round.clone());
+    }
+
+    let total_authorities = fixture.authorities().count();
+    let total_certificates = total_authorities * total_rounds as usize;
+    // Create certificates test data.
+    let mut certificates = vec![];
+    for header in headers.into_iter() {
+        certificates.push(fixture.certificate(&header));
+    }
+    assert_eq!(certificates.len(), total_certificates);
+    assert_eq!(16, total_certificates);
+
+    // Populate certificate store such that each authority has the following rounds:
+    // Authority 0: 1
+    // Authority 1: 1 2
+    // Authority 2: 1 2 3
+    // Authority 3: 1 2 3 4
+    // This is unrealistic because in practice a certificate can only be stored with 2f+1 parents
+    // already in store. But this does not matter for testing here.
+    let mut authorities = Vec::<PublicKey>::new();
+    for i in 0..total_authorities {
+        authorities.push(certificates[i].header.author.clone());
+        for j in 0..=i {
+            let cert = certificates[i + j * total_authorities].clone();
+            assert_eq!(&cert.header.author, authorities.last().unwrap());
+            certificate_store
+                .write(cert)
+                .expect("Writing certificate to store failed");
+        }
+    }
+
+    // Each test case contains (lower bound round, skip rounds, max items, expected output).
+    let test_cases = vec![
+        (
+            0,
+            vec![vec![], vec![], vec![], vec![]],
+            20,
+            vec![1, 1, 1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            0,
+            vec![vec![1u64], vec![1], vec![], vec![]],
+            20,
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            0,
+            vec![vec![], vec![], vec![1], vec![1]],
+            20,
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            1,
+            vec![vec![], vec![], vec![2], vec![2]],
+            4,
+            vec![2, 3, 3, 4],
+        ),
+        (1, vec![vec![], vec![], vec![2], vec![2]], 2, vec![2, 3]),
+        (
+            0,
+            vec![vec![1], vec![1], vec![1, 2, 3], vec![1, 2, 3]],
+            2,
+            vec![2, 4],
+        ),
+        (2, vec![vec![], vec![], vec![], vec![]], 3, vec![3, 3, 4]),
+        (2, vec![vec![], vec![], vec![], vec![]], 2, vec![3, 3]),
+        // Check that round 2 and 4 are fetched for the last authority, skipping round 3.
+        (
+            1,
+            vec![vec![], vec![], vec![3], vec![3]],
+            5,
+            vec![2, 2, 2, 4],
+        ),
+    ];
+    for (lower_bound_round, skip_rounds_vec, max_items, expected_rounds) in test_cases {
+        let req = FetchCertificatesRequest::default()
+            .set_bounds(
+                lower_bound_round,
+                authorities
+                    .clone()
+                    .into_iter()
+                    .zip(
+                        skip_rounds_vec
+                            .into_iter()
+                            .map(|rounds| rounds.into_iter().collect()),
+                    )
+                    .collect(),
+            )
+            .set_max_items(max_items);
+        let resp = handler
+            .fetch_certificates(anemo::Request::new(req.clone()))
+            .await
+            .unwrap()
+            .into_body();
+        assert_eq!(
+            resp.certificates
+                .iter()
+                .map(|cert| cert.round())
+                .collect_vec(),
+            expected_rounds
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_process_payload_availability_success() {
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+
+    let (tx_primary_messages, _) = test_utils::test_channel!(1);
+    let (_, certificate_store, payload_store) = create_db_stores();
+    let handler = PrimaryReceiverHandler {
+        tx_primary_messages,
+        certificate_store: certificate_store.clone(),
+        payload_store: payload_store.clone(),
+        proposer_store: ProposerStore::new_for_tests(),
+    };
+
+    // GIVEN some mock certificates
+    let mut certificates = HashMap::new();
+    let mut missing_certificates = HashSet::new();
+
+    for i in 0..10 {
+        let header = author
+            .header_builder(&committee)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .build(author.keypair())
+            .unwrap();
+
+        let certificate = fixture.certificate(&header);
+        let digest = certificate.clone().digest();
+
+        certificates.insert(digest, certificate.clone());
+
+        // We want to simulate the scenario of both having some certificates
+        // found and some non found. Store only the half. The other half
+        // should be returned back as non found.
+        if i < 7 {
+            // write the certificate
+            certificate_store.write(certificate.clone()).unwrap();
+
+            for payload in certificate.header.payload {
+                payload_store.async_write(payload, 1).await;
+            }
+        } else {
+            missing_certificates.insert(digest);
+        }
+    }
+
+    // WHEN requesting the payload availability for all the certificates
+    let request = anemo::Request::new(PayloadAvailabilityRequest {
+        certificate_digests: certificates.keys().copied().collect(),
+    });
+    let response = handler.get_payload_availability(request).await.unwrap();
+    let result_digests: HashSet<CertificateDigest> = response
+        .body()
+        .payload_availability
+        .iter()
+        .map(|(digest, _)| *digest)
+        .collect();
+
+    assert_eq!(
+        result_digests.len(),
+        certificates.len(),
+        "Returned unique number of certificates don't match the expected"
+    );
+
+    // ensure that we have no payload availability for some
+    let availability_map = response
+        .into_body()
+        .payload_availability
+        .into_iter()
+        .counts_by(|c| c.1);
+
+    for (available, found) in availability_map {
+        if available {
+            assert_eq!(found, 7, "Expected to have available payloads");
+        } else {
+            assert_eq!(found, 3, "Expected to have non available payloads");
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_process_payload_availability_when_failures() {
+    // GIVEN
+    // We initialise the test stores manually to allow us
+    // inject some wrongly serialised values to cause data store errors.
+    let rocksdb = store::rocks::open_cf(
+        temp_dir(),
+        None,
+        &[
+            test_utils::CERTIFICATES_CF,
+            test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF,
+            test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF,
+            test_utils::PAYLOAD_CF,
+        ],
+    )
+    .expect("Failed creating database");
+
+    let (
+        certificate_map,
+        certificate_digest_by_round_map,
+        certificate_digest_by_origin_map,
+        payload_map,
+    ) = store::reopen!(&rocksdb,
+        test_utils::CERTIFICATES_CF;<CertificateDigest, Certificate>,
+        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+        test_utils::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
+
+    let certificate_store = CertificateStore::new(
+        certificate_map,
+        certificate_digest_by_round_map,
+        certificate_digest_by_origin_map,
+    );
+    let payload_store: Store<(BatchDigest, WorkerId), PayloadToken> = Store::new(payload_map);
+
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+
+    let (tx_primary_messages, _) = test_utils::test_channel!(1);
+    let handler = PrimaryReceiverHandler {
+        tx_primary_messages,
+        certificate_store: certificate_store.clone(),
+        payload_store: payload_store.clone(),
+        proposer_store: ProposerStore::new_for_tests(),
+    };
+
+    // AND some mock certificates
+    let mut certificate_digests = Vec::new();
+    for _ in 0..10 {
+        let header = author
+            .header_builder(&committee)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .build(author.keypair())
+            .unwrap();
+
+        let certificate = fixture.certificate(&header);
+        let digest = certificate.clone().digest();
+
+        // In order to test an error scenario that is coming from the data store,
+        // we are going to store for the provided certificate digests some unexpected
+        // payload in order to blow up the deserialisation.
+        let serialised_key = bincode::DefaultOptions::new()
+            .with_big_endian()
+            .with_fixint_encoding()
+            .serialize(&digest.borrow())
+            .expect("Couldn't serialise key");
+
+        // Just serialise the "false" value
+        let dummy_value = bincode::serialize(false.borrow()).expect("Couldn't serialise value");
+
+        rocksdb
+            .put_cf(
+                &rocksdb
+                    .cf_handle(test_utils::CERTIFICATES_CF)
+                    .expect("Couldn't find column family"),
+                serialised_key,
+                dummy_value,
+            )
+            .expect("Couldn't insert value");
+
+        certificate_digests.push(digest);
+    }
+
+    // WHEN requesting the payload availability for all the certificates
+    let request = anemo::Request::new(PayloadAvailabilityRequest {
+        certificate_digests,
+    });
+    let result = handler.get_payload_availability(request).await;
+    assert!(result.is_err(), "expected error reading certificates");
 }

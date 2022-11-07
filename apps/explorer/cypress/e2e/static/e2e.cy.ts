@@ -32,18 +32,18 @@ describe('End-to-end Tests', () => {
         it('can be searched', () => {
             cy.visit('/');
             searchText(successID);
-            cy.get('[data-testid=transaction-id]').contains(successID);
+            cy.get('[data-testid=pageheader]').contains(successID);
         });
 
         it('can be reached through URL', () => {
             cy.visit(`/transactions/${successID}`);
-            cy.get('[data-testid=transaction-id]').contains(successID);
+            cy.get('[data-testid=pageheader]').contains(successID);
         });
 
         it('includes the sender time information', () => {
             cy.visit(`/transactions/${successID}`);
-            cy.get('[data-testid=transaction-sender]').contains(
-                'Sun, 15 Dec 2024 00:00:00 GMT'
+            cy.get('[data-testid=transaction-timestamp]').contains(
+                'Dec 15, 2024, 00:00:00 UTC'
             );
         });
     });
@@ -155,15 +155,15 @@ describe('End-to-end Tests', () => {
 
             cy.visit(`/addresses/${address}`);
 
-            cy.get(`${rowCSSSelector(1)} ${label}`).contains('0x2::USD::USD');
+            cy.get(`${rowCSSSelector(1)} ${label}`).contains('USD');
             cy.get(`${rowCSSSelector(1)} ${count}`).contains('2');
             cy.get(`${rowCSSSelector(1)} ${balance}`).contains(
-                '9007199254740993'
+                '9,007,199,254,740,993'
             );
 
             cy.get(`${rowCSSSelector(2)} ${label}`).contains('SUI');
             cy.get(`${rowCSSSelector(2)} ${count}`).contains('2');
-            cy.get(`${rowCSSSelector(2)} ${balance}`).contains('200');
+            cy.get(`${rowCSSSelector(2)} ${balance}`).contains('0.0000002');
         });
     });
 

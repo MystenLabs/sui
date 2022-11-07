@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getCertifiedTransaction,
     getExecutionStatusType,
     getTransactionKindName,
     getTransactions,
@@ -31,6 +32,8 @@ const txKindToTxt: Record<TransactionKindName, string> = {
     TransferSui: 'Sui transfer',
     ChangeEpoch: 'Change epoch',
     Pay: 'Pay',
+    PaySui: 'PaySui',
+    PayAllSui: 'PayAllSui',
 };
 
 function TransactionDetailsPage() {
@@ -46,7 +49,10 @@ function TransactionDetailsPage() {
     const statusIcon = status === 'success' ? 'check2-circle' : 'x-circle';
     const transferKind =
         txDetails &&
-        getTransactionKindName(getTransactions(txDetails.certificate)[0]);
+        getTransactionKindName(
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            getTransactions(getCertifiedTransaction(txDetails)!)[0]
+        );
     return (
         <div className={cl('container')}>
             {txDetails ? (

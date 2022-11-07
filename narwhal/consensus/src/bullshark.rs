@@ -1,22 +1,36 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusOutput,
 };
 use config::{Committee, Stake};
-use fastcrypto::{traits::EncodeDecodeBase64, Hash};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
+use std::{collections::BTreeSet, sync::Arc};
+use tokio::time::Instant;
 use tracing::{debug, error};
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
 pub mod bullshark_tests;
+
+/// LastRound is a helper struct to keep necessary info
+/// around the leader election on the last election round.
+/// When both the leader_found = true & leader_has_support = true
+/// then we know that we do have a "successful" leader election
+/// and consequently a commit.
+#[derive(Default)]
+pub struct LastRound {
+    /// True when the leader has actually proposed a certificate
+    /// and found in our DAG
+    leader_found: bool,
+    /// When the leader has enough support from downstream
+    /// certificates
+    leader_has_support: bool,
+}
 
 pub struct Bullshark {
     /// The committee information.
@@ -25,6 +39,14 @@ pub struct Bullshark {
     pub store: Arc<ConsensusStore>,
     /// The depth of the garbage collector.
     pub gc_depth: Round,
+
+    pub metrics: Arc<ConsensusMetrics>,
+    /// The last time we had a successful leader election
+    pub last_successful_leader_election_timestamp: Instant,
+    /// The last round leader election result
+    pub last_leader_election: LastRound,
+    /// The most recent round of inserted certificate
+    pub max_inserted_certificate_round: Round,
 }
 
 impl ConsensusProtocol for Bullshark {
@@ -38,43 +60,32 @@ impl ConsensusProtocol for Bullshark {
         let round = certificate.round();
         let mut consensus_index = consensus_index;
 
-        // We must have stored already the parents of this certiciate!
-        if round > 0 {
-            let parents = certificate.header.parents.clone();
-            if let Some(round_table) = state.dag.get(&(round - 1)) {
-                let store_parents: BTreeSet<&CertificateDigest> =
-                    round_table.iter().map(|(_, (digest, _))| digest).collect();
+        // We must have stored already the parents of this certificate!
+        self.log_error_if_missing_parents(&certificate, state);
 
-                for parent_digest in parents {
-                    if !store_parents.contains(&parent_digest) {
-                        if round - 1 + self.gc_depth > state.last_committed_round {
-                            error!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
-                                certificate, parent_digest
-                            );
-                        } else {
-                            debug!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
-                                certificate, parent_digest
-                            );
-                        }
-                    }
-                }
-            } else {
-                error!(
-                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
-                    round - 1,
-                    certificate
-                );
+        // Add the new certificate to the local storage.
+        if state.try_insert(certificate).is_err() {
+            return Ok(Vec::new());
+        }
+
+        // Report last leader election if was unsuccessful
+        if round > self.max_inserted_certificate_round && round % 2 == 0 {
+            let last_election_round = &self.last_leader_election;
+
+            if !last_election_round.leader_found {
+                self.metrics
+                    .leader_election
+                    .with_label_values(&["not_found"])
+                    .inc();
+            } else if !last_election_round.leader_has_support {
+                self.metrics
+                    .leader_election
+                    .with_label_values(&["not_enough_support"])
+                    .inc();
             }
         }
 
-        // Add the new certificate to the local storage.
-        state
-            .dag
-            .entry(round)
-            .or_insert_with(HashMap::new)
-            .insert(certificate.origin(), (certificate.digest(), certificate));
+        self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // f+1 certificates. This is because we need them to reveal the common coin.
@@ -94,7 +105,14 @@ impl ConsensusProtocol for Bullshark {
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
         {
             Some(x) => x,
-            None => return Ok(Vec::new()),
+            None => {
+                self.last_leader_election = LastRound {
+                    leader_found: false,
+                    leader_has_support: false,
+                };
+                // leader has not been found - we don't have any certificate
+                return Ok(Vec::new());
+            }
         };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
@@ -107,6 +125,11 @@ impl ConsensusProtocol for Bullshark {
             .map(|(_, x)| self.committee.stake(&x.origin()))
             .sum();
 
+        self.last_leader_election = LastRound {
+            leader_found: true,
+            leader_has_support: false,
+        };
+
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
         // the last committed leader, and commit all preceding leaders in the right order. Committing
         // a leader block means committing all its dependencies.
@@ -114,6 +137,8 @@ impl ConsensusProtocol for Bullshark {
             debug!("Leader {:?} does not have enough support", leader);
             return Ok(Vec::new());
         }
+
+        self.last_leader_election.leader_has_support = true;
 
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
@@ -149,8 +174,26 @@ impl ConsensusProtocol for Bullshark {
                     &consensus_index,
                     &digest,
                 )?;
+                debug!(
+                    "Store commit index:{}, digest:{}",
+                    &consensus_index, &digest
+                );
             }
         }
+
+        // record the last time we got a successful leader election
+        let elapsed = self.last_successful_leader_election_timestamp.elapsed();
+
+        self.metrics
+            .commit_rounds_latency
+            .observe(elapsed.as_secs_f64());
+
+        self.last_successful_leader_election_timestamp = Instant::now();
+
+        self.metrics
+            .leader_election
+            .with_label_values(&["elected"])
+            .inc();
 
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
@@ -158,6 +201,12 @@ impl ConsensusProtocol for Bullshark {
         for (name, round) in &state.last_committed {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
+
+        debug!("Total committed certificates: {}", sequence.len());
+
+        self.metrics
+            .committed_certificates
+            .observe(sequence.len() as f64);
 
         Ok(sequence)
     }
@@ -170,11 +219,56 @@ impl ConsensusProtocol for Bullshark {
 
 impl Bullshark {
     /// Create a new Bullshark consensus instance.
-    pub fn new(committee: Committee, store: Arc<ConsensusStore>, gc_depth: Round) -> Self {
+    pub fn new(
+        committee: Committee,
+        store: Arc<ConsensusStore>,
+        gc_depth: Round,
+        metrics: Arc<ConsensusMetrics>,
+    ) -> Self {
         Self {
             committee,
             store,
             gc_depth,
+            last_successful_leader_election_timestamp: Instant::now(),
+            last_leader_election: LastRound::default(),
+            max_inserted_certificate_round: 0,
+            metrics,
+        }
+    }
+
+    // Checks that the provided certificate's parents exist and prints the necessary
+    // log statements. This method does not take more actions other than printing
+    // log statements.
+    fn log_error_if_missing_parents(&self, certificate: &Certificate, state: &ConsensusState) {
+        let round = certificate.round();
+        if round > 0 {
+            let parents = certificate.header.parents.clone();
+            if let Some(round_table) = state.dag.get(&(round - 1)) {
+                let store_parents: BTreeSet<&CertificateDigest> =
+                    round_table.iter().map(|(_, (digest, _))| digest).collect();
+
+                for parent_digest in parents {
+                    if !store_parents.contains(&parent_digest) {
+                        if round - 1 + self.gc_depth > state.last_committed_round {
+                            error!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
+                                certificate, parent_digest
+                            );
+                        } else {
+                            debug!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
+                                certificate, parent_digest
+                            );
+                        }
+                    }
+                }
+            } else {
+                error!(
+                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
+                    round - 1,
+                    certificate
+                );
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-processed 9 tasks
+processed 5 tasks
 
 task 1 'publish'. lines 9-12:
 created: object(103)
@@ -8,26 +8,10 @@ task 2 'publish'. lines 14-19:
 created: object(105)
 written: object(104)
 
-task 3 'publish'. lines 21-29:
+task 3 'publish'. lines 21-26:
 created: object(107)
 written: object(106)
 
-task 4 'publish'. lines 31-36:
+task 4 'publish'. lines 28-33:
 created: object(109)
 written: object(108)
-
-task 5 'publish'. lines 38-43:
-created: object(111)
-written: object(110)
-
-task 6 'publish'. lines 45-51:
-created: object(113)
-written: object(112)
-
-task 7 'publish'. lines 53-59:
-created: object(115)
-written: object(114)
-
-task 8 'publish'. lines 61-66:
-created: object(117)
-written: object(116)

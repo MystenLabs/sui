@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+fastcrypto = { workspace = true }
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 jsonrpsee-core = "0.15.1"
 jsonrpsee-proc-macros = "0.15.1"
@@ -22,6 +23,8 @@ futures = "0.3.23"
 tokio = { version = "1.20.1", features = ["full"] }
 signature = "1.6.0"
 
+tap = "1.0"
+
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
@@ -30,4 +33,5 @@ sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-cost = { path = "../sui-cost" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
+sui-metrics = { path = "../sui-metrics" }
 workspace-hack.workspace = true

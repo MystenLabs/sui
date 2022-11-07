@@ -71,7 +71,12 @@ function SuiNetworkCardStatic() {
     return <SuiNetworkCard count={3030} />;
 }
 
-const SuiNetworkStats = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? <SuiNetworkCardStatic /> : <SuiNetworkCard count={count} />;
+function SuiNetworkStats({ count }: { count: number }) {
+    return IS_STATIC_ENV ? (
+        <SuiNetworkCardStatic />
+    ) : (
+        <SuiNetworkCard count={count} />
+    );
+}
 
 export default SuiNetworkStats;

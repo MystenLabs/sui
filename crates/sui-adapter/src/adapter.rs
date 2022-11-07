@@ -1,6 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+    fmt::Debug,
+};
+
 use anyhow::Result;
 use leb128;
 use linked_hash_map::LinkedHashMap;
@@ -18,39 +25,32 @@ use move_core_types::{
     value::{MoveStruct, MoveTypeLayout, MoveValue},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
-
-use sui_cost_tables::bytecode_tables::GasStatus;
-
 use move_vm_runtime::{
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
     session::{SerializedReturnValues, Session},
 };
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
-    fmt::Debug,
-};
+
+use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
+use sui_types::storage::SingleTxContext;
 use sui_types::{
     base_types::*,
-    coin::Coin,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
-    event::{Event, TransferType},
+    event::Event,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
-    storage::{DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
+    storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
 };
 use sui_verifier::{
     entry_points_verifier::{is_tx_context, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
     verifier, INIT_FN_NAME,
 };
+use tracing::instrument;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
-use crate::object_root_ancestor_map::ObjectRootAncestorMap;
 
 macro_rules! assert_invariant {
     ($cond:expr, $msg:expr) => {
@@ -71,7 +71,7 @@ pub fn new_session<
     'v,
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + ChildObjectResolver,
 >(
     vm: &'v MoveVM,
     state_view: &'r S,
@@ -92,9 +92,14 @@ pub fn new_session<
 /// otherwise we return Ok(Ok).
 /// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
+#[instrument(name = "adapter_execute", level = "trace", skip_all)]
 pub fn execute<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -110,7 +115,7 @@ pub fn execute<
         .filter_map(|arg| match arg {
             CallArg::Pure(_) => None,
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-            | CallArg::Object(ObjectArg::SharedObject(id)) => {
+            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
                 Some(vec![(*id, state_view.read_object(id)?)])
             }
             CallArg::ObjVec(vec) => {
@@ -121,7 +126,7 @@ pub fn execute<
                     vec.iter()
                         .filter_map(|obj_arg| match obj_arg {
                             ObjectArg::ImmOrOwnedObject((id, _, _))
-                            | ObjectArg::SharedObject(id) => {
+                            | ObjectArg::SharedObject { id, .. } => {
                                 Some((*id, state_view.read_object(id)?))
                             }
                         })
@@ -166,7 +171,11 @@ pub fn execute<
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -248,6 +257,7 @@ fn execute_internal<
         writes,
         deletions,
         user_events,
+        loaded_child_objects,
     } = object_runtime.finish()?;
     let session = new_session(vm, &*state_view, BTreeMap::new());
     let writes = writes
@@ -274,6 +284,7 @@ fn execute_internal<
         state_view,
         module_id,
         &by_value_object_map,
+        &loaded_child_objects,
         mutable_refs,
         writes,
         deletions,
@@ -284,9 +295,14 @@ fn execute_internal<
     Ok(())
 }
 
+#[instrument(name = "adapter_publish", level = "trace", skip_all)]
 pub fn publish<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     natives: NativeFunctionTable,
@@ -308,17 +324,17 @@ pub fn publish<
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    state_view.log_event(Event::Publish {
-        sender: ctx.sender(),
-        package_id,
-    });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
 /// Store package in state_view and call module initializers
 pub fn store_package_and_init_modules<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -347,7 +363,14 @@ pub fn store_package_and_init_modules<
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
     let id = package_object.id();
-    let changes = BTreeMap::from([(id, ObjectChange::Write(package_object, WriteKind::Create))]);
+    let changes = BTreeMap::from([(
+        id,
+        ObjectChange::Write(
+            SingleTxContext::publish(ctx.sender()),
+            package_object,
+            WriteKind::Create,
+        ),
+    )]);
     state_view.apply_object_changes(changes);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_status)
@@ -356,7 +379,11 @@ pub fn store_package_and_init_modules<
 /// Modules in module_ids_to_init must have the init method defined
 fn init_modules<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -402,7 +429,7 @@ fn init_modules<
 /// and the Sui verifier.
 pub fn verify_and_link<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ChildObjectResolver,
 >(
     state_view: &S,
     modules: &[CompiledModule],
@@ -494,6 +521,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     state_view: &mut S,
     module_id: &ModuleId,
     by_value_objects: &BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     writes: LinkedHashMap<ObjectID, (WriteKind, Owner, StructTag, AbilitySet, Vec<u8>)>,
     deletions: LinkedHashMap<ObjectID, DeleteKind>,
@@ -501,7 +529,11 @@ fn process_successful_execution<S: Storage + ParentSync>(
     ctx: &TxContext,
 ) -> Result<(), ExecutionError> {
     let sender = ctx.sender();
-
+    let tx_ctx = SingleTxContext {
+        package_id: ObjectID::from(*module_id.address()),
+        transaction_module: Identifier::from(module_id.name()),
+        sender,
+    };
     let mut changes = BTreeMap::new();
     for (obj_id, new_contents) in mutable_refs {
         // update contents and increment sequence number
@@ -513,22 +545,34 @@ fn process_successful_execution<S: Storage + ParentSync>(
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
             .update_contents_and_increment_version(new_contents);
-        changes.insert(obj_id, ObjectChange::Write(obj, WriteKind::Mutate));
+
+        changes.insert(
+            obj_id,
+            ObjectChange::Write(tx_ctx.clone(), obj, WriteKind::Mutate),
+        );
     }
     let tx_digest = ctx.digest();
 
-    for (id, (write_kind, recipient, tag, abilities, contents)) in writes {
+    for (id, (write_kind, mut recipient, tag, abilities, contents)) in writes {
         let has_public_transfer = abilities.has_store();
         debug_assert_eq!(
             id,
             ObjectID::try_from(&contents[0..ID_END_INDEX])
                 .expect("object contents should start with an id")
         );
-        let old_object = by_value_objects.get(&id);
-        let (write_kind, version) = match (write_kind, old_object) {
-            (_, Some((_, version))) => {
+        let old_object_opt = by_value_objects.get(&id);
+        let loaded_child_version_opt = loaded_child_objects.get(&id);
+        assert_invariant!(
+            old_object_opt.is_none() || loaded_child_version_opt.is_none(),
+            format!("Loaded {id} as a child, but that object was an input object")
+        );
+        let old_obj_ver = old_object_opt
+            .map(|(_, version)| *version)
+            .or_else(|| loaded_child_version_opt.copied());
+        let (write_kind, version) = match (write_kind, old_obj_ver) {
+            (_, Some(version)) => {
                 debug_assert!(write_kind == WriteKind::Mutate);
-                (WriteKind::Mutate, *version)
+                (WriteKind::Mutate, version)
             }
             // When an object was wrapped at version `v`, we added a record into `parent_sync`
             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
@@ -561,61 +605,35 @@ fn process_successful_execution<S: Storage + ParentSync>(
 
         #[cfg(debug_assertions)]
         {
-            check_transferred_object_invariants(&move_obj, old_object)
+            check_transferred_object_invariants(&move_obj, &old_obj_ver)
         }
 
         // increment the object version. note that if the transferred object was
         // freshly created, this means that its version will now be 1.
         // thus, all objects in the global object pool have version > 0
         move_obj.increment_version();
-        // A to-be-transferred object can come from 3 sources:
-        //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
-        //   2. Created in this transaction (in `newly_generated_ids`)
-        //   3. Unwrapped in this transaction
-        // The following condition checks if this object was unwrapped in this transaction.
-        if let Some((_old_owner, old_obj_ver)) = old_object {
-            debug_assert!(write_kind == WriteKind::Mutate);
-            // Some kind of transfer since there's an old object
-            // Add an event for the transfer
-            let transfer_type = match recipient {
-                Owner::AddressOwner(_) => Some(TransferType::ToAddress),
-                Owner::ObjectOwner(_) => Some(TransferType::ToObject),
-                _ => None,
-            };
-            if let Some(type_) = transfer_type {
-                // Check for the transfer amount if the object is a Coin
-                let amount = if Coin::is_coin(&move_obj.type_) {
-                    let coin = Coin::from_bcs_bytes(move_obj.contents())?;
-                    Some(coin.value())
-                } else {
-                    None
-                };
-                state_view.log_event(Event::TransferObject {
-                    package_id: ObjectID::from(*module_id.address()),
-                    transaction_module: Identifier::from(module_id.name()),
-                    sender,
-                    recipient,
-                    object_id: id,
-                    version: *old_obj_ver,
-                    type_,
-                    amount,
-                })
-            }
-        } else if write_kind == WriteKind::Create {
-            state_view.log_event(Event::new_object(
-                module_id.address(),
-                module_id.name(),
-                sender,
-                recipient,
-                id,
-            ));
+
+        // Remember the version this object was shared at, if this write was the one that shared it.
+        if let Owner::Shared {
+            initial_shared_version,
+        } = &mut recipient
+        {
+            // TODO Consider a distinct Recipient enum within ObjectRuntime to enforce this
+            // invariant at the type level.
+            assert_eq!(
+                *initial_shared_version,
+                SequenceNumber::new(),
+                "Initial version should be blank before this point",
+            );
+            *initial_shared_version = move_obj.version();
         }
+
         let obj = Object::new_move(move_obj, recipient, tx_digest);
-        if old_object.is_none() {
+        if old_obj_ver.is_none() {
             // Charge extra gas based on object size if we are creating a new object.
             // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
         }
-        changes.insert(id, ObjectChange::Write(obj, write_kind));
+        changes.insert(id, ObjectChange::Write(tx_ctx.clone(), obj, write_kind));
     }
 
     for (id, delete_kind) in deletions {
@@ -637,13 +655,10 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 }
             },
         };
-        state_view.log_event(Event::delete_object(
-            module_id.address(),
-            module_id.name(),
-            ctx.sender(),
+        changes.insert(
             id,
-        ));
-        changes.insert(id, ObjectChange::Delete(version, delete_kind));
+            ObjectChange::Delete(tx_ctx.clone(), version, delete_kind),
+        );
     }
 
     for (tag, contents) in user_events {
@@ -665,9 +680,9 @@ fn process_successful_execution<S: Storage + ParentSync>(
 #[cfg(debug_assertions)]
 fn check_transferred_object_invariants(
     new_object: &MoveObject,
-    old_object: Option<&(object::Owner, SequenceNumber)>,
+    old_object: &Option<SequenceNumber>,
 ) {
-    if let Some((_owner, old_version)) = old_object {
+    if let Some(old_version) = old_object {
         // check consistency between the transferred object `new_object` and the tx input `o`
         // specifically, the object id, type, and version should be unchanged
         // we can only check the version here
@@ -814,9 +829,15 @@ pub fn resolve_and_type_check(
                     type_check_struct(view, type_args, idx, arg_type, param_type)?;
                     o
                 }
-                CallArg::Object(ObjectArg::SharedObject(id)) => {
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                }) => {
                     let (o, arg_type, param_type) = serialize_object(
-                        InputObjectKind::SharedMoveObject(id),
+                        InputObjectKind::SharedMoveObject {
+                            id,
+                            initial_shared_version,
+                        },
                         idx,
                         param_type,
                         objects,
@@ -842,7 +863,13 @@ pub fn resolve_and_type_check(
                             ObjectArg::ImmOrOwnedObject(ref_) => {
                                 InputObjectKind::ImmOrOwnedMoveObject(ref_)
                             }
-                            ObjectArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+                            ObjectArg::SharedObject {
+                                id,
+                                initial_shared_version,
+                            } => InputObjectKind::SharedMoveObject {
+                                id,
+                                initial_shared_version,
+                            },
                         };
                         let (o, arg_type, param_type) = serialize_object(
                             object_kind,
@@ -1052,7 +1079,7 @@ fn serialize_object<'a>(
                 error,
             ));
         }
-        InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
+        InputObjectKind::SharedMoveObject { .. } if !object.is_shared() => {
             let error = format!(
                 "Argument at index {} populated with an immutable or owned object id {} \
                         but an shared object was expected",
@@ -1116,6 +1143,9 @@ fn inner_param_type<'a>(
     mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
 ) -> Result<&'a SignatureToken, ExecutionError> {
+    if let Owner::ObjectOwner(parent) = &object.owner {
+        return Err(ExecutionErrorKind::invalid_child_object_argument(object_id, *parent).into());
+    }
     match &param_type {
         SignatureToken::Reference(inner_t) => Ok(&**inner_t),
         SignatureToken::MutableReference(inner_t) => {
@@ -1149,7 +1179,7 @@ fn inner_param_type<'a>(
         | t @ SignatureToken::TypeParameter(_) => {
             match &object.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
-                Owner::Shared | Owner::Immutable => {
+                Owner::Shared { .. } | Owner::Immutable => {
                     return Err(ExecutionError::new_with_source(
                         ExecutionErrorKind::entry_argument_error(
                             idx,
@@ -1185,47 +1215,11 @@ fn inner_param_type<'a>(
 /// - For each shared object used by-value, the type of the shared object must be defined in the
 ///   same module as the entry function being called.
 fn check_shared_object_rules(
-    objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
-    by_value_objects: &BTreeSet<ObjectID>,
-    object_type_map: &BTreeMap<ObjectID, ModuleId>,
-    current_module: ModuleId,
+    _objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
+    _by_value_objects: &BTreeSet<ObjectID>,
+    _object_type_map: &BTreeMap<ObjectID, ModuleId>,
+    _current_module: ModuleId,
 ) -> Result<(), ExecutionError> {
-    let object_owner_map = objects
-        .iter()
-        .map(|(id, obj)| (*id, obj.borrow().owner))
-        .collect();
-    let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
-    let by_value_object_owned = object_owner_map
-        .iter()
-        .filter_map(|(id, owner)| match owner {
-            Owner::ObjectOwner(owner) if by_value_objects.contains(id) => Some((*id, *owner)),
-            _ => None,
-        });
-    for (child_id, owner) in by_value_object_owned {
-        let (ancestor_id, ancestor_owner) = match ancestor_map.get_root_ancestor(&child_id) {
-            Some(ancestor) => ancestor,
-            None => return Err(ExecutionErrorKind::missing_object_owner(child_id, owner).into()),
-        };
-        if ancestor_owner.is_shared() {
-            // unwrap safe because the object ID exists in object_owner_map.
-            let child_module = object_type_map.get(&child_id).unwrap();
-            let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
-            if !(child_module == &current_module || ancestor_module == &current_module) {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::invalid_shared_child_use(child_id, ancestor_id),
-                    format!(
-        "When a child object (either direct or indirect) of a shared object is passed by-value to \
-        an entry function, either the child object's type or the shared object's type must be \
-        defined in the same module as the called function. This is violated by object {child_id} \
-        (defined in module '{child_module}'), whose ancestor {ancestor_id} is a shared \
-        object (defined in module '{ancestor_module}'), and neither are defined in this module \
-        '{current_module}'",
-                    ),
-                ));
-            }
-        }
-    }
-
     // TODO not yet supported
     // // check shared object by value rule
     // let by_value_shared_object = object_owner_map

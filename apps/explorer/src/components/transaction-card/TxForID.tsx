@@ -11,12 +11,14 @@ import { deduplicate } from '../../utils/searchUtil';
 import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import PaginationLogic from '../pagination/PaginationLogic';
-import TableCard from '../table/TableCard';
 import {
     type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
 } from './TxCardUtils';
+
+import { useRpc } from '~/hooks/useRpc';
+import { TableCard } from '~/ui/TableCard';
 
 const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
@@ -33,8 +35,8 @@ const getTx = async (
     category: categoryType
 ): Promise<GetTxnDigestsResponse> =>
     category === 'address'
-        ? rpc(network).getTransactionsForAddress(id)
-        : rpc(network).getTransactionsForObject(id);
+        ? rpc(network).getTransactionsForAddress(id, true)
+        : rpc(network).getTransactionsForObject(id, true);
 
 const viewFn = (results: any) => <TxForIDView showData={results} />;
 
@@ -45,7 +47,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
 
     return (
         <div data-testid="tx">
-            <TableCard tabledata={tableData} />
+            <TableCard data={tableData.data} columns={tableData.columns} />
         </div>
     );
 }
@@ -60,7 +62,7 @@ function TxForIDStatic({
     const data = deduplicate(findTxfromID(id)?.data as string[] | undefined)
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
-    if (!data) return <></>;
+    if (!data) return null;
     return (
         <PaginationLogic
             results={data}
@@ -75,6 +77,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] =
         useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
         getTx(id, network, category).then((transactions) => {
             //If the API method does not exist, the transactions will be undefined
@@ -83,7 +86,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
                     loadState: 'loaded',
                 });
             } else {
-                getDataOnTxDigests(network, transactions)
+                getDataOnTxDigests(rpc, transactions)
                     .then((data) => {
                         setData({
                             data: data as TxnData[],
@@ -96,7 +99,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
                     });
             }
         });
-    }, [id, network, category]);
+    }, [id, network, rpc, category]);
 
     if (showData.loadState === 'pending') {
         return <div>Loading ...</div>;
@@ -104,7 +107,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
 
     if (showData.loadState === 'loaded') {
         const data = showData.data;
-        if (!data) return <></>;
+        if (!data) return null;
         return (
             <PaginationLogic
                 results={data}

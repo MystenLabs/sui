@@ -4,19 +4,21 @@
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
-use fastcrypto::{Hash as _, SignatureService};
+use fastcrypto::{hash::Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
+use sui_metrics::spawn_monitored_task;
+use tokio::time::Instant;
 use tokio::{
     sync::watch,
     task::JoinHandle,
-    time::{sleep, Duration, Instant},
+    time::{sleep, Duration},
 };
 use tracing::{debug, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, ReconfigureNotification, Round,
+    BatchDigest, Certificate, Header, ReconfigureNotification, Round, Timestamp, TimestampMs,
 };
 
 #[cfg(test)]
@@ -30,7 +32,7 @@ pub struct Proposer {
     /// The committee information.
     committee: Committee,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature>,
+    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// The threshold number of batches that can trigger
     /// a header creation. When there are available at least
     /// `header_num_of_batches_threshold` batches we are ok
@@ -45,12 +47,12 @@ pub struct Proposer {
 
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
+    /// Receives the parents to include in the next header (along with their round number) from core.
+    rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
-    rx_workers: Receiver<(BatchDigest, WorkerId)>,
+    rx_our_digests: Receiver<(BatchDigest, WorkerId, TimestampMs)>,
     /// Sends newly created headers to the `Core`.
-    tx_core: Sender<Header>,
+    tx_headers: Sender<Header>,
 
     /// The proposer store for persisting the last header.
     proposer_store: ProposerStore,
@@ -61,7 +63,7 @@ pub struct Proposer {
     /// Holds the certificate of the last leader (if any).
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
-    digests: Vec<(BatchDigest, WorkerId)>,
+    digests: Vec<(BatchDigest, WorkerId, TimestampMs)>,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -72,20 +74,20 @@ impl Proposer {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        signature_service: SignatureService<Signature>,
+        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
-        rx_workers: Receiver<(BatchDigest, WorkerId)>,
-        tx_core: Sender<Header>,
+        rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+        rx_our_digests: Receiver<(BatchDigest, WorkerId, TimestampMs)>,
+        tx_headers: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,
@@ -95,9 +97,9 @@ impl Proposer {
                 max_header_delay,
                 network_model,
                 rx_reconfigure,
-                rx_core,
-                rx_workers,
-                tx_core,
+                rx_parents,
+                rx_our_digests,
+                tx_headers,
                 proposer_store,
                 round: 0,
                 last_parents: genesis,
@@ -110,38 +112,13 @@ impl Proposer {
         })
     }
 
-    async fn make_header(&mut self) -> DagResult<()> {
+    /// make_header creates a new Header, persists it to database
+    /// and sends it to core for processing. If successful, it returns
+    /// the number of batch digests included in header.
+    async fn make_header(&mut self) -> DagResult<usize> {
         // Make a new header.
-        let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let mut header = Header::new(
-            self.name.clone(),
-            self.round,
-            self.committee.epoch(),
-            self.digests.drain(..num_of_digests).collect(),
-            self.last_parents.drain(..).map(|x| x.digest()).collect(),
-            &mut self.signature_service,
-        )
-        .await;
-        debug!("Created {header:?}");
+        let header = self.create_new_header().await?;
 
-        // Equivocation protection using the proposer store
-        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
-            if last_header.round == header.round && last_header.epoch == header.epoch {
-                // We have already produced a header for the current round, idempotent re-send
-                if last_header != header {
-                    debug!("Equivocation protection was enacted in the proposer");
-
-                    // add again the digests for proposal
-                    // keeping their original order
-                    header
-                        .payload
-                        .into_iter()
-                        .for_each(|value| self.digests.insert(0, value));
-
-                    header = last_header;
-                }
-            }
-        }
         // Store the last header.
         self.proposer_store.write_last_proposed(&header)?;
 
@@ -151,11 +128,62 @@ impl Proposer {
             info!("Created {} -> {:?}", header, digest);
         }
 
+        let num_of_included_digests = header.payload.len();
+
         // Send the new header to the `Core` that will broadcast and process it.
-        self.tx_core
+        self.tx_headers
             .send(header)
             .await
-            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|_| DagError::ShuttingDown)?;
+
+        Ok(num_of_included_digests)
+    }
+
+    // Creates a new header. Also the method ensures we are protected against equivocation.
+    // If we detect that a different header has been already produced for the same round, then
+    // this method returns the earlier header. Otherwise the newly created header will be returned.
+    async fn create_new_header(&mut self) -> DagResult<Header> {
+        // Make a new header.
+        let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
+        let digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
+
+        let header = Header::new(
+            self.name.clone(),
+            self.round,
+            self.committee.epoch(),
+            digests
+                .iter()
+                .map(|(digest, worker_id, _)| (*digest, *worker_id))
+                .collect(),
+            self.last_parents.drain(..).map(|x| x.digest()).collect(),
+            &mut self.signature_service,
+        )
+        .await;
+
+        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
+            if last_header.round == header.round && last_header.epoch == header.epoch {
+                // We have already produced a header for the current round, idempotent re-send
+                if last_header != header {
+                    debug!("Equivocation protection was enacted in the proposer");
+
+                    // add again the digests for proposal
+                    // keeping their original order
+                    digests
+                        .iter()
+                        .for_each(|value| self.digests.insert(0, *value));
+
+                    return Ok(last_header);
+                }
+            }
+        }
+
+        for (_, _, created_at_timestamp) in digests {
+            self.metrics
+                .proposer_batch_latency
+                .observe(created_at_timestamp.elapsed().as_secs_f64());
+        }
+
+        Ok(header)
     }
 
     /// Update the committee and cleanup internal state.
@@ -289,7 +317,18 @@ impl Proposer {
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
-                    Ok(()) => (),
+                    Ok(digests) => {
+                        let reason = if timer_expired {
+                            "timeout"
+                        } else {
+                            "threshold_size_reached"
+                        };
+
+                        self.metrics
+                            .num_of_batch_digests_in_header
+                            .with_label_values(&[&self.committee.epoch.to_string(), reason])
+                            .observe(digests as f64);
+                    }
                 }
 
                 // Reschedule the timer.
@@ -299,7 +338,7 @@ impl Proposer {
             }
 
             tokio::select! {
-                Some((parents, round, epoch)) = self.rx_core.recv() => {
+                Some((parents, round, epoch)) = self.rx_parents.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
                     match epoch.cmp(&self.committee.epoch()) {
@@ -349,11 +388,22 @@ impl Proposer {
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
                     advance = self.ready();
+
+                    let round_type = if self.round % 2 == 0 {
+                        "even"
+                    } else {
+                        "odd"
+                    };
+
+                    self.metrics
+                    .proposer_ready_to_advance
+                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                    .inc();
                 }
 
                 // Receive digests from our workers.
-                Some((digest, worker_id)) = self.rx_workers.recv() => {
-                    self.digests.push((digest, worker_id));
+                Some(digest_record) = self.rx_our_digests.recv() => {
+                    self.digests.push(digest_record);
                 }
 
                 // Check whether the timer expired.

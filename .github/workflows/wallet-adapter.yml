@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isWalletAdapter: ${{ contains(fromJson(steps.diff.outputs.packages), 'sui-wallet-adapter') }}
+      isWalletAdapter: ${{ steps.diff.outputs.packages && contains(fromJson(steps.diff.outputs.packages), 'sui-wallet-adapter') }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - uses: pnpm/action-setup@v2.2.2
+      - uses: pnpm/action-setup@v2.2.4
         with:
           version: 7
       - name: Install Nodejs

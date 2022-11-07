@@ -1,14 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
-use std::str::FromStr;
-
 use anyhow::{anyhow, Error};
-use base64ct::Encoding;
-use bip32::{ChildNumber, DerivationPath, XPrv};
 use digest::Digest;
-use fastcrypto::bls12381::{
+use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
     BLS12381Signature,
 };
@@ -30,14 +24,24 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 use signature::Signer;
-use slip10_ed25519::derive_ed25519_private_key;
+use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::{Committee, EpochId};
+use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
+use fastcrypto::encoding::{Base64, Encoding};
+use std::fmt::Debug;
+
 pub use enum_dispatch::enum_dispatch;
+
+#[cfg(test)]
+#[path = "unit_tests/crypto_tests.rs"]
+mod crypto_tests;
 
 // Authority Objects
 pub type AuthorityKeyPair = BLS12381KeyPair;
@@ -150,12 +154,11 @@ impl EncodeDecodeBase64 for SuiKeyPair {
                 bytes.extend_from_slice(kp1.private().as_ref());
             }
         }
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes =
-            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        let bytes = Base64::decode(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
@@ -240,12 +243,11 @@ impl EncodeDecodeBase64 for PublicKey {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(&[self.flag()]);
         bytes.extend_from_slice(self.as_ref());
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes =
-            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        let bytes = Base64::decode(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
                 if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
@@ -320,9 +322,13 @@ impl PublicKey {
 /// Defines the compressed version of the public key that we pass around
 /// in Sui
 #[serde_as]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 pub struct AuthorityPublicKeyBytes(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; AuthorityPublicKey::LENGTH],
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; AuthorityPublicKey::LENGTH],
 );
 
 impl AuthorityPublicKeyBytes {
@@ -384,9 +390,10 @@ impl Display for AuthorityPublicKeyBytes {
 }
 
 impl ToFromBytes for AuthorityPublicKeyBytes {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let bytes: [u8; AuthorityPublicKey::LENGTH] =
-            bytes.try_into().map_err(signature::Error::from_source)?;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
+        let bytes: [u8; AuthorityPublicKey::LENGTH] = bytes
+            .try_into()
+            .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?;
         Ok(AuthorityPublicKeyBytes(bytes))
     }
 }
@@ -573,106 +580,6 @@ where
     (kp.public().into(), kp)
 }
 
-/// Ed25519 follows SLIP-0010 using hardened path: m/44'/784'/0'/0'/{index}'
-/// Secp256k1 follows BIP-32 using path where the first 3 levels are hardened: m/54'/784'/0'/0/{index}
-/// Note that the purpose for Secp256k1 is registered as 54, to differentiate from Ed25519 with purpose 44.
-pub fn derive_key_pair_from_path(
-    seed: &[u8],
-    derivation_path: Option<DerivationPath>,
-    key_scheme: &SignatureScheme,
-) -> Result<(SuiAddress, SuiKeyPair), SuiError> {
-    let path = validate_path(key_scheme, derivation_path)?;
-    match key_scheme {
-        SignatureScheme::ED25519 => {
-            let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
-            let derived = derive_ed25519_private_key(seed, &indexes);
-            let sk = Ed25519PrivateKey::from_bytes(&derived)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-            let kp = Ed25519KeyPair::from(sk);
-            Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
-        }
-        SignatureScheme::Secp256k1 => {
-            let child_xprv = XPrv::derive_from_path(seed, &path)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-            let kp = Secp256k1KeyPair::from(
-                Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
-                    .unwrap(),
-            );
-            Ok((kp.public().into(), SuiKeyPair::Secp256k1SuiKeyPair(kp)))
-        }
-        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS is not supported for user key derivation".to_string(),
-        }),
-    }
-}
-
-pub fn validate_path(
-    key_scheme: &SignatureScheme,
-    path: Option<DerivationPath>,
-) -> Result<DerivationPath, SuiError> {
-    match key_scheme {
-        SignatureScheme::ED25519 => {
-            match path {
-                Some(p) => {
-                    // The derivation path must be hardened at all levels with purpose = 44, coin_type = 784
-                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
-                        if purpose
-                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_ED25519, true).unwrap()
-                            && coin_type
-                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
-                            && account.is_hardened()
-                            && change.is_hardened()
-                            && address.is_hardened()
-                        {
-                            Ok(p)
-                        } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                        }
-                    } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                    }
-                }
-                None => Ok(format!(
-                    "m/{DERVIATION_PATH_PURPOSE_ED25519}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0'/0'"
-                )
-                .parse()
-                .unwrap()),
-            }
-        }
-        SignatureScheme::Secp256k1 => {
-            match path {
-                Some(p) => {
-                    // The derivation path must be hardened at first 3 levels with purpose = 54, coin_type = 784
-                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
-                        if purpose
-                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_SECP256K1, true).unwrap()
-                            && coin_type
-                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
-                            && account.is_hardened()
-                            && !change.is_hardened()
-                            && !address.is_hardened()
-                        {
-                            Ok(p)
-                        } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                        }
-                    } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                    }
-                }
-                None => Ok(format!(
-                    "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
-                )
-                .parse()
-                .unwrap()),
-            }
-        }
-        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS is not supported for user key derivation".to_string(),
-        }),
-    }
-}
-
 /// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
 pub fn random_key_pair_by_type_from_rng<R>(
     key_scheme: SignatureScheme,
@@ -700,6 +607,14 @@ where
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
 {
     let priv_length = <KP as KeypairTraits>::PrivKey::LENGTH;
+    let pub_key_length = <KP as KeypairTraits>::PubKey::LENGTH;
+    if bytes.len() != priv_length + pub_key_length {
+        return Err(SuiError::KeyConversionError(format!(
+            "Invalid input byte length, expected {}: {}",
+            priv_length,
+            bytes.len()
+        )));
+    }
     let sk = <KP as KeypairTraits>::PrivKey::from_bytes(&bytes[..priv_length])
         .map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KP = sk.into();
@@ -729,7 +644,7 @@ impl Serialize for Signature {
         let bytes = self.as_ref();
 
         if serializer.is_human_readable() {
-            let s = base64ct::Base64::encode_string(bytes);
+            let s = Base64::encode(bytes);
             serializer.serialize_str(&s)
         } else {
             serializer.serialize_bytes(bytes)
@@ -746,7 +661,7 @@ impl<'de> Deserialize<'de> for Signature {
 
         let bytes = if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            base64ct::Base64::decode_vec(&s).map_err(|e| Error::custom(e.to_string()))?
+            Base64::decode(&s).map_err(|e| Error::custom(e.to_string()))?
         } else {
             let data: Vec<u8> = Vec::deserialize(deserializer)?;
             data
@@ -816,9 +731,9 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let flag = base64ct::Base64::encode_string(&[self.scheme().flag()]);
-        let s = base64ct::Base64::encode_string(self.signature_bytes());
-        let p = base64ct::Base64::encode_string(self.public_key_bytes());
+        let flag = Base64::encode([self.scheme().flag()]);
+        let s = Base64::encode(self.signature_bytes());
+        let p = Base64::encode(self.public_key_bytes());
         write!(f, "{flag}@{s}@{p}")?;
         Ok(())
     }
@@ -1159,6 +1074,24 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
     }
 }
 
+impl AuthoritySignInfo {
+    pub fn new<T>(
+        epoch: EpochId,
+        value: &T,
+        name: AuthorityName,
+        secret: &dyn Signer<AuthoritySignature>,
+    ) -> Self
+    where
+        T: Signable<Vec<u8>>,
+    {
+        Self {
+            epoch,
+            authority: name,
+            signature: AuthoritySignature::new(value, secret),
+        }
+    }
+}
+
 impl Hash for AuthoritySignInfo {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.epoch.hash(state);
@@ -1270,45 +1203,54 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
             selected_public_keys.push(committee.public_key(authority)?);
         }
 
-        let threshold = if STRONG_THRESHOLD {
-            committee.quorum_threshold()
-        } else {
-            committee.validity_threshold()
-        };
-        fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
+        fp_ensure!(
+            weight >= Self::quorum_threshold(committee),
+            SuiError::CertificateRequiresQuorum
+        );
 
         Ok(())
     }
 }
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
-    pub fn new(epoch: EpochId) -> Self {
-        AuthorityQuorumSignInfo {
-            epoch,
-            signature: AggregateAuthoritySignature::default(),
-            signers_map: RoaringBitmap::new(),
-        }
-    }
-
-    pub fn new_with_signatures(
-        mut signatures: Vec<(AuthorityPublicKeyBytes, AuthoritySignature)>,
+    pub fn new_from_auth_sign_infos(
+        auth_sign_infos: Vec<AuthoritySignInfo>,
         committee: &Committee,
     ) -> SuiResult<Self> {
-        let mut map = RoaringBitmap::new();
-        signatures.sort_by_key(|(public_key, _)| *public_key);
+        fp_ensure!(
+            auth_sign_infos.iter().all(|a| a.epoch == committee.epoch),
+            SuiError::InvalidSignature {
+                error: "All signatures must be from the same epoch as the committee".to_string()
+            }
+        );
+        let total_stake: StakeUnit = auth_sign_infos
+            .iter()
+            .map(|a| committee.weight(&a.authority))
+            .sum();
+        fp_ensure!(
+            total_stake >= Self::quorum_threshold(committee),
+            SuiError::InvalidSignature {
+                error: "Signatures don't have enough stake to form a quorum".to_string()
+            }
+        );
 
-        for (pk, _) in &signatures {
+        let signatures: BTreeMap<_, _> = auth_sign_infos
+            .into_iter()
+            .map(|a| (a.authority, a.signature))
+            .collect();
+        let mut map = RoaringBitmap::new();
+        for pk in signatures.keys() {
             map.insert(
                 committee
                     .authority_index(pk)
                     .ok_or(SuiError::UnknownSigner)? as u32,
             );
         }
-        let sigs: Vec<AuthoritySignature> = signatures.into_iter().map(|(_, sig)| sig).collect();
+        let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();
 
         Ok(AuthorityQuorumSignInfo {
             epoch: committee.epoch,
-            signature: AggregateAuthoritySignature::aggregate(sigs).map_err(|e| {
+            signature: AggregateAuthoritySignature::aggregate(&sigs).map_err(|e| {
                 SuiError::InvalidSignature {
                     error: e.to_string(),
                 }
@@ -1326,6 +1268,14 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 .authority_by_index(i)
                 .ok_or(SuiError::InvalidAuthenticator)
         })
+    }
+
+    pub fn quorum_threshold(committee: &Committee) -> StakeUnit {
+        if STRONG_THRESHOLD {
+            committee.quorum_threshold()
+        } else {
+            committee.validity_threshold()
+        }
     }
 
     pub fn len(&self) -> u64 {
@@ -1394,6 +1344,10 @@ mod bcs_signable {
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageHeader {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageChunk {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessage {}
+
     impl BcsSignable for crate::messages::CommitteeInfoResponse {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
@@ -1426,6 +1380,10 @@ where
         // Remove name tag before deserialization using BCS
         let name = serde_name::trace_name::<Self>().expect("Self should be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();
+        let actual_bytes_len = bytes.len();
+        if name_byte_len >= actual_bytes_len {
+            anyhow::bail!("Failed to deserialize shorter than expected signable bytes (len:{actual_bytes_len}) to {name}.");
+        }
         Ok(bcs::from_bytes(&bytes[name_byte_len..])?)
     }
 }

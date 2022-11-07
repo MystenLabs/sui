@@ -1,67 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority::AuthorityState,
-    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
-    authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics},
-    epoch::committee_store::CommitteeStore,
-    safe_client::SafeClientMetrics,
-};
+use crate::authority::AuthorityState;
 use signature::Signer;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    committee::Committee,
     crypto::{get_key_pair, AccountKeyPair, Signature},
-    messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData},
+    messages::{
+        BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData, VerifiedTransaction,
+    },
     object::Object,
 };
 
 use futures::StreamExt;
+use sui_types::base_types::{random_object_ref, AuthorityName, ExecutionDigests};
+use sui_types::committee::Committee;
+use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature};
+use sui_types::gas::GasCostSummary;
+use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects};
+use sui_types::object::Owner;
 use tokio::time::sleep;
 use tracing::info;
-
-/// Create a test authority aggregator.
-/// (duplicated from test-utils/src/authority.rs - that function can't be used
-/// in sui-core because of type name conflicts (sui_core::safe_client::SafeClient vs
-/// safe_client::SafeClient).
-pub fn test_authority_aggregator(
-    config: &NetworkConfig,
-) -> AuthorityAggregator<NetworkAuthorityClient> {
-    let validators_info = config.validator_set();
-    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    // TODO: duplicated code in authority.rs
-    let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new_for_tests());
-    let clients: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| {
-            (
-                config.protocol_key(),
-                NetworkAuthorityClient::connect_lazy(
-                    config.network_address(),
-                    network_metrics.clone(),
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-    let registry = prometheus::Registry::new();
-    AuthorityAggregator::new(
-        committee,
-        committee_store,
-        clients,
-        AuthAggMetrics::new(&registry),
-        Arc::new(SafeClientMetrics::new(&registry)),
-        network_metrics,
-    )
-}
 
 pub async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
     wait_for_all_txes(vec![wait_digest], state).await
@@ -130,7 +94,7 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
 
 // Creates a fake sender-signed transaction for testing. This transaction will
 // not actually work.
-pub fn create_fake_transaction() -> Transaction {
+pub fn create_fake_transaction() -> VerifiedTransaction {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -145,12 +109,63 @@ pub fn create_fake_transaction() -> Transaction {
     to_sender_signed_transaction(data, &sender_key)
 }
 
+pub fn create_fake_cert_and_effect_digest<'a>(
+    signers: impl Iterator<
+        Item = (
+            &'a AuthorityName,
+            &'a (dyn Signer<AuthoritySignature> + Send + Sync),
+        ),
+    >,
+    committee: &Committee,
+) -> (ExecutionDigests, CertifiedTransaction) {
+    let transaction = create_fake_transaction();
+    let cert = CertifiedTransaction::new_with_auth_sign_infos(
+        transaction.clone(),
+        signers
+            .map(|(name, signer)| {
+                AuthoritySignInfo::new(committee.epoch, &transaction.signed_data, *name, signer)
+            })
+            .collect(),
+        committee,
+    )
+    .unwrap();
+    let effects = dummy_transaction_effects(&transaction);
+    (
+        ExecutionDigests::new(*transaction.digest(), effects.digest()),
+        cert,
+    )
+}
+
 // This is used to sign transaction with signer using default Intent.
 pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
-) -> Transaction {
+) -> VerifiedTransaction {
     let signature = Signature::new_temp(&data.to_bytes(), signer);
     // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    Transaction::new(data, signature)
+    VerifiedTransaction::new_unchecked(Transaction::new(data, signature))
+}
+
+pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
+    TransactionEffects {
+        status: ExecutionStatus::Success,
+        gas_used: GasCostSummary {
+            computation_cost: 0,
+            storage_cost: 0,
+            storage_rebate: 0,
+        },
+        shared_objects: Vec::new(),
+        transaction_digest: *tx.digest(),
+        created: Vec::new(),
+        mutated: Vec::new(),
+        unwrapped: Vec::new(),
+        deleted: Vec::new(),
+        wrapped: Vec::new(),
+        gas_object: (
+            random_object_ref(),
+            Owner::AddressOwner(tx.signed_data.data.signer()),
+        ),
+        events: Vec::new(),
+        dependencies: Vec::new(),
+    }
 }

@@ -1,36 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store_tables::AuthorityStoreTables, *};
+use super::{
+    authority_store_tables::{AuthorityEpochTables, AuthorityPerpetualTables},
+    *,
+};
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
+use arc_swap::ArcSwap;
+use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::iter;
 use std::path::Path;
-use std::sync::atomic::AtomicU64;
+use std::sync::{atomic::AtomicU64, Arc};
 use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     mutex_table::{LockGuard, MutexTable},
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
 };
-use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use sui_types::object::{Owner, OBJECT_START_VERSION};
-use sui_types::storage::WriteKind;
+use sui_types::object::Owner;
+use sui_types::storage::{ChildObjectResolver, SingleTxContext, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tracing::{debug, error, info, trace};
-use typed_store::rocks::{DBBatch, DBMap};
+use tracing::{debug, info, trace};
+use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
 pub type InternalSequenceNumber = u64;
+pub type PendingDigest = (bool /* is sequenced */, TransactionDigest);
 
 pub struct CertLockGuard(LockGuard);
 
@@ -50,7 +56,7 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 pub struct SuiDataStore<S> {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
-    pub wal: Arc<DBWriteAheadLog<CertifiedTransaction>>,
+    pub wal: Arc<DBWriteAheadLog<TrustedCertificate>>,
 
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
@@ -63,14 +69,26 @@ pub struct SuiDataStore<S> {
     // A notifier for new pending certificates
     pending_notifier: Arc<Notify>,
 
-    pub(crate) tables: AuthorityStoreTables<S>,
+    pub(crate) perpetual_tables: AuthorityPerpetualTables<S>,
+    pub(crate) epoch_tables: ArcSwap<AuthorityEpochTables<S>>,
+
+    // needed for re-opening epoch db.
+    path: PathBuf,
+    db_options: Option<Options>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
-    pub fn open(path: &Path, db_options: Option<Options>) -> Self {
-        let tables =
-            AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options, None);
+    pub fn open(path: &Path, db_options: Option<Options>) -> SuiResult<Self> {
+        let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
+
+        let epoch = if perpetual_tables.database_is_empty()? {
+            0
+        } else {
+            perpetual_tables.get_epoch()?
+        };
+
+        let epoch_tables = Arc::new(AuthorityEpochTables::open(epoch, path, db_options.clone()));
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
@@ -82,7 +100,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
 
         // Get the last sequence item
-        let pending_seq = tables
+        let pending_seq = epoch_tables
             .pending_execution
             .iter()
             .skip_to_last()
@@ -91,26 +109,43 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .unwrap_or(0);
         let next_pending_seq = AtomicU64::new(pending_seq);
 
-        Self {
+        Ok(Self {
             wal,
             lock_service,
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             next_pending_seq,
             pending_notifier: Arc::new(Notify::new()),
-            tables,
-        }
+            perpetual_tables,
+            epoch_tables: epoch_tables.into(),
+            path: path.into(),
+            db_options,
+        })
     }
 
-    pub async fn acquire_tx_guard(&self, cert: &CertifiedTransaction) -> SuiResult<CertTxGuard> {
+    pub(crate) fn reopen_epoch_db(&self, new_epoch: EpochId) {
+        info!(?new_epoch, "re-opening AuthorityEpochTables for new epoch");
+        let epoch_tables = Arc::new(AuthorityEpochTables::open(
+            new_epoch,
+            &self.path,
+            self.db_options.clone(),
+        ));
+        self.epoch_tables.store(epoch_tables);
+    }
+
+    pub fn epoch_tables(&self) -> arc_swap::Guard<Arc<AuthorityEpochTables<S>>> {
+        self.epoch_tables.load()
+    }
+
+    pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
-        let guard = self.wal.begin_tx(digest, cert).await?;
+        let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
 
         if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
             // If the tx has been retried too many times, it could be a poison pill, and we should
             // prevent the client from continually retrying it.
             let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
             debug!(?digest, "{}", err);
-            return Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err });
+            return Err(SuiError::ErrorWhileProcessingCertificate { err });
         }
 
         Ok(guard)
@@ -133,7 +168,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
-        self.tables
+        self.perpetual_tables
             .effects
             .get(transaction_digest)?
             .map(|data| data.effects)
@@ -144,7 +179,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
-        self.tables
+        self.perpetual_tables
             .effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
@@ -152,18 +187,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
-        Ok(self
-            .tables
-            .objects
-            .iter()
-            .skip_to(&ObjectKey::ZERO)?
-            .next()
-            .is_none())
+        self.perpetual_tables.database_is_empty()
     }
 
     pub fn next_sequence_number(&self) -> Result<TxSequenceNumber, SuiError> {
         Ok(self
-            .tables
+            .perpetual_tables
             .executed_sequence
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
@@ -174,12 +203,15 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     #[cfg(test)]
     pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &ExecutionDigests) {
-        self.tables.executed_sequence.insert(&seq, digest).unwrap();
+        self.perpetual_tables
+            .executed_sequence
+            .insert(&seq, digest)
+            .unwrap();
     }
 
     #[cfg(test)]
     pub fn get_next_object_version(&self, obj: &ObjectID) -> Option<SequenceNumber> {
-        self.tables.next_object_versions.get(obj).unwrap()
+        self.epoch_tables().next_object_versions.get(obj).unwrap()
     }
 
     /// Add a number of certificates to the pending transactions as well as the
@@ -192,27 +224,22 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// index. If two instanced run concurrently, the indexes are guaranteed to not overlap
     /// although some certificates may be included twice in the `pending_execution`, and
     /// the same certificate may be written twice (but that is OK since it is valid.)
-    pub fn add_pending_certificates(
+    pub fn add_pending_digests(
         &self,
-        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+        digests: Vec<TransactionDigest>,
+        is_sequenced: bool,
     ) -> SuiResult<()> {
         let first_index = self
             .next_pending_seq
-            .fetch_add(certs.len() as u64, Ordering::Relaxed);
+            .fetch_add(digests.len() as u64, Ordering::Relaxed);
 
-        let batch = self.tables.pending_execution.batch();
+        let batch = self.epoch_tables().pending_execution.batch();
         let batch = batch.insert_batch(
-            &self.tables.pending_execution,
-            certs
+            &self.epoch_tables().pending_execution,
+            digests
                 .iter()
                 .enumerate()
-                .map(|(num, (digest, _))| ((num as u64) + first_index, digest)),
-        )?;
-        let batch = batch.insert_batch(
-            &self.tables.certificates,
-            certs
-                .into_iter()
-                .filter_map(|(digest, cert_opt)| cert_opt.map(|cert| (digest, cert))),
+                .map(|(num, digest)| ((num as u64) + first_index, (is_sequenced, *digest))),
         )?;
         batch.write()?;
 
@@ -223,31 +250,21 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Get all stored certificate digests
-    pub fn get_pending_digests(
-        &self,
-    ) -> SuiResult<Vec<(InternalSequenceNumber, TransactionDigest)>> {
-        Ok(self.tables.pending_execution.iter().collect())
+    pub fn get_pending_digests(&self) -> SuiResult<Vec<(InternalSequenceNumber, PendingDigest)>> {
+        Ok(self.epoch_tables().pending_execution.iter().collect())
     }
 
     /// Remove entries from pending certificates
-    pub fn remove_pending_certificates(&self, seqs: Vec<InternalSequenceNumber>) -> SuiResult<()> {
-        let batch = self.tables.pending_execution.batch();
-        let batch = batch.delete_batch(&self.tables.pending_execution, seqs.iter())?;
+    pub fn remove_pending_digests(&self, seqs: Vec<InternalSequenceNumber>) -> SuiResult<()> {
+        let batch = self.epoch_tables().pending_execution.batch();
+        let batch = batch.delete_batch(&self.epoch_tables().pending_execution, seqs.iter())?;
         batch.write()?;
         Ok(())
     }
 
-    // Empty the pending_execution table, and remove the certs from the certificates table.
+    // Empty the pending_execution table.
     pub fn remove_all_pending_certificates(&self) -> SuiResult {
-        let all_pending_tx = self.get_pending_digests()?;
-        let mut batch = self.tables.pending_execution.batch();
-        batch = batch.delete_batch(
-            &self.tables.certificates,
-            all_pending_tx.iter().map(|(_, digest)| digest),
-        )?;
-        batch.write()?;
-        self.tables.pending_execution.clear()?;
-
+        self.epoch_tables().pending_execution.clear()?;
         Ok(())
     }
 
@@ -262,7 +279,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn get_owner_objects(&self, owner: Owner) -> Result<Vec<ObjectInfo>, SuiError> {
         debug!(?owner, "get_owner_objects");
         Ok(self
-            .tables
+            .perpetual_tables
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
@@ -277,46 +294,15 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self.tables.objects.get(&ObjectKey(*object_id, version))?)
+        Ok(self
+            .perpetual_tables
+            .objects
+            .get(&ObjectKey(*object_id, version))?)
     }
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj_entry = self
-            .tables
-            .objects
-            .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
-
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.tables.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
-            _ => Ok(None),
-        }
+        self.perpetual_tables.get_object(object_id)
     }
 
     /// Get many objects
@@ -328,13 +314,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(result)
     }
 
-    /// Get many objects by their (id, version number) key.
     pub fn get_input_objects(&self, objects: &[InputObjectKind]) -> Result<Vec<Object>, SuiError> {
         let mut result = Vec::new();
         let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
+                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } => {
                     self.get_object(id)?
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
@@ -347,46 +332,72 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             }
         }
         if !errors.is_empty() {
-            Err(SuiError::ObjectErrors { errors })
+            Err(SuiError::TransactionInputObjectsErrors { errors })
         } else {
             Ok(result)
         }
     }
 
-    /// Get many objects by their (id, version number) key.
     pub fn get_sequenced_input_objects(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
     ) -> Result<Vec<Object>, SuiError> {
-        let shared_locks: HashMap<_, _> = self.all_shared_locks(digest)?.into_iter().collect();
+        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut result = Vec::new();
         let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) => self.get_object(id)?,
-                InputObjectKind::SharedMoveObject(id) => match shared_locks.get(id) {
-                    Some(version) => self.get_object_by_key(id, *version)?,
-                    None => {
-                        errors.push(SuiError::SharedObjectLockNotSetError);
-                        continue;
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
+                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
+                            self.all_shared_locks(digest)?.into_iter().collect(),
+                        )
+                    })?;
+                    match shared_locks.get(id) {
+                        Some(version) => {
+                            if let Some(obj) = self.get_object_by_key(id, *version)? {
+                                result.push(obj);
+                            } else {
+                                // When this happens, other transactions that use smaller versions of
+                                // this shared object haven't finished execution.
+                                errors.push(SuiError::SharedObjectPriorVersionsPendingExecution {
+                                    object_id: *id,
+                                    version_not_ready: *version,
+                                });
+                            }
+                            continue;
+                        }
+                        None => {
+                            errors.push(SuiError::SharedObjectLockNotSetError);
+                            continue;
+                        }
                     }
-                },
+                }
+                InputObjectKind::MovePackage(id) => self.get_object(id)?,
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }
             };
+            // SharedMoveObject should not reach here
             match obj {
                 Some(obj) => result.push(obj),
                 None => errors.push(kind.object_not_found_error()),
             }
         }
         if !errors.is_empty() {
-            Err(SuiError::ObjectErrors { errors })
+            Err(SuiError::TransactionInputObjectsErrors { errors })
         } else {
             Ok(result)
         }
+    }
+
+    pub async fn get_tx_sequence(
+        &self,
+        tx: TransactionDigest,
+    ) -> SuiResult<Option<TxSequenceNumber>> {
+        self.lock_service.get_tx_sequence(tx).await
     }
 
     /// Get the transaction envelope that currently locks the given object,
@@ -394,7 +405,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
-    ) -> SuiResult<Option<TransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
         let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
             SuiError::ObjectLockUninitialized {
                 obj_ref: *object_ref,
@@ -411,7 +422,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     .factor(10)
                     .map(jitter)
                     .take(3);
-                let mut tx_option = self.tables.transactions.get(tx_digest)?;
+                let mut tx_option = self.epoch_tables().transactions.get(tx_digest)?;
                 while tx_option.is_none() {
                     if let Some(duration) = retry_strategy.next() {
                         // Wait to retry
@@ -421,9 +432,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                         // No more retries, just quit
                         break;
                     }
-                    tx_option = self.tables.transactions.get(tx_digest)?;
+                    tx_option = self.epoch_tables().transactions.get(tx_digest)?;
                 }
-                Ok(tx_option)
+                Ok(tx_option.map(|t| t.into()))
             }
             None => Ok(None),
         }
@@ -433,14 +444,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        self.tables.certificates.get(digest).map_err(|e| e.into())
+    ) -> Result<Option<VerifiedCertificate>, SuiError> {
+        self.perpetual_tables
+            .certificates
+            .get(digest)
+            .map(|r| r.map(|c| c.into()))
+            .map_err(|e| e.into())
     }
 
     /// Read the transactionDigest that is the parent of an object reference
     /// (ie. the transaction that created an object at this version.)
     pub fn parent(&self, object_ref: &ObjectRef) -> Result<Option<TransactionDigest>, SuiError> {
-        self.tables
+        self.perpetual_tables
             .parent_sync
             .get(object_ref)
             .map_err(|e| e.into())
@@ -451,7 +466,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         object_refs: &[ObjectRef],
     ) -> Result<Vec<Option<TransactionDigest>>, SuiError> {
-        self.tables
+        self.perpetual_tables
             .parent_sync
             .multi_get(object_refs)
             .map_err(|e| e.into())
@@ -468,7 +483,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let obj_dig_inner = ObjectDigest::new([0; 32]);
 
         Ok(self
-            .tables
+            .perpetual_tables
             .parent_sync
             .iter()
             // The object id [0; 16] is the smallest possible
@@ -483,6 +498,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
+    #[cfg(test)] // Nothing wrong with this function, but it is not currently used outside of tests
     pub fn get_assigned_object_versions<'a>(
         &self,
         transaction_digest: &TransactionDigest,
@@ -490,7 +506,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
         let keys = object_ids.map(|objid| (*transaction_digest, *objid));
 
-        self.tables
+        self.epoch_tables()
             .assigned_object_versions
             .multi_get(keys)
             .map_err(SuiError::from)
@@ -502,7 +518,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         transaction_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
         Ok(self
-            .tables
+            .epoch_tables()
             .assigned_object_versions
             .iter()
             .skip_to(&(*transaction_digest, ObjectID::ZERO))?
@@ -527,11 +543,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// TODO: We need this today because we don't have another way to sync an account.
     pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         // Insert object
-        self.tables.objects.insert(&object_ref.into(), object)?;
+        self.perpetual_tables
+            .objects
+            .insert(&object_ref.into(), object)?;
 
         // Update the index
         if object.get_single_owner().is_some() {
-            self.tables.owner_index.insert(
+            self.perpetual_tables.owner_index.insert(
                 &(object.owner, object_ref.0),
                 &ObjectInfo::new(&object_ref, object),
             )?;
@@ -543,7 +561,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
 
         // Update the parent
-        self.tables
+        self.perpetual_tables
             .parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
 
@@ -554,7 +572,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// In particular it does not check the old locks before inserting new ones, so the objects
     /// must be new.
     pub async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
-        let batch = self.tables.objects.batch();
+        let batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
             .map(|o| (o.compute_object_reference(), o))
@@ -562,19 +580,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         batch
             .insert_batch(
-                &self.tables.objects,
+                &self.perpetual_tables.objects,
                 ref_and_objects
                     .iter()
                     .map(|(oref, o)| (ObjectKey::from(oref), **o)),
             )?
             .insert_batch(
-                &self.tables.owner_index,
+                &self.perpetual_tables.owner_index,
                 ref_and_objects
                     .iter()
                     .map(|(oref, o)| ((o.owner, oref.0), ObjectInfo::new(oref, o))),
             )?
             .insert_batch(
-                &self.tables.parent_sync,
+                &self.perpetual_tables.parent_sync,
                 ref_and_objects
                     .iter()
                     .map(|(oref, o)| (oref, o.previous_transaction)),
@@ -596,7 +614,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         epoch: EpochId,
         owned_input_objects: &[ObjectRef],
-        transaction: TransactionEnvelope<S>,
+        transaction: VerifiedTransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
         let tx_digest = *transaction.digest();
 
@@ -609,7 +627,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // For now write transactions after because if we write before, there is a chance the lock can fail
         // and this can cause invalid transactions to be inserted in the table.
         // https://github.com/MystenLabs/sui/issues/1990
-        self.tables.transactions.insert(&tx_digest, &transaction)?;
+        self.epoch_tables()
+            .transactions
+            .insert(&tx_digest, transaction.serializable_ref())?;
 
         Ok(())
     }
@@ -631,36 +651,39 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult {
+    ) -> SuiResult<TxSequenceNumber> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let mut write_batch = self.tables.certificates.batch();
+        let mut write_batch = self.perpetual_tables.certificates.batch();
 
         // Store the certificate indexed by transaction digest
         let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
-            &self.tables.certificates,
-            iter::once((transaction_digest, certificate)),
+            &self.perpetual_tables.certificates,
+            iter::once((transaction_digest, certificate.serializable_ref())),
         )?;
 
-        self.sequence_tx(
-            write_batch,
-            inner_temporary_store,
-            transaction_digest,
-            proposed_seq,
-            effects,
-            effects_digest,
-        )
-        .await?;
+        let seq = self
+            .sequence_tx(
+                write_batch,
+                inner_temporary_store,
+                transaction_digest,
+                proposed_seq,
+                effects,
+                effects_digest,
+            )
+            .await?;
 
         // Cleanup the lock of the shared objects. This must be done after we write effects, as
         // effects_exists is used as the guard to avoid re-locking objects for a previously
         // executed tx. remove_shared_objects_locks.
-        self.remove_shared_objects_locks(transaction_digest, certificate)
+        self.remove_shared_objects_locks(transaction_digest, certificate)?;
+
+        Ok(seq)
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -670,7 +693,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
-        let write_batch = self.tables.certificates.batch();
+        let write_batch = self.perpetual_tables.certificates.batch();
         self.batch_update_objects(
             write_batch,
             inner_temporary_store,
@@ -688,30 +711,31 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         input_objects: InputObjects,
         mutated_objects: BTreeMap<ObjectRef, (Object, WriteKind)>,
-        certificate: CertifiedTransaction,
+        certificate: VerifiedCertificate,
         proposed_seq: TxSequenceNumber,
         effects: TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
+        let ctx = SingleTxContext::gateway(certificate.sender_address());
         let transaction_digest = certificate.digest();
         let mut temporary_store =
             TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
         for (_, (object, kind)) in mutated_objects {
-            temporary_store.write_object(object, kind);
+            temporary_store.write_object(&ctx, object, kind);
         }
         for obj_ref in &effects.effects.deleted {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+            temporary_store.delete_object(&ctx, &obj_ref.0, obj_ref.1, DeleteKind::Normal);
         }
         for obj_ref in &effects.effects.wrapped {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+            temporary_store.delete_object(&ctx, &obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
         let (inner_temporary_store, _events) = temporary_store.into_inner();
 
-        let mut write_batch = self.tables.certificates.batch();
+        let mut write_batch = self.perpetual_tables.certificates.batch();
         // Store the certificate indexed by transaction digest
         write_batch = write_batch.insert_batch(
-            &self.tables.certificates,
-            iter::once((transaction_digest, &certificate)),
+            &self.perpetual_tables.certificates,
+            iter::once((transaction_digest, certificate.serializable_ref())),
         )?;
         self.sequence_tx(
             write_batch,
@@ -721,7 +745,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &effects,
             effects_digest,
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     async fn sequence_tx(
@@ -732,7 +757,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult {
+    ) -> SuiResult<TxSequenceNumber> {
         // Safe to unwrap since UpdateType::Transaction ensures we get a sequence number back.
         let assigned_seq = self
             .batch_update_objects(
@@ -748,9 +773,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // We can't write this until after sequencing succeeds (which happens in
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
-        let batch = self.tables.effects.batch();
+        let batch = self.perpetual_tables.effects.batch();
         let batch = batch.insert_batch(
-            &self.tables.effects,
+            &self.perpetual_tables.effects,
             [(transaction_digest, effects)].into_iter(),
         )?;
 
@@ -772,7 +797,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             "storing sequence number to executed_sequence"
         );
         let batch = batch.insert_batch(
-            &self.tables.executed_sequence,
+            &self.perpetual_tables.executed_sequence,
             [(
                 assigned_seq,
                 ExecutionDigests::new(*transaction_digest, *effects_digest),
@@ -782,7 +807,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         batch.write()?;
 
-        Ok(())
+        Ok(assigned_seq)
     }
 
     /// Helper function for updating the objects in the state
@@ -830,11 +855,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 ));
 
         // Delete the old owner index entries
-        write_batch = write_batch.delete_batch(&self.tables.owner_index, old_object_owners)?;
+        write_batch =
+            write_batch.delete_batch(&self.perpetual_tables.owner_index, old_object_owners)?;
 
         // Index the certificate by the objects mutated
         write_batch = write_batch.insert_batch(
-            &self.tables.parent_sync,
+            &self.perpetual_tables.parent_sync,
             written
                 .iter()
                 .map(|(_, (object_ref, _object, _kind))| (object_ref, transaction_digest)),
@@ -842,7 +868,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Index the certificate by the objects deleted
         write_batch = write_batch.insert_batch(
-            &self.tables.parent_sync,
+            &self.perpetual_tables.parent_sync,
             deleted.iter().map(|(object_id, (version, kind))| {
                 (
                     (
@@ -862,12 +888,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
-        write_batch =
-            write_batch.delete_batch(&self.tables.transactions, iter::once(transaction_digest))?;
+        self.epoch_tables()
+            .transactions
+            .remove(&transaction_digest)?;
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
-            &self.tables.owner_index,
+            &self.perpetual_tables.owner_index,
             written
                 .iter()
                 .filter_map(|(_id, (object_ref, new_object, _kind))| {
@@ -880,7 +907,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Insert each output object into the stores
         write_batch = write_batch.insert_batch(
-            &self.tables.objects,
+            &self.perpetual_tables.objects,
             written
                 .iter()
                 .map(|(_, (obj_ref, new_object, _kind))| (ObjectKey::from(obj_ref), new_object)),
@@ -959,9 +986,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// 4. owner_index table change is reverted.
     pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let effects = self.get_effects(tx_digest)?;
-        let mut write_batch = self.tables.certificates.batch();
-        write_batch = write_batch.delete_batch(&self.tables.certificates, iter::once(tx_digest))?;
-        write_batch = write_batch.delete_batch(&self.tables.effects, iter::once(tx_digest))?;
+        let mut write_batch = self.perpetual_tables.certificates.batch();
+        write_batch =
+            write_batch.delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?;
+        write_batch =
+            write_batch.delete_batch(&self.perpetual_tables.effects, iter::once(tx_digest))?;
 
         let all_new_refs = effects
             .mutated
@@ -971,7 +1000,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map(|(r, _)| r)
             .chain(effects.deleted.iter())
             .chain(effects.wrapped.iter());
-        write_batch = write_batch.delete_batch(&self.tables.parent_sync, all_new_refs)?;
+        write_batch = write_batch.delete_batch(&self.perpetual_tables.parent_sync, all_new_refs)?;
 
         let all_new_object_keys = effects
             .mutated
@@ -979,7 +1008,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .chain(effects.created.iter())
             .chain(effects.unwrapped.iter())
             .map(|((id, version, _), _)| ObjectKey(*id, *version));
-        write_batch = write_batch.delete_batch(&self.tables.objects, all_new_object_keys)?;
+        write_batch =
+            write_batch.delete_batch(&self.perpetual_tables.objects, all_new_object_keys)?;
 
         // Reverting the change to the owner_index table is most complex.
         // For each newly created (i.e. created and unwrapped) object, the entry in owner_index
@@ -993,7 +1023,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .chain(effects.unwrapped.iter())
             .chain(effects.mutated.iter())
             .map(|((id, _, _), owner)| (*owner, *id));
-        write_batch = write_batch.delete_batch(&self.tables.owner_index, owners_to_delete)?;
+        write_batch =
+            write_batch.delete_batch(&self.perpetual_tables.owner_index, owners_to_delete)?;
         let mutated_objects = effects
             .mutated
             .iter()
@@ -1009,7 +1040,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 )
             });
         let old_objects = self
-            .tables
+            .perpetual_tables
             .objects
             .multi_get(mutated_objects)?
             .into_iter()
@@ -1020,7 +1051,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     ObjectInfo::new(&obj.compute_object_reference(), &obj),
                 )
             });
-        write_batch = write_batch.insert_batch(&self.tables.owner_index, old_objects)?;
+        write_batch = write_batch.insert_batch(&self.perpetual_tables.owner_index, old_objects)?;
 
         write_batch.write()?;
         Ok(())
@@ -1041,41 +1072,32 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
-        let mut iterator = self
-            .tables
-            .parent_sync
-            .iter()
-            // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
-
-        Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
-            if obj_ref.0 == object_id {
-                Some((obj_ref, tx_digest))
-            } else {
-                None
-            }
-        }))
+        self.perpetual_tables.get_latest_parent_entry(object_id)
     }
 
     /// Remove the shared objects locks.
     pub fn remove_shared_objects_locks(
         &self,
         transaction_digest: &TransactionDigest,
-        transaction: &CertifiedTransaction,
+        transaction: &VerifiedCertificate,
     ) -> SuiResult {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
-        for object_id in transaction.shared_input_objects() {
+        for (object_id, _) in transaction.shared_input_objects() {
             sequenced_to_delete.push((*transaction_digest, *object_id));
             if self.get_object(object_id)?.is_none() {
                 schedule_to_delete.push(*object_id);
             }
         }
-        let mut write_batch = self.tables.assigned_object_versions.batch();
-        write_batch =
-            write_batch.delete_batch(&self.tables.assigned_object_versions, sequenced_to_delete)?;
-        write_batch =
-            write_batch.delete_batch(&self.tables.next_object_versions, schedule_to_delete)?;
+        let mut write_batch = self.epoch_tables().assigned_object_versions.batch();
+        write_batch = write_batch.delete_batch(
+            &self.epoch_tables().assigned_object_versions,
+            sequenced_to_delete,
+        )?;
+        write_batch = write_batch.delete_batch(
+            &self.epoch_tables().next_object_versions,
+            schedule_to_delete,
+        )?;
         write_batch.write()?;
         Ok(())
     }
@@ -1084,7 +1106,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// of that transaction. Used by the nodes, which don't listen to consensus.
     pub fn acquire_shared_locks_from_effects(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         effects: &TransactionEffects,
         // Do not remove unused arg - ensures that this function is not called without holding a
         // lock.
@@ -1099,63 +1121,81 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .collect();
         debug!(?sequenced, "Shared object locks sequenced from effects");
 
-        let mut write_batch = self.tables.assigned_object_versions.batch();
-        write_batch = write_batch.insert_batch(&self.tables.assigned_object_versions, sequenced)?;
+        let mut write_batch = self.epoch_tables().assigned_object_versions.batch();
+        write_batch =
+            write_batch.insert_batch(&self.epoch_tables().assigned_object_versions, sequenced)?;
         write_batch.write()?;
 
         Ok(())
     }
 
-    pub async fn consensus_message_processed(
+    pub fn consensus_message_processed(
         &self,
         digest: &TransactionDigest,
     ) -> Result<bool, SuiError> {
         Ok(self
-            .tables
+            .epoch_tables()
             .consensus_message_processed
             .contains_key(digest)?)
     }
 
+    /// Caller is responsible to call consensus_message_processed before this method
+    pub async fn record_owned_object_cert_from_consensus(
+        &self,
+        certificate: &VerifiedCertificate,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> Result<(), SuiError> {
+        let write_batch = self.epoch_tables().last_consensus_index.batch();
+        self.finish_consensus_message_process(write_batch, certificate, consensus_index)
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
-    /// last consensus index.
+    /// last consensus index and consensus_message_processed table.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
     ///
     /// Caller is responsible to call consensus_message_processed before this method
-    pub async fn persist_certificate_and_lock_shared_objects(
+    pub async fn lock_shared_objects(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         consensus_index: ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.shared_input_objects();
-        let versions = self.tables.next_object_versions.multi_get(ids)?;
+        let ids = certificate.shared_input_objects().map(|(id, _)| id);
+        let versions = self.epoch_tables().next_object_versions.multi_get(ids)?;
 
-        let ids = certificate.shared_input_objects();
-        let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
-            .zip(versions.iter())
-            .map(|(id, v)| {
-                // If it is the first time the shared object has been sequenced, assign it the default
-                // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
-                // to assign the next sequence number.
-                let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
-                let next_version = version.increment();
+        let mut sequenced_to_write = Vec::new();
+        let mut schedule_to_write = Vec::new();
+        for ((id, initial_shared_version), v) in
+            certificate.shared_input_objects().zip(versions.iter())
+        {
+            // If it is the first time the shared object has been sequenced, assign it the version
+            // that the object was shared at.  This `initial_shared_version` will be the initial
+            // version for the object if it was created as a shared object, or will be the version
+            // it was upgraded to a shared object.  We can trust this number as validity is checked
+            // when creating a certificate
+            let version = match v {
+                Some(v) => *v,
+                None => self
+                    // TODO: if we use an eventually consistent object store in the future,
+                    // we must make this read strongly consistent somehow!
+                    .get_latest_parent_entry(*id)?
+                    .map(|(objref, _)| objref.1)
+                    .unwrap_or_else(|| *initial_shared_version),
+            };
+            let next_version = version.increment();
 
-                let sequenced = ((transaction_digest, *id), version);
-                let scheduled = (id, next_version);
-
-                (sequenced, scheduled)
-            })
-            .unzip();
+            sequenced_to_write.push(((transaction_digest, *id), version));
+            schedule_to_write.push((*id, next_version));
+        }
 
         trace!(tx_digest = ?transaction_digest,
                ?sequenced_to_write, ?schedule_to_write,
                "locking shared objects");
 
         // Make an iterator to update the last consensus index.
-        let index_to_write = iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Holding _tx_lock avoids the following race:
         // - we check effects_exist, returns false
@@ -1165,14 +1205,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // - now it's possible to run a new tx against old versions of the shared objects.
         let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
 
-        // Schedule the certificate for execution
-        self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])?;
-
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
 
         // Atomically store all elements.
-        let mut write_batch = self.tables.assigned_object_versions.batch();
+        let mut write_batch = self.epoch_tables().assigned_object_versions.batch();
 
         // If the tx has already been executed, we don't need to populate assigned_object_versions,
         // and indeed we shouldn't because it will never be cleaned up.
@@ -1192,19 +1229,78 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // (Both checkpoints and the node follower system ensure that at least one
         // honest validator has vouched for the TransactionEffects that were used).
         if !self.effects_exists(&transaction_digest)? {
-            write_batch = write_batch
-                .insert_batch(&self.tables.assigned_object_versions, sequenced_to_write)?;
+            write_batch = write_batch.insert_batch(
+                &self.epoch_tables().assigned_object_versions,
+                sequenced_to_write,
+            )?;
         }
 
-        write_batch =
-            write_batch.insert_batch(&self.tables.next_object_versions, schedule_to_write)?;
-        write_batch =
-            write_batch.insert_batch(&self.tables.last_consensus_index, index_to_write)?;
-        write_batch = write_batch.insert_batch(
-            &self.tables.consensus_message_processed,
-            iter::once((transaction_digest, true)),
+        write_batch = write_batch
+            .insert_batch(&self.epoch_tables().next_object_versions, schedule_to_write)?;
+
+        self.finish_consensus_message_process(write_batch, certificate, consensus_index)
+    }
+
+    /// When we finish processing certificate from consensus we record this information.
+    /// Tables updated:
+    ///  * consensus_message_processed - indicate that this certificate was processed by consensus
+    ///  * last_consensus_index - records last processed position in consensus stream
+    ///  * consensus_message_order - records at what position this transaction was first seen in consensus
+    /// Self::consensus_message_processed returns true after this call for given certificate
+    fn finish_consensus_message_process(
+        &self,
+        batch: DBBatch,
+        certificate: &VerifiedCertificate,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> SuiResult {
+        let transaction_digest = *certificate.digest();
+        let batch = batch.insert_batch(
+            &self.epoch_tables().consensus_message_order,
+            [(consensus_index.index.clone(), transaction_digest)],
         )?;
-        write_batch.write().map_err(SuiError::from)
+        let batch = batch.insert_batch(
+            &self.epoch_tables().last_consensus_index,
+            [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
+        )?;
+        let batch = batch.insert_batch(
+            &self.epoch_tables().consensus_message_processed,
+            [(transaction_digest, true)],
+        )?;
+        Ok(batch.write()?)
+    }
+
+    pub fn record_checkpoint_boundary(&self, certificate_height: u64) -> SuiResult {
+        if let Some((index, height)) = self
+            .epoch_tables()
+            .checkpoint_boundary
+            .iter()
+            .skip_to_last()
+            .next()
+        {
+            if height >= certificate_height {
+                // Due to crash recovery we might see same boundary twice
+                debug!("Not recording checkpoint boundary - already updated");
+            } else {
+                let index = index + 1;
+                debug!(
+                    "Recording checkpoint boundary {} at {}",
+                    index, certificate_height
+                );
+                self.epoch_tables()
+                    .checkpoint_boundary
+                    .insert(&index, &certificate_height)?;
+            }
+        } else {
+            // Table is empty
+            debug!(
+                "Recording first checkpoint boundary at {}",
+                certificate_height
+            );
+            self.epoch_tables()
+                .checkpoint_boundary
+                .insert(&0, &certificate_height)?;
+        }
+        Ok(())
     }
 
     pub fn transactions_in_seq_range(
@@ -1213,7 +1309,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         end: u64,
     ) -> SuiResult<Vec<(u64, ExecutionDigests)>> {
         Ok(self
-            .tables
+            .perpetual_tables
             .executed_sequence
             .iter()
             .skip_to(&start)?
@@ -1221,113 +1317,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .collect())
     }
 
-    /// Retrieves batches including transactions within a range.
-    ///
-    /// This function returns all signed batches that enclose the requested transaction
-    /// including the batch preceding the first requested transaction, the batch including
-    /// the last requested transaction (if there is one) and all batches in between.
-    ///
-    /// Transactions returned include all transactions within the batch that include the
-    /// first requested transaction, all the way to at least all the transactions that are
-    /// included in the last batch returned. If the last requested transaction is outside a
-    /// batch (one has not yet been generated) the function returns all transactions at the
-    /// end of the sequence that are in TxSequenceOrder (and ignores any that are out of
-    /// order.)
-    // TODO: Why include the transaction prior to `start`?
-    #[allow(clippy::type_complexity)]
-    pub fn batches_and_transactions(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, ExecutionDigests)>), SuiError> {
-        /*
-        Get all batches that include requested transactions. This includes the signed batch
-        prior to the first requested transaction, the batch including the last requested
-        transaction and all batches in between.
-
-        So for example if we got a request for start: 3 end: 9 and we have:
-        B0 T0 T1 B2 T2 B3 T3 T4 T5 B6 T6 T8 T9
-
-        This will return B2, B3, B6
-
-        */
-        let batches: Vec<SignedBatch> = self
-            .tables
-            .batches
-            .iter()
-            .skip_prior_to(&start)?
-            .take_while(|(_seq, batch)| batch.data().initial_sequence_number < end)
-            .map(|(_, batch)| batch)
-            .collect();
-
-        /*
-        Get transactions in the retrieved batches. The first batch is included
-        without transactions, so get transactions of all subsequent batches, or
-        until the end of the sequence if the last batch does not contain the
-        requested end sequence number.
-
-        So for example if we got a request for start: 3 end: 9 and we have:
-        B0 T0 T1 B2 T2 B3 T3 T4 T5 B6 T6 T8 T9
-
-        The code below will return T2 .. T6
-
-        Note: T8 is out of order so the sequence returned ends at T6.
-
-        */
-
-        let first_seq = batches
-            .first()
-            .ok_or(SuiError::NoBatchesFoundError)?
-            .data()
-            .next_sequence_number;
-        let mut last_seq = batches
-            .last()
-            .unwrap() // if the first exists the last exists too
-            .data()
-            .next_sequence_number;
-
-        let mut in_sequence = last_seq;
-        let in_sequence_ptr = &mut in_sequence;
-
-        if last_seq < end {
-            // This means that the request needs items beyond the end of the
-            // last batch, so we include all items.
-            last_seq = TxSequenceNumber::MAX;
-        }
-
-        /* Since the database writes are asynchronous it may be the case that the tail end of the
-        sequence misses items. This will confuse calling logic, so we filter them out and allow
-        callers to use the subscription API to catch the latest items in order. */
-
-        let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = self
-            .tables
-            .executed_sequence
-            .iter()
-            .skip_to(&first_seq)?
-            .take_while(|(seq, _tx)| {
-                // Before the end of the last batch we want everything.
-                if *seq < *in_sequence_ptr {
-                    return true;
-                };
-
-                // After the end of the last batch we only take items in sequence.
-                if *seq < last_seq && *seq == *in_sequence_ptr {
-                    *in_sequence_ptr += 1;
-                    return true;
-                }
-
-                // If too large or out of sequence after the last batch
-                // we stop taking items.
-                false
-            })
-            .collect();
-
-        Ok((batches, transactions))
-    }
-
     /// Return the latest consensus index. It is used to bootstrap the consensus client.
     pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
-        self.tables
+        self.epoch_tables()
             .last_consensus_index
             .get(&LAST_CONSENSUS_INDEX_ADDR)
             .map(|x| x.unwrap_or_default())
@@ -1337,40 +1329,37 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TransactionEnvelope<S>>> {
-        let transaction = self.tables.transactions.get(transaction_digest)?;
-        Ok(transaction)
+    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+        let transaction = self.epoch_tables().transactions.get(transaction_digest)?;
+        Ok(transaction.map(|t| t.into()))
     }
 
     pub fn get_certified_transaction(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<CertifiedTransaction>> {
-        let transaction = self.tables.certificates.get(transaction_digest)?;
-        Ok(transaction)
+    ) -> SuiResult<Option<VerifiedCertificate>> {
+        let transaction = self.perpetual_tables.certificates.get(transaction_digest)?;
+        Ok(transaction.map(|t| t.into()))
     }
 
     pub fn multi_get_certified_transaction(
         &self,
         transaction_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<CertifiedTransaction>>> {
-        Ok(self.tables.certificates.multi_get(transaction_digests)?)
+    ) -> SuiResult<Vec<Option<VerifiedCertificate>>> {
+        Ok(self
+            .perpetual_tables
+            .certificates
+            .multi_get(transaction_digests)?
+            .into_iter()
+            .map(|o| o.map(|c| c.into()))
+            .collect())
     }
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState>
     where
         S: Eq + Serialize + for<'de> Deserialize<'de>,
     {
-        let sui_system_object = self
-            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Ok(result)
+        self.perpetual_tables.get_sui_system_state_object()
     }
 }
 
@@ -1381,7 +1370,11 @@ impl SuiDataStore<AuthoritySignInfo> {
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
-        let tx = self.tables.transactions.get(transaction_digest)?;
+        let tx: Option<VerifiedTransactionEnvelope<AuthoritySignInfo>> = self
+            .epoch_tables()
+            .transactions
+            .get(transaction_digest)?
+            .map(|t| t.into());
         Ok(if let Some(signed_tx) = tx {
             signed_tx.auth_sign_info.epoch == cur_epoch
         } else {
@@ -1392,18 +1385,20 @@ impl SuiDataStore<AuthoritySignInfo> {
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: self.tables.transactions.get(transaction_digest)?,
-            certified_transaction: self.tables.certificates.get(transaction_digest)?,
-            signed_effects: self.tables.effects.get(transaction_digest)?,
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+        Ok(VerifiedTransactionInfoResponse {
+            signed_transaction: self
+                .epoch_tables()
+                .transactions
+                .get(transaction_digest)?
+                .map(|t| t.into()),
+            certified_transaction: self
+                .perpetual_tables
+                .certificates
+                .get(transaction_digest)?
+                .map(|c| c.into()),
+            signed_effects: self.perpetual_tables.effects.get(transaction_digest)?,
         })
-    }
-}
-
-impl SuiDataStore<EmptySignInfo> {
-    pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
-        &self.tables.transactions
     }
 }
 
@@ -1421,6 +1416,26 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
             );
         }
         Ok(package)
+    }
+}
+
+impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ChildObjectResolver
+    for SuiDataStore<S>
+{
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        let child_object = match self.get_object(child)? {
+            None => return Ok(None),
+            Some(o) => o,
+        };
+        let parent = *parent;
+        if child_object.owner != Owner::ObjectOwner(parent.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: *child,
+                given_parent: parent,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some(child_object))
     }
 }
 

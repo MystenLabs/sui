@@ -2,10 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
@@ -17,11 +17,13 @@ use std::{
 
 use anyhow::anyhow;
 use arc_swap::ArcSwap;
-use async_trait::async_trait;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use futures::stream::{self, Stream};
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use parking_lot::Mutex;
@@ -30,7 +32,6 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use tap::TapFallible;
-use thiserror::Error;
 use tokio::sync::{
     broadcast::{self, error::RecvError},
     mpsc,
@@ -40,30 +41,34 @@ use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 pub use authority_store::{
-    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
+    AuthorityStore, GatewayStore, PendingDigest, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-use narwhal_executor::{ExecutionIndices, ExecutionState};
+use narwhal_consensus::ConsensusOutput;
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
-use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
+use sui_json_rpc_types::{
+    type_and_fields_from_move_struct, SuiEvent, SuiEventEnvelope, SuiTransactionEffects,
+};
 use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
+    node_sync_store::NodeSyncStore,
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::event::{Event, EventID};
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointRequest, CheckpointRequestType,
-    CheckpointResponse, CheckpointSequenceNumber,
+    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointFragmentMessage,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::{Owner, PastObjectRead};
-use sui_types::query::TransactionQuery;
+use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -80,11 +85,14 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
+use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::checkpoints::ConsensusSender;
-use crate::consensus_adapter::ConsensusListenerMessage;
+use crate::consensus_handler::{
+    SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
+};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
+use crate::scoped_counter;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -121,7 +129,7 @@ pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
-type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
+type CertTxGuard<'a> = DBTxGuard<'a, TrustedCertificate>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -137,7 +145,6 @@ pub struct AuthorityMetrics {
     total_certs: IntCounter,
     total_cert_attempts: IntCounter,
     total_effects: IntCounter,
-    signature_errors: IntCounter,
     pub shared_obj_tx: IntCounter,
     tx_already_processed: IntCounter,
     num_input_objs: Histogram,
@@ -176,9 +183,13 @@ pub struct AuthorityMetrics {
     post_processing_total_tx_sent_to_post_processing: IntCounter,
     post_processing_latest_seq_seen: IntGauge,
 
+    pub num_post_processing_tasks: IntGauge,
+    pub num_batch_service_tasks: IntGauge,
+
     /// Batch service metrics
     pub(crate) batch_service_total_tx_broadcasted: IntCounter,
     pub(crate) batch_service_latest_seq_broadcasted: IntGauge,
+    pub(crate) batch_svc_is_running: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -222,12 +233,6 @@ impl AuthorityMetrics {
             )
             .unwrap(),
 
-            signature_errors: register_int_counter_with_registry!(
-                "total_signature_errors",
-                "Number of transaction signature errors",
-                registry,
-            )
-            .unwrap(),
             shared_obj_tx: register_int_counter_with_registry!(
                 "num_shared_obj_tx",
                 "Number of transactions involving shared objects",
@@ -411,6 +416,18 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            num_post_processing_tasks: register_int_gauge_with_registry!(
+                "num_post_processing_tasks",
+                "Number of post processing tasks currently running.",
+                registry,
+            )
+            .unwrap(),
+            num_batch_service_tasks: register_int_gauge_with_registry!(
+                "num_batch_service_tasks",
+                "Number of batch service tasks currently running.",
+                registry,
+            )
+            .unwrap(),
             batch_service_total_tx_broadcasted: register_int_counter_with_registry!(
                 "batch_service_total_tx_broadcasted",
                 "Total number of txes broadcasted in batch service",
@@ -423,6 +440,11 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            batch_svc_is_running: register_int_counter_with_registry!(
+                "batch_svc_is_running",
+                "Sanity check to ensure batch service is running",
+                registry,
+            ).unwrap(),
         }
     }
 }
@@ -453,6 +475,8 @@ pub struct AuthorityState {
 
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
+
+    pub node_sync_store: Arc<NodeSyncStore>,
 
     indexes: Option<Arc<IndexStore>>,
 
@@ -510,8 +534,8 @@ impl AuthorityState {
 
     async fn handle_transaction_impl(
         &self,
-        transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+        transaction: VerifiedTransaction,
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         // If a transaction was signed in a previous epoch, we should no longer reuse it.
@@ -526,7 +550,7 @@ impl AuthorityState {
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
-            !transaction.signed_data.data.kind.is_system_tx(),
+            !transaction.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
 
@@ -535,14 +559,16 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, &transaction)
-                .await?;
+        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
+            &self.database,
+            &transaction.signed_data.data,
+        )
+        .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
         let signed_transaction =
-            SignedTransaction::new(self.epoch(), transaction, self.name, &*self.secret);
+            VerifiedSignedTransaction::new(self.epoch(), transaction, self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
@@ -558,18 +584,13 @@ impl AuthorityState {
     /// Initiate a new transaction.
     pub async fn handle_transaction(
         &self,
-        transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+        transaction: VerifiedTransaction,
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
         let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
         self.metrics.tx_orders.inc();
-        // Check the sender's signature.
-        transaction.verify().map_err(|e| {
-            self.metrics.signature_errors.inc();
-            e
-        })?;
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -597,7 +618,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate_with_effects<S>(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         // NOTE: the caller of this (node_sync) must promise to wait until it
         // knows for sure this tx is finalized, namely, it has seen a
         // CertifiedTransactionEffects or at least f+1 identifical effects
@@ -612,7 +633,7 @@ impl AuthorityState {
         debug!(?digest, "handle_certificate_with_effects");
         fp_ensure!(
             effects.effects.transaction_digest == digest,
-            SuiError::ErrorWhileProcessingConfirmationTransaction {
+            SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
@@ -649,8 +670,8 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
         self.handle_certificate_impl(certificate, false).await
     }
@@ -658,17 +679,17 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate_bypass_validator_halt(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         self.handle_certificate_impl(certificate, true).await
     }
 
     #[instrument(level = "trace", skip_all)]
     async fn handle_certificate_impl(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         bypass_validator_halt: bool,
-    ) -> SuiResult<TransactionInfoResponse> {
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
@@ -676,8 +697,13 @@ impl AuthorityState {
             ));
         }
 
-        let tx_digest = certificate.digest();
+        let tx_digest = *certificate.digest();
         debug!(?tx_digest, "handle_confirmation_transaction");
+
+        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
+            debug!("shared object cert has not been sequenced by narwhal");
+            return Err(SuiError::SharedObjectLockNotSetError);
+        }
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -696,11 +722,11 @@ impl AuthorityState {
         );
         let tx_guard = self
             .database
-            .acquire_tx_guard(&certificate)
+            .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, &certificate, bypass_validator_halt)
+        self.process_certificate(tx_guard, certificate, bypass_validator_halt)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
@@ -754,7 +780,7 @@ impl AuthorityState {
             lock_errors.is_empty(),
             // NOTE: the error message here will say 'Error acquiring lock' but what it means is
             // 'error checking lock'.
-            SuiError::ObjectErrors {
+            SuiError::TransactionInputObjectsErrors {
                 errors: lock_errors
             }
         );
@@ -766,9 +792,9 @@ impl AuthorityState {
     async fn process_certificate(
         &self,
         tx_guard: CertTxGuard<'_>,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         mut bypass_validator_halt: bool,
-    ) -> SuiResult<TransactionInfoResponse> {
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -779,21 +805,12 @@ impl AuthorityState {
 
         // We also bypass validator halt if this is the system transaction.
         // TODO: Shared object transactions should also bypass validator halt.
-        bypass_validator_halt |= certificate.signed_data.data.kind.is_system_tx();
+        bypass_validator_halt |= certificate.is_system_tx();
 
         if self.is_halted() && !bypass_validator_halt {
             tx_guard.release();
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
-
-        // Check the certificate signatures.
-        let committee = &self.committee.load();
-        tracing::trace_span!("cert_check_signature")
-            .in_scope(|| certificate.verify(committee))
-            .map_err(|e| {
-                self.metrics.signature_errors.inc();
-                e
-            })?;
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
@@ -814,17 +831,85 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(
-            inner_temporary_store,
-            certificate,
-            &signed_effects,
-            bypass_validator_halt,
-        )
-        .await
-        .tap_err(|e| error!(?digest, "commit_certificate failed: {e}"))?;
+        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
+        let ticket_seq = notifier_ticket.seq();
+        let res = self
+            .commit_certificate(
+                inner_temporary_store,
+                certificate,
+                &signed_effects,
+                notifier_ticket,
+            )
+            .await;
+        let seq = match res {
+            Err(err) => {
+                if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
+                    debug!(
+                        ?digest,
+                        "validator halted and this cert will never be committed"
+                    );
+                    tx_guard.release();
+                } else {
+                    error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
+                }
+                debug!(
+                     seq=?ticket_seq,
+                    "Ticket not notified due to commit failure",
+                );
+                // Check if we were able to sequence the tx at all
+                match self.db().get_tx_sequence(*certificate.digest()).await {
+                    Err(db_err) => {
+                        // TODO: Add retries on failing to read from db because
+                        // this still stalls the batch maker
+                        error!(
+                            ?digest,
+                            seq=?ticket_seq,
+                            "validator failed to read if db has locked the tx sequence: {}", db_err
+                        );
+                    }
+                    Ok(None) => {
+                        debug!(?digest, seq=?ticket_seq, "Closing the notifier ticket because we couldn't lock the tx sequence");
+                        self.batch_notifier.notify(ticket_seq);
+                    }
+                    Ok(Some(tx_seq)) => {
+                        if tx_seq < ticket_seq {
+                            debug!(
+                                ?digest,
+                                ?tx_seq,
+                                ?ticket_seq,
+                                "Notifying during retry failure, current low watermark {:?}",
+                                self.batch_notifier.low_watermark()
+                            );
+                            // Notify if we failed during a retry after sequencing
+                            self.batch_notifier.notify(ticket_seq);
+                        };
+                    }
+                }
+                return Err(err);
+            }
+            Ok(seq) => {
+                if seq < ticket_seq {
+                    debug!(
+                        ?digest,
+                        ?seq,
+                        ?ticket_seq,
+                        "Notifying during retry, current low watermark {:?}",
+                        self.batch_notifier.low_watermark()
+                    );
+                    self.batch_notifier.notify(seq);
+                };
+                seq
+            }
+        };
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
+
+        // index certificate
+        let _ = self
+            .post_process_one_tx(seq, &digest)
+            .await
+            .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -844,7 +929,7 @@ impl AuthorityState {
             .batch_size
             .observe(certificate.signed_data.data.kind.batch_size() as f64);
 
-        Ok(TransactionInfoResponse {
+        Ok(VerifiedTransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
             certified_transaction: Some(certificate.clone()),
             signed_effects: Some(signed_effects),
@@ -863,7 +948,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
         let _metrics_guard = start_timer(self.metrics.prepare_certificate_latency.clone());
@@ -911,14 +996,14 @@ impl AuthorityState {
         Ok((inner_temp_store, signed_effects))
     }
 
-    pub async fn dry_run_transaction(
+    pub async fn dry_exec_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: TransactionData,
         transaction_digest: TransactionDigest,
     ) -> Result<SuiTransactionEffects, anyhow::Error> {
-        transaction.verify()?;
         let (gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, transaction).await?;
+            transaction_input_checker::check_transaction_input(&self.database, &transaction)
+                .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
@@ -928,7 +1013,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                transaction.signed_data.data.clone(),
+                transaction,
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -946,7 +1031,7 @@ impl AuthorityState {
     pub async fn get_tx_info_already_executed(
         &self,
         digest: &TransactionDigest,
-    ) -> SuiResult<Option<TransactionInfoResponse>> {
+    ) -> SuiResult<Option<VerifiedTransactionInfoResponse>> {
         if self.database.effects_exists(digest)? {
             debug!("Transaction {digest:?} already executed");
             Ok(Some(self.make_transaction_info(digest).await?))
@@ -961,7 +1046,7 @@ impl AuthorityState {
         indexes: &IndexStore,
         seq: TxSequenceNumber,
         digest: &TransactionDigest,
-        cert: &CertifiedTransaction,
+        cert: &VerifiedCertificate,
         effects: &SignedTransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult {
@@ -993,10 +1078,17 @@ impl AuthorityState {
         seq: TxSequenceNumber,
         digest: &TransactionDigest,
     ) -> SuiResult {
+        if self.indexes.is_none()
+            && self.transaction_streamer.is_none()
+            && self.event_handler.is_none()
+        {
+            return Ok(());
+        }
+
         // Load cert and effects.
         let info = self.make_transaction_info(digest).await?;
         let (cert, effects) = match info {
-            TransactionInfoResponse {
+            VerifiedTransactionInfoResponse {
                 certified_transaction: Some(cert),
                 signed_effects: Some(effects),
                 ..
@@ -1020,7 +1112,9 @@ impl AuthorityState {
 
         // Stream transaction
         if let Some(transaction_streamer) = &self.transaction_streamer {
-            transaction_streamer.enqueue((cert, effects.clone())).await;
+            transaction_streamer
+                .enqueue((cert.into(), effects.clone()))
+                .await;
             self.metrics
                 .post_processing_total_tx_added_to_streamer
                 .inc();
@@ -1044,29 +1138,36 @@ impl AuthorityState {
 
     // TODO: This should persist the last successfully-processed sequence to disk, and upon
     // starting up, look for any sequences in the store since then and process them.
+    #[instrument(level = "debug", skip_all)]
     pub async fn run_tx_post_processing_process(&self) -> SuiResult {
         let mut subscriber = self.subscribe_batch();
+        let _guard = scoped_counter!(self.metrics, num_post_processing_tasks);
+        debug!("subscribed to batch service");
 
         loop {
             match subscriber.recv().await {
-                Ok(item) => {
-                    if let UpdateItem::Transaction((
-                        seq,
-                        ExecutionDigests {
-                            transaction: digest,
-                            ..
-                        },
-                    )) = item
-                    {
+                Ok(item) => match item {
+                    UpdateItem::Batch(batch) => {
+                        debug!(
+                            batch_seq = ?batch.data().next_sequence_number,
+                            "post process received batch"
+                        );
+                    }
+                    UpdateItem::Transaction((seq, ExecutionDigests { .. })) => {
                         self.metrics.post_processing_latest_seq_seen.set(seq as i64);
                         self.metrics
                             .post_processing_total_tx_sent_to_post_processing
                             .inc();
+                        /*
+                         * TODO: we are temporarily not processing txes here because the batch
+                         * system is flaky somehow. The metrics above are left alone so that we can
+                         * continue debugging.
                         if let Err(e) = self.post_process_one_tx(seq, &digest).await {
                             warn!(?digest, "Couldn't process tx: {e}");
                         }
+                        */
                     }
-                }
+                },
                 Err(RecvError::Closed) => {
                     // This shall not happen because the sender of batch notifier should not be closed.
                     error!("run_tx_post_processing_process receiver channel closed. If this happens there is a bug");
@@ -1096,7 +1197,7 @@ impl AuthorityState {
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         self.make_transaction_info(&request.transaction_digest)
             .await
     }
@@ -1111,7 +1212,7 @@ impl AuthorityState {
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, SuiError> {
+    ) -> Result<VerifiedObjectInfoResponse, SuiError> {
         let ref_and_digest = match request.request_kind {
             ObjectInfoRequestKind::PastObjectInfo(seq)
             | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
@@ -1200,82 +1301,6 @@ impl AuthorityState {
             requested_object_reference,
             object_and_lock,
         })
-    }
-
-    /// Handles a request for a batch info. It returns a sequence of
-    /// [batches, transactions, batches, transactions] as UpdateItems, and a flag
-    /// that if true indicates the request goes beyond the last batch in the
-    /// database.
-    pub async fn handle_batch_info_request(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<
-        (
-            VecDeque<UpdateItem>,
-            // Should subscribe, computed start, computed end
-            (bool, TxSequenceNumber, TxSequenceNumber),
-        ),
-        SuiError,
-    > {
-        // Ensure the range contains some elements and end > start
-        if request.length == 0 {
-            return Err(SuiError::InvalidSequenceRangeError);
-        };
-
-        // Ensure we are not doing too much work per request
-        let length = std::cmp::min(request.length, MAX_ITEMS_LIMIT);
-
-        // If we do not have a start, pick next sequence number that has
-        // not yet been put into a batch.
-        let start = match request.start {
-            Some(start) => start,
-            None => {
-                self.last_batch()?
-                    .expect("Authority is always initialized with a batch")
-                    .data()
-                    .next_sequence_number
-            }
-        };
-        let end = start + length;
-
-        let (batches, transactions) = self.database.batches_and_transactions(start, end)?;
-
-        let mut dq_batches = std::collections::VecDeque::from(batches);
-        let mut dq_transactions = std::collections::VecDeque::from(transactions);
-        let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
-        let mut last_batch_next_seq = 0;
-
-        // Send full historical data as [Batch - Transactions - Batch - Transactions - Batch].
-        while let Some(current_batch) = dq_batches.pop_front() {
-            // Get all transactions belonging to this batch and send them
-            loop {
-                // No more items or item too large for this batch
-                if dq_transactions.is_empty()
-                    || dq_transactions[0].0 >= current_batch.data().next_sequence_number
-                {
-                    break;
-                }
-
-                let current_transaction = dq_transactions.pop_front().unwrap();
-                items.push_back(UpdateItem::Transaction(current_transaction));
-            }
-
-            // Now send the batch
-            last_batch_next_seq = current_batch.data().next_sequence_number;
-            items.push_back(UpdateItem::Batch(current_batch));
-        }
-
-        // whether we have sent everything requested, or need to start
-        // live notifications.
-        let should_subscribe = end > last_batch_next_seq;
-
-        // If any transactions are left they must be outside a batch
-        while let Some(current_transaction) = dq_transactions.pop_front() {
-            // Remember the last sequence sent
-            items.push_back(UpdateItem::Transaction(current_transaction));
-        }
-
-        Ok((items, (should_subscribe, start, end)))
     }
 
     pub fn handle_checkpoint_request(
@@ -1384,6 +1409,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        node_sync_store: Arc<NodeSyncStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
@@ -1413,7 +1439,9 @@ impl AuthorityState {
 
         let committee = committee_store.get_latest_committee();
 
-        let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
+        let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
+        let event_handler =
+            event_store.map(|es| Arc::new(EventHandler::new(es, module_cache.clone())));
 
         let mut state = AuthorityState {
             name,
@@ -1422,17 +1450,18 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
+            node_sync_store,
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
+            module_cache,
             event_handler,
             transaction_streamer,
             checkpoints,
             committee_store,
             batch_channels: tx,
             batch_notifier: Arc::new(
-                authority_notifier::TransactionNotifier::new(store.clone())
+                authority_notifier::TransactionNotifier::new(store.clone(), prometheus_registry)
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
@@ -1460,7 +1489,7 @@ impl AuthorityState {
         // Get all unprocessed checkpoints
         for (_seq, batch) in state
             .database
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_to(&next_expected_tx)
@@ -1468,7 +1497,7 @@ impl AuthorityState {
         {
             let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                 .database
-                .tables
+                .perpetual_tables
                 .executed_sequence
                 .iter()
                 .skip_to(&batch.data().initial_sequence_number)
@@ -1514,7 +1543,8 @@ impl AuthorityState {
             None => &default_genesis,
         };
 
-        let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
+        // unwrap ok - for testing only.
+        let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
         let mut checkpoints = CheckpointStore::open(
             &path.join("checkpoints"),
             None,
@@ -1535,11 +1565,19 @@ impl AuthorityState {
             &genesis_committee,
             None,
         ));
+
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            path.join("node_sync_db"),
+            None,
+            None,
+        ));
+
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
+            node_sync_store,
             epochs,
             None,
             None,
@@ -1550,6 +1588,38 @@ impl AuthorityState {
             tx_reconfigure_consensus,
         )
         .await
+    }
+
+    pub fn add_pending_sequenced_certificate(&self, cert: VerifiedCertificate) -> SuiResult {
+        self.add_pending_impl(vec![(*cert.digest(), Some(cert))], true)
+    }
+
+    /// Add a number of certificates to the pending transactions as well as the
+    /// certificates structure if they are not already executed.
+    /// Certificates are optional, and if not provided, they will be eventually
+    /// downloaded in the execution driver.
+    pub fn add_pending_certificates(
+        &self,
+        certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
+    ) -> SuiResult<()> {
+        self.add_pending_impl(certs, false)
+    }
+
+    fn add_pending_impl(
+        &self,
+        certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
+        is_sequenced: bool,
+    ) -> SuiResult {
+        self.node_sync_store
+            .batch_store_certs(certs.iter().filter_map(|(_, cert_opt)| cert_opt.clone()))?;
+
+        self.database.add_pending_digests(
+            certs
+                .iter()
+                .map(|(seq_and_digest, _)| *seq_and_digest)
+                .collect(),
+            is_sequenced,
+        )
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1577,7 +1647,10 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self.process_certificate(tx_guard, &cert, false).await {
+                if let Err(e) = self
+                    .process_certificate(tx_guard, &cert.into(), false)
+                    .await
+                {
                     warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
@@ -1626,7 +1699,10 @@ impl AuthorityState {
         self.committee.load().clone().deref().clone()
     }
 
-    async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    pub(crate) async fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, SuiError> {
         self.database.get_object(object_id)
     }
 
@@ -1652,6 +1728,7 @@ impl AuthorityState {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
                             Err(SuiError::ObjectNotFound {
                                 object_id: *object_id,
+                                version: Some(obj_ref.1),
                             })
                         }
                         Some(object) => {
@@ -1711,6 +1788,7 @@ impl AuthorityState {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
                             Err(SuiError::ObjectNotFound {
                                 object_id: *object_id,
+                                version: Some(obj_ref.1),
                             })
                         }
                         Some(object) => {
@@ -1754,7 +1832,7 @@ impl AuthorityState {
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(VerifiedCertificate, TransactionEffects), anyhow::Error> {
         QueryHelpers::get_transaction(&self.database, &digest)
     }
 
@@ -1807,7 +1885,7 @@ impl AuthorityState {
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit, reverse)?,
             TransactionQuery::All => {
-                let iter = self.database.tables.executed_sequence.iter();
+                let iter = self.database.perpetual_tables.executed_sequence.iter();
                 if reverse {
                     let iter = iter
                         .skip_prior_to(&cursor)?
@@ -1844,118 +1922,78 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns at most `limit` events emitted in the given transaction,
-    /// emitted within [start_time, end_time) in order of events emitted.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_transaction(
+    pub async fn get_events(
         &self,
-        digest: TransactionDigest,
+        query: EventQuery,
+        cursor: Option<EventID>,
         limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        descending: bool,
+    ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es.events_by_transaction(digest, limit).await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
+        let cursor = cursor.unwrap_or(if descending {
+            // Database only support up to i64::MAX
+            (i64::MAX, i64::MAX).into()
+        } else {
+            (0, 0).into()
+        });
 
-    /// Returns at most `limit` events emitted in the given module,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_transaction_module(
-        &self,
-        module_id: &ModuleId,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_module_id(start_time, end_time, module_id, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events with the given move event struct name, e.g.
-    /// `0x2::devnet_nft::MintNFTEvent` or
-    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_move_event_struct_name(
-        &self,
-        move_event_struct_name: &str,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_move_event_struct_name(start_time, end_time, move_event_struct_name, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events associated with the given sender,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_sender(
-        &self,
-        sender: &SuiAddress,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_sender(start_time, end_time, sender, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events associated with the given recipient,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_recipient(
-        &self,
-        recipient: &Owner,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_recipient(start_time, end_time, recipient, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events associated with the given object,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_object(
-        &self,
-        object: &ObjectID,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_object(start_time, end_time, object, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events emitted within [start_time, end_time),
-    /// sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_timerange(
-        &self,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es.event_iterator(start_time, end_time, limit).await?;
-        StoredEvent::into_event_envelopes(stored_events)
+        let stored_events = match query {
+            EventQuery::All => es.all_events(cursor, limit, descending).await?,
+            EventQuery::Transaction(digest) => {
+                es.events_by_transaction(digest, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::MoveModule { package, module } => {
+                let module_id = ModuleId::new(
+                    AccountAddress::from(package),
+                    Identifier::from_str(&module)?,
+                );
+                es.events_by_module_id(&module_id, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::MoveEvent(struct_name) => {
+                es.events_by_move_event_struct_name(&struct_name, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::Sender(sender) => {
+                es.events_by_sender(&sender, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::Recipient(recipient) => {
+                es.events_by_recipient(&recipient, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::Object(object) => {
+                es.events_by_object(&object, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::TimeRange {
+                start_time,
+                end_time,
+            } => {
+                es.event_iterator(start_time, end_time, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::EventType(event_type) => {
+                es.events_by_type(event_type, cursor, limit, descending)
+                    .await?
+            }
+        };
+        let mut events = StoredEvent::into_event_envelopes(stored_events)?;
+        // populate parsed json event
+        for event in &mut events {
+            if let SuiEvent::MoveEvent {
+                type_, fields, bcs, ..
+            } = &mut event.1.event
+            {
+                let struct_tag = parse_struct_tag(type_)?;
+                let event =
+                    Event::move_event_to_move_struct(&struct_tag, bcs, &*self.module_cache)?;
+                let (_, event) = type_and_fields_from_move_struct(&struct_tag, event);
+                *fields = Some(event)
+            }
+        }
+        Ok(events)
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {
@@ -1976,9 +2014,30 @@ impl AuthorityState {
     async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        self.database
-            .get_signed_transaction_info(transaction_digest)
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+        let mut info = self
+            .database
+            .get_signed_transaction_info(transaction_digest)?;
+        // If the transaction was executed in previous epochs, the validator will
+        // re-sign the effects with new current epoch so that a client is always able to
+        // obtain an effects certificate at the current epoch.
+        if let Some(effects) = info.signed_effects.take() {
+            let cur_epoch = self.epoch();
+            let new_effects = if effects.auth_signature.epoch < cur_epoch {
+                debug!(
+                    effects_epoch=?effects.auth_signature.epoch,
+                    ?cur_epoch,
+                    "Re-signing the effects with the current epoch"
+                );
+                effects
+                    .effects
+                    .to_sign_effects(cur_epoch, &self.name, &*self.secret)
+            } else {
+                effects
+            };
+            info.signed_effects = Some(new_effects);
+        }
+        Ok(info)
     }
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
@@ -1997,7 +2056,7 @@ impl AuthorityState {
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        signed_transaction: SignedTransaction,
+        signed_transaction: VerifiedSignedTransaction,
     ) -> Result<(), SuiError> {
         self.database
             .lock_and_write_transaction(self.epoch(), mutable_input_objects, signed_transaction)
@@ -2010,18 +2069,18 @@ impl AuthorityState {
     pub(crate) async fn commit_certificate(
         &self,
         inner_temporary_store: InnerTemporaryStore,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         signed_effects: &SignedTransactionEffects,
-        bypass_validator_halt: bool,
-    ) -> SuiResult {
+        notifier_ticket: TransactionNotifierTicket,
+    ) -> SuiResult<TxSequenceNumber> {
         let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
-        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
         let effects_digest = &signed_effects.digest();
-        self.database
+        let seq = self
+            .database
             .update_state(
                 inner_temporary_store,
                 certificate,
@@ -2035,27 +2094,38 @@ impl AuthorityState {
             })?;
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
-        Ok(())
+        Ok(seq)
     }
 
-    /// Check whether a shared-object certificate has already been given shared-locks.
-    pub async fn transaction_shared_locks_exist(
+    /// Returns true if certificate is a shared-object cert but has not been sequenced.
+    fn is_cert_awaiting_sequencing(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+        // always an error to call this on fullnode.
+        assert!(!self.is_fullnode());
+
+        if !certificate.contains_shared_object() {
+            Ok(false)
+        } else {
+            self.database
+                .consensus_message_processed(certificate.digest())
+                .map(|r| !r)
+        }
+    }
+
+    /// Check whether certificate was processed by consensus.
+    /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
+    pub fn consensus_message_processed(
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
-        let digest = certificate.digest();
-        let shared_inputs = certificate.shared_input_objects();
-        let shared_locks = self
-            .database
-            .get_assigned_object_versions(digest, shared_inputs)?;
-        Ok(shared_locks[0].is_some())
+        self.database
+            .consensus_message_processed(certificate.digest())
     }
 
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
-    ) -> Result<Option<SignedTransaction>, SuiError> {
+    ) -> Result<Option<VerifiedSignedTransaction>, SuiError> {
         self.database
             .get_object_locking_transaction(object_ref)
             .await
@@ -2067,7 +2137,7 @@ impl AuthorityState {
     pub async fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<CertifiedTransaction>, SuiError> {
+    ) -> Result<Option<VerifiedCertificate>, SuiError> {
         self.database.read_certificate(digest)
     }
 
@@ -2104,29 +2174,71 @@ impl AuthorityState {
     }
 
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
+        // Check the certificate. Remember that Byzantine authorities may input anything into
+        // consensus.
+        certificate.verify_signatures(&self.committee.load())
+    }
+
+    /// Verifies transaction signatures and other data
+    /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
+    /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
+    /// This function returns unit error and is responsible for emitting log messages for internal errors
+    pub(crate) fn verify_consensus_transaction(
+        &self,
+        transaction: SequencedConsensusTransaction,
+    ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _timer = self
             .metrics
             .verify_narwhal_transaction_duration_mcs
             .utilization_timer();
-        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-        // may input anything into consensus.
-        fp_ensure!(
-            certificate.contains_shared_object(),
-            SuiError::NotASharedObjectTransaction
-        );
-
-        // Check the certificate. Remember that Byzantine authorities may input anything into
-        // consensus.
-        certificate.verify(&self.committee.load())
+        match &transaction.transaction.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                if self
+                    .database
+                    .consensus_message_processed(certificate.digest())
+                    .expect("Storage error")
+                {
+                    debug!(
+                        consensus_index=?transaction.consensus_index,
+                        tracking_id=?transaction.transaction.tracking_id,
+                        tx_digest = ?certificate.digest(),
+                        "handle_consensus_transaction UserTransaction [skip]",
+                    );
+                    self.metrics.skipped_consensus_txns.inc();
+                    return Err(());
+                }
+                self.verify_narwhal_transaction(certificate)
+                    .map_err(|err| {
+                        warn!(
+                            "Ignoring malformed transaction (failed to verify) from {}: {:?}",
+                            transaction.consensus_output.certificate.header.author, err
+                        );
+                    })?;
+            }
+            ConsensusTransactionKind::Checkpoint(fragment) => {
+                fragment.verify().map_err(|err| {
+                    warn!(
+                        "Ignoring malformed fragment (failed to verify) from {}: {:?}",
+                        transaction.consensus_output.certificate.header.author, err
+                    );
+                })?;
+            }
+        }
+        Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
+    /// The transaction passed here went through verification in verify_consensus_transaction.
+    /// This method is called in the exact sequence message are ordered in consensus.
+    /// Errors returned by this call are treated as critical errors and cause node to panic.
     pub(crate) async fn handle_consensus_transaction(
         &self,
-        // TODO [2533]: use this once integrating Narwhal reconfiguration
-        _consensus_output: &narwhal_consensus::ConsensusOutput,
-        consensus_index: ExecutionIndicesWithHash,
-        transaction: ConsensusTransaction,
-    ) -> Result<(), NarwhalHandlerError> {
+        transaction: VerifiedSequencedConsensusTransaction,
+    ) -> SuiResult {
+        let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
+            consensus_output: _consensus_output,
+            consensus_index,
+            transaction,
+        }) = transaction;
         self.metrics.total_consensus_txns.inc();
         let _timer = self
             .metrics
@@ -2135,31 +2247,18 @@ impl AuthorityState {
         let tracking_id = transaction.get_tracking_id();
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
+                // is constructed.
+                let certificate = VerifiedCertificate::new_unchecked(*certificate);
+
                 if self
                     .checkpoints
                     .lock()
                     .should_reject_consensus_transaction()
                 {
-                    return Err(NarwhalHandlerError::ValidatorHalted);
-                }
-                if self
-                    .database
-                    .consensus_message_processed(certificate.digest())
-                    .await
-                    .map_err(NarwhalHandlerError::NodeError)?
-                {
-                    debug!(
-                        ?consensus_index,
-                        ?tracking_id,
-                        tx_digest = ?certificate.digest(),
-                        "handle_consensus_transaction UserTransaction [skip]",
-                    );
-                    self.metrics.skipped_consensus_txns.inc();
+                    debug!("Validator has stopped accepting consensus transactions, skipping {:?} from {:?}", certificate.digest(), consensus_index);
                     return Ok(());
                 }
-                self.verify_narwhal_transaction(&certificate)
-                    .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
-
                 debug!(
                     ?consensus_index,
                     ?tracking_id,
@@ -2167,38 +2266,49 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
-                self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
-                    // todo - potentially more errors from inside here needs to be mapped differently
-                    .await
-                    .map_err(NarwhalHandlerError::NodeError)?;
+                // Schedule the certificate for execution
+                self.add_pending_sequenced_certificate(certificate.clone())?;
 
-                Ok(())
+                if certificate.contains_shared_object() {
+                    self.database
+                        .lock_shared_objects(&certificate, consensus_index)
+                        .await
+                } else {
+                    self.database
+                        .record_owned_object_cert_from_consensus(&certificate, consensus_index)
+                        .await
+                }
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
-                let cp_seq = fragment.proposer_sequence_number();
-                debug!(
-                    ?consensus_index,
-                    ?cp_seq,
-                    "handle_consensus_transaction Checkpoint. Proposer: {}, Other: {}",
-                    fragment.proposer.authority(),
-                    fragment.other.authority(),
-                );
-
-                let committee = self.committee.load();
-                fragment
-                    .verify(&committee)
-                    .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
+                match &fragment.message {
+                    CheckpointFragmentMessage::Header(header) => {
+                        debug!(
+                            ?consensus_index,
+                            cp_seq=?header.proposer.summary.sequence_number,
+                            proposer=?header.proposer.authority().concise(),
+                            other=?header.other.authority().concise(),
+                            chunk_count=?header.chunk_count,
+                            "handle_consensus_transaction Checkpoint header message",
+                        );
+                    }
+                    CheckpointFragmentMessage::Chunk(chunk) => {
+                        debug!(
+                            ?consensus_index,
+                            cp_seq=?chunk.sequence_number,
+                            proposer=?chunk.proposer.concise(),
+                            other=?chunk.other.concise(),
+                            chunk_id=?chunk.chunk_id,
+                            "handle_consensus_transaction Checkpoint chunk message",
+                        );
+                    }
+                }
 
                 let mut checkpoint = self.checkpoints.lock();
-                checkpoint
-                    .handle_internal_fragment(
-                        consensus_index.index,
-                        *fragment,
-                        self.database.clone(),
-                        &self.committee.load(),
-                    )
-                    .map_err(NarwhalHandlerError::NodeError)?;
+                checkpoint.handle_internal_fragment(
+                    consensus_index.index,
+                    fragment.message,
+                    &self.committee.load(),
+                )?;
 
                 // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                 // to persist the consensus index. If the validator crashes, this transaction
@@ -2220,123 +2330,12 @@ impl AuthorityState {
             }
         }
     }
-}
 
-pub struct ConsensusHandler {
-    state: Arc<AuthorityState>,
-    sender: mpsc::Sender<ConsensusListenerMessage>,
-    hash: Mutex<u64>,
-}
-
-impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: mpsc::Sender<ConsensusListenerMessage>) -> Self {
-        let hash = Mutex::new(0);
-        Self {
-            state,
-            sender,
-            hash,
-        }
-    }
-
-    fn update_hash(&self, index: ExecutionIndices, v: &[u8]) -> ExecutionIndicesWithHash {
-        let mut hash_guard = self
-            .hash
-            .try_lock()
-            .expect("Should not have contention on ExecutionState::update_hash");
-        let mut hasher = DefaultHasher::new();
-        (*hash_guard).hash(&mut hasher);
-        v.hash(&mut hasher);
-        let hash = hasher.finish();
-        *hash_guard = hash;
-        // Log hash for every certificate
-        if index.next_transaction_index == 1 && index.next_batch_index == 1 {
-            debug!(
-                "Integrity hash for consensus output at certificate {} is {:016x}",
-                index.next_certificate_index, hash
-            );
-        }
-        ExecutionIndicesWithHash { index, hash }
-    }
-}
-
-#[async_trait]
-impl ExecutionState for ConsensusHandler {
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
+    pub(crate) fn handle_commit_boundary(
         &self,
-        // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: &narwhal_consensus::ConsensusOutput,
-        consensus_index: ExecutionIndices,
-        serialized_transaction: Vec<u8>,
-    ) {
-        let consensus_index = self.update_hash(consensus_index, &serialized_transaction);
-        let transaction =
-            match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
-                Ok(transaction) => transaction,
-                Err(err) => {
-                    warn!(
-                        "Ignoring malformed transaction (failed to deserialize) from {}: {}",
-                        consensus_output.certificate.header.author, err
-                    );
-                    return;
-                }
-            };
-        match self
-            .state
-            .handle_consensus_transaction(consensus_output, consensus_index, transaction)
-            .await
-        {
-            Ok(()) => {
-                if self
-                    .sender
-                    .send(ConsensusListenerMessage::Processed(serialized_transaction))
-                    .await
-                    .is_err()
-                {
-                    warn!("Consensus handler outbound channel closed");
-                }
-            }
-            Err(NarwhalHandlerError::SkipNarwhalTransaction(err)) => {
-                warn!(
-                    "Ignoring malformed transaction (failed to verify) from {}: {:?}",
-                    consensus_output.certificate.header.author, err
-                );
-            }
-            Err(NarwhalHandlerError::ValidatorHalted) => {
-                debug!("Validator has stopped accepting consensus transactions, skipping");
-            }
-            Err(NarwhalHandlerError::NodeError(err)) => {
-                Err(err).expect("Unrecoverable error in consensus handler")
-            }
-        }
+        consensus_output: &Arc<ConsensusOutput>,
+    ) -> SuiResult {
+        self.database
+            .record_checkpoint_boundary(consensus_output.consensus_index)
     }
-
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        let index_with_hash = self
-            .state
-            .database
-            .last_consensus_index()
-            .expect("Failed to load consensus indices");
-        *self
-            .hash
-            .try_lock()
-            .expect("Should not have contention on ExecutionState::load_execution_indices") =
-            index_with_hash.hash;
-        index_with_hash.index
-    }
-}
-
-// todo - consider deleting this struct
-#[derive(Eq, PartialEq, Clone, Debug, Error)]
-pub enum NarwhalHandlerError {
-    /// Local node error after which it is not safe to continue consuming narwhal stream
-    #[error("Local node error {}", 0)]
-    NodeError(SuiError),
-    /// Transaction from narwhal did not pass verification and should be rejected,
-    /// narwhal can continue streaming next transactions to SUI
-    #[error("Invalid transaction {}", 0)]
-    SkipNarwhalTransaction(SuiError),
-    #[error("Validator halted and no longer accepts sequenced transactions")]
-    ValidatorHalted,
 }

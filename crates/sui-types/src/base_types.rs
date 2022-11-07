@@ -9,7 +9,6 @@ use std::fmt;
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use base64ct::Encoding;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
 use hex::FromHex;
@@ -33,10 +32,9 @@ use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::object::{Object, Owner};
-use crate::sui_serde::Base64;
-use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
 use crate::waypoint::IntoPoint;
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -80,6 +78,14 @@ pub struct ObjectID(
 );
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+
+pub fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
 
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
@@ -617,7 +623,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64ct::Base64::encode_string(&self.0);
+        let s = Base64::encode(self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -625,7 +631,7 @@ impl std::fmt::Debug for TransactionDigest {
 
 impl std::fmt::Debug for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64ct::Base64::encode_string(&self.0);
+        let s = Base64::encode(self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -978,11 +984,11 @@ impl FromStr for ObjectID {
 }
 
 impl FromStr for TransactionDigest {
-    type Err = base64ct::Error;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
-        base64ct::Base64::decode(s, &mut result)?;
+        result.copy_from_slice(&Base64::decode(s).map_err(|e| anyhow!(e))?);
         Ok(TransactionDigest(result))
     }
 }

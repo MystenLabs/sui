@@ -7,18 +7,19 @@
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,
     sync::Arc,
 };
 use storage::CertificateStore;
+use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification,
-    Round, StoreResult,
+    Round, StoreResult, Timestamp,
 };
 
 /// The representation of the DAG in memory.
@@ -59,7 +60,6 @@ impl ConsensusState {
         }
     }
 
-    #[instrument(level = "info", skip_all)]
     pub fn new_from_store(
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
@@ -132,6 +132,28 @@ impl ConsensusState {
         dag
     }
 
+    #[allow(clippy::result_unit_err)]
+    pub fn try_insert(&mut self, certificate: Certificate) -> Result<(), ()> {
+        let last_committed = self
+            .last_committed
+            .get(&certificate.origin())
+            .cloned()
+            .unwrap_or_default();
+        if certificate.round() < last_committed {
+            debug!(
+                "Ignoring certificate {:?} as it is past last committed round for this origin {}",
+                certificate, last_committed
+            );
+            Err(())
+        } else {
+            self.dag
+                .entry(certificate.round())
+                .or_insert_with(HashMap::new)
+                .insert(certificate.origin(), (certificate.digest(), certificate));
+            Ok(())
+        }
+    }
+
     /// Update and clean up internal state base on committed certificates.
     pub fn update(&mut self, certificate: &Certificate, gc_depth: Round) {
         self.last_committed
@@ -146,6 +168,10 @@ impl ConsensusState {
             .last_committed_round
             .with_label_values(&[])
             .set(last_committed_round as i64);
+
+        self.metrics
+            .certificate_commit_latency
+            .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
 
         // We purge all certificates past the gc depth
         self.dag.retain(|r, _| r + gc_depth >= last_committed_round);
@@ -184,11 +210,11 @@ pub struct Consensus<ConsensusProtocol> {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: metered_channel::Receiver<Certificate>,
+    rx_new_certificates: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_primary: metered_channel::Sender<Certificate>,
+    tx_committed_certificates: metered_channel::Sender<Certificate>,
     /// Outputs the sequence of ordered certificates to the application layer.
-    tx_output: metered_channel::Sender<ConsensusOutput>,
+    tx_sequence: metered_channel::Sender<ConsensusOutput>,
 
     /// The (global) consensus index. We assign one index to each sequenced certificate. this is
     /// helpful for clients.
@@ -214,9 +240,9 @@ where
         store: Arc<ConsensusStore>,
         cert_store: CertificateStore,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_primary: metered_channel::Receiver<Certificate>,
-        tx_primary: metered_channel::Sender<Certificate>,
-        tx_output: metered_channel::Sender<ConsensusOutput>,
+        rx_new_certificates: metered_channel::Receiver<Certificate>,
+        tx_committed_certificates: metered_channel::Sender<Certificate>,
+        tx_sequence: metered_channel::Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
@@ -238,16 +264,16 @@ where
         let s = Self {
             committee,
             rx_reconfigure,
-            rx_primary,
-            tx_primary,
-            tx_output,
+            rx_new_certificates,
+            tx_committed_certificates,
+            tx_sequence,
             consensus_index,
             protocol,
             metrics,
             state,
         };
 
-        tokio::spawn(s.run())
+        spawn_monitored_task!(s.run())
     }
 
     fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
@@ -268,7 +294,7 @@ where
         // Listen to incoming certificates.
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_primary.recv() => {
+                Some(certificate) = self.rx_new_certificates.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
                     match certificate.epoch().cmp(&self.committee.epoch()) {
@@ -328,12 +354,12 @@ where
                                 .set((mysten_util_mem::malloc_size(&self.state.dag) + std::mem::size_of::<Dag>()) as i64);
                         }
 
-                        self.tx_primary
+                        self.tx_committed_certificates
                             .send(certificate.clone())
                             .await
                             .expect("Failed to send certificate to primary");
 
-                        if let Err(e) = self.tx_output.send(output).await {
+                        if let Err(e) = self.tx_sequence.send(output).await {
                             tracing::warn!("Failed to output certificate: {e}");
                         }
                     }

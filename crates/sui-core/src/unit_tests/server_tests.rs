@@ -21,40 +21,6 @@ use sui_types::{
 use crate::safe_client::SafeClient;
 use typed_store::Map;
 
-#[tokio::test]
-async fn test_start_stop_batch_subsystem() {
-    let sender = dbg_addr(1);
-    let object_id = dbg_object_id(1);
-    let mut authority_state = init_state_with_object_id(sender, object_id).await;
-    authority_state
-        .init_batches_from_database()
-        .expect("Init batches failed!");
-
-    // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
-
-    let server = Arc::new(AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/999/http".parse().unwrap(),
-        Arc::new(authority_state),
-        consensus_address,
-        tx_consensus_listener,
-    ));
-    let join = server
-        .spawn_batch_subsystem(1000, Duration::from_secs(50))
-        .await
-        .expect("Problem launching subsystem.");
-
-    // Now drop the server to simulate the authority server ending processing.
-    server.state.batch_notifier.close();
-    drop(server);
-
-    // This should return immediately.
-    join.await
-        .expect("Error stopping subsystem")
-        .expect("Subsystem crashed?");
-}
-
 //This is the most basic example of how to test the server logic
 #[tokio::test]
 async fn test_simple_request() {
@@ -129,7 +95,7 @@ async fn test_subscription() {
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = state.batch_notifier.ticket(false).expect("all good");
-        db.tables
+        db.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -184,7 +150,7 @@ async fn test_subscription() {
                 .batch_notifier
                 .ticket(false)
                 .expect("all good");
-            db2.tables
+            db2.perpetual_tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
@@ -262,7 +228,7 @@ async fn test_subscription() {
             .batch_notifier
             .ticket(false)
             .expect("all good");
-        db3.tables
+        db3.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -338,7 +304,7 @@ async fn test_subscription_safe_client() {
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = server.state.batch_notifier.ticket(false).expect("all good");
-        db.tables
+        db.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -401,7 +367,7 @@ async fn test_subscription_safe_client() {
                 .batch_notifier
                 .ticket(false)
                 .expect("all good");
-            db2.tables
+            db2.perpetual_tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
@@ -475,7 +441,7 @@ async fn test_subscription_safe_client() {
             .batch_notifier
             .ticket(false)
             .expect("all good");
-        db3.tables
+        db3.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -483,20 +449,23 @@ async fn test_subscription_safe_client() {
         i += 1;
         tokio::time::sleep(Duration::from_millis(20)).await;
         ticket.notify();
+        if i > 129 {
+            break;
+        }
+    }
 
-        // Then we wait to receive
-        if let Some(data) = stream1.next().await {
-            match data.expect("Bad response") {
-                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    num_batches += 1;
-                    if signed_batch.data().next_sequence_number >= 129 {
-                        break;
-                    }
+    // Then we wait to receive
+    while let Some(data) = stream1.next().await {
+        match data.expect("Bad response") {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.data().next_sequence_number >= 129 {
+                    break;
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                    println!("Received {seq}");
-                    num_transactions += 1;
-                }
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                println!("Received {seq}");
+                num_transactions += 1;
             }
         }
     }

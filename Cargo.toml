@@ -17,7 +17,9 @@ members = [
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-types",
+    "crates/sui-keys",
     "crates/sui-macros",
+    "crates/sui-metrics",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -41,15 +43,20 @@ members = [
     "narwhal/config", "narwhal/consensus", "narwhal/crypto", "narwhal/dag", "narwhal/examples", "narwhal/executor", "narwhal/network", "narwhal/node", "narwhal/primary", "narwhal/storage", "narwhal/test-utils", "narwhal/types", "narwhal/worker",
 ]
 
+[workspace.package]
+# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
+version = "0.15.0"
+
 [profile.release]
-# The following two lines add minimal symbol information, which helps certain profilers like Bytehound
-# without significantly increasing binary size
-debug = true
-strip = 'debuginfo'
+# debug = 1 means line charts only, which is minimum needed for good stack traces
+debug = 1
+strip = 'none'
+# Exit process with SIGABRT when any thread panics
+panic = 'abort'
 
 [profile.bench]
-# Do not strip any debug info.  This helps the widest set of profiling tools
-debug = true
+# debug = 1 means line charts only, which is minimum needed for good stack traces
+debug = 1
 strip = 'none'
 
 [profile.simulator]
@@ -64,34 +71,44 @@ opt-level = 1
 [workspace.dependencies]
 
 # github.com/MystenLabs/mysten-infra dependencies
-typed-store = "0.1.0"
-typed-store-derive = "0.1.0"
+typed-store = "0.4.0"
+typed-store-derive = "0.3.0"
 telemetry-subscribers = { version = "0.2.0", features = ["jaeger", "tokio-console"] }
-mysten-network = "0.2.0"
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9" }
 name-variant = "0.1.0"
-store = { version = "0.1.0", package = "typed-store" }
+store = { version = "0.4.0", package = "typed-store" }
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-cli = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-package = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-prover = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-cli = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-package = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-prover = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "be52c7118aeb94fbbfa12590e420a75e8ddfec93" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4b7a06fe393003013489990dc2f4d3d2ebb32539" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbb2d02a7a64c27314721748cc4d015b00490dbe" }
+
+# anemo dependencies
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
+
+# patch sqlx to a version using libsqlite3-sys v0.25.1 or later, see
+# https://github.com/launchbadge/sqlx/pull/2176
+[patch.crates-io]
+sqlx = { git="https://github.com/huitseeker/sqlx", branch="update_libsqlite3" }

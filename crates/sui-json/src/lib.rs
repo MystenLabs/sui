@@ -6,6 +6,7 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
 use move_core_types::account_address::AccountAddress;
+use move_core_types::u256::U256;
 use move_core_types::{
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
@@ -15,7 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue};
 use std::collections::VecDeque;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{self, Debug, Formatter};
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
@@ -26,6 +27,47 @@ const HEX_PREFIX: &str = "0x";
 
 #[cfg(test)]
 mod tests;
+
+/// A list of error categories encountered when parsing numbers.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum SuiJsonValueErrorKind {
+    /// JSON value must be of specific types.
+    ValueTypeNotAllowed,
+
+    /// JSON arrays must be homogeneous.
+    ArrayNotHomogeneous,
+}
+
+#[derive(Debug)]
+pub struct SuiJsonValueError {
+    kind: SuiJsonValueErrorKind,
+    val: JsonValue,
+}
+
+impl SuiJsonValueError {
+    pub fn new(val: &JsonValue, kind: SuiJsonValueErrorKind) -> Self {
+        Self {
+            kind,
+            val: val.clone(),
+        }
+    }
+}
+
+impl std::error::Error for SuiJsonValueError {}
+
+impl fmt::Display for SuiJsonValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let err_str = match self.kind {
+            SuiJsonValueErrorKind::ValueTypeNotAllowed => {
+                format!("JSON value type {} not allowed.", self.val)
+            }
+            SuiJsonValueErrorKind::ArrayNotHomogeneous => {
+                format!("Array not homogeneous. Mismatched value: {}.", self.val)
+            }
+        };
+        write!(f, "{err_str}")
+    }
+}
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum SuiJsonCallArg {
@@ -53,9 +95,7 @@ impl SuiJsonValue {
             // Must be homogeneous
             JsonValue::Array(a) => {
                 // Fail if not homogeneous
-                if !is_homogeneous(&JsonValue::Array(a)) {
-                    bail!("Arrays must be homogeneous",);
-                }
+                check_valid_homogeneous(&JsonValue::Array(a))?
             }
             _ => bail!("{json_value} not allowed."),
         };
@@ -100,11 +140,12 @@ impl SuiJsonValue {
 
         match &inner_vec[0] {
             MoveTypeLayout::Vector(inner) => match **inner {
-                MoveTypeLayout::U8 | MoveTypeLayout::Address => {
-                    Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
-                        Self::to_move_value(val, &inner_vec[0].clone())?,
-                    ])))
-                }
+                MoveTypeLayout::U8 => Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                    Self::to_move_value(val, &inner_vec[0].clone())?,
+                ]))),
+                MoveTypeLayout::Address => Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                    Self::to_move_value(val, &MoveTypeLayout::Address)?,
+                ]))),
                 _ => bail!(
                     "Cannot convert string arg {s} to {ty} \
                              which is expected to be a struct \
@@ -128,17 +169,32 @@ impl SuiJsonValue {
             (JsonValue::Number(n), MoveTypeLayout::U8) => {
                 MoveValue::U8(u8::try_from(n.as_u64().unwrap())?)
             }
+            (JsonValue::Number(n), MoveTypeLayout::U16) => {
+                MoveValue::U16(u16::try_from(n.as_u64().unwrap())?)
+            }
+            (JsonValue::Number(n), MoveTypeLayout::U32) => {
+                MoveValue::U32(u32::try_from(n.as_u64().unwrap())?)
+            }
             (JsonValue::Number(n), MoveTypeLayout::U64) => MoveValue::U64(n.as_u64().unwrap()),
 
-            // u8, u64, u128 can be encoded as String
+            // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
-                MoveValue::U8(u8::try_from(convert_string_to_u128(s.as_str())?)?)
+                MoveValue::U8(u8::try_from(convert_string_to_u256(s.as_str())?)?)
+            }
+            (JsonValue::String(s), MoveTypeLayout::U16) => {
+                MoveValue::U16(u16::try_from(convert_string_to_u256(s.as_str())?)?)
+            }
+            (JsonValue::String(s), MoveTypeLayout::U32) => {
+                MoveValue::U32(u32::try_from(convert_string_to_u256(s.as_str())?)?)
             }
             (JsonValue::String(s), MoveTypeLayout::U64) => {
-                MoveValue::U64(u64::try_from(convert_string_to_u128(s.as_str())?)?)
+                MoveValue::U64(u64::try_from(convert_string_to_u256(s.as_str())?)?)
             }
             (JsonValue::String(s), MoveTypeLayout::U128) => {
-                MoveValue::U128(convert_string_to_u128(s.as_str())?)
+                MoveValue::U128(u128::try_from(convert_string_to_u256(s.as_str())?)?)
+            }
+            (JsonValue::String(s), MoveTypeLayout::U256) => {
+                MoveValue::U256(convert_string_to_u256(s.as_str())?)
             }
             (JsonValue::String(s), MoveTypeLayout::Struct(MoveStructLayout::Runtime(inner))) => {
                 Self::handle_inner_struct_layout(inner, val, ty, s)?
@@ -146,8 +202,6 @@ impl SuiJsonValue {
             (JsonValue::String(s), MoveTypeLayout::Vector(t)) => {
                 match &**t {
                     MoveTypeLayout::U8 => {
-                        // U256 Not allowed for now
-
                         // We can encode U8 Vector as string in 2 ways
                         // 1. If it starts with 0x, we treat it as hex strings, where each pair is a
                         //    byte
@@ -210,6 +264,10 @@ fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
         Ok(JsonValue::String(v.to_hex_literal()))
     } else if let Ok(v) = bcs::from_bytes::<u8>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
+    } else if let Ok(v) = bcs::from_bytes::<u16>(bytes) {
+        Ok(JsonValue::Number(Number::from(v)))
+    } else if let Ok(v) = bcs::from_bytes::<u32>(bytes) {
+        Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<u64>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<bool>(bytes) {
@@ -252,19 +310,19 @@ enum ValidJsonType {
 }
 
 /// Check via BFS
-/// The invariant is that all types at a given level must be the same or be empty
-pub fn is_homogeneous(val: &JsonValue) -> bool {
+/// The invariant is that all types at a given level must be the same or be empty, and all must be valid
+pub fn check_valid_homogeneous(val: &JsonValue) -> Result<(), SuiJsonValueError> {
     let mut deq: VecDeque<&JsonValue> = VecDeque::new();
     deq.push_back(val);
-    is_homogeneous_rec(&mut deq)
+    check_valid_homogeneous_rec(&mut deq)
 }
 
 /// Check via BFS
 /// The invariant is that all types at a given level must be the same or be empty
-fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
+fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), SuiJsonValueError> {
     if curr_q.is_empty() {
         // Nothing to do
-        return true;
+        return Ok(());
     }
     // Queue for the next level
     let mut next_q = VecDeque::new();
@@ -274,9 +332,10 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     // Process all in this queue/level
     while !curr_q.is_empty() {
         // Okay to unwrap since we know values exist
-        let curr = match curr_q.pop_front().unwrap() {
+        let v = curr_q.pop_front().unwrap();
+        let curr = match v {
             JsonValue::Bool(_) => ValidJsonType::Bool,
-            JsonValue::Number(_) => ValidJsonType::Number,
+            JsonValue::Number(x) if x.is_u64() => ValidJsonType::Number,
             JsonValue::String(_) => ValidJsonType::String,
             JsonValue::Array(w) => {
                 // Add to the next level
@@ -284,7 +343,12 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
                 ValidJsonType::Array
             }
             // Not valid
-            _ => return false,
+            _ => {
+                return Err(SuiJsonValueError::new(
+                    v,
+                    SuiJsonValueErrorKind::ValueTypeNotAllowed,
+                ))
+            }
         };
 
         if level_type == ValidJsonType::Any {
@@ -292,16 +356,26 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
             level_type = curr;
         } else if level_type != curr {
             // Mismatch in the level
-            return false;
+            return Err(SuiJsonValueError::new(
+                v,
+                SuiJsonValueErrorKind::ArrayNotHomogeneous,
+            ));
         }
     }
     // Process the next level
-    is_homogeneous_rec(&mut next_q)
+    check_valid_homogeneous_rec(&mut next_q)
 }
 
 fn is_primitive_type_tag(t: &TypeTag) -> bool {
     match t {
-        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
+        TypeTag::Bool
+        | TypeTag::U8
+        | TypeTag::U16
+        | TypeTag::U32
+        | TypeTag::U64
+        | TypeTag::U128
+        | TypeTag::U256
+        | TypeTag::Address => true,
         TypeTag::Vector(inner) => is_primitive_type_tag(inner),
         TypeTag::Struct(StructTag {
             address,
@@ -336,8 +410,11 @@ pub fn primitive_type(
     match param {
         SignatureToken::Bool => (true, Some(MoveTypeLayout::Bool)),
         SignatureToken::U8 => (true, Some(MoveTypeLayout::U8)),
+        SignatureToken::U16 => (true, Some(MoveTypeLayout::U16)),
+        SignatureToken::U32 => (true, Some(MoveTypeLayout::U32)),
         SignatureToken::U64 => (true, Some(MoveTypeLayout::U64)),
         SignatureToken::U128 => (true, Some(MoveTypeLayout::U128)),
+        SignatureToken::U256 => (true, Some(MoveTypeLayout::U256)),
         SignatureToken::Address => (true, Some(MoveTypeLayout::Address)),
         SignatureToken::Vector(inner) => {
             let (is_primitive, inner_layout_opt) = primitive_type(view, type_args, inner);
@@ -577,9 +654,9 @@ pub fn resolve_move_function_args(
     resolve_call_args(&view, type_args, &combined_args_json, parameters)
 }
 
-fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
+fn convert_string_to_u256(s: &str) -> Result<U256, anyhow::Error> {
     // Try as normal number
-    if let Ok(v) = s.parse::<u128>() {
+    if let Ok(v) = s.parse::<U256>() {
         return Ok(v);
     }
 
@@ -591,5 +668,5 @@ fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
     if !s.starts_with(HEX_PREFIX) {
         bail!("Unable to convert {s} to unsigned int.",);
     }
-    u128::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
+    U256::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
 }

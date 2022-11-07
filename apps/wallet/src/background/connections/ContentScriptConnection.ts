@@ -29,11 +29,13 @@ export class ContentScriptConnection extends Connection {
     public static readonly CHANNEL: PortChannelName =
         'sui_content<->background';
     public readonly origin: string;
+    public readonly pagelink?: string | undefined;
     public readonly originFavIcon: string | undefined;
 
     constructor(port: Runtime.Port) {
         super(port);
         this.origin = this.getOrigin(port);
+        this.pagelink = this.getAppUrl(port);
         this.originFavIcon = port.sender?.tab?.favIconUrl;
     }
 
@@ -158,6 +160,14 @@ export class ContentScriptConnection extends Connection {
         throw new Error(
             "[ContentScriptConnection] port doesn't include an origin"
         );
+    }
+
+    // optional field for the app link.
+    private getAppUrl(port: Runtime.Port) {
+        if (port.sender?.url) {
+            return new URL(port.sender.url).href;
+        }
+        return undefined;
     }
 
     private sendError<Error extends ErrorPayload>(

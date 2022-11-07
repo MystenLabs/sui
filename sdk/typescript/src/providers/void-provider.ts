@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
+import { HttpHeaders } from '../rpc/client';
 import {
   CertifiedTransaction,
+  CoinDenominationInfoResponse,
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
   SuiObjectInfo,
   GetObjectDataResponse,
-  SuiTransactionResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -24,11 +25,32 @@ import {
   ObjectOwner,
   SuiAddress,
   ObjectId,
-  SuiEvents, TransactionQuery, Ordering, PaginatedTransactionDigests,
+  SuiEvents,
+  TransactionQuery,
+  PaginatedTransactionDigests,
+  EventQuery,
+  PaginatedEvents,
+  EventId,
+  RpcApiVersion,
+  FaucetResponse,
+  Order,
 } from '../types';
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
+  // API Version
+  async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
+    throw this.newError('getRpcApiVersion');
+  }
+
+  // Faucet
+  async requestSuiFromFaucet(
+    _recipient: SuiAddress,
+    _httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    throw this.newError('requestSuiFromFaucet');
+  }
+
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
@@ -38,6 +60,10 @@ export class VoidProvider extends Provider {
     _address: string
   ): Promise<SuiObjectInfo[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
+  }
+
+  getCoinDenominationInfo(_coin_type: string): CoinDenominationInfoResponse {
+    throw this.newError('getCoinDenominationInfo');
   }
 
   async getCoinBalancesOwnedByAddress(
@@ -80,15 +106,6 @@ export class VoidProvider extends Provider {
     throw this.newError('getTransaction');
   }
 
-  async executeTransaction(
-    _txnBytes: string,
-    _signatureScheme: SignatureScheme,
-    _signature: string,
-    _pubkey: string
-  ): Promise<SuiTransactionResponse> {
-    throw this.newError('executeTransaction');
-  }
-
   async executeTransactionWithRequestType(
     _txnBytes: string,
     _signatureScheme: SignatureScheme,
@@ -108,10 +125,6 @@ export class VoidProvider extends Provider {
     _end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
-  }
-
-  async getRecentTransactions(_count: number): Promise<GetTxnDigestsResponse> {
-    throw this.newError('getRecentTransactions');
   }
 
   async getMoveFunctionArgTypes(
@@ -231,11 +244,21 @@ export class VoidProvider extends Provider {
     return new Error(`Please use a valid provider for ${operation}`);
   }
 
-  async getTransactions(_query: TransactionQuery,
-                        _cursor: TransactionDigest | null,
-                        _limit: number | null,
-                        _order: Ordering
+  async getTransactions(
+      _query: TransactionQuery,
+      _cursor: TransactionDigest | null,
+      _limit: number | null,
+      _order: Order
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
+  }
+
+  async getEvents(
+      _query: EventQuery,
+      _cursor: EventId | null,
+      _limit: number | null,
+      _order: Order
+  ): Promise<PaginatedEvents> {
+    throw this.newError('getEvents');
   }
 }

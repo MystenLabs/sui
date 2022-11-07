@@ -6,16 +6,15 @@ use crate::metrics::initialise_metrics;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
+use futures::stream::FuturesOrdered;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::time::Duration;
 use store::rocks;
-use test_utils::{
-    batch, temp_dir, CommitteeFixture, WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
-};
-use types::{TransactionsClient, WorkerPrimaryMessage};
+use test_utils::{batch, temp_dir, CommitteeFixture};
+use types::{MockWorkerToPrimary, MockWorkerToWorker, TransactionsClient, WorkerToPrimaryServer};
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -53,20 +52,38 @@ async fn handle_clients_transactions() {
     );
 
     // Spawn a network listener to receive our batch's digest.
+    let mut peer_networks = Vec::new();
     let batch = batch();
     let batch_digest = batch.digest();
 
-    let primary_address = committee.primary(&name).unwrap();
-    let expected = WorkerPrimaryMessage::OurBatch(batch_digest, worker_id);
-    let (mut handle, _network) =
-        WorkerToPrimaryMockServer::spawn(my_primary.network_keypair().copy(), primary_address);
+    let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);
+    let mut mock_primary_server = MockWorkerToPrimary::new();
+    mock_primary_server
+        .expect_report_our_batch()
+        .withf(move |request| {
+            let message = request.body();
+
+            message.digest == batch_digest
+                && message.worker_id == worker_id
+                && message.metadata.created_at > 0
+        })
+        .times(1)
+        .returning(move |_| {
+            tx_await_batch.try_send(()).unwrap();
+            Ok(anemo::Response::new(()))
+        });
+    let primary_routes =
+        anemo::Router::new().add_rpc_service(WorkerToPrimaryServer::new(mock_primary_server));
+    peer_networks.push(my_primary.new_network(primary_routes));
 
     // Spawn enough workers' listeners to acknowledge our batches.
-    let mut other_workers = Vec::new();
     for worker in fixture.authorities().skip(1).map(|a| a.worker(worker_id)) {
-        let handle =
-            WorkerToWorkerMockServer::spawn(worker.keypair(), worker.info().worker_address.clone());
-        other_workers.push(handle);
+        let mut mock_server = MockWorkerToWorker::new();
+        mock_server
+            .expect_report_batch()
+            .returning(|_| Ok(anemo::Response::new(())));
+        let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
+        peer_networks.push(worker.new_network(routes));
     }
 
     // Wait till other services have been able to start up
@@ -79,16 +96,32 @@ async fn handle_clients_transactions() {
         .transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
-    let mut client = TransactionsClient::new(channel);
-    for tx in batch.0 {
-        let txn = TransactionProto {
-            transaction: Bytes::from(tx.clone()),
-        };
-        client.submit_transaction(txn).await.unwrap();
-    }
+    let client = TransactionsClient::new(channel);
+
+    let join_handle = tokio::task::spawn(async move {
+        let mut fut_list = FuturesOrdered::new();
+        for tx in batch.transactions {
+            let txn = TransactionProto {
+                transaction: Bytes::from(tx.clone()),
+            };
+
+            // Calls to submit_transaction are now blocking, so we need to drive them
+            // all at the same time, rather than sequentially.
+            let mut inner_client = client.clone();
+            fut_list.push_back(async move {
+                inner_client.submit_transaction(txn).await.unwrap();
+            });
+        }
+
+        // Drive all sending in parallel.
+        while fut_list.next().await.is_some() {}
+    });
 
     // Ensure the primary received the batch's digest (ie. it did not panic).
-    assert_eq!(handle.recv().await.unwrap(), expected);
+    rx_await_batch.recv().await.unwrap();
+
+    // Ensure sending ended.
+    assert!(join_handle.await.is_ok());
 }
 
 #[tokio::test]

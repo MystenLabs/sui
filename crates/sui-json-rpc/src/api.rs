@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::collections::BTreeMap;
 
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
     MoveFunctionArgType, RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
@@ -17,17 +19,18 @@ use sui_json_rpc_types::{
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
+use sui_types::committee::EpochId;
 use sui_types::crypto::SignatureScheme;
+use sui_types::event::EventID;
+use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
-use sui_types::object::Owner;
-use sui_types::query::{Ordering, TransactionQuery};
-use sui_types::sui_serde::Base64;
+use sui_types::query::{EventQuery, TransactionQuery};
 
 /// Maximum number of events returned in an event query.
-/// This is equivalent to EVENT_STORE_QUERY_MAX_LIMIT in `sui-storage` crate.
+/// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
 /// To avoid unnecessary dependency on that crate, we have a reference here
 /// for document purposes.
-pub const MAX_RESULT_SIZE: usize = 4096;
+pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
 #[rpc(server, client, namespace = "sui")]
@@ -113,13 +116,7 @@ pub trait RpcReadApi {
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
     #[method(name = "dryRunTransaction")]
-    async fn dry_run_transaction(
-        &self,
-        tx_bytes: Base64,
-        sig_scheme: SignatureScheme,
-        signature: Base64,
-        pub_key: Base64,
-    ) -> RpcResult<SuiTransactionEffects>;
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.
@@ -174,8 +171,8 @@ pub trait RpcFullNodeReadApi {
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page
         limit: Option<usize>,
-        /// Transaction query ordering
-        order: Ordering,
+        /// query result ordering, default to false (ascending order), oldest record first.  
+        descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
     /// Note there is no software-level guarantee/SLA that objects with past versions
@@ -190,6 +187,14 @@ pub trait RpcFullNodeReadApi {
         /// the version of the queried object. If None, default to the latest known version
         version: SequenceNumber,
     ) -> RpcResult<GetPastObjectDataResponse>;
+
+    /// Return the committee information for the asked epoch
+    #[method(name = "getCommitteeInfo")]
+    async fn get_committee_info(
+        &self,
+        /// The epoch of interest. If None, default to the latest epoch
+        epoch: Option<EpochId>,
+    ) -> RpcResult<CommitteeInfoResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
@@ -228,6 +233,10 @@ pub trait RpcTransactionBuilder {
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Send Coin<T> to a list of addresses, where `T` can be any coin type, following a list of amounts,
+    /// The object specified in the `gas` field will be used to pay the gas fee for the transaction.
+    /// The gas object can not appear in `input_coins`. If the gas object is not specified, the RPC server
+    /// will auto-select one.
     #[method(name = "pay")]
     async fn pay(
         &self,
@@ -241,6 +250,50 @@ pub trait RpcTransactionBuilder {
         amounts: Vec<u64>,
         /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    /// Send SUI coins to a list of addresses, following a list of amounts.
+    /// This is for SUI coin only and does not require a separate gas coin object.
+    /// Specifically, what pay_sui does are:
+    /// 1. debit each input_coin to create new coin following the order of
+    /// amounts and assign it to the corresponding recipient.
+    /// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
+    /// input coin, then use the first input coin as the gas coin object.
+    /// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
+    /// 4. all other input coints other than the first one are deleted.
+    #[method(name = "paySui")]
+    async fn pay_sui(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// the Sui coins to be used in this transaction, including the coin for gas payment.
+        input_coins: Vec<ObjectID>,
+        /// the recipients' addresses, the length of this vector must be the same as amounts.
+        recipients: Vec<SuiAddress>,
+        /// the amounts to be transferred to recipients, following the same order
+        amounts: Vec<u64>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    /// Send all SUI coins to one recipient.
+    /// This is for SUI coin only and does not require a separate gas coin object.
+    /// Specifically, what pay_all_sui does are:
+    /// 1. accumulate all SUI from input coins and deposit all SUI to the first input coin
+    /// 2. transfer the updated first coin to the recipient and also use this first coin as gas coin object.
+    /// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
+    /// 4. all other input coins other than the first are deleted.
+    #[method(name = "payAllSui")]
+    async fn pay_all_sui(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// the Sui coins to be used in this transaction, including the coin for gas payment.
+        input_coins: Vec<ObjectID>,
+        /// the recipient address,
+        recipient: SuiAddress,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -383,99 +436,19 @@ pub trait EventStreamingApi {
 #[open_rpc(namespace = "sui", tag = "Event Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventReadApi {
-    /// Return events emitted by the given transaction.
-    #[method(name = "getEventsByTransaction")]
-    async fn get_events_by_transaction(
+    /// Return list of events for a specified query criteria.
+    #[method(name = "getEvents")]
+    async fn get_events(
         &self,
-        /// digest of the transaction, as base-64 encoded string
-        digest: TransactionDigest,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return events emitted in a specified Move module
-    #[method(name = "getEventsByModule")]
-    async fn get_events_by_transaction_module(
-        &self,
-        /// the Move package ID
-        package: ObjectID,
-        /// the module name
-        module: String,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-        /// left endpoint of time interval, inclusive
-        start_time: u64,
-        /// right endpoint of time interval, exclusive
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return events with the given move event struct name
-    #[method(name = "getEventsByMoveEventStructName")]
-    async fn get_events_by_move_event_struct_name(
-        &self,
-        /// the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params
-        move_event_struct_name: String,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-        /// left endpoint of time interval, inclusive
-        start_time: u64,
-        /// right endpoint of time interval, exclusive
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return events associated with the given sender.
-    #[method(name = "getEventsBySender")]
-    async fn get_events_by_sender(
-        &self,
-        /// the sender's Sui address
-        sender: SuiAddress,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-        /// left endpoint of time interval, inclusive
-        start_time: u64,
-        /// right endpoint of time interval, exclusive
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return events associated with the given recipient
-    #[method(name = "getEventsByRecipient")]
-    async fn get_events_by_recipient(
-        &self,
-        /// the recipient
-        recipient: Owner,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-        /// left endpoint of time interval, inclusive
-        start_time: u64,
-        /// right endpoint of time interval, exclusive
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return events associated with the given object
-    #[method(name = "getEventsByObject")]
-    async fn get_events_by_object(
-        &self,
-        /// the object ID
-        object: ObjectID,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-        /// left endpoint of time interval, inclusive
-        start_time: u64,
-        /// right endpoint of time interval, exclusive
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return events emitted in [start_time, end_time) interval
-    #[method(name = "getEventsByTimeRange")]
-    async fn get_events_by_timerange(
-        &self,
-        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
-        count: usize,
-        /// left endpoint of time interval, inclusive
-        start_time: u64,
-        /// right endpoint of time interval, exclusive
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+        /// the event query criteria.
+        query: EventQuery,
+        /// optional paging cursor
+        cursor: Option<EventID>,
+        /// maximum number of items per page
+        limit: Option<usize>,
+        /// query result ordering, default to false (ascending order), oldest record first.  
+        descending_order: Option<bool>,
+    ) -> RpcResult<EventPage>;
 }
 
 #[open_rpc(namespace = "sui", tag = "APIs to execute transactions.")]
@@ -528,4 +501,16 @@ pub trait EstimatorApi {
         mutated_object_sizes_after: Option<usize>,
         storage_rebate: Option<u64>,
     ) -> RpcResult<SuiGasCostSummary>;
+}
+
+pub fn cap_page_limit(limit: Option<usize>) -> Result<usize, anyhow::Error> {
+    let limit = limit.unwrap_or(QUERY_MAX_RESULT_LIMIT);
+    if limit == 0 {
+        Err(anyhow!("Page result limit must be larger then 0."))?;
+    }
+    Ok(if limit > QUERY_MAX_RESULT_LIMIT {
+        QUERY_MAX_RESULT_LIMIT
+    } else {
+        limit
+    })
 }

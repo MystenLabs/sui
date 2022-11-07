@@ -6,7 +6,10 @@ use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
-use types::{Batch, BatchDigest};
+use types::{
+    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
+    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
+};
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
     type Response: Clone + Send + Sync;
@@ -93,12 +96,36 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
 }
 
 #[async_trait]
+pub trait PrimaryToPrimaryRpc {
+    async fn get_certificates(
+        &self,
+        peer: &NetworkPublicKey,
+        request: impl anemo::types::request::IntoRequest<GetCertificatesRequest> + Send,
+    ) -> Result<GetCertificatesResponse>;
+    async fn fetch_certificates(
+        &self,
+        peer: &NetworkPublicKey,
+        request: FetchCertificatesRequest,
+    ) -> Result<FetchCertificatesResponse>;
+
+    async fn get_latest_header(
+        &self,
+        peer: &NetworkPublicKey,
+        request: impl anemo::types::request::IntoRequest<LatestHeaderRequest> + Send,
+    ) -> Result<LatestHeaderResponse>;
+}
+
+#[async_trait]
 pub trait PrimaryToWorkerRpc {
+    async fn delete_batches(&self, peer: NetworkPublicKey, digests: Vec<BatchDigest>)
+        -> Result<()>;
+}
+
+#[async_trait]
+pub trait WorkerRpc {
     async fn request_batch(
         &self,
         peer: NetworkPublicKey,
         batch: BatchDigest,
     ) -> Result<Option<Batch>>;
-    async fn delete_batches(&self, peer: NetworkPublicKey, digests: Vec<BatchDigest>)
-        -> Result<()>;
 }

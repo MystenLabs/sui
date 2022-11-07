@@ -141,7 +141,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
-                .handle_certificate(new_certificate)
+                .handle_certificate(new_certificate.into())
                 .await
                 .expect("Problem processing certificate");
 
@@ -231,7 +231,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
-                .handle_certificate(new_certificate)
+                .handle_certificate(new_certificate.into())
                 .await
                 .expect("Problem processing certificate");
 

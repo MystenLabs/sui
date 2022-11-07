@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ExecutionDigests};
-use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature, VerificationObligation};
+use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature};
 use crate::error::{SuiError, SuiResult};
-use crate::message_envelope::{Envelope, Message};
+use crate::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
@@ -110,10 +110,6 @@ impl Message for AuthorityBatch {
         );
         Ok(())
     }
-
-    fn add_to_verification_obligation(&self, _: &mut VerificationObligation) -> SuiResult<()> {
-        Ok(())
-    }
 }
 
 pub type SignedBatch = Envelope<AuthorityBatch, AuthoritySignInfo>;
@@ -127,3 +123,5 @@ impl SignedBatch {
         Self::new(0, batch, secret, authority)
     }
 }
+
+pub type VerifiedSignedBatch = VerifiedEnvelope<AuthorityBatch, AuthoritySignInfo>;

@@ -5,7 +5,7 @@ use anemo::PeerId;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::traits::KeyPair;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::future::join_all;
 use network::P2pNetwork;
 use prometheus::Registry;
@@ -48,7 +48,7 @@ async fn test_successful_blocks_delete() {
         tx_removed_certificates,
     );
 
-    let mut block_ids = Vec::new();
+    let mut digests = Vec::new();
     let mut header_ids = Vec::new();
 
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
@@ -69,27 +69,29 @@ async fn test_successful_blocks_delete() {
             .unwrap();
 
         let certificate = fixture.certificate(&header);
-        let block_id = certificate.digest();
+        let digest = certificate.digest();
 
         // write the certificate
         certificate_store.write(certificate.clone()).unwrap();
         dag.insert(certificate).await.unwrap();
 
         // write the header
-        header_store.write(header.clone().id, header.clone()).await;
+        header_store
+            .async_write(header.clone().digest(), header.clone())
+            .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().digest());
 
         // write the batches to payload store
         payload_store
-            .write_all(vec![
+            .sync_write_all(vec![
                 ((batch_1.clone().digest(), worker_id_0), 0),
                 ((batch_2.clone().digest(), worker_id_1), 0),
             ])
             .await
             .expect("couldn't store batches");
 
-        block_ids.push(block_id);
+        digests.push(digest);
 
         worker_batches
             .entry(worker_id_0)
@@ -129,15 +131,12 @@ async fn test_successful_blocks_delete() {
             .unwrap();
     }
 
-    block_remover
-        .remove_blocks(block_ids.clone())
-        .await
-        .unwrap();
+    block_remover.remove_blocks(digests.clone()).await.unwrap();
 
     // ensure that certificates have been deleted from store
-    for block_id in block_ids.clone() {
+    for digest in digests.clone() {
         assert!(
-            certificate_store.read(block_id).unwrap().is_none(),
+            certificate_store.read(digest).unwrap().is_none(),
             "Certificate shouldn't exist"
         );
     }
@@ -168,13 +167,13 @@ async fn test_successful_blocks_delete() {
     let mut total_deleted = 0;
     while let Ok(Some(c)) = timeout(Duration::from_secs(1), rx_removed_certificates.recv()).await {
         assert!(
-            block_ids.contains(&c.digest()),
+            digests.contains(&c.digest()),
             "Deleted certificate not found"
         );
         total_deleted += 1;
     }
 
-    assert_eq!(total_deleted, block_ids.len());
+    assert_eq!(total_deleted, digests.len());
 }
 
 #[tokio::test]
@@ -208,7 +207,7 @@ async fn test_failed_blocks_delete() {
         tx_removed_certificates,
     );
 
-    let mut block_ids = Vec::new();
+    let mut digests = Vec::new();
     let mut header_ids = Vec::new();
 
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
@@ -229,27 +228,29 @@ async fn test_failed_blocks_delete() {
             .unwrap();
 
         let certificate = fixture.certificate(&header);
-        let block_id = certificate.digest();
+        let digest = certificate.digest();
 
         // write the certificate
         certificate_store.write(certificate.clone()).unwrap();
         dag.insert(certificate).await.unwrap();
 
         // write the header
-        header_store.write(header.clone().id, header.clone()).await;
+        header_store
+            .async_write(header.clone().digest(), header.clone())
+            .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().digest());
 
         // write the batches to payload store
         payload_store
-            .write_all(vec![
+            .sync_write_all(vec![
                 ((batch_1.clone().digest(), worker_id_0), 0),
                 ((batch_2.clone().digest(), worker_id_1), 0),
             ])
             .await
             .expect("couldn't store batches");
 
-        block_ids.push(block_id);
+        digests.push(digest);
 
         worker_batches
             .entry(worker_id_0)
@@ -295,14 +296,11 @@ async fn test_failed_blocks_delete() {
             .unwrap();
     }
 
-    assert!(block_remover
-        .remove_blocks(block_ids.clone())
-        .await
-        .is_err());
+    assert!(block_remover.remove_blocks(digests.clone()).await.is_err());
 
     // Ensure that nothing else is deleted after failed worker batch delete.
-    for block_id in block_ids.clone() {
-        assert!(certificate_store.read(block_id).unwrap().is_some());
+    for digest in digests.clone() {
+        assert!(certificate_store.read(digest).unwrap().is_some());
     }
     for header_id in header_ids {
         assert!(header_store.read(header_id).await.unwrap().is_some());

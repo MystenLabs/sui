@@ -13,9 +13,8 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
-    crypto::Keystore,
     json::SuiJsonValue,
     rpc_types::SuiData,
     types::{
@@ -35,7 +34,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
-        client: SuiClient::new_rpc_client(&opts.rpc_server_url, None).await?,
+        client: SuiClient::new(&opts.rpc_server_url, None).await?,
         keystore,
     };
 
@@ -100,7 +99,7 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction(
-                Transaction::new(create_game_call, signature),
+                Transaction::new(create_game_call, signature).verify()?,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -196,7 +195,7 @@ impl TicTacToe {
                 .client
                 .quorum_driver()
                 .execute_transaction(
-                    Transaction::new(place_mark_call, signature),
+                    Transaction::new(place_mark_call, signature).verify()?,
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await?;

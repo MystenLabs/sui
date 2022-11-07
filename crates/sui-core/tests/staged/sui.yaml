@@ -63,6 +63,7 @@ ChangeEpoch:
     - epoch: U64
     - storage_charge: U64
     - computation_charge: U64
+    - storage_rebate: U64
 CircularObjectOwnership:
   STRUCT:
     - object:
@@ -156,25 +157,23 @@ ExecutionFailureStatus:
     13:
       InsufficientBalance: UNIT
     14:
-      NonEntryFunctionInvoked: UNIT
+      CoinTypeMismatch: UNIT
     15:
-      EntryTypeArityMismatch: UNIT
+      NonEntryFunctionInvoked: UNIT
     16:
+      EntryTypeArityMismatch: UNIT
+    17:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    17:
+    18:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    18:
-      MissingObjectOwner:
-        NEWTYPE:
-          TYPENAME: MissingObjectOwner
     19:
-      InvalidSharedChildUse:
+      InvalidChildObjectArgument:
         NEWTYPE:
-          TYPENAME: InvalidSharedChildUse
+          TYPENAME: InvalidChildObjectArgument
     20:
       InvalidSharedByValue:
         NEWTYPE:
@@ -227,22 +226,16 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
 Identifier:
   NEWTYPESTRUCT: STR
-InvalidSharedByValue:
-  STRUCT:
-    - object:
-        TYPENAME: ObjectID
-InvalidSharedChildUse:
-  STRUCT:
-    - child:
-        TYPENAME: ObjectID
-    - ancestor:
-        TYPENAME: ObjectID
-MissingObjectOwner:
+InvalidChildObjectArgument:
   STRUCT:
     - child:
         TYPENAME: ObjectID
     - parent:
         TYPENAME: SuiAddress
+InvalidSharedByValue:
+  STRUCT:
+    - object:
+        TYPENAME: ObjectID
 ModuleId:
   STRUCT:
     - address:
@@ -334,6 +327,12 @@ MoveTypeLayout:
           TYPENAME: MoveStructLayout
     7:
       signer: UNIT
+    8:
+      u16: UNIT
+    9:
+      u32: UNIT
+    10:
+      u256: UNIT
 ObjectArg:
   ENUM:
     0:
@@ -345,8 +344,11 @@ ObjectArg:
             - TYPENAME: ObjectDigest
     1:
       SharedObject:
-        NEWTYPE:
-          TYPENAME: ObjectID
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
@@ -383,10 +385,36 @@ Owner:
         NEWTYPE:
           TYPENAME: SuiAddress
     2:
-      Shared: UNIT
+      Shared:
+        STRUCT:
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
 Pay:
+  STRUCT:
+    - coins:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - recipients:
+        SEQ:
+          TYPENAME: SuiAddress
+    - amounts:
+        SEQ: U64
+PayAllSui:
+  STRUCT:
+    - coins:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - recipient:
+        TYPENAME: SuiAddress
+PaySui:
   STRUCT:
     - coins:
         SEQ:
@@ -424,6 +452,14 @@ SingleTransactionKind:
         NEWTYPE:
           TYPENAME: Pay
     5:
+      PaySui:
+        NEWTYPE:
+          TYPENAME: PaySui
+    6:
+      PayAllSui:
+        NEWTYPE:
+          TYPENAME: PayAllSui
+    7:
       ChangeEpoch:
         NEWTYPE:
           TYPENAME: ChangeEpoch
@@ -495,6 +531,12 @@ TypeTag:
       struct:
         NEWTYPE:
           TYPENAME: StructTag
+    8:
+      u16: UNIT
+    9:
+      u32: UNIT
+    10:
+      u256: UNIT
 TypedStoreError:
   ENUM:
     0:
@@ -508,6 +550,8 @@ TypedStoreError:
         NEWTYPE: STR
     3:
       CrossDBBatch: UNIT
+    4:
+      MetricsReporting: UNIT
 UpdateItem:
   ENUM:
     0:

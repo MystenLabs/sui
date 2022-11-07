@@ -10,6 +10,8 @@ use crate::{
 use tokio_stream::{Stream, StreamExt};
 
 use std::collections::{hash_map, BTreeSet, HashMap};
+use sui_metrics::monitored_future;
+use sui_metrics::spawn_monitored_task;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{
@@ -17,7 +19,8 @@ use sui_types::{
     },
     error::{SuiError, SuiResult},
     messages::{
-        CertifiedTransaction, SignedTransactionEffects, TransactionEffects, TransactionInfoResponse,
+        CertifiedTransaction, SignedTransactionEffects, TransactionEffects,
+        TransactionInfoResponse, VerifiedCertificate,
     },
     messages_checkpoint::CheckpointContents,
 };
@@ -99,7 +102,7 @@ where
         }
     }
 
-    async fn notify(&self, key: &Key, res: ResultT) -> SuiResult {
+    fn notify(&self, key: &Key, res: ResultT) -> SuiResult {
         if let Some(tx) = self.waiters.lock().unwrap().remove(key) {
             tx.send(res).map_err(|_| SuiError::GenericAuthorityError {
                 error: format!("couldn't notify waiters for key {:?}", key),
@@ -280,7 +283,7 @@ impl<A> NodeSyncState<A> {
     }
 
     pub fn store(&self) -> Arc<NodeSyncStore> {
-        self.active_authority.node_sync_store.clone()
+        self.state().node_sync_store.clone()
     }
 
     fn state(&self) -> &AuthorityState {
@@ -320,9 +323,9 @@ where
                 );
 
                 return (
-                    tokio::spawn(async move {
+                    spawn_monitored_task!(monitored_future!(async move {
                         let _guard = state.receiver.lock().await;
-                    }),
+                    })),
                     sender,
                 );
             }
@@ -330,19 +333,18 @@ where
         };
 
         (
-            tokio::spawn(async move { state.handle_messages(&mut receiver).await }),
+            spawn_monitored_task!(monitored_future!(state.handle_messages(&mut receiver))),
             sender,
         )
     }
 
-    async fn notify(
+    fn notify(
         waiter: &Waiter<TransactionDigest, SyncResult>,
         digest: &TransactionDigest,
         result: SyncResult,
     ) {
         waiter
             .notify(digest, result)
-            .await
             .tap_err(|e| debug!(?digest, "{}", e))
             .ok();
     }
@@ -420,7 +422,7 @@ where
             // the semaphore in this context.
             let permit = limit.acquire_owned().await.unwrap();
 
-            tokio::spawn(async move {
+            spawn_monitored_task!(async move {
                 let res = timeout(
                     MAX_NODE_TASK_LIFETIME,
                     state.process_digest(epoch_id, sync_arg, permit),
@@ -452,8 +454,8 @@ where
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
                 trace!(?epoch_id, ?tx_digest, "notifying parents and waiters");
-                Self::notify(&state.pending_parents, tx_digest, res.clone()).await;
-                Self::notify(&state.pending_txes, tx_digest, res.clone()).await;
+                Self::notify(&state.pending_parents, tx_digest, res.clone());
+                Self::notify(&state.pending_txes, tx_digest, res.clone());
 
                 Self::send_sync_res_to_receiver(tx, res, &sync_arg, &epoch_id);
             });
@@ -508,15 +510,10 @@ where
         &self,
         epoch_id: EpochId,
         digest: &TransactionDigest,
-    ) -> SuiResult<CertifiedTransaction> {
-        if let Some(cert) = self.state().database.read_certificate(digest)? {
-            if cert.epoch() == epoch_id {
-                return Ok(cert);
-            }
-            warn!(
-                ?digest, ?epoch_id, cert_epoch = ?cert.epoch(),
-                "Found certificate from prior epoch in authority db"
-            );
+    ) -> SuiResult<VerifiedCertificate> {
+        if let Some(cert) = self.store().get_cert(epoch_id, digest)? {
+            assert_eq!(epoch_id, cert.epoch());
+            return Ok(cert);
         }
 
         let (cert, _) = self
@@ -578,21 +575,23 @@ where
         bypass_validator_halt: bool,
     ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
+
         let cert = self.get_cert(epoch_id, digest).await?;
 
         let result = if bypass_validator_halt {
             self.state()
-                .handle_certificate_bypass_validator_halt(cert.clone())
+                .handle_certificate_bypass_validator_halt(&cert)
                 .await
         } else {
-            self.state().handle_certificate(cert.clone()).await
+            self.state().handle_certificate(&cert).await
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectNotFound { .. })
-            | Err(SuiError::ObjectErrors { .. })
-            | Err(SuiError::SharedObjectLockNotSetError) => {
-                debug!(?digest, "cert execution failed due to missing parents");
+            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
+                debug!(
+                    ?digest,
+                    "cert execution failed due to missing parents {:?}", e
+                );
 
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 
@@ -607,10 +606,10 @@ where
                 debug!(?digest, "parents executed, re-attempting cert");
                 if bypass_validator_halt {
                     self.state()
-                        .handle_certificate_bypass_validator_halt(cert.clone())
+                        .handle_certificate_bypass_validator_halt(&cert)
                         .await
                 } else {
-                    self.state().handle_certificate(cert.clone()).await
+                    self.state().handle_certificate(&cert).await
                 }?;
                 Ok(SyncStatus::CertExecuted)
             }
@@ -863,7 +862,7 @@ where
         epoch_id: EpochId,
         authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         req: &DownloadRequest,
-    ) -> SuiResult<(CertifiedTransaction, Option<SignedTransactionEffects>)> {
+    ) -> SuiResult<(VerifiedCertificate, Option<SignedTransactionEffects>)> {
         let tx_digest = *req.transaction_digest();
 
         match (
@@ -885,21 +884,19 @@ where
             let node_sync_store = self.store();
             let req = req.clone();
             let metrics = self.active_authority.gossip_metrics.clone();
-            tokio::task::spawn(async move {
-                let _ = pending_downloads
-                    .notify(
-                        &tx_digest,
-                        Self::download_impl(
-                            epoch_id,
-                            authorities_with_cert,
-                            aggregator,
-                            &req,
-                            node_sync_store,
-                            metrics,
-                        )
-                        .await,
+            spawn_monitored_task!(async move {
+                let _ = pending_downloads.notify(
+                    &tx_digest,
+                    Self::download_impl(
+                        epoch_id,
+                        authorities_with_cert,
+                        aggregator,
+                        &req,
+                        node_sync_store,
+                        metrics,
                     )
-                    .await;
+                    .await,
+                );
             });
         }
 

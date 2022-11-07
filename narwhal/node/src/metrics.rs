@@ -7,6 +7,7 @@ use multiaddr::Multiaddr;
 use mysten_network::multiaddr::to_socket_addr;
 use prometheus::{Registry, TextEncoder};
 use std::collections::HashMap;
+use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 
 const METRICS_ROUTE: &str = "/metrics";
@@ -36,7 +37,7 @@ pub fn start_prometheus_server(addr: Multiaddr, registry: &Registry) -> JoinHand
 
     let socket_addr = to_socket_addr(&addr).expect("failed to convert Multiaddr to SocketAddr");
 
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         axum::Server::bind(&socket_addr)
             .serve(app.into_make_service())
             .await

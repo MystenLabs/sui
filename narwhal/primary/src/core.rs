@@ -3,15 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
+    certificate_waiter::CertificateLoopbackMessage,
     metrics::PrimaryMetrics,
     primary::PrimaryMessage,
     synchronizer::Synchronizer,
 };
+
 use async_recursion::async_recursion;
 use config::{Committee, Epoch, SharedWorkerCache};
-use crypto::{PublicKey, Signature};
-use fastcrypto::{Hash as _, SignatureService};
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use crypto::{NetworkPublicKey, PublicKey, Signature};
+use fastcrypto::{hash::Hash as _, SignatureService};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -19,18 +24,23 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
+use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{debug, error, info, instrument, warn};
+
+use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagError::StoreError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, Vote,
+    Certificate, Header, HeaderDigest, LatestHeaderRequest, ReconfigureNotification, Round,
+    RoundVoteDigestPair, Timestamp, Vote,
 };
 
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
+
+const LATEST_HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct Core {
     /// The public key of this primary.
@@ -46,7 +56,7 @@ pub struct Core {
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Synchronizer,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature>,
+    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// Get a signal when the round changes
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
@@ -55,17 +65,17 @@ pub struct Core {
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receiver for dag messages (headers, votes, certificates).
-    rx_primaries: Receiver<PrimaryMessage>,
+    rx_primary_messages: Receiver<PrimaryMessage>,
     /// Receives loopback headers from the `HeaderWaiter`.
-    rx_header_waiter: Receiver<Header>,
+    rx_headers_loopback: Receiver<Header>,
     /// Receives loopback certificates from the `CertificateWaiter`.
-    rx_certificate_waiter: Receiver<Certificate>,
+    rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
     /// Receives our newly created headers from the `Proposer`.
-    rx_proposer: Receiver<Header>,
+    rx_headers: Receiver<Header>,
     /// Output all certificates to the consensus layer.
-    tx_consensus: Sender<Certificate>,
+    tx_new_certificates: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
+    tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
 
     /// The last garbage collected round.
     gc_round: Round,
@@ -102,20 +112,20 @@ impl Core {
         certificate_store: CertificateStore,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         synchronizer: Synchronizer,
-        signature_service: SignatureService<Signature>,
+        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
-        rx_committee: watch::Receiver<ReconfigureNotification>,
-        rx_primaries: Receiver<PrimaryMessage>,
-        rx_header_waiter: Receiver<Header>,
-        rx_certificate_waiter: Receiver<Certificate>,
-        rx_proposer: Receiver<Header>,
-        tx_consensus: Sender<Certificate>,
-        tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_primary_messages: Receiver<PrimaryMessage>,
+        rx_headers_loopback: Receiver<Header>,
+        rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
+        rx_headers: Receiver<Header>,
+        tx_new_certificates: Sender<Certificate>,
+        tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,
@@ -126,13 +136,13 @@ impl Core {
                 signature_service,
                 rx_consensus_round_updates,
                 gc_depth,
-                rx_reconfigure: rx_committee,
-                rx_primaries,
-                rx_header_waiter,
-                rx_certificate_waiter,
-                rx_proposer,
-                tx_consensus,
-                tx_proposer,
+                rx_reconfigure,
+                rx_primary_messages,
+                rx_headers_loopback,
+                rx_certificates_loopback,
+                rx_headers,
+                tx_new_certificates,
+                tx_parents,
                 gc_round: 0,
                 highest_received_round: 0,
                 highest_processed_round: 0,
@@ -158,14 +168,66 @@ impl Core {
 
         let last_round_certificates = self
             .certificate_store
-            .last_round()
+            .last_two_rounds_certs()
             .expect("Failed recovering certificates in primary core");
+
+        let last_round_number = last_round_certificates
+            .first()
+            .map(|c| c.round())
+            .unwrap_or(0);
 
         for certificate in last_round_certificates {
             self.append_certificate_in_aggregator(certificate)
                 .await
                 .expect("Failed appending recovered certificates to aggregator in primary core");
         }
+
+        self.highest_received_round = last_round_number;
+        self.highest_processed_round = last_round_number;
+
+        // Get latest header from all peers and process it.
+        let peers: Vec<NetworkPublicKey> = self
+            .committee
+            .others_primaries(&self.name)
+            .into_iter()
+            .map(|(_, _, network_key)| network_key)
+            .collect();
+
+        let mut header_futures = FuturesUnordered::new();
+
+        for peer in peers.iter() {
+            let network = self.network.network();
+            let request = anemo::Request::new(LatestHeaderRequest {})
+                .with_timeout(LATEST_HEADER_REQUEST_TIMEOUT);
+
+            header_futures.push(async move { network.get_latest_header(peer, request).await });
+        }
+
+        let mut latest_headers = Vec::new();
+        while let Some(res) = header_futures.next().await {
+            match res {
+                Ok(response) => {
+                    if let Some(header) = response.header {
+                        latest_headers.push(header);
+                    } else {
+                        debug!("peer's latest header was None on recovery path")
+                    }
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to get latest header from peer as recovery on startup: {:?}",
+                        e
+                    )
+                }
+            }
+        }
+
+        for header in latest_headers {
+            if let Err(err) = self.process_header(&header).await {
+                error!("error on recovery path processing latest header: {:?}", err);
+            }
+        }
+
         self
     }
 
@@ -205,6 +267,13 @@ impl Core {
     #[async_recursion]
     #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
     async fn process_header(&mut self, header: &Header) -> DagResult<()> {
+        self.process_header_internal(header, /* signed */ false)
+            .await
+    }
+
+    #[async_recursion]
+    #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
+    async fn process_header_internal(&mut self, header: &Header, signed: bool) -> DagResult<()> {
         debug!("Processing {:?} round:{:?}", header, header.round);
         let header_source = if self.name.eq(&header.author) {
             "own"
@@ -217,7 +286,7 @@ impl Core {
             .processing
             .entry(header.round)
             .or_insert_with(HashSet::new)
-            .insert(header.id);
+            .insert(header.digest());
 
         if inserted {
             // Only increase the metric when the header has been seen for the first
@@ -229,15 +298,13 @@ impl Core {
                 .inc();
         }
 
-        // If the following condition is valid, it means we already garbage collected the parents. There is thus
-        // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
-        if self.gc_round >= header.round {
+        // If the header has been signed, there is no point in trying to vote.
+        // Also any missing parent will be fetched by certificate waiter.
+        // TODO: call this directly from process_certificate(), and avoid looping back
+        // the header.
+        if signed {
             if self.synchronizer.missing_payload(header).await? {
-                self.metrics
-                    .headers_suspended
-                    .with_label_values(&[&header.epoch.to_string(), "missing_payload"])
-                    .inc();
-                debug!("Downloading the payload of {header}");
+                debug!("Downloading the certificate payload of {header}");
             }
             return Ok(());
         }
@@ -251,7 +318,10 @@ impl Core {
                 .headers_suspended
                 .with_label_values(&[&header.epoch.to_string(), "missing_parents"])
                 .inc();
-            debug!("Processing of {} suspended: missing parent(s)", header.id);
+            debug!(
+                "Processing of {} suspended: missing parent(s)",
+                header.digest()
+            );
             return Ok(());
         }
 
@@ -260,13 +330,13 @@ impl Core {
         for x in parents {
             ensure!(
                 x.round() + 1 == header.round,
-                DagError::MalformedHeader(header.id)
+                DagError::MalformedHeader(header.digest())
             );
             stake += self.committee.stake(&x.origin());
         }
         ensure!(
             stake >= self.committee.quorum_threshold(),
-            DagError::HeaderRequiresQuorum(header.id)
+            DagError::HeaderRequiresQuorum(header.digest())
         );
 
         // Ensure we have the payload. If we don't, the synchronizer will ask our workers to get it, and then
@@ -281,7 +351,9 @@ impl Core {
         }
 
         // Store the header.
-        self.header_store.write(header.id, header.clone()).await;
+        self.header_store
+            .async_write(header.digest(), header.clone())
+            .await;
 
         self.metrics
             .headers_processed
@@ -366,14 +438,14 @@ impl Core {
         // that are stored in the header store. This strategy can be used to re-deliver votes to
         // ensure progress / liveness.
         self.vote_digest_store
-            .write(
+            .sync_write(
                 header.author.clone(),
                 RoundVoteDigestPair {
                     round: header.round,
                     vote_digest,
                 },
             )
-            .await;
+            .await?;
 
         Ok(())
     }
@@ -409,6 +481,18 @@ impl Core {
                 .with_label_values(&[&certificate.epoch().to_string()])
                 .inc();
 
+            self.metrics
+                .header_to_certificate_latency
+                .with_label_values(&[&certificate.epoch().to_string()])
+                .observe(
+                    certificate
+                        .header
+                        .metadata
+                        .created_at
+                        .elapsed()
+                        .as_secs_f64(),
+                );
+
             // Process the new certificate.
             match self.process_certificate(certificate).await {
                 Ok(()) => (),
@@ -422,6 +506,14 @@ impl Core {
     #[async_recursion]
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+        if self.certificate_store.read(certificate.digest())?.is_some() {
+            trace!(
+                "Certificate {} has already been processed. Skip processing.",
+                certificate.digest()
+            );
+            return Ok(());
+        }
+
         debug!(
             "Processing {:?} round:{:?}",
             certificate,
@@ -447,28 +539,29 @@ impl Core {
         //
         // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
         let minimal_round_for_parents = certificate.round().saturating_sub(1);
-        self.tx_proposer
+        self.tx_parents
             .send((vec![], minimal_round_for_parents, certificate.epoch()))
             .await
             .map_err(|_| DagError::ShuttingDown)?;
 
-        // Process the header embedded in the certificate if we haven't already voted for it (if we already
-        // voted, it means we already processed it). Since this header got certified, we are sure that all
-        // the data it refers to (ie. its payload and its parents) are available. We can thus continue the
-        // processing of the certificate even if we don't have them in store right now.
+        // Process the header embedded in the certificate if we haven't already voted for it (if we already voted, it means we already processed it),
+        // or processed it as a certificate.
+        // Since this header got certified, we are sure that all the data it refers to (ie. its payload and its parents) are available.
+        // We can thus continue the processing of the certificate even if we don't have them in store right now.
         if !self
             .processing
             .get(&certificate.header.round)
-            .map_or_else(|| false, |x| x.contains(&certificate.header.id))
+            .map_or_else(|| false, |x| x.contains(&certificate.header.digest()))
         {
             // This function may still throw an error if the storage fails.
-            self.process_header(&certificate.header).await?;
+            self.process_header_internal(&certificate.header, /* signed */ true)
+                .await?;
         }
 
-        // Ensure we have all the ancestors of this certificate yet (if we didn't already garbage collect them).
-        // If we don't, the synchronizer will gather them and trigger re-processing of this certificate.
+        // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
+        // If we don't, the synchronizer will start fetching missing certificates.
         if certificate.round() > self.gc_round + 1
-            && !self.synchronizer.deliver_certificate(&certificate).await?
+            && !self.synchronizer.check_parents(&certificate).await?
         {
             debug!(
                 "Processing of {:?} suspended: missing ancestors",
@@ -500,11 +593,11 @@ impl Core {
             .await?;
 
         // Send it to the consensus layer.
-        let id = certificate.header.id;
-        if let Err(e) = self.tx_consensus.send(certificate).await {
+        let digest = certificate.header.digest();
+        if let Err(e) = self.tx_new_certificates.send(certificate).await {
             warn!(
                 "Failed to deliver certificate {} to the consensus: {}",
-                id, e
+                digest, e
             );
         }
         Ok(())
@@ -522,7 +615,7 @@ impl Core {
             .append(certificate.clone(), &self.committee)
         {
             // Send it to the `Proposer`.
-            self.tx_proposer
+            self.tx_parents
                 .send((parents, certificate.round(), certificate.epoch()))
                 .await
                 .map_err(|_| DagError::ShuttingDown)?;
@@ -552,10 +645,19 @@ impl Core {
                 received: header.epoch
             }
         );
+        // Even if a certificate can be created from this header, it will never get included
+        // in this node's DAG.
         ensure!(
             self.gc_round < header.round,
-            DagError::TooOld(header.id.into(), header.round, self.gc_round)
+            DagError::TooOld(header.digest().into(), header.round, self.gc_round)
         );
+        // TODO: enable below.
+        // The header round is too high for this node, which is unlikely to acquire all
+        // parent certificates in time.
+        // ensure!(
+        //     self.highest_processed_round + MAX_HEADER_ROUND_CATCHUP_THRESHOLD > header.round,
+        //     DagError::TooNew(header.id().into(), header.round, self.gc_round)
+        // );
 
         // Verify the header's signature.
         header.verify(&self.committee, self.worker_cache.clone())?;
@@ -583,10 +685,10 @@ impl Core {
 
         // Ensure we receive a vote on the expected header.
         ensure!(
-            vote.id == self.current_header.id
+            vote.digest == self.current_header.digest()
                 && vote.origin == self.current_header.author
                 && vote.round == self.current_header.round,
-            DagError::UnexpectedVote(vote.id)
+            DagError::UnexpectedVote(vote.digest)
         );
 
         // Verify the vote.
@@ -604,6 +706,7 @@ impl Core {
                 received: certificate.epoch()
             }
         );
+        // Ok to drop old certificate, because it will never be included into the consensus dag.
         ensure!(
             self.gc_round < certificate.round(),
             DagError::TooOld(
@@ -612,7 +715,6 @@ impl Core {
                 self.gc_round
             )
         );
-
         // Verify the certificate (and the embedded header).
         certificate
             .verify(&self.committee, self.worker_cache.clone())
@@ -640,7 +742,7 @@ impl Core {
         // Cleanup internal state.
         let keys = self.vote_digest_store.iter(None).await.into_keys();
         if let Err(e) = self.vote_digest_store.remove_all(keys).await {
-            error!("Error in change epoch when clearing vote store {}", e);
+            error!("Error in change epoch when clearing vote store {:?}", e);
         }
         self.processing.clear();
         self.certificates_aggregators.clear();
@@ -659,7 +761,7 @@ impl Core {
         loop {
             let result = tokio::select! {
                 // We receive here messages from other primaries.
-                Some(message) = self.rx_primaries.recv() => {
+                Some(message) = self.rx_primary_messages.recv() => {
                     match message {
                         PrimaryMessage::Header(header) => {
                             match self.sanitize_header(&header).await {
@@ -679,21 +781,37 @@ impl Core {
                                 error => error
                             }
                         },
-                        _ => panic!("Unexpected core message")
                     }
                 },
 
                 // We receive here loopback headers from the `HeaderWaiter`. Those are headers for which we interrupted
                 // execution (we were missing some of their dependencies) and we are now ready to resume processing.
-                Some(header) = self.rx_header_waiter.recv() => self.process_header(&header).await,
+                Some(header) = self.rx_headers_loopback.recv() => self.process_header(&header).await,
 
-                // We receive here loopback certificates from the `CertificateWaiter`. Those are certificates for which
-                // we interrupted execution (we were missing some of their ancestors) and we are now ready to resume
-                // processing.
-                Some(certificate) = self.rx_certificate_waiter.recv() => self.process_certificate(certificate).await,
+                // Here loopback certificates from the `CertificateWaiter` are received. These are
+                // certificates fetched from other validators that are potentially missing locally.
+                Some(message) = self.rx_certificates_loopback.recv() => {
+                    let mut result = Ok(());
+                    for cert in message.certificates {
+                        result = match self.sanitize_certificate(&cert).await {
+                            // TODO: consider moving some checks to CertificateWaiter, and skipping
+                            // those checks here?
+                            Ok(()) => self.process_certificate(cert).await,
+                            // It is possible that subsequent certificates are above GC round,
+                            // so not stopping early.
+                            Err(DagError::TooOld(_, _, _)) => continue,
+                            error => error
+                        };
+                        if result.is_err() {
+                            break;
+                        }
+                    };
+                    message.done.send(()).expect("Failed to signal back to CertificateWaiter");
+                    result
+                },
 
                 // We also receive here our new headers created by the `Proposer`.
-                Some(header) = self.rx_proposer.recv() => self.process_own_header(header).await,
+                Some(header) = self.rx_headers.recv() => self.process_own_header(header).await,
 
                 // Check whether the committee changed.
                 result = self.rx_reconfigure.changed() => {
@@ -742,7 +860,11 @@ impl Core {
                     error!("{e}");
                     panic!("Storage failure: killing node.");
                 }
-                Err(e @ DagError::TooOld(..) | e @ DagError::InvalidEpoch { .. }) => debug!("{e}"),
+                Err(
+                    e @ DagError::TooOld(..)
+                    | e @ DagError::VoteTooOld(..)
+                    | e @ DagError::InvalidEpoch { .. },
+                ) => debug!("{e}"),
                 Err(e) => warn!("{e}"),
             }
 

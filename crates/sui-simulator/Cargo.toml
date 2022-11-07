@@ -12,8 +12,8 @@ sui-framework = { path = "../sui-framework" }
 sui-types = { path = "../sui-types" }
 telemetry-subscribers.workspace = true
 tracing = "0.1"
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "982cf1a544ebd1e2818330f9b1247a4c3dd26c13", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b28d77f88434535b166cc60bd3e5018aa75cd705", package = "msim" }

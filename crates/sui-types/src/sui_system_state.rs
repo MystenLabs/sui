@@ -10,6 +10,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::AuthorityName;
+use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::{
@@ -128,6 +129,7 @@ pub struct SuiSystemState {
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub reference_gas_price: u64,
+    pub validator_report_records: VecMap<AccountAddress, VecSet<AccountAddress>>,
     // TODO: Use getters instead of all pub.
 }
 

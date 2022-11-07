@@ -4,12 +4,32 @@
 .container {
     display: flex;
     flex-flow: row nowrap;
+    justify-content: center;
     align-items: center;
     padding: 8px 10px;
     gap: 6px;
     border-radius: 10px;
-    background-color: colors.$issue-light;
-    color: colors.$issue-dark;
+
+    @include utils.typography('ParagraphPrimary/P2-M');
+
+    &.warning {
+        background-color: colors.$issue-light;
+        color: colors.$issue-dark;
+    }
+
+    &.success {
+        background-color: colors.$success-light;
+        color: colors.$success-dark;
+    }
+
+    &.loading {
+        background-color: colors.$sui-steel-blue;
+        color: colors.$white;
+
+        > .loader {
+            border-color: colors.$white;
+        }
+    }
 }
 
 .icon {
