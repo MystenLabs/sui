@@ -35,9 +35,9 @@ dependencies = [
 
 [[package]]
 name = "aes"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe0133578c0986e1fe3dfcd4af1cc5b2dd6c3dbf534d69916ce16a2701d40ba"
+checksum = "433cfd6710c9986c576a25ca913c39d66a6474107b406f34f91d4a8923395241"
 dependencies = [
  "cfg-if",
  "cipher",
@@ -79,6 +79,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "aliasable"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,7 +110,7 @@ dependencies = [
  "pkcs8",
  "quinn",
  "rand 0.8.5",
- "rcgen",
+ "rcgen 0.9.3",
  "rustls",
  "serde 1.0.147",
  "serde_json",
@@ -1319,6 +1325,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "component"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "eyre",
+ "tokio",
+]
+
+[[package]]
 name = "config"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2258,6 +2273,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ed25519-dalek"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
+dependencies = [
+ "curve25519-dalek",
+ "ed25519",
+ "rand 0.7.3",
+ "serde 1.0.147",
+ "sha2 0.9.9",
+ "zeroize",
+]
+
+[[package]]
 name = "ed25519-dalek-fiat"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2410,7 +2439,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbb2d02a7a64c27314721748cc4d015b00490dbe#bbb2d02a7a64c27314721748cc4d015b00490dbe"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=12c522bea01e4a3d19ecae63d789edcdcce2d66c#12c522bea01e4a3d19ecae63d789edcdcce2d66c"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2456,7 +2485,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbb2d02a7a64c27314721748cc4d015b00490dbe#bbb2d02a7a64c27314721748cc4d015b00490dbe"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=12c522bea01e4a3d19ecae63d789edcdcce2d66c#12c522bea01e4a3d19ecae63d789edcdcce2d66c"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -4340,7 +4369,7 @@ dependencies = [
  "move-ir-to-bytecode-syntax",
  "move-ir-types",
  "move-symbol-pool",
- "ouroboros",
+ "ouroboros 0.9.5",
  "thiserror",
 ]
 
@@ -4825,7 +4854,6 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "mysten-network"
 version = "0.2.0"
-source = "git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9#62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9"
 dependencies = [
  "bincode",
  "bytes",
@@ -4846,7 +4874,6 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=87c2cf04f4d9c7ef1f157ddbe68af15269ae9424#87c2cf04f4d9c7ef1f157ddbe68af15269ae9424"
 dependencies = [
  "cfg-if",
  "ed25519-consensus",
@@ -4864,7 +4891,6 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=87c2cf04f4d9c7ef1f157ddbe68af15269ae9424#87c2cf04f4d9c7ef1f157ddbe68af15269ae9424"
 dependencies = [
  "proc-macro2 1.0.47",
  "syn 1.0.103",
@@ -4880,8 +4906,6 @@ checksum = "034a0ad7deebf0c2abcf2435950a6666c3c15ea9d8fad0c0f48efa8a7f843fed"
 [[package]]
 name = "name-variant"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6c053f5dc2372fc0489f34614d5064df83b42c9918b6df8f8d9410010d547f6"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -5033,7 +5057,6 @@ dependencies = [
  "match_opt",
  "mockall",
  "multiaddr",
- "mysten-network",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5047,7 +5070,6 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "sui-metrics",
- "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
  "tokio",
@@ -5130,7 +5152,7 @@ dependencies = [
  "serde_yaml",
  "structopt",
  "sui-metrics",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -5140,7 +5162,6 @@ dependencies = [
  "tracing-subscriber 0.3.15",
  "typed-store",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -5187,7 +5208,6 @@ dependencies = [
  "serde 1.0.147",
  "sui-metrics",
  "tap",
- "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
  "tokio",
@@ -5250,7 +5270,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tempfile",
  "thiserror",
  "tokio",
@@ -5259,7 +5279,6 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -5340,7 +5359,6 @@ dependencies = [
  "serde 1.0.147",
  "sui-metrics",
  "tap",
- "telemetry-subscribers 0.2.0",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -5871,8 +5889,18 @@ version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbeff60e3e37407a80ead3e9458145b456e978c4068cddbfea6afb48572962ca"
 dependencies = [
- "ouroboros_macro",
+ "ouroboros_macro 0.9.5",
  "stable_deref_trait",
+]
+
+[[package]]
+name = "ouroboros"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfbb50b356159620db6ac971c6d5c9ab788c9cc38a6f49619fca2a27acb062ca"
+dependencies = [
+ "aliasable",
+ "ouroboros_macro 0.15.5",
 ]
 
 [[package]]
@@ -5880,6 +5908,19 @@ name = "ouroboros_macro"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03f2cb802b5bdfdf52f1ffa0b54ce105e4d346e91990dd571f86c91321ad49e2"
+dependencies = [
+ "Inflector",
+ "proc-macro-error",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "syn 1.0.103",
+]
+
+[[package]]
+name = "ouroboros_macro"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a0d9d1a6191c4f391f87219d1ea42b23f09ee84d64763cd05ee6ea88d9f384d"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -6399,6 +6440,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus-closure-metric"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "prometheus",
+ "protobuf",
+]
+
+[[package]]
 name = "proptest"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6773,6 +6823,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rccheck"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "ed25519",
+ "ed25519-dalek",
+ "eyre",
+ "ouroboros 0.15.5",
+ "pkcs8",
+ "proptest",
+ "rand 0.7.3",
+ "rcgen 0.10.0",
+ "rustls",
+ "serde 1.0.147",
+ "tracing",
+ "webpki",
+ "x509-parser",
+]
+
+[[package]]
 name = "rcgen"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6781,6 +6851,19 @@ dependencies = [
  "pem",
  "ring",
  "time 0.3.15",
+ "yasna",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
+dependencies = [
+ "pem",
+ "ring",
+ "time 0.3.15",
+ "x509-parser",
  "yasna",
 ]
 
@@ -8033,6 +8116,7 @@ dependencies = [
  "move-prover-boogie-backend",
  "move-unit-test",
  "multiaddr",
+ "mysten-network",
  "narwhal-executor",
  "prometheus",
  "rand 0.8.5",
@@ -8057,7 +8141,7 @@ dependencies = [
  "sui-simulator",
  "sui-swarm",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
@@ -8137,7 +8221,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
@@ -8174,7 +8258,7 @@ dependencies = [
  "sui-swarm",
  "sui-transaction-builder",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
@@ -8271,7 +8355,7 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "tap",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tempfile",
  "test-fuzz",
  "test-utils",
@@ -8344,7 +8428,7 @@ dependencies = [
  "sui-node",
  "sui-types",
  "tap",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "test-utils",
  "thiserror",
  "tokio",
@@ -8413,7 +8497,6 @@ dependencies = [
  "async-trait",
  "clap 3.2.22",
  "futures",
- "mysten-network",
  "prometheus",
  "serde 1.0.147",
  "sui-config",
@@ -8426,7 +8509,7 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "test-utils",
  "tokio",
  "tracing",
@@ -8547,7 +8630,6 @@ dependencies = [
  "prometheus",
  "scopeguard",
  "tap",
- "telemetry-subscribers 0.2.0",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -8590,7 +8672,7 @@ dependencies = [
  "sui-storage",
  "sui-telemetry",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tokio",
  "tower",
  "tracing",
@@ -8665,15 +8747,13 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-types",
- "telemetry-subscribers 0.1.0",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
  "tower",
  "tower-http",
  "tracing",
- "typed-store",
- "typed-store-derive",
  "workspace-hack",
 ]
 
@@ -8719,7 +8799,7 @@ dependencies = [
  "msim",
  "sui-framework",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tracing",
  "workspace-hack",
 ]
@@ -8752,7 +8832,6 @@ dependencies = [
  "sui-metrics",
  "sui-types",
  "tap",
- "telemetry-subscribers 0.2.0",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -8776,7 +8855,6 @@ dependencies = [
  "sui-simulator",
  "sui-types",
  "tap",
- "telemetry-subscribers 0.2.0",
  "tempfile",
  "tokio",
  "tonic-health",
@@ -8810,7 +8888,7 @@ dependencies = [
  "sui-cluster-test",
  "sui-faucet",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tokio",
  "tower",
  "tower-http",
@@ -8826,7 +8904,6 @@ dependencies = [
  "colored",
  "eyre",
  "futures",
- "mysten-network",
  "narwhal-executor",
  "rocksdb",
  "serde 1.0.147",
@@ -8838,13 +8915,11 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "tempfile",
  "textwrap 0.15.1",
  "tokio",
  "tracing",
- "typed-store",
- "typed-store-derive",
  "workspace-hack",
 ]
 
@@ -9069,30 +9144,9 @@ dependencies = [
 
 [[package]]
 name = "telemetry-subscribers"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd5997cf07ccebedf30d53f94effb0c992b655278e4777d71762aada8766b027"
-dependencies = [
- "crossterm 0.25.0",
- "once_cell",
- "opentelemetry 0.17.0",
- "opentelemetry-jaeger 0.16.0",
- "prometheus",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-bunyan-formatter",
- "tracing-chrome",
- "tracing-opentelemetry 0.17.4",
- "tracing-subscriber 0.3.15",
-]
-
-[[package]]
-name = "telemetry-subscribers"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2a01f8161eb6d52700ec8f82a9432b425db5d1729ac747b52d34dfc9f4f0902"
 dependencies = [
+ "camino",
  "console-subscriber",
  "crossterm 0.25.0",
  "once_cell",
@@ -9237,7 +9291,6 @@ dependencies = [
  "jsonrpsee-http-client",
  "move-core-types",
  "multiaddr",
- "mysten-network",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -9925,33 +9978,38 @@ checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 [[package]]
 name = "typed-store"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "488cc59f48a09de5398e541b3a5d0fe319a624f8f539fec02e2c91f89e1bbac2"
 dependencies = [
  "bincode",
  "collectable",
  "eyre",
  "fdlimit",
  "once_cell",
+ "proc-macro2 1.0.47",
  "prometheus",
+ "quote 1.0.21",
  "rocksdb",
  "serde 1.0.147",
+ "syn 1.0.103",
  "tap",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
+ "typed-store-derive",
 ]
 
 [[package]]
 name = "typed-store-derive"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49b0f78dcf6a391c5087b884d1415a9bdd8c508f89320b8d070b3e960253568d"
 dependencies = [
+ "eyre",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
+ "rocksdb",
  "syn 1.0.103",
+ "tempfile",
  "tokio",
+ "typed-store",
 ]
 
 [[package]]
@@ -10950,10 +11008,6 @@ dependencies = [
  "multihash",
  "multihash-derive",
  "multimap",
- "mysten-network",
- "mysten-util-mem",
- "mysten-util-mem-derive",
- "name-variant",
  "named-lock",
  "native-tls",
  "nested",
@@ -11001,8 +11055,8 @@ dependencies = [
  "ordered-float 1.1.1",
  "ordered-float 2.10.0",
  "os_str_bytes",
- "ouroboros",
- "ouroboros_macro",
+ "ouroboros 0.9.5",
+ "ouroboros_macro 0.9.5",
  "output_vt100",
  "overload",
  "owo-colors",
@@ -11087,7 +11141,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "rayon-core",
- "rcgen",
+ "rcgen 0.9.3",
  "read-write-set",
  "read-write-set-dynamic",
  "readonly",
@@ -11212,8 +11266,6 @@ dependencies = [
  "tap",
  "target-lexicon",
  "target-spec",
- "telemetry-subscribers 0.1.0",
- "telemetry-subscribers 0.2.0",
  "tempfile",
  "tera",
  "termcolor",
@@ -11276,8 +11328,6 @@ dependencies = [
  "tui",
  "twox-hash",
  "typed-arena",
- "typed-store",
- "typed-store-derive",
  "typenum",
  "ucd-trie",
  "uint",
@@ -11382,6 +11432,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "nom 7.1.1",
  "oid-registry",
+ "ring",
  "rusticata-macros",
  "thiserror",
  "time 0.3.15",

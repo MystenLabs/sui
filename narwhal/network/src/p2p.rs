@@ -63,7 +63,7 @@ impl P2pNetwork {
         let network = anemo::Network::bind("127.0.0.1:0")
             .server_name("narwhal")
             .private_key(
-                crypto::NetworkKeyPair::generate(&mut rand::rngs::OsRng)
+                crypto::NetworkKeyPair::generate(&mut rand::thread_rng())
                     .private()
                     .0
                     .to_bytes(),

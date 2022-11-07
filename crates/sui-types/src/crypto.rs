@@ -16,7 +16,8 @@ pub use fastcrypto::traits::{
     VerifyingKey,
 };
 use fastcrypto::Verifier;
-use rand::rngs::OsRng;
+use rand::rngs::{OsRng, StdRng};
+use rand::SeedableRng;
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::ser::Serializer;
@@ -576,7 +577,7 @@ where
     R: rand::CryptoRng + rand::RngCore,
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
 {
-    let kp = KP::generate(csprng);
+    let kp = KP::generate(&mut StdRng::from_rng(csprng).unwrap());
     (kp.public().into(), kp)
 }
 
