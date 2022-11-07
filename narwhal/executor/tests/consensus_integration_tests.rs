@@ -93,8 +93,11 @@ async fn test_recovery() {
     let mut consensus_index_counter = 0;
     let num_of_committed_certificates = 5;
 
-    for i in 1..=num_of_committed_certificates {
-        let output = rx_output.recv().await.unwrap();
+    let committed_sub_dags = rx_output.recv().await.unwrap();
+    assert_eq!(committed_sub_dags.len(), 1);
+    let committed_sub_dag = committed_sub_dags.pop().unwrap();
+    assert_eq!(committed_sub_dag.len(), num_of_committed_certificates);
+    for (i, output) in committed_sub_dag.certificates.enumerate() {
         assert_eq!(output.consensus_index, consensus_index_counter);
 
         if i < 5 {
