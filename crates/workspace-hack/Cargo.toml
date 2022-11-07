@@ -43,7 +43,7 @@ arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = 
 asn1-rs = { version = "0.5", features = ["datetime", "std", "time"] }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
-atoi = { version = "1", default-features = false }
+atoi = { version = "2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
@@ -673,7 +673,7 @@ async-recursion = { version = "1", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 async-stream-impl = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
-atoi = { version = "1", default-features = false }
+atoi = { version = "2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 autocfg = { version = "1", default-features = false }

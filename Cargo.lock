@@ -460,6 +460,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atoi"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f28d99ec8bfea296261ca1af174f24225171fea9664ba9003cbebee704810528"
+dependencies = [
+ "num-traits 0.2.15",
+]
+
+[[package]]
 name = "atomicwrites"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7819,7 +7828,7 @@ version = "0.6.2"
 source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
 dependencies = [
  "ahash",
- "atoi",
+ "atoi 1.0.0",
  "bitflags",
  "byteorder",
  "bytes",
@@ -10583,7 +10592,7 @@ dependencies = [
  "async-stream",
  "async-stream-impl",
  "async-trait",
- "atoi",
+ "atoi 2.0.0",
  "atomicwrites",
  "atty",
  "autocfg",
