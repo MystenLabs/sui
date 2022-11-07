@@ -211,7 +211,7 @@ futures-timer = { version = "3", default-features = false, features = ["gloo-tim
 futures-util = { version = "0.3", features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
 fxhash = { version = "0.2", default-features = false }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde"] }
-gethostname = { version = "0.4", default-features = false }
+gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 ghash = { version = "0.5", default-features = false }
@@ -862,7 +862,7 @@ futures-timer = { version = "3", default-features = false, features = ["gloo-tim
 futures-util = { version = "0.3", features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
 fxhash = { version = "0.2", default-features = false }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde"] }
-gethostname = { version = "0.4", default-features = false }
+gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 ghash = { version = "0.5", default-features = false }
