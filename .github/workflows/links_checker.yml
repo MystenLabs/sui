@@ -20,7 +20,7 @@ jobs:
 
       - name: Check all links at *.md and doc files
         id: lychee
-        uses: lycheeverse/lychee-action@v1.5.1
+        uses: lycheeverse/lychee-action@v1.5.2
         with:
           output: ${{ env.LYCHEE_OUT }}
           format: markdown
