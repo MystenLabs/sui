@@ -212,6 +212,11 @@ where
     // Get the pending transactions
     let pending_transactions = active_authority.state.database.get_pending_digests()?;
 
+    active_authority
+        .execution_driver_metrics
+        .pending_transactions
+        .set(pending_transactions.len() as i64);
+
     let (pending_sequenced, pending_transactions, indexes_to_delete) =
         sort_and_partition_pending_certs(pending_transactions);
 
@@ -280,10 +285,6 @@ where
     let executed_count = executed.len();
     debug!(?pending_count, ?executed_count, "execute_pending completed");
 
-    active_authority
-        .execution_driver_metrics
-        .pending_transactions
-        .set((pending_count - executed_count) as i64);
     active_authority
         .execution_driver_metrics
         .executed_transactions
