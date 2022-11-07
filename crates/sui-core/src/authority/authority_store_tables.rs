@@ -12,10 +12,11 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
-use sui_types::messages::{TrustedCertificate, TrustedTransactionEnvelope};
+use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;
 
+use sui_types::message_envelope::TrustedEnvelope;
 use typed_store_derive::DBMapUtils;
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -23,7 +24,7 @@ use typed_store_derive::DBMapUtils;
 pub struct AuthorityEpochTables<S> {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
-    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransactionEnvelope<S>>,
+    pub(crate) transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, S>>,
 
     /// The pending execution table holds a sequence of transactions that are present
     /// in the certificates table, but may not have yet been executed, and should be executed.

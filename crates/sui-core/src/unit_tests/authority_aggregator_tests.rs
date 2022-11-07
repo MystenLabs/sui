@@ -334,20 +334,15 @@ where
             .handle_transaction_info_request(TransactionInfoRequest::from(*transaction_digest))
             .await
         {
-            votes.push(signed.auth_sign_info.clone());
+            votes.push(signed.auth_sig().clone());
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction.signed_data.data == signed.signed_data.data);
+                assert!(inner_transaction.data().data == signed.data().data);
             }
             transaction = Some(signed);
         }
     }
 
-    CertifiedTransaction::new_with_auth_sign_infos(
-        transaction.unwrap().to_transaction(),
-        votes,
-        committee,
-    )
-    .unwrap()
+    CertifiedTransaction::new(transaction.unwrap().into_message(), votes, committee).unwrap()
 }
 
 pub async fn do_cert<A>(

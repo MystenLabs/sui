@@ -105,7 +105,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
             .keystore
             .sign(&sender, &data.to_bytes())
             .unwrap();
-        Transaction::new(data, signature).verify().unwrap()
+        Transaction::from_data(data, signature).verify().unwrap()
     };
 
     let resp = context
@@ -162,7 +162,7 @@ pub async fn submit_move_transaction(
         .keystore
         .sign(&sender, &data.to_bytes())
         .unwrap();
-    let tx = Transaction::new(data, signature).verify().unwrap();
+    let tx = Transaction::from_data(data, signature).verify().unwrap();
     let tx_digest = tx.digest();
     debug!(?tx_digest, "submitting move transaction");
 
@@ -388,7 +388,7 @@ pub async fn delete_devnet_nft(
         .keystore
         .sign(sender, &data.to_bytes())
         .unwrap();
-    let tx = Transaction::new(data, signature).verify().unwrap();
+    let tx = Transaction::from_data(data, signature).verify().unwrap();
 
     let resp = context
         .client

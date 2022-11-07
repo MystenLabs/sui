@@ -84,9 +84,9 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .await
             .unwrap();
         let vote = response.signed_transaction.unwrap();
-        let certificate = CertifiedTransaction::new_with_auth_sign_infos(
-            transaction,
-            vec![vote.auth_sign_info.clone()],
+        let certificate = CertifiedTransaction::new(
+            transaction.into_message(),
+            vec![vote.auth_sig().clone()],
             &authority.committee.load(),
         )
         .unwrap();
@@ -149,7 +149,7 @@ async fn submit_transaction_to_consensus_adapter() {
     objects.push(test_shared_object());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
-    let expected_transaction = certificate.clone().to_transaction();
+    let expected_transaction = certificate.clone().into_data();
 
     let committee = state.clone_committee();
     let name = state.name;
@@ -218,7 +218,7 @@ async fn submit_transaction_to_consensus_adapter() {
     let message: ConsensusTransaction = bincode::deserialize(&bytes).unwrap();
     match message.kind {
         ConsensusTransactionKind::UserTransaction(x) => {
-            assert_eq!(x.to_transaction(), expected_transaction)
+            assert_eq!(x.into_data(), expected_transaction)
         }
         _ => panic!("Unexpected message {message:?}"),
     }

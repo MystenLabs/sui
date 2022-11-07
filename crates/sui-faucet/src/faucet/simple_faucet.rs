@@ -351,7 +351,7 @@ impl SimpleFaucet {
             .keystore
             .sign(&signer, &txn_data.to_bytes())?;
 
-        let tx = Transaction::new(txn_data, signature).verify()?;
+        let tx = Transaction::from_data(txn_data, signature).verify()?;
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,

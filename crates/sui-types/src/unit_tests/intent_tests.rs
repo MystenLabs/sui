@@ -63,11 +63,11 @@ fn test_authority_signature_intent() {
         10000,
     );
     let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, signature);
 
     // Create an intent with signed data.
     let intent = Intent::default_with_scope(IntentScope::TransactionData);
-    let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, &tx.signed_data)).unwrap();
+    let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, tx.data())).unwrap();
 
     // Check that the first 3 bytes are the domain separation information.
     assert_eq!(
@@ -80,11 +80,11 @@ fn test_authority_signature_intent() {
     );
 
     // Check that intent's last bytes match the signed_data's bsc bytes.
-    let signed_data_bcs = bcs::to_bytes(&tx.signed_data).unwrap();
+    let signed_data_bcs = bcs::to_bytes(tx.data()).unwrap();
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(&tx.signed_data, intent, &kp);
-    let verification = s.verify_secure(&tx.signed_data, intent, kp.public().into());
+    let s = AuthoritySignature::new_secure(tx.data(), intent, &kp);
+    let verification = s.verify_secure(tx.data(), intent, kp.public().into());
     assert!(verification.is_ok())
 }
