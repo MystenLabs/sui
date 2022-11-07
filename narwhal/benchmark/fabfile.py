@@ -99,7 +99,12 @@ def demo(ctx, debug=True):
         'prometheus_metrics': {
             # Use a random available local port.
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
-        }
+        },
+        "network_admin_server": {
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
+        },
     }
     try:
         ret = Demo(bench_params, node_params).run(debug)
