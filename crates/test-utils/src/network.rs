@@ -184,7 +184,7 @@ impl TestClusterBuilder {
             .save()?;
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf).await?;
+        let wallet = WalletContext::new(&wallet_conf, None).await?;
 
         Ok(TestCluster {
             swarm,
@@ -293,7 +293,7 @@ pub async fn start_a_fullnode_with_handle(
 
     let rpc_url = format!("http://{}", jsonrpc_server_url);
     let rpc_client = HttpClientBuilder::default().build(&rpc_url)?;
-    let sui_client = SuiClient::new(&rpc_url, ws_url.as_deref()).await?;
+    let sui_client = SuiClient::new(&rpc_url, ws_url.as_deref(), None).await?;
 
     let ws_client = if let Some(ws_url) = &ws_url {
         Some(WsClientBuilder::default().build(ws_url).await?)
