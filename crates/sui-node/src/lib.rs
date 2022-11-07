@@ -36,6 +36,7 @@ use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
 use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_network::api::ValidatorServer;
 use sui_network::default_mysten_network_config;
+use sui_network::discovery;
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     node_sync_store::NodeSyncStore,
@@ -83,6 +84,7 @@ pub struct SuiNode {
     _prometheus_registry: Registry,
 
     _p2p_network: anemo::Network,
+    _discovery: discovery::Handle,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -309,15 +311,19 @@ impl SuiNode {
             spawn_monitored_task!(server.serve().map_err(Into::into))
         };
 
+        let (discovery, discovery_server) = discovery::Builder::new()
+            .config(config.p2p_config.clone())
+            .build();
+
         let p2p_network = {
+            let routes = anemo::Router::new().add_rpc_service(discovery_server);
+
             let inbound_network_metrics =
                 NetworkMetrics::new("sui", "inbound", &prometheus_registry);
             let outbound_network_metrics =
                 NetworkMetrics::new("sui", "outbound", &prometheus_registry);
             let network_connection_metrics =
                 NetworkConnectionMetrics::new("sui", &prometheus_registry);
-
-            let routes = anemo::Router::new();
 
             let service = ServiceBuilder::new()
                 .layer(TraceLayer::new_for_server_errors())
@@ -350,6 +356,8 @@ impl SuiNode {
             network
         };
 
+        let discovery_handle = discovery.start(p2p_network.clone());
+
         let (json_rpc_service, ws_subscription_service) = build_http_servers(
             state.clone(),
             &transaction_orchestrator.clone(),
@@ -372,6 +380,7 @@ impl SuiNode {
             transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
             _p2p_network: p2p_network,
+            _discovery: discovery_handle,
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
