@@ -265,7 +265,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    let client = SuiClient::new(&format!("http://{}", addr), None).await?;
+    let client = SuiClient::new(&format!("http://{}", addr), None, None).await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();
