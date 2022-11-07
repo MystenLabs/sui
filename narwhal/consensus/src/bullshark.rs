@@ -7,6 +7,7 @@ use crate::{
     utils, ConsensusOutput,
 };
 use config::{Committee, Stake};
+use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
@@ -64,7 +65,7 @@ impl ConsensusProtocol for Bullshark {
         self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
-        if state.try_insert(certificate).is_err() {
+        if state.try_insert(&certificate).is_err() {
             return Ok(Vec::new());
         }
 
@@ -236,6 +237,21 @@ impl Bullshark {
         }
     }
 
+    // Returns the PublicKey of the authority which is the leader for the provided `round`.
+    // Pay attention that this method will return always the first authority as the leader
+    // when used under a test environment.
+    pub fn leader_authority(committee: &Committee, _round: Round) -> PublicKey {
+        cfg_if::cfg_if! {
+            if #[cfg(test)] {
+                // consensus tests rely on returning the same leader.
+                committee.authorities.iter().next().expect("Empty authorities table!").0.clone()
+            } else {
+                // Elect the leader in a stake-weighted choice seeded by the round
+                committee.leader(_round)
+            }
+        }
+    }
+
     // Checks that the provided certificate's parents exist and prints the necessary
     // log statements. This method does not take more actions other than printing
     // log statements.
@@ -282,18 +298,9 @@ impl Bullshark {
     ) -> Option<&'a (CertificateDigest, Certificate)> {
         // Note: this function is often called with even rounds only. While we do not aim at random selection
         // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
-
-        cfg_if::cfg_if! {
-            if #[cfg(test)] {
-                // consensus tests rely on returning the same leader.
-                let leader = committee.authorities.iter().next().expect("Empty authorities table!").0;
-            } else {
-                // Elect the leader in a stake-weighted choice seeded by the round
-                let leader = &committee.leader(round);
-            }
-        }
+        let leader = Self::leader_authority(committee, round);
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(leader))
+        dag.get(&round).and_then(|x| x.get(&leader))
     }
 }
