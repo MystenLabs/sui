@@ -32,7 +32,7 @@ pub fn test_validatdor_metadata(
         next_epoch_stake: 1,
         next_epoch_delegation: 1,
         next_epoch_gas_price: 1,
-        next_epoch_commission_rate: 0, 
+        next_epoch_commission_rate: 0,
     }
 }
 
