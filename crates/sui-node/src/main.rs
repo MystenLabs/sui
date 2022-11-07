@@ -24,8 +24,8 @@ struct Args {
 }
 
 // Memory profiling is now done automatically by the Ying profiler.
-use ying_profiler::utils::ProfilerRunner;
-use ying_profiler::YingProfiler;
+// use ying_profiler::utils::ProfilerRunner;
+// use ying_profiler::YingProfiler;
 
 // #[global_allocator]
 // static YING_ALLOC: YingProfiler = YingProfiler;
