@@ -16,6 +16,10 @@ pub struct P2pConfig {
     /// This will be shared with other peers through the discovery service
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_address: Option<Multiaddr>,
+    /// SeedPeers configured with a PeerId are preferred and the node will always try to ensure a
+    /// connection is established with these nodes.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub seed_peers: Vec<SeedPeer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anemo_config: Option<anemo::Config>,
 }
@@ -29,7 +33,16 @@ impl Default for P2pConfig {
         Self {
             listen_address: default_listen_address(),
             external_address: Default::default(),
+            seed_peers: Default::default(),
             anemo_config: Default::default(),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SeedPeer {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_id: Option<anemo::PeerId>,
+    pub address: Multiaddr,
 }
