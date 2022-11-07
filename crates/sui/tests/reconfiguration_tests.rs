@@ -354,6 +354,7 @@ async fn create_and_register_new_validator(
             CallArg::Pure(bcs::to_bytes(&new_validator.network_address).unwrap()),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(validator_stake)),
             CallArg::Pure(bcs::to_bytes(&new_validator.gas_price()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator.commission_rate()).unwrap()),
         ],
     );
     submit_shared_object_transaction(validator_tx, validator_info).await
