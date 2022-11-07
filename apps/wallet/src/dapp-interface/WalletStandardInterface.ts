@@ -40,11 +40,13 @@ type WalletEventsMap = {
     [E in keyof EventsListeners]: Parameters<EventsListeners[E]>[0];
 };
 
-// TODO: rebuild event interface with Mitt.
+// NOTE: Because this runs in a content script, we can't fetch the manifest.
+const name = process.env.APP_NAME || 'Sui Wallet';
+
 export class SuiWallet implements Wallet {
     readonly #events: Emitter<WalletEventsMap>;
     readonly #version = '1.0.0' as const;
-    readonly #name = 'Sui Wallet' as const;
+    readonly #name = name;
     #account: ReadonlyWalletAccount | null;
     #messagesStream: WindowMessageStream;
 
