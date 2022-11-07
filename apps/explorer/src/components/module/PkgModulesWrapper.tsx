@@ -99,16 +99,13 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <Combobox.Options
                         static
                         as="div"
-                        className="h-[209px] md:h-[571px] overflow-auto pr-1"
+                        className="h-verticalListShort md:h-verticalListLong overflow-auto pr-1"
                     >
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
                                     {({ active }) => (
-                                        <div
-                                            key={idx}
-                                            className="md:min-w-fit "
-                                        >
+                                        <div key={idx} className="md:min-w-fit">
                                             <ListItem
                                                 active={
                                                     active ||
@@ -132,7 +129,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </TabList>
                     <TabPanels>
                         <TabPanel>
-                            <div className="overflow-auto h-[555px]">
+                            <div className="overflow-auto h-verticalListLong">
                                 <ModuleViewWrapper
                                     id={id}
                                     modules={modules}
