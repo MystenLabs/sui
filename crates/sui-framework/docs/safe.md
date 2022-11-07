@@ -362,7 +362,7 @@ a trusted party (or smart contract) to transfer the object out.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="safe.md#0x2_safe_create">create</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_create">create</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -388,7 +388,7 @@ a trusted party (or smart contract) to transfer the object out.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="safe.md#0x2_safe_create_empty">create_empty</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_create_empty">create_empty</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -440,7 +440,7 @@ Deposit funds to the safe
 Deposit funds to the safe
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="safe.md#0x2_safe_deposit">deposit</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_deposit">deposit</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -493,7 +493,7 @@ Withdraw coins from the safe as a <code><a href="safe.md#0x2_safe_OwnerCapabilit
 Withdraw coins from the safe as a <code><a href="safe.md#0x2_safe_OwnerCapability">OwnerCapability</a></code> holder
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="safe.md#0x2_safe_withdraw">withdraw</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">safe::OwnerCapability</a>&lt;T&gt;, withdraw_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_withdraw">withdraw</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">safe::OwnerCapability</a>&lt;T&gt;, withdraw_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -551,7 +551,7 @@ Withdraw coins from the safe as a <code><a href="safe.md#0x2_safe_TransferCapabi
 Revoke a <code><a href="safe.md#0x2_safe_TransferCapability">TransferCapability</a></code> as an <code><a href="safe.md#0x2_safe_OwnerCapability">OwnerCapability</a></code> holder
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="safe.md#0x2_safe_revoke_transfer_capability">revoke_transfer_capability</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">safe::OwnerCapability</a>&lt;T&gt;, capability_id: <a href="object.md#0x2_object_ID">object::ID</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_revoke_transfer_capability">revoke_transfer_capability</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">safe::OwnerCapability</a>&lt;T&gt;, capability_id: <a href="object.md#0x2_object_ID">object::ID</a>)
 </code></pre>
 
 
@@ -578,7 +578,7 @@ Revoke a <code><a href="safe.md#0x2_safe_TransferCapability">TransferCapability<
 Revoke a <code><a href="safe.md#0x2_safe_TransferCapability">TransferCapability</a></code> as its owner
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="safe.md#0x2_safe_self_revoke_transfer_capability">self_revoke_transfer_capability</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_TransferCapability">safe::TransferCapability</a>&lt;T&gt;)
+<pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_self_revoke_transfer_capability">self_revoke_transfer_capability</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">safe::Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_TransferCapability">safe::TransferCapability</a>&lt;T&gt;)
 </code></pre>
 
 

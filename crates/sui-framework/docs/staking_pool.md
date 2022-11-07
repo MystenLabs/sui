@@ -717,7 +717,7 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 Withdraw delegation from an inactive pool.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_inactive_pool">withdraw_from_inactive_pool</a>(inactive_pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">staking_pool::InactiveStakingPool</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, withdraw_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_inactive_pool">withdraw_from_inactive_pool</a>(inactive_pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">staking_pool::InactiveStakingPool</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, withdraw_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -748,7 +748,7 @@ Withdraw delegation from an inactive pool.
 Destroy an empty delegation that no longer contains any SUI or pool tokens.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_delegation">destroy_empty_delegation</a>(delegation: <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_delegation">destroy_empty_delegation</a>(delegation: <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>)
 </code></pre>
 
 
@@ -783,7 +783,7 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 Destroy an empty delegation that no longer contains any SUI or pool tokens.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_staked_sui">destroy_empty_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_staked_sui">destroy_empty_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>)
 </code></pre>
 
 
