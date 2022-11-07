@@ -86,6 +86,7 @@ use sui_types::{
 };
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
+use crate::authority::authority_notify_read::NotifyRead;
 use crate::checkpoints::ConsensusSender;
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
@@ -123,6 +124,7 @@ mod gas_tests;
 pub mod authority_store_tables;
 
 pub mod authority_notifier;
+mod authority_notify_read;
 mod authority_store;
 
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
@@ -192,6 +194,8 @@ pub struct AuthorityMetrics {
     pub(crate) batch_service_total_tx_broadcasted: IntCounter,
     pub(crate) batch_service_latest_seq_broadcasted: IntGauge,
     pub(crate) batch_svc_is_running: IntCounter,
+
+    pending_notify_read: IntGauge,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -459,6 +463,12 @@ impl AuthorityMetrics {
                 "Sanity check to ensure batch service is running",
                 registry,
             ).unwrap(),
+            pending_notify_read: register_int_gauge_with_registry!(
+                "pending_notify_read",
+                "Pending notify read requests",
+                registry,
+            )
+                .unwrap(),
         }
     }
 }
@@ -2105,6 +2115,10 @@ impl AuthorityState {
             .tap_ok(|_| {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
             })?;
+        // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
+        self.metrics
+            .pending_notify_read
+            .set(self.database.notify_read.num_pending() as i64);
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(seq)

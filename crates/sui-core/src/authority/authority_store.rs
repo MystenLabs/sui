@@ -76,6 +76,8 @@ pub struct SuiDataStore<S> {
     // needed for re-opening epoch db.
     path: PathBuf,
     db_options: Option<Options>,
+
+    pub(crate) notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
@@ -120,6 +122,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             epoch_tables: epoch_tables.into(),
             path: path.into(),
             db_options,
+            notify_read: NotifyRead::new(),
         })
     }
 
@@ -686,6 +689,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 effects_digest,
             )
             .await?;
+
+        self.notify_read
+            .notify(transaction_digest, &effects.effects);
 
         // Cleanup the lock of the shared objects. This must be done after we write effects, as
         // effects_exists is used as the guard to avoid re-locking objects for a previously

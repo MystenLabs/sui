@@ -121,7 +121,7 @@ fn make_aggregator(
     aggregator
 }
 
-#[sim_test]
+#[tokio::test]
 async fn sequence_fragments() {
     // Spawn a quorum of authorities.
     let configs = test_authority_configs();
