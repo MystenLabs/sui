@@ -11,6 +11,7 @@ use fastcrypto::{
     traits::ToFromBytes,
     Verifier,
 };
+use fastcrypto_zkp::{verifier::{PreparedVerifyingKey, verify_with_processed_vk, Proof}, conversions::{PrimeField, bls_g1_affine_from_zcash_bytes, bls_g2_affine_from_zcash_bytes, BlsFr, BlsG1Affine}};
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -34,7 +35,8 @@ pub const INVALID_PUBKEY: u64 = 6;
 /// Using the word "sui" for nothing-up-my-sleeve number guarantees.
 pub const BP_DOMAIN: &[u8] = b"sui";
 
-/// Native implementation of ecrecover in public Move API, see crypto.move for specifications.
+/// Native implementation of ecrecover in public Mo
+/// ve API, see crypto.move for specifications.
 pub fn ecrecover(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -473,4 +475,70 @@ pub fn hmac_sha3_256(
             hmac::hmac_sha3_256(&hmac_key, &message.as_bytes_ref()).to_vec()
         )],
     ))
+}
+
+/// Native implemention of ed25519_verify in public Move API, see crypto.move for specifications.
+pub fn internal_verify_groth16_proof(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(args.len() == 8);
+
+    let vk_gamma_abc_g1_bytes = pop_arg!(args, Vec<u8>);
+    let alpha_g1_beta_g2_bytes = pop_arg!(args, Vec<u8>);
+    let gamma_g2_neg_pc_bytes = pop_arg!(args, Vec<u8>);
+    let delta_g2_neg_pc_bytes = pop_arg!(args, Vec<u8>);
+    
+    let gamma_g2_neg_pc: [u8; 96] = gamma_g2_neg_pc_bytes.try_into().unwrap();
+    let delta_g2_neg_pc: [u8; 96] = delta_g2_neg_pc_bytes.try_into().unwrap();
+
+    let x_bytes = pop_arg!(args, Vec<u8>);
+    let a_bytes = pop_arg!(args, Vec<u8>);
+    let b_bytes = pop_arg!(args, Vec<u8>);
+    let c_bytes = pop_arg!(args, Vec<u8>);
+
+    let pvk = build_pvk(x_bytes.len(), vk_gamma_abc_g1_bytes, alpha_g1_beta_g2_bytes, &gamma_g2_neg_pc, &delta_g2_neg_pc).unwrap();
+
+    let x_bytes = pop_arg!(args, Vec<u8>);
+    let x: [u8; 48] = x_bytes.try_into().unwrap();
+
+    let x = BlsFr::from_le_bytes_mod_order(&x);
+
+    let a_bytes_arr: [u8; 48] = a_bytes.try_into().unwrap();
+    let b_bytes_arr: [u8; 96] = b_bytes.try_into().unwrap();
+    let c_bytes_arr: [u8; 48] = c_bytes.try_into().unwrap();
+
+    let proof = Proof {
+        a: bls_g1_affine_from_zcash_bytes(&a_bytes_arr).unwrap(),
+        b: bls_g2_affine_from_zcash_bytes(&b_bytes_arr).unwrap(),
+        c: bls_g1_affine_from_zcash_bytes(&c_bytes_arr).unwrap(),
+    };
+
+    let cost = legacy_empty_cost();
+
+    match verify_with_processed_vk(&pvk, x, &proof) {
+        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
+        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    }
+}
+
+fn build_pvk(input_size: usize, vk_gamma_abc_g1: Vec<u8>, alpha_g1_beta_g2_bytes: Vec<u8>, gamma_g2_neg_pc: &[u8; 96], delta_g2_neg_pc: &[u8; 96]) -> Result<PreparedVerifyingKey, SuiError> {
+    let mut vec_points: Vec<BlsG1Affine> = Vec::new();
+    if input_size * 48 != vk_gamma_abc_g1.len() {
+        return Err(SuiError::InvalidPrivateKey);
+    }
+    (0..input_size.into()).step_by(48).for_each(
+        |i| {
+            let arr: [u8; 48] = vk_gamma_abc_g1[i..i+48].try_into().unwrap();
+            vec_points.push(bls_g1_affine_from_zcash_bytes(&arr).unwrap());
+        }
+    );
+    
+    Ok(PreparedVerifyingKey {
+        vk_gamma_abc_g1: vec_points,
+        alpha_g1_beta_g2: alpha_g1_beta_g2_bytes.to_vec(),
+        gamma_g2_neg_pc: bls_g2_affine_from_zcash_bytes(gamma_g2_neg_pc).unwrap(),
+        delta_g2_neg_pc: bls_g2_affine_from_zcash_bytes(delta_g2_neg_pc).unwrap(),
+    })
 }

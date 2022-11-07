@@ -19,6 +19,7 @@ sha3 = "0.10.4"
 curve25519-dalek-ng = "4.1.1"
 
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 digest = "0.10.3"
 serde = { version = "1.0.144", features = ["derive"] }
 

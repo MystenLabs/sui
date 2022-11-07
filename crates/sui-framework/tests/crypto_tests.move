@@ -9,6 +9,7 @@ module sui::crypto_tests {
     use sui::digest;
     use sui::elliptic_curve as ec;
     use sui::hmac;
+    use sui::zkp;
     use std::vector;
     use std::hash::sha2_256;
 
@@ -544,5 +545,14 @@ module sui::crypto_tests {
             i = i + 1;
         };
         addr
+    }
+
+    #[test]
+    fun test_groth16_verifier() {
+        let pvk = zkp::pvk_from_bytes(vector[142], vector[142], vector[142], vector[142]);
+        let x = vector[142];
+        let proof = zkp::proof_from_bytes(vector[1]);
+        let verify = zkp::verify_groth16_proof(pvk, x, proof);
+        assert!(verify == true, 0)
     }
 }

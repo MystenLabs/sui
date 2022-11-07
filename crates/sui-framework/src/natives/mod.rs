@@ -217,6 +217,7 @@ pub fn all_natives(
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
         ),
+        ("zkp", "internal_verify_groth16_proof", make_native!(crypto::internal_verify_groth16_proof)),
     ];
     sui_natives
         .iter()
