@@ -48,7 +48,6 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             .unwrap(),
     );
 
-    // TODO: duplicated code with transaction.rs
     loop {
         tokio::select! {
             _ = &mut timeout => panic!("wait_for_tx timed out"),
@@ -90,6 +89,11 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             },
         }
     }
+
+    // A small delay is needed so that the batch process can finish notifying other subscribers,
+    // which tests may depend on. Otherwise tests can pass or fail depending on whether the
+    // subscriber in this function was notified first or last.
+    sleep(Duration::from_millis(10)).await;
 }
 
 // Creates a fake sender-signed transaction for testing. This transaction will
