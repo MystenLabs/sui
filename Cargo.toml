@@ -53,6 +53,8 @@ debug = 1
 strip = 'none'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
+# Crash on runtime integer overflow
+overflow-checks = true
 
 [profile.bench]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
