@@ -97,7 +97,7 @@ cbc = { version = "0.1", features = ["alloc", "block-padding", "std"] }
 cfg-expr = { version = "0.11", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
-chrono-tz = { version = "0.8", features = ["std"] }
+chrono-tz = { version = "0.6", features = ["std"] }
 cipher = { version = "0.4", default-features = false, features = ["alloc", "block-padding", "std"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
@@ -733,7 +733,7 @@ cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.11", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
-chrono-tz = { version = "0.8", features = ["std"] }
+chrono-tz = { version = "0.6", features = ["std"] }
 chrono-tz-build = { version = "0.0.3", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["alloc", "block-padding", "std"] }
 clang-sys = { version = "1", default-features = false, features = ["clang_3_5", "clang_3_6", "clang_3_7", "clang_3_8", "clang_3_9", "clang_4_0", "clang_5_0", "clang_6_0", "libloading", "runtime"] }
