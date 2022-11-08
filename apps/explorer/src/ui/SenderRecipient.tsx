@@ -74,7 +74,7 @@ function Amount({ amount, symbol }: { amount: number; symbol?: string }) {
                 {amount}
             </Heading>
             {symbol && (
-                <div className="text-sui-grey-80 ">
+                <div className="text-sui-grey-80">
                     <Text variant="bodySmall">{symbol}</Text>
                 </div>
             )}
