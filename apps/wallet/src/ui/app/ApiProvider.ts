@@ -81,11 +81,11 @@ export const DEFAULT_API_ENV = getDefaultApiEnv();
 
 type NetworkTypes = keyof typeof API_ENV;
 
-const EXCLUDE_STAGING = process.env.SHOW_STAGING !== 'false' && API_ENV.staging;
 
 export const generateActiveNetworkList = (): NetworkTypes[] => {
     const excludedNetworks: NetworkTypes[] = [];
-    if (EXCLUDE_STAGING) {
+
+    if (process.env.SHOW_STAGING !== 'false') {
         excludedNetworks.push(API_ENV.staging);
     }
 
