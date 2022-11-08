@@ -1262,8 +1262,8 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if !object.is_owned_or_quasi_shared() {
-                            // Unowned objects have no locks.
+                        let lock = if !object.is_address_owned() {
+                            // Only address owned objects have locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
