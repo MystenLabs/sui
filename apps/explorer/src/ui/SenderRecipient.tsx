@@ -5,7 +5,7 @@ import { cva } from 'class-variance-authority';
 
 import { ReactComponent as DoneIcon } from '~/assets/SVGIcons/CheckFill.svg';
 import { ReactComponent as StartIcon } from '~/assets/SVGIcons/Start.svg';
-import { AddressLink } from '~/ui/AddressLink';
+import { Link} from '~/ui/Link';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 
@@ -17,7 +17,6 @@ const senderRecipientAddressStyles = cva(
                 true: 'ml-6',
             },
         },
-        defaultVariants: {},
     }
 );
 
@@ -36,7 +35,9 @@ function SenderRecipientAddress({
             <div className="w-4 mt-1">
                 {isSender ? <StartIcon /> : <DoneIcon />}
             </div>
-            <AddressLink link={address} />
+            <Link variant="mono" to={`/addresses/${encodeURIComponent(address)}`}>
+                {address}
+            </Link>
         </div>
     );
 }
