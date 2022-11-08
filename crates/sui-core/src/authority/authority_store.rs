@@ -23,6 +23,7 @@ use sui_storage::{
 };
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::object::Owner;
 use sui_types::storage::{ChildObjectResolver, SingleTxContext, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
@@ -405,7 +406,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
-    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
             SuiError::ObjectLockUninitialized {
                 obj_ref: *object_ref,
@@ -614,7 +615,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         epoch: EpochId,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedTransactionEnvelope<S>,
+        transaction: VerifiedEnvelope<SenderSignedData, S>,
     ) -> Result<(), SuiError> {
         let tx_digest = *transaction.digest();
 
@@ -1329,7 +1330,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let transaction = self.epoch_tables().transactions.get(transaction_digest)?;
         Ok(transaction.map(|t| t.into()))
     }
@@ -1370,13 +1371,13 @@ impl SuiDataStore<AuthoritySignInfo> {
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
-        let tx: Option<VerifiedTransactionEnvelope<AuthoritySignInfo>> = self
+        let tx: Option<VerifiedSignedTransaction> = self
             .epoch_tables()
             .transactions
             .get(transaction_digest)?
             .map(|t| t.into());
         Ok(if let Some(signed_tx) = tx {
-            signed_tx.auth_sign_info.epoch == cur_epoch
+            signed_tx.auth_sig().epoch == cur_epoch
         } else {
             false
         })

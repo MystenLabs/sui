@@ -45,7 +45,7 @@ pub async fn transaction(
     let digest = request.transaction_identifier.hash;
     let (cert, effects) = context.state.get_transaction(digest).await?;
     let hash = *cert.digest();
-    let data = &cert.signed_data.data;
+    let data = &cert.data().data;
 
     let operations = Operation::from_data_and_events(data, &effects.status, &effects.events)?;
 

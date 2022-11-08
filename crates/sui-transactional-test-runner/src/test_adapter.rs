@@ -461,7 +461,7 @@ impl<'a> SuiTestAdapter<'a> {
         let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
-            .signed_data
+            .data()
             .data
             .input_objects()?
             .into_iter()
@@ -496,7 +496,7 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             temporary_store,
-            transaction.into_inner().signed_data.data,
+            transaction.into_inner().into_data().data,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

@@ -575,7 +575,7 @@ impl AuthorityState {
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
-            &transaction.signed_data.data,
+            &transaction.data().data,
         )
         .await?;
 
@@ -601,7 +601,7 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.data().data);
         let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
         self.metrics.tx_orders.inc();
@@ -675,7 +675,7 @@ impl AuthorityState {
                 ?observed_effects_digest,
                 ?effects.effects,
                 ?resp.signed_effects,
-                input_objects = ?certificate.signed_data.data.input_objects(),
+                input_objects = ?certificate.data().data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
@@ -732,7 +732,7 @@ impl AuthorityState {
         let span = tracing::debug_span!(
             "validator_acquire_tx_guard",
             ?tx_digest,
-            tx_kind = certificate.signed_data.data.kind_as_str()
+            tx_kind = certificate.data().data.kind_as_str()
         );
         let tx_guard = self
             .database
@@ -941,7 +941,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.signed_data.data.kind.batch_size() as f64);
+            .observe(certificate.data().data.kind.batch_size() as f64);
 
         Ok(VerifiedTransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -972,8 +972,7 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_change_epoch_tx()
-        {
+        if !shared_object_refs.is_empty() && !certificate.data().data.kind.is_change_epoch_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
@@ -996,7 +995,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                certificate.signed_data.data.clone(),
+                certificate.data().data.clone(),
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -1066,7 +1065,7 @@ impl AuthorityState {
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
-            cert.signed_data
+            cert.data()
                 .data
                 .input_objects()?
                 .iter()
@@ -1075,7 +1074,7 @@ impl AuthorityState {
                 .effects
                 .all_mutated()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
-            cert.signed_data
+            cert.data()
                 .data
                 .move_calls()
                 .iter()
@@ -2190,7 +2189,7 @@ impl AuthorityState {
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
         // Check the certificate. Remember that Byzantine authorities may input anything into
         // consensus.
-        certificate.verify_signatures(&self.committee.load())
+        certificate.verify_signature(&self.committee.load())
     }
 
     /// Verifies transaction signatures and other data

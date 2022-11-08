@@ -431,7 +431,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
 
                 SuiClientCommandResult::Publish(response)
@@ -474,7 +474,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -501,7 +501,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -543,7 +543,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -586,7 +586,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
 
                 let cert = response.certificate;
@@ -618,7 +618,7 @@ impl SuiClientCommands {
 
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
 
                 let cert = response.certificate;
@@ -706,7 +706,7 @@ impl SuiClientCommands {
                 };
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
             }
@@ -724,7 +724,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature).verify()?)
+                    .execute_transaction(Transaction::from_data(data, signature).verify()?)
                     .await?;
 
                 SuiClientCommandResult::MergeCoin(response)
@@ -813,7 +813,7 @@ impl SuiClientCommands {
                         .to_vec()
                         .map_err(|e| anyhow!(e))?,
                 )?;
-                let signed_tx = Transaction::new(
+                let signed_tx = Transaction::from_data(
                     data,
                     Signature::from_bytes(
                         &[
@@ -1215,7 +1215,7 @@ pub async fn call_move(
         )
         .await?;
     let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
-    let transaction = Transaction::new(data, signature).verify()?;
+    let transaction = Transaction::from_data(data, signature).verify()?;
 
     let response = context.execute_transaction(transaction).await?;
     let cert = response.certificate;
