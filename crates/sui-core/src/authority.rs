@@ -2361,6 +2361,7 @@ impl AuthorityState {
         &self,
         consensus_output: &Arc<ConsensusOutput>,
     ) -> SuiResult {
+        debug!("Commit boundary at consensus_index {}", consensus_output.consensus_index);
         // This exchange is restart safe because of following:
         //
         // We try to read last checkpoint content and send it to the checkpoint service
@@ -2373,6 +2374,7 @@ impl AuthorityState {
         {
             self.checkpoint_service.notify_checkpoint(index, roots)?;
         }
+        error!("Recording checkpoint boundary {}", consensus_output.consensus_index);
         self.database
             .record_checkpoint_boundary(consensus_output.consensus_index)
     }

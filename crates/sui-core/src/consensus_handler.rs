@@ -12,7 +12,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use sui_types::messages::ConsensusTransaction;
 use tokio::sync::mpsc;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
@@ -139,6 +139,7 @@ impl ExecutionState for ConsensusHandler {
 
     #[instrument(level = "trace", skip_all)]
     async fn notify_commit_boundary(&self, consensus_output: &Arc<ConsensusOutput>) {
+        error!("[impl] notify_commit_boundary: index: {}, len: {}", consensus_output.consensus_index, consensus_output.certificate.header.payload.len());
         self.state
             .handle_commit_boundary(consensus_output)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")

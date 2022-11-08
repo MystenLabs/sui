@@ -6,7 +6,7 @@ use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
-use tracing::debug;
+use tracing::{debug, info};
 
 use types::{metered_channel, Batch, Timestamp};
 
@@ -63,9 +63,11 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             }
             // this is temporary
             // we will get explicit signal from consensus on where is commit boundary in the future
+            info!("index.batch_index: {}, len: {}", index.batch_index, index.consensus_output.certificate.header.payload.len());
             if index.batch_index + 1
                 == index.consensus_output.certificate.header.payload.len() as u64
             {
+                info!("notify_commit_boundary: {}, len: {}", index.batch_index, index.consensus_output.certificate.header.payload.len());
                 self.callback
                     .notify_commit_boundary(&index.consensus_output)
                     .await;
