@@ -2584,7 +2584,7 @@ impl From<ObjectInfo> for SuiObjectInfo {
             object_id: info.object_id,
             version: info.version,
             digest: info.digest,
-            type_: info.type_,
+            type_: format!("{}", info.type_),
             owner: info.owner,
             previous_transaction: info.previous_transaction,
         }

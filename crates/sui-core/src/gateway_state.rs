@@ -1183,7 +1183,7 @@ where
     ) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
         let mut coins = Vec::new();
         for info in self.store.get_owner_objects(Owner::AddressOwner(address))? {
-            if info.type_ == GasCoin::type_().to_string() {
+            if info.type_.is_gas_coin() {
                 let object = self.get_object_internal(&info.object_id).await?;
                 let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
                 coins.push((info.into(), gas_coin.value()));
