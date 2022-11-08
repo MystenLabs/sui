@@ -133,6 +133,11 @@ impl<'a> ObjectRuntime<'a> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
+        // - an object is new if it is contained in the new ids or if it is the
+        //   SUI_SYSTEM_STATE_OBJECT_ID which is only transferred in genesis
+        // - Otherwise, check the input objects for the previous owner
+        // - If it was not in the input objects, it must have been wrapped or must have been a
+        //   child object
         let transfer_result =
             if self.state.new_ids.contains_key(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID {
                 TransferResult::New
@@ -309,6 +314,8 @@ impl ObjectRuntimeState {
                         debug_assert!(!new_ids.contains_key(&id));
                         WriteKind::Mutate
                     } else if id == SUI_SYSTEM_STATE_OBJECT_ID || new_ids.contains_key(&id) {
+                        // SUI_SYSTEM_STATE_OBJECT_ID is only transferred during genesis
+                        // TODO find a way to insert this in the new_ids during genesis transactions
                         WriteKind::Create
                     } else {
                         WriteKind::Unwrap
