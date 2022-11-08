@@ -97,21 +97,15 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         </button>
                     </div>
                     <Combobox.Options
-                        static
                         as="div"
-                        className="h-verticalListShort md:h-verticalListLong overflow-auto pr-1"
+                        className=" overflow-auto pr-1 absolute bg-red-900 w-full md:w-1/6 h-fit pb-0.5"
                     >
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
                                     {({ active }) => (
                                         <div key={idx} className="md:min-w-fit">
-                                            <ListItem
-                                                active={
-                                                    active ||
-                                                    selectedModule === name
-                                                }
-                                            >
+                                            <ListItem active={active}>
                                                 {name}
                                             </ListItem>
                                         </div>
@@ -121,6 +115,17 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         </VerticalList>
                     </Combobox.Options>
                 </Combobox>
+                <div className="h-verticalListShort md:h-verticalListLong">
+                    <VerticalList>
+                        {modulenames.map((name, idx) => (
+                            <div key={idx} className="md:min-w-fit">
+                                <ListItem active={selectedModule === name}>
+                                    {name}
+                                </ListItem>
+                            </div>
+                        ))}
+                    </VerticalList>
+                </div>
             </div>
             <div className="border-0 md:border-l border-solid border-sui-grey-45 md:pl-7 pt-5 grow">
                 <TabGroup size="md">
