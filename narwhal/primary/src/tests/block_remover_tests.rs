@@ -166,8 +166,8 @@ async fn test_successful_blocks_delete() {
     // ensure deleted certificates have been populated to output channel
     let mut total_deleted = 0;
 
-    /*while let Ok(Some(c)) = 
-        timeout(Duration::from_secs(1), rx_removed_certificates.recv()).await 
+    /*while let Ok(Some(c)) =
+        timeout(Duration::from_secs(1), rx_removed_certificates.recv()).await
     {
         assert!(
             digests.contains(&c.digest()),
