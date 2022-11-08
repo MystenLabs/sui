@@ -32,7 +32,6 @@ env:
 
 jobs:
   release-build:
-    needs: release
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     strategy:
