@@ -553,11 +553,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 &(object.owner, object_ref.0),
                 &ObjectInfo::new(&object_ref, object),
             )?;
-            // Only initialize lock for owned objects.
-            // TODO: Skip this for quasi-shared objects.
-            self.lock_service
-                .initialize_locks(&[object_ref], false /* is_force_reset */)
-                .await?;
+            // Only initialize lock for address owned objects.
+            if !object.is_child_object() {
+                self.lock_service
+                    .initialize_locks(&[object_ref], false /* is_force_reset */)
+                    .await?;
+            }
         }
 
         // Update the parent
@@ -599,9 +600,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             )?
             .write()?;
 
-        let refs: Vec<_> = ref_and_objects.iter().map(|(oref, _)| *oref).collect();
+        let non_child_object_refs: Vec<_> = ref_and_objects
+            .iter()
+            .filter(|(_, object)| !object.is_child_object())
+            .map(|(oref, _)| *oref)
+            .collect();
         self.lock_service
-            .initialize_locks(&refs, false /* is_force_reset */)
+            .initialize_locks(&non_child_object_refs, false /* is_force_reset */)
             .await?;
 
         Ok(())
@@ -638,6 +643,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// It's called when we could not get a transaction to successfully execute,
     /// and have to roll back.
     pub async fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        // this object should not be a child object, since child objects can no longer be
+        // inputs, but
+        // TODO double check these are not child objects
         self.lock_service
             .initialize_locks(owned_input_objects, true /* is_force_reset */)
             .await?;
