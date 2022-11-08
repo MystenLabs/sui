@@ -98,9 +98,19 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </div>
                     <Combobox.Options
                         as="div"
-                        className=" overflow-auto pr-1 absolute w-full md:w-1/6 h-fit pb-0.5 shadow-moduleOption rounded-md"
+                        className=" overflow-auto pr-1 absolute w-full md:w-1/6 h-fit pb-0.5 shadow-moduleOption rounded-md bg-white"
                     >
                         <VerticalList>
+                            {filteredModules.length > 0 ? (
+                                <div className="text-caption font-semibold ml-0.5 px-3 py-2 uppercase text-sui-grey-75">
+                                    {filteredModules.length} Result
+                                    {filteredModules.length === 1 ? '' : 's'}
+                                </div>
+                            ) : (
+                                <div className="text-sui-grey-70 text-body italic py-5 px-3.5 text-center">
+                                    No results
+                                </div>
+                            )}
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
                                     {({ active }) => (
