@@ -3,40 +3,21 @@
 
 import { cva } from 'class-variance-authority';
 
-//TODO: Switch to using ButtonOrLink component after support for sui explorer links
-import Longtext from '~/components/longtext/Longtext';
+import { ReactComponent as DoneIcon } from '~/assets/SVGIcons/CheckFill.svg';
+import { ReactComponent as StartIcon } from '~/assets/SVGIcons/Start.svg';
+import { AddressLink } from '~/ui/AddressLink';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 
-const isCoinTransfer = cva(
-    ['flex flex-col ml-6 gap-[15px] justify-center  relative'],
-    {
-        variants: {
-            singleTransferCoin: {
-                true: 'before:content-[url()] before:border-2 before:border-[#a0b6c3] before:overflow-y-hidden before:absolute before:h-[calc(55%)] before:w-[15px] before:border-r-[transparent] before:border-t-[transparent] before:mt-1 before:ml-[-16px] before:rounded-l before:border-dotted',
-            },
-        },
-    }
-);
-
 const senderRecipientAddressStyles = cva(
-    [
-        'break-all before:ml-[-23px] before:absolute relative before:top-[50%] before:translate-y-[-50%]',
-    ],
+    ['break-all flex flex-row gap-2 w-full items-center'],
     {
         variants: {
-            isSender: {
-                true: 'before:content-[url(~/assets/SVGIcons/Start.svg)] before:mt-[2px]',
-                false: 'before:content-[url(~/assets/SVGIcons/CheckFill.svg)] before:mt-[3px]',
-            },
             isCoinTransfer: {
-                true: 'ml-[20px]',
+                true: 'ml-6',
             },
         },
-
-        defaultVariants: {
-            isSender: false,
-        },
+        defaultVariants: {},
     }
 );
 
@@ -51,25 +32,18 @@ function SenderRecipientAddress({
 }) {
     const isCoinTransfer = !!(isCoin && !isSender);
     return (
-        <div
-            className={senderRecipientAddressStyles({
-                isSender,
-                isCoinTransfer,
-            })}
-        >
-            <Longtext
-                text={address}
-                category="addresses"
-                isLink
-                alttext={address}
-            />
+        <div className={senderRecipientAddressStyles({ isCoinTransfer })}>
+            <div className="w-4 mt-1">
+                {isSender ? <StartIcon /> : <DoneIcon />}
+            </div>
+            <AddressLink link={address} />
         </div>
     );
 }
 
 function Amount({ amount, symbol }: { amount: number; symbol?: string }) {
     return (
-        <div className="flex flex-row items-end gap-1 text-sui-grey-100">
+        <div className="flex flex-row items-end gap-1 text-sui-grey-100 ml-6">
             <Heading as="h4" variant="heading4">
                 {amount}
             </Heading>
@@ -117,7 +91,10 @@ export function SenderRecipient({
             <Heading as="h4" variant="heading4" weight="semibold">
                 Sender {singleTransferCoin && '& Recipient'}
             </Heading>
-            <div className={isCoinTransfer({ singleTransferCoin })}>
+            <div className="flex flex-col gap-[15px] justify-center relative">
+                {singleTransferCoin && (
+                    <div className="absolute border-2 border-[#a0b6c3] overflow-y-hidden h-[calc(55%)] w-4 border-r-[transparent] border-t-[transparent] mt-1 ml-1.5 rounded-l border-dotted" />
+                )}
                 <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (
                     <SenderRecipientAddress
@@ -127,7 +104,7 @@ export function SenderRecipient({
                 )}
                 {multipleRecipientsList?.length ? (
                     <div className="mt-2 flex flex-col gap-2">
-                        <div className="ml-[-24px] mt-[5px] mb-[10px]">
+                        <div className=" mt-[5px] mb-2.5">
                             <Heading
                                 as="h4"
                                 variant="heading4"

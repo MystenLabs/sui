@@ -14,7 +14,7 @@ const linkStyles = cva(
         variants: {
             variant: {
                 text: 'text-body font-semibold text-sui-grey-75 hover:text-sui-grey-90 active:text-sui-grey-100',
-                mono: 'font-mono text-bodySmall font-medium text-sui-dark',
+                mono: 'font-mono text-body font-medium text-sui-dark',
             },
             uppercase: {
                 true: 'uppercase',

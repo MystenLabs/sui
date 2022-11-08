@@ -29,15 +29,22 @@ export default {
             </MemoryRouter>
         ),
     ],
-
-    args: {
-        ...data,
-        transferCoin: true,
-    },
 } as Meta;
 
-export const Default: StoryObj<SenderRecipientProps> = {
-    render: (props) => <SenderRecipient {...props} />,
+export const singleTransfer: StoryObj<SenderRecipientProps> = {
+    args: {
+        transferCoin: true,
+        sender: '0x813f1adee5abb1e00dfa653bb827856106e56764',
+        recipients: [
+            {
+                address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
+                amount: {
+                    value: 1000,
+                    unit: 'SUI',
+                },
+            },
+        ],
+    },
 };
 
 export const noRecipient: StoryObj<SenderRecipientProps> = {
@@ -48,8 +55,7 @@ export const noRecipient: StoryObj<SenderRecipientProps> = {
     },
 };
 
-export const nonCoin: StoryObj<SenderRecipientProps> = {
-    ...Default,
+export const multipleRecipients: StoryObj<SenderRecipientProps> = {
     args: {
         ...data,
         transferCoin: false,
@@ -70,10 +76,6 @@ export const nonCoin: StoryObj<SenderRecipientProps> = {
             },
             {
                 address: '0x813f1adee5abb1e00dfa653bb827856106e56764',
-                amount: {
-                    value: 950,
-                    unit: 'SUI',
-                },
             },
         ],
     },
