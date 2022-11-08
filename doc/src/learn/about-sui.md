@@ -34,11 +34,11 @@ This breakthrough is possible only with Sui's novel data model. Thanks to its ob
 
 ### Sui highlights
 
-* Unmatched scalability, instant settlement
-* A safe smart contract language accessible to mainstream developers
-* Ability to define rich and composable on-chain assets
-* Better user experience for web3 apps
-* [Narwhal and Bullshark](../learn/architecture/consensus.md) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
+- Unmatched scalability, instant settlement
+- A safe smart contract language accessible to mainstream developers
+- Ability to define rich and composable on-chain assets
+- Better user experience for web3 apps
+- [Narwhal and Bullshark](../learn/architecture/consensus.md) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus
 
 Sui is the only blockchain today that can scale with the growth of web3 while achieving industry-leading performance, cost, programmability, and usability. As we push towards mainnet launch, we will demonstrate capacity beyond the transaction processing capabilities of established systems – traditional and blockchain alike. We see Sui as the first internet-scale programmable blockchain platform, a foundational layer for web3.
 
