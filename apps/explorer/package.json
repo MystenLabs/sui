@@ -21,7 +21,8 @@
         "preview": "vite preview",
         "storybook": "storybook dev -p 6007",
         "build-storybook": "storybook build",
-        "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
+        "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007",
+        "vercel:ignored-build-step": "node scripts/vercel-ignored-build.js"
     },
     "dependencies": {
         "@floating-ui/react-dom-interactions": "^0.10.1",
