@@ -35,7 +35,7 @@ export class Explorer {
         return new URL(
             `/transactions/${encodeURIComponent(txDigest)}`,
             getDefaultUrl(apiEnv)
-        ).href;
+        )?.href;
     }
 
     public static getAddressUrl(address: SuiAddress, apiEnv: API_ENV) {

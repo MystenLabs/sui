@@ -3,10 +3,9 @@
 
 import cl from 'classnames';
 import { Field, Formik, Form } from 'formik';
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import * as Yup from 'yup';
 
-import { ENV_TO_API } from '_app/ApiProvider';
 import Button from '_app/shared/button';
 import InputWithAction from '_app/shared/input-with-action';
 import Alert from '_components/alert';
@@ -17,38 +16,41 @@ import st from '../NetworkSelector.module.scss';
 
 const MIN_CHAR = 5;
 
+const isValidUrl = (url: string | undefined) => {
+    if (!url) return false;
+    try {
+        new URL(url);
+    } catch (e) {
+        return false;
+    }
+    return true;
+};
+
 const validation = Yup.object({
     rpcInput: Yup.string()
         .required()
         .label('Custom RPC URL')
         .min(MIN_CHAR)
-        .test(
-            'validate-url',
-            'Not a valid URL',
-            (value) =>
-                value?.indexOf('http://') === 0 ||
-                value?.indexOf('https://') === 0
-        ),
+        .test('validate-url', 'Not a valid URL', (value) => isValidUrl(value)),
 });
 
 export function CustomRPCInput() {
-    const placeholder = ENV_TO_API.customRPC?.fullNode;
+    const placeholder = 'http://localhost:3000/';
 
-    const customRPC = useAppSelector(({ app }) => app.customRPC);
-    const [customRPCURL, setCustomRPCURL] = useState<string>(customRPC || '');
+    const customRPC = useAppSelector(({ app }) => app.customRPC || '');
+
     const dispatch = useAppDispatch();
 
     const changeNetwork = useCallback(
         async ({ rpcInput }: { rpcInput: string }) => {
             dispatch(setCustomRPC(rpcInput));
-            setCustomRPCURL(rpcInput);
         },
         [dispatch]
     );
 
     return (
         <Formik
-            initialValues={{ rpcInput: customRPCURL }}
+            initialValues={{ rpcInput: customRPC }}
             validationSchema={validation}
             onSubmit={changeNetwork}
             enableReinitialize={true}

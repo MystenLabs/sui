@@ -65,7 +65,7 @@ export const setCustomRPC = createAsyncThunk<void, string, AppThunkConfig>(
 
 type NetworkTypes = keyof typeof API_ENV;
 
-const generateActiveNetworkList = (): NetworkTypes[] => {
+export const generateActiveNetworkList = (): NetworkTypes[] => {
     const excludedNetworks: NetworkTypes[] = [];
 
     // Deal with edge case where user has customRPC or testnet is disabled
