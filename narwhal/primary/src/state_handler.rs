@@ -69,9 +69,7 @@ impl StateHandler {
         })
     }
 
-    async fn handle_sequenced(&mut self, round: Round, _certificates: Vec<Certificate>) {
-        // TODO [issue #9]: Re-include batch digests that have not been sequenced into our next block.
-
+    async fn handle_sequenced(&mut self, round: Round, certificates: Vec<Certificate>) {
         if round > self.last_committed_round {
             self.last_committed_round = round;
 
@@ -80,7 +78,7 @@ impl StateHandler {
         }
 
         // Now we are going to signal which of our own batches have been committed.
-        let own_rounds_committed: Vec<_> = _certificates
+        let own_rounds_committed: Vec<_> = certificates
             .iter()
             .filter_map(|cert| {
                 if cert.header.author == self.name {

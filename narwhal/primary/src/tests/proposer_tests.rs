@@ -97,7 +97,12 @@ async fn propose_payload() {
     let worker_id = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
     tx_our_digests
-        .send(((digest, worker_id, 0), tx_ack))
+        .send(OurDigestMessage {
+            digest,
+            worker_id,
+            timestamp: 0,
+            ack_channel: tx_ack,
+        })
         .await
         .unwrap();
 
@@ -110,15 +115,22 @@ async fn propose_payload() {
     // WHEN available batches are more than the maximum ones
     let batches: IndexMap<BatchDigest, WorkerId> = fixture_payload((max_num_of_batches * 2) as u8);
 
+    let mut ack_list = vec![];
     for (batch_id, worker_id) in batches {
         let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
         tx_our_digests
-            .send(((batch_id, worker_id, 0), tx_ack))
+            .send(OurDigestMessage {
+                digest: batch_id,
+                worker_id,
+                timestamp: 0,
+                ack_channel: tx_ack,
+            })
             .await
             .unwrap();
 
-        // Just check it is being acked
-        assert!(rx_ack.await.is_ok());
+        ack_list.push(rx_ack);
+
+        tokio::task::yield_now().await;
     }
 
     // AND send some parents to advance the round
@@ -137,6 +149,11 @@ async fn propose_payload() {
     assert_eq!(header.round, 2);
     assert_eq!(header.payload.len(), max_num_of_batches);
     assert!(rx_ack.await.is_ok());
+
+    // Check all batches are acked.
+    for rx_ack in ack_list {
+        assert!(rx_ack.await.is_ok());
+    }
 }
 
 #[tokio::test]
@@ -184,7 +201,12 @@ async fn equivocation_protection() {
     let worker_id = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
     tx_our_digests
-        .send(((digest, worker_id, 0), tx_ack))
+        .send(OurDigestMessage {
+            digest,
+            worker_id,
+            timestamp: 0,
+            ack_channel: tx_ack,
+        })
         .await
         .unwrap();
 
@@ -244,7 +266,12 @@ async fn equivocation_protection() {
     let worker_id = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
     tx_our_digests
-        .send(((digest, worker_id, 0), tx_ack))
+        .send(OurDigestMessage {
+            digest,
+            worker_id,
+            timestamp: 0,
+            ack_channel: tx_ack,
+        })
         .await
         .unwrap();
 

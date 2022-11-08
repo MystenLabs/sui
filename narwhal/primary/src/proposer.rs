@@ -11,7 +11,7 @@ use storage::ProposerStore;
 use sui_metrics::spawn_monitored_task;
 use tokio::time::Instant;
 use tokio::{
-    sync::watch,
+    sync::{oneshot, watch},
     task::JoinHandle,
     time::{sleep, Duration},
 };
@@ -21,6 +21,16 @@ use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, Header, ReconfigureNotification, Round, Timestamp, TimestampMs,
 };
+
+/// Messages sent to the proposer about our own batch digests
+#[derive(Debug)]
+pub struct OurDigestMessage {
+    pub digest: BatchDigest,
+    pub worker_id: WorkerId,
+    pub timestamp: TimestampMs,
+    /// A channel to send an () as an ack after this digest is processed by the primary.
+    pub ack_channel: oneshot::Sender<()>,
+}
 
 #[cfg(test)]
 #[path = "tests/proposer_tests.rs"]
@@ -51,10 +61,7 @@ pub struct Proposer {
     /// Receives the parents to include in the next header (along with their round number) from core.
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
-    rx_our_digests: Receiver<(
-        (BatchDigest, WorkerId, TimestampMs),
-        tokio::sync::oneshot::Sender<()>,
-    )>,
+    rx_our_digests: Receiver<OurDigestMessage>,
     /// Sends newly created headers to the `Core`.
     tx_headers: Sender<Header>,
 
@@ -70,10 +77,10 @@ pub struct Proposer {
     digests: Vec<(BatchDigest, WorkerId, TimestampMs)>,
 
     /// Holds the map of proposed previous round headers, used to ensure that
-    /// all digests included will eventually be re-sent.
+    /// all batches' digest included will eventually be re-sent.
     proposed_headers: BTreeMap<Round, Header>,
     /// Commited headers channel on which we get updates on which of
-    /// our own headers have been committed to re-play batch digests
+    /// our own headers have been committed.
     rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
 
     /// Metrics handler
@@ -94,10 +101,7 @@ impl Proposer {
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
-        rx_our_digests: Receiver<(
-            (BatchDigest, WorkerId, TimestampMs),
-            tokio::sync::oneshot::Sender<()>,
-        )>,
+        rx_our_digests: Receiver<OurDigestMessage>,
         tx_headers: Sender<Header>,
         rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
@@ -324,6 +328,7 @@ impl Proposer {
                 }
 
                 // Advance to the next round.
+
                 self.round += 1;
                 self.metrics
                     .current_round
@@ -381,17 +386,17 @@ impl Proposer {
                     }
 
                     if !retransmit_rounds.is_empty() {
-                    // Add the digests to retransmit to the digests for the next header
-                    digests_to_resend.extend(&self.digests);
-                    self.digests = digests_to_resend;
+                        // Add the digests to retransmit to the digests for the next header
+                        digests_to_resend.extend(&self.digests);
+                        self.digests = digests_to_resend;
 
-                    // Now delete the headers with batches we re-transmit
-                    for round in &retransmit_rounds {
-                        self.proposed_headers.remove(round);
+                        // Now delete the headers with batches we re-transmit
+                        for round in &retransmit_rounds {
+                            self.proposed_headers.remove(round);
+                        }
+
+                        debug!("Retransmit batches in undelivered headers {:?} at commit round {:?}", retransmit_rounds, commit_round);
                     }
-
-                    debug!("Retransmit batches in undelivered headers {:?} at commit round {:?}", retransmit_rounds, commit_round);
-                }
                 },
 
                 Some((parents, round, epoch)) = self.rx_parents.recv() => {
@@ -458,11 +463,22 @@ impl Proposer {
                 }
 
                 // Receive digests from our workers.
-                Some((digest_record, ack_sender)) = self.rx_our_digests.recv() => {
+                Some( OurDigestMessage {
+                        digest,
+                        worker_id,
+                        timestamp,
+                        ack_channel,
+
+                    }) = self.rx_our_digests.recv() => {
+                    let digest_record = (digest, worker_id, timestamp, );
                     self.digests.push(digest_record);
                     // Signal back to the worker that the batch is recorded on the
-                    // primary, and will be tracked until inclusion.
-                    let _ = ack_sender.send(());
+                    // primary, and will be tracked until inclusion. This means that
+                    // if the primary does not fail it will attempt to send the digest
+                    // (and re-send if necessary) until it is sequenced, or the end of
+                    // the epoch is reached. For the moment this does not persist primary
+                    // crashes and re-starts.
+                    let _ = ack_channel.send(());
                 }
 
                 // Check whether the timer expired.

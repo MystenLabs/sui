@@ -9,7 +9,7 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     metrics::initialise_metrics,
-    proposer::Proposer,
+    proposer::{OurDigestMessage, Proposer},
     state_handler::StateHandler,
     synchronizer::Synchronizer,
     BlockRemover,
@@ -700,10 +700,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_our_digests: Sender<(
-        (BatchDigest, WorkerId, u64),
-        tokio::sync::oneshot::Sender<()>,
-    )>,
+    tx_our_digests: Sender<OurDigestMessage>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
@@ -715,26 +712,25 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+        let (tx_ack, rx_ack) = oneshot::channel();
         let response = self
             .tx_our_digests
-            .send((
-                (
-                    message.digest,
-                    message.worker_id,
-                    message.metadata.created_at,
-                ),
-                tx_ack,
-            ))
+            .send(OurDigestMessage {
+                digest: message.digest,
+                worker_id: message.worker_id,
+                timestamp: message.metadata.created_at,
+                ack_channel: tx_ack,
+            })
             .await
             .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()));
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
 
-        // TODO: if there is an error here, we should send an error back to the client
-        //       since it means the primary does not work correctly, and the batch may
-        //       not be included.
-        let _ = rx_ack.await;
-        response
+        // If we are ok, then wait for the ack
+        rx_ack
+            .await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        Ok(response)
     }
 
     async fn report_others_batch(

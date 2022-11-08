@@ -169,7 +169,7 @@ impl BlockRemover {
             // Unwrap safe since list is not empty.
             let highest_round = certificates.iter().map(|c| c.header.round).max().unwrap();
 
-            // !!!!! WHY ARE WE SENDING THESE TO THE COMMITTED CHANNEL BACK?
+            // We signal that these certificates must have been committed by the external consensus
             self.tx_committed_certificates
                 .send((highest_round, all_certs))
                 .await
