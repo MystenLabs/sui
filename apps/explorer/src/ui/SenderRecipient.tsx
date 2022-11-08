@@ -49,7 +49,7 @@ function SenderRecipientAddress({
     address: string;
     isCoin?: boolean;
 }) {
-    const isCoinTransfer = isCoin && !isSender ? true : false;
+    const isCoinTransfer = !!(isCoin && !isSender);
     return (
         <div
             className={senderRecipientAddressStyles({
