@@ -420,7 +420,7 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.requestWithType(
         'sui_getTransactions',
-        [query, cursor, limit, order === 'descending'],
+        [query, cursor, limit, descendingOrder],
         isPaginatedTransactionDigests,
         this.options.skipDataValidation
       );
