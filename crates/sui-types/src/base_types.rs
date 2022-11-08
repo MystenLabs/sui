@@ -8,6 +8,7 @@ use fastcrypto::encoding::decode_bytes_hex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::StructTag;
 use opentelemetry::{global, Context};
 use rand::Rng;
 use schemars::JsonSchema;
@@ -28,6 +29,7 @@ use crate::crypto::{
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
+use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use crate::waypoint::IntoPoint;
@@ -85,12 +87,21 @@ pub fn random_object_ref() -> ObjectRef {
     )
 }
 
+/// Type of a Sui object
+#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub enum ObjectType {
+    /// Move package containing one or more bytecode modules
+    Package,
+    /// A Move struct of the given
+    Struct(StructTag),
+}
+
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
     pub object_id: ObjectID,
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
-    pub type_: String,
+    pub type_: ObjectType,
     pub owner: Owner,
     pub previous_transaction: TransactionDigest,
 }
@@ -101,8 +112,8 @@ impl ObjectInfo {
         let type_ = o
             .data
             .type_()
-            .map(|tag| tag.to_string())
-            .unwrap_or_else(|| "Package".to_string());
+            .map(|tag| ObjectType::Struct(tag.clone()))
+            .unwrap_or(ObjectType::Package);
         Self {
             object_id,
             version,
@@ -110,6 +121,15 @@ impl ObjectInfo {
             type_,
             owner: o.owner,
             previous_transaction: o.previous_transaction,
+        }
+    }
+}
+
+impl ObjectType {
+    pub fn is_gas_coin(&self) -> bool {
+        match self {
+            ObjectType::Struct(s) => s == &GasCoin::type_(),
+            ObjectType::Package => false,
         }
     }
 }
@@ -872,6 +892,15 @@ impl From<SuiAddress> for AccountAddress {
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::Display for ObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectType::Package => write!(f, "Package"),
+            ObjectType::Struct(t) => write!(f, "{}", t),
+        }
     }
 }
 

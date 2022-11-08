@@ -75,7 +75,7 @@ async fn get_coins(state: &AuthorityState, address: SuiAddress) -> Result<Vec<Co
     let object_infos = state.get_owner_objects(Owner::AddressOwner(address))?;
     let coin_infos = object_infos
         .iter()
-        .filter(|o| o.type_ == GasCoin::type_().to_string())
+        .filter(|o| o.type_.is_gas_coin())
         .map(|info| info.object_id)
         .collect::<Vec<_>>();
 

@@ -19,13 +19,13 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     EventPage, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
     SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead,
-    SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
+    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
+    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
     SuiTransactionResponse, TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectInfo, SequenceNumber, SuiAddress, TransactionDigest,
+    ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, Signature};
 use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
@@ -254,11 +254,11 @@ impl RpcExampleProvider {
     fn get_objects_owned_by_address(&mut self) -> Examples {
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let result = (0..4)
-            .map(|_| ObjectInfo {
+            .map(|_| SuiObjectInfo {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: GasCoin::type_().to_string(),
+                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
                 owner: Owner::AddressOwner(owner),
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
             })
@@ -276,11 +276,11 @@ impl RpcExampleProvider {
     fn get_objects_owned_by_object(&mut self) -> Examples {
         let owner = ObjectID::new(self.rng.gen());
         let result = (0..4)
-            .map(|_| ObjectInfo {
+            .map(|_| SuiObjectInfo {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: GasCoin::type_().to_string(),
+                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
                 owner: Owner::ObjectOwner(SuiAddress::from(owner)),
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
             })

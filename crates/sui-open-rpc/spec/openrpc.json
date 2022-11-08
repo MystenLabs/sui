@@ -778,44 +778,44 @@
             "name": "Result",
             "value": [
               {
-                "object_id": "0x1ab0e832877d628233e3e1d64f76b71a80ec4f33",
+                "objectId": "0x1ab0e832877d628233e3e1d64f76b71a80ec4f33",
                 "version": 0,
                 "digest": "L00aZ0LFN/K7Mkc7AbHcscqslCcipHh7sYXkeRkWkm4=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previous_transaction": "X9sl3YQvc2q5c+h/U7SFeEJ4mh3VkWdimzxcq+R9v0g="
+                "previousTransaction": "X9sl3YQvc2q5c+h/U7SFeEJ4mh3VkWdimzxcq+R9v0g="
               },
               {
-                "object_id": "0x827ec0818e00de4b297f047c3beda43d6e9f9b1b",
+                "objectId": "0x827ec0818e00de4b297f047c3beda43d6e9f9b1b",
                 "version": 0,
                 "digest": "G8RM3841dOf38LLeIyOgbrw1a61hRyazE9gRAS1L5yM=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previous_transaction": "dVaHEgp8bfI4nDc8j74GvaemESBlJmjdVof+5z+seiw="
+                "previousTransaction": "dVaHEgp8bfI4nDc8j74GvaemESBlJmjdVof+5z+seiw="
               },
               {
-                "object_id": "0x564da689e9da76e1430d191fbc937d42f74104aa",
+                "objectId": "0x564da689e9da76e1430d191fbc937d42f74104aa",
                 "version": 0,
                 "digest": "KRhx9LnRIPdlg6HaXREj8rigrGBrlApm5C79eCr1IDE=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previous_transaction": "EjMa3C7W9ALco5a/5t+jrIpX6giGCHD9UVz3ymr7iH0="
+                "previousTransaction": "EjMa3C7W9ALco5a/5t+jrIpX6giGCHD9UVz3ymr7iH0="
               },
               {
-                "object_id": "0xd1e09be8e451cd3c364076623c0231898be0722c",
+                "objectId": "0xd1e09be8e451cd3c364076623c0231898be0722c",
                 "version": 0,
                 "digest": "COTrIpxEy5V9Kc9zcK+KG5xULUmzyDz7nGg/t9BSbik=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previous_transaction": "136J57/v1Pc62j0ZrIfUU1HwGWqIC5XD6iRN0GDStlM="
+                "previousTransaction": "136J57/v1Pc62j0ZrIfUU1HwGWqIC5XD6iRN0GDStlM="
               }
             ]
           }
@@ -863,44 +863,44 @@
             "name": "Result",
             "value": [
               {
-                "object_id": "0xa14c6b812b94fe613c5bcebb5eeb1d449e251616",
+                "objectId": "0xa14c6b812b94fe613c5bcebb5eeb1d449e251616",
                 "version": 0,
                 "digest": "bVfXH96xVNDcns23swBX0KkyaEysNSzcGj6JgCnQJO4=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previous_transaction": "wdRMavXi+s3thNA7U3NRTxbj1m4ACBBRZLtzoe1YssE="
+                "previousTransaction": "wdRMavXi+s3thNA7U3NRTxbj1m4ACBBRZLtzoe1YssE="
               },
               {
-                "object_id": "0x8b0cbf377792e206e6b80d4d5eea64e2e70563b1",
+                "objectId": "0x8b0cbf377792e206e6b80d4d5eea64e2e70563b1",
                 "version": 0,
                 "digest": "WJAmxON/lBpFHvggmg+/vxtUmyuya46u4IiVFG3ye8M=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previous_transaction": "zyYQwUsuJ8Hu1WwztXkDQVDqRrzPdlPgC28ktjvQTaY="
+                "previousTransaction": "zyYQwUsuJ8Hu1WwztXkDQVDqRrzPdlPgC28ktjvQTaY="
               },
               {
-                "object_id": "0x8bc160c74cd844f922623fa58cdd6ef2d0531ce3",
+                "objectId": "0x8bc160c74cd844f922623fa58cdd6ef2d0531ce3",
                 "version": 0,
                 "digest": "WfMui9DNX54cTteFYCsUTXmIN9uwFHTINWbFsqU1QQ0=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previous_transaction": "2qHdP8SvMhjXbMeqa+GABOXjjLNcyvGLfxpOPcex5/8="
+                "previousTransaction": "2qHdP8SvMhjXbMeqa+GABOXjjLNcyvGLfxpOPcex5/8="
               },
               {
-                "object_id": "0xd3dbd682f600d1f62dc0921f7f7dbfca95055adc",
+                "objectId": "0xd3dbd682f600d1f62dc0921f7f7dbfca95055adc",
                 "version": 0,
                 "digest": "XhR6Hu4u3SNxRHRERonJRvaaWFkkuRxLiubUzW4eAvY=",
-                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previous_transaction": "ZY0hvOm4i9zu4SlBRO7EfPOTiLtoD2m3QmvFKSlpL9w="
+                "previousTransaction": "ZY0hvOm4i9zu4SlBRO7EfPOTiLtoD2m3QmvFKSlpL9w="
               }
             ]
           }
