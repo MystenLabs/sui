@@ -221,7 +221,7 @@ pub struct Consensus<ConsensusProtocol> {
     /// if it already sent us its whole history.
     rx_new_certificates: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_committed_certificates: metered_channel::Sender<Certificate>,
+    tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_sequence: metered_channel::Sender<ConsensusOutput>,
 
@@ -250,7 +250,7 @@ where
         cert_store: CertificateStore,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
-        tx_committed_certificates: metered_channel::Sender<Certificate>,
+        tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_sequence: metered_channel::Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
@@ -331,12 +331,18 @@ where
                     }
 
                     // Process the certificate using the selected consensus protocol.
+                    let commit_round_leader = certificate.header.round;
                     let sequence =
                         self.protocol
                             .process_certificate(&mut self.state, self.consensus_index, certificate)?;
 
                     // Update the consensus index.
                     self.consensus_index += sequence.len() as u64;
+
+                    // We extract a list of headers from this specific validator that
+                    // have been agreed upon, and signal this back to the narwhal sub-system
+                    // to be used to re-send batches that have not made it to a commit.
+                    let mut commited_certificates = Vec::new();
 
                     // Output the sequence in the right order.
                     for output in sequence {
@@ -363,14 +369,18 @@ where
                                 .set((mysten_util_mem::malloc_size(&self.state.dag) + std::mem::size_of::<Dag>()) as i64);
                         }
 
-                        self.tx_committed_certificates
-                            .send(certificate.clone())
-                            .await
-                            .expect("Failed to send certificate to primary");
+                        commited_certificates.push(certificate.clone());
 
                         if let Err(e) = self.tx_sequence.send(output).await {
                             tracing::warn!("Failed to output certificate: {e}");
                         }
+                    }
+
+                    if !commited_certificates.is_empty(){
+                        self.tx_committed_certificates
+                        .send((commit_round_leader, commited_certificates))
+                        .await
+                        .expect("Failed to send certificate to primary");
                     }
 
                     self.metrics

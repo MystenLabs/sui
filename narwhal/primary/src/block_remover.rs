@@ -16,6 +16,7 @@ use store::{rocks::TypedStoreError, Store};
 use tracing::{debug, instrument, warn};
 use types::{
     metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
+    Round,
 };
 
 #[cfg(test)]
@@ -50,7 +51,7 @@ pub struct BlockRemover {
     worker_network: P2pNetwork,
 
     /// Outputs all the successfully deleted certificates
-    tx_committed_certificates: Sender<Certificate>,
+    tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
 }
 
 impl BlockRemover {
@@ -63,7 +64,7 @@ impl BlockRemover {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         dag: Option<Arc<Dag>>,
         worker_network: P2pNetwork,
-        tx_committed_certificates: Sender<Certificate>,
+        tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
     ) -> BlockRemover {
         Self {
             name,
@@ -163,9 +164,14 @@ impl BlockRemover {
             .map_err(Either::Left)?;
 
         // Now output all the removed certificates
-        for certificate in certificates.clone() {
+        if !certificates.is_empty() {
+            let all_certs = certificates.clone();
+            // Unwrap safe since list is not empty.
+            let highest_round = certificates.iter().map(|c| c.header.round).max().unwrap();
+
+            // We signal that these certificates must have been committed by the external consensus
             self.tx_committed_certificates
-                .send(certificate)
+                .send((highest_round, all_certs))
                 .await
                 .expect("Couldn't forward removed certificates to channel");
         }
