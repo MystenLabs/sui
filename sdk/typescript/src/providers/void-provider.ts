@@ -248,7 +248,7 @@ export class VoidProvider extends Provider {
       _query: TransactionQuery,
       _cursor: TransactionDigest | null,
       _limit: number | null,
-      _order: Order
+      _descendingOrder: boolean = true
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
   }

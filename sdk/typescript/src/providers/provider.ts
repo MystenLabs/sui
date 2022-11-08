@@ -162,7 +162,7 @@ export abstract class Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
-    order: Order
+    descendingOrder: boolean
   ): Promise<PaginatedTransactionDigests>;
 
   /**

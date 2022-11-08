@@ -415,7 +415,7 @@ export class JsonRpcProvider extends Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null = null,
     limit: number | null = null,
-    order: Order = 'descending'
+    descendingOrder: boolean = true
   ): Promise<PaginatedTransactionDigests> {
     try {
       return await this.client.requestWithType(
