@@ -13,6 +13,9 @@ module.exports = {
         100: "1",
         130: "1.3",
       },
+      boxShadow: {
+        moduleOption: '0px 0px 29px rgba(0, 0, 0, 0.13), 0px 0px 44px rgba(0, 0, 0, 0.15), 0px 0px 0px rgba(0, 0, 0, 0.2)',
+      },
       fontSize: {
         // Text sizes:
         body: ["14px", "1"],

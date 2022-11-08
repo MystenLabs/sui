@@ -98,7 +98,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </div>
                     <Combobox.Options
                         as="div"
-                        className=" overflow-auto pr-1 absolute bg-red-900 w-full md:w-1/6 h-fit pb-0.5"
+                        className=" overflow-auto pr-1 absolute w-full md:w-1/6 h-fit pb-0.5 shadow-moduleOption rounded-md"
                     >
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
