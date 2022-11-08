@@ -14,6 +14,9 @@ Object.entries(tsconfig.compilerOptions.paths).forEach(([key, [value]]) => {
     tsconfigPaths[key] = alias(value);
 });
 
+// Assign the Vercel Analytics ID into a vite-safe name:
+process.env.VITE_VERCEL_ANALYTICS_ID = process.env.VERCEL_ANALYTICS_ID;
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), svgr()],
