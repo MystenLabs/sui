@@ -74,7 +74,7 @@ opt-level = 1
 typed-store = "0.4.0"
 typed-store-derive = "0.3.0"
 telemetry-subscribers = { version = "0.2.0", features = ["jaeger", "tokio-console"] }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "fee7617899ac605f4aaf77312a394751ae577546" }
 name-variant = "0.1.0"
 store = { version = "0.4.0", package = "typed-store" }
 
@@ -98,7 +98,8 @@ move-ir-types = { git = "https://github.com/move-language/move", rev = "3ac0cd7b
 move-prover = { git = "https://github.com/move-language/move", rev = "3ac0cd7b78cc2a6d470b7fefbfd82b0c044ef576" }
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "3ac0cd7b78cc2a6d470b7fefbfd82b0c044ef576" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbb2d02a7a64c27314721748cc4d015b00490dbe" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522bea01e4a3d19ecae63d789edcdcce2d66c" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522bea01e4a3d19ecae63d789edcdcce2d66c", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
