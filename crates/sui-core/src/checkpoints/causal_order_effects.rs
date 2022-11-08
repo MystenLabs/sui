@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use itertools::Itertools;
 use std::{
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
@@ -173,7 +172,7 @@ pub trait EffectsStore {
         // include it in a proposal and honest nodes include full causal sequences in proposals.
 
         // Calculate total gas costs of all transactions that still remain.
-        let gas_summary = get_total_gas_costs_from_txn_effects(
+        let gas_summary = GasCostSummary::new_from_txn_effects(
             final_sequence.iter().map(|d| *effect_map.get(*d).unwrap()),
         );
 
@@ -232,7 +231,7 @@ impl EffectsStore for TestEffectsStore {
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<(Vec<ExecutionDigests>, GasCostSummary)> {
         let digests = transactions.clone().map(|x| &x.transaction);
-        let gas_costs = get_total_gas_costs_from_txn_effects(
+        let gas_costs = GasCostSummary::new_from_txn_effects(
             self.get_effects(digests)?.iter().filter_map(|e| e.as_ref()),
         );
         Ok((
@@ -263,27 +262,6 @@ impl CausalOrder for Arc<AuthorityStore> {
         Ok(self
             .get_causal_order_and_gas_summary_from_effects(transactions, ckpt_store)?
             .0)
-    }
-}
-
-fn get_total_gas_costs_from_txn_effects<'a>(
-    transactions: impl Iterator<Item = &'a TransactionEffects>,
-) -> GasCostSummary {
-    let (storage_costs, computation_costs, storage_rebates): (Vec<u64>, Vec<u64>, Vec<u64>) =
-        transactions
-            .map(|e| {
-                (
-                    e.gas_used.storage_cost,
-                    e.gas_used.computation_cost,
-                    e.gas_used.storage_rebate,
-                )
-            })
-            .multiunzip();
-
-    GasCostSummary {
-        storage_cost: storage_costs.iter().sum(),
-        computation_cost: computation_costs.iter().sum(),
-        storage_rebate: storage_rebates.iter().sum(),
     }
 }
 

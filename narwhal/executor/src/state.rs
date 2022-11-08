@@ -15,6 +15,16 @@ pub struct ExecutionIndices {
     pub next_transaction_index: SequenceNumber,
 }
 
+impl ExecutionIndices {
+    pub fn last_for_certificate(certificate_index: u64) -> Self {
+        ExecutionIndices {
+            next_certificate_index: certificate_index,
+            next_batch_index: SequenceNumber::MAX,
+            next_transaction_index: SequenceNumber::MAX,
+        }
+    }
+}
+
 impl Ord for ExecutionIndices {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         (

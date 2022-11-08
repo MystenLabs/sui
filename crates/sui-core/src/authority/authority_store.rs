@@ -7,6 +7,7 @@ use super::{
 };
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use arc_swap::ArcSwap;
+use narwhal_executor::ExecutionIndices;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -1282,6 +1283,44 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             [(transaction_digest, true)],
         )?;
         Ok(batch.write()?)
+    }
+
+    /// Returns transaction digests from consensus_message_order table in the "checkpoint range".
+    ///
+    /// Checkpoint range is defined from the last seen checkpoint(excluded) to the provided
+    /// to_height (included)
+    pub fn last_checkpoint(
+        &self,
+        to_height_included: u64,
+    ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
+        let epoch_tables = self.epoch_tables();
+
+        let Some((index, from_height_excluded)) = epoch_tables
+            .checkpoint_boundary
+            .iter()
+            .skip_to_last()
+            .next() else {
+            return Ok(None);
+        };
+        if from_height_excluded >= to_height_included {
+            // Due to crash recovery we might enter this function twice for same boundary
+            debug!("Not returning last checkpoint - already processed");
+            return Ok(None);
+        }
+
+        let iter = epoch_tables.consensus_message_order.iter();
+        let last_previous = ExecutionIndices::last_for_certificate(from_height_excluded);
+        let iter = iter.skip_to(&last_previous)?;
+        // skip_to lands to key the last_key or key after it
+        // technically here we need to check if first item in stream has a key equal to last_previous
+        // however in practice this can not happen because number of batches in certificate is
+        // limited and is less then u64::MAX
+        let roots = iter
+            .take_while(|(idx, _tx)| idx.next_certificate_index <= to_height_included)
+            .map(|(_idx, tx)| tx)
+            .collect();
+
+        Ok(Some((index, roots)))
     }
 
     pub fn record_checkpoint_boundary(&self, certificate_height: u64) -> SuiResult {

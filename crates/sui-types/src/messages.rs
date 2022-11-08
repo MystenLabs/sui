@@ -1659,6 +1659,13 @@ impl TransactionEffects {
             )
     }
 
+    pub fn execution_digests(&self) -> ExecutionDigests {
+        ExecutionDigests {
+            transaction: self.transaction_digest,
+            effects: self.digest(),
+        }
+    }
+
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
