@@ -116,6 +116,7 @@
         color: colors.$issue;
         width: 100%;
         font-size: 12px;
+        word-break: break-all;
     }
 
     .tx-address {

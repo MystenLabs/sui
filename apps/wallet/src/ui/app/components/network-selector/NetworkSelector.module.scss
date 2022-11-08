@@ -1,3 +1,6 @@
+@use '_values/colors';
+@use '_utils';
+
 .network-options {
     display: flex;
     flex-flow: column nowrap;
@@ -5,7 +8,6 @@
     justify-content: center;
     margin: 0;
     background-color: #fff;
-    padding: 16px 0 0;
 }
 
 .network-lists {
@@ -19,33 +21,87 @@
 
 .network-item {
     list-style: none;
-    padding: 16px;
-    font-size: 16px;
-    font-style: normal;
+    padding: 0 10px;
+    height: 56px;
     cursor: pointer;
     display: flex;
     justify-content: flex-start;
     align-items: center;
-    line-height: 20px;
+    border-bottom: 1px solid colors.$gray-45;
 
-    &:hover {
-        background-color: #e6effe;
+    @include utils.typography('table/title-sm');
+
+    line-height: 100%;
+
+    .network-selector {
+        background: transparent;
+        border: none;
+        padding: 15px 0;
+        margin: 0;
+        text-decoration: none;
+        display: flex;
+        width: 100%;
+        cursor: pointer;
+
+        @include utils.typography('table/title-sm');
+
+        line-height: 100%;
     }
-}
 
-.network-icon {
-    margin-right: 15px;
-    font-size: 13px;
+    .network-icon {
+        font-size: 16px;
+        color: colors.$gray-45;
+        line-height: 100%;
+        transition: color 0.2s ease-in-out;
+    }
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    .network-active {
+        color: colors.$success;
+
+        &.custom-rpc-active {
+            color: colors.$success;
+        }
+    }
+
+    .custom-rpc-active {
+        color: colors.$gray-60;
+    }
 }
 
 .selected-network {
     margin-right: 15px;
     font-weight: bold;
     font-size: 20px;
-    opacity: 0;
 }
 
-.network-active {
-    opacity: 1;
-    color: #6fbcf0;
+.custom-rpc {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: flex-end;
+    width: 100%;
+
+    form {
+        width: 278px;
+    }
+}
+
+.error {
+    margin-top: 5px;
+}
+
+.action {
+    text-transform: uppercase;
+
+    &.valid {
+        opacity: 1;
+    }
+
+    &.can-save {
+        background: colors.$gray-90;
+        color: colors.$white;
+    }
 }

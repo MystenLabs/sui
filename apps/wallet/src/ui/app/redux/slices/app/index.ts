@@ -5,12 +5,15 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
 import { AppType } from './AppType';
-import { DEFAULT_API_ENV } from '_app/ApiProvider';
+import {
+    DEFAULT_API_ENV,
+    API_ENV,
+    generateActiveNetworkList,
+} from '_app/ApiProvider';
 import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { API_ENV } from '_app/ApiProvider';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -18,6 +21,7 @@ type AppState = {
     appType: AppType;
     apiEnv: API_ENV;
     navVisible: boolean;
+    customRPC?: string | null;
     activeOrigin: string | null;
     activeOriginFavIcon: string | null;
 };
@@ -25,6 +29,7 @@ type AppState = {
 const initialState: AppState = {
     appType: AppType.unknown,
     apiEnv: DEFAULT_API_ENV,
+    customRPC: null,
     navVisible: true,
     activeOrigin: null,
     activeOriginFavIcon: null,
@@ -34,13 +39,29 @@ const initialState: AppState = {
 // TODO: add clear Object state because edge cases where use state stays in cache
 export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
     'changeRPCNetwork',
-    (networkName, { extra: { api }, dispatch }) => {
+    (networkName, { extra: { api }, dispatch, getState }) => {
+        const { app } = getState();
+        const isCustomRPC = networkName === API_ENV.customRPC;
+        const customRPCURL =
+            app?.customRPC && isCustomRPC ? app?.customRPC : null;
+
+        // don't switch if customRPC and empty input //handle default
         dispatch(setApiEnv(networkName));
-        api.setNewJsonRpcProvider(networkName);
+        api.setNewJsonRpcProvider(networkName, customRPCURL);
         dispatch(getTransactionsByAddress());
         dispatch(fetchAllOwnedAndRequiredObjects());
         // Set persistent network state
         Browser.storage.local.set({ sui_Env: networkName });
+    }
+);
+
+export const setCustomRPC = createAsyncThunk<void, string, AppThunkConfig>(
+    'setCustomRPC',
+    (customRPC, { dispatch }) => {
+        // Set persistent network state
+        Browser.storage.local.set({ sui_Env_RPC: customRPC });
+        dispatch(setCustomRPCURL(customRPC));
+        dispatch(changeRPCNetwork(API_ENV.customRPC));
     }
 );
 
@@ -49,11 +70,34 @@ export const initNetworkFromStorage = createAsyncThunk<
     void,
     AppThunkConfig
 >('initNetworkFromStorage', async (_, { dispatch, extra: { api } }) => {
-    const result = await Browser.storage.local.get(['sui_Env']);
-    const network = result.sui_Env;
-    if (network) {
-        api.setNewJsonRpcProvider(network);
+    const result = await Browser.storage.local.get(['sui_Env', 'sui_Env_RPC']);
+
+    const isValidCustomRPC = result?.sui_Env_RPC?.length > 0;
+
+    const network =
+        result.sui_Env === API_ENV.customRPC && !isValidCustomRPC
+            ? DEFAULT_API_ENV
+            : result.sui_Env;
+
+    const customRPCURL =
+        network === API_ENV.customRPC && isValidCustomRPC
+            ? result.sui_Env_RPC
+            : null;
+
+    if (result.sui_Env_RPC && customRPCURL) {
+        dispatch(setCustomRPCURL(result.sui_Env_RPC));
+    }
+
+    // Deal with edge case where user has customRPC or testnet is disabled
+    const setDefaultNetwork =
+        network && generateActiveNetworkList().includes(network);
+
+    if (setDefaultNetwork) {
+        api.setNewJsonRpcProvider(network, customRPCURL);
         await dispatch(setApiEnv(network));
+    } else {
+        api.setNewJsonRpcProvider(DEFAULT_API_ENV);
+        await dispatch(setApiEnv(DEFAULT_API_ENV));
     }
 });
 
@@ -65,6 +109,9 @@ const slice = createSlice({
         },
         setApiEnv: (state, { payload }: PayloadAction<API_ENV>) => {
             state.apiEnv = payload;
+        },
+        setCustomRPCURL: (state, { payload }: PayloadAction<string>) => {
+            state.customRPC = payload;
         },
         setNavVisibility: (
             state,
@@ -85,8 +132,13 @@ const slice = createSlice({
     initialState,
 });
 
-export const { initAppType, setApiEnv, setNavVisibility, setActiveOrigin } =
-    slice.actions;
+export const {
+    initAppType,
+    setApiEnv,
+    setNavVisibility,
+    setActiveOrigin,
+    setCustomRPCURL,
+} = slice.actions;
 export const getNavIsVisible = ({ app }: RootState) => app.navVisible;
 
 export default slice.reducer;
