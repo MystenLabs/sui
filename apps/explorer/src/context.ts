@@ -15,16 +15,24 @@ export const NetworkContext = createContext<
 
 export function useNetwork(): [string, (network: Network | string) => void] {
     const [searchParams, setSearchParams] = useSearchParams();
+
     const network = useMemo(() => {
         const networkParam = searchParams.get('network');
-        if (networkParam && networkParam in Network) {
-            return networkParam;
+
+        if (
+            networkParam &&
+            (Object.values(Network) as string[]).includes(
+                networkParam.toUpperCase()
+            )
+        ) {
+            return networkParam.toUpperCase();
         }
-        return DEFAULT_NETWORK;
+
+        return networkParam ?? DEFAULT_NETWORK;
     }, [searchParams]);
 
     const setNetwork = (network: Network | string) => {
-        setSearchParams({ network });
+        setSearchParams({ network: network.toLowerCase() });
     };
 
     useEffect(() => {
