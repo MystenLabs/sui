@@ -81,7 +81,6 @@ export const DEFAULT_API_ENV = getDefaultApiEnv();
 
 type NetworkTypes = keyof typeof API_ENV;
 
-
 export const generateActiveNetworkList = (): NetworkTypes[] => {
     const excludedNetworks: NetworkTypes[] = [];
 
