@@ -25,7 +25,7 @@ function getDefaultUrl(apiEnv?: API_ENV) {
 
 export class Explorer {
     public static getObjectUrl(objectID: ObjectId, apiEnv: API_ENV) {
-        return new URL(`/objects/${objectID}`, getDefaultUrl(apiEnv))?.href;
+        return new URL(`/objects/${objectID}`, getDefaultUrl(apiEnv)).href;
     }
 
     public static getTransactionUrl(
@@ -35,10 +35,10 @@ export class Explorer {
         return new URL(
             `/transactions/${encodeURIComponent(txDigest)}`,
             getDefaultUrl(apiEnv)
-        )?.href;
+        ).href;
     }
 
     public static getAddressUrl(address: SuiAddress, apiEnv: API_ENV) {
-        return new URL(`/addresses/${address}`, getDefaultUrl(apiEnv))?.href;
+        return new URL(`/addresses/${address}`, getDefaultUrl(apiEnv)).href;
     }
 }

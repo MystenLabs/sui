@@ -23,25 +23,18 @@ function FaucetRequestButton({ mode = 'primary' }: FaucetRequestButtonProps) {
     const showFaucetRequestButton = API_ENV.customRPC !== network;
     const dispatch = useAppDispatch();
     const loading = useAppSelector(({ faucet }) => faucet.loading);
-    return (
-        <>
-            {showFaucetRequestButton ? (
-                <Button
-                    mode={mode}
-                    onClick={() => {
-                        dispatch(requestGas());
-                    }}
-                    disabled={loading}
-                >
-                    <Icon
-                        icon={SuiIcons.Download}
-                        className={cl(st.icon, st[mode])}
-                    />
-                    Request {networkName} SUI Tokens
-                </Button>
-            ) : null}
-        </>
-    );
+    return showFaucetRequestButton ? (
+        <Button
+            mode={mode}
+            onClick={() => {
+                dispatch(requestGas());
+            }}
+            disabled={loading}
+        >
+            <Icon icon={SuiIcons.Download} className={cl(st.icon, st[mode])} />
+            Request {networkName} SUI Tokens
+        </Button>
+    ) : null;
 }
 
 export default FaucetRequestButton;
