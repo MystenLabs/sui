@@ -119,9 +119,7 @@ pub fn keccak256(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(
-            Keccak256::digest(&*msg_ref).to_vec()
-        )],
+        smallvec![Value::vector_u8(Keccak256::digest(&*msg_ref).to_vec())],
     ))
 }
 
