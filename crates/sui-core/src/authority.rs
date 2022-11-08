@@ -1264,7 +1264,7 @@ impl AuthorityState {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
                         let lock = if !object.is_address_owned() {
-                            // Unowned objects have no locks.
+                            // Only address owned objects have locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
