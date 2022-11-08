@@ -8,12 +8,12 @@ use std::sync::Arc;
 use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 use tracing::debug;
-
-use types::{metered_channel, Batch, ConsensusOutput, Timestamp};
+use types::{metered_channel, Batch, CommittedSubDag, ConsensusOutput, Timestamp};
 
 #[derive(Clone, Debug)]
 pub struct BatchIndex {
-    pub consensus_output: Arc<ConsensusOutput>,
+    pub sub_dag: Arc<CommittedSubDag>,
+    pub output: Arc<ConsensusOutput>,
     pub next_certificate_index: u64,
     pub batch_index: u64,
 }
@@ -52,29 +52,29 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                 batch.transactions.len()
             );
             self.metrics.notifier_processed_batches.inc();
+
             let mut bytes = 0usize;
             for (transaction_index, transaction) in batch.transactions.into_iter().enumerate() {
                 let execution_indices = ExecutionIndices {
                     next_certificate_index: index.next_certificate_index,
                     next_batch_index: index.batch_index + 1,
                     next_transaction_index: transaction_index as u64 + 1,
+                    last_committed_leader: index.sub_dag.leader.round(),
                 };
                 bytes += transaction.len();
+
+                // NOTE: We now have access to the entire commit through `index.sub_dag`. We may
+                // thus choose to make it available to Sui through `handle_consensus_transaction`.
+
                 self.callback
-                    .handle_consensus_transaction(
-                        &index.consensus_output,
-                        execution_indices,
-                        transaction,
-                    )
+                    .handle_consensus_transaction(&index.output, execution_indices, transaction)
                     .await;
             }
 
-            let round = index.consensus_output.certificate.round();
-            if self.committee.leader(round) == self.name {
-                self.callback
-                    .notify_commit_boundary(&index.consensus_output)
-                    .await;
+            if index.sub_dag.is_last(&index.output) {
+                self.callback.notify_commit_boundary(&index.output).await;
             }
+
             self.metrics
                 .batch_execution_latency
                 .observe(batch.metadata.created_at.elapsed().as_secs_f64());

@@ -77,7 +77,7 @@ impl Executor {
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
-        restored_consensus_output: Vec<ConsensusOutput>,
+        restored_consensus_output: Vec<CommittedSubDag>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -117,7 +117,16 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     consensus_store: Arc<ConsensusStore>,
     certificate_store: CertificateStore,
     execution_state: &State,
-) -> Result<Vec<ConsensusOutput>, SubscriberError> {
+) -> Result<Vec<CommittedSubDag>, SubscriberError> {
+    let last_committed_leader = execution_state
+        .load_execution_indices()
+        .await
+        .last_committed_leader;
+    consensus_store
+        .read_committed_sub_dags_from(&last_committed_leader)
+        .map_err(SubscriberError::from)
+
+    /*
     let mut restored_consensus_output = Vec::new();
     let consensus_next_index = consensus_store
         .read_last_consensus_index()
@@ -162,6 +171,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         }
     }
     Ok(restored_consensus_output)
+    */
 }
 
 #[async_trait]

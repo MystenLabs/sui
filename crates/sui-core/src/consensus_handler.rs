@@ -146,7 +146,7 @@ impl ExecutionState for ConsensusHandler {
 }
 
 pub struct SequencedConsensusTransaction {
-    pub consensus_output: Arc<ConsensusOutput>,
+    pub consensus_output: Arc<narwhal_types::ConsensusOutput>,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: ConsensusTransaction,
 }

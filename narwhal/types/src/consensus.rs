@@ -40,6 +40,20 @@ impl CommittedSubDag {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn num_of_batches(&self) -> usize {
+        self.certificates
+            .iter()
+            .map(|x| x.certificate.header.payload.len())
+            .sum()
+    }
+
+    pub fn is_last(&self, output: &ConsensusOutput) -> bool {
+        self.certificates
+            .iter()
+            .last()
+            .map_or_else(|| false, |x| x == output)
+    }
 }
 
 /// Shutdown token dropped when a task is properly shut down.
@@ -54,6 +68,8 @@ pub struct ConsensusStore {
     last_committed: DBMap<PublicKey, Round>,
     /// The global consensus sequence.
     sequence: DBMap<SequenceNumber, CertificateDigest>,
+    /// All committed sub-dags, indexed by the round number of the leader committing it.
+    committed_sub_dags: DBMap<Round, CommittedSubDag>,
 }
 
 impl ConsensusStore {
@@ -61,10 +77,12 @@ impl ConsensusStore {
     pub fn new(
         last_committed: DBMap<PublicKey, Round>,
         sequence: DBMap<SequenceNumber, CertificateDigest>,
+        committed_sub_dags: DBMap<Round, CommittedSubDag>,
     ) -> Self {
         Self {
             last_committed,
             sequence,
+            committed_sub_dags,
         }
     }
 
@@ -87,6 +105,21 @@ impl ConsensusStore {
         write_batch = write_batch.insert_batch(
             &self.sequence,
             std::iter::once((consensus_index, certificate_id)),
+        )?;
+        write_batch.write()
+    }
+
+    /// Persist a committed sub dag.
+    pub fn write_committed_sub_dag(
+        &self,
+        last_committed: &HashMap<PublicKey, Round>,
+        sub_dag: &CommittedSubDag,
+    ) -> Result<(), TypedStoreError> {
+        let mut write_batch = self.last_committed.batch();
+        write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
+        write_batch = write_batch.insert_batch(
+            &self.committed_sub_dags,
+            std::iter::once((sub_dag.leader.round(), sub_dag)),
         )?;
         write_batch.write()
     }
@@ -125,5 +158,15 @@ impl ConsensusStore {
             .skip_prior_to(&SequenceNumber::MAX)?
             .next()
             .unwrap_or_default())
+    }
+
+    /// Load all the sub dags committed by a leader with round number of at least `from`.
+    pub fn read_committed_sub_dags_from(&self, from: &Round) -> StoreResult<Vec<CommittedSubDag>> {
+        Ok(self
+            .committed_sub_dags
+            .iter()
+            .skip_to(from)?
+            .map(|(_, sub_dag)| sub_dag)
+            .collect())
     }
 }

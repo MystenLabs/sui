@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use serde::{Deserialize, Serialize};
-use types::SequenceNumber;
+use types::{Round, SequenceNumber};
 
 /// The state of the subscriber keeping track of the transactions that have already been
 /// executed. It ensures we do not process twice the same transaction despite crash-recovery.
@@ -13,6 +13,8 @@ pub struct ExecutionIndices {
     pub next_batch_index: SequenceNumber,
     /// The index of the last transaction we executed (used for crash-recovery).
     pub next_transaction_index: SequenceNumber,
+    /// The round number of the last committed leader.
+    pub last_committed_leader: Round,
 }
 
 impl Ord for ExecutionIndices {

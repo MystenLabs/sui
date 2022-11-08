@@ -185,10 +185,13 @@ impl ConsensusProtocol for Bullshark {
                 );
             }
 
-            committed_sub_dags.push(CommittedSubDag {
+            let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-            });
+            };
+            self.store
+                .write_committed_sub_dag(&state.last_committed, &sub_dag)?;
+            committed_sub_dags.push(sub_dag);
         }
 
         // record the last time we got a successful leader election

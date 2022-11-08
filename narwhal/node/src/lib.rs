@@ -26,9 +26,9 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusOutput,
-    ConsensusStore, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair,
-    SequenceNumber,
+    metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDag,
+    ConsensusOutput, ConsensusStore, Header, HeaderDigest, ReconfigureNotification, Round,
+    RoundVoteDigestPair, SequenceNumber,
 };
 use worker::{metrics::initialise_metrics, Worker};
 
@@ -60,6 +60,7 @@ impl NodeStorage {
     const BATCHES_CF: &'static str = "batches";
     const LAST_COMMITTED_CF: &'static str = "last_committed";
     const SEQUENCE_CF: &'static str = "sequence";
+    const SUB_DAG_CF: &'static str = "sub_dag";
     const TEMP_BATCH_CF: &'static str = "temp_batches";
 
     /// Open or reopen all the storage of the node.
@@ -78,6 +79,7 @@ impl NodeStorage {
                 Self::BATCHES_CF,
                 Self::LAST_COMMITTED_CF,
                 Self::SEQUENCE_CF,
+                Self::SEQUENCE_CF,
                 Self::TEMP_BATCH_CF,
             ],
         )
@@ -94,6 +96,7 @@ impl NodeStorage {
             batch_map,
             last_committed_map,
             sequence_map,
+            sub_dag_map,
             temp_batch_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
@@ -106,6 +109,7 @@ impl NodeStorage {
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
             Self::SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
+            Self::SUB_DAG_CF;<Round, CommittedSubDag>,
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 
@@ -119,7 +123,11 @@ impl NodeStorage {
         );
         let payload_store = Store::new(payload_map);
         let batch_store = Store::new(batch_map);
-        let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sequence_map));
+        let consensus_store = Arc::new(ConsensusStore::new(
+            last_committed_map,
+            sequence_map,
+            sub_dag_map,
+        ));
         let temp_batch_store = Store::new(temp_batch_map);
 
         Self {
@@ -312,10 +320,10 @@ impl Node {
             store.certificate_store.clone(),
             &execution_state,
         )
-        .await?
-        .into_iter()
-        .sorted_by(|a, b| a.consensus_index.cmp(&b.consensus_index))
-        .collect::<Vec<ConsensusOutput>>();
+        .await?;
+        // .into_iter()
+        // .sorted_by(|a, b| a.consensus_index.cmp(&b.consensus_index))
+        // .collect::<Vec<ConsensusOutput>>();
 
         let len_restored = restored_consensus_output.len() as u64;
         if len_restored > 0 {
