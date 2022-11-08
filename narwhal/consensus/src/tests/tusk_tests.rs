@@ -72,7 +72,7 @@ async fn commit_one() {
 
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=4 {
         let output = sequence.next().unwrap();
@@ -138,11 +138,11 @@ async fn dead_node() {
 
     // We should commit 3 leaders (rounds 2, 4, and 6).
     let mut committed = Vec::new();
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     committed.extend(committed_sub_dag.certificates);
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     committed.extend(committed_sub_dag.certificates);
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     committed.extend(committed_sub_dag.certificates);
 
     let mut sequence = committed.into_iter();
@@ -255,7 +255,7 @@ async fn not_enough_support() {
     }
 
     // We should commit 2 leaders (rounds 2 and 4).
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -264,7 +264,7 @@ async fn not_enough_support() {
     let output = sequence.next().unwrap();
     assert_eq!(output.certificate.round(), 2);
 
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -343,7 +343,7 @@ async fn missing_leader() {
     }
 
     // Ensure the commit sequence is as expected.
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
@@ -426,7 +426,7 @@ async fn epoch_change() {
 
         // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
         // leader); then the leader's certificate should be committed.
-        let committed_sub_dag = *rx_output.recv().await.unwrap();
+        let committed_sub_dag = rx_output.recv().await.unwrap();
         let mut sequence = committed_sub_dag.certificates.into_iter();
         for _ in 1..=4 {
             let output = sequence.next().unwrap();
@@ -507,7 +507,7 @@ async fn restart_with_new_committee() {
 
         // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
         // leader); then the leader's certificate should be committed.
-        let committed_sub_dag = *rx_output.recv().await.unwrap();
+        let committed_sub_dag = rx_output.recv().await.unwrap();
         let mut sequence = committed_sub_dag.certificates.into_iter();
         for _ in 1..=4 {
             let output = sequence.next().unwrap();

@@ -91,7 +91,7 @@ async fn test_recovery() {
     let mut consensus_index_counter = 0;
     let num_of_committed_certificates = 5;
 
-    let committed_sub_dag = *rx_output.recv().await.unwrap();
+    let committed_sub_dag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for i in 1..=num_of_committed_certificates {
         let output = sequence.next().unwrap();

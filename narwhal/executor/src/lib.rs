@@ -75,7 +75,7 @@ impl Executor {
         committee: Committee,
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
-        rx_sequence: metered_channel::Receiver<Box<CommittedSubDag>>,
+        rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
         restored_consensus_output: Vec<ConsensusOutput>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>

@@ -40,7 +40,7 @@ pub struct Subscriber<Network> {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive sequenced consensus messages.
-    rx_sequence: metered_channel::Receiver<Box<CommittedSubDag>>,
+    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     /// Ordered batches for the consumer
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     /// The metrics handler
@@ -60,7 +60,7 @@ pub fn spawn_subscriber(
     worker_cache: SharedWorkerCache,
     committee: Committee,
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    rx_sequence: metered_channel::Receiver<Box<CommittedSubDag>>,
+    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<ConsensusOutput>,

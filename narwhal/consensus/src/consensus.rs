@@ -223,7 +223,7 @@ pub struct Consensus<ConsensusProtocol> {
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
     tx_committed_certificates: metered_channel::Sender<Certificate>,
     /// Outputs the sequence of ordered certificates to the application layer.
-    tx_sequence: metered_channel::Sender<Box<CommittedSubDag>>,
+    tx_sequence: metered_channel::Sender<CommittedSubDag>,
 
     /// The (global) consensus index. We assign one index to each sequenced certificate. this is
     /// helpful for clients.
@@ -251,7 +251,7 @@ where
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<Certificate>,
-        tx_sequence: metered_channel::Sender<Box<CommittedSubDag>>,
+        tx_sequence: metered_channel::Sender<CommittedSubDag>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
@@ -371,7 +371,7 @@ where
                                 .expect("Failed to send certificate to primary");
                         }
 
-                        if let Err(e) = self.tx_sequence.send(Box::new(committed_sub_dag)).await {
+                        if let Err(e) = self.tx_sequence.send(committed_sub_dag).await {
                             tracing::warn!("Failed to output certificate: {e}");
                         }
                     }
