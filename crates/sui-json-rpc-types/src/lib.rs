@@ -2653,7 +2653,7 @@ impl From<SuiTransactionFilter> for TransactionFilter {
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename = "EventFilter")]
 pub enum SuiEventFilter {
     Package(ObjectID),
