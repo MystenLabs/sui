@@ -8,7 +8,6 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
-import { CURRENT_ENV } from './utils/envUtil';
 import { plausible } from './utils/plausible';
 
 import './index.css';
@@ -25,7 +24,6 @@ if (import.meta.env.PROD) {
         // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
         // TODO: Adjust this to a lower value once the Explorer has more traffic
         tracesSampleRate: 1.0,
-        environment: CURRENT_ENV,
     });
 }
 

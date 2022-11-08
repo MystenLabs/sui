@@ -44,12 +44,6 @@ function App() {
         }
     }, [previousNetwork, network]);
 
-    useEffect(() => {
-        growthbook.setAttributes({
-            network,
-        });
-    }, [network]);
-
     return (
         // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
         <React.Fragment key={network}>

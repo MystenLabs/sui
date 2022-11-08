@@ -1,70 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    createContext,
-    useEffect,
-    useLayoutEffect,
-    useState,
-    type Dispatch,
-    type SetStateAction,
-} from 'react';
+import * as Sentry from '@sentry/react';
+import { createContext, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { CURRENT_ENV } from './utils/envUtil';
-
-import type { Network } from './utils/api/DefaultRpcClient';
-
-const LOCALSTORE_RPC_KEY = CURRENT_ENV + 'sui-explorer-rpc';
-const LOCALSTORE_RPC_TIME_KEY = CURRENT_ENV + 'sui-explorer-rpc-lastset';
-// Below is 3 hours in milliseconds:
-const LOCALSTORE_RPC_VALID_MS = 60000 * 60 * 3;
+import { Network } from './utils/api/DefaultRpcClient';
+import { DEFAULT_NETWORK } from './utils/envUtil';
+import { growthbook } from './utils/growthbook';
 
 export const NetworkContext = createContext<
-    [Network | string, Dispatch<SetStateAction<Network | string>>]
+    [Network | string, (network: Network | string) => void]
 >(['', () => null]);
 
-const wasNetworkSetLongTimeAgo = (): boolean => {
-    const lastEpoch = Number(
-        window.localStorage.getItem(LOCALSTORE_RPC_TIME_KEY)
-    );
-
-    const nowEpoch = Date.now().valueOf();
-
-    if (nowEpoch - lastEpoch >= LOCALSTORE_RPC_VALID_MS) {
-        window.localStorage.setItem(
-            LOCALSTORE_RPC_TIME_KEY,
-            nowEpoch.toString()
-        );
-        return true;
-    } else {
-        return false;
-    }
-};
-
-export function useNetwork(): [
-    string,
-    Dispatch<SetStateAction<Network | string>>
-] {
-    const [searchParams] = useSearchParams();
-    const [network, setNetwork] = useState<Network | string>(() => {
-        const storedNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
-        if (!storedNetwork || wasNetworkSetLongTimeAgo()) {
-            return CURRENT_ENV;
+export function useNetwork(): [string, (network: Network | string) => void] {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const network = useMemo(() => {
+        const networkParam = searchParams.get('network');
+        if (networkParam && networkParam in Network) {
+            return networkParam;
         }
-        return storedNetwork;
-    });
-
-    useLayoutEffect(() => {
-        const rpcUrl = searchParams.get('rpcUrl');
-        if (rpcUrl) {
-            setNetwork(rpcUrl);
-        }
+        return DEFAULT_NETWORK;
     }, [searchParams]);
 
+    const setNetwork = (network: Network | string) => {
+        setSearchParams({ network });
+    };
+
     useEffect(() => {
-        // If network in UI changes, change network in storage:
-        window.localStorage.setItem(LOCALSTORE_RPC_KEY, network);
+        growthbook.setAttributes({
+            network,
+        });
+
+        Sentry.setContext('network', {
+            network,
+        });
     }, [network]);
 
     return [network, setNetwork];
