@@ -104,6 +104,10 @@ module.exports = {
       animation: {
         shimmer: 'shimmer 2s infinite linear',
       },
+      height: {
+        'verticalListShort': '21vh',
+        'verticalListLong': '57vh',
+      }
     },
   },
   corePlugins: {
