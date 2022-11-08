@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::str::FromStr;
 
-use sha3::{Digest, Sha3_256};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};

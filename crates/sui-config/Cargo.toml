@@ -33,8 +33,6 @@ sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
 workspace-hack.workspace = true
-sha3 = "0.10.4"
-digest = "0.10.3"
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }
