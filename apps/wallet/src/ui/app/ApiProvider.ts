@@ -89,18 +89,12 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
         excludedNetworks.push(API_ENV.staging);
     }
 
-    // Deal with edge case where user has customRPC or testnet is disabled
-    const excludeCustomRPC =
-        !growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL) && API_ENV.customRPC;
-    const excludeTestnet =
-        !growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT) && API_ENV.testNet;
-
-    if (excludeCustomRPC) {
-        excludedNetworks.push(excludeCustomRPC);
+    if (!growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) {
+        excludedNetworks.push(API_ENV.testNet);
     }
 
-    if (excludeTestnet) {
-        excludedNetworks.push(excludeTestnet);
+    if (!growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL)) {
+        excludedNetworks.push(API_ENV.customRPC);
     }
 
     return Object.values(API_ENV).filter(
