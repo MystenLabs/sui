@@ -17,6 +17,7 @@ use crate::scoped_counter;
 
 use futures::stream::{self, Stream};
 use futures::StreamExt;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
@@ -321,9 +322,8 @@ impl crate::authority::AuthorityState {
         // Define a local structure to support the stream construction.
         struct BatchStreamingLocals<GuardT> {
             _guard: GuardT,
-            // Next tx with sequence number that should be
-            // read from db and published
-            next_tx_seq: TxSequenceNumber,
+            no_more_txns: bool,
+            txns: VecDeque<(TxSequenceNumber, ExecutionDigests)>,
             // Next batch to be read from db should have its next_sequence_number
             // be at least this much
             next_batch_seq: TxSequenceNumber,
@@ -339,7 +339,8 @@ impl crate::authority::AuthorityState {
 
         let local_state = BatchStreamingLocals {
             _guard: follower_connections_concurrent_guard,
-            next_tx_seq: seq,
+            no_more_txns: false,
+            txns: VecDeque::new(),
             next_batch_seq: seq + 1,
             next_item: NextItemToPublish::Batch,
             pending_batch: Some(signed_batch),
@@ -363,20 +364,8 @@ impl crate::authority::AuthorityState {
                         local_state,
                     ));
                 } else if local_state.next_item == NextItemToPublish::Transaction {
-                    let tx: Option<(TxSequenceNumber, ExecutionDigests)> = local_state
-                        .db
-                        .perpetual_tables
-                        .executed_sequence
-                        .iter()
-                        .skip_to(&local_state.next_tx_seq)
-                        .map(|mut o| o.next())
-                        .unwrap_or_default();
+                    let tx = local_state.txns.pop_front();
                     if let Some((seq, digest)) = tx {
-                        local_state.next_tx_seq = seq + 1;
-                        if local_state.next_tx_seq >= (local_state.next_batch_seq - 1) {
-                            // We read all txns for this batch, time to publish the batch
-                            local_state.next_item = NextItemToPublish::Batch;
-                        }
                         local_state.metrics.follower_txes_streamed.inc();
                         return Some((
                             Ok(BatchInfoResponseItem(UpdateItem::Transaction((
@@ -385,12 +374,10 @@ impl crate::authority::AuthorityState {
                             local_state,
                         ));
                     } else {
-                        // We failed to read the next txn, close the stream
-                        error!("Failed to read txn from db, closing stream");
-                        return None;
+                        local_state.next_item = NextItemToPublish::Batch;
                     }
                 } else {
-                    if local_state.next_tx_seq >= end {
+                    if local_state.no_more_txns {
                         return None;
                     }
                     let batch = local_state
@@ -405,10 +392,27 @@ impl crate::authority::AuthorityState {
                         // we found a new batch
                         let initial_seq_num = signed_batch.data().initial_sequence_number;
                         let next_seq_num = signed_batch.data().next_sequence_number;
+                        if let Ok(iter) = local_state
+                            .db
+                            .perpetual_tables
+                            .executed_sequence
+                            .iter()
+                            .skip_to(&initial_seq_num)
+                        {
+                            local_state.txns =
+                                iter.take_while(|(seq, _)| seq < &next_seq_num).collect();
+                        } else {
+                            // We failed to read the next txn, close the stream
+                            error!("Failed to read txn from db, closing stream");
+                            return None;
+                        }
                         if initial_seq_num < end {
                             local_state.pending_batch = Some(signed_batch);
                         } else {
                             local_state.pending_batch = None;
+                        }
+                        if next_seq_num >= end {
+                            local_state.no_more_txns = true;
                         }
                         local_state.next_item = NextItemToPublish::Transaction;
                         local_state.next_batch_seq = next_seq_num + 1;
