@@ -137,7 +137,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </VerticalList>
                 </div>
             </div>
-            <div className="border-0 md:border-l border-solid border-sui-grey-45 md:pl-7 pt-5 grow">
+            <div className="border-0 md:border-l border-solid border-sui-grey-45 md:pl-7 pt-5 grow overflow-auto">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
