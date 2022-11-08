@@ -9,7 +9,7 @@ Here is a rundown of existing examples in the Sui repository.
 
 ## Basics
 
-In the [Basics](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/basics) example, explore object creation, update, and exchange.
+In the [Basics](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/basics) example, explore object creation, updates, and exchanges.
 
 ## Crypto
 
