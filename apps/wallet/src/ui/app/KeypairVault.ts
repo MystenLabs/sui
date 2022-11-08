@@ -30,4 +30,8 @@ export default class KeypairVault {
         }
         return this._keypair;
     }
+
+    public clear() {
+        this._keypair = null;
+    }
 }

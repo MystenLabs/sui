@@ -34,6 +34,8 @@ export const KeypairVaultMiddleware: Middleware =
             if (entropy) {
                 keypairVault.entropy = entropy;
                 dispatch(setAddress(keypairVault.getAccount()));
+            } else {
+                keypairVault.clear();
             }
             entropy = null;
         }
