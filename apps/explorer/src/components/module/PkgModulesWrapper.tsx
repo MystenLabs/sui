@@ -115,7 +115,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                 <Combobox.Option key={name} value={name}>
                                     {({ active }) => (
                                         <div key={idx} className="md:min-w-fit">
-                                            <ListItem active={active}>
+                                            <ListItem active={active} isBlue>
                                                 {name}
                                             </ListItem>
                                         </div>

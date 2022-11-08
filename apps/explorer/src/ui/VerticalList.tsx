@@ -6,19 +6,24 @@ import { type ReactNode } from 'react';
 
 export interface ListItemProps {
     active?: boolean;
+    isBlue?: boolean;
     children: ReactNode;
     onClick?(): void;
 }
 
-export function ListItem({ active, children, onClick }: ListItemProps) {
+export function ListItem({ active, isBlue, children, onClick }: ListItemProps) {
+    const activeStyle = isBlue
+        ? 'bg-sui/10 border-transparent'
+        : 'bg-sui-grey-45 text-sui-grey-90 font-semibold border-solid border-sui-grey-50 shadow-sm';
+
     return (
         <li className="list-none">
             <button
                 type="button"
                 className={clsx(
-                    'cursor-pointer px-3 py-2 rounded-md text-body block w-full border border-solid text-left mt-0.5 ml-0.5',
+                    'cursor-pointer px-3 py-2 rounded-md text-body block w-full text-left mt-0.5 ml-0.5 border',
                     active
-                        ? 'bg-sui-grey-45 text-sui-grey-90 font-semibold border border-sui-grey-50 shadow-sm'
+                        ? activeStyle
                         : 'bg-white text-sui-grey-80 font-medium border-transparent'
                 )}
                 onClick={onClick}
