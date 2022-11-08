@@ -9,7 +9,7 @@ mod notifier;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::metrics::ExecutorMetrics;
 use crate::notifier::Notifier;
@@ -28,8 +28,7 @@ use mockall::automock;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore,
-    ReconfigureNotification, SequenceNumber,
+    metered_channel, CommittedSubDag, ConsensusOutput, ConsensusStore, ReconfigureNotification,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -103,8 +102,7 @@ impl Executor {
             restored_consensus_output,
         );
 
-        let notifier_handler =
-            Notifier::spawn(name, committee, rx_notifier, execution_state, arc_metrics);
+        let notifier_handler = Notifier::spawn(rx_notifier, execution_state, arc_metrics);
 
         // Return the handle.
         info!("Consensus subscriber successfully started");
@@ -118,60 +116,51 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     certificate_store: CertificateStore,
     execution_state: &State,
 ) -> Result<Vec<CommittedSubDag>, SubscriberError> {
+    // We always want to recover at least the last committed certificate since we can't know
+    // whether the execution has been interrupted and there are still batches/transactions
+    // that need to be send for execution.
+
     let last_committed_leader = execution_state
         .load_execution_indices()
         .await
         .last_committed_leader;
-    consensus_store
-        .read_committed_sub_dags_from(&last_committed_leader)
-        .map_err(SubscriberError::from)
 
-    /*
-    let mut restored_consensus_output = Vec::new();
-    let consensus_next_index = consensus_store
-        .read_last_consensus_index()
-        .map_err(SubscriberError::StoreError)?;
+    let compressed_sub_dags =
+        consensus_store.read_committed_sub_dags_from(&last_committed_leader)?;
 
-    // Execution state always keeps the index of the latest certificate that has been executed.
-    // However, in consensus_store the committed certificates are stored alongside the "next" index
-    // that should be assigned to a certificate. Thus, to successfully recover the un-executed
-    // certificates from the consensus_store we are incrementing the `next_certificate_index` by 1
-    // to align the semantics.
-    // TODO: https://github.com/MystenLabs/sui/issues/5819
-    let last = execution_state.load_execution_indices().await;
-    let last_executed_index = last.next_certificate_index + 1;
+    let mut sub_dags = Vec::new();
+    for compressed_sub_dag in compressed_sub_dags {
+        let (certificate_digests, consensus_indices): (Vec<_>, Vec<_>) =
+            compressed_sub_dag.certificates.into_iter().unzip();
 
-    debug!(
-        "Recovering with last executor index:{:?}, last consensus index:{}",
-        last, consensus_next_index
-    );
+        let certificates: Vec<_> = certificate_store
+            .read_all(certificate_digests)
+            .unwrap()
+            .into_iter()
+            .map(|cert_option| cert_option.unwrap())
+            .collect();
 
-    // We always want to recover at least the last committed certificate since we can't know
-    // whether the execution has been interrupted and there are still batches/transactions
-    // that need to be send for execution.
-    let missing = consensus_store
-        .read_sequenced_certificates_from(&last_executed_index)?
-        .into_iter()
-        .map(|(seq, digest)| (seq - 1, digest))
-        .collect::<Vec<(SequenceNumber, CertificateDigest)>>();
-
-    debug!("Found {} certificates to recover", missing.len());
-
-    for (seq, cert_digest) in missing {
-        debug!(
-            "Recovered certificate index:{}, digest:{}",
-            seq, cert_digest
-        );
-        if let Some(cert) = certificate_store.read(cert_digest).unwrap() {
-            // Save the missing sequence / cert pair as ConsensusOutput to re-send to the executor.
-            restored_consensus_output.push(ConsensusOutput {
-                certificate: cert,
-                consensus_index: seq,
+        let outputs = certificates
+            .into_iter()
+            .zip(consensus_indices.into_iter())
+            .map(|(certificate, consensus_index)| ConsensusOutput {
+                certificate,
+                consensus_index,
             })
-        }
+            .collect();
+
+        let leader = certificate_store
+            .read(compressed_sub_dag.leader)
+            .unwrap()
+            .unwrap();
+
+        sub_dags.push(CommittedSubDag {
+            certificates: outputs,
+            leader,
+        });
     }
-    Ok(restored_consensus_output)
-    */
+
+    Ok(sub_dags)
 }
 
 #[async_trait]

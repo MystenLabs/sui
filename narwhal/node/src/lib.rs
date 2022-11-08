@@ -11,7 +11,6 @@ use consensus::{
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
-use itertools::Itertools;
 use network::P2pNetwork;
 use primary::{NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
@@ -26,9 +25,9 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDag,
-    ConsensusOutput, ConsensusStore, Header, HeaderDigest, ReconfigureNotification, Round,
-    RoundVoteDigestPair, SequenceNumber,
+    metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell,
+    ConsensusStore, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair,
+    SequenceNumber,
 };
 use worker::{metrics::initialise_metrics, Worker};
 
@@ -109,7 +108,7 @@ impl NodeStorage {
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
             Self::SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
-            Self::SUB_DAG_CF;<Round, CommittedSubDag>,
+            Self::SUB_DAG_CF;<Round, CommittedSubDagShell>,
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 

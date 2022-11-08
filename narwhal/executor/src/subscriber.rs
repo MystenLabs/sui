@@ -31,8 +31,8 @@ use tokio::{
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ConsensusOutput,
-    ReconfigureNotification, Timestamp,
+    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ReconfigureNotification,
+    Timestamp,
 };
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the

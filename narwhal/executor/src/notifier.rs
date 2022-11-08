@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
-use config::Committee;
-use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use sui_metrics::spawn_monitored_task;
@@ -19,8 +17,6 @@ pub struct BatchIndex {
 }
 
 pub struct Notifier<State: ExecutionState> {
-    name: PublicKey,
-    committee: Committee,
     rx_notifier: metered_channel::Receiver<(BatchIndex, Batch)>,
     callback: State,
     metrics: Arc<ExecutorMetrics>,
@@ -28,15 +24,11 @@ pub struct Notifier<State: ExecutionState> {
 
 impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
     pub fn spawn(
-        name: PublicKey,
-        committee: Committee,
         rx_notifier: metered_channel::Receiver<(BatchIndex, Batch)>,
         callback: State,
         metrics: Arc<ExecutorMetrics>,
     ) -> JoinHandle<()> {
         let notifier = Notifier {
-            name,
-            committee,
             rx_notifier,
             callback,
             metrics,

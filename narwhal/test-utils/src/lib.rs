@@ -28,7 +28,7 @@ use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore,
+    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, Header, HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse,
     PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
@@ -132,7 +132,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     let (last_committed_map, sequence_map, sub_dag_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<PublicKey, Round>,
         SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
-        SUB_DAG_CF;<Round, CommittedSubDag>
+        SUB_DAG_CF;<Round, CommittedSubDagShell>
     );
 
     Arc::new(ConsensusStore::new(

@@ -4,6 +4,7 @@
 
 use crate::{Certificate, CertificateDigest, Round};
 use crypto::PublicKey;
+use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use store::{
@@ -56,6 +57,27 @@ impl CommittedSubDag {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommittedSubDagShell {
+    /// The sequence of committed certificates' digests.
+    pub certificates: Vec<(CertificateDigest, SequenceNumber)>,
+    /// The leader certificate's digest responsible of committing this sub-dag.
+    pub leader: CertificateDigest,
+}
+
+impl CommittedSubDagShell {
+    pub fn from_sub_dag(sub_dag: &CommittedSubDag) -> Self {
+        Self {
+            certificates: sub_dag
+                .certificates
+                .iter()
+                .map(|x| (x.certificate.digest(), x.consensus_index))
+                .collect(),
+            leader: sub_dag.leader.digest(),
+        }
+    }
+}
+
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;
 
@@ -69,7 +91,7 @@ pub struct ConsensusStore {
     /// The global consensus sequence.
     sequence: DBMap<SequenceNumber, CertificateDigest>,
     /// All committed sub-dags, indexed by the round number of the leader committing it.
-    committed_sub_dags: DBMap<Round, CommittedSubDag>,
+    committed_sub_dags: DBMap<Round, CommittedSubDagShell>,
 }
 
 impl ConsensusStore {
@@ -77,7 +99,7 @@ impl ConsensusStore {
     pub fn new(
         last_committed: DBMap<PublicKey, Round>,
         sequence: DBMap<SequenceNumber, CertificateDigest>,
-        committed_sub_dags: DBMap<Round, CommittedSubDag>,
+        committed_sub_dags: DBMap<Round, CommittedSubDagShell>,
     ) -> Self {
         Self {
             last_committed,
@@ -115,11 +137,15 @@ impl ConsensusStore {
         last_committed: &HashMap<PublicKey, Round>,
         sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
+        // Compress the sub-dag to not write the entire certificates.
+        let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
+
+        // Atomically persist the sub-dag and the last committed certificates.
         let mut write_batch = self.last_committed.batch();
         write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
         write_batch = write_batch.insert_batch(
             &self.committed_sub_dags,
-            std::iter::once((sub_dag.leader.round(), sub_dag)),
+            std::iter::once((sub_dag.leader.round(), shell)),
         )?;
         write_batch.write()
     }
@@ -161,7 +187,10 @@ impl ConsensusStore {
     }
 
     /// Load all the sub dags committed by a leader with round number of at least `from`.
-    pub fn read_committed_sub_dags_from(&self, from: &Round) -> StoreResult<Vec<CommittedSubDag>> {
+    pub fn read_committed_sub_dags_from(
+        &self,
+        from: &Round,
+    ) -> StoreResult<Vec<CommittedSubDagShell>> {
         Ok(self
             .committed_sub_dags
             .iter()
