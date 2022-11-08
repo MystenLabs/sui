@@ -17,11 +17,6 @@ use sui_sdk::{
 };
 use sui_types::{base_types::ObjectID, error::SuiError};
 
-#[derive(Clone, Debug)]
-pub struct DependencyVerificationResult {
-    pub verified_dependencies: HashMap<AccountAddress, Dependency>,
-}
-
 #[derive(Debug)]
 pub enum DependencyVerificationError {
     /// Could not read a dependencies' on-chain object
@@ -83,7 +78,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
     pub async fn verify_deployed_dependencies(
         &mut self,
         compiled_package: CompiledPackage,
-    ) -> Result<DependencyVerificationResult, DependencyVerificationError> {
+    ) -> Result<(), DependencyVerificationError> {
         let compiled_dep_map = get_module_bytes_map(&compiled_package);
 
         let mut on_chain_module_count = 0usize;
@@ -157,9 +152,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             ));
         }
 
-        Ok(DependencyVerificationResult {
-            verified_dependencies,
-        })
+        Ok(())
     }
 
     async fn pkg_for_address(

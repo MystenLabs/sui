@@ -25,9 +25,8 @@ use sui_framework::build_move_package;
 use sui_source_validation::BytecodeSourceVerifier;
 use tracing::info;
 
-
-use sui_framework_build::compiled_package::{BuildConfig};
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
@@ -52,7 +51,7 @@ use sui_types::{
 #[cfg(not(msim))]
 use sui_sdk::SuiClient;
 
-use crate::config::{SuiEnv};
+use crate::config::SuiEnv;
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
