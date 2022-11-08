@@ -166,6 +166,8 @@ pub struct AuthorityMetrics {
     pub follower_items_loaded: IntCounter,
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
+    pub follower_txes_streamed: IntCounter,
+    pub follower_batches_streamed: IntCounter,
     pub follower_start_seq_num: Histogram,
 
     // TODO: consolidate these into GossipMetrics
@@ -346,6 +348,18 @@ impl AuthorityMetrics {
             follower_connections_concurrent: register_int_gauge_with_registry!(
                 "follower_connections_concurrent",
                 "Current number of concurrent follower connections",
+                registry,
+            )
+            .unwrap(),
+            follower_batches_streamed: register_int_counter_with_registry!(
+                "follower_batches_streamed",
+                "Number of signed batches streamed to followers",
+                registry,
+            )
+            .unwrap(),
+            follower_txes_streamed: register_int_counter_with_registry!(
+                "follower_txes_streamed",
+                "Number of transactions streamed to followers",
                 registry,
             )
             .unwrap(),
