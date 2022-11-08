@@ -9,9 +9,9 @@ import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
 import { plausible } from './utils/plausible';
+import { reportWebVitals } from './utils/vitals';
 
 import './index.css';
-import { reportWebVitals } from './utils/vitals';
 
 // NOTE: The plausible tracker ensures it doesn't run on localhost, so we don't
 // need to gate this call.

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as Sentry from '@sentry/react';
-import { createContext, useEffect, useMemo } from 'react';
+import { createContext, useLayoutEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Network } from './utils/api/DefaultRpcClient';
 import { DEFAULT_NETWORK } from './utils/envUtil';
 import { growthbook } from './utils/growthbook';
+import { queryClient } from './utils/queryClient';
 
 export const NetworkContext = createContext<
     [Network | string, (network: Network | string) => void]
@@ -32,10 +33,13 @@ export function useNetwork(): [string, (network: Network | string) => void] {
     }, [searchParams]);
 
     const setNetwork = (network: Network | string) => {
+        // When resetting the network, we reset the query client at the same time:
+        queryClient.cancelQueries();
+        queryClient.clear()
         setSearchParams({ network: network.toLowerCase() });
     };
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         growthbook.setAttributes({
             network,
         });
