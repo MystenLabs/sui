@@ -5,9 +5,11 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
 import { AppType } from './AppType';
-import { DEFAULT_API_ENV, API_ENV } from '_app/ApiProvider';
-import { growthbook } from '_app/experimentation/feature-gating';
-import { FEATURES } from '_app/experimentation/features';
+import {
+    DEFAULT_API_ENV,
+    API_ENV,
+    generateActiveNetworkList,
+} from '_app/ApiProvider';
 import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 import { getTransactionsByAddress } from '_redux/slices/txresults';
 
@@ -62,30 +64,6 @@ export const setCustomRPC = createAsyncThunk<void, string, AppThunkConfig>(
         dispatch(changeRPCNetwork(API_ENV.customRPC));
     }
 );
-
-type NetworkTypes = keyof typeof API_ENV;
-
-export const generateActiveNetworkList = (): NetworkTypes[] => {
-    const excludedNetworks: NetworkTypes[] = [];
-
-    // Deal with edge case where user has customRPC or testnet is disabled
-    const excludeCustomRPC =
-        !growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL) && API_ENV.customRPC;
-    const excludeTestnet =
-        !growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT) && API_ENV.testNet;
-
-    if (excludeCustomRPC) {
-        excludedNetworks.push(excludeCustomRPC);
-    }
-
-    if (excludeTestnet) {
-        excludedNetworks.push(excludeTestnet);
-    }
-
-    return Object.values(API_ENV).filter(
-        (env) => !excludedNetworks.includes(env as keyof typeof API_ENV)
-    );
-};
 
 export const initNetworkFromStorage = createAsyncThunk<
     void,

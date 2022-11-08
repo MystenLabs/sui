@@ -79,6 +79,35 @@ function getDefaultAPI(env: API_ENV) {
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
 
+type NetworkTypes = keyof typeof API_ENV;
+
+const EXCLUDE_STAGING = process.env.SHOW_STAGING !== 'false' && API_ENV.staging;
+
+export const generateActiveNetworkList = (): NetworkTypes[] => {
+    const excludedNetworks: NetworkTypes[] = [];
+    if (EXCLUDE_STAGING) {
+        excludedNetworks.push(API_ENV.staging);
+    }
+
+    // Deal with edge case where user has customRPC or testnet is disabled
+    const excludeCustomRPC =
+        !growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL) && API_ENV.customRPC;
+    const excludeTestnet =
+        !growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT) && API_ENV.testNet;
+
+    if (excludeCustomRPC) {
+        excludedNetworks.push(excludeCustomRPC);
+    }
+
+    if (excludeTestnet) {
+        excludedNetworks.push(excludeTestnet);
+    }
+
+    return Object.values(API_ENV).filter(
+        (env) => !excludedNetworks.includes(env as keyof typeof API_ENV)
+    );
+};
+
 export default class ApiProvider {
     private _apiFullNodeProvider?: JsonRpcProvider;
     private _signer: RawSigner | null = null;
