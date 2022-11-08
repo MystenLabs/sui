@@ -92,6 +92,7 @@ async fn test_recovery() {
     let num_of_committed_certificates = 5;
 
     let committed_sub_dag = rx_output.recv().await.unwrap();
+    let leader_round = committed_sub_dag.leader.round();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for i in 1..=num_of_committed_certificates {
         let output = sequence.next().unwrap();
@@ -118,6 +119,7 @@ async fn test_recovery() {
                 next_certificate_index: last_executed_certificate_index,
                 next_batch_index: 0,
                 next_transaction_index: 0,
+                last_committed_leader: leader_round,
             });
 
         let consensus_output = get_restored_consensus_output(
@@ -130,9 +132,10 @@ async fn test_recovery() {
 
         // we expect to have recovered all the certificates between the "last executed certificate" (included)
         // up to the "last committed certificate" (included).
-        assert_eq!(
-            consensus_output.len(),
-            (num_of_committed_certificates - last_executed_certificate_index) as usize
+        assert_eq!(consensus_output.len(), 1);
+        assert!(
+            consensus_output[0].len()
+                >= (num_of_committed_certificates - last_executed_certificate_index) as usize
         );
     }
 }

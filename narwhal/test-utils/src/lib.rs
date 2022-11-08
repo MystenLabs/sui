@@ -126,8 +126,12 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     const SEQUENCE_CF: &str = "sequence";
     const SUB_DAG_CF: &str = "sub_dag";
 
-    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
-        .expect("Failed creating database");
+    let rocksdb = rocks::open_cf(
+        store_path,
+        None,
+        &[LAST_COMMITTED_CF, SEQUENCE_CF, SUB_DAG_CF],
+    )
+    .expect("Failed creating database");
 
     let (last_committed_map, sequence_map, sub_dag_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<PublicKey, Round>,

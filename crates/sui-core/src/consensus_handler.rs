@@ -177,16 +177,19 @@ pub fn test_update_hash() {
         next_certificate_index: 0,
         next_batch_index: 0,
         next_transaction_index: 0,
+        last_committed_leader: 0,
     };
     let index1 = ExecutionIndices {
         next_certificate_index: 0,
         next_batch_index: 1,
         next_transaction_index: 0,
+        last_committed_leader: 0,
     };
     let index2 = ExecutionIndices {
         next_certificate_index: 0,
         next_batch_index: 2,
         next_transaction_index: 0,
+        last_committed_leader: 0,
     };
 
     let last_seen = ExecutionIndicesWithHash {

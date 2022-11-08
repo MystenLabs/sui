@@ -79,6 +79,7 @@ impl NodeStorage {
                 Self::LAST_COMMITTED_CF,
                 Self::SEQUENCE_CF,
                 Self::SEQUENCE_CF,
+                Self::SUB_DAG_CF,
                 Self::TEMP_BATCH_CF,
             ],
         )
