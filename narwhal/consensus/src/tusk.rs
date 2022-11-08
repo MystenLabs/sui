@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, CommittedSubDag, ConsensusOutput, SequenceNumber,
+    utils, SequenceNumber,
 };
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{Certificate, CertificateDigest, ConsensusStore, Round, StoreResult};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore, Round,
+    StoreResult,
+};
 
 #[cfg(any(test))]
 #[path = "tests/tusk_tests.rs"]

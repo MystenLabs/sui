@@ -4,7 +4,6 @@ use crate::notifier::BatchIndex;
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics};
 
 use config::{Committee, SharedWorkerCache, WorkerId};
-use consensus::{CommittedSubDag, ConsensusOutput};
 use crypto::{NetworkPublicKey, PublicKey};
 
 use futures::stream::FuturesOrdered;
@@ -31,7 +30,10 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
-use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification, Timestamp};
+use types::{
+    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ConsensusOutput,
+    ReconfigureNotification, Timestamp,
+};
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then

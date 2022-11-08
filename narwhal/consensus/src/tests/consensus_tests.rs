@@ -14,8 +14,8 @@ use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
 use crate::metrics::ConsensusMetrics;
-use crate::{Consensus, ConsensusOutput};
-use types::{Certificate, ReconfigureNotification};
+use crate::Consensus;
+use types::{Certificate, ConsensusOutput, ReconfigureNotification};
 
 /// This test is trying to compare the output of the Consensus algorithm when:
 /// (1) running without any crash for certificates processed from round 1 to 5 (inclusive)

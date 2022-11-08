@@ -19,35 +19,7 @@ mod utils;
 
 pub use crate::consensus::Consensus;
 
-use serde::{Deserialize, Serialize};
-use types::{Certificate, SequenceNumber};
+use types::SequenceNumber;
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
-
-/// The output format of the consensus.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct ConsensusOutput {
-    /// The sequenced certificate.
-    pub certificate: Certificate,
-    /// The (global) index associated with this certificate.
-    pub consensus_index: SequenceNumber,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct CommittedSubDag {
-    /// The sequence of committed certificates.
-    pub certificates: Vec<ConsensusOutput>,
-    /// The leader certificate responsible of committing this sub-dag.
-    pub leader: Certificate,
-}
-
-impl CommittedSubDag {
-    pub fn len(&self) -> usize {
-        self.certificates.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}

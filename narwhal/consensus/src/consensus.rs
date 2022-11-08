@@ -4,7 +4,7 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::{metrics::ConsensusMetrics, CommittedSubDag, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
@@ -18,8 +18,8 @@ use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification,
-    Round, StoreResult, Timestamp,
+    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore,
+    ReconfigureNotification, Round, StoreResult, Timestamp,
 };
 
 #[cfg(test)]

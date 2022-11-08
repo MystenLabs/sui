@@ -5,7 +5,7 @@ use consensus::{
     bullshark::Bullshark,
     dag::Dag,
     metrics::{ChannelMetrics, ConsensusMetrics},
-    Consensus, ConsensusOutput,
+    Consensus,
 };
 
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
@@ -26,8 +26,9 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
-    HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, SequenceNumber,
+    metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusOutput,
+    ConsensusStore, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair,
+    SequenceNumber,
 };
 use worker::{metrics::initialise_metrics, Worker};
 

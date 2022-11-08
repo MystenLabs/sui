@@ -1,11 +1,11 @@
-use std::sync::Arc;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
-use consensus::ConsensusOutput;
 use executor::{ExecutionIndices, ExecutionState};
+use std::sync::Arc;
 
 use tokio::sync::mpsc::Sender;
+use types::ConsensusOutput;
 
 /// A simple/dumb execution engine.
 pub struct SimpleExecutionState {

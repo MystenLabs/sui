@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{CertificateDigest, Round};
+use crate::{Certificate, CertificateDigest, Round};
 use crypto::PublicKey;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use store::{
     rocks::{DBMap, TypedStoreError},
@@ -13,6 +14,33 @@ use tokio::sync::mpsc;
 
 /// A global sequence number assigned to every certificate.
 pub type SequenceNumber = u64;
+
+/// The output format of the consensus.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct ConsensusOutput {
+    /// The sequenced certificate.
+    pub certificate: Certificate,
+    /// The (global) index associated with this certificate.
+    pub consensus_index: SequenceNumber,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct CommittedSubDag {
+    /// The sequence of committed certificates.
+    pub certificates: Vec<ConsensusOutput>,
+    /// The leader certificate responsible of committing this sub-dag.
+    pub leader: Certificate,
+}
+
+impl CommittedSubDag {
+    pub fn len(&self) -> usize {
+        self.certificates.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
 
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;

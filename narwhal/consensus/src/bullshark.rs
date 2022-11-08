@@ -1,18 +1,21 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, ConsensusOutput,
+    utils,
 };
-use crate::{metrics::ConsensusMetrics, CommittedSubDag};
 use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, error};
-use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore, Round,
+    SequenceNumber, StoreResult,
+};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]

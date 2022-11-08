@@ -15,7 +15,6 @@ use crate::metrics::ExecutorMetrics;
 use crate::notifier::Notifier;
 use async_trait::async_trait;
 use config::{Committee, SharedWorkerCache};
-use consensus::{CommittedSubDag, ConsensusOutput};
 use crypto::PublicKey;
 use network::P2pNetwork;
 
@@ -29,7 +28,8 @@ use mockall::automock;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel, CertificateDigest, ConsensusStore, ReconfigureNotification, SequenceNumber,
+    metered_channel, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore,
+    ReconfigureNotification, SequenceNumber,
 };
 
 /// Convenience type representing a serialized transaction.

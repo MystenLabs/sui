@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use config::Committee;
-use consensus::ConsensusOutput;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
@@ -10,7 +9,7 @@ use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
-use types::{metered_channel, Batch, Timestamp};
+use types::{metered_channel, Batch, ConsensusOutput, Timestamp};
 
 #[derive(Clone, Debug)]
 pub struct BatchIndex {
