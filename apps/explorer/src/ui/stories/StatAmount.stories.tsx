@@ -14,6 +14,6 @@ export const defaultAmount: StoryObj<StatAmountProps> = {
         amount: 9740991,
         currency: 'SUI',
         dollarAmount: 123.56,
-        date: Date.now(),
+        date: 1667942429177,
     },
 };
