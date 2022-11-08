@@ -6,6 +6,7 @@ use fastcrypto::{
     bls12381::{min_pk, min_sig},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
+    hash::{HashFunction, Keccak256},
     hmac,
     secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
@@ -118,11 +119,7 @@ pub fn keccak256(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(
-            <sha3::Keccak256 as sha3::digest::Digest>::digest(&*msg_ref)
-                .as_slice()
-                .to_vec()
-        )],
+        smallvec![Value::vector_u8(Keccak256::digest(&*msg_ref).to_vec())],
     ))
 }
 

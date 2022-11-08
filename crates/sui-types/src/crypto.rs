@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
-use digest::Digest;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
     BLS12381Signature,
@@ -23,7 +22,6 @@ use schemars::JsonSchema;
 use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
-use sha3::Sha3_256;
 use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -36,6 +34,7 @@ use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
 use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
 use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use std::fmt::Debug;
 
 pub use enum_dispatch::enum_dispatch;
