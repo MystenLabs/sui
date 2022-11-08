@@ -9,13 +9,11 @@ export default {
     component: StatAmount,
 } as Meta;
 
-const data = {
-    amount: 9740991,
-    currency: 'SUI',
-    dollarAmount: 123.56,
-    date: Date.now(),
-};
-
-export const Default: StoryObj<StatAmountProps> = {
-    render: () => <StatAmount {...data} />,
+export const defaultAmount: StoryObj<StatAmountProps> = {
+    args: {
+        amount: 9740991,
+        currency: 'SUI',
+        dollarAmount: 123.56,
+        date: Date.now(),
+    },
 };

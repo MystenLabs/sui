@@ -8,18 +8,18 @@ import { formatDate } from '~/utils/timeUtils';
 export interface StatAmountProps {
     amount: number | string;
     currency?: string;
-    dollarAmount?: number | string;
+    dollarAmount?: number;
     date?: Date | number;
 }
 
 export function StatAmount({
     amount,
-    currency = 'SUI',
+    currency,
     dollarAmount,
     date,
 }: StatAmountProps) {
     return (
-        <div className="flex flex-col justify-start h-full text-sui-grey-75 gap-2">
+        <div className="flex flex-col justify-start text-sui-grey-75 gap-2">
             <div className="text-sui-grey-100 flex flex-col items-baseline gap-2.5">
                 {date && (
                     <div className="text-sui-grey-75">
@@ -42,14 +42,19 @@ export function StatAmount({
                     <Heading as="h2" variant="heading2" weight="bold">
                         {amount}
                     </Heading>
-                    <div className="text-sui-grey-80 ">
-                        <Text variant="bodySmall">{currency}</Text>
-                    </div>
+                    {currency && (
+                        <div className="text-sui-grey-80 ">
+                            <Text variant="bodySmall">{currency}</Text>
+                        </div>
+                    )}
                 </div>
             </div>
             {dollarAmount && (
                 <Text variant="bodySmall" weight="semibold">
-                    ${dollarAmount}
+                    {new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency: 'USD',
+                    }).format(dollarAmount)}
                 </Text>
             )}
         </div>
