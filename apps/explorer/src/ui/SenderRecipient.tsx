@@ -70,7 +70,7 @@ function SenderRecipientAddress({
 function Amount({ amount, symbol }: { amount: number; symbol?: string }) {
     return (
         <div className="flex flex-row items-end gap-1 text-sui-grey-100">
-            <Heading as="h6" variant="heading6">
+            <Heading as="h4" variant="heading4">
                 {amount}
             </Heading>
             {symbol && (
@@ -110,7 +110,7 @@ export function SenderRecipient({
         : recipients;
 
     return (
-        <div className="flex flex-col justify-start h-full text-sui-grey-75 gap-2">
+        <div className="flex flex-col justify-start h-full text-sui-grey-100 gap-4">
             <Heading as="h4" variant="heading4" weight="semibold">
                 Sender {senderRecipient && '& Recipient'}
             </Heading>
@@ -124,7 +124,7 @@ export function SenderRecipient({
                 )}
                 {multipleRecipientsList?.length ? (
                     <div className="mt-2 flex flex-col gap-2">
-                        <div className="ml-[-24px] mt-[10px] mb-[10px]">
+                        <div className="ml-[-24px] mt-[5px] mb-[10px]">
                             <Heading
                                 as="h4"
                                 variant="heading4"
