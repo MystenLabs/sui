@@ -13,7 +13,7 @@ use std::{collections::BTreeMap, path::Path};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
     base_types::TransactionDigest,
-    error::{SuiError, SuiResult},
+    error::SuiResult,
     in_memory_storage::InMemoryStorage,
     messages::InputObjects,
     temporary_store::TemporaryStore,
