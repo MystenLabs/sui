@@ -123,24 +123,6 @@ pub fn legacy_length_cost() -> InternalGas {
     InternalGas::new(98)
 }
 
-/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
-/// This is useful for when publishing
-pub fn build_move_package_to_bytes(
-    path: &Path,
-    build_config: BuildConfig,
-) -> Result<Vec<Vec<u8>>, SuiError> {
-    build_move_package(path, build_config).map(|compiled_pkg| {
-        compiled_pkg
-            .get_modules()
-            .map(|m| {
-                let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap();
-                bytes
-            })
-            .collect::<Vec<_>>()
-    })
-}
-
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
