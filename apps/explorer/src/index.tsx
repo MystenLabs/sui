@@ -11,6 +11,7 @@ import App from './app/App';
 import { plausible } from './utils/plausible';
 
 import './index.css';
+import { reportWebVitals } from './utils/vitals';
 
 // NOTE: The plausible tracker ensures it doesn't run on localhost, so we don't
 // need to gate this call.
@@ -34,3 +35,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         </Router>
     </React.StrictMode>
 );
+
+reportWebVitals();
