@@ -12,7 +12,7 @@ const isCoinTransfer = cva(
     ['flex flex-col ml-6 gap-[15px] justify-center  relative'],
     {
         variants: {
-            senderRecipient: {
+            singleTransferCoin: {
                 true: 'before:content-[url()] before:border-2 before:border-[#a0b6c3] before:overflow-y-hidden before:absolute before:h-[calc(55%)] before:w-[15px] before:border-r-[transparent] before:border-t-[transparent] before:mt-1 before:ml-[-16px] before:rounded-l before:border-dotted',
             },
         },
@@ -101,10 +101,13 @@ export function SenderRecipient({
     recipients,
     transferCoin = true,
 }: SenderRecipientProps) {
-    const multipleRecipients =
-        recipients?.length && recipients?.length > 1 ? true : false;
-    const senderRecipient = !multipleRecipients && transferCoin ? true : false;
-    const primaryRecipient = senderRecipient && recipients?.[0];
+    const multipleRecipients = !!(recipients?.length && recipients?.length > 1);
+    const singleTransferCoin = !!(
+        !multipleRecipients &&
+        transferCoin &&
+        recipients?.length
+    );
+    const primaryRecipient = singleTransferCoin && recipients?.[0];
     const multipleRecipientsList = primaryRecipient
         ? recipients?.filter((_, i) => i !== 0)
         : recipients;
@@ -112,9 +115,9 @@ export function SenderRecipient({
     return (
         <div className="flex flex-col justify-start h-full text-sui-grey-100 gap-4">
             <Heading as="h4" variant="heading4" weight="semibold">
-                Sender {senderRecipient && '& Recipient'}
+                Sender {singleTransferCoin && '& Recipient'}
             </Heading>
-            <div className={isCoinTransfer({ senderRecipient })}>
+            <div className={isCoinTransfer({ singleTransferCoin })}>
                 <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (
                     <SenderRecipientAddress
