@@ -105,16 +105,16 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </div>
                     <Combobox.Options
                         as="div"
-                        className="overflow-auto pr-1 absolute w-full md:w-1/6 h-fit pb-0.5 shadow-moduleOption rounded-md bg-white z-10"
+                        className="overflow-auto absolute w-full md:w-1/6 h-fit shadow-moduleOption rounded-md bg-white z-10 px-2 pb-5 pt-3"
                     >
                         <VerticalList>
                             {filteredModules.length > 0 ? (
-                                <div className="text-caption font-semibold ml-0.5 px-3 py-2 uppercase text-sui-grey-75">
+                                <div className="text-caption font-semibold ml-1.5 pb-2 uppercase text-sui-grey-75">
                                     {filteredModules.length} Result
                                     {filteredModules.length === 1 ? '' : 's'}
                                 </div>
                             ) : (
-                                <div className="text-sui-grey-70 text-body italic py-5 px-3.5 text-center">
+                                <div className="text-sui-grey-70 text-body italic pt-2 px-3.5 text-center">
                                     No results
                                 </div>
                             )}
@@ -132,10 +132,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         </VerticalList>
                     </Combobox.Options>
                 </Combobox>
-                <div className="h-verticalListShort md:h-verticalListLong overflow-auto">
+                <div className="h-verticalListShort md:h-verticalListLong overflow-auto pt-3">
                     <VerticalList>
                         {modulenames.map((name, idx) => (
-                            <div key={idx} className="md:min-w-fit">
+                            <div key={idx} className="md:min-w-fit mx-0.5">
                                 <ListItem
                                     active={selectedModule === name}
                                     onClick={clickModuleName(name)}
