@@ -2,12 +2,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::messages::TransactionEffects;
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
     object::{Object, Owner},
 };
+use itertools::MultiUnzip;
 use move_core_types::{
     gas_algebra::{GasQuantity, InternalGas, InternalGasPerByte, NumBytes, UnitDiv},
     vm_status::StatusCode,
@@ -62,6 +64,27 @@ impl GasCostSummary {
     /// Get net gas usage, positive number means used gas; negative number means refund.
     pub fn net_gas_usage(&self) -> i64 {
         self.gas_used() as i64 - self.storage_rebate as i64
+    }
+
+    pub fn new_from_txn_effects<'a>(
+        transactions: impl Iterator<Item = &'a TransactionEffects>,
+    ) -> GasCostSummary {
+        let (storage_costs, computation_costs, storage_rebates): (Vec<u64>, Vec<u64>, Vec<u64>) =
+            transactions
+                .map(|e| {
+                    (
+                        e.gas_used.storage_cost,
+                        e.gas_used.computation_cost,
+                        e.gas_used.storage_rebate,
+                    )
+                })
+                .multiunzip();
+
+        GasCostSummary {
+            storage_cost: storage_costs.iter().sum(),
+            computation_cost: computation_costs.iter().sum(),
+            storage_rebate: storage_rebates.iter().sum(),
+        }
     }
 }
 

@@ -1978,7 +1978,11 @@ async fn test_store_revert_state_update() {
         .get_certified_transaction(&tx_digest)
         .unwrap()
         .is_none());
-    assert!(authority_state.database.get_effects(&tx_digest).is_err());
+    assert!(authority_state
+        .database
+        .as_ref()
+        .get_effects(&tx_digest)
+        .is_err());
 }
 
 // helpers
