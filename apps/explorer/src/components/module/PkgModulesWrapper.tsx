@@ -125,7 +125,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         </VerticalList>
                     </Combobox.Options>
                 </Combobox>
-                <div className="h-verticalListShort md:h-verticalListLong">
+                <div className="h-verticalListShort md:h-verticalListLong overflow-auto">
                     <VerticalList>
                         {modulenames.map((name, idx) => (
                             <div key={idx} className="md:min-w-fit">
