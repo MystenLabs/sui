@@ -431,6 +431,7 @@ impl SuiClientCommands {
                 // verify that all dependency packages have the correct on-chain bytecode
                 #[cfg(not(msim))]
                 let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+                #[cfg(not(msim))]
                 match verifier
                     .verify_deployed_dependencies(compiled_package.package)
                     .await
