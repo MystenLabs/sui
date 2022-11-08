@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isTypescriptSDK: ${{ contains(fromJson(steps.pnpm.outputs.packages), '@mysten/sui.js') || steps.diff.outputs.isRust }}
+      isTypescriptSDK: ${{ steps.diff.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), '@mysten/sui.js') || steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes (pnpm)

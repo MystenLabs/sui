@@ -3,8 +3,8 @@
 
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
+use fastcrypto::traits::AllowedRng;
 use fastcrypto::{hash::Sha3_256, hmac::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
-use rand::{CryptoRng, RngCore};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
@@ -95,11 +95,10 @@ impl SignatureSeed {
     ///
     /// ```
     /// extern crate rand;
-    /// use rand::rngs::OsRng;
+    /// use rand::thread_rng;
     /// use sui_types::signature_seed::SignatureSeed;
     /// # fn main() {
-    ///     let mut csprng = OsRng{};
-    ///     let secret_key: SignatureSeed = SignatureSeed::generate(&mut csprng);
+    ///     let secret_key: SignatureSeed = SignatureSeed::generate(&mut thread_rng());
     /// # }
     /// ```
     ///
@@ -112,7 +111,7 @@ impl SignatureSeed {
     /// A fresh random `SignatureSeed`.
     pub fn generate<T>(csprng: &mut T) -> SignatureSeed
     where
-        T: CryptoRng + RngCore,
+        T: AllowedRng,
     {
         let mut sk: SignatureSeed = SignatureSeed([0u8; SEED_LENGTH]);
         csprng.fill_bytes(&mut sk.0);

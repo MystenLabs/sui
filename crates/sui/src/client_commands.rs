@@ -838,7 +838,7 @@ impl SuiClientCommands {
                 let env = SuiEnv { alias, rpc, ws };
 
                 // Check urls are valid and server is reachable
-                env.create_rpc_client().await?;
+                env.create_rpc_client(None).await?;
                 context.config.envs.push(env.clone());
                 context.config.save()?;
                 SuiClientCommandResult::NewEnv(env)
@@ -868,7 +868,10 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub async fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
+    pub async fn new(
+        config_path: &Path,
+        request_timeout: Option<std::time::Duration>,
+    ) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             err.context(format!(
                 "Cannot open wallet config file at {:?}",
@@ -876,7 +879,10 @@ impl WalletContext {
             ))
         })?;
         #[cfg(not(msim))]
-        let client = config.get_active_env()?.create_rpc_client().await?;
+        let client = config
+            .get_active_env()?
+            .create_rpc_client(request_timeout)
+            .await?;
         #[cfg(msim)]
         let client = sui_sdk::embedded_gateway::SuiClient::new(&config_path.parent().unwrap())?;
 

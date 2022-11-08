@@ -187,7 +187,7 @@ impl SuiCommand {
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config).await?;
-                let context = WalletContext::new(&config).await?;
+                let context = WalletContext::new(&config, None).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client { config, cmd, json } => {
@@ -200,11 +200,11 @@ impl SuiCommand {
                     let mut config = config.persisted(&config_path);
                     SuiClientCommands::switch_env(&mut config, env)?;
                     // This will init the client to check if the urls are correct and reachable
-                    config.get_active_env()?.create_rpc_client().await?;
+                    config.get_active_env()?.create_rpc_client(None).await?;
                     config.save()?;
                 }
 
-                let mut context = WalletContext::new(&config_path).await?;
+                let mut context = WalletContext::new(&config_path, None).await?;
 
                 if let Some(cmd) = cmd {
                     if let Err(e) = context.client.check_api_version() {

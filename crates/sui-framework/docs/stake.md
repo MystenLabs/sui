@@ -180,7 +180,7 @@ Withdraw <code>amount</code> from the balance of <code><a href="stake.md#0x2_sta
 Burn the stake object. This can be done only when the stake has a zero balance.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="stake.md#0x2_stake_burn">burn</a>(self: <a href="stake.md#0x2_stake_Stake">stake::Stake</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="stake.md#0x2_stake_burn">burn</a>(self: <a href="stake.md#0x2_stake_Stake">stake::Stake</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 

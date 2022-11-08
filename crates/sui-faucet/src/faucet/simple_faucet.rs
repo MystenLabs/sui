@@ -26,7 +26,7 @@ use tokio::sync::{
     Mutex,
 };
 use tokio::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
@@ -41,6 +41,8 @@ pub struct SimpleFaucet {
 
 const DEFAULT_GAS_BUDGET: u64 = 1000;
 const PAY_SUI_GAS: u64 = 1000;
+const WAIT_FOR_GAS_TIMEOUT_SEC: u64 = 5;
+const WAIT_FOR_LOCK_TIMEOUT_SEC: u64 = 10;
 
 impl SimpleFaucet {
     pub async fn new(
@@ -61,18 +63,20 @@ impl SimpleFaucet {
             .map(|q| GasCoin::try_from(&q.1).unwrap())
             .collect::<Vec<GasCoin>>();
 
+        let metrics = FaucetMetrics::new(prometheus_registry);
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
             let coin_id = *coin.id();
             producer
                 .send(coin_id)
                 .await
-                .tap_ok(|_| info!("Adding coin {:?} to gas pool", coin_id))
+                .tap_ok(|_| {
+                    info!("Adding coin {:?} to gas pool", coin_id);
+                    metrics.total_available_coins.inc();
+                })
                 .tap_err(|e| error!("Failed to add gas coin {} to pools: {:?}", coin_id, e))
                 .unwrap();
         }
-
-        let metrics = FaucetMetrics::new(prometheus_registry);
 
         Ok(Self {
             wallet,
@@ -83,21 +87,34 @@ impl SimpleFaucet {
         })
     }
 
-    async fn prepare_gas_coin(
-        &self,
-        total_amount: u64,
-        uuid: Uuid,
-    ) -> anyhow::Result<Option<ObjectID>> {
+    async fn prepare_gas_coin(&self, total_amount: u64, uuid: Uuid) -> anyhow::Result<ObjectID> {
         // If the gas candidate queue is exhausted, the request will be
         // suspended indefinitely until a producer puts in more candidate
         // gas objects. At the same time, other requests will be blocked by the
         // lock acquisition as well.
-        let mut consumer = self.consumer.lock().await;
-        debug!(?uuid, "Got consumer lock, pulling coins.");
+        let mut consumer = match tokio::time::timeout(
+            Duration::from_secs(WAIT_FOR_LOCK_TIMEOUT_SEC),
+            self.consumer.lock(),
+        )
+        .await
+        {
+            Ok(guard) => Ok(guard),
+            Err(_) => {
+                error!(?uuid, "Timeout when getting consumer lock");
+                Err(anyhow::anyhow!("Too many concurrent requests, try later!"))
+            }
+        }?;
+        info!(?uuid, "Got consumer lock, pulling coins.");
         loop {
-            match tokio::time::timeout(Duration::from_secs(30), consumer.recv()).await {
+            match tokio::time::timeout(
+                Duration::from_secs(WAIT_FOR_GAS_TIMEOUT_SEC),
+                consumer.recv(),
+            )
+            .await
+            {
                 Ok(Some(coin)) => {
-                    debug!(?uuid, "Pulling coin from pool {:?}", coin);
+                    info!(?uuid, "Pulling coin from pool {:?}", coin);
+                    self.metrics.total_available_coins.dec();
                     let gas_coin = self.get_gas_coin(coin).await?;
                     if let Some(gas_coin) = gas_coin {
                         if gas_coin.value() >= total_amount + PAY_SUI_GAS {
@@ -107,9 +124,10 @@ impl SimpleFaucet {
                                 coin,
                                 gas_coin.value()
                             );
-                            return Ok(Some(coin));
+                            return Ok(coin);
                         } else {
-                            // If amount is not big enough, remove it
+                            // If amount is not big enough, remove it from the pool
+                            self.metrics.total_discarded_coins.inc();
                             warn!(
                                 ?uuid,
                                 "Coin {:?} does not have enough balance ({:?}), removing from pool",
@@ -118,7 +136,8 @@ impl SimpleFaucet {
                             );
                         }
                     } else {
-                        // Invalid gas, remove it
+                        // Invalid gas, remove it from the pool
+                        self.metrics.total_discarded_coins.inc();
                         warn!(
                             ?uuid,
                             "Coin {:?} is not longer valid, removing from pool", coin
@@ -134,7 +153,7 @@ impl SimpleFaucet {
                 }
             }
         }
-        Ok(None)
+        anyhow::bail!("Temporarily run out of coin, try later!");
     }
 
     /// Check if the gas coin is still valid. A valid gas coin is
@@ -174,11 +193,11 @@ impl SimpleFaucet {
         let number_of_coins = amounts.len();
         let total_amount: u64 = amounts.iter().sum();
 
-        let gas_coin_opt = self
+        let gas_coin = self
             .prepare_gas_coin(total_amount, uuid)
             .await
             .tap_ok(|res| {
-                debug!(recipient=?recipient, ?uuid, "Planning to use gas coin: {:?}", res);
+                info!(recipient=?recipient, ?uuid, "Planning to use gas coin: {:?}", res);
             })
             .tap_err(|err| {
                 error!(
@@ -193,8 +212,6 @@ impl SimpleFaucet {
                     err.to_string()
                 ))
             })?;
-        let interal_err = FaucetError::Internal("Failed to prepare coin, None returned.".into());
-        let gas_coin = gas_coin_opt.ok_or(interal_err)?;
 
         let result = self
             .execute_pay_sui_txn_with_retrials(
@@ -211,14 +228,15 @@ impl SimpleFaucet {
         // we put back the coins. The producer should never wait indefinitely,
         // in that the channel is initialized with big enough capacity.
         let producer = self.producer.lock().await;
-        debug!(
+        info!(
             ?uuid,
             "Got producer lock and recycling gas coin {:?}.", gas_coin
         );
         producer
             .try_send(gas_coin)
             .expect("unexpected - queue is large enough to hold all coins");
-        debug!(?uuid, "Recycled coin {:?}", gas_coin);
+        self.metrics.total_available_coins.inc();
+        info!(?uuid, "Recycled coin {:?}", gas_coin);
         drop(producer);
 
         match result {
@@ -285,7 +303,7 @@ impl SimpleFaucet {
         while res.is_err() {
             if let Some(interval) = retry_iter.next() {
                 tokio::time::sleep(*interval).await;
-                debug!(
+                info!(
                     ?recipient,
                     ?coin_id,
                     ?uuid,
@@ -319,6 +337,11 @@ impl SimpleFaucet {
         budget: u64,
         uuid: Uuid,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
+        self.metrics.current_executions_in_flight.inc();
+        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
+            metrics.current_executions_in_flight.dec();
+        });
+
         let context = &self.wallet;
         let txn_data = self
             .build_pay_sui_txn(coin_id, signer, recipient, amounts, budget)
@@ -634,6 +657,7 @@ mod tests {
             .unwrap()
             .value();
         assert_eq!(tiny_amount, tiny_value + PAY_SUI_GAS);
+        info!("tiny coin id: {:?}, amount: {}", tiny_coin_id, tiny_amount);
 
         let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
@@ -643,8 +667,8 @@ mod tests {
         // Ask for a value higher than tiny coin + PAY_SUI_GAS
         let number_of_coins = gases.len();
         let amounts = &vec![tiny_value + 1; number_of_coins - 1];
-        // We traverse the the list twice, which must trigger the tiny gas to be examined but not used
-        let _ = futures::future::join_all((0..2).map(|_| {
+        // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
+        let _ = futures::future::join_all((0..10).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),
@@ -662,7 +686,7 @@ mod tests {
             amounts.len(),
         );
 
-        // Verify that the tiny gas is still in the queue.
+        // Verify that the tiny gas is not in the queue.
         tokio::task::yield_now().await;
         let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
         assert!(candidates.get(&tiny_coin_id).is_none());

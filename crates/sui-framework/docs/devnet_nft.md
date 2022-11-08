@@ -121,7 +121,7 @@ An example NFT that can be minted by anybody
 Create a new devnet_nft
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_mint">mint</a>(name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, <a href="url.md#0x2_url">url</a>: <a href="">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_mint">mint</a>(name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, <a href="url.md#0x2_url">url</a>: <a href="">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -163,7 +163,7 @@ Create a new devnet_nft
 Update the <code>description</code> of <code>nft</code> to <code>new_description</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_update_description">update_description</a>(nft: &<b>mut</b> <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, new_description: <a href="">vector</a>&lt;u8&gt;, _: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_update_description">update_description</a>(nft: &<b>mut</b> <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, new_description: <a href="">vector</a>&lt;u8&gt;, _: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -192,7 +192,7 @@ Update the <code>description</code> of <code>nft</code> to <code>new_description
 Permanently delete <code>nft</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_burn">burn</a>(nft: <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, _: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_burn">burn</a>(nft: <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, _: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 

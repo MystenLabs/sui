@@ -76,7 +76,10 @@ function fieldsContent(fields: { [key: string]: any } | undefined) {
     return Object.keys(fields).map((k) => {
         return {
             label: k,
-            value: fields[k].toString(),
+            value:
+                typeof fields[k] === 'object'
+                    ? JSON.stringify(fields[k])
+                    : fields[k].toString(),
             monotypeClass: true,
         };
     });
