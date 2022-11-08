@@ -34,7 +34,7 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
-use sui_sdk::{TransactionExecutionResult, SuiClient};
+use sui_sdk::TransactionExecutionResult;
 use sui_types::crypto::SignableBytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -47,6 +47,11 @@ use sui_types::{
     crypto::{Signature, SignatureScheme},
     messages::TransactionData,
 };
+
+#[cfg(msim)]
+use sui_sdk::embedded_gateway::SuiClient;
+#[cfg(not(msim))]
+use sui_sdk::SuiClient;
 
 use crate::config::SuiEnv;
 
