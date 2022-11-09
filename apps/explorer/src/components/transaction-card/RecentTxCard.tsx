@@ -6,7 +6,7 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
+import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -109,6 +109,13 @@ type Props = {
     truncateLength?: number;
 };
 
+// TODO: Remove this when we refactor pagiantion:
+const statusToLoadState: Record<QueryStatus, string> = {
+    error: 'fail',
+    loading: 'pending',
+    success: 'loaded',
+};
+
 // Transactions frequently update, so we consider them stale after 10 seconds:
 const TRANSACTION_STALE_TIME = 10 * 1000;
 
@@ -179,6 +186,7 @@ export function LatestTxCard({
     const stats = {
         count: countQuery?.data || 0,
         stats_text: 'Total transactions',
+        loadState: statusToLoadState[countQuery.status],
     };
 
     const PaginationWithStatsOrStatsWithLink =
