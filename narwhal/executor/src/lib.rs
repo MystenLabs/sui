@@ -123,7 +123,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     let last_committed_leader = execution_state
         .load_execution_indices()
         .await
-        .last_committed_leader;
+        .last_committed_round;
 
     let compressed_sub_dags =
         consensus_store.read_committed_sub_dags_from(&last_committed_leader)?;

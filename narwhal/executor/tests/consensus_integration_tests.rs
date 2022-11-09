@@ -119,7 +119,7 @@ async fn test_recovery() {
                 next_certificate_index: last_executed_certificate_index,
                 next_batch_index: 0,
                 next_transaction_index: 0,
-                last_committed_leader: leader_round,
+                last_committed_round: leader_round,
             });
 
         let consensus_output = get_restored_consensus_output(

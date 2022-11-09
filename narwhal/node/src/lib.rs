@@ -321,9 +321,6 @@ impl Node {
             &execution_state,
         )
         .await?;
-        // .into_iter()
-        // .sorted_by(|a, b| a.consensus_index.cmp(&b.consensus_index))
-        // .collect::<Vec<ConsensusOutput>>();
 
         let len_restored = restored_consensus_output.len() as u64;
         if len_restored > 0 {

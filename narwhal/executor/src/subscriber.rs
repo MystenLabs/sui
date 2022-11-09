@@ -173,6 +173,14 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         &self,
         deliver: CommittedSubDag,
     ) -> Vec<impl Future<Output = (BatchIndex, Batch)> + '_> {
+        self.metrics
+            .subscriber_current_round
+            .set(deliver.leader.round() as i64);
+        self.metrics.subscriber_processed_certificates.inc();
+        self.metrics
+            .subscriber_certificate_latency
+            .observe(deliver.leader.metadata.created_at.elapsed().as_secs_f64());
+
         let num_of_batches = deliver.num_of_batches();
         if num_of_batches == 0 {
             debug!("No batches to fetch, payload is empty");
@@ -183,19 +191,6 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
 
         let deliver = Arc::new(deliver);
         for output in &deliver.certificates {
-            self.metrics
-                .subscriber_current_round
-                .set(output.certificate.round() as i64);
-            self.metrics.subscriber_processed_certificates.inc();
-            self.metrics.subscriber_certificate_latency.observe(
-                output
-                    .certificate
-                    .metadata
-                    .created_at
-                    .elapsed()
-                    .as_secs_f64(),
-            );
-
             let output_arc = Arc::new(output.clone());
             for (batch_index, (digest, worker_id)) in
                 output.certificate.header.payload.iter().enumerate()

@@ -51,7 +51,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     next_certificate_index: index.next_certificate_index,
                     next_batch_index: index.batch_index + 1,
                     next_transaction_index: transaction_index as u64 + 1,
-                    last_committed_leader: index.sub_dag.leader.round(),
+                    last_committed_round: index.sub_dag.leader.round(),
                 };
                 bytes += transaction.len();
 
@@ -63,7 +63,9 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     .await;
             }
 
-            if index.sub_dag.is_last(&index.output) {
+            if index.batch_index + 1 == index.output.certificate.header.payload.len() as u64
+                && index.sub_dag.is_last(&index.output)
+            {
                 self.callback.notify_commit_boundary(&index.output).await;
             }
 
