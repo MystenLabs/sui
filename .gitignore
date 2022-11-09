@@ -12,6 +12,7 @@
 # Move build directory
 build
 storage/
+!narwhal/storage
 
 # Thumbnails
 ._*
