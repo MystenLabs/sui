@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Amount } from '~/ui/Amount';
+import { CoinBalance } from '~/ui/CoinBalance';
 import { Heading } from '~/ui/Heading';
 import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
 
 type Recipient = {
     address: string;
     coin?: {
-        amount: number;
-        coinSymbol?: string;
+        amount: number | string;
+        symbol?: string;
     };
 };
 
@@ -24,7 +24,7 @@ export function SenderRecipient({
     recipients,
     transferCoin,
 }: SenderRecipientProps) {
-    const multipleRecipients = !!(recipients?.length && recipients?.length > 1);
+    const multipleRecipients = recipients && recipients?.length > 1;
     const singleTransferCoin = !!(
         !multipleRecipients &&
         transferCoin &&
@@ -36,31 +36,29 @@ export function SenderRecipient({
         : recipients;
 
     return (
-        <div className="flex flex-col justify-start h-full text-sui-grey-100 gap-4">
-            <Heading as="h4" variant="heading4" weight="semibold">
+        <div className="flex flex-col justify-start text-sui-grey-100 gap-4">
+            <Heading variant="heading4" weight="semibold">
                 Sender {singleTransferCoin && '& Recipient'}
             </Heading>
             <div className="flex flex-col gap-[15px] justify-center relative">
                 {singleTransferCoin && (
-                    <div className="absolute border-2 border-[#a0b6c3] overflow-y-hidden h-[calc(55%)] w-4 border-r-[transparent] border-t-[transparent] mt-1 ml-1.5 rounded-l border-dotted" />
+                    <div className="absolute border-2 border-sui-steel overflow-y-hidden h-[calc(55%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l border-dotted" />
                 )}
                 <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (
-                    <SenderRecipientAddress
-                        address={primaryRecipient.address}
-                        isCoin
-                    />
+                    <div className="ml-6">
+                        <SenderRecipientAddress
+                            address={primaryRecipient.address}
+                        />
+                    </div>
                 )}
                 {multipleRecipientsList?.length ? (
                     <div className="mt-2 flex flex-col gap-2">
-                        <div className=" mt-[5px] mb-2.5">
-                            <Heading
-                                as="h4"
-                                variant="heading4"
-                                weight="semibold"
-                            >
-                                Recipient
-                                {multipleRecipientsList.length > 1 && 's'}
+                        <div className="mt-[5px] mb-2.5">
+                            <Heading variant="heading4" weight="semibold">
+                                {multipleRecipientsList.length > 1
+                                    ? 'Recipients'
+                                    : 'Recipient'}
                             </Heading>
                         </div>
 
@@ -74,12 +72,12 @@ export function SenderRecipient({
                                         address={recipient?.address}
                                     />
                                     {recipient?.coin && (
-                                        <Amount
-                                            amount={recipient.coin.amount}
-                                            coinSymbol={
-                                                recipient.coin?.coinSymbol
-                                            }
-                                        />
+                                        <div className="ml-6">
+                                            <CoinBalance
+                                                amount={recipient.coin.amount}
+                                                symbol={recipient.coin?.symbol}
+                                            />
+                                        </div>
                                     )}
                                 </div>
                             ))}

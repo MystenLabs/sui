@@ -64,14 +64,20 @@ export const multipleRecipients: StoryObj<SenderRecipientProps> = {
                 address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
                 coin: {
                     amount: 400,
-                    coinSymbol: 'SUI',
+                    symbol: 'SUI',
                 },
             },
             {
                 address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
                 coin: {
                     amount: 1850,
-                    coinSymbol: 'COIN',
+                    symbol: 'COIN',
+                },
+            },
+            {
+                address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
+                coin: {
+                    amount: 1850,
                 },
             },
             {

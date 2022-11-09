@@ -3,15 +3,15 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { Amount, type AmountProps } from '../Amount';
+import { CoinBalance, type CoinBalanceProps } from '../CoinBalance';
 
 export default {
-    component: Amount,
+    component: CoinBalance,
 } as Meta;
 
-export const SuiAmount: StoryObj<AmountProps> = {
+export const Default: StoryObj<CoinBalanceProps> = {
     args: {
         amount: 1000,
-        coinSymbol: 'SUI',
+        symbol: 'SUI',
     },
 };
