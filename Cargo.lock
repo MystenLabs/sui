@@ -8307,6 +8307,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
+ "hex",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",

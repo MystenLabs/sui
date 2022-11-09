@@ -33,11 +33,11 @@ impl CheckpointOutput for LogCheckpointOutput {
         );
         info!(
             "Creating checkpoint {:?} at sequence {}, previous digest {:?}, transactions count {}, content digest {:?}",
-            summary.digest(),
+            hex::encode(summary.digest()),
             summary.sequence_number,
             summary.previous_digest,
             contents.size(),
-            summary.content_digest
+            hex::encode(summary.content_digest),
         );
 
         Ok(())
