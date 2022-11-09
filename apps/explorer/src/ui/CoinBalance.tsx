@@ -9,7 +9,7 @@ export type CoinBalanceProps = { amount: number | string; symbol?: string };
 
 export function CoinBalance({ amount, symbol }: CoinBalanceProps) {
     return (
-        <div className="flex flex-row items-end gap-1 text-sui-grey-100">
+        <div className="flex flex-row items-end gap-1 text-sui-grey-100 break-words">
             <Heading variant="heading4">{amount}</Heading>
             {symbol && (
                 <div className="text-sui-grey-80">

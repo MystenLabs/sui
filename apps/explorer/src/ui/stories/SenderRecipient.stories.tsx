@@ -39,7 +39,7 @@ export const singleTransfer: StoryObj<SenderRecipientProps> = {
             {
                 address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
                 coin: {
-                    amount: 1000,
+                    amount: 100000,
                     symbol: 'SUI',
                 },
             },
@@ -70,14 +70,21 @@ export const multipleRecipients: StoryObj<SenderRecipientProps> = {
             {
                 address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
                 coin: {
-                    amount: 1850,
+                    amount: "1.345M",
                     symbol: 'COIN',
                 },
             },
             {
                 address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
                 coin: {
-                    amount: 1850,
+                    amount: 100000230404050504,
+                    symbol: 'MIST',
+                },
+            },
+            {
+                address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
+                coin: {
+                    amount: 1000002,
                 },
             },
             {
