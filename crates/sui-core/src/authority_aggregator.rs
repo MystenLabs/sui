@@ -1941,10 +1941,10 @@ where
     }
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
-        let (object_map, cert_map) = self.get_object_by_id(object_id, false).await?;
+        let (object_map, _cert_map) = self.get_object_by_id(object_id, false).await?;
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
-        while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
+        while let Some(((obj_ref, _tx_digest), (obj_option, layout_option, authorities))) =
             object_ref_stack.pop()
         {
             let stake: StakeUnit = authorities
