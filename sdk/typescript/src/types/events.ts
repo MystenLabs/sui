@@ -129,9 +129,15 @@ export type SuiEventFilter =
   | { And: [SuiEventFilter, SuiEventFilter] }
   | { Or: [SuiEventFilter, SuiEventFilter] };
 
+export type SuiEventId = {
+  tx_seq_num: number;
+  event_seq_number: number;
+}
+
 export type SuiEventEnvelope = {
   timestamp: number;
   txDigest: TransactionDigest;
+  id: SuiEventId;
   event: SuiEvent;
 };
 
