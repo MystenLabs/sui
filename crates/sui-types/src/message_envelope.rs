@@ -5,11 +5,13 @@ use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    EmptySignInfo, Signable,
+    EmptySignInfo, Signable, SignableBytes,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
+use serde::Serializer;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_with::{Bytes, DeserializeAs};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
@@ -91,9 +93,56 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     }
 }
 
+pub struct DataWithEpoch<T>
+where
+    T: Signable<Vec<u8>> + SignableBytes,
+{
+    data: T,
+    epoch: EpochId,
+}
+
+impl<T> Serialize for DataWithEpoch<T>
+where
+    T: Signable<Vec<u8>> + SignableBytes,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut w = Vec::new();
+        self.epoch.write(&mut w);
+        self.data.write(&mut w);
+        serializer.serialize_bytes(&w)
+    }
+}
+impl<'de, T> Deserialize<'de> for DataWithEpoch<T>
+where
+    T: Signable<Vec<u8>> + SignableBytes,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
+        Ok(Self {
+            epoch: bytes[0] as u64,
+            data: T::from_signable_bytes(&bytes[1..]).map_err(|e| Error::custom(e.to_string()))?,
+        })
+    }
+}
+impl<T> DataWithEpoch<T>
+where
+    T: Signable<Vec<u8>> + SignableBytes,
+{
+    pub fn new(data: T, epoch: EpochId) -> Self {
+        DataWithEpoch { data, epoch }
+    }
+}
+
 impl<T> Envelope<T, AuthoritySignInfo>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Signable<Vec<u8>> + Clone + SignableBytes,
 {
     pub fn new(
         epoch: EpochId,

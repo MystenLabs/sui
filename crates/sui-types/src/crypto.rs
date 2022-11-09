@@ -32,6 +32,7 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
+use crate::message_envelope::DataWithEpoch;
 use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::{HashFunction, Sha3_256};
@@ -1082,12 +1083,12 @@ impl AuthoritySignInfo {
         secret: &dyn Signer<AuthoritySignature>,
     ) -> Self
     where
-        T: Signable<Vec<u8>>,
+        T: Signable<Vec<u8>> + Clone + SignableBytes,
     {
         Self {
             epoch,
             authority: name,
-            signature: AuthoritySignature::new(value, secret),
+            signature: AuthoritySignature::new(&DataWithEpoch::new(value.clone(), epoch), secret),
         }
     }
 }
@@ -1334,6 +1335,7 @@ where
 ///
 ///
 mod bcs_signable {
+    use super::{Signable, SignableBytes};
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
     impl BcsSignable for crate::batch::TransactionBatch {}
@@ -1353,7 +1355,11 @@ mod bcs_signable {
     impl BcsSignable for crate::messages::TransactionData {}
     impl BcsSignable for crate::messages::SenderSignedData {}
     impl BcsSignable for crate::object::Object {}
-
+    impl BcsSignable for u64 {}
+    impl<T> BcsSignable for crate::message_envelope::DataWithEpoch<T> where
+        T: Signable<Vec<u8>> + SignableBytes
+    {
+    }
     impl BcsSignable for super::bcs_signable_test::Foo {}
     #[cfg(test)]
     impl BcsSignable for super::bcs_signable_test::Bar {}
@@ -1504,11 +1510,11 @@ impl VerificationObligation {
 pub mod bcs_signable_test {
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     pub struct Foo(pub String);
 
     #[cfg(test)]
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     pub struct Bar(pub String);
 
     #[cfg(test)]
