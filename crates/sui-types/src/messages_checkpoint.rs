@@ -17,6 +17,7 @@ use crate::{
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub type CheckpointSequenceNumber = u64;
@@ -174,6 +175,36 @@ pub struct CheckpointSummaryEnvelope<S> {
     pub auth_signature: S,
 }
 
+impl<S> CheckpointSummaryEnvelope<S> {
+    pub fn summary(&self) -> &CheckpointSummary {
+        &self.summary
+    }
+
+    pub fn digest(&self) -> CheckpointDigest {
+        self.summary.digest()
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.summary.epoch
+    }
+
+    pub fn sequence_number(&self) -> CheckpointSequenceNumber {
+        self.summary.sequence_number
+    }
+
+    pub fn content_digest(&self) -> CheckpointContentsDigest {
+        self.summary.content_digest
+    }
+
+    pub fn previous_digest(&self) -> Option<CheckpointDigest> {
+        self.summary.previous_digest
+    }
+
+    pub fn next_epoch_committee(&self) -> Option<&[(AuthorityName, StakeUnit)]> {
+        self.summary.next_epoch_committee.as_deref()
+    }
+}
+
 impl<S: Debug> Display for CheckpointSummaryEnvelope<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.summary)?;
@@ -328,6 +359,41 @@ impl CertifiedCheckpointSummary {
     }
 }
 
+/// A type-safe way to ensure that a checkpoint has been verified
+#[derive(Clone, Debug)]
+pub struct VerifiedCheckpoint(CertifiedCheckpointSummary);
+
+// The only acceptible way to construct this type is via explicitly verifying it
+static_assertions::assert_not_impl_any!(VerifiedCheckpoint: Serialize, DeserializeOwned);
+
+impl VerifiedCheckpoint {
+    pub fn new(
+        checkpoint: CertifiedCheckpointSummary,
+        committee: &Committee,
+    ) -> Result<Self, (CertifiedCheckpointSummary, SuiError)> {
+        match checkpoint.verify(committee, None) {
+            Ok(()) => Ok(Self(checkpoint)),
+            Err(err) => Err((checkpoint, err)),
+        }
+    }
+
+    pub fn inner(&self) -> &CertifiedCheckpointSummary {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> CertifiedCheckpointSummary {
+        self.0
+    }
+}
+
+impl std::ops::Deref for VerifiedCheckpoint {
+    type Target = CertifiedCheckpointSummary;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// This is a message validators publish to consensus in order to sign checkpoint
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointSignatureMessage {
@@ -361,6 +427,10 @@ impl CheckpointContents {
 
     pub fn iter(&self) -> Iter<'_, ExecutionDigests> {
         self.transactions.iter()
+    }
+
+    pub fn into_inner(self) -> Vec<ExecutionDigests> {
+        self.transactions
     }
 
     pub fn size(&self) -> usize {
