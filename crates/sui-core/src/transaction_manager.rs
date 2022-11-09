@@ -32,7 +32,7 @@ pub(crate) struct TransactionManager {
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending certificates and
     /// other persistent data.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         authority_store: Arc<AuthorityStore>,
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
@@ -45,7 +45,7 @@ impl TransactionManager {
             tx_ready_certificates,
         };
         transaction_manager
-            .enqueue(
+            .add(
                 transaction_manager
                     .authority_store
                     .all_pending_certificates()
@@ -58,13 +58,56 @@ impl TransactionManager {
     /// Enqueues certificates into TransactionManager. Once all of the input objects are available
     /// locally for a certificate, the certified transaction will be sent to execution driver.
     ///
-    /// REQUIRED: Shared object locks must be taken before calling this function on shared object
-    /// transactions!
+    /// This is  a no-op for certificates that are executing or have finished execution.
+    /// Takes shared object locks if needed, and persists the pending certificate for crash
+    /// recovery.
     ///
     /// TODO: it may be less error prone to take shared object locks inside this function, or
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
-    pub(crate) fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+    pub(crate) async fn enqueue_to_execute(
+        &mut self,
+        certs: Vec<VerifiedCertificate>,
+    ) -> SuiResult<()> {
+        for cert in &certs {
+            // Skip processing if the certificate is already enqueued, executing or executed.
+            if self
+                .pending_certificates
+                .contains_key(&(cert.epoch(), *cert.digest()))
+            {
+                continue;
+            }
+            // It is necessary to check pending certificates before effects in storage, because
+            // during a transaction commit, effects are written before or at the same time as
+            // cleaning up pending certificates.
+            if self
+                .authority_store
+                .pending_certificate_exists(cert.epoch(), cert.digest())?
+            {
+                continue;
+            }
+            if self.authority_store.effects_exists(cert.digest())? {
+                continue;
+            }
+
+            // Commit the necessary updates to the authority store.
+            if cert.contains_shared_object() {
+                self.authority_store
+                    .record_pending_shared_object_certificate(cert)
+                    .await?;
+            } else {
+                self.authority_store
+                    .record_pending_owned_object_certificate(cert)
+                    .await?;
+            }
+        }
+        self.add(certs)?;
+        Ok(())
+    }
+
+    /// Adds the pending certificates into TransactionManager, assuming the necessary persistent
+    /// data have been written into pending certificates, and shared locks tables if needed.
+    fn add(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         for cert in certs {
             let missing = self
                 .authority_store
@@ -94,8 +137,7 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager that the given objects have been committed.
-    // TODO: investigate switching TransactionManager to use notify_read() on objects table.
-    pub(crate) fn objects_committed(&mut self, object_keys: Vec<ObjectKey>) {
+    pub(crate) fn committed(&mut self, digest: &TransactionDigest, object_keys: Vec<ObjectKey>) -> SuiResult<()> {
         for object_key in object_keys {
             let cert_key = if let Some(key) = self.missing_inputs.remove(&object_key) {
                 key
@@ -131,12 +173,20 @@ impl TransactionManager {
                 self.certificate_ready(cert);
             }
         }
+        // Remove the certificate that finished execution.
+        let _ = authority
+            .state
+            .database
+            .remove_pending_certificate(certificate.epoch(), &digest);
         self.metrics
             .transaction_manager_num_missing_objects
             .set(self.missing_inputs.len() as i64);
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(self.pending_certificates.len() as i64);
+    }
+
+    pub(crate) fn objects_committed(&mut self, object_keys: Vec<ObjectKey>) {
     }
 
     /// Run a periodic scanning task that checks if any input object is in fact already committed.
