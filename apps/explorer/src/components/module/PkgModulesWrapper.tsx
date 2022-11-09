@@ -134,8 +134,8 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                 </Combobox>
                 <div className="h-verticalListShort md:h-verticalListLong overflow-auto pt-3">
                     <VerticalList>
-                        {modulenames.map((name, idx) => (
-                            <div key={idx} className="md:min-w-fit mx-0.5">
+                        {modulenames.map((name) => (
+                            <div key={name} className="md:min-w-fit mx-0.5">
                                 <ListItem
                                     active={selectedModule === name}
                                     onClick={clickModuleName(name)}
