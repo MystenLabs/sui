@@ -77,13 +77,6 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         );
     }, [filteredModules]);
 
-    const clickModuleName = useCallback(
-        (moduleName: string) => () => {
-            setSelectedModule(moduleName);
-        },
-        []
-    );
-
     return (
         <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
             <div className="w-full md:w-1/5">
@@ -138,7 +131,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             <div key={name} className="md:min-w-fit mx-0.5">
                                 <ListItem
                                     active={selectedModule === name}
-                                    onClick={clickModuleName(name)}
+                                    onClick={() => setSelectedModule(name)}
                                 >
                                     {name}
                                 </ListItem>
