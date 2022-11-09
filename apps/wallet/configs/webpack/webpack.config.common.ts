@@ -202,7 +202,9 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 // 'typeof window': JSON.stringify(typeof {}),
                 'process.env.NODE_DEBUG': false,
                 'process.env.WALLET_KEYRING_PASSWORD': JSON.stringify(
-                    Buffer.from(randomBytes(64)).toString('hex')
+                    IS_DEV
+                        ? 'DEV_PASS'
+                        : Buffer.from(randomBytes(64)).toString('hex')
                 ),
                 'process.env.WALLET_BETA': WALLET_BETA,
                 'process.env.APP_NAME': JSON.stringify(APP_NAME),
