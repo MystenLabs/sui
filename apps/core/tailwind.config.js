@@ -7,6 +7,9 @@ module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      backgroundImage: {
+        "gradient-blue": "linear-gradient(135deg, #589AEA 0%, #4C75A6 100%);",
+      },
       // Line-heights that are found in the design:
       lineHeight: {
         80: "0.8",
@@ -100,12 +103,12 @@ module.exports = {
       },
       keyframes: {
         shimmer: {
-          '0%': { 'background-position': '-1000px 0' },
-          '100%': { 'background-position': '1000px 0' },
+          "0%": { "background-position": "-1000px 0" },
+          "100%": { "background-position": "1000px 0" },
         },
       },
       animation: {
-        shimmer: 'shimmer 2s infinite linear',
+        shimmer: "shimmer 2s infinite linear",
       },
       spacing: {
         '4.5': '1.125rem',
