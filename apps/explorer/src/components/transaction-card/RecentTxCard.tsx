@@ -9,7 +9,7 @@ import {
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
@@ -29,6 +29,7 @@ import { Banner } from '~/ui/Banner';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -201,9 +202,9 @@ export function LatestTxCard({
             />
         ) : (
             <TabFooter stats={stats}>
-                <Link className={styles.moretxbtn} to="/transactions">
+                <LinkWithQuery className={styles.moretxbtn} to="/transactions">
                     <div>More Transactions</div> <ArrowRight />
-                </Link>
+                </LinkWithQuery>
             </TabFooter>
         );
 

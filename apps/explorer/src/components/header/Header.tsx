@@ -1,25 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Link } from 'react-router-dom';
-
 import { ReactComponent as SuiLogo } from '../../assets/Sui Logo.svg';
 import NetworkSelect from '../network/Network';
 import Search from '../search/Search';
 
 import styles from './Header.module.css';
 
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+
 function Header() {
     return (
         <header>
-            <Link
+            <LinkWithQuery
                 id="homeBtn"
                 data-testid="nav-logo-button"
                 className={styles.suititle}
                 to="/"
             >
                 <SuiLogo />
-            </Link>
+            </LinkWithQuery>
 
             <div className={styles.search}>
                 <Search />

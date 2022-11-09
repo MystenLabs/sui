@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type ComponentProps, forwardRef } from 'react';
-import { Link, type LinkProps } from 'react-router-dom';
+
+import { LinkWithQuery, type LinkProps } from './LinkWithQuery';
 
 export interface ButtonOrLinkProps
     extends Omit<
@@ -30,7 +31,7 @@ export const ButtonOrLink = forwardRef<
 
     // Internal router link:
     if (to) {
-        return <Link to={to} ref={ref} {...props} />;
+        return <LinkWithQuery to={to} ref={ref} {...props} />;
     }
 
     // We set the default type to be "button" to avoid accidentally submitting forms.

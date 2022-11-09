@@ -15,7 +15,6 @@ import {
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
-import { Link } from 'react-router-dom';
 
 import {
     eventToDisplay,
@@ -50,6 +49,7 @@ import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -225,12 +225,12 @@ function ItemView({ data }: { data: TxItemView }) {
                                         copyButton="16"
                                     />
                                 ) : item.href ? (
-                                    <Link
+                                    <LinkWithQuery
                                         to={item.href}
                                         className={styles.customhreflink}
                                     >
                                         {item.value}
-                                    </Link>
+                                    </LinkWithQuery>
                                 ) : (
                                     item.value
                                 )}
