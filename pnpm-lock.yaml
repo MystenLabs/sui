@@ -54,6 +54,7 @@ importers:
       '@types/react': ^18.0.20
       '@types/react-dom': ^18.0.6
       '@types/topojson-client': ^3.1.1
+      '@vercel/analytics': ^0.1.3
       '@visx/geo': ^2.10.0
       '@visx/responsive': ^2.10.0
       '@visx/tooltip': ^2.10.0
@@ -93,6 +94,7 @@ importers:
       vite: ^3.0.8
       vite-plugin-svgr: ^2.2.1
       vitest: ^0.22.1
+      web-vitals: ^3.0.4
     dependencies:
       '@floating-ui/react-dom-interactions': 0.10.1_7ey2zzynotv32rpkwno45fsx4e
       '@growthbook/growthbook': 0.18.1
@@ -108,6 +110,7 @@ importers:
       '@tanstack/react-query': 4.14.1_biqbaboplfbrettd7655fr4n2y
       '@tanstack/react-query-devtools': 4.14.1_mr54dne27lnoplqapf6eiuempu
       '@tanstack/react-table': 8.5.11_biqbaboplfbrettd7655fr4n2y
+      '@vercel/analytics': 0.1.3_react@18.2.0
       '@visx/geo': 2.10.0_react@18.2.0
       '@visx/responsive': 2.10.0_react@18.2.0
       '@visx/tooltip': 2.10.0_biqbaboplfbrettd7655fr4n2y
@@ -124,6 +127,7 @@ importers:
       react-hot-toast: 2.4.0_biqbaboplfbrettd7655fr4n2y
       react-router-dom: 6.3.0_biqbaboplfbrettd7655fr4n2y
       topojson-client: 3.1.0
+      web-vitals: 3.0.4
     devDependencies:
       '@babel/core': 7.19.3
       '@storybook/addon-a11y': 7.0.0-alpha.38_biqbaboplfbrettd7655fr4n2y
@@ -6062,6 +6066,14 @@ packages:
       '@typescript-eslint/types': 5.38.1
       eslint-visitor-keys: 3.3.0
     dev: true
+
+  /@vercel/analytics/0.1.3_react@18.2.0:
+    resolution: {integrity: sha512-zJuEwzvi0bBmWrMrj9jvyMS+X6iUdW3m/y5P7aOLwJQKHsJyfpdINo/4Rv+wxubz3gl4nRqIQdtOFCe1P1ErXQ==}
+    peerDependencies:
+      react: ^16.8||^17||^18
+    dependencies:
+      react: 18.2.0
+    dev: false
 
   /@visx/bounds/2.10.0_biqbaboplfbrettd7655fr4n2y:
     resolution: {integrity: sha512-rY7WFTIjQaXA8tFL45O2qbtSRkyF4yF75HiWz06F7BVmJ9UjF2qlomB3Y1z6gk6ZiFhwQ4zxABjOVjAQPLn7nQ==}
@@ -19963,6 +19975,10 @@ packages:
   /web-namespaces/1.1.4:
     resolution: {integrity: sha512-wYxSGajtmoP4WxfejAPIr4l0fVh+jeMXZb08wNc0tMg6xsfZXj3cECqIK0G7ZAqUq0PP8WlMDtaOGVBTAWztNw==}
     dev: true
+
+  /web-vitals/3.0.4:
+    resolution: {integrity: sha512-Yau8qf1AJ/dm6MY180Bi0qpCIuWmAfKAnOqmxLecGfIHn0+ND3H4JOhXeY73Pyi9zjSF5J4SNUewHLNUzU7mmA==}
+    dev: false
 
   /webextension-polyfill/0.9.0:
     resolution: {integrity: sha512-LTtHb0yR49xa9irkstDxba4GATDAcDw3ncnFH9RImoFwDlW47U95ME5sn5IiQX2ghfaECaf6xyXM8yvClIBkkw==}
