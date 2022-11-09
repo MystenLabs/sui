@@ -4974,7 +4974,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "sui-metrics",
- "telemetry-subscribers 0.2.0",
+ "telemetry-subscribers",
  "thiserror",
  "tokio",
  "tracing",
