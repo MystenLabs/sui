@@ -48,7 +48,7 @@ fn test_signed_values() {
     );
     let committee = Committee::new(0, authorities).unwrap();
 
-    let transaction = Transaction::from_data(
+    let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             _a2,
             random_object_ref(),
@@ -61,7 +61,7 @@ fn test_signed_values() {
     .verify()
     .unwrap();
 
-    let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data(
+    let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             _a2,
             random_object_ref(),
@@ -74,33 +74,33 @@ fn test_signed_values() {
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.clone().into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(v.verify(&committee).is_ok());
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec2.public()),
+        transaction.clone().into_message(),
         &sec2,
+        AuthorityPublicKeyBytes::from(sec2.public()),
     );
     assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        transaction,
-        AuthorityPublicKeyBytes::from(sec3.public()),
+        transaction.into_message(),
         &sec3,
+        AuthorityPublicKeyBytes::from(sec3.public()),
     );
     assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        bad_transaction,
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        bad_transaction.into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(v.verify(&committee).is_err());
 }
@@ -123,7 +123,7 @@ fn test_certificates() {
     );
     let committee = Committee::new(0, authorities).unwrap();
 
-    let transaction = Transaction::from_data(
+    let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             a2,
             random_object_ref(),
@@ -138,38 +138,38 @@ fn test_certificates() {
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.clone().into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     let v2 = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec2.public()),
+        transaction.clone().into_message(),
         &sec2,
+        AuthorityPublicKeyBytes::from(sec2.public()),
     );
     let v3 = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec3.public()),
+        transaction.clone().into_message(),
         &sec3,
+        AuthorityPublicKeyBytes::from(sec3.public()),
     );
 
-    let mut sigs = vec![v1.auth_sign_info.clone()];
-    assert!(CertifiedTransaction::new_with_auth_sign_infos(
-        transaction.clone(),
+    let mut sigs = vec![v1.auth_sig().clone()];
+    assert!(CertifiedTransaction::new(
+        transaction.clone().into_message(),
         sigs.clone(),
         &committee
     )
     .is_err());
-    sigs.push(v2.auth_sign_info);
-    let c = CertifiedTransaction::new_with_auth_sign_infos(transaction.clone(), sigs, &committee)
-        .unwrap();
-    assert!(c.verify_signatures(&committee).is_ok());
+    sigs.push(v2.auth_sig().clone());
+    let c =
+        CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee).unwrap();
+    assert!(c.verify_signature(&committee).is_ok());
 
-    let sigs = vec![v1.auth_sign_info, v3.auth_sign_info];
+    let sigs = vec![v1.auth_sig().clone(), v3.auth_sig().clone()];
 
-    assert!(CertifiedTransaction::new_with_auth_sign_infos(transaction, sigs, &committee).is_err());
+    assert!(CertifiedTransaction::new(transaction.into_message(), sigs, &committee).is_err());
 }
 
 #[test]
@@ -396,7 +396,7 @@ fn test_digest_caching() {
 
     let committee = Committee::new(0, authorities).unwrap();
 
-    let transaction = Transaction::from_data(
+    let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
         &ssec2,
     )
@@ -405,15 +405,15 @@ fn test_digest_caching() {
 
     let mut signed_tx = SignedTransaction::new(
         committee.epoch(),
-        transaction,
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(signed_tx.verify_signatures(&committee).is_ok());
+    assert!(signed_tx.verify_signature(&committee).is_ok());
 
     let initial_digest = *signed_tx.digest();
 
-    signed_tx.signed_data.data.gas_budget += 1;
+    signed_tx.data_mut_for_testing().data.gas_budget += 1;
 
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
@@ -465,8 +465,8 @@ fn test_user_signature_committed_in_transactions() {
         random_object_ref(),
         10000,
     );
-    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
+    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
+    let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
     assert_ne!(tx_digest_a, tx_digest_b);
@@ -498,24 +498,26 @@ fn test_user_signature_committed_in_signed_transactions() {
         random_object_ref(),
         10000,
     );
-    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec)
+    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec)
         .verify()
         .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
-    let transaction_b =
-        VerifiedTransaction::new_unchecked(Transaction::from_data(tx_data, &sender_sec2));
+    let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
+        tx_data,
+        &sender_sec2,
+    ));
 
     let signed_tx_a = SignedTransaction::new(
         0,
-        transaction_a.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction_a.clone().into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     let signed_tx_b = SignedTransaction::new(
         0,
-        transaction_b.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction_b.clone().into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     let tx_digest_a = signed_tx_a.digest();
@@ -527,12 +529,12 @@ fn test_user_signature_committed_in_signed_transactions() {
     authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
     let committee = Committee::new(0, authorities.clone()).unwrap();
     assert!(signed_tx_a
-        .auth_sign_info
-        .verify(&transaction_a.signed_data, &committee)
+        .auth_sig()
+        .verify(transaction_a.data(), &committee)
         .is_ok());
     assert!(signed_tx_a
-        .auth_sign_info
-        .verify(&transaction_b.signed_data, &committee)
+        .auth_sig()
+        .verify(transaction_b.data(), &committee)
         .is_err());
 
     // Test hash non-equality
@@ -562,8 +564,8 @@ fn test_user_signature_committed_in_checkpoints() {
         10000,
     );
 
-    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
+    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
+    let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -637,32 +639,32 @@ fn verify_sender_signature_correctly_with_flag() {
         10000,
     );
 
-    let transaction = Transaction::from_data(tx_data, &sender_kp)
+    let transaction = Transaction::from_data_and_signer(tx_data, &sender_kp)
         .verify()
         .unwrap();
 
     // create tx also signed by authority
     let signed_tx = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.clone().into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     // signature contains the correct Secp256k1 flag
     assert_eq!(
-        transaction.signed_data.tx_signature.scheme().flag(),
+        transaction.data().tx_signature.scheme().flag(),
         Secp256k1SuiSignature::SCHEME.flag()
     );
 
     // authority accepts signs tx after verification
     assert!(signed_tx
-        .auth_sign_info
-        .verify(&transaction.signed_data, &committee)
+        .auth_sig()
+        .verify(transaction.data(), &committee)
         .is_ok());
 
     // creates transaction envelope with Ed25519 signature
-    let transaction_1 = Transaction::from_data(
+    let transaction_1 = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             receiver_address,
             random_object_ref(),
@@ -677,25 +679,25 @@ fn verify_sender_signature_correctly_with_flag() {
 
     let signed_tx_1 = SignedTransaction::new(
         committee.epoch(),
-        transaction_1.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction_1.clone().into_message(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     // signature contains the correct Ed25519 flag
     assert_eq!(
-        transaction_1.signed_data.tx_signature.scheme().flag(),
+        transaction_1.data().tx_signature.scheme().flag(),
         Ed25519SuiSignature::SCHEME.flag()
     );
 
     // signature verified
     assert!(signed_tx_1
-        .auth_sign_info
-        .verify(&transaction_1.signed_data, &committee)
+        .auth_sig()
+        .verify(transaction_1.data(), &committee)
         .is_ok());
 
     assert!(signed_tx_1
-        .auth_sign_info
-        .verify(&transaction.signed_data, &committee)
+        .auth_sig()
+        .verify(transaction.data(), &committee)
         .is_err());
 }

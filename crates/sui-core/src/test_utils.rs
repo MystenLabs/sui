@@ -48,7 +48,6 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             .unwrap(),
     );
 
-    // TODO: duplicated code with transaction.rs
     loop {
         tokio::select! {
             _ = &mut timeout => panic!("wait_for_tx timed out"),
@@ -90,6 +89,11 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             },
         }
     }
+
+    // A small delay is needed so that the batch process can finish notifying other subscribers,
+    // which tests may depend on. Otherwise tests can pass or fail depending on whether the
+    // subscriber in this function was notified first or last.
+    sleep(Duration::from_millis(10)).await;
 }
 
 // Creates a fake sender-signed transaction for testing. This transaction will
@@ -119,11 +123,11 @@ pub fn create_fake_cert_and_effect_digest<'a>(
     committee: &Committee,
 ) -> (ExecutionDigests, CertifiedTransaction) {
     let transaction = create_fake_transaction();
-    let cert = CertifiedTransaction::new_with_auth_sign_infos(
-        transaction.clone(),
+    let cert = CertifiedTransaction::new(
+        transaction.data().clone(),
         signers
             .map(|(name, signer)| {
-                AuthoritySignInfo::new(committee.epoch, &transaction.signed_data, *name, signer)
+                AuthoritySignInfo::new(committee.epoch, transaction.data(), *name, signer)
             })
             .collect(),
         committee,
@@ -141,9 +145,9 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
-    let signature = Signature::new_temp(&data.to_bytes(), signer);
+    let signature = Signature::new(&data, signer);
     // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    VerifiedTransaction::new_unchecked(Transaction::new(data, signature))
+    VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
@@ -163,7 +167,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
         wrapped: Vec::new(),
         gas_object: (
             random_object_ref(),
-            Owner::AddressOwner(tx.signed_data.data.signer()),
+            Owner::AddressOwner(tx.data().data.signer()),
         ),
         events: Vec::new(),
         dependencies: Vec::new(),

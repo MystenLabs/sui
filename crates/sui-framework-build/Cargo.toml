@@ -12,6 +12,7 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 fastcrypto = { workspace = true }
 once_cell = "1.16"
 
+serde-reflection = "0.3.6"
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../../crates/sui-verifier" }
 

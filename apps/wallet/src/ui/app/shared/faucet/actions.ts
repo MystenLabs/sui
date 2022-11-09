@@ -30,7 +30,7 @@ export const requestGas = createAsyncThunk<
         app: { apiEnv },
         account: { address },
     } = getState();
-    const faucetUrl = new URL('/gas', ENV_TO_API[apiEnv].faucet);
+    const faucetUrl = new URL('/gas', ENV_TO_API[apiEnv]?.faucet);
     if (!address) {
         throw rejectWithValue({
             status: -1,

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { randomBytes } from '@noble/hashes/utils';
 import { exec } from 'child_process';
 import CopyPlugin from 'copy-webpack-plugin';
 import DotEnv from 'dotenv-webpack';
@@ -177,6 +178,9 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 // TODO: check if this is worth investigating a fix and maybe do a separate build for UI and bg?
                 // 'typeof window': JSON.stringify(typeof {}),
                 'process.env.NODE_DEBUG': false,
+                'process.env.WALLET_KEYRING_PASSWORD': JSON.stringify(
+                    Buffer.from(randomBytes(64)).toString('hex')
+                ),
             }),
             new ProvidePlugin({
                 Buffer: ['buffer', 'Buffer'],

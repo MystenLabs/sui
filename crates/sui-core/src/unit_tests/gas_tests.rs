@@ -279,7 +279,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .certified_transaction
         .as_ref()
         .unwrap()
-        .signed_data
+        .data()
         .data
         .kind
         .single_transactions()

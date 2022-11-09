@@ -28,7 +28,7 @@ function Account() {
         }
     }, [dispatch]);
     return (
-        <Layout title="Account" backUrl={backUrl}>
+        <Layout title="Account" backUrl={backUrl} isSettings>
             <div className={st.content}>
                 <div className={st.itemGroup}>
                     <label className={st.itemTitle}>Address</label>

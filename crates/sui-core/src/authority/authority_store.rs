@@ -23,6 +23,7 @@ use sui_storage::{
 };
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::object::Owner;
 use sui_types::storage::{ChildObjectResolver, SingleTxContext, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
@@ -405,7 +406,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
-    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
             SuiError::ObjectLockUninitialized {
                 obj_ref: *object_ref,
@@ -553,11 +554,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 &(object.owner, object_ref.0),
                 &ObjectInfo::new(&object_ref, object),
             )?;
-            // Only initialize lock for owned objects.
-            // TODO: Skip this for quasi-shared objects.
-            self.lock_service
-                .initialize_locks(&[object_ref], false /* is_force_reset */)
-                .await?;
+            // Only initialize lock for address owned objects.
+            if !object.is_child_object() {
+                self.lock_service
+                    .initialize_locks(&[object_ref], false /* is_force_reset */)
+                    .await?;
+            }
         }
 
         // Update the parent
@@ -599,9 +601,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             )?
             .write()?;
 
-        let refs: Vec<_> = ref_and_objects.iter().map(|(oref, _)| *oref).collect();
+        let non_child_object_refs: Vec<_> = ref_and_objects
+            .iter()
+            .filter(|(_, object)| !object.is_child_object())
+            .map(|(oref, _)| *oref)
+            .collect();
         self.lock_service
-            .initialize_locks(&refs, false /* is_force_reset */)
+            .initialize_locks(&non_child_object_refs, false /* is_force_reset */)
             .await?;
 
         Ok(())
@@ -614,7 +620,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         epoch: EpochId,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedTransactionEnvelope<S>,
+        transaction: VerifiedEnvelope<SenderSignedData, S>,
     ) -> Result<(), SuiError> {
         let tx_digest = *transaction.digest();
 
@@ -638,6 +644,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// It's called when we could not get a transaction to successfully execute,
     /// and have to roll back.
     pub async fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        // this object should not be a child object, since child objects can no longer be
+        // inputs, but
+        // TODO double check these are not child objects
         self.lock_service
             .initialize_locks(owned_input_objects, true /* is_force_reset */)
             .await?;
@@ -829,7 +838,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         let owned_inputs: Vec<_> = active_inputs
             .iter()
-            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned_or_quasi_shared())
+            .filter(|(id, _, _)| objects.get(id).unwrap().is_address_owned())
             .cloned()
             .collect();
 
@@ -935,7 +944,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object, _kind))| {
-                    if new_object.is_owned_or_quasi_shared() {
+                    if new_object.is_address_owned() {
                         Some(*object_ref)
                     } else {
                         None
@@ -1329,7 +1338,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let transaction = self.epoch_tables().transactions.get(transaction_digest)?;
         Ok(transaction.map(|t| t.into()))
     }
@@ -1370,13 +1379,13 @@ impl SuiDataStore<AuthoritySignInfo> {
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
-        let tx: Option<VerifiedTransactionEnvelope<AuthoritySignInfo>> = self
+        let tx: Option<VerifiedSignedTransaction> = self
             .epoch_tables()
             .transactions
             .get(transaction_digest)?
             .map(|t| t.into());
         Ok(if let Some(signed_tx) = tx {
-            signed_tx.auth_sign_info.epoch == cur_epoch
+            signed_tx.auth_sig().epoch == cur_epoch
         } else {
             false
         })

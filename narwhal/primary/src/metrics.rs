@@ -86,6 +86,8 @@ pub struct PrimaryChannelMetrics {
     pub tx_committed_certificates: IntGauge,
     /// occupancy of the channel from the `primary::Core` to the `Consensus`
     pub tx_new_certificates: IntGauge,
+    /// occupancy of the channel signaling own committed headers
+    pub tx_commited_own_headers: IntGauge,
 
     // totals
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::PayloadReceiver`
@@ -116,6 +118,8 @@ pub struct PrimaryChannelMetrics {
     pub tx_committed_certificates_total: IntCounter,
     /// total received on channel from the `primary::Core` to the `Consensus`
     pub tx_new_certificates_total: IntCounter,
+    /// total received on the channel signaling own committed headers
+    pub tx_commited_own_headers_total: IntCounter,
 }
 
 impl PrimaryChannelMetrics {
@@ -213,6 +217,11 @@ impl PrimaryChannelMetrics {
                 Self::DESC_NEW_CERTS,
                 registry
             ).unwrap(),
+            tx_commited_own_headers: register_int_gauge_with_registry!(
+                "tx_commited_own_headers",
+                "occupancy of the channel signaling own committed headers.",
+                registry
+            ).unwrap(),
 
             // totals
             tx_others_digests_total: register_int_counter_with_registry!(
@@ -285,6 +294,12 @@ impl PrimaryChannelMetrics {
                 Self::DESC_NEW_CERTS_TOTAL,
                 registry
             ).unwrap(),
+            tx_commited_own_headers_total: register_int_counter_with_registry!(
+                "tx_commited_own_headers_total",
+                "total received on channel signaling own committed headers.",
+                registry
+            ).unwrap(),
+
 
 
 

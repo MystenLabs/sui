@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::object_runtime::{ObjectRuntime, TransferResult};
 use crate::legacy_emit_cost;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -14,7 +15,8 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::SequenceNumber, object::Owner};
 
-use super::object_runtime::ObjectRuntime;
+const E_SHARED_NON_NEW_OBJECT: u64 = 0;
+
 /// Implementation of Move native function
 /// `transfer_internal<T: key>(obj: T, recipient: vector<u8>, to_object: bool)`
 /// Here, we simply emit this event. The sui adapter
@@ -77,7 +79,7 @@ pub fn share_object(
 
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
-    object_runtime_transfer(
+    let transfer_result = object_runtime_transfer(
         context,
         // Dummy version, to be filled with the correct initial version when the transaction is
         // finalized.
@@ -88,7 +90,14 @@ pub fn share_object(
         obj,
     )?;
     let cost = legacy_emit_cost();
-    Ok(NativeResult::ok(cost, smallvec![]))
+    Ok(match transfer_result {
+        // New means the ID was created in this transaction
+        // SameOwner means the object was previously shared and was re-shared; since
+        // shared objects cannot be taken by-value in the adapter, this can only
+        // happen via test_scenario
+        TransferResult::New | TransferResult::SameOwner => NativeResult::ok(cost, smallvec![]),
+        TransferResult::OwnerChanged => NativeResult::err(cost, E_SHARED_NON_NEW_OBJECT),
+    })
 }
 
 fn object_runtime_transfer(
@@ -96,7 +105,7 @@ fn object_runtime_transfer(
     owner: Owner,
     ty: Type,
     obj: Value,
-) -> PartialVMResult<()> {
+) -> PartialVMResult<TransferResult> {
     let tag = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => s,
         _ => {
@@ -107,6 +116,5 @@ fn object_runtime_transfer(
         }
     };
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.transfer(owner, ty, tag, obj)?;
-    Ok(())
+    obj_runtime.transfer(owner, ty, tag, obj)
 }

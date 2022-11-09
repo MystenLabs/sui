@@ -3,6 +3,7 @@
 
 import cl from 'classnames';
 
+import { API_ENV } from '_app/ApiProvider';
 import CopyToClipboard from '_components/copy-to-clipboard';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -23,6 +24,9 @@ function AccountAddress({
     shorten = true,
     mode = 'normal',
 }: AccountAddressProps) {
+    const network = useAppSelector(({ app }) => app.apiEnv);
+    const showExplorerLink = API_ENV.customRPC !== network;
+
     const address = useAppSelector(({ account: { address } }) => address);
     const shortenAddress = useMiddleEllipsis(address, 10, 7);
     const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
@@ -33,7 +37,7 @@ function AccountAddress({
                     {shorten ? shortenAddress : address}
                 </span>
             </CopyToClipboard>
-            {showLink ? (
+            {showLink && showExplorerLink ? (
                 <ExplorerLink
                     type={ExplorerLinkType.address}
                     useActiveAddress={true}

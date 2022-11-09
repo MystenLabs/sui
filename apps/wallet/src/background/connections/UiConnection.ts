@@ -13,10 +13,11 @@ import {
 import { isDisconnectApp } from '_payloads/permissions/DisconnectApp';
 import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import Keyring from '_src/background/Keyring';
 import Permissions from '_src/background/Permissions';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
+import Keyring from '_src/background/keyring';
+import { entropyToSerialized } from '_src/shared/utils/bip39';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -59,7 +60,9 @@ export class UiConnection extends Connection {
                 method: 'walletStatusUpdate',
                 return: {
                     isLocked,
-                    mnemonic: Keyring.mnemonic() || undefined,
+                    entropy: Keyring.entropy
+                        ? entropyToSerialized(Keyring.entropy)
+                        : undefined,
                     isInitialized: await Keyring.isWalletInitialized(),
                 },
             })

@@ -8,10 +8,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use sui_metrics::spawn_monitored_task;
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use types::{
-    metered_channel::Receiver, Certificate, ReconfigureNotification, Round,
-    WorkerReconfigureMessage,
+    metered_channel::{Receiver, Sender},
+    Certificate, ReconfigureNotification, Round, WorkerReconfigureMessage,
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
@@ -23,7 +23,7 @@ pub struct StateHandler {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
-    rx_committed_certificates: Receiver<Certificate>,
+    rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
     /// Signals a new consensus round
     tx_consensus_round_updates: watch::Sender<u64>,
     /// Receives notifications to reconfigure the system.
@@ -32,6 +32,8 @@ pub struct StateHandler {
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// The latest round committed by consensus.
     last_committed_round: Round,
+    /// A channel to update the committed rounds
+    tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
     network: P2pNetwork,
 }
@@ -42,10 +44,11 @@ impl StateHandler {
         name: PublicKey,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
-        rx_committed_certificates: Receiver<Certificate>,
+        rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<u64>,
         rx_state_handler: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
@@ -58,6 +61,7 @@ impl StateHandler {
                 rx_state_handler,
                 tx_reconfigure,
                 last_committed_round: 0,
+                tx_commited_own_headers,
                 network,
             }
             .run()
@@ -65,15 +69,34 @@ impl StateHandler {
         })
     }
 
-    async fn handle_sequenced(&mut self, certificate: Certificate) {
-        // TODO [issue #9]: Re-include batch digests that have not been sequenced into our next block.
-
-        let round = certificate.round();
+    async fn handle_sequenced(&mut self, round: Round, certificates: Vec<Certificate>) {
         if round > self.last_committed_round {
             self.last_committed_round = round;
 
             // Trigger cleanup on the primary.
             let _ = self.tx_consensus_round_updates.send(round); // ignore error when receivers dropped.
+        }
+
+        // Now we are going to signal which of our own batches have been committed.
+        let own_rounds_committed: Vec<_> = certificates
+            .iter()
+            .filter_map(|cert| {
+                if cert.header.author == self.name {
+                    Some(cert.header.round)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        debug!(
+            "Own committed rounds {:?} at round {:?}",
+            own_rounds_committed, round
+        );
+
+        // If a reporting channel is available send the committed own
+        // headers to it.
+        if let Some(sender) = &self.tx_commited_own_headers {
+            let _ = sender.send((round, own_rounds_committed)).await;
         }
     }
 
@@ -130,8 +153,8 @@ impl StateHandler {
         );
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(certificate).await;
+                Some((round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(round, certificates).await;
                 },
 
                 Some(message) = self.rx_state_handler.recv() => {

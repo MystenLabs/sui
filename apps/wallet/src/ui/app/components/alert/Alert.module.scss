@@ -1,5 +1,6 @@
 @use '_values/colors';
 @use '_utils';
+@use '_values/sizing' as s;
 
 .container {
     display: flex;
@@ -9,6 +10,10 @@
     padding: 8px 10px;
     gap: 6px;
     border-radius: 10px;
+
+    :global(.app-initializing) & {
+        width: s.$popup-width;
+    }
 
     @include utils.typography('ParagraphPrimary/P2-M');
 
@@ -38,6 +43,7 @@
 
 .message {
     overflow-wrap: anywhere;
+    flex: 1;
 
     @include utils.typography('ParagraphPrimary/P2-M');
 }

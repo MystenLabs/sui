@@ -5,6 +5,7 @@ use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
 use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
@@ -168,10 +169,9 @@ impl Genesis {
     }
 
     pub fn sha3(&self) -> [u8; 32] {
-        use digest::Digest;
         use std::io::Write;
 
-        let mut digest = sha3::Sha3_256::default();
+        let mut digest = Sha3_256::default();
         digest.write_all(&self.to_bytes()).unwrap();
         let hash = digest.finalize();
         hash.into()

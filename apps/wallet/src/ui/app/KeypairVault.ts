@@ -3,13 +3,17 @@
 
 import { Ed25519Keypair } from '@mysten/sui.js';
 
+import { toEntropy, entropyToMnemonic } from '_shared/utils/bip39';
+
 import type { Keypair } from '@mysten/sui.js';
 
 export default class KeypairVault {
     private _keypair: Keypair | null = null;
 
-    public set mnemonic(mnemonic: string) {
-        this._keypair = Ed25519Keypair.deriveKeypair(mnemonic);
+    public set entropy(entropy: string) {
+        this._keypair = Ed25519Keypair.deriveKeypair(
+            entropyToMnemonic(toEntropy(entropy))
+        );
     }
 
     public getAccount(): string | null {
@@ -25,5 +29,9 @@ export default class KeypairVault {
             throw new Error('Account keypair is not set');
         }
         return this._keypair;
+    }
+
+    public clear() {
+        this._keypair = null;
     }
 }

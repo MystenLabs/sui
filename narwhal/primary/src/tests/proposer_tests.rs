@@ -19,6 +19,7 @@ async fn propose_empty() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
 
@@ -38,6 +39,7 @@ async fn propose_empty() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -61,6 +63,7 @@ async fn propose_payload() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -82,6 +85,7 @@ async fn propose_payload() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -91,7 +95,16 @@ async fn propose_payload() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    tx_our_digests
+        .send(OurDigestMessage {
+            digest,
+            worker_id,
+            timestamp: 0,
+            ack_channel: tx_ack,
+        })
+        .await
+        .unwrap();
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
@@ -102,8 +115,22 @@ async fn propose_payload() {
     // WHEN available batches are more than the maximum ones
     let batches: IndexMap<BatchDigest, WorkerId> = fixture_payload((max_num_of_batches * 2) as u8);
 
+    let mut ack_list = vec![];
     for (batch_id, worker_id) in batches {
-        tx_our_digests.send((batch_id, worker_id, 0)).await.unwrap();
+        let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+        tx_our_digests
+            .send(OurDigestMessage {
+                digest: batch_id,
+                worker_id,
+                timestamp: 0,
+                ack_channel: tx_ack,
+            })
+            .await
+            .unwrap();
+
+        ack_list.push(rx_ack);
+
+        tokio::task::yield_now().await;
     }
 
     // AND send some parents to advance the round
@@ -121,6 +148,12 @@ async fn propose_payload() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 2);
     assert_eq!(header.payload.len(), max_num_of_batches);
+    assert!(rx_ack.await.is_ok());
+
+    // Check all batches are acked.
+    for rx_ack in ack_list {
+        assert!(rx_ack.await.is_ok());
+    }
 }
 
 #[tokio::test]
@@ -138,7 +171,7 @@ async fn equivocation_protection() {
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
-
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the proposer.
@@ -156,6 +189,7 @@ async fn equivocation_protection() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -165,7 +199,16 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    tx_our_digests
+        .send(OurDigestMessage {
+            digest,
+            worker_id,
+            timestamp: 0,
+            ack_channel: tx_ack,
+        })
+        .await
+        .unwrap();
 
     // Create and send parents
     let parents: Vec<_> = fixture
@@ -177,6 +220,7 @@ async fn equivocation_protection() {
 
     let result = tx_parents.send((parents, 1, 0)).await;
     assert!(result.is_ok());
+    assert!(rx_ack.await.is_ok());
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
@@ -193,7 +237,7 @@ async fn equivocation_protection() {
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
-
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let _proposer_handle = Proposer::spawn(
@@ -210,6 +254,7 @@ async fn equivocation_protection() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -219,7 +264,16 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    tx_our_digests
+        .send(OurDigestMessage {
+            digest,
+            worker_id,
+            timestamp: 0,
+            ack_channel: tx_ack,
+        })
+        .await
+        .unwrap();
 
     // Create and send a superset parents, same round but different set from before
     let parents: Vec<_> = fixture
@@ -231,6 +285,7 @@ async fn equivocation_protection() {
 
     let result = tx_parents.send((parents, 1, 0)).await;
     assert!(result.is_ok());
+    assert!(rx_ack.await.is_ok());
 
     // Ensure the proposer makes the same header as before
     let new_header = rx_headers.recv().await.unwrap();

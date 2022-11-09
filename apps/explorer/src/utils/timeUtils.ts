@@ -145,3 +145,43 @@ export const timeAgo = (
 
     return result ? result : `< 1 sec`;
 };
+
+// TODO - Merge with related functions
+type Format =
+    | 'year'
+    | 'month'
+    | 'day'
+    | 'hour'
+    | 'minute'
+    | 'second'
+    | 'weekday';
+
+export function formatDate(date: Date | number, format?: Format[]): string {
+    const formatOption =
+        format ?? (['month', 'day', 'hour', 'minute'] as Format[]);
+    const dateTime = new Date(date);
+    if (!(dateTime instanceof Date)) return '';
+
+    const options = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        weekday: 'short',
+        minute: 'numeric',
+        second: 'numeric',
+    };
+
+    const formatOptions = formatOption.reduce(
+        (accumulator, current: Format) => {
+            const responseObj = {
+                ...accumulator,
+                ...{ [current]: options[current] },
+            };
+            return responseObj;
+        },
+        {}
+    );
+
+    return new Intl.DateTimeFormat('en-US', formatOptions).format(dateTime);
+}

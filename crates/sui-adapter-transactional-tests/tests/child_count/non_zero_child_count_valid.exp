@@ -1,44 +1,41 @@
-processed 11 tasks
+processed 10 tasks
 
 init:
 A: object(100), B: object(101)
 
-task 1 'publish'. lines 9-43:
+task 1 'publish'. lines 9-46:
 created: object(105)
 written: object(104)
 
-task 2 'run'. lines 45-45:
+task 2 'run'. lines 48-48:
 created: object(107), object(108), object(109)
 written: object(106)
 
-task 3 'run'. lines 47-47:
-written: object(108), object(110)
-
-task 4 'view-object'. lines 49-53:
+task 3 'view-object'. lines 50-54:
 Owner: Shared
-Version: 2
+Version: 1
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
-task 5 'run'. lines 55-55:
-created: object(112), object(113), object(114)
-written: object(111)
+task 4 'run'. lines 56-56:
+created: object(111), object(112), object(113)
+written: object(110)
 
-task 6 'run'. lines 57-57:
-written: object(113), object(115)
+task 5 'run'. lines 58-58:
+written: object(112), object(114)
 
-task 7 'view-object'. lines 59-63:
+task 6 'view-object'. lines 60-64:
 Owner: Account Address ( B )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
 
-task 8 'run'. lines 65-65:
-created: object(117), object(118), object(119)
-written: object(116)
+task 7 'run'. lines 66-66:
+created: object(116), object(117), object(118)
+written: object(115)
 
-task 9 'transfer-object'. lines 67-67:
-written: object(119), object(120)
+task 8 'transfer-object'. lines 68-68:
+written: object(117), object(119)
 
-task 10 'view-object'. lines 69-69:
+task 9 'view-object'. lines 70-70:
 Owner: Account Address ( B )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(117)}}}

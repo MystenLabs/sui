@@ -5,6 +5,7 @@ import { memo, useCallback, useMemo } from 'react';
 
 import { Explorer } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
+import { API_ENV } from '_app/ApiProvider';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
@@ -48,6 +49,8 @@ function ExplorerLink(props: ExplorerLinkProps) {
     const { type, children, className, title, showIcon = true } = props;
     const address = useAddress(props);
     const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
+    const notCustomRPC = selectedApiEnv !== API_ENV.customRPC;
+
     const objectID = type === ExplorerLinkType.object ? props.objectID : null;
     const transactionID =
         type === ExplorerLinkType.transaction ? props.transactionID : null;
@@ -55,19 +58,24 @@ function ExplorerLink(props: ExplorerLinkProps) {
         switch (type) {
             case ExplorerLinkType.address:
                 return (
-                    address && Explorer.getAddressUrl(address, selectedApiEnv)
+                    address &&
+                    notCustomRPC &&
+                    Explorer.getAddressUrl(address, selectedApiEnv)
                 );
             case ExplorerLinkType.object:
                 return (
-                    objectID && Explorer.getObjectUrl(objectID, selectedApiEnv)
+                    objectID &&
+                    notCustomRPC &&
+                    Explorer.getObjectUrl(objectID, selectedApiEnv)
                 );
             case ExplorerLinkType.transaction:
                 return (
                     transactionID &&
+                    notCustomRPC &&
                     Explorer.getTransactionUrl(transactionID, selectedApiEnv)
                 );
         }
-    }, [type, address, objectID, transactionID, selectedApiEnv]);
+    }, [type, address, notCustomRPC, selectedApiEnv, objectID, transactionID]);
 
     const handleclick = useCallback(() => {
         if (props.track) {
@@ -76,6 +84,9 @@ function ExplorerLink(props: ExplorerLinkProps) {
     }, [props.track]);
 
     if (!explorerHref) {
+        return null;
+    }
+    if (selectedApiEnv === API_ENV.customRPC) {
         return null;
     }
     return (

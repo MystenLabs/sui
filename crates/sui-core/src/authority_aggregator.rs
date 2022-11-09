@@ -636,7 +636,7 @@ where
         // Extract the set of authorities that should have this certificate
         // and its full history. We should be able to use these are source authorities.
         let mut candidate_source_authorties: HashSet<AuthorityName> = cert
-            .auth_sign_info
+            .auth_sig()
             .authorities(committee)
             .collect::<SuiResult<HashSet<_>>>()?
             .iter()
@@ -1604,7 +1604,7 @@ where
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
         );
-        trace!("Transaction data: {:?}", transaction.signed_data.data);
+        trace!("Transaction data: {:?}", transaction.data().data);
 
         #[derive(Default)]
         struct ProcessTransactionState {
@@ -1677,10 +1677,10 @@ where
                             Ok(VerifiedTransactionInfoResponse {
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
-                            }) if inner_signed_transaction.auth_sign_info.epoch == self.committee.epoch => {
+                            }) if inner_signed_transaction.auth_sig().epoch == self.committee.epoch => {
                                 let tx_digest = inner_signed_transaction.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
-                                state.signatures.push(inner_signed_transaction.into_inner().auth_sign_info);
+                                state.signatures.push(inner_signed_transaction.into_inner().into_data_and_sig().1);
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     self.metrics
@@ -1689,8 +1689,8 @@ where
                                     self.metrics.num_good_stake.observe(state.good_stake as f64);
                                     self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     state.certificate =
-                                        Some(CertifiedTransaction::new_with_auth_sign_infos(
-                                            transaction_ref.clone(),
+                                        Some( CertifiedTransaction::new(
+                                            transaction_ref.data().clone(),
                                             state.signatures.clone(),
                                             &self.committee,
                                         )?.verify(&self.committee)?);
@@ -1741,7 +1741,7 @@ where
                                         ?tx_digest,
                                         name=?name.concise(),
                                         expected_epoch=?self.committee.epoch,
-                                        returned_epoch=?inner_signed.auth_sign_info.epoch,
+                                        returned_epoch=?inner_signed.auth_sig().epoch,
                                         "Returned signed transaction is from wrong epoch"
                                     );
                                 }
@@ -2291,7 +2291,7 @@ where
         }
 
         let signers: BTreeSet<_> = cert
-            .auth_sign_info
+            .auth_sig()
             .authorities(&self.committee)
             .filter_map(|r| r.ok())
             .cloned()

@@ -3,9 +3,9 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.narwhal_committee()
 ---
 authorities:
-  jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY:
+  mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ:
     stake: 1
     primary_address: ""
-    network_key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
+    network_key: DX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=
 epoch: 0
 

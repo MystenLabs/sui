@@ -235,12 +235,12 @@ impl<C> SafeClient<C> {
         } = response;
 
         let signed_transaction = if let Some(signed_transaction) = signed_transaction {
-            committee = Some(self.get_committee(&signed_transaction.auth_sign_info.epoch)?);
+            committee = Some(self.get_committee(&signed_transaction.auth_sig().epoch)?);
             // Check the transaction signature
             let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;
             // Check it has the right signer
             fp_ensure!(
-                signed_transaction.auth_sign_info.authority == self.address,
+                signed_transaction.auth_sig().authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Unexpected validator address in the signed tx signature".to_string()
@@ -262,7 +262,7 @@ impl<C> SafeClient<C> {
         let certified_transaction = match certified_transaction {
             Some(certificate) => {
                 if committee.is_none() {
-                    committee = Some(self.get_committee(&certificate.auth_sign_info.epoch)?);
+                    committee = Some(self.get_committee(&certificate.auth_sig().epoch)?);
                 }
                 // Check signatures and quorum
                 let certificate = certificate.verify(committee.as_ref().unwrap())?;
@@ -339,7 +339,7 @@ impl<C> SafeClient<C> {
         let parent_certificate = if skip_committee_check_during_reconfig {
             parent_certificate.map(VerifiedCertificate::new_unchecked)
         } else if let Some(certificate) = parent_certificate {
-            let epoch = certificate.auth_sign_info.epoch;
+            let epoch = certificate.auth_sig().epoch;
             Some(certificate.verify(&self.get_committee(&epoch)?)?)
         } else {
             None
@@ -414,11 +414,11 @@ impl<C> SafeClient<C> {
             let signed_transaction = if let Some(signed_transaction) = lock {
                 // We cannot reuse the committee fetched above since they may not be from the same
                 // epoch.
-                let epoch = signed_transaction.auth_sign_info.epoch;
+                let epoch = signed_transaction.auth_sig().epoch;
                 let signed_transaction = signed_transaction.verify(&self.get_committee(&epoch)?)?;
                 // Check it has the right signer
                 fp_ensure!(
-                    signed_transaction.auth_sign_info.authority == self.address,
+                    signed_transaction.auth_sig().authority == self.address,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Unexpected validator address in the signed tx signature"
@@ -457,7 +457,7 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         // check the signature of the batch
         let epoch = signed_batch.auth_sig().epoch;
-        signed_batch.verify(&self.get_committee(&epoch)?)?;
+        signed_batch.verify_signature(&self.get_committee(&epoch)?)?;
 
         // ensure transactions enclosed match requested range
 

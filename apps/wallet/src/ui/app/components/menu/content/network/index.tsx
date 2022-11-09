@@ -8,7 +8,7 @@ import NetworkSelector from '_components/network-selector';
 function Network() {
     const mainMenuUrl = useNextMenuUrl(true, '/');
     return (
-        <Layout backUrl={mainMenuUrl} title="Network">
+        <Layout backUrl={mainMenuUrl} title="Network" isSettings>
             <NetworkSelector />
         </Layout>
     );
