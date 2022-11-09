@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
-import { Link } from 'react-router-dom';
 
 import codestyle from '../../styles/bytecode.module.css';
 import { normalizeSuiAddress } from '../../utils/stringUtils';
@@ -15,6 +14,7 @@ import type { Language } from 'prism-react-renderer';
 import styles from './ModuleView.module.css';
 
 import { useRpc } from '~/hooks/useRpc';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 // Include Rust language support.
 // TODO: Write a custom prismjs syntax for Move Bytecode.
@@ -141,7 +141,7 @@ function ModuleView({ id, name, code }: Props) {
                                             const href = `/objects/${reference.address}?module=${reference.module}`;
 
                                             return (
-                                                <Link
+                                                <LinkWithQuery
                                                     key={key}
                                                     {...getTokenProps({
                                                         token,

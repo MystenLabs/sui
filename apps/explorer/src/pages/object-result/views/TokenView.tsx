@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 
 import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
@@ -24,6 +23,9 @@ import {
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
+
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+
 function TokenView({ data }: { data: DataType }) {
     const viewedData = {
         ...data,
@@ -85,12 +87,12 @@ function TokenView({ data }: { data: DataType }) {
                             <tr>
                                 <td>Type</td>
                                 <td>
-                                    <Link
+                                    <LinkWithQuery
                                         to={genhref(viewedData.objType)}
                                         className={styles.objecttypelink}
                                     >
                                         {trimStdLibPrefix(viewedData.objType)}
-                                    </Link>
+                                    </LinkWithQuery>
                                 </td>
                             </tr>
                             <tr>

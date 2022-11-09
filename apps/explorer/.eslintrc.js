@@ -130,6 +130,21 @@ module.exports = {
 
         // We may eventually want to turn this on but it requires migration:
         'react/no-array-index-key': 'off',
+
+        // Require usage of the custom Link component:
+        'no-restricted-imports': [
+            'error',
+            {
+                paths: [
+                    {
+                        name: 'react-router-dom',
+                        importNames: ['Link'],
+                        message:
+                            'Please use `LinkWithQuery` from "~/ui/utils/LinkWithQuery" instead.',
+                    },
+                ],
+            },
+        ],
     },
     overrides: [
         {
