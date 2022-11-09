@@ -42,6 +42,8 @@ types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../mysten-infra/crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../mysten-infra/crates/mysten-network" }
+telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers"}
+
 workspace-hack.workspace = true
 
 sui-metrics = { path = "../../crates/sui-metrics" }

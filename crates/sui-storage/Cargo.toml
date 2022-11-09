@@ -33,6 +33,7 @@ move-bytecode-utils.workspace = true
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 typed-store = { path = "../../mysten-infra/crates/typed-store" }
 typed-store-derive = { path = "../../mysten-infra/crates/typed-store-derive" }
+telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers"}
 
 workspace-hack.workspace = true
 eyre = "0.6.8"

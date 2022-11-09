@@ -32,6 +32,7 @@ types = { path = "../types", package = "narwhal-types" }
 prometheus = "0.13.2"
 store = { path = "../../mysten-infra/crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../mysten-infra/crates/mysten-network"}
+telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers"}
 
 sui-metrics = { path = "../../crates/sui-metrics" }
 
