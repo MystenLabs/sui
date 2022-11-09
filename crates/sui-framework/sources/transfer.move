@@ -3,6 +3,10 @@
 
 module sui::transfer {
 
+    /// Shared an object that was previously created. Shared objects must currently
+    /// be constructed in the transaction they are created.
+    const ESharedNonNewObject: u64 = 0;
+
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
     /// unique ID.
@@ -24,6 +28,8 @@ module sui::transfer {
     /// https://github.com/MystenLabs/sui/issues/681
     /// This API is exposed to demonstrate how we may be able to use it to program
     /// Move contracts that use shared objects.
+    /// Aborts with `ESharedNonNewObject` of the object being shared was not created
+    /// in this transaction. This restriction may be relaxed in the future.
     public native fun share_object<T: key>(obj: T);
 
     native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);

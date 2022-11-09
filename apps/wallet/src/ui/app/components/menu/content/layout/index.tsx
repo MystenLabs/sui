@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -13,13 +14,14 @@ import st from './Layout.module.scss';
 export type LayoutProps = {
     backUrl?: string;
     title: string;
+    isSettings?: boolean;
     children: ReactNode | ReactNode[];
 };
 
-function Layout({ backUrl, title, children }: LayoutProps) {
+function Layout({ backUrl, title, children, isSettings }: LayoutProps) {
     return (
         <div className={st.container}>
-            <div className={st.header}>
+            <div className={cl(st.header, isSettings && st.isSettings)}>
                 {backUrl ? (
                     <Link to={backUrl} className={st.arrowBack}>
                         <Icon icon={SuiIcons.ArrowLeft} />

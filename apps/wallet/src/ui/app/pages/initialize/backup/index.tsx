@@ -12,7 +12,8 @@ import CopyToClipboard from '_components/copy-to-clipboard';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
-import { loadMnemonicFromKeyring } from '_redux/slices/account';
+import { loadEntropyFromKeyring } from '_redux/slices/account';
+import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
 
 import st from './Backup.module.scss';
 
@@ -35,7 +36,11 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
             setLoading(true);
             try {
                 setLocalMnemonic(
-                    await dispatch(loadMnemonicFromKeyring({})).unwrap()
+                    entropyToMnemonic(
+                        toEntropy(
+                            await dispatch(loadEntropyFromKeyring({})).unwrap()
+                        )
+                    )
                 );
             } catch (e) {
                 setError(

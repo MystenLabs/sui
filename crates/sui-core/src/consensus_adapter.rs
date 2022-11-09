@@ -170,7 +170,7 @@ pub struct ConsensusWaiter {
     // This channel is used to signal the result if the transaction gets
     // sequenced and observed at the output of consensus.
     signal_back: oneshot::Receiver<SuiResult<()>>,
-    // We use this channel as a signalling mechanism, to detect if the ConsensusWaiter
+    // We use this channel as a signaling mechanism, to detect if the ConsensusWaiter
     // struct is dropped, and to clean up the ConsensusListener structures to prevent
     // memory leaks.
     signal_close: oneshot::Receiver<()>,
@@ -314,7 +314,7 @@ impl ConsensusAdapter {
         };
 
         // TODO: make consensus guarantee delivery after submit_transaction() returns, and avoid the timeout below.
-        let result = match timeout(self.timeout, waiter.wait_for_result()).await {
+        match timeout(self.timeout, waiter.wait_for_result()).await {
             Ok(Ok(_)) => {
                 // Increment the attempted certificate sequencing success
                 self.opt_metrics.as_ref().map(|metrics| {
@@ -341,9 +341,7 @@ impl ConsensusAdapter {
                 // the channels.
                 Err(SuiError::FailedToHearBackFromConsensus(e.to_string()))
             }
-        };
-
-        result
+        }
     }
 }
 
@@ -382,7 +380,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
 /// notify the called when they are sequenced.
 pub struct ConsensusListener {
     /// Receive messages input to the consensus.
-    rx_consensus_input: Receiver<ConsensusListenerMessage>,
+    rx_consensus_listener: Receiver<ConsensusListenerMessage>,
     /// Keep a map of all consensus inputs that are currently being sequenced.
     /// Maximum size of the pending notifiers is bounded by the maximum pending transactions of the node.
     pending: HashMap<ConsensusTransactionDigest, Vec<(u64, TxSequencedNotifier)>>,
@@ -390,9 +388,9 @@ pub struct ConsensusListener {
 
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
-    pub fn spawn(rx_consensus_input: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
+    pub fn spawn(rx_consensus_listener: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
         spawn_monitored_task!(Self {
-            rx_consensus_input,
+            rx_consensus_listener,
             pending: HashMap::new(),
         }
         .run())
@@ -426,10 +424,10 @@ impl ConsensusListener {
         loop {
             tokio::select! {
                 // A new transaction has been sent to consensus or is no longer needed.
-                Some(message) = self.rx_consensus_input.recv() => {
+                Some(message) = self.rx_consensus_listener.recv() => {
                     match message {
                         // Keep track of this certificates so we can notify the user later.
-                        ConsensusListenerMessage::New(transaction, (replier, mut _closer)) => {
+                        ConsensusListenerMessage::New(transaction, (replier, mut closer)) => {
                             let digest = Self::hash_serialized_transaction(&transaction);
                             let id = id_counter;
                             id_counter += 1;
@@ -440,7 +438,7 @@ impl ConsensusListener {
                             // Register with the close notification.
                             closed_notifications.push(monitored_future!(async move {
                                 // Wait for the channel to close
-                                _closer.closed().await;
+                                closer.closed().await;
                                 // Return he digest concerned
                                 (digest, id)
                             }));

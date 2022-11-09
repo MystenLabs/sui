@@ -274,7 +274,7 @@ async fn run_actual_and_estimate_costs(
             .with_async(|node| async move {
                 let state = node.state();
                 estimate_transaction_computation_cost(
-                    tx.into_inner().signed_data.data,
+                    tx.into_inner().into_data().data,
                     state.clone(),
                     None,
                     None,

@@ -618,6 +618,11 @@ fn process_successful_execution<S: Storage + ParentSync>(
             initial_shared_version,
         } = &mut recipient
         {
+            assert_invariant!(
+                old_obj_ver.is_none(),
+                "The object should be guaranteed to be new by \
+                sui::transfer::share_object, which aborts if it is not new"
+            );
             // TODO Consider a distinct Recipient enum within ObjectRuntime to enforce this
             // invariant at the type level.
             assert_eq!(

@@ -19,8 +19,6 @@ use types::{Certificate, ReconfigureNotification, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
-    let _guard = setup_tracing();
-
     // Create storage
     let storage = NodeStorage::reopen(temp_dir());
 

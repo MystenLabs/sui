@@ -8,7 +8,7 @@ use crate::{
         object_runtime::{object_store::ObjectResult, ObjectRuntime},
     },
 };
-use digest::Digest;
+use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -20,7 +20,6 @@ use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
-use sha3::Sha3_256;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -95,7 +94,7 @@ pub fn hash_type_and_key(
     let hash = hasher.finalize();
 
     // truncate into an ObjectID and return
-    let id = ObjectID::try_from(&hash[0..ObjectID::LENGTH]).unwrap();
+    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::address(id.into())],

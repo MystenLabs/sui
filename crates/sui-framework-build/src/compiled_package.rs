@@ -1,17 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashSet},
+    path::PathBuf,
+};
 
 use fastcrypto::encoding::Base64;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::{module_cache::GetModule, Modules};
+use move_binary_format::{
+    access::ModuleAccess,
+    normalized::{self, Type},
+    CompiledModule,
+};
+use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
 use move_compiler::compiled_unit::CompiledUnitEnum;
-use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, StructTag, TypeTag},
+};
 use move_package::{
     compilation::compiled_package::CompiledPackage as MoveCompiledPackage,
     BuildConfig as MoveBuildConfig,
 };
+use serde_reflection::Registry;
 use sui_types::{
     error::{SuiError, SuiResult},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
@@ -248,6 +259,72 @@ impl CompiledPackage {
         }
 
         Ok(())
+    }
+
+    /// Generate layout schemas for all types declared by this package, as well as
+    /// all struct types passed into `entry` functions declared by modules in this package
+    /// (either directly or by reference).
+    /// These layout schemas can be consumed by clients (e.g., the TypeScript SDK) to enable
+    /// BCS serialization/deserialization of the package's objects, tx arguments, and events.
+    pub fn generate_struct_layouts(&self) -> Registry {
+        let mut package_types = BTreeSet::new();
+        for m in self.get_modules() {
+            let normalized_m = normalized::Module::new(m);
+            // 1. generate struct layouts for all declared types
+            'structs: for (name, s) in normalized_m.structs {
+                let mut dummy_type_parameters = Vec::new();
+                for t in &s.type_parameters {
+                    if t.is_phantom {
+                        // if all of t's type parameters are phantom, we can generate a type layout
+                        // we make this happen by creating a StructTag with dummy `type_params`, since the layout generator won't look at them.
+                        // we need to do this because SerdeLayoutBuilder will refuse to generate a layout for any open StructTag, but phantom types
+                        // cannot affect the layout of a struct, so we just use dummy values
+                        dummy_type_parameters.push(TypeTag::Signer)
+                    } else {
+                        // open type--do not attempt to generate a layout
+                        // TODO: handle generating layouts for open types?
+                        continue 'structs;
+                    }
+                }
+                debug_assert!(dummy_type_parameters.len() == s.type_parameters.len());
+                package_types.insert(StructTag {
+                    address: *m.address(),
+                    module: m.name().to_owned(),
+                    name,
+                    type_params: dummy_type_parameters,
+                });
+            }
+            // 2. generate struct layouts for all parameters of `entry` funs
+            for (_name, f) in normalized_m.exposed_functions {
+                if f.is_entry {
+                    for t in f.parameters {
+                        let tag_opt = match t.clone() {
+                            Type::Address
+                            | Type::Bool
+                            | Type::Signer
+                            | Type::TypeParameter(_)
+                            | Type::U8
+                            | Type::U16
+                            | Type::U32
+                            | Type::U64
+                            | Type::U128
+                            | Type::U256
+                            | Type::Vector(_) => continue,
+                            Type::Reference(t) | Type::MutableReference(t) => t.into_struct_tag(),
+                            s @ Type::Struct { .. } => s.into_struct_tag(),
+                        };
+                        if let Some(tag) = tag_opt {
+                            package_types.insert(tag);
+                        }
+                    }
+                }
+            }
+        }
+        let mut layout_builder = SerdeLayoutBuilder::new(self);
+        for typ in &package_types {
+            layout_builder.build_struct_layout(typ).unwrap();
+        }
+        layout_builder.into_registry()
     }
 }
 

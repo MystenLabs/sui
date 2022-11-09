@@ -4,9 +4,9 @@
 import { isAnyOf } from '@reduxjs/toolkit';
 
 import {
-    loadMnemonicFromKeyring,
+    loadEntropyFromKeyring,
     setAddress,
-    createMnemonic,
+    createVault,
     setKeyringStatus,
 } from '_redux/slices/account';
 import { thunkExtras } from '_store/thunk-extras';
@@ -14,9 +14,9 @@ import { thunkExtras } from '_store/thunk-extras';
 import type { Middleware } from '@reduxjs/toolkit';
 
 const keypairVault = thunkExtras.keypairVault;
-const matchUpdateMnemonic = isAnyOf(
-    loadMnemonicFromKeyring.fulfilled,
-    createMnemonic.fulfilled,
+const matchUpdateKeypairVault = isAnyOf(
+    loadEntropyFromKeyring.fulfilled,
+    createVault.fulfilled,
     setKeyringStatus
 );
 
@@ -24,18 +24,20 @@ export const KeypairVaultMiddleware: Middleware =
     ({ dispatch }) =>
     (next) =>
     (action) => {
-        if (matchUpdateMnemonic(action)) {
-            let mnemonic;
+        if (matchUpdateKeypairVault(action)) {
+            let entropy;
             if (typeof action.payload === 'string') {
-                mnemonic = action.payload;
+                entropy = action.payload;
             } else {
-                mnemonic = action.payload?.mnemonic;
+                entropy = action.payload?.entropy;
             }
-            if (mnemonic) {
-                keypairVault.mnemonic = mnemonic;
+            if (entropy) {
+                keypairVault.entropy = entropy;
                 dispatch(setAddress(keypairVault.getAccount()));
+            } else {
+                keypairVault.clear();
             }
-            mnemonic = null;
+            entropy = null;
         }
         return next(action);
     };

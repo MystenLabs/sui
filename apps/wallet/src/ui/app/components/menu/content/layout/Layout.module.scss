@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .container {
     display: flex;
@@ -27,4 +28,12 @@
     color: colors.$gray-100;
     font-weight: 600;
     font-size: 18px;
+}
+
+.is-settings .title {
+    @include utils.typography('page-title');
+
+    margin: auto;
+    color: colors.$gray-90;
+    line-height: 100%;
 }

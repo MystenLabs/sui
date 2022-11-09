@@ -5,13 +5,13 @@ use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    Signable,
+    EmptySignInfo, Signable,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::fmt::{Debug, Formatter};
-use std::ops::{Deref, DerefMut};
+use std::fmt::{Debug, Display, Formatter};
+use std::ops::Deref;
 
 pub trait Message {
     type DigestType: Clone + Debug;
@@ -41,6 +41,27 @@ impl<T: Message, S> Envelope<T, S> {
     pub fn into_data(self) -> T {
         self.data
     }
+
+    pub fn into_data_and_sig(self) -> (T, S) {
+        let Self {
+            data,
+            auth_signature,
+            ..
+        } = self;
+        (data, auth_signature)
+    }
+
+    pub fn auth_sig(&self) -> &S {
+        &self.auth_signature
+    }
+
+    pub fn digest(&self) -> &T::DigestType {
+        self.digest.get_or_init(|| self.data.digest())
+    }
+
+    pub fn data_mut_for_testing(&mut self) -> &mut T {
+        &mut self.data
+    }
 }
 
 impl<T: Message + PartialEq, S: PartialEq> PartialEq for Envelope<T, S> {
@@ -49,29 +70,24 @@ impl<T: Message + PartialEq, S: PartialEq> PartialEq for Envelope<T, S> {
     }
 }
 
-impl<T, S> Envelope<T, S>
-where
-    T: Message + Signable<Vec<u8>>,
-    S: AuthoritySignInfoTrait,
-{
-    pub fn digest(&self) -> &T::DigestType {
-        self.digest.get_or_init(|| self.data.digest())
+impl<T: Message> Envelope<T, EmptySignInfo> {
+    pub fn new(data: T) -> Self {
+        Self {
+            digest: OnceCell::new(),
+            data,
+            auth_signature: EmptySignInfo {},
+        }
     }
 
-    pub fn auth_sig(&self) -> &S {
-        &self.auth_signature
+    pub fn verify_signature(&self) -> SuiResult {
+        self.data.verify()
     }
 
-    /// A convenient interface to verify this message only.
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.data.verify()?;
-        self.auth_signature.verify(&self.data, committee)
-    }
-
-    /// Verify and return a VerifiedEnvelope.
-    pub fn into_verify(self, committee: &Committee) -> SuiResult<VerifiedEnvelope<T, S>> {
-        self.verify(committee)?;
-        Ok(VerifiedEnvelope::new_from_verified(self))
+    pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
+        self.verify_signature()?;
+        Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(
+            self,
+        ))
     }
 }
 
@@ -91,6 +107,29 @@ where
             data,
             auth_signature,
         }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_signature.epoch
+    }
+
+    pub fn into_unsigned(self) -> Envelope<T, EmptySignInfo> {
+        Envelope::<T, EmptySignInfo>::new(self.into_data())
+    }
+
+    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
+        self.data.verify()?;
+        self.auth_signature.verify(self.data(), committee)
+    }
+
+    pub fn verify(
+        self,
+        committee: &Committee,
+    ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
+        self.verify_signature(committee)?;
+        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
+            self,
+        ))
     }
 }
 
@@ -112,6 +151,25 @@ where
         };
 
         Ok(cert)
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_signature.epoch
+    }
+
+    // TODO: Eventually we should remove all calls to verify_signature
+    // and make sure they all call verify to avoid repeated verifications.
+    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
+        self.data.verify()?;
+        self.auth_signature.verify(self.data(), committee)
+    }
+
+    pub fn verify(
+        self,
+        committee: &Committee,
+    ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
+        self.verify_signature(committee)?;
+        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }
 
@@ -165,7 +223,8 @@ where
 }
 
 impl<T: Message, S> VerifiedEnvelope<T, S> {
-    fn new_from_verified(inner: Envelope<T, S>) -> Self {
+    /// This API should only be called when the input is already verified.
+    pub fn new_from_verified(inner: Envelope<T, S>) -> Self {
         Self(TrustedEnvelope(inner), NoSer)
     }
 
@@ -197,6 +256,13 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
     pub fn serializable(self) -> TrustedEnvelope<T, S> {
         self.0
     }
+
+    /// Remove the authority signatures `S` from this envelope.
+    pub fn into_unsigned(self) -> VerifiedEnvelope<T, EmptySignInfo> {
+        VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(Envelope::<T, EmptySignInfo>::new(
+            self.into_inner().into_data(),
+        ))
+    }
 }
 
 /// After deserialization, a TrustedTransactionEnvelope can be turned back into a
@@ -214,9 +280,10 @@ impl<T: Message, S> Deref for VerifiedEnvelope<T, S> {
     }
 }
 
-impl<T: Message, S> DerefMut for VerifiedEnvelope<T, S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0 .0
+impl<T: Message, S> Deref for Envelope<T, S> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.data
     }
 }
 
@@ -236,3 +303,13 @@ where
 }
 
 impl<T: Message, S> Eq for VerifiedEnvelope<T, S> where Envelope<T, S>: Eq {}
+
+impl<T, S> Display for VerifiedEnvelope<T, S>
+where
+    T: Message,
+    Envelope<T, S>: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0 .0)
+    }
+}

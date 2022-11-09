@@ -5,6 +5,10 @@
 
 use crypto::KeyPair;
 use fastcrypto::traits::KeyPair as _;
+use rand::{
+    rngs::{OsRng, StdRng},
+    SeedableRng,
+};
 use std::num::NonZeroUsize;
 use test_utils::CommitteeFixture;
 use types::{Certificate, Vote};
@@ -107,7 +111,7 @@ fn test_unknown_signature_in_certificate() {
         signatures.push((vote.author.clone(), vote.signature.clone()));
     }
 
-    let malicious_key = KeyPair::generate(&mut rand::rngs::OsRng);
+    let malicious_key = KeyPair::generate(&mut StdRng::from_rng(OsRng).unwrap());
 
     let vote = Vote::new_with_signer(&header, malicious_key.public(), &malicious_key);
     signatures.push((vote.author.clone(), vote.signature));

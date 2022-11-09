@@ -78,10 +78,10 @@ pub async fn check_certificate_input<S>(
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    let gas_status = get_gas_status(store, &cert.signed_data.data).await?;
-    let input_objects = cert.signed_data.data.input_objects()?;
+    let gas_status = get_gas_status(store, &cert.data().data).await?;
+    let input_objects = cert.data().data.input_objects()?;
 
-    let tx_data = &cert.signed_data.data;
+    let tx_data = &cert.data().data;
     let objects = if tx_data.kind.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
         // through sequencing, so we must bypass the sequence checks here.
@@ -89,7 +89,7 @@ where
     } else {
         store.get_sequenced_input_objects(cert.digest(), &input_objects)?
     };
-    let input_objects = check_objects(&cert.signed_data.data, input_objects, objects).await?;
+    let input_objects = check_objects(&cert.data().data, input_objects, objects).await?;
     Ok((gas_status, input_objects))
 }
 

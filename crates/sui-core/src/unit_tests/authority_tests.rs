@@ -89,8 +89,8 @@ fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTrans
     assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
     assert_eq!(
-        o1.auth_sign_info.signature.as_ref(),
-        o2.auth_sign_info.signature.as_ref()
+        o1.auth_sig().signature.as_ref(),
+        o2.auth_sig().signature.as_ref()
     );
 }
 
@@ -108,8 +108,8 @@ fn compare_transaction_info_responses(
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.digest(), cert2.digest());
             assert_eq!(
-                cert1.auth_sign_info.signature.as_ref(),
-                cert2.auth_sign_info.signature.as_ref()
+                cert1.auth_sig().signature.as_ref(),
+                cert2.auth_sig().signature.as_ref()
             );
         }
         (None, None) => (),
@@ -184,7 +184,7 @@ async fn test_dry_run_transaction() {
     let transaction_digest = *transaction.digest();
 
     let response = authority
-        .dry_exec_transaction(transaction.signed_data.data.clone(), transaction_digest)
+        .dry_exec_transaction(transaction.data().data.clone(), transaction_digest)
         .await;
     assert!(response.is_ok());
 
@@ -252,14 +252,14 @@ async fn test_handle_transfer_transaction_bad_signature() {
     .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
-    let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_temp(
-        &transfer_transaction.signed_data.data.to_bytes(),
-        &unknown_key,
-    );
+    let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
+    bad_signature_transfer_transaction
+        .data_mut_for_testing()
+        .tx_signature =
+        Signature::new_temp(&transfer_transaction.data().data.to_bytes(), &unknown_key);
 
     assert!(client
-        .handle_transaction(bad_signature_transfer_transaction.into_inner())
+        .handle_transaction(bad_signature_transfer_transaction)
         .await
         .is_err());
 
@@ -493,9 +493,9 @@ async fn test_handle_transfer_transaction_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
-            .signed_data
+            .data()
             .data,
-        transfer_transaction.signed_data.data
+        transfer_transaction.data().data
     );
 }
 
@@ -611,9 +611,9 @@ pub async fn send_and_confirm_transaction_with_shared(
 
     // Collect signatures from a quorum of authorities
     let committee = authority.committee.load();
-    let certificate = CertifiedTransaction::new_with_auth_sign_infos(
-        transaction,
-        vec![vote.auth_sign_info],
+    let certificate = CertifiedTransaction::new(
+        transaction.into_message(),
+        vec![vote.auth_sig().clone()],
         &committee,
     )
     .unwrap()
@@ -1746,7 +1746,7 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
-        .handle_transaction(certified_transfer_transaction.into_inner().to_transaction())
+        .handle_transaction(certified_transfer_transaction.into_unsigned())
         .await;
     assert!(result2.is_ok());
     assert_eq!(
@@ -1789,15 +1789,15 @@ async fn test_change_epoch_transaction() {
     // Make sure that the raw transaction will never be accepted by the validator.
     assert_eq!(
         authority_state
-            .handle_transaction(signed_tx.clone().to_transaction())
+            .handle_transaction(signed_tx.clone().into_unsigned())
             .await
             .unwrap_err(),
         SuiError::InvalidSystemTransaction
     );
     let committee = authority_state.committee.load();
-    let certificate = CertifiedTransaction::new_with_auth_sign_infos(
-        signed_tx.clone().to_transaction(),
-        vec![signed_tx.auth_sign_info.clone()],
+    let certificate = CertifiedTransaction::new(
+        signed_tx.clone().into_message(),
+        vec![signed_tx.auth_sig().clone()],
         &committee,
     )
     .unwrap()
@@ -2143,9 +2143,9 @@ fn init_certified_transaction(
         &*authority_state.secret,
     );
     let committee = authority_state.committee.load();
-    CertifiedTransaction::new_with_auth_sign_infos(
-        transaction,
-        vec![vote.auth_sign_info.clone()],
+    CertifiedTransaction::new(
+        transaction.into_message(),
+        vec![vote.auth_sig().clone()],
         &committee,
     )
     .unwrap()
@@ -2296,12 +2296,8 @@ async fn make_test_transaction(
             .await
             .unwrap();
         let vote = response.signed_transaction.unwrap();
-        sigs.push(vote.auth_sign_info.clone());
-        if let Ok(cert) = CertifiedTransaction::new_with_auth_sign_infos(
-            vote.to_transaction(),
-            sigs.clone(),
-            &committee,
-        ) {
+        sigs.push(vote.auth_sig().clone());
+        if let Ok(cert) = CertifiedTransaction::new(vote.into_message(), sigs.clone(), &committee) {
             return cert.verify(&committee).unwrap();
         }
     }

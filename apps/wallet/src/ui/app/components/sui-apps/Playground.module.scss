@@ -25,6 +25,7 @@
         padding: 15px 20px;
         text-align: center;
         font-weight: 600;
+        text-transform: initial;
 
         &:hover {
             background: colors.$button-hover;

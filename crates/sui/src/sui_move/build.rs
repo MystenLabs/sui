@@ -5,8 +5,14 @@ use clap::Parser;
 use move_cli::base::{self, build};
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use sui_framework_build::compiled_package::BuildConfig;
+
+const LAYOUTS_DIR: &str = "layouts";
+const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 
 #[derive(Parser)]
 pub struct Build {
@@ -15,6 +21,13 @@ pub struct Build {
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
+    /// If true, generate struct layout schemas for
+    /// all struct types passed into `entry` functions declared by modules in this package
+    /// These layout schemas can be consumed by clients (e.g.,
+    /// the TypeScript SDK) to enable serialization/deserialization of transaction arguments
+    /// and events.
+    #[clap(long, global = true)]
+    pub generate_struct_layouts: bool,
 }
 
 impl Build {
@@ -24,13 +37,19 @@ impl Build {
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
-        Self::execute_internal(&rerooted_path, build_config, self.dump_bytecode_as_base64)
+        Self::execute_internal(
+            &rerooted_path,
+            build_config,
+            self.dump_bytecode_as_base64,
+            self.generate_struct_layouts,
+        )
     }
 
     pub fn execute_internal(
         rerooted_path: &Path,
         config: MoveBuildConfig,
         dump_bytecode_as_base64: bool,
+        generate_struct_layouts: bool,
     ) -> anyhow::Result<()> {
         let pkg = sui_framework::build_move_package(
             rerooted_path,
@@ -43,6 +62,18 @@ impl Build {
         if dump_bytecode_as_base64 {
             println!("{}", json!(pkg.get_package_base64()))
         }
+
+        if generate_struct_layouts {
+            let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
+            // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
+            let mut layout_filename = pkg.path;
+            layout_filename.push("build");
+            layout_filename.push(pkg.package.compiled_package_info.package_name.as_str());
+            layout_filename.push(LAYOUTS_DIR);
+            layout_filename.push(STRUCT_LAYOUTS_FILENAME);
+            fs::write(layout_filename, layout_str)?
+        }
+
         Ok(())
     }
 }

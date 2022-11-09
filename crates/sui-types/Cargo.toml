@@ -18,7 +18,6 @@ serde = { version = "1.0.144", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
 serde-name = "0.2.1"
 sha2 = "0.9.9"
-sha3 = "0.10.4"
 thiserror = "1.0.34"
 tracing = "0.1"
 hex = "0.4.3"
@@ -30,7 +29,6 @@ signature = "1.6.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 zeroize = "1.5.7"
-digest = "0.10.3"
 schemars ="0.8.10"
 tonic = "0.8"
 strum = "^0.24"

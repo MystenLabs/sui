@@ -134,7 +134,9 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction(
-                Transaction::new(txn_data, signature).verify().unwrap(),
+                Transaction::from_data(txn_data, signature)
+                    .verify()
+                    .unwrap(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
@@ -286,8 +288,8 @@ impl ClusterTest {
         let mut success_cnt = 0;
         let total_cnt = tests.len() as i32;
         for t in tests {
-            let is_sucess = t.run(&mut ctx).await as i32;
-            success_cnt += is_sucess;
+            let is_success = t.run(&mut ctx).await as i32;
+            success_cnt += is_success;
         }
         if success_cnt < total_cnt {
             // If any test failed, panic to bubble up the signal

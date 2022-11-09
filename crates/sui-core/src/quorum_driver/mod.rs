@@ -24,7 +24,6 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
     QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
-    VerifiedTransactionEnvelope,
 };
 
 const TASK_QUEUE_SIZE: usize = 5000;
@@ -296,7 +295,7 @@ where
         let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
         conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
         if conflicting_tx_digests.is_empty() {
-            error!("This path in unreachable with an emtpy conflicting_tx_digests.");
+            error!("This path in unreachable with an empty conflicting_tx_digests.");
             return Ok(None);
         }
 
@@ -397,9 +396,7 @@ where
         }
 
         if let Some(signed_transaction) = signed_transaction {
-            let transaction = signed_transaction.into_inner().to_transaction();
-            // SafeClient checked the transaction is legit in `handle_transaction_info_request`
-            let verified_transaction = VerifiedTransactionEnvelope::new_unchecked(transaction);
+            let verified_transaction = signed_transaction.into_unsigned();
             // Now ask validators to execute this transaction.
             let result = self
                 .validators

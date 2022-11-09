@@ -14,10 +14,9 @@ use fastcrypto::{
 };
 use indexmap::IndexMap;
 use multiaddr::Multiaddr;
-use rand::SeedableRng;
 use rand::{
     rngs::{OsRng, StdRng},
-    thread_rng, Rng,
+    thread_rng, Rng, SeedableRng,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -926,7 +925,7 @@ impl WorkerFixture {
             .unwrap()
     }
 
-    fn generate<R, P>(mut rng: R, id: WorkerId, mut get_port: P) -> Self
+    fn generate<R, P>(rng: R, id: WorkerId, mut get_port: P) -> Self
     where
         R: rand::RngCore + rand::CryptoRng,
         P: FnMut(&str) -> u16,

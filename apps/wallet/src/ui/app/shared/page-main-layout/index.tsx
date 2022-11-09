@@ -5,6 +5,7 @@ import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
 import DappStatus from '_app/shared/dapp-status';
+import { ErrorBoundary } from '_components/error-boundary';
 import Logo from '_components/logo';
 import { MenuButton, MenuContent } from '_components/menu';
 import Navigation from '_components/navigation';
@@ -54,7 +55,7 @@ export default function PageMainLayout({
                         className
                     )}
                 >
-                    {children}
+                    <ErrorBoundary>{children}</ErrorBoundary>
                 </main>
                 {bottomNavEnabled ? <Navigation /> : null}
                 {topNavMenuEnabled ? <MenuContent /> : null}

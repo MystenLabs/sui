@@ -11,6 +11,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
+use crate::authority::AuthorityMetrics;
 use crate::authority::AuthorityStore;
 use crate::scoped_counter;
 
@@ -333,6 +334,7 @@ impl crate::authority::AuthorityState {
             // will be closed
             pending_batch: Option<SignedBatch>,
             db: Arc<AuthorityStore>,
+            metrics: Arc<AuthorityMetrics>,
         }
 
         let local_state = BatchStreamingLocals {
@@ -342,6 +344,7 @@ impl crate::authority::AuthorityState {
             next_item: NextItemToPublish::Batch,
             pending_batch: Some(signed_batch),
             db: self.db(),
+            metrics,
         };
 
         // Construct the stream
@@ -354,6 +357,7 @@ impl crate::authority::AuthorityState {
                     // publish the batch
                     let batch = local_state.pending_batch.unwrap();
                     local_state.pending_batch = None;
+                    local_state.metrics.follower_batches_streamed.inc();
                     return Some((
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(batch))),
                         local_state,
@@ -373,6 +377,7 @@ impl crate::authority::AuthorityState {
                             // We read all txns for this batch, time to publish the batch
                             local_state.next_item = NextItemToPublish::Batch;
                         }
+                        local_state.metrics.follower_txes_streamed.inc();
                         return Some((
                             Ok(BatchInfoResponseItem(UpdateItem::Transaction((
                                 seq, digest,

@@ -140,13 +140,12 @@ pub async fn estimate_transaction_computation_cost(
     let tx = to_sender_signed_transaction(tx_data, &keypair);
 
     let (_gas_status, input_objects) =
-        transaction_input_checker::check_transaction_input(&state.db(), &tx.signed_data.data)
-            .await?;
+        transaction_input_checker::check_transaction_input(&state.db(), &tx.data().data).await?;
     let in_mem_temporary_store =
         TemporaryStore::new(state.db(), input_objects, TransactionDigest::random());
 
     estimate_transaction_inner(
-        tx.into_inner().signed_data.data.kind,
+        tx.into_inner().into_data().data.kind,
         computation_gas_unit_price,
         storage_gas_unit_price,
         mutated_object_sizes_after,

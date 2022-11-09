@@ -12,7 +12,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
-import { createMnemonic } from '_redux/slices/account';
+import { createVault } from '_redux/slices/account';
 import { PRIVACY_POLICY_LINK, ToS_LINK } from '_shared/constants';
 
 import st from './Create.module.scss';
@@ -36,7 +36,7 @@ const CreatePage = () => {
                 onSubmit={async (values) => {
                     try {
                         await dispatch(
-                            createMnemonic({ password: values.password })
+                            createVault({ password: values.password })
                         ).unwrap();
                         navigate('../backup');
                     } catch (e) {

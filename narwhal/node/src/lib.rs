@@ -292,7 +292,7 @@ impl Node {
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
-        tx_committed_certificates: metered_channel::Sender<Certificate>,
+        tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where

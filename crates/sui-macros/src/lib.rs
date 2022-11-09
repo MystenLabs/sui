@@ -33,7 +33,8 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
                 use ::sui_simulator::fastcrypto::traits::KeyPair;
-
+                use rand::rngs::{StdRng, OsRng};
+                use rand::SeedableRng;
                 // anemo uses x509-parser, which has many lazy static variables. start a network to
                 // initialize all that static state before the first test.
                 let rt = ::sui_simulator::runtime::Runtime::new();
@@ -44,7 +45,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                         Network::bind(format!("127.0.0.1:{}", port))
                             .server_name("static-init-network")
                             .private_key(
-                                ::sui_simulator::fastcrypto::ed25519::Ed25519KeyPair::generate(&mut rand::rngs::OsRng)
+                                ::sui_simulator::fastcrypto::ed25519::Ed25519KeyPair::generate(&mut StdRng::from_rng(OsRng).unwrap())
                                     .private()
                                     .0
                                     .to_bytes(),

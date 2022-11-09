@@ -20,6 +20,7 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::SignatureScheme;
+use sui_types::messages::SenderSignedData;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
@@ -90,7 +91,7 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
         .map_err(|e| anyhow!(e))?;
         let result = self
             .client
-            .execute_transaction(Transaction::new(data, signature))
+            .execute_transaction(Transaction::new(SenderSignedData::new(data, signature)))
             .await;
         Ok(result?)
     }

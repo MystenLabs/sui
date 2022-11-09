@@ -433,12 +433,10 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
                 key.public().into(),
                 &key,
             );
-            sigs.push(vote.auth_sign_info.clone());
-            if let Ok(tx_cert) = CertifiedTransaction::new_with_auth_sign_infos(
-                vote.clone().to_transaction(),
-                sigs.clone(),
-                committee,
-            ) {
+            sigs.push(vote.auth_sig().clone());
+            if let Ok(tx_cert) =
+                CertifiedTransaction::new(vote.into_inner().into_data(), sigs.clone(), committee)
+            {
                 tx_certs.push(tx_cert.verify(committee).unwrap());
                 let effects = dummy_transaction_effects(&tx);
                 let signed_effects = effects.to_sign_effects(

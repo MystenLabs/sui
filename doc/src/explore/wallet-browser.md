@@ -2,7 +2,7 @@
 title: Sui Wallet
 ---
 
-This topic describes how to install and use the [Sui Wallet Browser Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). You can use Sui Wallet to create an address and complete transactions, mint NFTs, view and manage assets on the Sui network, and connect with blockchain dApps on Web3.
+This topic describes how to install and use the [Sui Wallet Browser Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). You can use the Sui Wallet to create an address, complete transactions, mint NFTs, view or manage assets on the Sui network, and connect with blockchain dApps on Web3.
 
 The early versions of Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
 

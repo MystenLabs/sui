@@ -1,28 +1,28 @@
 ---
-source: config/tests/config_tests.rs
+source: narwhal/config/tests/config_tests.rs
 expression: committee
 ---
 {
   "authorities": {
-    "i9DpjC/kZbDd57csSg7qWFMF3uTECO2jBD3M5BOXU8T7AebTrMO+9D5IbnUI8N7lFhmjEiKFhwUOlFGbx1jkdP212PR/XvnayHxDaJuMkytxACBnshi9TrbZiZP10tqL": {
+    "ku8PylNwBUMzkshpDSeMnbV25O8rPkUFDPcqAyeEXztH02eOq6WemzFMEsi1p0LrBvKBvTLpwLwHhkCatYptihcO75iZRjtFkYwkAlv0GmQQyHZ+xO+UYweLQiYdFHtf": {
       "stake": 1,
       "primary_address": "/ip4/127.0.0.1/tcp/0/http",
-      "network_key": "+oKq7VFT0pAQvjlvEti2YUw5fHXEYT/bs21P9wTlAKs="
+      "network_key": "Zm3+Rl2weh6VsEmVBAALZ9Pk1yOf+nHpT8LsI1l/0q8="
     },
-    "jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY": {
+    "mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ": {
       "stake": 1,
       "primary_address": "/ip4/127.0.0.1/tcp/0/http",
-      "network_key": "rvP0pLjsod/DQzYb+OQ2vULeklnAS4MU644gVN1ugqs="
+      "network_key": "iRf3oG9ka0fwbVnVX9BQ3m9wisZbj4rDCF/q5oTjLU4="
     },
-    "ld89LijKV9Ra6U/hkj6PnWKgcDbW4IgHAy1sHOLjHNvxLDoMQYJhDA5yb3+rOIfRBm91BOK0aSlGEtfdAZOB5af1kfxciSrnzDAHDKw1eCMo92nMEHWj5bpJbSlnySf7": {
+    "ofT8sYBvqkB+c/sjDYTwar96xgZbTdi/ncbet8ja9ePYhtSje59zyarNpF/ZxM1dAncK6uyr9Xv1lS7bJs+nSj2k0bMvbStf5RORLeuPwYz/yJrDOQQf4MxOnW0u8Gzo": {
       "stake": 1,
       "primary_address": "/ip4/127.0.0.1/tcp/0/http",
-      "network_key": "r7SQXpVQz0YqggB4JKBV2XWuk0RwxHfZ3bttKyZMNvo="
+      "network_key": "LC/82uPqS70tgF56yNcxk5O1TD37cuMArVZDxvROh6M="
     },
-    "teRXk6Iq1Pod0UgOcrvBrvVvs8ZpM0bUgbZNL7YpH4n06TvGuiaId9SfpuYe+JOOF4rXiNzQv7CW6npbn3SVZMv9NzwYJcz5RL6F3gAMpNx+o9YM5+gqNtn/OGArUTCC": {
+    "q1ys+9ZU8B5aHgYbgyC5N0XQlGdq1B7xY9D8JOyT89upZpiuKRUDBsq3h/WbLtd4AvLNFNECBjlAG06r8heq7tEs6ol97VfaS2579e4b337eJAwd/y1bIt4F+LhEc3sV": {
       "stake": 1,
       "primary_address": "/ip4/127.0.0.1/tcp/0/http",
-      "network_key": "Kt9mRluFkBunwfq2VREQbBXuSYGOsFo95bA/PIrvVhc="
+      "network_key": "dqJ63C6YZnD7A5GKXt7kPzZ/HzbCxobxbOy3xRXx+2U="
     }
   },
   "epoch": 0

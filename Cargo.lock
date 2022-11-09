@@ -4965,6 +4965,7 @@ dependencies = [
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-dag",
+ "narwhal-node",
  "narwhal-storage",
  "narwhal-test-utils",
  "narwhal-types",
@@ -4973,6 +4974,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "sui-metrics",
+ "telemetry-subscribers 0.2.0",
  "thiserror",
  "tokio",
  "tracing",
@@ -8095,7 +8097,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8126,6 +8128,7 @@ dependencies = [
  "serde 1.0.147",
  "serde_json",
  "serde_with",
+ "serde_yaml",
  "shell-words",
  "signature",
  "sui-config",
@@ -8276,7 +8279,6 @@ dependencies = [
  "arc-swap",
  "bcs",
  "camino",
- "digest 0.10.5",
  "dirs",
  "fastcrypto",
  "insta",
@@ -8292,7 +8294,6 @@ dependencies = [
  "serde 1.0.147",
  "serde_with",
  "serde_yaml",
- "sha3 0.10.6",
  "sui-adapter",
  "sui-framework",
  "sui-simulator",
@@ -8304,7 +8305,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8409,7 +8410,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8464,7 +8465,6 @@ dependencies = [
  "num_enum",
  "once_cell",
  "serde 1.0.147",
- "sha3 0.10.6",
  "smallvec",
  "sui-framework-build",
  "sui-types",
@@ -8484,6 +8484,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "once_cell",
+ "serde-reflection",
  "sui-types",
  "sui-verifier",
  "workspace-hack",
@@ -8602,7 +8603,6 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "serde_json",
- "sha3 0.10.6",
  "signature",
  "slip10_ed25519",
  "sui-types",
@@ -8649,7 +8649,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -8759,7 +8759,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -8767,6 +8767,7 @@ dependencies = [
  "bcs",
  "clap 3.2.22",
  "dirs",
+ "fastcrypto",
  "futures",
  "futures-core",
  "jsonrpsee",
@@ -8776,7 +8777,6 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "serde_json",
- "sha3 0.10.6",
  "sui-config",
  "sui-core",
  "sui-json",
@@ -8897,7 +8897,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
@@ -8972,7 +8972,6 @@ dependencies = [
  "bincode",
  "byteorder",
  "curve25519-dalek",
- "digest 0.10.5",
  "enum_dispatch",
  "eyre",
  "fastcrypto",
@@ -9000,7 +8999,6 @@ dependencies = [
  "serde_repr",
  "serde_with",
  "sha2 0.9.9",
- "sha3 0.10.6",
  "signature",
  "static_assertions",
  "strum",

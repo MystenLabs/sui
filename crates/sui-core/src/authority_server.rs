@@ -368,7 +368,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "validator_state_process_tx",
             ?tx_digest,
-            tx_kind = transaction.signed_data.data.kind_as_str()
+            tx_kind = transaction.data().data.kind_as_str()
         );
 
         let info = state
@@ -409,7 +409,7 @@ impl ValidatorService {
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
-        if state.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
+        if state.is_halted() && !certificate.data().data.kind.is_system_tx() {
             return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
         }
 
@@ -442,7 +442,7 @@ impl ValidatorService {
             let span = tracing::debug_span!(
                 "validator_state_process_cert",
                 ?tx_digest,
-                tx_kind = certificate.signed_data.data.kind_as_str()
+                tx_kind = certificate.data().data.kind_as_str()
             );
             match state
                 .handle_certificate(&certificate)

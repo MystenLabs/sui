@@ -84,9 +84,9 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .await
             .unwrap();
         let vote = response.signed_transaction.unwrap();
-        let certificate = CertifiedTransaction::new_with_auth_sign_infos(
-            transaction,
-            vec![vote.auth_sign_info.clone()],
+        let certificate = CertifiedTransaction::new(
+            transaction.into_message(),
+            vec![vote.auth_sig().clone()],
             &authority.committee.load(),
         )
         .unwrap();
@@ -118,7 +118,7 @@ async fn listen_to_sequenced_transaction() {
         .unwrap();
 
     // Spawn a consensus listener.
-    ConsensusListener::spawn(/* rx_consensus_input */ rx_sui_to_consensus);
+    ConsensusListener::spawn(/* rx_consensus_listener */ rx_sui_to_consensus);
 
     // Submit a sample consensus transaction.
     let (waiter, signals) = ConsensusWaiter::new();
@@ -138,7 +138,7 @@ async fn listen_to_sequenced_transaction() {
 }
 
 #[tokio::test]
-async fn submit_transaction_to_consensus() {
+async fn submit_transaction_to_consensus_adapter() {
     let port = sui_config::utils::get_available_port();
     let consensus_address: Multiaddr = format!("/dns/localhost/tcp/{port}/http").parse().unwrap();
     let (tx_consensus_listener, mut rx_consensus_listener) = channel(1);
@@ -149,15 +149,15 @@ async fn submit_transaction_to_consensus() {
     objects.push(test_shared_object());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
-    let expected_transaction = certificate.clone().to_transaction();
+    let expected_transaction = certificate.clone().into_data();
 
     let committee = state.clone_committee();
     let name = state.name;
     let state_guard = Arc::new(state);
     let metrics = ConsensusAdapterMetrics::new_test();
 
-    // Make a new consensus submitter instance.
-    let submitter = ConsensusAdapter::new(
+    // Make a new consensus adapter instance.
+    let adapter = ConsensusAdapter::new(
         consensus_address.clone(),
         tx_consensus_listener,
         /* timeout */ Duration::from_secs(5),
@@ -167,7 +167,7 @@ async fn submit_transaction_to_consensus() {
     // Spawn a network listener to receive the transaction (emulating the consensus node).
     let mut handle = ConsensusMockServer::spawn(consensus_address);
 
-    // Notify the submitter when a consensus transaction has been sequenced and executed.
+    // Notify the adapter when a consensus transaction has been sequenced and executed.
     tokio::spawn(async move {
         while let Some(message) = rx_consensus_listener.recv().await {
             let (serialized, replier) = match message {
@@ -185,23 +185,28 @@ async fn submit_transaction_to_consensus() {
             // Set the shared object locks.
             state_guard
                 .handle_consensus_transaction(VerifiedSequencedConsensusTransaction::new_test(
-                    ConsensusTransaction::new_certificate_message(&name, *certificate),
+                    ConsensusTransaction::new_certificate_message(&name, *certificate.clone()),
                 ))
                 .await
                 .unwrap();
 
-            // Reply to the submitter.
+            // Reply to the adapter. This fails when Narwhal is not running when submitting in
+            // ConsensusAdapter, dropping the receiver. But this is ok because the submit will
+            // be retried.
             let result = Ok(());
-            replier.0.send(result).unwrap();
+            let _ = replier
+                .0
+                .send(result)
+                .tap_err(|err| println!("Failed to send success signal: {:?}", err));
         }
     });
 
     let certificate = certificate.verify(&committee).unwrap();
 
-    // Submit the transaction and ensure the submitter reports success to the caller. Note
+    // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
     loop {
-        match submitter.submit(&name, &certificate).await {
+        match adapter.submit(&name, &certificate).await {
             Ok(_) => break,
             Err(SuiError::ConsensusConnectionBroken(..)) => (),
             Err(e) => panic!("Unexpected error message: {e}"),
@@ -213,7 +218,7 @@ async fn submit_transaction_to_consensus() {
     let message: ConsensusTransaction = bincode::deserialize(&bytes).unwrap();
     match message.kind {
         ConsensusTransactionKind::UserTransaction(x) => {
-            assert_eq!(x.to_transaction(), expected_transaction)
+            assert_eq!(x.into_data(), expected_transaction)
         }
         _ => panic!("Unexpected message {message:?}"),
     }
