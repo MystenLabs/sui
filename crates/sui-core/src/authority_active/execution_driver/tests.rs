@@ -23,6 +23,7 @@ use sui_types::object::Object;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::timeout;
 use tracing::info;
+use typed_store::Map;
 
 async fn wait_for_certs(
     stream: &mut UnboundedReceiver<VerifiedCertificate>,
@@ -111,6 +112,14 @@ async fn pending_exec_notify_ready_certificates() {
 
     // Wait for all the sending to happen.
     let certs = _end_of_sending_join.await.expect("all ok");
+
+    // Clear effects so their executions will happen below.
+    authority_state
+        .database
+        .perpetual_tables
+        .effects
+        .clear()
+        .expect("Clearing effects failed!");
 
     // Insert the certificates
     authority_state

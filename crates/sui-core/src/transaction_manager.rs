@@ -32,7 +32,7 @@ pub(crate) struct TransactionManager {
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending certificates and
     /// other persistent data.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         authority_store: Arc<AuthorityStore>,
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
@@ -51,6 +51,7 @@ impl TransactionManager {
                     .all_pending_certificates()
                     .unwrap(),
             )
+            .await
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -64,8 +65,15 @@ impl TransactionManager {
     /// TODO: it may be less error prone to take shared object locks inside this function, or
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
-    pub(crate) fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+    pub(crate) async fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         for cert in certs {
+            // Skip processing if the certificate is already enqueued.
+            if self
+                .pending_certificates
+                .contains_key(&(cert.epoch(), *cert.digest()))
+            {
+                continue;
+            }
             let missing = self
                 .authority_store
                 .get_missing_input_objects(cert.digest(), &cert.data().data.input_objects()?)

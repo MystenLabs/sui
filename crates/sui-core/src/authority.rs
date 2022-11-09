@@ -1487,7 +1487,7 @@ impl AuthorityState {
 
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     pub async fn new(
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
@@ -1526,11 +1526,9 @@ impl AuthorityState {
             event_store.map(|es| Arc::new(EventHandler::new(es, module_cache.clone())));
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let transaction_manager = Arc::new(tokio::sync::Mutex::new(TransactionManager::new(
-            store.clone(),
-            tx_ready_certificates,
-            metrics.clone(),
-        )));
+        let transaction_manager = Arc::new(tokio::sync::Mutex::new(
+            TransactionManager::new(store.clone(), tx_ready_certificates, metrics.clone()).await,
+        ));
 
         let mut state = AuthorityState {
             name,
@@ -1696,7 +1694,7 @@ impl AuthorityState {
             .batch_store_certs(certs.iter().cloned())?;
         self.database.store_pending_certificates(&certs)?;
         let mut transaction_manager = self.transaction_manager.lock().await;
-        transaction_manager.enqueue(certs)
+        transaction_manager.enqueue(certs).await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2378,7 +2376,7 @@ impl AuthorityState {
                 }
 
                 let mut transaction_manager = self.transaction_manager.lock().await;
-                transaction_manager.enqueue(vec![certificate])
+                transaction_manager.enqueue(vec![certificate]).await
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
                 match &fragment.message {

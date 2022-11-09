@@ -232,6 +232,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map(|c| c.into()))
     }
 
+    /// Checks if a certificate is in the pending queue.
+    pub fn pending_certificate_exists(
+        &self,
+        epoch_id: EpochId,
+        tx: &TransactionDigest,
+    ) -> Result<bool, SuiError> {
+        Ok(self
+            .epoch_tables()
+            .pending_certificates
+            .contains_key(&(epoch_id, *tx))?)
+    }
+
     /// Deletes one pending certificate.
     pub fn remove_pending_certificate(
         &self,
@@ -370,6 +382,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     // Move package always uses version 1.
                     let version = VersionNumber::from_u64(1);
                     if !self.object_exists(id, version)? {
+                        // The cert cannot have been formed if immutable inputs were missing.
                         missing.push(ObjectKey(*id, version));
                     }
                 }
@@ -1252,6 +1265,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         //       it is ok to just update the pending list without updating the sequence.
 
         // Atomically store all elements.
+        // TODO: clear the shared object locks per transaction after ensuring consistency.
         let mut write_batch = self.epoch_tables().assigned_object_versions.batch();
 
         write_batch = write_batch.insert_batch(
