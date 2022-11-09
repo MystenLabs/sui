@@ -47,6 +47,10 @@ module tutorial::color_object {
         object::delete(id);
     }
 
+    public entry fun transfer(object: ColorObject, recipient: address) {
+        transfer::transfer(object, recipient)
+    }
+
     // == Functions covered in Chapter 3 ==
 
     public entry fun freeze_object(object: ColorObject) {
