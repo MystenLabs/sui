@@ -1981,6 +1981,12 @@ pub struct SuiEventEnvelope {
     pub timestamp: u64,
     /// Transaction digest of associated transaction, if any
     pub tx_digest: Option<TransactionDigest>,
+    /// Sequential event ID, ie (transaction seq number, event seq number).
+    /// 1) Serves as a unique event ID for each fullnode
+    /// 2) Also serves to sequence events for the purposes of pagination and querying.
+    ///    A higher id is an event seen later by that fullnode.
+    /// This ID is the "cursor" for event querying.
+    pub id: EventID,
     /// Specific event type
     pub event: SuiEvent,
 }
