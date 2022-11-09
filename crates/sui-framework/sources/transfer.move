@@ -12,7 +12,7 @@ module sui::transfer {
     /// unique ID.
     public fun transfer<T: key>(obj: T, recipient: address) {
         // TODO: emit event
-        transfer_internal(obj, recipient, false)
+        transfer_internal(obj, recipient)
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
@@ -32,7 +32,7 @@ module sui::transfer {
     /// in this transaction. This restriction may be relaxed in the future.
     public native fun share_object<T: key>(obj: T);
 
-    native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);
+    native fun transfer_internal<T: key>(obj: T, recipient: address);
 
     // Cost calibration functions
     #[test_only]
@@ -54,14 +54,13 @@ module sui::transfer {
     }
 
     #[test_only]
-    public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address, to_object: bool) {
-        transfer_internal(obj, recipient, to_object);
+    public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address) {
+        transfer_internal(obj, recipient);
     }
     #[test_only]
-    public fun calibrate_transfer_internal_nop<T: key + drop>(obj: T, recipient: address, to_object: bool) {
+    public fun calibrate_transfer_internal_nop<T: key + drop>(obj: T, recipient: address) {
         let _ = obj;
         let _ = recipient;
-        let _ = to_object;
     }
 
 }

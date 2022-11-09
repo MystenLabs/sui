@@ -30,17 +30,12 @@ pub fn transfer_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    debug_assert!(args.len() == 2);
 
     let ty = ty_args.pop().unwrap();
-    let to_object = pop_arg!(args, bool);
     let recipient = pop_arg!(args, AccountAddress);
     let obj = args.pop_back().unwrap();
-    let owner = if to_object {
-        Owner::ObjectOwner(recipient.into())
-    } else {
-        Owner::AddressOwner(recipient.into())
-    };
+    let owner = Owner::AddressOwner(recipient.into());
     object_runtime_transfer(context, owner, ty, obj)?;
     // Charge a constant native gas cost here, since
     // we will charge it properly when processing
