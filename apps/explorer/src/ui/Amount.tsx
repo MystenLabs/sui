@@ -4,17 +4,17 @@
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 
-export type AmountProps = { amount: number; symbol?: string };
+export type AmountProps = { amount: number; coinSymbol?: string };
 
-export function Amount({ amount, symbol }: AmountProps) {
+export function Amount({ amount, coinSymbol }: AmountProps) {
     return (
         <div className="flex flex-row items-end gap-1 text-sui-grey-100 ml-6">
             <Heading as="h4" variant="heading4">
                 {amount}
             </Heading>
-            {symbol && (
+            {coinSymbol && (
                 <div className="text-sui-grey-80">
-                    <Text variant="bodySmall">{symbol}</Text>
+                    <Text variant="bodySmall">{coinSymbol}</Text>
                 </div>
             )}
         </div>

@@ -7,9 +7,9 @@ import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
 
 type Recipient = {
     address: string;
-    amount?: {
-        value: number;
-        unit?: string;
+    coin?: {
+        amount: number;
+        coinSymbol?: string;
     };
 };
 
@@ -63,22 +63,27 @@ export function SenderRecipient({
                                 {multipleRecipientsList.length > 1 && 's'}
                             </Heading>
                         </div>
-                        {multipleRecipientsList?.map((recipient) => (
-                            <div
-                                className="flex flex-col gap-2.5 mb-2"
-                                key={recipient.address}
-                            >
-                                <SenderRecipientAddress
-                                    address={recipient?.address}
-                                />
-                                {recipient?.amount && (
-                                    <Amount
-                                        amount={recipient.amount?.value}
-                                        symbol={recipient.amount?.unit}
+
+                        <div className="flex flex-col gap-6">
+                            {multipleRecipientsList.map((recipient) => (
+                                <div
+                                    className="flex flex-col gap-2.5"
+                                    key={recipient.address}
+                                >
+                                    <SenderRecipientAddress
+                                        address={recipient?.address}
                                     />
-                                )}
-                            </div>
-                        ))}
+                                    {recipient?.coin && (
+                                        <Amount
+                                            amount={recipient.coin.amount}
+                                            coinSymbol={
+                                                recipient.coin?.coinSymbol
+                                            }
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 ) : null}
             </div>
