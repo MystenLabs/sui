@@ -1,13 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
+use crate::header_waiter::WaiterMessage;
 use config::{Committee, WorkerId};
 use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
 use std::{collections::HashMap, sync::Arc};
-use storage::CertificateStore;
+use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use types::{
     error::DagResult, metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header,

@@ -1,10 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    metrics::PrimaryMetrics,
-    primary::{PayloadToken, PrimaryMessage},
-};
+use crate::{metrics::PrimaryMetrics, primary::PrimaryMessage};
 use anyhow::Result;
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
@@ -15,7 +12,7 @@ use futures::{
 };
 use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
 use std::{collections::HashMap, sync::Arc};
-use storage::CertificateStore;
+use storage::{CertificateStore, PayloadToken};
 use store::{Store, StoreError};
 use sui_metrics::{monitored_future, spawn_monitored_task};
 use thiserror::Error;

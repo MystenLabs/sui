@@ -20,10 +20,11 @@ use narwhal_node as node;
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
-    Node, NodeStorage,
+    Node,
 };
 use prometheus::Registry;
 use std::sync::Arc;
+use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::info;

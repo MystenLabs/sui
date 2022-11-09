@@ -11,10 +11,11 @@ use multiaddr::Multiaddr;
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, worker_metrics_registry},
-    Node, NodeStorage,
+    Node,
 };
 use prometheus::{proto::Metric, Registry};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
+use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use tokio::{
     sync::{broadcast::Sender, mpsc::channel, RwLock},

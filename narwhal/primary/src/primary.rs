@@ -39,7 +39,7 @@ use std::{
     net::Ipv4Addr,
     sync::Arc,
 };
-use storage::{CertificateStore, ProposerStore};
+use storage::{CertificateStore, PayloadToken, ProposerStore};
 use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
@@ -62,9 +62,6 @@ pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
-
-// A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
-pub type PayloadToken = u8;
 
 /// The network model in which the primary operates.
 pub enum NetworkModel {

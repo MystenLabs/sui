@@ -7,15 +7,15 @@ use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
-use node::NodeStorage;
-use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
+use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
     time::Duration,
 };
-use storage::CertificateStore;
+use storage::NodeStorage;
+use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use test_utils::{
     fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
