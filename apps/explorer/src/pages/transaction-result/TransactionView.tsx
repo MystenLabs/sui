@@ -13,6 +13,7 @@ import {
     getTransferSuiTransaction,
     getTransferSuiAmount,
     SUI_TYPE_ARG,
+    SuiJsonValue
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -325,6 +326,23 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         </div>
     ));
 
+    const argumentDisplay = (argumentValue: SuiJsonValue[] | undefined) => (
+        argumentValue
+        ? (
+            <div className="flex flex-col">
+            {
+                argumentValue?.map?.((item: SuiJsonValue, index: number) => (
+                    <div className="mt-3 first:mt-0" key={index}>
+                        "{item}"
+                    </div>
+                ))
+                || JSON.stringify(argumentValue)
+            }
+            </div>
+        )
+        : null
+    );
+
     const transactionSignatureData = {
         title: 'Transaction Signatures',
         content: [
@@ -414,7 +432,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                       {
                           label: 'Argument',
                           monotypeClass: true,
-                          value: JSON.stringify(txKindData.arguments.value),
+                          value: argumentDisplay(txKindData.arguments.value)
                       },
                   ],
               }
