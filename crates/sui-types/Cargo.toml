@@ -50,8 +50,8 @@ narwhal-executor = { path = "../../narwhal/executor" }
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
-typed-store = { path = "../../mysten-infra/crates/typed-store" }
-name-variant = { path = "../../mysten-infra/crates/name-variant" }
+typed-store = { path = "../../crates/typed-store" }
+name-variant = { path = "../../crates/name-variant" }
 
 workspace-hack.workspace = true
 proptest = "1.0.0"

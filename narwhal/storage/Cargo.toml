@@ -19,7 +19,7 @@ tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
-store = { path = "../../mysten-infra/crates/typed-store", package = "typed-store" }
+store = { path = "../../crates/typed-store", package = "typed-store" }
 
 workspace-hack.workspace = true
 

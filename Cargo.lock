@@ -1331,6 +1331,7 @@ dependencies = [
  "async-trait",
  "eyre",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4869,6 +4870,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4886,6 +4888,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "roaring",
  "smallvec",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4895,6 +4898,7 @@ dependencies = [
  "proc-macro2 1.0.47",
  "syn 1.0.103",
  "synstructure",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4910,6 +4914,7 @@ dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5165,6 +5170,7 @@ dependencies = [
  "tracing-subscriber 0.3.15",
  "typed-store",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5283,6 +5289,7 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5778,21 +5785,6 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-jaeger"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8c0b12cd9e3f9b35b52f6e0dac66866c519b26f424f4bbf96e3fe8bfbdc5229"
-dependencies = [
- "async-trait",
- "lazy_static 1.4.0",
- "opentelemetry 0.17.0",
- "opentelemetry-semantic-conventions 0.9.0",
- "thiserror",
- "thrift 0.15.0",
- "tokio",
-]
-
-[[package]]
-name = "opentelemetry-jaeger"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e785d273968748578931e4dc3b4f5ec86b26e09d9e0d66b55adda7fce742f7a"
@@ -5802,19 +5794,10 @@ dependencies = [
  "futures-executor",
  "once_cell",
  "opentelemetry 0.18.0",
- "opentelemetry-semantic-conventions 0.10.0",
+ "opentelemetry-semantic-conventions",
  "thiserror",
- "thrift 0.16.0",
+ "thrift",
  "tokio",
-]
-
-[[package]]
-name = "opentelemetry-semantic-conventions"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "985cc35d832d412224b2cffe2f9194b1b89b6aa5d0bef76d080dce09d90e62bd"
-dependencies = [
- "opentelemetry 0.17.0",
 ]
 
 [[package]]
@@ -6451,6 +6434,7 @@ dependencies = [
  "anyhow",
  "prometheus",
  "protobuf",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6844,6 +6828,7 @@ dependencies = [
  "serde 1.0.147",
  "tracing",
  "webpki",
+ "workspace-hack",
  "x509-parser",
 ]
 
@@ -8859,6 +8844,7 @@ dependencies = [
  "sui-simulator",
  "sui-types",
  "tap",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tonic-health",
@@ -9153,15 +9139,16 @@ dependencies = [
  "crossterm 0.25.0",
  "once_cell",
  "opentelemetry 0.18.0",
- "opentelemetry-jaeger 0.17.0",
+ "opentelemetry-jaeger",
  "prometheus",
  "tokio",
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
  "tracing-chrome",
- "tracing-opentelemetry 0.18.0",
+ "tracing-opentelemetry",
  "tracing-subscriber 0.3.15",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9293,6 +9280,7 @@ dependencies = [
  "jsonrpsee-http-client",
  "move-core-types",
  "multiaddr",
+ "mysten-network",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -9380,19 +9368,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
 dependencies = [
  "num_cpus",
-]
-
-[[package]]
-name = "thrift"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b82ca8f46f95b3ce96081fe3dd89160fdea970c254bb72925255d1b62aae692e"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float 1.1.1",
- "threadpool",
 ]
 
 [[package]]
@@ -9865,20 +9840,6 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.17.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbbe89715c1dbbb790059e2565353978564924ee85017b5fff365c872ff6721f"
-dependencies = [
- "once_cell",
- "opentelemetry 0.17.0",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber 0.3.15",
-]
-
-[[package]]
-name = "tracing-opentelemetry"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21ebb87a95ea13271332df069020513ab70bdb5637ca42d6e492dc3bbbad48de"
@@ -9998,6 +9959,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store-derive",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10012,6 +9974,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10613,6 +10576,7 @@ dependencies = [
  "aes-gcm",
  "ahash",
  "aho-corasick",
+ "aliasable",
  "anemo",
  "anemo-build",
  "anemo-tower",
@@ -10807,6 +10771,7 @@ dependencies = [
  "ecdsa",
  "ed25519",
  "ed25519-consensus",
+ "ed25519-dalek",
  "ed25519-dalek-fiat",
  "either",
  "elliptic-curve",
@@ -11048,16 +11013,16 @@ dependencies = [
  "openssl-sys",
  "opentelemetry 0.17.0",
  "opentelemetry 0.18.0",
- "opentelemetry-jaeger 0.16.0",
- "opentelemetry-jaeger 0.17.0",
- "opentelemetry-semantic-conventions 0.10.0",
- "opentelemetry-semantic-conventions 0.9.0",
+ "opentelemetry-jaeger",
+ "opentelemetry-semantic-conventions",
  "opentelemetry_api",
  "opentelemetry_sdk",
  "ordered-float 1.1.1",
  "ordered-float 2.10.0",
  "os_str_bytes",
+ "ouroboros 0.15.5",
  "ouroboros 0.9.5",
+ "ouroboros_macro 0.15.5",
  "ouroboros_macro 0.9.5",
  "output_vt100",
  "overload",
@@ -11143,6 +11108,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "rayon-core",
+ "rcgen 0.10.0",
  "rcgen 0.9.3",
  "read-write-set",
  "read-write-set-dynamic",
@@ -11284,8 +11250,7 @@ dependencies = [
  "thousands",
  "thread_local",
  "threadpool",
- "thrift 0.15.0",
- "thrift 0.16.0",
+ "thrift",
  "time 0.1.44",
  "time 0.3.15",
  "time-macros",
@@ -11320,8 +11285,7 @@ dependencies = [
  "tracing-core",
  "tracing-futures",
  "tracing-log",
- "tracing-opentelemetry 0.17.4",
- "tracing-opentelemetry 0.18.0",
+ "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
  "tracing-subscriber 0.3.15",
  "tracing-test",

@@ -37,7 +37,7 @@ sui-metrics = { path = "../sui-metrics" }
 
 move-core-types.workspace = true
 
-telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 workspace-hack.workspace = true
 
 [dev-dependencies]

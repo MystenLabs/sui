@@ -43,10 +43,10 @@ rocksdb = "0.19.0"
 
 tempfile = "3.3.0"
 narwhal-executor = { path = "../../narwhal/executor" }
-telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers" }
-typed-store = { path = "../../mysten-infra/crates/typed-store" }
-typed-store-derive = { path = "../../mysten-infra/crates/typed-store-derive" }
-mysten-network = { path = "../../mysten-infra/crates/mysten-network" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+typed-store = { path = "../../crates/typed-store" }
+typed-store-derive = { path = "../../crates/typed-store-derive" }
+mysten-network = { path = "../../crates/mysten-network" }
 
 move-core-types.workspace = true
 move-prover.workspace = true

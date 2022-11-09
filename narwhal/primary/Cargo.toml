@@ -40,9 +40,9 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
-store = { path = "../../mysten-infra/crates/typed-store", package = "typed-store" }
-mysten-network = { path = "../../mysten-infra/crates/mysten-network" }
-telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers"}
+store = { path = "../../crates/typed-store", package = "typed-store" }
+mysten-network = { path = "../../crates/mysten-network" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 workspace-hack.workspace = true
 

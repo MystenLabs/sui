@@ -30,9 +30,9 @@ sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 sui-metrics = { path = "../sui-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
-typed-store = { path = "../../mysten-infra/crates/typed-store" }
-mysten-network = { path = "../../mysten-infra/crates/mysten-network" }
-telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers" }
+typed-store = { path = "../../crates/typed-store" }
+mysten-network = { path = "../../crates/mysten-network" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 
 ying-profiler = { git = "https://github.com/velvia/ying-profiler", features = ["profile-spans"] }
 

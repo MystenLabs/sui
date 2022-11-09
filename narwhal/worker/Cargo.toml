@@ -30,9 +30,9 @@ network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }
 types = { path = "../types", package = "narwhal-types" }
 prometheus = "0.13.2"
-store = { path = "../../mysten-infra/crates/typed-store", package = "typed-store" }
-mysten-network = { path = "../../mysten-infra/crates/mysten-network"}
-telemetry-subscribers = { path = "../../mysten-infra/crates/telemetry-subscribers"}
+store = { path = "../../crates/typed-store", package = "typed-store" }
+mysten-network = { path = "../../crates/mysten-network"}
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 sui-metrics = { path = "../../crates/sui-metrics" }
 
