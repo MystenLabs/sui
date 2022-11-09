@@ -40,6 +40,7 @@ use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
+pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{
     AuthorityStore, GatewayStore, PendingDigest, ResolverWrapper, SuiDataStore, UpdateType,
 };
@@ -88,6 +89,7 @@ use sui_types::{
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::checkpoints::ConsensusSender;
+use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -511,6 +513,8 @@ pub struct AuthorityState {
 
     /// The checkpoint store
     pub checkpoints: Arc<Mutex<CheckpointStore>>,
+
+    checkpoint_service: Arc<CheckpointService>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -1441,6 +1445,7 @@ impl AuthorityState {
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
         tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1490,6 +1495,7 @@ impl AuthorityState {
             consensus_guardrail: AtomicUsize::new(0),
             metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
             tx_reconfigure_consensus,
+            checkpoint_service,
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1595,6 +1601,12 @@ impl AuthorityState {
             None,
         ));
 
+        let checkpoint_service = CheckpointService::spawn(
+            &path.join("checkpoint2"),
+            Box::new(store.clone()),
+            LogCheckpointOutput::boxed(),
+        );
+
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
@@ -1609,6 +1621,7 @@ impl AuthorityState {
             genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
+            checkpoint_service,
         )
         .await
     }
@@ -2362,6 +2375,19 @@ impl AuthorityState {
         &self,
         consensus_output: &Arc<ConsensusOutput>,
     ) -> SuiResult {
+        debug!("Commit boundary at {}", consensus_output.consensus_index);
+        // This exchange is restart safe because of following:
+        //
+        // We try to read last checkpoint content and send it to the checkpoint service
+        // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
+        //
+        // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
+        if let Some((index, roots)) = self
+            .database
+            .last_checkpoint(consensus_output.consensus_index)?
+        {
+            self.checkpoint_service.notify_checkpoint(index, roots)?;
+        }
         self.database
             .record_checkpoint_boundary(consensus_output.consensus_index)
     }
