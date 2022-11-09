@@ -16,10 +16,7 @@ clap = "2.34"
 dhat = { version = "0.3.2", optional = true }
 futures = "0.3.24"
 multiaddr = "0.15.0"
-mysten-network.workspace = true
 rand = "0.8.5"
-store = { version = "0.4.0", package = "typed-store"}
-telemetry-subscribers.workspace = true
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1.10"
@@ -42,10 +39,14 @@ prometheus = "0.13.2"
 storage = { path = "../storage", package = "narwhal-storage" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
-workspace-hack.workspace = true
 eyre = "0.6.8"
 
+store = { path = "../../crates/typed-store", package = "typed-store" }
+mysten-network = { path = "../../crates/mysten-network" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+
 sui-metrics = { path = "../../crates/sui-metrics" }
+workspace-hack.workspace = true
 
 anemo.workspace = true
 reqwest = { version = "0.11.12", features = ["json"] }

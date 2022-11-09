@@ -19,7 +19,6 @@ serde_with = { version = "2.0.1", features = ["hex"] }
 tracing = "0.1.36"
 bcs = "0.1.4"
 clap = { version = "3.2.17", features = ["derive"] }
-telemetry-subscribers.workspace = true
 bip32 = "0.4.0"
 
 sui-core = { path = "../sui-core" }
@@ -41,11 +40,13 @@ colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
 rocksdb = "0.19.0"
-typed-store.workspace = true
-typed-store-derive.workspace = true
 
 tempfile = "3.3.0"
 narwhal-executor = { path = "../../narwhal/executor" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+typed-store = { path = "../../crates/typed-store" }
+typed-store-derive = { path = "../../crates/typed-store-derive" }
+mysten-network = { path = "../../crates/mysten-network" }
 
 move-core-types.workspace = true
 move-prover.workspace = true
@@ -66,8 +67,6 @@ tempfile = "3.3.0"
 futures = "0.3.23"
 prometheus = "0.13.2"
 
-typed-store.workspace = true
-typed-store-derive.workspace = true
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 test-utils = { path = "../test-utils" }

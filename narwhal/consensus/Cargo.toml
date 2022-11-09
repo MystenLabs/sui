@@ -11,10 +11,8 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 bincode = "1.3.3"
 bytes = "1.2.1"
 match_opt = "0.1.2"
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "fee7617899ac605f4aaf77312a394751ae577546" }
 rand = { version = "0.8.5", optional = true }
 serde = { version = "1.0.144", features = ["derive"] }
-store.workspace = true
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync"] }
 tracing = "0.1.36"
@@ -29,6 +27,9 @@ types = { path = "../types", package = "narwhal-types" }
 workspace-hack.workspace = true
 cfg-if = "1.0.0"
 sui-metrics = { path = "../../crates/sui-metrics" }
+mysten-util-mem = { path = "../../crates/mysten-util-mem" }
+store = { path = "../../crates/typed-store", package = "typed-store" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 
 [dev-dependencies]
 bincode = "1.3.3"
@@ -37,8 +38,6 @@ futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 node = { path = "../node", package = "narwhal-node" }
-
-telemetry-subscribers.workspace = true
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["criterion", "flamegraph"]}

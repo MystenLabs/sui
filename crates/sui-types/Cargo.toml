@@ -37,9 +37,6 @@ roaring = "0.10.1"
 enum_dispatch = "^0.3"
 eyre = "0.6.8"
 
-name-variant.workspace = true
-typed-store.workspace = true
-
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
@@ -53,6 +50,9 @@ narwhal-executor = { path = "../../narwhal/executor" }
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
+typed-store = { path = "../../crates/typed-store" }
+name-variant = { path = "../../crates/name-variant" }
+
 workspace-hack.workspace = true
 proptest = "1.0.0"
 

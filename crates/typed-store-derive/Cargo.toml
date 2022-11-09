@@ -1,0 +1,25 @@
+[package]
+name = "typed-store-derive"
+version = "0.3.0"
+license = "Apache-2.0"
+authors = ["Ade A. <ade@mystenlabs.com>"]
+description = "macros for the typed-store crate"
+repository = "https://github.com/mystenlabs/mysten-infra"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.47"
+quote = "1.0.9"
+syn = { version = "1.0.102", features = ["full"] }
+workspace-hack.workspace = true
+
+[dev-dependencies]
+eyre = "0.6.8"
+rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+tempfile = "3.3.0"
+typed-store = { path = "../typed-store" }
+tokio = { version = "1.21.2", features = ["test-util"] }

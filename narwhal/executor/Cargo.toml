@@ -28,16 +28,16 @@ storage = { path = "../storage", package = "narwhal-storage" }
 itertools = "0.10.5"
 
 types = { path = "../types", package = "narwhal-types" }
-mysten-network.workspace = true
 network = { path = "../network", package = "narwhal-network" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 anyhow = "1.0.65"
-store.workspace = true
 match_opt = "0.1.2"
 rand = "0.8.5"
 mockall = "0.11.2"
 
 sui-metrics = { path = "../../crates/sui-metrics" }
+store = { path = "../../crates/typed-store", package = "typed-store" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 workspace-hack.workspace = true
 
@@ -48,4 +48,3 @@ primary = { path = "../primary", package = "narwhal-primary" }
 node = { path = "../node", package = "narwhal-node" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 types = { path = "../types", package = "narwhal-types" }
-telemetry-subscribers.workspace = true

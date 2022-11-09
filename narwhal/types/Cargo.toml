@@ -16,7 +16,6 @@ derive_builder = "0.11.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 mockall = "0.11.2"
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "fee7617899ac605f4aaf77312a394751ae577546" }
 prometheus = "0.13.2"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
@@ -26,7 +25,6 @@ roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_with = "2.0.1"
 signature = "1.6.1"
-store = {  version = "0.4.0", package = "typed-store"}
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
@@ -40,6 +38,9 @@ dag = { path = "../dag", package = "narwhal-dag" }
 anemo.workspace = true
 workspace-hack.workspace = true
 once_cell = "1.16.0"
+
+store = { path = "../../crates/typed-store", package = "typed-store" }
+mysten-util-mem = { path = "../../crates/mysten-util-mem" }
 
 [dev-dependencies]
 criterion = "0.3.6"

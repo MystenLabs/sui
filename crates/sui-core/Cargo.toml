@@ -49,15 +49,15 @@ move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-runtime.workspace = true
 
-typed-store.workspace = true
-typed-store-derive.workspace = true
-mysten-network.workspace = true
-
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-consensus = { path = "../../narwhal/consensus" }
 narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+typed-store = { path = "../../crates/typed-store" }
+typed-store-derive = { path = "../../crates/typed-store-derive" }
+mysten-network = { path = "../../crates/mysten-network" }
 
 fastcrypto.workspace = true
 workspace-hack.workspace = true
@@ -74,7 +74,6 @@ rand = "0.8.5"
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
-telemetry-subscribers.workspace = true
 
 sui-framework-build = { path = "../sui-framework-build" }
 sui-macros = { path = "../sui-macros" }

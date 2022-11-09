@@ -10,10 +10,10 @@ edition = "2021"
 workspace-hack.workspace = true
 sui-framework = { path = "../sui-framework" }
 sui-types = { path = "../sui-types" }
-telemetry-subscribers.workspace = true
 tracing = "0.1"
 anemo.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
 
 [target.'cfg(msim)'.dependencies]
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b28d77f88434535b166cc60bd3e5018aa75cd705", package = "msim" }

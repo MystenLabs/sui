@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 workspace-hack.workspace = true
-telemetry-subscribers.workspace = true
 tracing = "0.1"
 scopeguard = "1"
 prometheus = "0.13"
