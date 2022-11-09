@@ -5,6 +5,7 @@ import { randomBytes } from '@noble/hashes/utils';
 import { exec } from 'child_process';
 import CopyPlugin from 'copy-webpack-plugin';
 import DotEnv from 'dotenv-webpack';
+import gitRevSync from 'git-rev-sync';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import { resolve } from 'path';
@@ -14,7 +15,25 @@ import packageJson from '../../package.json';
 
 import type { Configuration } from 'webpack';
 
-const APP_NAME = 'Sui Wallet';
+function generateDateVersion(patch: number) {
+    const sha = gitRevSync.short();
+    const date = new Date();
+    const version = [
+        String(date.getUTCFullYear()).slice(2),
+        String(date.getUTCMonth() + 1),
+        String(date.getUTCDate()),
+        patch,
+    ].join('.');
+
+    return {
+        version,
+        version_name: `${version} (${sha})`,
+    };
+}
+
+const WALLET_BETA = process.env.WALLET_BETA === 'true';
+const PATCH_VERISON = Number(process.env.PATCH_VERSION) || 0;
+
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
 const CONFIGS_ROOT = resolve(PROJECT_ROOT, 'configs');
 const SRC_ROOT = resolve(PROJECT_ROOT, 'src');
@@ -25,6 +44,11 @@ const TS_CONFIG_FILE = resolve(
     TS_CONFIGS_ROOT,
     `tsconfig.${IS_DEV ? 'dev' : 'prod'}.json`
 );
+const APP_NAME = WALLET_BETA
+    ? 'Sui Wallet (BETA)'
+    : IS_DEV
+    ? 'Sui Wallet (DEV)'
+    : 'Sui Wallet';
 
 function loadTsConfig(tsConfigFilePath: string) {
     return new Promise<string>((res, rej) => {
@@ -155,12 +179,11 @@ const commonConfig: () => Promise<Configuration> = async () => {
                         from: resolve(SRC_ROOT, 'manifest', 'manifest.json'),
                         to: resolve(OUTPUT_ROOT, '[name][ext]'),
                         transform: (content) => {
-                            const { description, version } = packageJson;
                             const manifestJson = {
                                 ...JSON.parse(content.toString()),
+                                ...generateDateVersion(PATCH_VERISON),
                                 name: APP_NAME,
-                                description,
-                                version,
+                                description: packageJson.description,
                             };
                             return JSON.stringify(manifestJson, null, 4);
                         },
@@ -181,6 +204,8 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 'process.env.WALLET_KEYRING_PASSWORD': JSON.stringify(
                     Buffer.from(randomBytes(64)).toString('hex')
                 ),
+                'process.env.WALLET_BETA': WALLET_BETA,
+                'process.env.APP_NAME': JSON.stringify(APP_NAME),
             }),
             new ProvidePlugin({
                 Buffer: ['buffer', 'Buffer'],

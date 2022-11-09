@@ -181,6 +181,7 @@ importers:
       '@sentry/tracing': ^7.6.0
       '@tanstack/react-query': ^4.14.1
       '@types/dotenv-webpack': ^7.0.3
+      '@types/git-rev-sync': ^2.0.0
       '@types/node': ^18.0.6
       '@types/react': ^18.0.20
       '@types/react-dom': ^18.0.6
@@ -208,6 +209,7 @@ importers:
       eslint-webpack-plugin: ^3.2.0
       formik: ^2.2.9
       framer-motion: ^7.5.1
+      git-rev-sync: ^3.0.2
       happy-dom: ^7.6.0
       html-webpack-plugin: ^5.5.0
       mini-css-extract-plugin: ^2.6.1
@@ -297,6 +299,7 @@ importers:
       '@sentry/react': 7.11.1_react@18.2.0
       '@sentry/tracing': 7.11.1
       '@types/dotenv-webpack': 7.0.3_webpack-cli@4.10.0
+      '@types/git-rev-sync': 2.0.0
       '@types/node': 18.7.6
       '@types/react': 18.0.20
       '@types/react-dom': 18.0.6
@@ -317,6 +320,7 @@ importers:
       eslint-config-prettier: 8.5.0_eslint@8.23.0
       eslint-config-react-app: 7.0.1_itqs5654cmlnjraw6gjzqacppi
       eslint-webpack-plugin: 3.2.0_skpnekq7gq3zdkwzxpcrmjcczy
+      git-rev-sync: 3.0.2
       happy-dom: 7.6.0
       html-webpack-plugin: 5.5.0_webpack@5.74.0
       mini-css-extract-plugin: 2.6.1_webpack@5.74.0
@@ -5426,6 +5430,10 @@ packages:
 
   /@types/geojson/7946.0.10:
     resolution: {integrity: sha512-Nmh0K3iWQJzniTuPRcJn5hxXkfB1T1pgB89SBig5PlJQU5yocazeu4jATJlaA0GYFKWMqDdvYemoSnF2pXgLVA==}
+
+  /@types/git-rev-sync/2.0.0:
+    resolution: {integrity: sha512-qGYApbb0m8Ofy3pwYks+kYVIZQAN/cqNucJGbl5O5GpLw9JSzp74rkTWDhPv3brrJfJb5/ixtimLJpo4tfh2QA==}
+    dev: true
 
   /@types/glob/7.2.0:
     resolution: {integrity: sha512-ZUxbzKl0IfJILTS6t7ip5fQQM/J3TJYubDm3nMbgubNNYS62eXeUpoLUC8/7fJNiFYHTrGPQn7hspDUzIHX3UA==}
@@ -11261,6 +11269,14 @@ packages:
       assert-plus: 1.0.0
     dev: true
 
+  /git-rev-sync/3.0.2:
+    resolution: {integrity: sha512-Nd5RiYpyncjLv0j6IONy0lGzAqdRXUaBctuGBbrEA2m6Bn4iDrN/9MeQTXuiquw8AEKL9D2BW0nw5m/lQvxqnQ==}
+    dependencies:
+      escape-string-regexp: 1.0.5
+      graceful-fs: 4.1.15
+      shelljs: 0.8.5
+    dev: true
+
   /github-slugger/1.4.0:
     resolution: {integrity: sha512-w0dzqw/nt51xMVmlaV1+JRzN+oCa1KfcgGEWhxUG16wbdA+Xnt/yoFO8Z8x/V82ZcZ0wy6ln9QDup5avbhiDhQ==}
     dev: true
@@ -11449,6 +11465,10 @@ packages:
       p-cancelable: 1.1.0
       to-readable-stream: 1.0.0
       url-parse-lax: 3.0.0
+    dev: true
+
+  /graceful-fs/4.1.15:
+    resolution: {integrity: sha512-6uHUhOPEBgQ24HM+r6b/QwWfZq+yiFcipKFrOFiBEnWdy5sdzYoi+pJeQaPI5qOLRFqWmAXUPQNsielzdLoecA==}
     dev: true
 
   /graceful-fs/4.2.10:
