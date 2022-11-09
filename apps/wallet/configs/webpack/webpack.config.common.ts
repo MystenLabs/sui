@@ -22,7 +22,7 @@ function generateDateVersion(patch: number) {
         String(date.getUTCFullYear()).slice(2),
         String(date.getUTCMonth() + 1),
         String(date.getUTCDate()),
-        patch ?? 0,
+        patch,
     ].join('.');
 
     return {
@@ -31,7 +31,7 @@ function generateDateVersion(patch: number) {
     };
 }
 
-const WALLET_BETA = !!process.env.WALLET_BETA;
+const WALLET_BETA = process.env.WALLET_BETA === 'true';
 const PATCH_VERISON = Number(process.env.PATCH_VERSION) || 0;
 
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
