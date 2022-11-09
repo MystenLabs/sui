@@ -9,7 +9,7 @@ import { ReactComponent as Sender } from './icons/sender.svg';
 import { Link } from '~/ui/Link';
 
 const senderRecipientAddressStyles = cva(
-    ['break-all flex flex-row gap-2 w-full items-center'],
+    ['break-all flex flex-row gap-2 items-center'],
     {
         variants: {
             isCoinTransfer: {

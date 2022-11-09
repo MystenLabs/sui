@@ -64,7 +64,7 @@ export function SenderRecipient({
                             </Heading>
                         </div>
 
-                        <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-2">
                             {multipleRecipientsList.map((recipient) => (
                                 <div
                                     className="flex flex-col gap-2.5"
