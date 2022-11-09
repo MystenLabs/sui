@@ -83,7 +83,7 @@ export async function publishPackage(
       { encoding: 'utf-8' }
     )
   );
-  const publishTxn = await signer.publishWithRequestType({
+  const publishTxn = await signer.publish({
     compiledModules: useLocalTxnBuilder
       ? compiledModules.map((m: any) =>
           Array.from(new Base64DataBuffer(m).getData())

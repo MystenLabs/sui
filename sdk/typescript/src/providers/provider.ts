@@ -176,7 +176,7 @@ export abstract class Provider {
    * replace the other `executeTransaction` that's only available on the
    * Gateway
    */
-  abstract executeTransactionWithRequestType(
+  abstract executeTransaction(
     txnBytes: string,
     signatureScheme: SignatureScheme,
     signature: string,

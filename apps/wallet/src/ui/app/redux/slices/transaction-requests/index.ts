@@ -153,16 +153,10 @@ export const respondToTransactionRequest = createAsyncThunk<
                               }
                             : txRequest.tx.data;
 
-                    response =
-                        await signer.signAndExecuteTransactionWithRequestType(
-                            txn
-                        );
+                    response = await signer.signAndExecuteTransaction(txn);
                 } else if (txRequest.tx.type === 'serialized-move-call') {
                     const txBytes = new Base64DataBuffer(txRequest.tx.data);
-                    response =
-                        await signer.signAndExecuteTransactionWithRequestType(
-                            txBytes
-                        );
+                    response = await signer.signAndExecuteTransaction(txBytes);
                 } else {
                     throw new Error(
                         `Either tx or txBytes needs to be defined.`

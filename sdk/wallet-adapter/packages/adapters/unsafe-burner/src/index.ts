@@ -44,8 +44,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   }
 
   async signAndExecuteTransaction(transaction: SignableTransaction) {
-    const response =
-      await this.#signer.signAndExecuteTransactionWithRequestType(transaction);
+    const response = await this.#signer.signAndExecuteTransaction(transaction);
 
     return {
       certificate: getCertifiedTransaction(response)!,
