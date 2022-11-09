@@ -14,7 +14,7 @@ const data = {
             address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
             coin: {
                 amount: 1000,
-                coinSymbol: 'SUI',
+                symbol: 'SUI',
             },
         },
     ],
@@ -40,7 +40,7 @@ export const singleTransfer: StoryObj<SenderRecipientProps> = {
                 address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
                 coin: {
                     amount: 1000,
-                    coinSymbol: 'SUI',
+                    symbol: 'SUI',
                 },
             },
         ],
