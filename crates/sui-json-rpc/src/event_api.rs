@@ -59,6 +59,7 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
             event.map(|event| SuiEventEnvelope {
                 timestamp: e.timestamp,
                 tx_digest: e.tx_digest,
+                id: EventID::from((e.seq_num as i64, e.event_num as i64)),
                 event,
             })
         });

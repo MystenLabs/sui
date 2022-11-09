@@ -29,6 +29,7 @@ use sui_types::base_types::{
 };
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, Signature};
 use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
+use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
@@ -428,6 +429,7 @@ impl RpcExampleProvider {
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),
             tx_digest: Some(*tx_digest),
+            id: EventID::from((0, 0)),
             event: sui_event.clone(),
         }];
         let result = SuiTransactionResponse {

@@ -132,6 +132,7 @@ export type SuiEventFilter =
 export type SuiEventEnvelope = {
   timestamp: number;
   txDigest: TransactionDigest;
+  id: EventId;  // tx_seq_num:event_seq
   event: SuiEvent;
 };
 
