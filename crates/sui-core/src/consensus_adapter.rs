@@ -16,6 +16,7 @@ use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use std::collections::VecDeque;
+use std::future::Future;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -206,15 +207,37 @@ impl ConsensusWaiter {
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
-    consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
+    consensus_client: Box<dyn SubmitToConsensus>,
     /// A channel to notify the consensus listener to take action for a transactions.
-    tx_consensus_listener: Sender<ConsensusListenerMessage>,
+    _tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
     timeout: Duration,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
+}
+
+#[async_trait::async_trait]
+pub trait SubmitToConsensus: Sync + Send + 'static {
+    async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult;
+}
+
+#[async_trait::async_trait]
+impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Channel> {
+    async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
+        let serialized =
+            bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
+        let bytes = Bytes::from(serialized.clone());
+        self.clone()
+            .submit_transaction(TransactionProto { transaction: bytes })
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+            .tap_err(|r| {
+                error!("Submit transaction failed with: {:?}", r);
+            })?;
+        Ok(())
+    }
 }
 
 impl ConsensusAdapter {
@@ -225,14 +248,31 @@ impl ConsensusAdapter {
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Self {
-        let consensus_client = TransactionsClient::new(
+        let consensus_client = Box::new(TransactionsClient::new(
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
-        );
+        ));
         let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
-            tx_consensus_listener,
+            _tx_consensus_listener: tx_consensus_listener,
+            timeout,
+            num_inflight_transactions,
+            opt_metrics,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_test(
+        consensus_client: Box<dyn SubmitToConsensus>,
+        tx_consensus_listener: Sender<ConsensusListenerMessage>,
+        timeout: Duration,
+        opt_metrics: OptArcConsensusAdapterMetrics,
+    ) -> Self {
+        let num_inflight_transactions = Default::default();
+        Self {
+            consensus_client,
+            _tx_consensus_listener: tx_consensus_listener,
             timeout,
             num_inflight_transactions,
             opt_metrics,
@@ -256,6 +296,7 @@ impl ConsensusAdapter {
         &self,
         authority: &AuthorityName,
         certificate: &VerifiedCertificate,
+        processed_waiter: impl Future<Output = SuiResult<()>>,
     ) -> SuiResult {
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
@@ -268,20 +309,9 @@ impl ConsensusAdapter {
             ?tx_digest,
             "Certified transaction consensus message created"
         );
-        let serialized = bincode::serialize(&transaction)
-            .expect("Serializing consensus transaction cannot fail");
-        let bytes = Bytes::from(serialized.clone());
 
         let waiter = if certificate.contains_shared_object() {
-            // Notify the consensus listener that we are expecting to process this certificate.
-            let (waiter, signals) = ConsensusWaiter::new();
-
-            let consensus_input = ConsensusListenerMessage::New(serialized, signals);
-            self.tx_consensus_listener
-                .send(consensus_input)
-                .await
-                .expect("Failed to notify consensus listener");
-            Some(waiter)
+            Some(processed_waiter)
         } else {
             None
         };
@@ -295,13 +325,8 @@ impl ConsensusAdapter {
             // todo - we need stronger guarantees for checkpoints here (issue #5763)
             // todo - for owned objects this can also be done async
             self.consensus_client
-                .clone()
-                .submit_transaction(TransactionProto { transaction: bytes })
-                .await
-                .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
-                .tap_err(|r| {
-                    error!("Submit transaction failed with: {:?}", r);
-                })?;
+                .submit_to_consensus(&transaction)
+                .await?;
             Some(InflightDropGuard::acquire(self))
         } else {
             None
@@ -314,8 +339,8 @@ impl ConsensusAdapter {
         };
 
         // TODO: make consensus guarantee delivery after submit_transaction() returns, and avoid the timeout below.
-        match timeout(self.timeout, waiter.wait_for_result()).await {
-            Ok(Ok(_)) => {
+        match timeout(self.timeout, waiter).await {
+            Ok(Ok(())) => {
                 // Increment the attempted certificate sequencing success
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_success.inc();
@@ -506,7 +531,7 @@ pub struct CheckpointConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
     /// Channel to request to be notified when a given consensus transaction is sequenced.
-    tx_consensus_listener: Sender<ConsensusListenerMessage>,
+    _tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Receive new checkpoint fragments to sequence.
     rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
     /// A pointer to the checkpoints local store.
@@ -541,7 +566,7 @@ impl CheckpointConsensusAdapter {
         // Create the new instance.
         Self {
             consensus_client,
-            tx_consensus_listener,
+            _tx_consensus_listener: tx_consensus_listener,
             rx_checkpoint_consensus_adapter,
             checkpoint_db,
             retry_delay,
@@ -624,7 +649,7 @@ impl CheckpointConsensusAdapter {
                         waiting.push(future);
 
                         // Finally sent to consensus, after registering to avoid a race condition
-                        self.tx_consensus_listener
+                        self._tx_consensus_listener
                             .send(consensus_input)
                             .await
                             .expect("Failed to notify consensus listener");
