@@ -1,64 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cva } from 'class-variance-authority';
-
-import { ReactComponent as DoneIcon } from '~/assets/SVGIcons/CheckFill.svg';
-import { ReactComponent as StartIcon } from '~/assets/SVGIcons/Start.svg';
+import { Amount } from '~/ui/Amount';
 import { Heading } from '~/ui/Heading';
-import { Link } from '~/ui/Link';
-import { Text } from '~/ui/Text';
-
-const senderRecipientAddressStyles = cva(
-    ['break-all flex flex-row gap-2 w-full items-center'],
-    {
-        variants: {
-            isCoinTransfer: {
-                true: 'ml-6',
-            },
-        },
-    }
-);
-
-function SenderRecipientAddress({
-    isSender,
-    address,
-    isCoin,
-}: {
-    isSender?: boolean;
-    address: string;
-    isCoin?: boolean;
-}) {
-    const isCoinTransfer = !!(isCoin && !isSender);
-    return (
-        <div className={senderRecipientAddressStyles({ isCoinTransfer })}>
-            <div className="w-4 mt-1">
-                {isSender ? <StartIcon /> : <DoneIcon />}
-            </div>
-            <Link
-                variant="mono"
-                to={`/addresses/${encodeURIComponent(address)}`}
-            >
-                {address}
-            </Link>
-        </div>
-    );
-}
-
-function Amount({ amount, symbol }: { amount: number; symbol?: string }) {
-    return (
-        <div className="flex flex-row items-end gap-1 text-sui-grey-100 ml-6">
-            <Heading as="h4" variant="heading4">
-                {amount}
-            </Heading>
-            {symbol && (
-                <div className="text-sui-grey-80">
-                    <Text variant="bodySmall">{symbol}</Text>
-                </div>
-            )}
-        </div>
-    );
-}
+import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
 
 type Recipient = {
     address: string;
@@ -77,7 +22,7 @@ export interface SenderRecipientProps {
 export function SenderRecipient({
     sender,
     recipients,
-    transferCoin = true,
+    transferCoin,
 }: SenderRecipientProps) {
     const multipleRecipients = !!(recipients?.length && recipients?.length > 1);
     const singleTransferCoin = !!(
