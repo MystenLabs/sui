@@ -70,7 +70,7 @@ export const multipleRecipients: StoryObj<SenderRecipientProps> = {
             {
                 address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
                 coin: {
-                    amount: "1.345M",
+                    amount: '1.345M',
                     symbol: 'COIN',
                 },
             },
