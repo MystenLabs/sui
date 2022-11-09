@@ -63,10 +63,10 @@ export function SenderRecipient({
                                 {multipleRecipientsList.length > 1 && 's'}
                             </Heading>
                         </div>
-                        {multipleRecipientsList?.map((recipient, index) => (
+                        {multipleRecipientsList?.map((recipient) => (
                             <div
                                 className="flex flex-col gap-2.5 mb-2"
-                                key={index}
+                                key={recipient.address}
                             >
                                 <SenderRecipientAddress
                                     address={recipient?.address}
