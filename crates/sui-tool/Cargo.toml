@@ -28,7 +28,7 @@ sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-network = { path = "../sui-network" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+telemetry-subscribers.workspace = true
 
 colored = "2.0.0"
 workspace-hack.workspace = true

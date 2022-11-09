@@ -55,10 +55,10 @@ narwhal-consensus = { path = "../../narwhal/consensus" }
 narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
-typed-store = { path = "../../crates/typed-store" }
-typed-store-derive = { path = "../../crates/typed-store-derive" }
-mysten-network = { path = "../../crates/mysten-network" }
+telemetry-subscribers.workspace = true
+typed-store.workspace = true
+typed-store-derive.workspace = true
+mysten-network.workspace = true
 
 fastcrypto.workspace = true
 workspace-hack.workspace = true

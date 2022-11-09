@@ -11,7 +11,7 @@ async-trait = "0.1.57"
 tonic = "0.8"
 
 sui-types = { path = "../sui-types" }
-mysten-network = { path = "../../crates/mysten-network" }
+mysten-network.workspace = true
 
 workspace-hack.workspace = true
 

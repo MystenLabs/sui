@@ -31,7 +31,7 @@ sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 sui-metrics = { path = "../../crates/sui-metrics" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+telemetry-subscribers.workspace = true
 
 workspace-hack.workspace = true
 

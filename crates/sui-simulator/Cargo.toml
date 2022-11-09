@@ -13,7 +13,7 @@ sui-types = { path = "../sui-types" }
 tracing = "0.1"
 anemo.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+telemetry-subscribers.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b28d77f88434535b166cc60bd3e5018aa75cd705", package = "msim" }

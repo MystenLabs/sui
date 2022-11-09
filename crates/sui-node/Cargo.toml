@@ -30,9 +30,9 @@ sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 sui-metrics = { path = "../sui-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
-typed-store = { path = "../../crates/typed-store" }
-mysten-network = { path = "../../crates/mysten-network" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+typed-store.workspace = true
+mysten-network.workspace = true
+telemetry-subscribers.workspace = true
 
 ying-profiler = { git = "https://github.com/velvia/ying-profiler", features = ["profile-spans"] }
 

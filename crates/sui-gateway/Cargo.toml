@@ -24,7 +24,7 @@ sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-node = { path = "../sui-node" }
 sui-keys = { path = "../sui-keys" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+telemetry-subscribers.workspace = true
 
 workspace-hack.workspace = true
 
