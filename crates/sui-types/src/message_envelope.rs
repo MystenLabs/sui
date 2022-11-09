@@ -51,6 +51,11 @@ impl<T: Message, S> Envelope<T, S> {
         (data, auth_signature)
     }
 
+    /// Remove the authority signatures `S` from this envelope.
+    pub fn into_unsigned(self) -> Envelope<T, EmptySignInfo> {
+        Envelope::<T, EmptySignInfo>::new(self.into_data())
+    }
+
     pub fn auth_sig(&self) -> &S {
         &self.auth_signature
     }
@@ -111,10 +116,6 @@ where
 
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
-    }
-
-    pub fn into_unsigned(self) -> Envelope<T, EmptySignInfo> {
-        Envelope::<T, EmptySignInfo>::new(self.into_data())
     }
 
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
@@ -259,9 +260,7 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
 
     /// Remove the authority signatures `S` from this envelope.
     pub fn into_unsigned(self) -> VerifiedEnvelope<T, EmptySignInfo> {
-        VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(Envelope::<T, EmptySignInfo>::new(
-            self.into_inner().into_data(),
-        ))
+        VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(self.into_inner().into_unsigned())
     }
 }
 

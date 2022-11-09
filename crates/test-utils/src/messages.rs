@@ -442,10 +442,11 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
             {
                 tx_certs.push(tx_cert.verify(committee).unwrap());
                 let effects = dummy_transaction_effects(&tx);
-                let signed_effects = effects.to_sign_effects(
+                let signed_effects = SignedTransactionEffects::new(
                     committee.epoch(),
-                    &AuthorityPublicKeyBytes::from(key.public()),
+                    effects,
                     &key,
+                    AuthorityPublicKeyBytes::from(key.public()),
                 );
                 effect_sigs.push(signed_effects);
                 break;

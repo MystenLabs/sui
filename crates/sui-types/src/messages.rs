@@ -4,9 +4,9 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, Ed25519SuiSignature, EmptySignInfo, Signable, Signature,
-    SignatureScheme, SuiSignature, SuiSignatureInner, ToFromBytes,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    Ed25519SuiSignature, EmptySignInfo, Signable, Signature, SignatureScheme, SuiSignature,
+    SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -28,7 +28,6 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
@@ -1674,24 +1673,17 @@ impl TransactionEffects {
     pub fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
     }
+}
 
-    pub fn to_sign_effects(
-        self,
-        epoch: EpochId,
-        authority_name: &AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-    ) -> SignedTransactionEffects {
-        let transaction_effects_digest = OnceCell::from(self.digest());
-        let auth_signature = AuthoritySignInfo::new(epoch, &self, *authority_name, secret);
-        SignedTransactionEffects {
-            transaction_effects_digest,
-            effects: self,
-            auth_signature,
-        }
+impl Message for TransactionEffects {
+    type DigestType = TransactionEffectsDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        TransactionEffectsDigest(sha3_hash(self))
     }
 
-    pub fn digest(&self) -> TransactionEffectsDigest {
-        TransactionEffectsDigest(sha3_hash(self))
+    fn verify(&self) -> SuiResult {
+        Ok(())
     }
 }
 
@@ -1763,64 +1755,10 @@ impl Default for TransactionEffects {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionEffectsEnvelope<S> {
-    // This is a cache of an otherwise expensive to compute value.
-    // DO NOT serialize or deserialize from the network or disk.
-    #[serde(skip)]
-    transaction_effects_digest: OnceCell<TransactionEffectsDigest>,
-
-    pub effects: TransactionEffects,
-    pub auth_signature: S,
-}
-
-impl<S> TransactionEffectsEnvelope<S> {
-    pub fn digest(&self) -> &TransactionEffectsDigest {
-        self.transaction_effects_digest
-            .get_or_init(|| self.effects.digest())
-    }
-}
-
+pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
-
-impl SignedTransactionEffects {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.auth_signature.verify(&self.effects, committee)
-    }
-}
-
-impl PartialEq for SignedTransactionEffects {
-    fn eq(&self, other: &Self) -> bool {
-        self.effects == other.effects && self.auth_signature == other.auth_signature
-    }
-}
-
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-impl CertifiedTransactionEffects {
-    pub fn new(
-        effects: TransactionEffects,
-        signatures: Vec<AuthoritySignInfo>,
-        committee: &Committee,
-    ) -> SuiResult<Self> {
-        Ok(Self {
-            transaction_effects_digest: OnceCell::from(effects.digest()),
-            effects,
-            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
-                signatures, committee,
-            )?,
-        })
-    }
-
-    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
-        UnsignedTransactionEffects {
-            transaction_effects_digest: self.transaction_effects_digest,
-            effects: self.effects,
-            auth_signature: EmptySignInfo {},
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {

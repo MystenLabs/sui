@@ -553,7 +553,7 @@ where
         // Must release permit before enqueuing new work to prevent deadlock.
         drop(permit);
 
-        let missing_parents = self.get_missing_parents(&effects.effects)?;
+        let missing_parents = self.get_missing_parents(effects.data())?;
         self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, false)
             .await?;
 
@@ -598,7 +598,7 @@ where
                 // Must release permit before enqueuing new work to prevent deadlock.
                 drop(permit);
 
-                let missing_parents = self.get_missing_parents(&effects.effects)?;
+                let missing_parents = self.get_missing_parents(effects.data())?;
                 self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, true)
                     .await?;
 
@@ -759,7 +759,7 @@ where
             "wait_for_parents timed out, actively processing parents"
         );
 
-        let missing_parents = self.get_missing_parents(&effects.effects)?;
+        let missing_parents = self.get_missing_parents(effects.data())?;
 
         if let Err(err) = self
             .enqueue_parent_execution_requests(
@@ -771,7 +771,7 @@ where
             .await
         {
             let msg = "enqueue_parent_execution_requests failed";
-            debug!(?digest, parents = ?effects.effects.dependencies, "{}", msg);
+            debug!(?digest, parents = ?effects.data().dependencies, "{}", msg);
             Err(err)
         } else {
             debug!(?digest, "All parent certificates executed");
@@ -828,7 +828,7 @@ where
         // Must drop the permit before waiting to avoid deadlock.
         drop(permit);
 
-        for parent in effects.effects.dependencies.iter() {
+        for parent in effects.data().dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
 
             if self.state().database.effects_exists(parent)? {
@@ -846,7 +846,7 @@ where
         }
 
         if cfg!(debug_assertions) {
-            for parent in effects.effects.dependencies.iter() {
+            for parent in effects.data().dependencies.iter() {
                 debug_assert!(self.state().database.effects_exists(parent).unwrap());
             }
         }

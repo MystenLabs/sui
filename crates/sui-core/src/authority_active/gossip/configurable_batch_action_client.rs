@@ -19,6 +19,7 @@ use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
 use sui_types::error::SuiError;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
     CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,

@@ -177,17 +177,19 @@ impl EffectsStakeMap {
         weight: StakeUnit,
         committee: &Committee,
     ) -> bool {
-        let epoch = effects.auth_signature.epoch;
+        let epoch = effects.epoch();
+        let digest = *effects.digest();
+        let (effects, sig) = effects.into_data_and_sig();
         let entry = self
             .effects_map
-            .entry((epoch, *effects.digest()))
+            .entry((epoch, digest))
             .or_insert(EffectsStakeInfo {
                 stake: 0,
-                effects: effects.effects,
+                effects,
                 signatures: vec![],
             });
         entry.stake += weight;
-        entry.signatures.push(effects.auth_signature);
+        entry.signatures.push(sig);
 
         if entry.stake >= committee.quorum_threshold() {
             self.efects_cert = CertifiedTransactionEffects::new(
@@ -530,8 +532,8 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
-            for returned_digest in &signed_effects.effects.dependencies {
+            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.data().dependencies, "Got dependencies from source");
+            for returned_digest in &signed_effects.data().dependencies {
                 trace!(tx_digest =? returned_digest, "Found parent of missing cert");
 
                 let inner_transaction_info = source_client
@@ -1677,7 +1679,7 @@ where
                             Ok(VerifiedTransactionInfoResponse {
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
-                            }) if inner_signed_transaction.auth_sig().epoch == self.committee.epoch => {
+                            }) if inner_signed_transaction.epoch() == self.committee.epoch => {
                                 let tx_digest = inner_signed_transaction.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push(inner_signed_transaction.into_inner().into_data_and_sig().1);
@@ -1741,7 +1743,7 @@ where
                                         ?tx_digest,
                                         name=?name.concise(),
                                         expected_epoch=?self.committee.epoch,
-                                        returned_epoch=?inner_signed.auth_sig().epoch,
+                                        returned_epoch=?inner_signed.epoch(),
                                         "Returned signed transaction is from wrong epoch"
                                     );
                                 }

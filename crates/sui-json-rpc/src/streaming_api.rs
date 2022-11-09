@@ -52,7 +52,7 @@ impl TransactionStreamingApiServer for TransactionStreamingApiImpl {
             async move {
                 let sui_tx_cert = SuiCertifiedTransaction::try_from(tx_cert)?;
                 let sui_tx_effects = SuiTransactionEffects::try_from(
-                    signed_effects.effects,
+                    signed_effects.into_data(),
                     state_clone.module_cache.as_ref(),
                 )?;
                 let digest = sui_tx_cert.transaction_digest;

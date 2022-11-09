@@ -418,7 +418,7 @@ mod test {
                 .unwrap();
 
             assert!(matches!(
-                effects.effects.status,
+                effects.data().status,
                 ExecutionStatus::Success { .. }
             ));
         }

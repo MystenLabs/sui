@@ -1897,7 +1897,7 @@ async fn build_and_publish_test_package(
     .await
     .signed_effects
     .unwrap()
-    .effects;
+    .into_data();
     assert!(
         matches!(effects.status, ExecutionStatus::Success { .. }),
         "{:?}",
