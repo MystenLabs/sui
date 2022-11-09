@@ -40,6 +40,7 @@ pub type SerializedTransactionDigest = u64;
 
 #[automock]
 #[async_trait]
+// Important - if you add method with the default implementation here make sure to update impl ExecutionState for Arc<T>
 pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_transaction(
@@ -174,6 +175,10 @@ impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
         self.as_ref()
             .handle_consensus_transaction(consensus_output, execution_indices, transaction)
             .await
+    }
+
+    async fn notify_commit_boundary(&self, consensus_output: &Arc<ConsensusOutput>) {
+        self.as_ref().notify_commit_boundary(consensus_output).await
     }
 
     async fn load_execution_indices(&self) -> ExecutionIndices {
