@@ -1259,7 +1259,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.epoch_tables().consensus_message_processed,
             [(transaction_digest, true)],
         )?;
-        Ok(batch.write()?)
+        batch.write().map_err(SuiError::from)
     }
 
     pub fn record_checkpoint_boundary(&self, certificate_height: u64) -> SuiResult {
