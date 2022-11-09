@@ -5,6 +5,7 @@ use crate::natives;
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
+use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
 use std::{collections::HashMap, io::BufWriter, path::Path};
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
@@ -60,7 +61,7 @@ pub fn run_calib_tests(
                 ..config
             },
             natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
-            None,
+            Some(INITIAL_COST_SCHEDULE.clone()),
             false,
             &mut test_output_buf,
         )
