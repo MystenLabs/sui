@@ -45,6 +45,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Start network without authorities
     let start = SuiCommand::Start {
         config: Some(config),
+        no_full_node: false,
     }
     .execute()
     .await;
