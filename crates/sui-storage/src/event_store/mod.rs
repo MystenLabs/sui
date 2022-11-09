@@ -345,6 +345,7 @@ impl TryInto<SuiEventEnvelope> for StoredEvent {
         let timestamp = self.timestamp;
         let tx_digest = self.tx_digest;
         let event_type_str = self.event_type.as_str();
+        let event_id = self.id.clone();
         let event = match EventType::from_str(event_type_str) {
             Ok(type_) => {
                 match type_ {
@@ -365,6 +366,7 @@ impl TryInto<SuiEventEnvelope> for StoredEvent {
         Ok(SuiEventEnvelope {
             timestamp,
             tx_digest,
+            id: event_id,
             event,
         })
     }

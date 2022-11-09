@@ -480,7 +480,8 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY=",
+                  "txDigest": "Vi63z0O8cI/1smk/OYkxoECgOF4LxllfNwKQCDlHxmk=",
+                  "id": "0:0",
                   "event": {
                     "transferObject": {
                       "packageId": "0x0000000000000000000000000000000000000002",
@@ -2567,6 +2568,7 @@
         "type": "object",
         "required": [
           "event",
+          "id",
           "timestamp"
         ],
         "properties": {
@@ -2575,6 +2577,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/Event"
+              }
+            ]
+          },
+          "id": {
+            "description": "Sequential event ID, ie (transaction seq number, event seq number). 1) Serves as a unique event ID for each fullnode 2) Also serves to sequence events for the purposes of pagination and querying. A higher id is an event seen later by that fullnode. This ID is the \"cursor\" for event querying.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EventID"
               }
             ]
           },
