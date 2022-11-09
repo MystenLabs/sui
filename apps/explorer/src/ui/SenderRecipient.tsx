@@ -53,8 +53,8 @@ export function SenderRecipient({
                     </div>
                 )}
                 {multipleRecipientsList?.length ? (
-                    <div className="mt-2 flex flex-col gap-2">
-                        <div className="mt-[5px] mb-2.5">
+                    <div className="mt-3.5 flex flex-col gap-2.5">
+                        <div className="mb-2.5">
                             <Heading variant="heading4" weight="semibold">
                                 {multipleRecipientsList.length > 1
                                     ? 'Recipients'
