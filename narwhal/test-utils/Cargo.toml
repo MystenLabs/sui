@@ -39,7 +39,7 @@ worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers", package = "telemetry-subscribers" }
-mysten-network = { path = "../../crates/mysten-network" }
+mysten-network.workspace = true
 workspace-hack.workspace = true
 
 anemo.workspace = true

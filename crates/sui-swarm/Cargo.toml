@@ -20,8 +20,8 @@ prometheus = "0.13.2"
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
 sui-types = { path = "../sui-types" }
-mysten-network = { path = "../../crates/mysten-network" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+mysten-network.workspace = true
+telemetry-subscribers.workspace = true
 
 workspace-hack.workspace = true
 

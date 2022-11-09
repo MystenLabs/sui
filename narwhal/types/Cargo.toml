@@ -40,7 +40,7 @@ workspace-hack.workspace = true
 once_cell = "1.16.0"
 
 store = { path = "../../crates/typed-store", package = "typed-store" }
-mysten-util-mem = { path = "../../crates/mysten-util-mem" }
+mysten-util-mem.workspace = true
 
 [dev-dependencies]
 criterion = "0.3.6"

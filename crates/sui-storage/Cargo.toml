@@ -31,8 +31,8 @@ sui-metrics = { path = "../sui-metrics" }
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-typed-store = { path = "../../crates/typed-store" }
-typed-store-derive = { path = "../../crates/typed-store-derive" }
+typed-store.workspace = true
+typed-store-derive.workspace = true
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 workspace-hack.workspace = true

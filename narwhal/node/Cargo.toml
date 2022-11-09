@@ -42,8 +42,8 @@ worker = { path = "../worker", package = "narwhal-worker" }
 eyre = "0.6.8"
 
 store = { path = "../../crates/typed-store", package = "typed-store" }
-mysten-network = { path = "../../crates/mysten-network" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers" }
+mysten-network.workspace = true
+telemetry-subscribers.workspace = true
 
 sui-metrics = { path = "../../crates/sui-metrics" }
 workspace-hack.workspace = true
