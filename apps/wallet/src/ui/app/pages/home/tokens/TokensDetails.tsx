@@ -58,7 +58,7 @@ function MyTokens({
                         ))}
                         {coinBalance <= 0 ? (
                             <div className={st.emptyWallet}>
-                                <FaucetRequestButton />
+                                <FaucetRequestButton trackEventSource="home" />
                                 {emptyWalletDescription}
                             </div>
                         ) : null}
@@ -71,7 +71,7 @@ function MyTokens({
                         Your wallet contains no SUI.
                     </div>
                     {emptyWalletDescription}
-                    <FaucetRequestButton />
+                    <FaucetRequestButton trackEventSource="home" />
                 </div>
             )}
             <FaucetMessageInfo className={st.gasRequestInfo} />

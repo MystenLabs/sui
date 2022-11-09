@@ -8,6 +8,7 @@ import Button from '_app/shared/button';
 import { requestGas } from '_app/shared/faucet/actions';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { trackEvent } from '_shared/plausible';
 
 import type { ButtonProps } from '_app/shared/button';
 
@@ -15,9 +16,13 @@ import st from './RequestButton.module.scss';
 
 type FaucetRequestButtonProps = {
     mode?: ButtonProps['mode'];
+    trackEventSource: 'home' | 'settings';
 };
 
-function FaucetRequestButton({ mode = 'primary' }: FaucetRequestButtonProps) {
+function FaucetRequestButton({
+    mode = 'primary',
+    trackEventSource,
+}: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name;
     const showFaucetRequestButton = API_ENV.customRPC !== network;
@@ -28,6 +33,9 @@ function FaucetRequestButton({ mode = 'primary' }: FaucetRequestButtonProps) {
             mode={mode}
             onClick={() => {
                 dispatch(requestGas());
+                trackEvent('RequestGas', {
+                    props: { source: trackEventSource, networkName },
+                });
             }}
             disabled={loading}
         >

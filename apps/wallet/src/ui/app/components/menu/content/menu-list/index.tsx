@@ -63,7 +63,10 @@ function MenuList() {
                 />
             </div>
             <div className={st.actionsContainer}>
-                <FaucetRequestButton mode="secondary" />
+                <FaucetRequestButton
+                    mode="secondary"
+                    trackEventSource="settings"
+                />
                 <Button
                     mode="secondary"
                     size="large"
