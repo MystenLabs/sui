@@ -65,6 +65,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
+    #[serde(default)]
+    pub enable_gossip: bool,
+
     #[serde(default = "bool_true")]
     pub enable_checkpoint: bool,
 
