@@ -12,6 +12,6 @@ export default {
 export const SuiAmount: StoryObj<AmountProps> = {
     args: {
         amount: 1000,
-        symbol: 'SUI',
+        coinSymbol: 'SUI',
     },
 };

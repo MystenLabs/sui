@@ -12,9 +12,9 @@ const data = {
     recipients: [
         {
             address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
-            amount: {
-                value: 1000,
-                unit: 'SUI',
+            coin: {
+                amount: 1000,
+                coinSymbol: 'SUI',
             },
         },
     ],
@@ -38,9 +38,9 @@ export const singleTransfer: StoryObj<SenderRecipientProps> = {
         recipients: [
             {
                 address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
-                amount: {
-                    value: 1000,
-                    unit: 'SUI',
+                coin: {
+                    amount: 1000,
+                    coinSymbol: 'SUI',
                 },
             },
         ],
@@ -62,16 +62,16 @@ export const multipleRecipients: StoryObj<SenderRecipientProps> = {
         recipients: [
             {
                 address: '0x955d8ddc4a17670bda6b949cbdbc8f5aac820cc7',
-                amount: {
-                    value: 400,
-                    unit: 'SUI',
+                coin: {
+                    amount: 400,
+                    coinSymbol: 'SUI',
                 },
             },
             {
                 address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
-                amount: {
-                    value: 1850,
-                    unit: 'COIN',
+                coin: {
+                    amount: 1850,
+                    coinSymbol: 'COIN',
                 },
             },
             {
