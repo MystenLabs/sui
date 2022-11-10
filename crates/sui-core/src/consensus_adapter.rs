@@ -73,7 +73,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_timeouts: IntCounter,
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
-    pub sequencing_certificate_latency: Histogram,
+    pub sequencing_acknowledge_latency: Histogram,
 
     // Fragment sequencing metrics
     pub sequencing_fragment_attempt: IntCounter,
@@ -117,9 +117,9 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
-            sequencing_certificate_latency: register_histogram_with_registry!(
-                "sequencing_certificate_latency",
-                "The latency for certificate sequencing.",
+            sequencing_acknowledge_latency: register_histogram_with_registry!(
+                "sequencing_acknowledge_latency",
+                "The latency for acknowledgement from sequencing engine .",
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -310,42 +310,39 @@ impl ConsensusAdapter {
             "Certified transaction consensus message created"
         );
 
-        let waiter = if certificate.contains_shared_object() {
-            Some(processed_waiter)
-        } else {
-            None
-        };
         // Check if this authority submits the transaction to consensus.
-        let _timer = self
-            .opt_metrics
-            .as_ref()
-            .map(|m| m.sequencing_certificate_latency.start_timer());
         let should_submit = Self::should_submit(certificate);
         let _inflight_guard = if should_submit {
+            // Timer to record latency of acknowledgements from consensus
+            let _timer = self
+                .opt_metrics
+                .as_ref()
+                .map(|m| m.sequencing_acknowledge_latency.start_timer());
+
             // todo - we need stronger guarantees for checkpoints here (issue #5763)
             // todo - for owned objects this can also be done async
             self.consensus_client
                 .submit_to_consensus(&transaction)
                 .await?;
+
             Some(InflightDropGuard::acquire(self))
         } else {
             None
         };
 
-        let waiter = if let Some(waiter) = waiter {
-            waiter
-        } else {
+        // We do not wait unless its a share object transaction being sequenced.
+        if !certificate.contains_shared_object() {
+            // We only record for shared object transactions
             return Ok(());
         };
 
-        // TODO: make consensus guarantee delivery after submit_transaction() returns, and avoid the timeout below.
-        match timeout(self.timeout, waiter).await {
+        // Now consensus guarantees delivery after submit_transaction() if primary/workers are live
+        match timeout(self.timeout, processed_waiter).await {
             Ok(Ok(())) => {
                 // Increment the attempted certificate sequencing success
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_success.inc();
                 });
-
                 Ok(())
             }
             Ok(Err(e)) => {
@@ -353,7 +350,6 @@ impl ConsensusAdapter {
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_failures.inc();
                 });
-
                 Err(e)
             }
             Err(e) => {
