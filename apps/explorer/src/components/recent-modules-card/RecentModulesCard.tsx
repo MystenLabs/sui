@@ -45,19 +45,31 @@ export function RecentModulesCard() {
     const transformTable = (events: SuiEvents) => ({
         data: events.map((resp: SuiEventEnvelope) => {
             const { event, timestamp, txDigest } = resp;
-
             return {
-                time: <TxTimeType timestamp={timestamp} />,
-                sender: (
-                    <Link
-                        variant="mono"
-                        to={`/addresses/${encodeURIComponent(
-                            event.publish.sender
-                        )}`}
-                    >
-                        {truncate(event.publish.sender, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
+                ...('publish' in event && {
+                    time: <TxTimeType timestamp={timestamp} />,
+
+                    sender: (
+                        <Link
+                            variant="mono"
+                            to={`/addresses/${encodeURIComponent(
+                                event.publish.sender
+                            )}`}
+                        >
+                            {truncate(event.publish.sender, TRUNCATE_LENGTH)}
+                        </Link>
+                    ),
+                    packageId: (
+                        <Link
+                            variant="mono"
+                            to={`/objects/${encodeURIComponent(
+                                event.publish.packageId
+                            )}`}
+                        >
+                            {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
+                        </Link>
+                    ),
+             
                 txnDigest: (
                     <Link
                         variant="mono"
@@ -65,17 +77,8 @@ export function RecentModulesCard() {
                     >
                         {truncate(txDigest, TRUNCATE_LENGTH)}
                     </Link>
-                ),
-                packageId: (
-                    <Link
-                        variant="mono"
-                        to={`/objects/${encodeURIComponent(
-                            event.publish.packageId
-                        )}`}
-                    >
-                        {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
+                )
+            }),
             };
         }),
         columns: [...columns],

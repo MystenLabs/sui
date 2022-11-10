@@ -3,12 +3,17 @@
 import cl from 'clsx';
 import { lazy, Suspense } from 'react';
 
-import { TopGroupsCard } from '../../components/top-groups/TopGroups';
-import { TopValidatorsCardStatic } from '../../components/top-validators-card/TopValidatorsCard';
+import { RecentModulesCard } from '../../components/recent-modules-card/RecentModulesCard';
+import {
+    TopValidatorsCardStatic,
+    TopValidatorsCardAPI,
+} from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
 import styles from './Home.module.css';
+
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const ValidatorMap = lazy(
     () => import('../../components/validator-map/ValidatorMap')
@@ -47,10 +52,33 @@ function HomeAPI() {
                 />
             </section>
             <section className="right-item">
-                <TopGroupsCard />
+                <div>
+                    <TabGroup>
+                        <TabList>
+                            <Tab>Top Validators</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <TopValidatorsCardAPI />
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
+                </div>
                 <Suspense fallback={null}>
                     <ValidatorMap />
                 </Suspense>
+                <div className="mt-14">
+                    <TabGroup>
+                        <TabList>
+                            <Tab>Recent Packages</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <RecentModulesCard />
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
+                </div>
             </section>
         </div>
     );
