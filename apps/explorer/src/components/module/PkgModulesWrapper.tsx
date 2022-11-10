@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
+import clsx from 'clsx';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -112,13 +113,23 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                 </div>
                             )}
                             {filteredModules.map((name, idx) => (
-                                <Combobox.Option key={name} value={name}>
+                                <Combobox.Option
+                                    key={name}
+                                    value={name}
+                                    className="list-none md:min-w-fit"
+                                >
                                     {({ active }) => (
-                                        <div className="md:min-w-fit">
-                                            <ListItem active={active} isBlue>
-                                                {name}
-                                            </ListItem>
-                                        </div>
+                                        <button
+                                            type="button"
+                                            className={clsx(
+                                                'cursor-pointer py-2 rounded-md text-body block w-full text-left mt-0.5 px-1.5 border',
+                                                active
+                                                    ? 'bg-sui/10 text-sui-grey-80 border-transparent'
+                                                    : 'bg-white text-sui-grey-80 font-medium border-transparent'
+                                            )}
+                                        >
+                                            {name}
+                                        </button>
                                     )}
                                 </Combobox.Option>
                             ))}

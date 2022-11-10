@@ -6,16 +6,11 @@ import { type ReactNode } from 'react';
 
 export interface ListItemProps {
     active?: boolean;
-    isBlue?: boolean;
     children: ReactNode;
     onClick?(): void;
 }
 
-export function ListItem({ active, isBlue, children, onClick }: ListItemProps) {
-    const activeStyle = isBlue
-        ? 'bg-sui/10 text-sui-grey-80 border-transparent'
-        : 'bg-sui-grey-45 text-sui-grey-90 font-semibold border-solid border-sui-grey-50 shadow-sm';
-
+export function ListItem({ active, children, onClick }: ListItemProps) {
     return (
         <li className="list-none">
             <button
@@ -23,7 +18,7 @@ export function ListItem({ active, isBlue, children, onClick }: ListItemProps) {
                 className={clsx(
                     'cursor-pointer py-2 rounded-md text-body block w-full text-left mt-0.5 px-1.5 border',
                     active
-                        ? activeStyle
+                        ? 'bg-sui-grey-45 text-sui-grey-90 font-semibold border-solid border-sui-grey-50 shadow-sm'
                         : 'bg-white text-sui-grey-80 font-medium border-transparent'
                 )}
                 onClick={onClick}
