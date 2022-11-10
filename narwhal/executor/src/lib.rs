@@ -92,10 +92,10 @@ impl Executor {
 
         // Spawn the subscriber.
         let subscriber_handle = spawn_subscriber(
-            name.clone(),
+            name,
             network,
             worker_cache,
-            committee.clone(),
+            committee,
             tx_reconfigure.subscribe(),
             rx_sequence,
             tx_notifier,
@@ -134,11 +134,10 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         let (certificate_digests, consensus_indices): (Vec<_>, Vec<_>) =
             compressed_sub_dag.certificates.into_iter().unzip();
 
-        let certificates: Vec<_> = certificate_store
+        let certificates = certificate_store
             .read_all(certificate_digests)?
             .into_iter()
-            .flatten()
-            .collect();
+            .flatten();
 
         let outputs = certificates
             .into_iter()
