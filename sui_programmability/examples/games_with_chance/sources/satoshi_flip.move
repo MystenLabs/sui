@@ -53,8 +53,9 @@ module games_with_chance::satoshi_flip {
     }
 
     struct BankData has store {
-        max_bet: Balance<SUI>,
+        bank_balance: Balance<SUI>,
         min_bet: u64,
+        max_bet: u64
     }
 
     struct Outcome has store {
@@ -77,11 +78,12 @@ module games_with_chance::satoshi_flip {
     // fun!
 
     // this is invoked by playerA
-    public entry fun start_game(hash: vector<u8>, max_bet: Coin<SUI>, min_bet: u64, ctx: &mut TxContext) {
-        assert!(coin::value(&max_bet) >= min_bet, EMinBetTooHigh);
+    public entry fun start_game(hash: vector<u8>, banker_coin: Coin<SUI>, max_bet: u64, min_bet: u64, ctx: &mut TxContext) {
+        assert!(max_bet >= min_bet, EMinBetTooHigh);
         let bank_data = BankData {
-            max_bet: coin::into_balance(max_bet),
-            min_bet
+            bank_balance: coin::into_balance(banker_coin),
+            min_bet,
+            max_bet
         };
 
         let new_game = Game {
@@ -109,7 +111,7 @@ module games_with_chance::satoshi_flip {
 
     public fun max_bet(game: &Game): u64 {
         let bank_data = option::borrow(&game.bank_data);
-        balance::value(&bank_data.max_bet)
+        bank_data.max_bet
     }
 
     public fun min_bet(game: &Game): u64 {
@@ -134,13 +136,22 @@ module games_with_chance::satoshi_flip {
     }
 
     // this is invoked by playerB
-    public entry fun bet(game: &mut Game, guess: u8, stake: Coin<SUI>, ctx: &mut TxContext) {
+    public entry fun bet(game: &mut Game, guess: u8, stake_coin: Coin<SUI>, stake_amount: u64, ctx: &mut TxContext) {
         let bank_data = option::borrow(&game.bank_data);
-        assert!(coin::value(&stake) <= balance::value(&bank_data.max_bet), EStakeTooHigh);
-        assert!(coin::value(&stake) > bank_data.min_bet, EStakeTooLow);
+        assert!(stake_amount <= bank_data.max_bet, EStakeTooHigh);
+        assert!(stake_amount > bank_data.min_bet, EStakeTooLow);
         assert!(guess == 0 || guess == 1, EGuessNot1Or0);
+        assert!(coin::value(&stake_coin) >= stake_amount, EStakeTooHigh);
+        // Get a balance with the stake_amount value
+        let stake = coin::into_balance(stake_coin);
+        if (balance::value(&stake) > stake_amount) {
+            let total_balance = balance::value(&stake);
+            let to_return = balance::split(&mut stake, total_balance - stake_amount);
+            // return the rest
+            transfer::transfer(coin::from_balance(to_return, ctx), tx_context::sender(ctx));
+        };
         let bet_data = BetData {
-            stake: coin::into_balance(stake),
+            stake: stake,
             guess
         };
         option::fill(&mut game.bet_data, bet_data);
@@ -153,14 +164,14 @@ module games_with_chance::satoshi_flip {
         let hash = sha3_256(secret);
         if (hash != digest::sha3_256_digest_to_bytes(&game.hashed_secret)) {
             let BetData {stake, guess:_} = option::extract(&mut game.bet_data);
-            let BankData {max_bet, min_bet: _} = option::extract(&mut game.bank_data);
+            let BankData {bank_balance, min_bet: _, max_bet:_} = option::extract(&mut game.bank_data);
             let playerB = option::extract(&mut game.playerB);
             // TODO: Maybe add some punishment for the playerA
             transfer::transfer(coin::from_balance(stake, ctx), playerB);
-            transfer::transfer(coin::from_balance(max_bet, ctx), game.playerA);
+            transfer::transfer(coin::from_balance(bank_balance, ctx), game.playerA);
             abort EHashAndSecretDontMatch
         };
-        let BankData {max_bet, min_bet: _} = option::extract(&mut game.bank_data);
+        let BankData {bank_balance, min_bet: _, max_bet: _} = option::extract(&mut game.bank_data);
         if (option::is_some<BetData>(&mut game.bet_data)){
             // extract balances and guess
             let BetData {stake, guess} = option::extract(&mut game.bet_data);
@@ -175,7 +186,7 @@ module games_with_chance::satoshi_flip {
                 };
                 option::fill(&mut game.outcome, outcome);
                 let playerB = option::extract(&mut game.playerB);
-                pay_playerB(playerB, game.playerA, stake, max_bet, ctx);
+                pay_playerB(playerB, game.playerA, stake, bank_balance, ctx);
             } else {
                 // playerB lost
                 let outcome = Outcome {
@@ -185,8 +196,8 @@ module games_with_chance::satoshi_flip {
                 };
                 option::fill(&mut game.outcome, outcome);
 
-                balance::join(&mut max_bet, stake);
-                transfer::transfer(coin::from_balance(max_bet, ctx), game.playerA);
+                balance::join(&mut bank_balance, stake);
+                transfer::transfer(coin::from_balance(bank_balance, ctx), game.playerA);
             };
         } else {
             let outcome = Outcome {
@@ -197,7 +208,7 @@ module games_with_chance::satoshi_flip {
             option::fill(&mut game.outcome, outcome);
 
             // no bet placed, return the max_bet to playerA
-            let wins = coin::from_balance(max_bet, ctx);
+            let wins = coin::from_balance(bank_balance, ctx);
             transfer::transfer(wins, game.playerA);
         }
     }
@@ -209,7 +220,7 @@ module games_with_chance::satoshi_flip {
         // this call can only be called 2 epochs after the game was created
         assert!(game.epoch + EpochsCancelAfter <= tx_context::epoch(ctx), ENotEnoughEpochsPassedToCancel);
         // this exists since the game is created
-        let BankData {max_bet, min_bet: _} = option::extract(&mut game.bank_data);
+        let BankData {bank_balance, min_bet: _, max_bet: _} = option::extract(&mut game.bank_data);
 
         // if player B hasn't bet, return max_bet to player A
         if (!option::is_none(&game.bet_data)) {
@@ -219,7 +230,7 @@ module games_with_chance::satoshi_flip {
                 playerB_won: false
             };
             option::fill(&mut game.outcome, outcome);
-            transfer::transfer(coin::from_balance(max_bet, ctx), game.playerA);
+            transfer::transfer(coin::from_balance(bank_balance, ctx), game.playerA);
         }
         // if player B has bet and A has not revealed 2 epochs later, pay player B
         else {
@@ -232,25 +243,25 @@ module games_with_chance::satoshi_flip {
             };
             option::fill(&mut game.outcome, outcome);
             let playerB = option::extract(&mut game.playerB);
-            pay_playerB(playerB, game.playerA, stake, max_bet, ctx);
+            pay_playerB(playerB, game.playerA, stake, bank_balance, ctx);
         }
     }
 
     // helper functions
 
-    fun pay_playerB(playerB: address, playerA: address, stake: Balance<SUI>, max_bet: Balance<SUI>, ctx: &mut TxContext) {
+    fun pay_playerB(playerB: address, playerA: address, stake: Balance<SUI>, bank_balance: Balance<SUI>, ctx: &mut TxContext) {
         // if bet is less than max_bet, return the difference to player A after paying the wins
-         if (balance::value(&stake) < balance::value(&max_bet)) {
-            let profit = balance::split(&mut max_bet, balance::value(&stake));
+         if (balance::value(&stake) < balance::value(&bank_balance)) {
+            let profit = balance::split(&mut bank_balance, balance::value(&stake));
             // calculate the wins = profit + stake
             balance::join(&mut stake, profit);
             // pay the wins
             transfer::transfer(coin::from_balance(stake, ctx), playerB);
             // return the rest back to playerA
-            transfer::transfer(coin::from_balance(max_bet, ctx), playerA);
+            transfer::transfer(coin::from_balance(bank_balance, ctx), playerA);
         } else {
             // profit is the whole max_bet
-            balance::join(&mut stake, max_bet);
+            balance::join(&mut stake, bank_balance);
             transfer::transfer(coin::from_balance(stake, ctx), playerB);
         };
     }
