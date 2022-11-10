@@ -198,7 +198,6 @@ impl BatchMaker {
     ) -> Option<impl Future<Output = ()>> {
         #[cfg(feature = "benchmark")]
         {
-            use fastcrypto::hash::Hash;
             let digest = batch.digest();
 
             // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
