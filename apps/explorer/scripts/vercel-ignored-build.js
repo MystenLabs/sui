@@ -17,11 +17,16 @@ const requiresBuild = () => {
     process.exit(1);
 };
 
+const ref =
+    process.env.VERCEL === '1' && process.env.VERCEL_GIT_PREVIOUS_SHA
+        ? process.env.VERCEL_GIT_PREVIOUS_SHA
+        : 'HEAD^';
+
 async function main() {
     const { stdout, stderr } = await execFile('pnpm', [
         'list',
         '--filter',
-        '...[origin/main]',
+        `...[${ref}]`,
         '--depth',
         '-1',
         '--json',

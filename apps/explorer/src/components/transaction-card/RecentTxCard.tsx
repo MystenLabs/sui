@@ -139,9 +139,11 @@ export function LatestTxCard({
     const handlePageChange = useCallback(
         (newPage: number) => {
             setPageIndex(newPage);
-            setSearchParams({ p: newPage.toString() });
+            const newSearchParams = new URLSearchParams(searchParams);
+            newSearchParams.set('p', newPage.toString());
+            setSearchParams(newSearchParams);
         },
-        [setSearchParams]
+        [searchParams, setSearchParams]
     );
 
     const countQuery = useQuery(
