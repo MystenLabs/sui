@@ -3,10 +3,8 @@
 import cl from 'clsx';
 import { lazy, Suspense } from 'react';
 
-import {
-    TopValidatorsCardAPI,
-    TopValidatorsCardStatic,
-} from '../../components/top-validators-card/TopValidatorsCard';
+import { TopGroupsCard } from '../../components/top-groups/TopGroups';
+import { TopValidatorsCardStatic } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
@@ -49,7 +47,7 @@ function HomeAPI() {
                 />
             </section>
             <section className="right-item">
-                <TopValidatorsCardAPI />
+                <TopGroupsCard />
                 <Suspense fallback={null}>
                     <ValidatorMap />
                 </Suspense>

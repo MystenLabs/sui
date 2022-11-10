@@ -1,26 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RecentModulesCard } from '../../components/recent-modules-card/RecentModulesCard';
+import { TopValidatorsCardAPI } from '../../components/top-validators-card/TopValidatorsCard';
+
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
-// TODO: Specify the type of the context
-// Specify the type of the context
-function TopGroupsCard() {
-    // Mork data
+export function TopGroupsCard() {
     return (
         <TabGroup>
             <TabList>
-                <Tab>Top Modules</Tab>
-                <Tab>Top NFT Collections</Tab>
-                <Tab>Top Addresses</Tab>
+                <Tab>Top Validators</Tab>
+                <Tab>Recent Packages</Tab>
             </TabList>
             <TabPanels>
-                <TabPanel>Top Modules Component</TabPanel>
-                <TabPanel>Top NFT Collections Component</TabPanel>
-                <TabPanel>Top Modules Component</TabPanel>
+                <TabPanel>
+                    <TopValidatorsCardAPI />
+                </TabPanel>
+                <TabPanel>
+                    <RecentModulesCard />
+                </TabPanel>
             </TabPanels>
         </TabGroup>
     );
 }
-
-export default TopGroupsCard;

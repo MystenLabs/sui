@@ -18,7 +18,6 @@ import { useRpc } from '~/hooks/useRpc';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
 
 export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
@@ -76,33 +75,12 @@ export function TopValidatorsCardAPI() {
     if (loadState === 'pending') {
         return (
             <div data-testid="validators-table">
-                <TabGroup>
-                    <TabList>
-                        <Tab>Top Validators</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <div title="Top Validators">
-                                <PlaceholderTable
-                                    rowCount={4}
-                                    rowHeight="13px"
-                                    colHeadings={[
-                                        '#',
-                                        'Name',
-                                        'Address',
-                                        'Pubkey Bytes',
-                                    ]}
-                                    colWidths={[
-                                        '25px',
-                                        '135px',
-                                        '220px',
-                                        '220px',
-                                    ]}
-                                />
-                            </div>
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
+                <PlaceholderTable
+                    rowCount={4}
+                    rowHeight="13px"
+                    colHeadings={['#', 'Name', 'Address', 'Pubkey Bytes']}
+                    colWidths={['25px', '135px', '220px', '220px']}
+                />
             </div>
         );
     }
@@ -164,27 +142,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
 
     return (
         <div data-testid="validators-table">
-            <TabGroup>
-                <TabList>
-                    <Tab>Top Validators</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
-                        <TableCard
-                            data={tableData.data}
-                            columns={tableData.columns}
-                        />
-                        <div className="mt-3">
-                            <Link to="/validators">
-                                <div className="flex items-center gap-2">
-                                    More Validators{' '}
-                                    <ArrowRight fill="currentColor" />
-                                </div>
-                            </Link>
-                        </div>
-                    </TabPanel>
-                </TabPanels>
-            </TabGroup>
+            <TableCard data={tableData.data} columns={tableData.columns} />
         </div>
     );
 }
