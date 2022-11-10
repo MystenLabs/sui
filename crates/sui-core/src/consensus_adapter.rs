@@ -15,6 +15,9 @@ use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::atomic::AtomicU64;
@@ -24,7 +27,10 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
-use sui_metrics::{monitored_future, spawn_monitored_task};
+use sui_metrics::monitored_future;
+use sui_metrics::spawn_monitored_task;
+use sui_types::base_types::TransactionDigest;
+use sui_types::committee::Committee;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
@@ -208,6 +214,8 @@ impl ConsensusWaiter {
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Box<dyn SubmitToConsensus>,
+    /// The Sui committee information.
+    committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     _tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
@@ -244,6 +252,7 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_address: Multiaddr,
+        committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
@@ -255,6 +264,7 @@ impl ConsensusAdapter {
         let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
+            committee,
             _tx_consensus_listener: tx_consensus_listener,
             timeout,
             num_inflight_transactions,
@@ -265,6 +275,7 @@ impl ConsensusAdapter {
     #[cfg(test)]
     pub fn new_test(
         consensus_client: Box<dyn SubmitToConsensus>,
+        committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
@@ -272,6 +283,7 @@ impl ConsensusAdapter {
         let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
+            committee,
             _tx_consensus_listener: tx_consensus_listener,
             timeout,
             num_inflight_transactions,
@@ -284,9 +296,41 @@ impl ConsensusAdapter {
     }
 
     /// Check if this authority should submit the transaction to consensus.
-    fn should_submit(_certificate: &VerifiedCertificate) -> bool {
-        // TODO [issue #1647]: Right now every authority submits the transaction to consensus.
-        true
+    fn should_submit(
+        committee: &Committee,
+        ourselves: &AuthorityName,
+        tx_digest: &TransactionDigest,
+    ) -> bool {
+        // the 32 is as requirement of the deault StdRng::from_seed choice
+        let digest_bytes: [u8; 32] = tx_digest.to_bytes()[..32].try_into().unwrap();
+
+        // permute the validators deterministically, based on the digest
+        let mut rng = StdRng::from_seed(digest_bytes);
+        let mut validators = committee.voting_rights.clone();
+        validators.shuffle(&mut rng);
+
+        // the last (f+1) elements by weight are the submitters for this transaction
+        let mut total_weight = 0u64;
+        let mut found = false;
+        while total_weight < committee.validity_threshold() {
+            if let Some((name, weight)) = validators.pop() {
+                total_weight += weight;
+                if name == *ourselves {
+                    found = true;
+                    break;
+                }
+            } else {
+                unreachable!(
+                    "We should cross the validity threshold before running out of validators"
+                );
+            }
+        }
+        // Are we one of the submitters?
+        found
+
+        // TODO [issue #1647]: Right now every transaction is submitted to (f+1) authorities.
+        // We should bring this number down to one, and make sure the mapping to submitters is
+        // refreshed frequently enough to make sure this is Byzantine-resistant
     }
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
@@ -311,7 +355,7 @@ impl ConsensusAdapter {
         );
 
         // Check if this authority submits the transaction to consensus.
-        let should_submit = Self::should_submit(certificate);
+        let should_submit = Self::should_submit(&self.committee, authority, tx_digest);
         let _inflight_guard = if should_submit {
             // Timer to record latency of acknowledgements from consensus
             let _timer = self
@@ -719,6 +763,58 @@ impl CheckpointConsensusAdapter {
                    }
                 },
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod adapter_tests {
+    use super::ConsensusAdapter;
+    use fastcrypto::traits::KeyPair;
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+    use sui_types::{
+        base_types::{TransactionDigest, TRANSACTION_DIGEST_LENGTH},
+        committee::Committee,
+        crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
+    };
+
+    #[test]
+    fn should_submit_selects_valid_submitters() {
+        // grab a random committee and a random stake distribution
+        let mut rng = StdRng::from_seed([0; 32]);
+        const COMMITTEE_SIZE: usize = 10; // 3 * 3 + 1;
+        let authorities = (0..COMMITTEE_SIZE)
+            .map(|_k| {
+                (
+                    AuthorityPublicKeyBytes::from(
+                        get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng)
+                            .1
+                            .public(),
+                    ),
+                    rng.gen_range(0u64..10u64),
+                )
+            })
+            .collect::<Vec<_>>();
+        let committee = Committee::new(0, authorities.iter().cloned().collect()).unwrap();
+
+        // generate random transaction digests, and account for validator selection
+        const NUM_TEST_TRANSACTIONS: usize = 1000;
+
+        for _tx_idx in 0..NUM_TEST_TRANSACTIONS {
+            let mut tx_digest_bytes = [0u8; TRANSACTION_DIGEST_LENGTH];
+            rng.fill_bytes(&mut tx_digest_bytes);
+            let tx_digest = TransactionDigest::new(tx_digest_bytes);
+
+            let total_stake_this_committee = authorities.iter().map(|(_name, stake)| stake).sum();
+            // collect the stake of authorities which will be selected to submit the transaction
+            let mut submitters_total_stake = 0u64;
+            for (name, stake) in authorities.iter() {
+                if ConsensusAdapter::should_submit(&committee, name, &tx_digest) {
+                    submitters_total_stake += stake;
+                }
+            }
+            assert!(submitters_total_stake >= committee.validity_threshold());
+            assert!(submitters_total_stake < total_stake_this_committee);
         }
     }
 }
