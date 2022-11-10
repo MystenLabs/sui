@@ -1227,19 +1227,24 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         for ((id, initial_shared_version), v) in
             certificate.shared_input_objects().zip(versions.iter())
         {
-            // If it is the first time the shared object has been sequenced, assign it the version
-            // that the object was shared at.  This `initial_shared_version` will be the initial
-            // version for the object if it was created as a shared object, or will be the version
-            // it was upgraded to a shared object.  We can trust this number as validity is checked
-            // when creating a certificate
+            // On epoch changes, the `next_object_versions` table will be empty, and we rely on
+            // parent sync to recover the current version of the object.  However, if an object was
+            // previously aware of the object as owned, and it was upgraded to shared, the version
+            // in parent sync may be out of date, causing a fork.  In that case, we know that the
+            // `initial_shared_version` will be greater than the version in parent sync, and we can
+            // use that.  It is the version that the object was shared at, and can be trusted
+            // because it has been checked and signed by a quorum of other validators when creating
+            // the certificate.
             let version = match v {
                 Some(v) => *v,
-                None => self
-                    // TODO: if we use an eventually consistent object store in the future,
-                    // we must make this read strongly consistent somehow!
-                    .get_latest_parent_entry(*id)?
-                    .map(|(objref, _)| objref.1)
-                    .unwrap_or_else(|| *initial_shared_version),
+                None => *initial_shared_version.max(
+                    &self
+                        // TODO: if we use an eventually consistent object store in the future,
+                        // we must make this read strongly consistent somehow!
+                        .get_latest_parent_entry(*id)?
+                        .map(|(objref, _)| objref.1)
+                        .unwrap_or_default(),
+                ),
             };
             let next_version = version.increment();
 

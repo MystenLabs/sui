@@ -120,7 +120,7 @@ async fn initial_shared_version_mismatch_arbitrary() {
         .await;
     let err = fx.expect_err("Transaction fails");
     assert!(
-        is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"),
+        is_txn_input_error(&err, "SharedObjectPriorVersionsPendingExecution"),
         "{}",
         err
     );
