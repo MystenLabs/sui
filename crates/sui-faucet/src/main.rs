@@ -21,7 +21,7 @@ use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use sui_metrics::spawn_monitored_task;
-use tower::ServiceBuilder;
+use tower::{limit::RateLimitLayer, ServiceBuilder};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -52,6 +52,9 @@ struct FaucetConfig {
 
     #[clap(long, default_value_t = 120)]
     timeout_in_seconds: u64,
+
+    #[clap(long, default_value_t = 10)]
+    max_request_per_second: u64,
 }
 
 struct AppState<F = SimpleFaucet> {
@@ -84,6 +87,7 @@ async fn main() -> Result<(), anyhow::Error> {
         port,
         request_buffer_size,
         timeout_in_seconds,
+        max_request_per_second,
         ..
     } = config;
 
@@ -112,6 +116,10 @@ async fn main() -> Result<(), anyhow::Error> {
                 .layer(HandleErrorLayer::new(handle_error))
                 .layer(cors)
                 .buffer(request_buffer_size)
+                .layer(RateLimitLayer::new(
+                    max_request_per_second,
+                    Duration::from_secs(1),
+                ))
                 .concurrency_limit(max_concurrency)
                 .timeout(Duration::from_secs(timeout_in_seconds))
                 .layer(Extension(app_state))
