@@ -8,7 +8,8 @@ use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
+    SignedCheckpointSummary,
 };
 use tracing::{debug, info};
 
@@ -21,6 +22,12 @@ pub trait CheckpointOutput: Sync + Send + 'static {
     ) -> SuiResult;
 }
 
+#[async_trait]
+pub trait CertifiedCheckpointOutput: Sync + Send + 'static {
+    async fn certified_checkpoint_created(&self, summary: &CertifiedCheckpointSummary)
+        -> SuiResult;
+}
+
 pub struct SubmitCheckpointToConsensus<T> {
     pub sender: T,
     pub signer: StableSyncAuthoritySigner,
@@ -31,6 +38,10 @@ pub struct LogCheckpointOutput;
 
 impl LogCheckpointOutput {
     pub fn boxed() -> Box<dyn CheckpointOutput> {
+        Box::new(Self)
+    }
+
+    pub fn boxed_certified() -> Box<dyn CertifiedCheckpointOutput> {
         Box::new(Self)
     }
 }
@@ -76,6 +87,21 @@ impl CheckpointOutput for LogCheckpointOutput {
             hex::encode(summary.content_digest),
         );
 
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl CertifiedCheckpointOutput for LogCheckpointOutput {
+    async fn certified_checkpoint_created(
+        &self,
+        summary: &CertifiedCheckpointSummary,
+    ) -> SuiResult {
+        info!(
+            "Certified checkpoint with sequence {} and digest {}",
+            summary.summary.sequence_number,
+            hex::encode(summary.summary.digest())
+        );
         Ok(())
     }
 }

@@ -6,26 +6,31 @@ mod checkpoint_output;
 
 use crate::authority::EffectsNotifyRead;
 use crate::checkpoints2::casual_order::CasualOrder;
-use crate::checkpoints2::checkpoint_output::CheckpointOutput;
+use crate::checkpoints2::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints2::checkpoint_output::{
     LogCheckpointOutput, SubmitCheckpointToConsensus,
 };
 use futures::future::{select, Either};
 use futures::FutureExt;
-use std::collections::HashSet;
+use parking_lot::Mutex;
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_metrics::spawn_monitored_task;
-use sui_types::base_types::{EpochId, TransactionDigest};
+use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::committee::{Committee, StakeUnit};
+use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSignatureMessage, CheckpointSummary,
 };
-use tokio::sync::{oneshot, Notify};
-use tracing::{debug, error, info};
+use tokio::sync::{watch, Notify};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
@@ -54,15 +59,42 @@ struct CheckpointStoreTables {
     /// Lists all transaction digests included in checkpoints
     /// This can be cleaned up on epoch boundary
     digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+
+    /// Stores pending signatures
+    /// The key in this table is checkpoint sequence number and an arbitrary integer
+    /// This tables needs to be cleaned up on epoch boundary
+    pending_signatures: DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
+
+    /// Stores certified checkpoints
+    certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
 }
 
 pub struct CheckpointBuilder {
     tables: Arc<CheckpointStoreTables>,
     notify: Arc<Notify>,
+    notify_aggregator: Arc<Notify>,
     effects_store: Box<dyn EffectsNotifyRead>,
     output: Box<dyn CheckpointOutput>,
-    exit: oneshot::Receiver<()>,
+    exit: watch::Receiver<()>,
     epoch: EpochId,
+}
+
+pub struct CheckpointAggregator {
+    tables: Arc<CheckpointStoreTables>,
+    notify: Arc<Notify>,
+    exit: watch::Receiver<()>,
+    current: Option<SignatureAggregator>,
+    committee: Committee,
+    output: Box<dyn CertifiedCheckpointOutput>,
+}
+
+// This holds information to aggregate signatures for one checkpoint
+pub struct SignatureAggregator {
+    next_index: u64,
+    summary: CheckpointSummary,
+    digest: CheckpointDigest,
+    signatures: HashMap<AuthorityName, AuthoritySignInfo>,
+    stake: StakeUnit,
 }
 
 impl CheckpointBuilder {
@@ -71,8 +103,9 @@ impl CheckpointBuilder {
         notify: Arc<Notify>,
         effects_store: Box<dyn EffectsNotifyRead>,
         output: Box<dyn CheckpointOutput>,
-        exit: oneshot::Receiver<()>,
+        exit: watch::Receiver<()>,
         epoch: EpochId,
+        notify_aggregator: Arc<Notify>,
     ) -> Self {
         Self {
             tables,
@@ -81,6 +114,7 @@ impl CheckpointBuilder {
             output,
             exit,
             epoch,
+            notify_aggregator,
         }
     }
 
@@ -93,7 +127,7 @@ impl CheckpointBuilder {
                     continue;
                 }
             }
-            match select(&mut self.exit, self.notify.notified().boxed()).await {
+            match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // return on exit signal
                     return;
@@ -124,6 +158,7 @@ impl CheckpointBuilder {
         if !l.is_empty() {
             // Only create checkpoint if content is not empty
             batch = self.create_checkpoint(batch, l).await?;
+            self.notify_aggregator.notify_one();
         }
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [height])?;
         batch.write()?;
@@ -216,41 +251,223 @@ impl CheckpointBuilder {
     }
 }
 
+impl CheckpointAggregator {
+    fn new(
+        tables: Arc<CheckpointStoreTables>,
+        notify: Arc<Notify>,
+        exit: watch::Receiver<()>,
+        committee: Committee,
+        output: Box<dyn CertifiedCheckpointOutput>,
+    ) -> Self {
+        let current = None;
+        Self {
+            tables,
+            notify,
+            exit,
+            current,
+            committee,
+            output,
+        }
+    }
+
+    async fn run(mut self) {
+        loop {
+            if let Err(e) = self.run_inner().await {
+                error!(
+                    "Error while aggregating checkpoint, will retry in 1s: {:?}",
+                    e
+                );
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+
+            match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
+                Either::Left(_) => {
+                    // return on exit signal
+                    return;
+                }
+                Either::Right(_) => {}
+            }
+        }
+    }
+
+    async fn run_inner(&mut self) -> SuiResult {
+        'outer: loop {
+            let current = if let Some(current) = &mut self.current {
+                current
+            } else {
+                let next_to_certify = self.next_checkpoint_to_certify();
+                let Some(summary) = self.tables.checkpoint_summary.get(&next_to_certify)? else { return Ok(()); };
+                self.current = Some(SignatureAggregator {
+                    next_index: 0,
+                    digest: summary.digest(),
+                    summary,
+                    signatures: Default::default(),
+                    stake: Default::default(),
+                });
+                self.current.as_mut().unwrap()
+            };
+            let key = (current.summary.sequence_number, current.next_index);
+            let iter = self.tables.pending_signatures.iter().skip_to(&key)?;
+            debug!("Scanning pending checkpoint signatures from {:?}", key);
+            for ((seq, index), data) in iter {
+                if seq != current.summary.sequence_number {
+                    debug!(
+                        "Not enough checkpoint signatures on height {}",
+                        current.summary.sequence_number
+                    );
+                    // No more signatures (yet) for this checkpoint
+                    return Ok(());
+                }
+                debug!(
+                    "Processing signature for checkpoint {} from {:?}",
+                    current.summary.sequence_number,
+                    data.summary.auth_signature.authority.concise()
+                );
+                if let Ok(auth_signature) = current.try_aggregate(&self.committee, data) {
+                    let summary = CertifiedCheckpointSummary {
+                        summary: current.summary.clone(),
+                        auth_signature,
+                    };
+                    self.tables
+                        .certified_checkpoints
+                        .insert(&current.summary.sequence_number, &summary)?;
+                    self.output.certified_checkpoint_created(&summary).await?;
+                    self.current = None;
+                    continue 'outer;
+                } else {
+                    current.next_index = index + 1;
+                }
+            }
+            break;
+        }
+        Ok(())
+    }
+
+    fn next_checkpoint_to_certify(&self) -> CheckpointSequenceNumber {
+        self.tables
+            .certified_checkpoints
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(seq, _)| seq + 1)
+            .unwrap_or_default()
+    }
+}
+
+impl SignatureAggregator {
+    #[allow(clippy::result_unit_err)]
+    pub fn try_aggregate(
+        &mut self,
+        committee: &Committee,
+        data: CheckpointSignatureMessage,
+    ) -> Result<AuthorityWeakQuorumSignInfo, ()> {
+        let their_digest = data.summary.summary.digest();
+        let author = data.summary.auth_signature.authority;
+        let signature = data.summary.auth_signature;
+        if their_digest != self.digest {
+            // todo - consensus need to ensure data.summary.auth_signature.authority == narwhal_cert.author
+            warn!(
+                "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
+                author.concise(),
+                hex::encode(their_digest),
+                self.summary.sequence_number,
+                hex::encode(self.digest)
+            );
+            return Err(());
+        }
+        match self.signatures.entry(author) {
+            Entry::Occupied(oc) => {
+                if oc.get() != &signature {
+                    warn!("Validator {:?} submitted two different signatures for checkpoint {}: {:?}, {:?}", author.concise(), self.summary.sequence_number, oc.get(), signature);
+                    return Err(());
+                }
+            }
+            Entry::Vacant(va) => {
+                va.insert(signature);
+            }
+        }
+        self.stake += committee.weight(&author);
+        if self.stake >= committee.validity_threshold() {
+            let signatures = self.signatures.values().cloned().collect();
+            match AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(signatures, committee) {
+                Ok(aggregated) => Ok(aggregated),
+                Err(err) => {
+                    error!(
+                        "Unexpected error when aggregating signatures for checkpoint {}: {:?}",
+                        self.summary.sequence_number, err
+                    );
+                    Err(())
+                }
+            }
+        } else {
+            Err(())
+        }
+    }
+}
+
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
 pub struct CheckpointService {
     tables: Arc<CheckpointStoreTables>,
-    notify: Arc<Notify>,
-    _exit: oneshot::Sender<()>, // dropping this will eventually stop checkpoint tasks
+    notify_builder: Arc<Notify>,
+    notify_aggregator: Arc<Notify>,
+    last_signature_index: Mutex<u64>,
+    _exit: watch::Sender<()>, // dropping this will eventually stop checkpoint tasks
 }
 
 impl CheckpointService {
     pub fn spawn(
         path: &Path,
         effects_store: Box<dyn EffectsNotifyRead>,
-        output: Box<dyn CheckpointOutput>,
-        epoch: EpochId,
+        checkpoint_output: Box<dyn CheckpointOutput>,
+        certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
+        committee: Committee, // todo - figure out how this is updated
     ) -> Arc<Self> {
-        let notify = Arc::new(Notify::new());
+        let notify_builder = Arc::new(Notify::new());
+        let notify_aggregator = Arc::new(Notify::new());
 
         let tables = CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), None, None);
         let tables = Arc::new(tables);
 
-        let (exit_snd, exit_rcv) = oneshot::channel();
+        let (exit_snd, exit_rcv) = watch::channel(());
 
         let builder = CheckpointBuilder::new(
             tables.clone(),
-            notify.clone(),
+            notify_builder.clone(),
             effects_store,
-            output,
-            exit_rcv,
-            epoch,
+            checkpoint_output,
+            exit_rcv.clone(),
+            committee.epoch,
+            notify_aggregator.clone(),
         );
 
         spawn_monitored_task!(builder.run());
 
+        let aggregator = CheckpointAggregator::new(
+            tables.clone(),
+            notify_aggregator.clone(),
+            exit_rcv,
+            committee,
+            certified_checkpoint_output,
+        );
+
+        spawn_monitored_task!(aggregator.run());
+
+        let last_signature_index = tables
+            .pending_signatures
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|((_, index), _)| index)
+            .unwrap_or_default();
+
+        let last_signature_index = Mutex::new(last_signature_index);
+
         Arc::new(Self {
             tables,
-            notify,
+            notify_builder,
+            notify_aggregator,
+            last_signature_index,
             _exit: exit_snd,
         })
     }
@@ -275,18 +492,41 @@ impl CheckpointService {
             index, roots
         );
         self.tables.pending_checkpoints.insert(&index, &roots)?;
-        self.notify.notify_one();
+        self.notify_builder.notify_one();
         Ok(())
     }
 
     pub fn notify_checkpoint_signature(&self, info: Box<CheckpointSignatureMessage>) -> SuiResult {
+        let sequence = info.summary.summary.sequence_number;
+        if let Some((last_certified, _)) = self
+            .tables
+            .certified_checkpoints
+            .iter()
+            .skip_to_last()
+            .next()
+        {
+            if sequence <= last_certified {
+                debug!(
+                    "Ignore signature for checkpoint sequence {} from {} - already certified",
+                    info.summary.summary.sequence_number, info.summary.auth_signature.authority
+                );
+                return Ok(());
+            }
+        }
         info!(
             "Received signature for checkpoint sequence {}, digest {} from {}",
-            info.summary.summary.sequence_number,
+            sequence,
             hex::encode(info.summary.summary.digest()),
             info.summary.auth_signature.authority
         );
-        Ok(()) // todo
+        // While it can be tempting to make last_signature_index into AtomicU64, this won't work
+        // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions
+        let mut index = self.last_signature_index.lock();
+        *index += 1;
+        let key = (sequence, *index);
+        self.tables.pending_signatures.insert(&key, &info)?;
+        self.notify_aggregator.notify_one();
+        Ok(())
     }
 }
 
@@ -294,12 +534,16 @@ impl CheckpointService {
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
+    use sui_types::crypto::AuthorityKeyPair;
+    use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
 
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
+        let _guard = setup_tracing();
         let tempdir = tempdir().unwrap();
         let mut store: HashMap<TransactionDigest, TransactionEffects> = HashMap::new();
         store.insert(d(1), e(d(1), vec![d(2), d(3)]));
@@ -307,10 +551,19 @@ mod tests {
         store.insert(d(3), e(d(3), vec![]));
         store.insert(d(4), e(d(4), vec![]));
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
+        let (certified_output, mut certified_result) =
+            mpsc::channel::<CertifiedCheckpointSummary>(10);
         let store = Box::new(store);
 
-        let checkpoint_service =
-            CheckpointService::spawn(tempdir.path(), store, Box::new(output), 0);
+        let (keypair, committee) = committee();
+
+        let checkpoint_service = CheckpointService::spawn(
+            tempdir.path(),
+            store,
+            Box::new(output),
+            Box::new(certified_output),
+            committee,
+        );
         checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
         // Verify that sending same digests at same height is noop
         checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
@@ -330,6 +583,23 @@ mod tests {
         assert_eq!(c2t, vec![d(3), d(2), d(1)]);
         assert_eq!(c2s.previous_digest, Some(c1s.digest()));
         assert_eq!(c2s.sequence_number, 1);
+
+        let c1ss =
+            SignedCheckpointSummary::new_from_summary(c1s, keypair.public().into(), &keypair);
+        let c2ss =
+            SignedCheckpointSummary::new_from_summary(c2s, keypair.public().into(), &keypair);
+
+        checkpoint_service
+            .notify_checkpoint_signature(Box::new(CheckpointSignatureMessage { summary: c2ss }))
+            .unwrap();
+        checkpoint_service
+            .notify_checkpoint_signature(Box::new(CheckpointSignatureMessage { summary: c1ss }))
+            .unwrap();
+
+        let c1sc = certified_result.recv().await.unwrap();
+        let c2sc = certified_result.recv().await.unwrap();
+        assert_eq!(c1sc.summary.sequence_number, 0);
+        assert_eq!(c2sc.summary.sequence_number, 1);
     }
 
     #[async_trait]
@@ -367,6 +637,17 @@ mod tests {
         }
     }
 
+    #[async_trait::async_trait]
+    impl CertifiedCheckpointOutput for mpsc::Sender<CertifiedCheckpointSummary> {
+        async fn certified_checkpoint_created(
+            &self,
+            summary: &CertifiedCheckpointSummary,
+        ) -> SuiResult {
+            self.try_send(summary.clone()).unwrap();
+            Ok(())
+        }
+    }
+
     fn d(i: u8) -> TransactionDigest {
         let mut bytes: [u8; 32] = Default::default();
         bytes[0] = i;
@@ -382,5 +663,35 @@ mod tests {
             dependencies,
             ..Default::default()
         }
+    }
+
+    fn committee() -> (AuthorityKeyPair, Committee) {
+        use std::collections::BTreeMap;
+        use sui_types::crypto::get_key_pair;
+        use sui_types::crypto::AuthorityPublicKeyBytes;
+
+        let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
+        let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+        authorities.insert(
+            /* address */ authority_key.public().into(),
+            /* voting right */ 1,
+        );
+        (authority_key, Committee::new(0, authorities).unwrap())
+    }
+
+    fn setup_tracing() -> telemetry_subscribers::TelemetryGuards {
+        // Setup tracing
+        let tracing_level = "debug";
+        let network_tracing_level = "info";
+
+        let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
+
+        telemetry_subscribers::TelemetryConfig::new("narwhal")
+            // load env variables
+            .with_env()
+            // load special log filter
+            .with_log_level(&log_filter)
+            .init()
+            .0
     }
 }

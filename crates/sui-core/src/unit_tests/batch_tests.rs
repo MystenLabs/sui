@@ -96,7 +96,8 @@ pub(crate) async fn init_state(
         &checkpoint2_path,
         Box::new(store.clone()),
         LogCheckpointOutput::boxed(),
-        0,
+        LogCheckpointOutput::boxed_certified(),
+        committee,
     );
 
     AuthorityState::new(

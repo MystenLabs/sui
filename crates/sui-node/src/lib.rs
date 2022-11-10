@@ -179,7 +179,8 @@ impl SuiNode {
             &config.db_path().join("checkpoints2"),
             Box::new(store.clone()),
             checkpoint_output,
-            committee.epoch,
+            LogCheckpointOutput::boxed_certified(),
+            committee.clone(),
         );
 
         let state = Arc::new(
