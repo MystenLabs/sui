@@ -39,6 +39,7 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
+use crate::consensus_adapter::SubmitToConsensus;
 use crate::consensus_handler::ConsensusHandler;
 use tracing::{debug, info, Instrument};
 
@@ -99,8 +100,13 @@ impl AuthorityServer {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
+        use narwhal_types::TransactionsClient;
+        let consensus_client = Box::new(TransactionsClient::new(
+            mysten_network::client::connect_lazy(&consensus_address)
+                .expect("Failed to connect to consensus"),
+        ));
         let consensus_adapter = ConsensusAdapter::new(
-            consensus_address,
+            consensus_client,
             state.clone_committee(),
             tx_consensus_listener,
             Duration::from_secs(20),
@@ -263,6 +269,7 @@ impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
     pub async fn new(
+        consensus_client: Box<dyn SubmitToConsensus>,
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         prometheus_registry: Registry,
@@ -308,7 +315,7 @@ impl ValidatorService {
 
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
-            consensus_config.address().to_owned(),
+            consensus_client,
             state.clone_committee(),
             tx_consensus_listener.clone(),
             timeout,

@@ -151,7 +151,9 @@ async fn submit_transaction_to_consensus_adapter() {
     let state = Arc::new(state);
     let metrics = ConsensusAdapterMetrics::new_test();
 
+    #[derive(Clone)]
     struct SubmitDirectly(Arc<AuthorityState>);
+
     #[async_trait::async_trait]
     impl SubmitToConsensus for SubmitDirectly {
         async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
@@ -163,7 +165,7 @@ async fn submit_transaction_to_consensus_adapter() {
         }
     }
     // Make a new consensus adapter instance.
-    let adapter = ConsensusAdapter::new_test(
+    let adapter = ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
         committee.clone(),
         tx_consensus_listener,

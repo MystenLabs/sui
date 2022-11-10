@@ -30,6 +30,7 @@ sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 sui-metrics = { path = "../sui-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
+narwhal-types = { path = "../../narwhal/types" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

@@ -251,29 +251,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        consensus_address: Multiaddr,
-        committee: Committee,
-        tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        timeout: Duration,
-        opt_metrics: OptArcConsensusAdapterMetrics,
-    ) -> Self {
-        let consensus_client = Box::new(TransactionsClient::new(
-            mysten_network::client::connect_lazy(&consensus_address)
-                .expect("Failed to connect to consensus"),
-        ));
-        let num_inflight_transactions = Default::default();
-        Self {
-            consensus_client,
-            committee,
-            _tx_consensus_listener: tx_consensus_listener,
-            timeout,
-            num_inflight_transactions,
-            opt_metrics,
-        }
-    }
-
-    #[cfg(test)]
-    pub fn new_test(
         consensus_client: Box<dyn SubmitToConsensus>,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,

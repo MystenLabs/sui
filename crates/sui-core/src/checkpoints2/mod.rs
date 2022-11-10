@@ -7,7 +7,9 @@ mod checkpoint_output;
 use crate::authority::EffectsNotifyRead;
 use crate::checkpoints2::casual_order::CasualOrder;
 use crate::checkpoints2::checkpoint_output::CheckpointOutput;
-pub use crate::checkpoints2::checkpoint_output::LogCheckpointOutput;
+pub use crate::checkpoints2::checkpoint_output::{
+    LogCheckpointOutput, SubmitCheckpointToConsensus,
+};
 use futures::future::{select, Either};
 use futures::FutureExt;
 use std::collections::HashSet;
@@ -15,15 +17,15 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_metrics::spawn_monitored_task;
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use tokio::sync::{oneshot, Notify};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
@@ -60,6 +62,7 @@ pub struct CheckpointBuilder {
     effects_store: Box<dyn EffectsNotifyRead>,
     output: Box<dyn CheckpointOutput>,
     exit: oneshot::Receiver<()>,
+    epoch: EpochId,
 }
 
 impl CheckpointBuilder {
@@ -69,6 +72,7 @@ impl CheckpointBuilder {
         effects_store: Box<dyn EffectsNotifyRead>,
         output: Box<dyn CheckpointOutput>,
         exit: oneshot::Receiver<()>,
+        epoch: EpochId,
     ) -> Self {
         Self {
             tables,
@@ -76,6 +80,7 @@ impl CheckpointBuilder {
             effects_store,
             output,
             exit,
+            epoch,
         }
     }
 
@@ -106,11 +111,11 @@ impl CheckpointBuilder {
         let roots = self.effects_store.notify_read(roots).await?;
         let unsorted = self.complete_checkpoint(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
-        self.write_checkpoint(height, sorted)?;
+        self.write_checkpoint(height, sorted).await?;
         Ok(())
     }
 
-    fn write_checkpoint(
+    async fn write_checkpoint(
         &self,
         height: CheckpointCommitHeight,
         l: Vec<TransactionEffects>,
@@ -118,14 +123,14 @@ impl CheckpointBuilder {
         let mut batch = self.tables.pending_checkpoints.batch();
         if !l.is_empty() {
             // Only create checkpoint if content is not empty
-            batch = self.create_checkpoint(batch, l)?;
+            batch = self.create_checkpoint(batch, l).await?;
         }
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [height])?;
         batch.write()?;
         Ok(())
     }
 
-    fn create_checkpoint(
+    async fn create_checkpoint(
         &self,
         mut batch: DBBatch,
         l: Vec<TransactionEffects>,
@@ -140,7 +145,7 @@ impl CheckpointBuilder {
         );
         let gas_cost_summary = GasCostSummary::new_from_txn_effects(l.iter());
         let summary = CheckpointSummary::new(
-            0, //todo
+            self.epoch, // todo - need to figure out how this is updated
             sequence_number,
             &contents,
             previous_digest,
@@ -148,7 +153,7 @@ impl CheckpointBuilder {
             None, //todo
         );
 
-        self.output.checkpoint_created(&summary, &contents)?;
+        self.output.checkpoint_created(&summary, &contents).await?;
 
         batch = batch.insert_batch(
             &self.tables.checkpoint_content,
@@ -219,11 +224,11 @@ pub struct CheckpointService {
 }
 
 impl CheckpointService {
-    #[allow(dead_code)]
     pub fn spawn(
         path: &Path,
         effects_store: Box<dyn EffectsNotifyRead>,
         output: Box<dyn CheckpointOutput>,
+        epoch: EpochId,
     ) -> Arc<Self> {
         let notify = Arc::new(Notify::new());
 
@@ -238,6 +243,7 @@ impl CheckpointService {
             effects_store,
             output,
             exit_rcv,
+            epoch,
         );
 
         spawn_monitored_task!(builder.run());
@@ -272,6 +278,16 @@ impl CheckpointService {
         self.notify.notify_one();
         Ok(())
     }
+
+    pub fn notify_checkpoint_signature(&self, info: Box<CheckpointSignatureMessage>) -> SuiResult {
+        info!(
+            "Received signature for checkpoint sequence {}, digest {} from {}",
+            info.summary.summary.sequence_number,
+            hex::encode(info.summary.summary.digest()),
+            info.summary.auth_signature.authority
+        );
+        Ok(()) // todo
+    }
 }
 
 #[cfg(test)]
@@ -293,7 +309,8 @@ mod tests {
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
         let store = Box::new(store);
 
-        let checkpoint_service = CheckpointService::spawn(tempdir.path(), store, Box::new(output));
+        let checkpoint_service =
+            CheckpointService::spawn(tempdir.path(), store, Box::new(output), 0);
         checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
         // Verify that sending same digests at same height is noop
         checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
@@ -338,8 +355,9 @@ mod tests {
         }
     }
 
+    #[async_trait::async_trait]
     impl CheckpointOutput for mpsc::Sender<(CheckpointContents, CheckpointSummary)> {
-        fn checkpoint_created(
+        async fn checkpoint_created(
             &self,
             summary: &CheckpointSummary,
             contents: &CheckpointContents,

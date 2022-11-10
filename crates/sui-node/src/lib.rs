@@ -67,7 +67,8 @@ pub mod metrics;
 
 mod handle;
 pub use handle::SuiNodeHandle;
-use sui_core::checkpoints2::{CheckpointService, LogCheckpointOutput};
+use narwhal_types::TransactionsClient;
+use sui_core::checkpoints2::{CheckpointService, LogCheckpointOutput, SubmitCheckpointToConsensus};
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
@@ -154,10 +155,31 @@ impl SuiNode {
             None,
             None,
         ));
+
+        let consensus_client = config.consensus_config().map(|config| {
+            let consensus_address = config.address().to_owned();
+            TransactionsClient::new(
+                mysten_network::client::connect_lazy(&consensus_address)
+                    .expect("Failed to connect to consensus"),
+            )
+        });
+
+        let checkpoint_output = if let Some(ref consensus_client) = consensus_client {
+            Box::new(SubmitCheckpointToConsensus {
+                sender: consensus_client.clone(),
+                signer: secret.clone(),
+                authority: config.protocol_public_key(),
+            })
+        } else {
+            // todo - we should refactor code a bit and simply don't start checkpoint builder on full node
+            LogCheckpointOutput::boxed()
+        };
+
         let checkpoint_service = CheckpointService::spawn(
             &config.db_path().join("checkpoints2"),
             Box::new(store.clone()),
-            LogCheckpointOutput::boxed(),
+            checkpoint_output,
+            committee.epoch,
         );
 
         let state = Arc::new(
@@ -281,10 +303,16 @@ impl SuiNode {
         };
 
         let registry = prometheus_registry.clone();
-        let validator_service = if config.consensus_config().is_some() {
+        let validator_service = if let Some(consensus_client) = consensus_client {
             Some(
-                ValidatorService::new(config, state.clone(), registry, rx_reconfigure_consensus)
-                    .await?,
+                ValidatorService::new(
+                    Box::new(consensus_client),
+                    config,
+                    state.clone(),
+                    registry,
+                    rx_reconfigure_consensus,
+                )
+                .await?,
             )
         } else {
             None
