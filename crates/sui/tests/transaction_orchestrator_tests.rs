@@ -19,6 +19,7 @@ use test_utils::network::{start_a_fullnode_with_handle, TestClusterBuilder};
 use test_utils::transaction::{
     increment_counter, publish_basics_package_and_make_counter, wait_for_all_txes, wait_for_tx,
 };
+use tracing::info;
 
 #[tokio::test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
@@ -150,6 +151,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
         start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false).await?;
     // Note this node is different from the one connected with WalletContext
     let node = &fullnode_handle.sui_node;
+    let wallet_context_node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
 
     let active = node.active();
 
@@ -165,7 +167,8 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     let (pkg_ref, counter_id) = publish_basics_package_and_make_counter(context, signer).await;
     let counter_shared_at = counter_id.1;
 
-    // 0. Execute transaction through another fullnode (the one in WalletContext)
+    // 0. Execute transaction through Quorum Driver
+    info!("Execute with a Quorum Driver");
     let digests0 = increment(context, &signer, counter_id.0, 20, pkg_ref).await;
     // Since the node sync process is disabled, the node does not know about these txns
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
@@ -199,7 +202,10 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     node_knows_txes(node, &vec![digest0]).await;
 
     // 1. Execute with Orchestrator, WaitForLocalExecution
-    // WaitForLocalExecution synchronuously executes all previous txns
+    info!("Execute with Orchestrator, WaitForLocalExecution");
+
+    // We wait until the wallet context node knows about digest0 so it can pick the right gas
+    wait_for_tx(digest0, wallet_context_node.state().clone()).await;
     let digests1 = increment(context, &signer, counter_id.0, 20, pkg_ref).await;
 
     let tx1 = make_counter_increment_transaction_with_wallet_context(
@@ -211,6 +217,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     )
     .await;
     let digest1 = *tx1.digest();
+    // WaitForLocalExecution synchronuously executes all previous txns
     let res = execute_with_orchestrator(
         &orchestrator,
         tx1,
@@ -225,9 +232,10 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     node_knows_txes(node, &vec![digest1]).await;
 
     // 2. Execute with Orchestrator, ImmediateReturn
-    // ImmediateReturn does not wait for execution results.
-    // But the execution asynchronuously triggers all dependencies to
-    // be executed as well.
+    info!("Execute with Orchestrator, ImmediateReturn");
+
+    // We wait until the wallet context node knows about digest1 so it can pick the right gas
+    wait_for_tx(digest1, wallet_context_node.state().clone()).await;
     let digests2 = increment(context, &signer, counter_id.0, 20, pkg_ref).await;
     node_does_not_know_txes(node, &digests2).await;
 
@@ -239,6 +247,8 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
         None,
     )
     .await;
+    // ImmediateReturn does not wait for execution results. But the execution asynchronuously triggers
+    // all dependencies to be executed as well.
     let digest2 = *tx2.digest();
     execute_with_orchestrator(
         &orchestrator,
