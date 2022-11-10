@@ -114,7 +114,6 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             );
 
             println!("Start active execution process.");
-            active_state.clone().spawn_transaction_manager_scanner();
             active_state.clone().spawn_execute_process().await;
 
             // Spin the checkpoint service.
@@ -206,7 +205,6 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             );
 
             println!("Start active execution process.");
-            active_state.clone().spawn_transaction_manager_scanner();
             active_state.clone().spawn_execute_process().await;
 
             // Spin the gossip service.
@@ -296,7 +294,6 @@ async fn test_empty_checkpoint() {
                 .unwrap(),
             );
 
-            active_state.clone().spawn_transaction_manager_scanner();
             active_state.clone().spawn_execute_process().await;
 
             // Spawn the checkpointing service.

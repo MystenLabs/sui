@@ -76,7 +76,6 @@ pub struct SuiNode {
     _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
-    _transaction_manager_scanner_handle: Option<tokio::task::JoinHandle<()>>,
     _execute_driver_handle: tokio::task::JoinHandle<()>,
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
@@ -269,8 +268,6 @@ impl SuiNode {
         } else {
             None
         };
-        let transaction_manager_scanner_handle =
-            Some(active_authority.clone().spawn_transaction_manager_scanner());
         let execute_driver_handle = active_authority.clone().spawn_execute_process().await;
         let checkpoint_process_handle = if config.enable_checkpoint && is_validator {
             Some(
@@ -374,7 +371,6 @@ impl SuiNode {
             _json_rpc_service: json_rpc_service,
             _ws_subscription_service: ws_subscription_service,
             _gossip_handle: gossip_handle,
-            _transaction_manager_scanner_handle: transaction_manager_scanner_handle,
             _execute_driver_handle: execute_driver_handle,
             _checkpoint_process_handle: checkpoint_process_handle,
             _batch_subsystem_handle: batch_subsystem_handle,

@@ -167,7 +167,6 @@ pub struct AuthorityMetrics {
 
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
-    pub(crate) transaction_manager_objects_notified_via_scan: IntGauge,
     pub(crate) transaction_manager_num_ready: IntGauge,
 
     total_consensus_txns: IntCounter,
@@ -327,12 +326,6 @@ impl AuthorityMetrics {
             transaction_manager_num_pending_certificates: register_int_gauge_with_registry!(
                 "transaction_manager_num_pending_certificates",
                 "Current number of pending certificates in TransactionManager",
-                registry,
-            )
-            .unwrap(),
-            transaction_manager_objects_notified_via_scan: register_int_gauge_with_registry!(
-                "transaction_manager_objects_notified_via_scan",
-                "Current number of input objects found available via scanning in TransactionManager",
                 registry,
             )
             .unwrap(),
@@ -980,7 +973,13 @@ impl AuthorityState {
 
         // Notifies transaction manager about available input objects. This allows the transaction
         // manager to schedule ready transactions.
-        // TODO: investigate switching TransactionManager to use notify_read() on objects table.
+        //
+        // REQUIRED: this must be called after commit_certificate() (above), to ensure
+        // TransactionManager can receive the notifications for objects that it did not find
+        // in the objects table.
+        //
+        // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
+        // TransactionManager can get the notifications after the node crashes and restarts.
         {
             let mut transaction_manager = self.transaction_manager.lock().await;
             transaction_manager.objects_committed(output_keys);

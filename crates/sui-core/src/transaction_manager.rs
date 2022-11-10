@@ -11,7 +11,7 @@ use sui_types::{
     messages::VerifiedCertificate,
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
 
@@ -84,6 +84,14 @@ impl TransactionManager {
             }
             let cert_key = (cert.epoch(), *cert.digest());
             for obj_key in missing {
+                // A missing input object in TransactionManager will definitely be notified via
+                // objects_committed(), when the object actually gets committed, because:
+                // 1. Assume rocksdb is strongly consistent, writing the object to the objects
+                // table must happen after not finding the object in get_missing_input_objects().
+                // 2. Notification via objects_committed() will happen after an object is written
+                // into the objects table.
+                // 3. TransactionManager is protected by a mutex. The notification via
+                // objects_committed() can only arrive after the current enqueue() call finishes.
                 // TODO: verify the key does not already exist.
                 self.missing_inputs.insert(obj_key, cert_key);
                 self.pending_certificates
@@ -102,7 +110,6 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager that the given objects have been committed.
-    // TODO: investigate switching TransactionManager to use notify_read() on objects table.
     pub(crate) fn objects_committed(&mut self, object_keys: Vec<ObjectKey>) {
         for object_key in object_keys {
             let cert_key = if let Some(key) = self.missing_inputs.remove(&object_key) {
@@ -145,31 +152,6 @@ impl TransactionManager {
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(self.pending_certificates.len() as i64);
-    }
-
-    /// Run a periodic scanning task that checks if any input object is in fact already committed.
-    /// This can discover more ready transactions.
-    /// TODO: rely on notify_read() for objects or the mutex on TransactionManager instead, and
-    /// remove this periodic scanner.
-    pub(crate) fn scan_ready_transactions(&mut self) {
-        let mut available_inputs = Vec::new();
-        for (object_key, _) in self.missing_inputs.iter() {
-            match self
-                .authority_store
-                .object_exists(&object_key.0, object_key.1)
-            {
-                Ok(true) => available_inputs.push(*object_key),
-                Err(e) => warn!("Failed to check if object exists: {e}"),
-                _ => {}
-            }
-        }
-        if available_inputs.is_empty() {
-            return;
-        }
-        self.metrics
-            .transaction_manager_objects_notified_via_scan
-            .add(available_inputs.len() as i64);
-        self.objects_committed(available_inputs);
     }
 
     /// Marks the given certificate as ready to be executed.

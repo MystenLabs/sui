@@ -37,7 +37,7 @@ use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::{
     sync::{oneshot, Mutex, MutexGuard},
     task::JoinHandle,
-    time::{sleep, timeout},
+    time::timeout,
 };
 use tracing::{debug, error, info, warn};
 
@@ -74,7 +74,6 @@ const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
 const EXPONENTIAL_DELAY_BASIS: u64 = 2;
 pub const MAX_RETRY_DELAY_MS: u64 = 30_000;
-const TRANSACTION_MANAGER_SCAN_INTERNAL: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 pub struct AuthorityHealth {
@@ -383,36 +382,6 @@ where
     pub async fn cancel_node_sync_process_for_tests(&self) {
         let mut lock_guard = self.node_sync_process.lock().await;
         Self::cancel_node_sync_process_impl(&mut lock_guard).await;
-    }
-
-    /// Start a periodic process to check transactions that are ready.
-    /// This is necessary even though we try to notify TransactionManager about each committed
-    /// object, because currently there is no transaction semantics for data store.
-    /// The following is possible:
-    /// 1. A certificate enters TransactionManager, and gathers its missing input objects.
-    /// 2. One of its missing input object is committed, and notifies TransactionManager. No action
-    ///    will be taken since the input object is not yet part of TransactionManager's data.
-    /// 3. TransactionManager saves the certificate's missing input into its data structure,
-    ///    including the object just committed.
-    /// TODO: investigate switching TransactionManager to use notify_read() on objects table.
-    pub fn spawn_transaction_manager_scanner(self: Arc<Self>) -> JoinHandle<()> {
-        let weak_transaction_manager = Arc::downgrade(&self.state.transaction_manager);
-        spawn_monitored_task!(async move {
-            loop {
-                sleep(TRANSACTION_MANAGER_SCAN_INTERNAL).await;
-                {
-                    let transaction_manager_arc_guard =
-                        if let Some(transaction_manager) = weak_transaction_manager.upgrade() {
-                            transaction_manager
-                        } else {
-                            // Shut down.
-                            return;
-                        };
-                    let mut transaction_manager = transaction_manager_arc_guard.lock().await;
-                    transaction_manager.scan_ready_transactions();
-                }
-            }
-        })
     }
 
     /// Spawn pending certificate execution process
