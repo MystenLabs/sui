@@ -134,10 +134,9 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             compressed_sub_dag.certificates.into_iter().unzip();
 
         let certificates: Vec<_> = certificate_store
-            .read_all(certificate_digests)
-            .unwrap()
+            .read_all(certificate_digests)?
             .into_iter()
-            .map(|cert_option| cert_option.unwrap())
+            .flatten()
             .collect();
 
         let outputs = certificates
