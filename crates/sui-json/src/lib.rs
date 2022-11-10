@@ -160,16 +160,6 @@ impl SuiJsonValue {
     }
 
     fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<MoveValue, anyhow::Error> {
-        // Double check that all numbers conform
-        if let JsonValue::Number(n) = val {
-            if n.as_u64().is_none() {
-                return Err(anyhow!(format!(
-                    "{} is not a valid number. Only u64 allowed.",
-                    n
-                )));
-            }
-        }
-
         Ok(match (val, ty) {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => MoveValue::Bool(*b),
@@ -177,39 +167,19 @@ impl SuiJsonValue {
             // In constructor, we have already checked that the JSON number is unsigned int of at most U64
             (JsonValue::Number(n), MoveTypeLayout::U8) => match n.as_u64() {
                 Some(x) => MoveValue::U8(u8::try_from(x)?),
-                None => {
-                    return Err(anyhow!(format!(
-                        "{} is not a valid number. Only u64 allowed.",
-                        n
-                    )))
-                }
+                None => return Err(anyhow!("{} is not a valid number. Only u8 allowed.", n)),
             },
             (JsonValue::Number(n), MoveTypeLayout::U16) => match n.as_u64() {
                 Some(x) => MoveValue::U16(u16::try_from(x)?),
-                None => {
-                    return Err(anyhow!(format!(
-                        "{} is not a valid number. Only u64 allowed.",
-                        n
-                    )))
-                }
+                None => return Err(anyhow!("{} is not a valid number. Only u16 allowed.", n)),
             },
             (JsonValue::Number(n), MoveTypeLayout::U32) => match n.as_u64() {
                 Some(x) => MoveValue::U32(u32::try_from(x)?),
-                None => {
-                    return Err(anyhow!(format!(
-                        "{} is not a valid number. Only u64 allowed.",
-                        n
-                    )))
-                }
+                None => return Err(anyhow!("{} is not a valid number. Only u32 allowed.", n)),
             },
             (JsonValue::Number(n), MoveTypeLayout::U64) => match n.as_u64() {
                 Some(x) => MoveValue::U64(x),
-                None => {
-                    return Err(anyhow!(format!(
-                        "{} is not a valid number. Only u64 allowed.",
-                        n
-                    )))
-                }
+                None => return Err(anyhow!("{} is not a valid number. Only u64 allowed.", n)),
             },
 
             // u8, u16, u32, u64, u128, u256 can be encoded as String
