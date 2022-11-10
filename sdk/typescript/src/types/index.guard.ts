@@ -413,8 +413,8 @@ export function isSequenceNumber(obj: any, _argumentName?: string): obj is Seque
 
 export function isOrder(obj: any, _argumentName?: string): obj is Order {
     return (
-        (obj === "ascending" ||
-            obj === "descending")
+        (obj === false ||
+            obj === true)
     )
 }
 
