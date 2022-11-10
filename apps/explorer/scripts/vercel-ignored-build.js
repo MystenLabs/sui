@@ -59,5 +59,5 @@ main().catch((e) => {
     console.log(e.message);
     // In the case of an error, play it safe and build:
     console.error('Vercel Ignored Build Step Failed', e);
-    doNotBuild();
+    requiresBuild();
 });
