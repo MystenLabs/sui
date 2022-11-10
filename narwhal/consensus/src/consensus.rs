@@ -372,7 +372,7 @@ where
                         }
 
                         if let Err(e) = self.tx_sequence.send(committed_sub_dag).await {
-                            tracing::warn!("Failed to output certificate: {e}");
+                            tracing::warn!("Failed to output sub dag: {e}");
                         }
                     }
 
