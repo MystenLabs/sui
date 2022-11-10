@@ -59,6 +59,7 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
+use sui_config::p2p::StateSyncConfig;
 use sui_types::{
     base_types::ExecutionDigests,
     message_envelope::Message,
@@ -210,6 +211,8 @@ enum StateSyncMessage {
 }
 
 struct StateSyncEventLoop<S> {
+    config: StateSyncConfig,
+
     mailbox: mpsc::Receiver<StateSyncMessage>,
     /// Weak reference to our own mailbox
     weak_sender: mpsc::WeakSender<StateSyncMessage>,
@@ -235,7 +238,7 @@ where
     pub async fn start(mut self) {
         info!("State-Synchronizer started");
 
-        let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
+        let mut interval = tokio::time::interval(self.config.interval_period());
         let mut peer_events = {
             let (subscriber, peers) = self.network.subscribe();
             for peer_id in peers {
@@ -419,6 +422,7 @@ where
                 self.network.clone(),
                 self.store.clone(),
                 self.peer_heights.clone(),
+                self.config.checkpoint_header_download_concurrency(),
                 // The if condition should ensure that this is Some
                 highest_known_checkpoint.unwrap(),
             )
@@ -455,6 +459,7 @@ where
                 self.peer_heights.clone(),
                 self.weak_sender.clone(),
                 self.checkpoint_event_sender.clone(),
+                self.config.transaction_download_concurrency(),
                 // The if condition should ensure that this is Some
                 highest_verified_checkpoint.unwrap(),
             );
@@ -583,6 +588,7 @@ async fn sync_to_checkpoint<S: WriteStore>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
+    checkpoint_header_download_concurrency: usize,
     checkpoint: Checkpoint,
 ) -> Result<()> {
     let mut current = store.get_highest_verified_checkpoint();
@@ -662,7 +668,7 @@ async fn sync_to_checkpoint<S: WriteStore>(
             }
         })
         .pipe(futures::stream::iter)
-        .buffered(20);
+        .buffered(checkpoint_header_download_concurrency);
 
     while let Some((maybe_checkpoint, next)) = request_stream.next().await {
         // Verify the checkpoint
@@ -725,6 +731,7 @@ async fn sync_checkpoint_contents<S: WriteStore + Clone>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     sender: mpsc::WeakSender<StateSyncMessage>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    transaction_download_concurrency: usize,
     target_checkpoint: VerifiedCheckpoint,
 ) {
     let mut highest_synced = None;
@@ -743,6 +750,7 @@ async fn sync_checkpoint_contents<S: WriteStore + Clone>(
             network.clone(),
             &store,
             peer_heights.clone(),
+            transaction_download_concurrency,
             checkpoint,
         )
         .await
@@ -773,6 +781,7 @@ async fn sync_one_checkpoint_contents<S: WriteStore + Clone>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
+    transaction_download_concurrency: usize,
     checkpoint: VerifiedCheckpoint,
 ) -> Result<VerifiedCheckpoint> {
     let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
@@ -800,7 +809,7 @@ async fn sync_one_checkpoint_contents<S: WriteStore + Clone>(
         .into_iter()
         .map(|digests| get_transaction_and_effects(peers.clone(), store.clone(), digests))
         .pipe(futures::stream::iter)
-        .buffer_unordered(100);
+        .buffer_unordered(transaction_download_concurrency);
 
     while let Some(result) = stream.next().await {
         result?;

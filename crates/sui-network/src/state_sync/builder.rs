@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
+use sui_config::p2p::StateSyncConfig;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tap::Pipe;
 use tokio::{
@@ -20,19 +21,30 @@ use sui_types::storage::WriteStore;
 
 pub struct Builder<S> {
     store: Option<S>,
-    // config: Option<Config>,
+    config: Option<StateSyncConfig>,
 }
 
 impl Builder<()> {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self { store: None }
+        Self {
+            store: None,
+            config: None,
+        }
     }
 }
 
 impl<S> Builder<S> {
-    pub fn checkpoint_store<NewStore>(self, store: NewStore) -> Builder<NewStore> {
-        Builder { store: Some(store) }
+    pub fn store<NewStore>(self, store: NewStore) -> Builder<NewStore> {
+        Builder {
+            store: Some(store),
+            config: self.config,
+        }
+    }
+
+    pub fn config(mut self, config: StateSyncConfig) -> Self {
+        self.config = Some(config);
+        self
     }
 }
 
@@ -46,11 +58,13 @@ where
     }
 
     pub(super) fn build_internal(self) -> (UnstartedStateSync<S>, Server<S>) {
-        let Builder { store } = self;
+        let Builder { store, config } = self;
         let store = store.unwrap();
+        let config = config.unwrap_or_default();
 
-        let (sender, mailbox) = mpsc::channel(128);
-        let (checkpoint_event_sender, _reciever) = tokio::sync::broadcast::channel(128);
+        let (sender, mailbox) = mpsc::channel(config.mailbox_capacity());
+        let (checkpoint_event_sender, _reciever) =
+            broadcast::channel(config.synced_checkpoint_broadcast_channel_capacity());
         let weak_sender = sender.downgrade();
         let handle = Handle {
             sender,
@@ -72,6 +86,7 @@ where
 
         (
             UnstartedStateSync {
+                config,
                 handle,
                 mailbox,
                 store,
@@ -84,6 +99,7 @@ where
 }
 
 pub struct UnstartedStateSync<S> {
+    pub(super) config: StateSyncConfig,
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<StateSyncMessage>,
     pub(super) store: S,
@@ -97,6 +113,7 @@ where
 {
     pub(super) fn build(self, network: anemo::Network) -> (StateSyncEventLoop<S>, Handle) {
         let Self {
+            config,
             handle,
             mailbox,
             store,
@@ -106,6 +123,7 @@ where
 
         (
             StateSyncEventLoop {
+                config,
                 mailbox,
                 weak_sender: handle.sender.downgrade(),
                 tasks: JoinSet::new(),
