@@ -160,6 +160,16 @@ impl SuiJsonValue {
     }
 
     fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<MoveValue, anyhow::Error> {
+        // Double check that all numbers conform
+        if let JsonValue::Number(n) = val {
+            if n.as_u64().is_none() {
+                return Err(SuiJsonValueError::new(
+                    val,
+                    SuiJsonValueErrorKind::ValueTypeNotAllowed,
+                ));
+            }
+        }
+
         Ok(match (val, ty) {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => MoveValue::Bool(*b),
@@ -175,15 +185,7 @@ impl SuiJsonValue {
             (JsonValue::Number(n), MoveTypeLayout::U32) => {
                 MoveValue::U32(u32::try_from(n.as_u64().unwrap())?)
             }
-            (JsonValue::Number(n), MoveTypeLayout::U64) => match n.as_u64() {
-                Some(q) => MoveValue::U64(q),
-                None => {
-                    return Err(SuiJsonValueError::new(
-                        val,
-                        SuiJsonValueErrorKind::ValueTypeNotAllowed,
-                    ))
-                }
-            },
+            (JsonValue::Number(n), MoveTypeLayout::U64) => MoveValue::U64(n.as_u64().unwrap()),
 
             // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
