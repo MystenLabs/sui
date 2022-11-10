@@ -460,7 +460,10 @@
                 {
                   "timestamp": 0,
                   "txDigest": "Vi63z0O8cI/1smk/OYkxoECgOF4LxllfNwKQCDlHxmk=",
-                  "id": "0:0",
+                  "id": {
+                    "txSeq": 0,
+                    "eventSeq": 0
+                  },
                   "event": {
                     "transferObject": {
                       "packageId": "0x0000000000000000000000000000000000000002",
@@ -476,7 +479,10 @@
                   }
                 }
               ],
-              "nextCursor": "1000:5"
+              "nextCursor": {
+                "txSeq": 1000,
+                "eventSeq": 5
+              }
             }
           }
         }
@@ -2761,7 +2767,22 @@
         ]
       },
       "EventID": {
-        "type": "string"
+        "description": "Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number, the ID is local to this particular fullnode and will be different from other fullnode.",
+        "type": "object",
+        "required": [
+          "eventSeq",
+          "txSeq"
+        ],
+        "properties": {
+          "eventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "txSeq": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "EventQuery": {
         "oneOf": [

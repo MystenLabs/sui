@@ -11,8 +11,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::MoveStruct;
 use name_variant::NamedVariant;
-use schemars::gen::SchemaGenerator;
-use schemars::schema::Schema;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -51,34 +50,25 @@ pub struct EventEnvelope {
 }
 /// Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number,
 /// the ID is local to this particular fullnode and will be different from other fullnode.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(into = "String", try_from = "String")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct EventID {
-    pub tx_seq_num: i64,
-    pub event_seq_number: i64,
-}
-
-impl JsonSchema for EventID {
-    fn schema_name() -> String {
-        "EventID".into()
-    }
-    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
-        String::json_schema(gen)
-    }
+    pub tx_seq: i64,
+    pub event_seq: i64,
 }
 
 impl From<(i64, i64)> for EventID {
     fn from((tx_seq_num, event_seq_number): (i64, i64)) -> Self {
         Self {
-            tx_seq_num: tx_seq_num as i64,
-            event_seq_number: event_seq_number as i64,
+            tx_seq: tx_seq_num as i64,
+            event_seq: event_seq_number as i64,
         }
     }
 }
 
 impl From<EventID> for String {
     fn from(id: EventID) -> Self {
-        format!("{}:{}", id.tx_seq_num, id.event_seq_number)
+        format!("{}:{}", id.tx_seq, id.event_seq)
     }
 }
 
