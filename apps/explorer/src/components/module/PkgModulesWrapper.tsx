@@ -82,7 +82,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
             <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={setSelectedModule}>
-                    <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex mt-2.5 justify-between py-2">
+                    <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex mt-2.5 justify-between py-1">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => query}
@@ -94,7 +94,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             className="bg-inherit border-none pr-2"
                             type="submit"
                         >
-                            <SearchIcon className="fill-sui-steel cursor-pointer" />
+                            <SearchIcon className="fill-sui-steel cursor-pointer h-4.5 w-4.5 align-middle" />
                         </button>
                     </div>
                     <Combobox.Options
