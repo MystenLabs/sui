@@ -1,36 +1,48 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::header_waiter::WaiterMessage;
-use config::{Committee, WorkerId};
+use crate::primary::PayloadToken;
+use arc_swap::{ArcSwap, Guard};
+use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
-use std::{collections::HashMap, sync::Arc};
+use network::{anemo_ext::NetworkExt, RetryConfig};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
+use tokio::sync::watch;
+use tracing::{debug, error};
 use types::{
-    error::DagResult, metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header,
+    ensure,
+    error::{DagError, DagResult},
+    metered_channel::Sender,
+    BatchDigest, Certificate, CertificateDigest, Header, PrimaryToWorkerClient, Round,
+    WorkerSynchronizeMessage,
 };
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
 pub mod synchronizer_tests;
 
-/// The `Synchronizer` checks if we have all batches and parents referenced by a header. If we don't, it sends
-/// a command to the `Waiter` to request the missing data.
+/// The `Synchronizer` provides functions for retrieving missing certificates and batches.
+#[derive(Clone)]
 pub struct Synchronizer {
     /// The public key of this primary.
     name: PublicKey,
+    // The committee information.
+    committee: SharedCommittee,
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    /// Send commands to the `HeaderWaiter`.
-    tx_header_waiter: Sender<WaiterMessage>,
     /// Send commands to the `CertificateWaiter`.
     tx_certificate_waiter: Sender<Certificate>,
+    /// Get a signal when the round changes.
+    rx_consensus_round_updates: watch::Receiver<Round>,
     /// The genesis and its digests.
-    genesis: Vec<(CertificateDigest, Certificate)>,
+    genesis: Arc<ArcSwap<(Epoch, Vec<(CertificateDigest, Certificate)>)>>,
     /// The dag used for the external consensus
     dag: Option<Arc<Dag>>,
 }
@@ -38,42 +50,97 @@ pub struct Synchronizer {
 impl Synchronizer {
     pub fn new(
         name: PublicKey,
-        committee: &Committee,
+        committee: SharedCommittee,
+        worker_cache: SharedWorkerCache,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        tx_header_waiter: Sender<WaiterMessage>,
         tx_certificate_waiter: Sender<Certificate>,
+        rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
     ) -> Self {
-        let mut synchronizer = Self {
+        let genesis = Self::make_genesis(&committee.load());
+        Self {
             name,
+            committee,
+            worker_cache,
             certificate_store,
             payload_store,
-            tx_header_waiter,
             tx_certificate_waiter,
-            genesis: Vec::default(),
+            rx_consensus_round_updates,
+            genesis: Arc::new(ArcSwap::from_pointee(genesis)),
             dag,
-        };
-        synchronizer.update_genesis(committee);
-        synchronizer
-    }
-
-    /// Update the genesis (called upon reconfiguration).
-    pub fn update_genesis(&mut self, committee: &Committee) {
-        self.genesis = Certificate::genesis(committee)
-            .into_iter()
-            .map(|x| (x.digest(), x))
-            .collect();
-    }
-
-    /// Returns `true` if we have all transactions of the payload. If we don't, we return false,
-    /// synchronize with other nodes (through our workers), and re-schedule processing of the
-    /// header for when we will have its complete payload.
-    pub async fn missing_payload(&mut self, header: &Header) -> DagResult<bool> {
-        // We don't store the payload of our own workers.
-        if header.author == self.name {
-            return Ok(false);
         }
+    }
+
+    fn make_genesis(committee: &Committee) -> (Epoch, Vec<(CertificateDigest, Certificate)>) {
+        (
+            committee.epoch(),
+            Certificate::genesis(committee)
+                .into_iter()
+                .map(|x| (x.digest(), x))
+                .collect(),
+        )
+    }
+
+    /// Returns genesis certificates for the given Epoch, or returns error if
+    /// the Epoch is not current.
+    fn genesis_for_epoch(
+        &self,
+        epoch: Epoch,
+    ) -> DagResult<Guard<Arc<(Epoch, Vec<(CertificateDigest, Certificate)>)>>> {
+        let genesis_guard = self.genesis.load();
+        match genesis_guard.0.cmp(&epoch) {
+            Ordering::Less => {
+                // Attempt to update cached genesis certs.
+                let committee = self.committee.load();
+                if committee.epoch() != epoch {
+                    debug!(
+                        "synchronizer unable to load a new enough committee: needed {epoch} but got {}",
+                        committee.epoch()
+                    );
+                    return Err(DagError::InvalidEpoch {
+                        expected: committee.epoch(),
+                        received: epoch,
+                    });
+                }
+                self.genesis.store(Arc::new(Self::make_genesis(&committee)));
+                self.genesis_for_epoch(epoch)
+            }
+            Ordering::Equal => Ok(genesis_guard),
+            Ordering::Greater => Err(DagError::InvalidEpoch {
+                expected: genesis_guard.0,
+                received: epoch,
+            }),
+        }
+    }
+
+    /// Synchronizes batches in the given header with other nodes (through our workers).
+    /// Blocks until either synchronization is complete, or the current consensus rounds advances
+    /// past the max allowed age. (`max_age == 0` means the header's round must match current
+    /// round.)
+    pub async fn sync_batches(
+        &self,
+        header: &Header,
+        network: anemo::Network,
+        max_age: Round,
+    ) -> DagResult<()> {
+        if header.author == self.name {
+            debug!("skipping sync_batches for header {header}: no need to store payload of our own workers");
+            return Ok(());
+        }
+
+        // Clone the round updates channel so we can get update notifications specific to
+        // this RPC handler.
+        let mut rx_consensus_round_updates = self.rx_consensus_round_updates.clone();
+        let mut consensus_round = *rx_consensus_round_updates.borrow();
+        ensure!(
+            header.round >= consensus_round.saturating_sub(max_age),
+            DagError::TooOld(
+                header.digest().into(),
+                header.round,
+                consensus_round.saturating_sub(max_age)
+            )
+        );
 
         let mut missing = HashMap::new();
         for (digest, worker_id) in header.payload.iter() {
@@ -94,34 +161,90 @@ impl Synchronizer {
                 .await?
                 .is_none()
             {
-                missing.insert(*digest, *worker_id);
+                missing
+                    .entry(*worker_id)
+                    .or_insert_with(Vec::new)
+                    .push(*digest);
             }
         }
 
-        if missing.is_empty() {
-            return Ok(false);
+        // Build Synchronize requests to workers.
+        let mut synchronize_handles = Vec::new();
+        for (worker_id, digests) in missing {
+            let worker_name = self
+                .worker_cache
+                .load()
+                .worker(&self.name, &worker_id)
+                .expect("Author of valid header is not in the worker cache")
+                .name;
+            error!("syncing from worker {worker_name:?} digests: {digests:?}");
+
+            let network = network.clone();
+            let retry_config = RetryConfig {
+                retrying_max_elapsed_time: None, // Retry forever.
+                ..Default::default()
+            };
+            let handle = retry_config.retry(move || {
+                let network = network.clone();
+                let digests = digests.clone();
+                let message = WorkerSynchronizeMessage {
+                    digests: digests.clone(),
+                    target: header.author.clone(),
+                };
+                let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));
+                let mut client = PrimaryToWorkerClient::new(peer);
+                async move {
+                    let result = client.synchronize(message).await.map_err(|e| {
+                        backoff::Error::transient(DagError::NetworkError(format!("{e:?}")))
+                    });
+                    if result.is_ok() {
+                        for digest in digests.clone() {
+                            self.payload_store
+                                .async_write((digest, worker_id), 0u8)
+                                .await;
+                        }
+                    }
+                    result
+                }
+            });
+            synchronize_handles.push(handle);
         }
 
-        // Ok to drop header if its payloads are missing and HeaderWaiter is overloaded.
-        let _ = self
-            .tx_header_waiter
-            .try_send(WaiterMessage::SyncBatches(missing, header.clone()));
-        Ok(true)
+        // Wait until results are back, or this request gets too old to continue.
+        let mut wait_synchronize = futures::future::try_join_all(synchronize_handles);
+        loop {
+            tokio::select! {
+                results = &mut wait_synchronize => {
+                    break results
+                        .map(|_| ())
+                        .map_err(|e| DagError::NetworkError(format!("error synchronizing batches: {e:?}")))
+                },
+                Ok(()) = rx_consensus_round_updates.changed() => {
+                    consensus_round = *rx_consensus_round_updates.borrow();
+                    ensure!(
+                        header.round >= consensus_round.saturating_sub(max_age),
+                        DagError::TooOld(
+                            header.digest().into(),
+                            header.round,
+                            consensus_round.saturating_sub(max_age),
+                        )
+                    );
+                },
+            }
+        }
     }
 
-    /// Returns the parents of a header if we have them all. If at least one parent is missing,
-    /// we return an empty vector, synchronize with other nodes, and re-schedule processing
-    /// of the header for when we will have all the parents.
-    pub async fn get_parents(&mut self, header: &Header) -> DagResult<Vec<Certificate>> {
+    /// Returns the parent certificates of the given header, and a list of digests for any
+    /// that are missing.
+    pub fn get_parents(
+        &self,
+        header: &Header,
+    ) -> DagResult<(Vec<Certificate>, Vec<CertificateDigest>)> {
+        let genesis = self.genesis_for_epoch(header.epoch)?;
         let mut missing = Vec::new();
         let mut parents = Vec::new();
         for digest in &header.parents {
-            if let Some(genesis) = self
-                .genesis
-                .iter()
-                .find(|(x, _)| x == digest)
-                .map(|(_, x)| x)
-            {
+            if let Some(genesis) = genesis.1.iter().find(|(x, _)| x == digest).map(|(_, x)| x) {
                 parents.push(genesis.clone());
                 continue;
             }
@@ -132,23 +255,16 @@ impl Synchronizer {
             };
         }
 
-        if missing.is_empty() {
-            return Ok(parents);
-        }
-
-        // Ok to drop header if its parents are missing and HeaderWaiter is overloaded.
-        let _ = self
-            .tx_header_waiter
-            .try_send(WaiterMessage::SyncParents(missing, header.clone()));
-        Ok(Vec::new())
+        Ok((parents, missing))
     }
 
     /// Checks whether we have seen all the ancestors of the certificate. If we don't, send the
     /// certificate to the `CertificateWaiter` which will trigger range fetching of missing
     /// certificates.
-    pub async fn check_parents(&mut self, certificate: &Certificate) -> DagResult<bool> {
+    pub async fn check_parents(&self, certificate: &Certificate) -> DagResult<bool> {
+        let genesis = self.genesis_for_epoch(certificate.epoch())?;
         for digest in &certificate.header.parents {
-            if self.genesis.iter().any(|(x, _)| x == digest) {
+            if genesis.1.iter().any(|(x, _)| x == digest) {
                 continue;
             }
 

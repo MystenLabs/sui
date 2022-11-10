@@ -18,11 +18,10 @@ use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
-    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
-    WorkerToPrimaryClient, WorkerToWorkerClient,
+    GetCertificatesRequest, GetCertificatesResponse, PrimaryMessage, PrimaryToPrimaryClient,
+    PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -238,22 +237,6 @@ impl PrimaryToPrimaryRpc for anemo::Network {
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body())
     }
-
-    async fn get_latest_header(
-        &self,
-        peer: &NetworkPublicKey,
-        request: LatestHeaderRequest,
-    ) -> Result<LatestHeaderResponse> {
-        const LATEST_HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-        let request = anemo::Request::new(request).with_timeout(LATEST_HEADER_REQUEST_TIMEOUT);
-        let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self.waiting_peer(peer_id);
-        let response = PrimaryToPrimaryClient::new(peer)
-            .get_latest_header(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body())
-    }
 }
 
 //
@@ -309,24 +292,6 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
                 .await
         };
         self.unreliable_send(peer, f)
-    }
-}
-
-#[async_trait]
-impl ReliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
-    type Response = ();
-    async fn send(
-        &mut self,
-        peer: NetworkPublicKey,
-        message: &WorkerSynchronizeMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move { PrimaryToWorkerClient::new(peer).synchronize(message).await }
-        };
-
-        self.send(peer, f).await
     }
 }
 

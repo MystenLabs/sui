@@ -5228,6 +5228,7 @@ dependencies = [
  "arc-swap",
  "async-recursion",
  "async-trait",
+ "backoff",
  "base64",
  "bincode",
  "bytes",

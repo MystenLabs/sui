@@ -198,7 +198,7 @@ impl Proposer {
                 .map(|(digest, worker_id, _)| (*digest, *worker_id))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
-            &mut self.signature_service,
+            &self.signature_service,
         )
         .await;
 

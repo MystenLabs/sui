@@ -19,7 +19,7 @@ use storage::NodeStorage;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
-use types::{metered_channel, Certificate, ReconfigureNotification, Round};
+use types::{metered_channel, Certificate, ReconfigureNotification, Round, VoteInfo};
 use worker::{metrics::initialise_metrics, Worker};
 
 pub mod execution_state;
