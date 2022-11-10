@@ -2374,6 +2374,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "erasable"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f11890ce181d47a64e5d1eb4b6caba0e7bae911a356723740d058a5d0340b7d"
+dependencies = [
+ "autocfg",
+ "scopeguard",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4756,7 +4766,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b28d77f88434535b166cc60bd3e5018aa75cd705#b28d77f88434535b166cc60bd3e5018aa75cd705"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=89fb343539fd4f160eaa535560b295cec2c41a1a#89fb343539fd4f160eaa535560b295cec2c41a1a"
 dependencies = [
  "ahash",
  "async-task",
@@ -4765,6 +4775,7 @@ dependencies = [
  "cc",
  "downcast-rs",
  "env_logger",
+ "erasable",
  "futures",
  "lazy_static 1.4.0",
  "libc",
@@ -4784,7 +4795,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b28d77f88434535b166cc60bd3e5018aa75cd705#b28d77f88434535b166cc60bd3e5018aa75cd705"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=89fb343539fd4f160eaa535560b295cec2c41a1a#89fb343539fd4f160eaa535560b295cec2c41a1a"
 dependencies = [
  "darling",
  "proc-macro2 1.0.47",
