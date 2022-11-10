@@ -130,8 +130,8 @@ async fn test_recovery() {
         .await
         .unwrap();
 
-        // we expect to have recovered all the certificates between the "last executed certificate" (included)
-        // up to the "last committed certificate" (included).
+        // we expect to have recovered all the certificates from the last commit. The Sui executor engine
+        // will not execute twice the same certificate.
         assert_eq!(consensus_output.len(), 1);
         assert!(
             consensus_output[0].len()
