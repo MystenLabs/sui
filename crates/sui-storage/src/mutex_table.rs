@@ -290,7 +290,7 @@ async fn test_mutex_table() {
     assert!(map.unwrap().is_empty());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_mutex_table_bg_cleanup() {
     let mutex_table = MutexTable::<String>::new_with_cleanup(
         1,

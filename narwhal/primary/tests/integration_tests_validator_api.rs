@@ -847,7 +847,7 @@ async fn test_read_causal_unsigned_certificates() {
 /// from primary 2. All in all the end goal is to:
 /// * Primary 1 be able to retrieve both certificates 1 & 2 successfully
 /// * Primary 1 be able to fetch the payload for certificates 1 & 2
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_get_collections_with_missing_certificates() {
     // GIVEN keys for two primary nodes
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();

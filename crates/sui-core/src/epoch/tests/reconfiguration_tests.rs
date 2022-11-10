@@ -34,7 +34,7 @@ use crate::{
     test_utils::to_sender_signed_transaction,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_start_epoch_change() {
     // Create a sender, owning an object and a gas object.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
