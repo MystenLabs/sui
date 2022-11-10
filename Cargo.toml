@@ -72,14 +72,15 @@ version = "0.16.0"
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
 debug = 1
+split-debuginfo = 'packed'
 strip = 'none'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
 
+# Inherits from the release profile above.
 [profile.bench]
-# debug = 1 means line charts only, which is minimum needed for good stack traces
-debug = 1
-strip = 'none'
+# For convenience.
+split-debuginfo = 'off'
 
 [profile.simulator]
 inherits = "test"
