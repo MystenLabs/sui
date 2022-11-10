@@ -30,7 +30,7 @@
 A coin of type <code>T</code> locked until <code>locked_until_epoch</code>.
 
 
-<pre><code><b>struct</b> <a href="locked_coin.md#0x2_locked_coin_LockedCoin">LockedCoin</a>&lt;T&gt; <b>has</b> store, key
+<pre><code><b>struct</b> <a href="locked_coin.md#0x2_locked_coin_LockedCoin">LockedCoin</a>&lt;T&gt; <b>has</b> key
 </code></pre>
 
 

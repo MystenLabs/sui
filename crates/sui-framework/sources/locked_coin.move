@@ -12,7 +12,7 @@ module sui::locked_coin {
     friend sui::sui_system;
 
     /// A coin of type `T` locked until `locked_until_epoch`.
-    struct LockedCoin<phantom T> has key, store {
+    struct LockedCoin<phantom T> has key {
         id: UID,
         balance: Balance<T>,
         locked_until_epoch: EpochTimeLock
