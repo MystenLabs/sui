@@ -98,7 +98,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </div>
                     <Combobox.Options
                         as="div"
-                        className="overflow-auto absolute left-0 w-full box-border md:w-1/6 md:left-auto h-fit shadow-moduleOption rounded-md bg-white z-10 px-2 pb-5 pt-3"
+                        className="overflow-auto absolute left-0 w-full box-border md:w-1/6 md:left-auto h-fit max-h-verticalListLong overflow-auto shadow-moduleOption rounded-md bg-white z-10 px-2 pb-5 pt-3"
                     >
                         <VerticalList>
                             {filteredModules.length > 0 ? (
