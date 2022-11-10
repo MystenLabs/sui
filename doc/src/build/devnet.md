@@ -47,9 +47,9 @@ To connect the Sui client to Sui Devnet, run the following command:
 $ sui client
 ```
 
-The Sui client defaults to use localnet environment. You can also change it to Devnet fullnode alias.
+The Sui client defaults to use localnet environment. You can also change it to Devnet fullnode RPC.
 
-If you previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint to connect to Sui Devnet fullnode with the following commands:
+Previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint to connect to Sui Devnet fullnode with the following commands:
 ```shell
 $ sui client switch --env devnet
 ```
