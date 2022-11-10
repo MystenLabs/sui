@@ -29,9 +29,9 @@ export function useNavigateWithQuery() {
 }
 
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
-    ({ to, ...props }) => {
+    ({ to, ...props }, ref) => {
         const { search } = useLocation();
 
-        return <Link to={`${to}${search}`} {...props} />;
+        return <Link ref={ref} to={`${to}${search}`} {...props} />;
     }
 );
