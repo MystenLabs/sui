@@ -52,7 +52,7 @@ unique ID.
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>) {
     // TODO: emit <a href="event.md#0x2_event">event</a>
-    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, recipient, <b>false</b>)
+    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, recipient)
 }
 </code></pre>
 
@@ -123,7 +123,7 @@ in this transaction. This restriction may be relaxed in the future.
 
 
 
-<pre><code><b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>, to_object: bool)
+<pre><code><b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>)
 </code></pre>
 
 
@@ -132,7 +132,7 @@ in this transaction. This restriction may be relaxed in the future.
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>, to_object: bool);
+<pre><code><b>native</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
 </code></pre>
 
 
