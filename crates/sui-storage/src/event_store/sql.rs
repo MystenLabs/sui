@@ -377,8 +377,8 @@ impl EventStore for SqlEventStore {
         let query = get_event_query(vec![], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(limit as i64)
             .map(StoredEvent::from)
             .fetch_all(&self.pool)
@@ -398,8 +398,8 @@ impl EventStore for SqlEventStore {
         let query = get_event_query(vec![("tx_digest", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(digest.to_bytes())
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -420,8 +420,8 @@ impl EventStore for SqlEventStore {
         let query = get_event_query(vec![("event_type", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(event_type as u16)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -448,8 +448,8 @@ impl EventStore for SqlEventStore {
             descending,
         );
         let rows = sqlx::query(&query)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(start_time as i64)
             .bind(end_time as i64)
             .bind(limit as i64)
@@ -477,8 +477,8 @@ impl EventStore for SqlEventStore {
         );
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(module.address().to_vec())
             .bind(module.name().to_string())
             .bind(limit as i64)
@@ -501,8 +501,8 @@ impl EventStore for SqlEventStore {
         // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(move_event_struct_name)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -524,8 +524,8 @@ impl EventStore for SqlEventStore {
         let sender_vec = sender.to_vec();
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(sender_vec)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -550,8 +550,8 @@ impl EventStore for SqlEventStore {
             })?;
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(recipient_str)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -573,8 +573,8 @@ impl EventStore for SqlEventStore {
         let object_vec = object.to_vec();
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq_num)
-            .bind(cursor.event_seq_number)
+            .bind(cursor.tx_seq)
+            .bind(cursor.event_seq)
             .bind(object_vec)
             .bind(limit as i64)
             .map(StoredEvent::from)
