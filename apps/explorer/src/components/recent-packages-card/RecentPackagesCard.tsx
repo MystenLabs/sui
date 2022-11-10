@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { truncate } from '../../utils/stringUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
@@ -20,69 +21,69 @@ import { TableCard } from '~/ui/TableCard';
 const TRANSACTION_STALE_TIME = 10 * 1000;
 const TRUNCATE_LENGTH = 16;
 
+const columns = [
+    {
+        headerLabel: 'Time',
+        accessorKey: 'time',
+    },
+    {
+        headerLabel: 'Package ID',
+        accessorKey: 'packageId',
+    },
+    {
+        headerLabel: 'Transaction ID',
+        accessorKey: 'txnDigest',
+    },
+    {
+        headerLabel: 'Sender',
+        accessorKey: 'sender',
+    },
+];
+
+const transformTable = (events: SuiEvents) => ({
+    data: events.map((resp: SuiEventEnvelope) => {
+        const { event, timestamp, txDigest } = resp;
+        return {
+            ...('publish' in event && {
+                time: <TxTimeType timestamp={timestamp} />,
+
+                sender: (
+                    <Link
+                        variant="mono"
+                        to={`/addresses/${encodeURIComponent(
+                            event.publish.sender
+                        )}`}
+                    >
+                        {truncate(event.publish.sender, TRUNCATE_LENGTH)}
+                    </Link>
+                ),
+                packageId: (
+                    <Link
+                        variant="mono"
+                        to={`/objects/${encodeURIComponent(
+                            event.publish.packageId
+                        )}`}
+                    >
+                        {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
+                    </Link>
+                ),
+
+                txnDigest: (
+                    <Link
+                        variant="mono"
+                        to={`/transactions/${encodeURIComponent(txDigest)}`}
+                    >
+                        {truncate(txDigest, TRUNCATE_LENGTH)}
+                    </Link>
+                ),
+            }),
+        };
+    }),
+    columns: [...columns],
+});
+
 export function RecentModulesCard() {
     const rpc = useRpc();
-
-    const columns = [
-        {
-            headerLabel: 'Time',
-            accessorKey: 'time',
-        },
-        {
-            headerLabel: 'Package ID',
-            accessorKey: 'packageId',
-        },
-        {
-            headerLabel: 'Transaction ID',
-            accessorKey: 'txnDigest',
-        },
-        {
-            headerLabel: 'Sender',
-            accessorKey: 'sender',
-        },
-    ];
-
-    const transformTable = (events: SuiEvents) => ({
-        data: events.map((resp: SuiEventEnvelope) => {
-            const { event, timestamp, txDigest } = resp;
-            return {
-                ...('publish' in event && {
-                    time: <TxTimeType timestamp={timestamp} />,
-
-                    sender: (
-                        <Link
-                            variant="mono"
-                            to={`/addresses/${encodeURIComponent(
-                                event.publish.sender
-                            )}`}
-                        >
-                            {truncate(event.publish.sender, TRUNCATE_LENGTH)}
-                        </Link>
-                    ),
-                    packageId: (
-                        <Link
-                            variant="mono"
-                            to={`/objects/${encodeURIComponent(
-                                event.publish.packageId
-                            )}`}
-                        >
-                            {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
-                        </Link>
-                    ),
-
-                    txnDigest: (
-                        <Link
-                            variant="mono"
-                            to={`/transactions/${encodeURIComponent(txDigest)}`}
-                        >
-                            {truncate(txDigest, TRUNCATE_LENGTH)}
-                        </Link>
-                    ),
-                }),
-            };
-        }),
-        columns: [...columns],
-    });
 
     const { data, isLoading, isSuccess, isError } = useQuery(
         ['recentPackage'],
@@ -96,14 +97,19 @@ export function RecentModulesCard() {
                 'descending'
             );
 
-            return transformTable(recentPublishMod.data);
+            return recentPublishMod.data;
         },
         {
             staleTime: TRANSACTION_STALE_TIME,
         }
     );
 
-    if (isError) {
+    const tableData = useMemo(
+        () => (data ? transformTable(data) : null),
+        [data]
+    );
+
+    if (isError || !tableData) {
         return (
             <Banner variant="error" fullWidth>
                 No Package Found
@@ -127,7 +133,7 @@ export function RecentModulesCard() {
                 />
             )}
             {isSuccess && (
-                <TableCard data={data?.data} columns={data?.columns} />
+                <TableCard data={tableData.data} columns={tableData.columns} />
             )}
         </section>
     );
