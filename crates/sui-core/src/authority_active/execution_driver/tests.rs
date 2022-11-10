@@ -169,7 +169,6 @@ async fn pending_exec_full() {
                     .run_batch_service(1, Duration::from_secs(1))
                     .await
             });
-            active_state.clone().spawn_transaction_manager_scanner();
             active_state.clone().spawn_execute_process().await;
             active_state
                 .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
@@ -289,7 +288,6 @@ async fn test_transaction_manager() {
             .run_batch_service(1, Duration::from_secs(1))
             .await
     });
-    active_state.clone().spawn_transaction_manager_scanner();
     active_state.clone().spawn_execute_process().await;
 
     // Basic test: add certs out of dependency order. They should still be executed.
