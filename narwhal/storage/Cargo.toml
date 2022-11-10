@@ -12,7 +12,6 @@ tempfile = "3.3.0"
 dashmap = "5.4.0"
 fastcrypto.workspace = true
 futures = "0.3.24"
-store.workspace = true
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
@@ -20,6 +19,7 @@ tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
+store = { path = "../../crates/typed-store", package = "typed-store" }
 
 workspace-hack.workspace = true
 

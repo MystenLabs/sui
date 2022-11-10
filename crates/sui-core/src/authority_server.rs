@@ -368,7 +368,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "validator_state_process_tx",
             ?tx_digest,
-            tx_kind = transaction.signed_data.data.kind_as_str()
+            tx_kind = transaction.data().data.kind_as_str()
         );
 
         let info = state
@@ -409,13 +409,14 @@ impl ValidatorService {
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
-        if state.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
+        if state.is_halted() && !certificate.data().data.kind.is_system_tx() {
             return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
         }
 
         // 4) All certificates are sent to consensus (at least by some authorities)
         // For shared objects this will wait until either timeout or we have heard back from consensus.
         // For owned objects this will return without waiting for certificate to be sequenced
+        // First do quick dirty non-async check
         if !state.consensus_message_processed(&certificate)? {
             // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
             // This backpressure should not affect system transactions, e.g. for checkpointing.
@@ -428,7 +429,11 @@ impl ValidatorService {
             } else {
                 None
             };
-            consensus_adapter.submit(&state.name, &certificate).await?;
+            // Acquire more expensive registration
+            let processed_waiter = state.consensus_message_processed_notify(certificate.digest());
+            consensus_adapter
+                .submit(&state.name, &certificate, processed_waiter)
+                .await?;
         }
 
         // 5) Execute the certificate.
@@ -442,7 +447,7 @@ impl ValidatorService {
             let span = tracing::debug_span!(
                 "validator_state_process_cert",
                 ?tx_digest,
-                tx_kind = certificate.signed_data.data.kind_as_str()
+                tx_kind = certificate.data().data.kind_as_str()
             );
             match state
                 .handle_certificate(&certificate)

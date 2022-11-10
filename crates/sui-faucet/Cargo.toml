@@ -32,6 +32,7 @@ sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 sui-metrics = { path = "../../crates/sui-metrics" }
 telemetry-subscribers.workspace = true
+
 workspace-hack.workspace = true
 
 [dev-dependencies]

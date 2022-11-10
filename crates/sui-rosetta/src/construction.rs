@@ -11,8 +11,8 @@ use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
-    TransactionData,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, SenderSignedData,
+    Transaction, TransactionData,
 };
 use sui_types::object::Owner;
 
@@ -102,11 +102,11 @@ pub async fn combine(
     }
     .flag()];
 
-    let signed_tx = Transaction::new(
+    let signed_tx = Transaction::new(SenderSignedData::new(
         data,
         crypto::Signature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
-    );
-    signed_tx.verify_sender_signature()?;
+    ));
+    signed_tx.verify_signature()?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 
     Ok(ConstructionCombineResponse {
@@ -243,7 +243,7 @@ pub async fn parse(
                 .to_vec()
                 .map_err(|e| anyhow::anyhow!(e))?,
         )?;
-        tx.signed_data.data
+        tx.into_data().data
     } else {
         TransactionData::from_signable_bytes(
             &request

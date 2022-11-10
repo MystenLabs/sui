@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isClient: ${{ steps.diff.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-explorer') || steps.diff.outputs.isRust }}
+      isClient: ${{ contains(fromJson(steps.pnpm.outputs.packages), 'sui-explorer') || steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes (pnpm)

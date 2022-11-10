@@ -673,7 +673,7 @@ impl CheckpointFragment {
             let cert = self.data.certs.get(digest).ok_or_else(|| {
                 SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
             })?;
-            cert.verify_signatures(committee)?;
+            cert.verify_signature(committee)?;
         }
 
         Ok(())

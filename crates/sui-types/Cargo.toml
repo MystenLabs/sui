@@ -18,7 +18,6 @@ serde = { version = "1.0.144", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
 serde-name = "0.2.1"
 sha2 = "0.9.9"
-sha3 = "0.10.4"
 thiserror = "1.0.34"
 tracing = "0.1"
 hex = "0.4.3"
@@ -30,7 +29,6 @@ signature = "1.6.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 zeroize = "1.5.7"
-digest = "0.10.3"
 schemars ="0.8.10"
 tonic = "0.8"
 strum = "^0.24"
@@ -38,9 +36,6 @@ strum_macros = "^0.24"
 roaring = "0.10.1"
 enum_dispatch = "^0.3"
 eyre = "0.6.8"
-
-name-variant.workspace = true
-typed-store.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -55,6 +50,9 @@ narwhal-executor = { path = "../../narwhal/executor" }
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
+typed-store.workspace = true
+name-variant = { path = "../../crates/name-variant" }
+
 workspace-hack.workspace = true
 proptest = "1.0.0"
 

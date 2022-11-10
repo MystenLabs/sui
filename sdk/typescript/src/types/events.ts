@@ -96,7 +96,10 @@ export type EventQuery =
     | { "Object": ObjectId }
     | { "TimeRange": { "start_time": number, "end_time": number } };
 
-export type EventId = string
+export type EventId = {
+  txSeq: number,
+  eventSeq: number,
+}
 
 export type PaginatedEvents = {
   data: SuiEvents;
@@ -132,6 +135,7 @@ export type SuiEventFilter =
 export type SuiEventEnvelope = {
   timestamp: number;
   txDigest: TransactionDigest;
+  id: EventId;  // tx_seq_num:event_seq
   event: SuiEvent;
 };
 

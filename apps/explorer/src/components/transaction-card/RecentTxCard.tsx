@@ -6,10 +6,10 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
+import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
@@ -29,6 +29,7 @@ import { Banner } from '~/ui/Banner';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -109,6 +110,13 @@ type Props = {
     truncateLength?: number;
 };
 
+// TODO: Remove this when we refactor pagiantion:
+const statusToLoadState: Record<QueryStatus, string> = {
+    error: 'fail',
+    loading: 'pending',
+    success: 'loaded',
+};
+
 // Transactions frequently update, so we consider them stale after 10 seconds:
 const TRANSACTION_STALE_TIME = 10 * 1000;
 
@@ -179,6 +187,7 @@ export function LatestTxCard({
     const stats = {
         count: countQuery?.data || 0,
         stats_text: 'Total transactions',
+        loadState: statusToLoadState[countQuery.status],
     };
 
     const PaginationWithStatsOrStatsWithLink =
@@ -193,9 +202,9 @@ export function LatestTxCard({
             />
         ) : (
             <TabFooter stats={stats}>
-                <Link className={styles.moretxbtn} to="/transactions">
+                <LinkWithQuery className={styles.moretxbtn} to="/transactions">
                     <div>More Transactions</div> <ArrowRight />
-                </Link>
+                </LinkWithQuery>
             </TabFooter>
         );
 

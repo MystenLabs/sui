@@ -31,7 +31,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
     });
 
     it('Test ID as arg to entry functions', async () => {
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: packageId,
         module: 'test',
         function: 'test_id',

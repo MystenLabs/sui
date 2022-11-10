@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
+import { ErrorBoundary } from '_components/error-boundary';
 import NFTdisplay from '_components/nft-display';
 import { useAppSelector } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
@@ -31,7 +32,9 @@ function NftsPage() {
                                 }).toString()}`}
                                 key={nft.reference.objectId}
                             >
-                                <NFTdisplay nftobj={nft} showlabel={true} />
+                                <ErrorBoundary>
+                                    <NFTdisplay nftobj={nft} showlabel={true} />
+                                </ErrorBoundary>
                             </Link>
                         ))}
                     </section>

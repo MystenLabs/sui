@@ -1722,11 +1722,13 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
     type Error = anyhow::Error;
 
     fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
+        let digest = *cert.digest();
+        let (data, sig) = cert.into_data_and_sig();
         Ok(Self {
-            transaction_digest: *cert.digest(),
-            data: cert.signed_data.data.try_into()?,
-            tx_signature: cert.signed_data.tx_signature,
-            auth_sign_info: cert.auth_sign_info,
+            transaction_digest: digest,
+            data: data.data.try_into()?,
+            tx_signature: data.tx_signature,
+            auth_sign_info: sig,
         })
     }
 }
@@ -1979,6 +1981,12 @@ pub struct SuiEventEnvelope {
     pub timestamp: u64,
     /// Transaction digest of associated transaction, if any
     pub tx_digest: Option<TransactionDigest>,
+    /// Sequential event ID, ie (transaction seq number, event seq number).
+    /// 1) Serves as a unique event ID for each fullnode
+    /// 2) Also serves to sequence events for the purposes of pagination and querying.
+    ///    A higher id is an event seen later by that fullnode.
+    /// This ID is the "cursor" for event querying.
+    pub id: EventID,
     /// Specific event type
     pub event: SuiEvent,
 }

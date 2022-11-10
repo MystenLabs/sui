@@ -11,10 +11,19 @@ import { GROWTHBOOK_FEATURES } from '../../utils/growthbook';
 
 import styles from './Network.module.css';
 
+const NETWORK_DISPLAY_NAME: Record<Network, string> = {
+    [Network.LOCAL]: 'Local',
+    [Network.DEVNET]: 'Devnet',
+    [Network.STAGING]: 'Staging',
+    [Network.TESTNET]: 'Testnet',
+    [Network.STATIC]: 'Static JSON',
+    [Network.CI]: 'CI',
+};
+
 export default function NetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
     const [isModuleOpen, setModuleOpen] = useState(false);
-    const [isOpenInput, setIsOpenInput] = useState(false);
+    const [isOpenInput, setIsOpenInput] = useState(() => !(network in Network));
 
     const showTestNet = useFeature(
         GROWTHBOOK_FEATURES.USE_TEST_NET_ENDPOINT
@@ -24,28 +33,28 @@ export default function NetworkSelect() {
         () => (isModuleOpen ? setModuleOpen(false) : setModuleOpen(true)),
         [isModuleOpen, setModuleOpen]
     );
+
     const closeModal = useCallback(() => setModuleOpen(false), [setModuleOpen]);
 
     const openInput = useCallback(() => {
         setIsOpenInput(true);
-        setNetwork(getEndpoint(Network.Local));
+        setNetwork(getEndpoint(Network.LOCAL));
     }, [setIsOpenInput, setNetwork]);
 
     const chooseNetwork = useCallback(
         (specified: Network | string) => () => {
-            if (network !== specified) {
-                setNetwork(specified);
-                setIsOpenInput(false);
-            }
+            setNetwork(specified);
+            setIsOpenInput(false);
         },
-        [network, setNetwork]
+        [setNetwork]
     );
 
     const handleTextChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) =>
+        (e: React.FocusEvent<HTMLInputElement>) =>
             setNetwork(e.currentTarget.value),
         [setNetwork]
     );
+
     const networkStyle = (iconNetwork: Network | 'other') =>
         // Button text matches network or
         network === iconNetwork ||
@@ -62,10 +71,15 @@ export default function NetworkSelect() {
             </div>
         );
 
+    const networkName =
+        network in NETWORK_DISPLAY_NAME
+            ? NETWORK_DISPLAY_NAME[network as Network]
+            : network;
+
     return (
         <div>
             <div onClick={openModal} className={styles.networkbox}>
-                {network} <DownSVG />
+                {networkName} <DownSVG />
             </div>
             <div onClick={openModal} className={styles.hamburger}>
                 <svg height="30.5" width="30.5">
@@ -82,30 +96,30 @@ export default function NetworkSelect() {
                     <h2>Choose a Network</h2>
                     <div>
                         <div
-                            onClick={chooseNetwork(Network.Devnet)}
-                            className={networkStyle(Network.Devnet)}
+                            onClick={chooseNetwork(Network.DEVNET)}
+                            className={networkStyle(Network.DEVNET)}
                         >
                             Devnet
                         </div>
                         {IS_STAGING_ENV ? (
                             <div
-                                onClick={chooseNetwork(Network.Staging)}
-                                className={networkStyle(Network.Staging)}
+                                onClick={chooseNetwork(Network.STAGING)}
+                                className={networkStyle(Network.STAGING)}
                             >
                                 Staging
                             </div>
                         ) : null}
                         {showTestNet ? (
                             <div
-                                onClick={chooseNetwork(Network.Testnet)}
-                                className={networkStyle(Network.Testnet)}
+                                onClick={chooseNetwork(Network.TESTNET)}
+                                className={networkStyle(Network.TESTNET)}
                             >
                                 Testnet
                             </div>
                         ) : null}
                         <div
-                            onClick={chooseNetwork(Network.Local)}
-                            className={networkStyle(Network.Local)}
+                            onClick={chooseNetwork(Network.LOCAL)}
+                            className={networkStyle(Network.LOCAL)}
                         >
                             Local
                         </div>
@@ -118,8 +132,8 @@ export default function NetworkSelect() {
                         {isOpenInput && (
                             <input
                                 type="text"
-                                value={network}
-                                onChange={handleTextChange}
+                                defaultValue={network}
+                                onBlur={handleTextChange}
                             />
                         )}
                     </div>

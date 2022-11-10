@@ -99,20 +99,25 @@ function AppsPlayGround() {
                 >
                     {mintInProgress ? <LoadingIndicator /> : 'Mint an NFT'}
 
-                    {mintStatusIcon ? (
-                        <Icon
-                            icon={mintStatusIcon}
-                            className={cl(st['mint-icon'], {
-                                [st.success]: mintStatus,
-                                [st.fail]: !mintStatus,
-                            })}
-                        />
-                    ) : (
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className={cl(st.arrowActionIcon, st.angledArrow)}
-                        />
-                    )}
+                    {!mintInProgress ? (
+                        mintStatusIcon ? (
+                            <Icon
+                                icon={mintStatusIcon}
+                                className={cl(st['mint-icon'], {
+                                    [st.success]: mintStatus,
+                                    [st.fail]: !mintStatus,
+                                })}
+                            />
+                        ) : (
+                            <Icon
+                                icon={SuiIcons.ArrowRight}
+                                className={cl(
+                                    st.arrowActionIcon,
+                                    st.angledArrow
+                                )}
+                            />
+                        )
+                    ) : null}
                 </Button>
 
                 <ExplorerLink

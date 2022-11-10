@@ -34,7 +34,7 @@ describe('Coin related API', () => {
     );
     coinToSplit = coins[0].objectId;
     // split coins into desired amount
-    await signer.splitCoinWithRequestType({
+    await signer.splitCoin({
       coinObjectId: coinToSplit,
       splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
       gasBudget: DEFAULT_GAS_BUDGET,

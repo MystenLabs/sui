@@ -18,7 +18,9 @@ use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_metrics::spawn_monitored_task;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
-use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
+use sui_types::messages::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, SenderSignedData,
+};
 use sui_types::{
     crypto,
     crypto::SignableBytes,
@@ -64,7 +66,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             .concat(),
         )
         .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature);
+        let txn = Transaction::new(SenderSignedData::new(data, signature));
         let txn_digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();

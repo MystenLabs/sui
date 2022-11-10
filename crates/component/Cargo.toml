@@ -1,0 +1,16 @@
+[package]
+name = "component"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Laura Makdah <laura@mystenlabs.com>"]
+description = "library for resilient component supervision"
+repository = "https://github.com/mystenlabs/mysten-infra"
+edition = "2021"
+publish = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.56"
+eyre = "0.6.8"
+tokio = { version = "1.21.2", features = ["sync", "macros", "rt", "rt-multi-thread"] }
+workspace-hack.workspace = true

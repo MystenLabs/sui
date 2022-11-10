@@ -120,7 +120,7 @@ impl NetworkConfig {
             },
             consensus_config: None,
             enable_event_processing,
-            enable_checkpoint: true,
+            enable_checkpoint: false,
             enable_reconfig: false,
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,

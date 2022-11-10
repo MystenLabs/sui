@@ -1,0 +1,29 @@
+processed 7 tasks
+
+init:
+A: object(100)
+
+task 1 'publish'. lines 8-40:
+created: object(104)
+written: object(103)
+
+task 2 'run'. lines 42-42:
+created: object(106), object(107), object(108), object(109)
+written: object(105)
+
+task 3 'view-object'. lines 44-44:
+Owner: Account Address ( A )
+Version: 1
+Contents: t::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
+
+task 4 'run'. lines 46-46:
+Error: Transaction Effects Status: Move Runtime Abort. Module: sui::transfer, Status Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(ModuleId { address: sui, name: Identifier("transfer") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
+
+task 5 'run'. lines 48-48:
+Error: Transaction Effects Status: Move Runtime Abort. Module: sui::transfer, Status Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(ModuleId { address: sui, name: Identifier("transfer") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
+
+task 6 'run'. lines 50-50:
+Error: Transaction Effects Status: Move Runtime Abort. Module: sui::transfer, Status Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(ModuleId { address: sui, name: Identifier("transfer") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }

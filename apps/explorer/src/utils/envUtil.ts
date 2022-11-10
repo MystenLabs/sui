@@ -3,23 +3,9 @@
 
 import { Network } from './api/rpcSetting';
 
-const HOST_TO_NETWORK: Record<string, Network> = {
-    ci: Network.CI,
-    staging: Network.Staging,
-    devnet: Network.Devnet,
-    static: Network.Static,
-};
+export const DEFAULT_NETWORK =
+    import.meta.env.VITE_NETWORK ||
+    (import.meta.env.DEV ? Network.LOCAL : Network.DEVNET);
 
-export let CURRENT_ENV: Network = Network.Local;
-if (import.meta.env.VITE_NETWORK) {
-    CURRENT_ENV = HOST_TO_NETWORK[import.meta.env.VITE_NETWORK];
-} else if (
-    typeof window !== 'undefined' &&
-    window.location.hostname.includes('.sui.io')
-) {
-    const host = window.location.hostname.split('.').at(-3) || 'devnet';
-    CURRENT_ENV = HOST_TO_NETWORK[host] || Network.Devnet;
-}
-
-export const IS_STATIC_ENV = CURRENT_ENV === Network.Static;
-export const IS_STAGING_ENV = CURRENT_ENV === Network.Staging;
+export const IS_STATIC_ENV = DEFAULT_NETWORK === Network.STATIC;
+export const IS_STAGING_ENV = DEFAULT_NETWORK === Network.LOCAL;

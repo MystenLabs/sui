@@ -82,6 +82,12 @@ pub struct ObjectRuntime<'a> {
     pub(crate) state: ObjectRuntimeState,
 }
 
+pub enum TransferResult {
+    New,
+    SameOwner,
+    OwnerChanged,
+}
+
 impl TestInventories {
     fn new() -> Self {
         Self::default()
@@ -123,12 +129,30 @@ impl<'a> ObjectRuntime<'a> {
         ty: Type,
         tag: StructTag,
         obj: Value,
-    ) -> PartialVMResult<()> {
+    ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
+        // - an object is new if it is contained in the new ids or if it is the
+        //   SUI_SYSTEM_STATE_OBJECT_ID which is only transferred in genesis
+        // - Otherwise, check the input objects for the previous owner
+        // - If it was not in the input objects, it must have been wrapped or must have been a
+        //   child object
+        let transfer_result =
+            if self.state.new_ids.contains_key(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID {
+                TransferResult::New
+            } else if let Some((_, prev_owner)) = self.state.input_objects.get(&id) {
+                match (&owner, prev_owner) {
+                    // don't use == for dummy values in Shared owner
+                    (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
+                    (new, old) if new == old => TransferResult::SameOwner,
+                    _ => TransferResult::OwnerChanged,
+                }
+            } else {
+                TransferResult::OwnerChanged
+            };
         self.state.transfers.insert(id, (owner, ty, tag, obj));
-        Ok(())
+        Ok(transfer_result)
     }
 
     pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) {
@@ -290,6 +314,8 @@ impl ObjectRuntimeState {
                         debug_assert!(!new_ids.contains_key(&id));
                         WriteKind::Mutate
                     } else if id == SUI_SYSTEM_STATE_OBJECT_ID || new_ids.contains_key(&id) {
+                        // SUI_SYSTEM_STATE_OBJECT_ID is only transferred during genesis
+                        // TODO find a way to insert this in the new_ids during genesis transactions
                         WriteKind::Create
                     } else {
                         WriteKind::Unwrap

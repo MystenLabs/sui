@@ -168,7 +168,7 @@ where
             let err = match self
                 .net
                 .load()
-                .process_transaction(advance_epoch_tx.clone().to_transaction())
+                .process_transaction(advance_epoch_tx.clone().into_unsigned())
                 .await
             {
                 Ok(certificate) => match self.state.handle_certificate(&certificate).await {

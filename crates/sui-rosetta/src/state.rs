@@ -248,7 +248,7 @@ impl PseudoBlockProvider {
                 let (tx, effect) = state.get_transaction(digest).await?;
 
                 let ops = Operation::from_data_and_events(
-                    &tx.signed_data.data,
+                    &tx.data().data,
                     &effect.status,
                     &effect.events,
                 )?;

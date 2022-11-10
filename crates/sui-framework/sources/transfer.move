@@ -3,12 +3,16 @@
 
 module sui::transfer {
 
+    /// Shared an object that was previously created. Shared objects must currently
+    /// be constructed in the transaction they are created.
+    const ESharedNonNewObject: u64 = 0;
+
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
     /// unique ID.
     public fun transfer<T: key>(obj: T, recipient: address) {
         // TODO: emit event
-        transfer_internal(obj, recipient, false)
+        transfer_internal(obj, recipient)
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
@@ -24,9 +28,11 @@ module sui::transfer {
     /// https://github.com/MystenLabs/sui/issues/681
     /// This API is exposed to demonstrate how we may be able to use it to program
     /// Move contracts that use shared objects.
+    /// Aborts with `ESharedNonNewObject` of the object being shared was not created
+    /// in this transaction. This restriction may be relaxed in the future.
     public native fun share_object<T: key>(obj: T);
 
-    native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);
+    native fun transfer_internal<T: key>(obj: T, recipient: address);
 
     // Cost calibration functions
     #[test_only]
@@ -48,14 +54,13 @@ module sui::transfer {
     }
 
     #[test_only]
-    public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address, to_object: bool) {
-        transfer_internal(obj, recipient, to_object);
+    public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address) {
+        transfer_internal(obj, recipient);
     }
     #[test_only]
-    public fun calibrate_transfer_internal_nop<T: key + drop>(obj: T, recipient: address, to_object: bool) {
+    public fun calibrate_transfer_internal_nop<T: key + drop>(obj: T, recipient: address) {
         let _ = obj;
         let _ = recipient;
-        let _ = to_object;
     }
 
 }

@@ -43,7 +43,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -91,7 +91,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -139,7 +139,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -187,7 +187,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -235,7 +235,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -283,7 +283,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -331,7 +331,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: true
+    enable-checkpoint: false
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000

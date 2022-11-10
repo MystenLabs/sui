@@ -115,13 +115,13 @@ export class BackgroundClient {
         );
     }
 
-    public async createMnemonic(password: string, importedMnemonic?: string) {
+    public async createVault(password: string, importedEntropy?: string) {
         return await lastValueFrom(
             this.sendMessage(
-                createMessage<KeyringPayload<'createMnemonic'>>({
+                createMessage<KeyringPayload<'create'>>({
                     type: 'keyring',
-                    method: 'createMnemonic',
-                    args: { password, importedMnemonic },
+                    method: 'create',
+                    args: { password, importedEntropy },
                     return: undefined,
                 })
             ).pipe(take(1))
@@ -163,12 +163,12 @@ export class BackgroundClient {
         );
     }
 
-    public async getMnemonic(password?: string) {
+    public async getEntropy(password?: string) {
         return await lastValueFrom(
             this.sendMessage(
-                createMessage<KeyringPayload<'getMnemonic'>>({
+                createMessage<KeyringPayload<'getEntropy'>>({
                     type: 'keyring',
-                    method: 'getMnemonic',
+                    method: 'getEntropy',
                     args: password,
                     return: undefined,
                 })
@@ -176,10 +176,7 @@ export class BackgroundClient {
                 take(1),
                 map(({ payload }) => {
                     if (
-                        isKeyringPayload<'getMnemonic'>(
-                            payload,
-                            'getMnemonic'
-                        ) &&
+                        isKeyringPayload(payload, 'getEntropy') &&
                         payload.return
                     ) {
                         return payload.return;

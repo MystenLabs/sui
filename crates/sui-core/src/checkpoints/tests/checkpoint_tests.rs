@@ -1181,14 +1181,12 @@ async fn set_fragment_external() {
         for key_pair in keys.iter() {
             sigs.push(AuthoritySignInfo::new(
                 0,
-                &tx.signed_data,
+                tx.data(),
                 key_pair.public().into(),
                 key_pair,
             ));
         }
-        let mut certificate =
-            CertifiedTransaction::new_with_auth_sign_infos(tx, sigs, &committee).unwrap();
-        certificate.auth_sign_info.epoch = committee.epoch();
+        let certificate = CertifiedTransaction::new(tx.into_message(), sigs, &committee).unwrap();
         fragment12.data.certs.insert(digest, certificate);
     }
     // let fragment13 = p1.diff_with(&p3);

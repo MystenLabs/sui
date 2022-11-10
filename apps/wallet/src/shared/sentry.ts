@@ -3,10 +3,9 @@
 
 import * as Sentry from '@sentry/react';
 import { BrowserTracing } from '@sentry/tracing';
+import Browser from 'webextension-polyfill';
 
-import packageJson from '../../package.json';
-
-const WALLET_VERSION = JSON.stringify(packageJson.version);
+const WALLET_VERSION = Browser.runtime.getManifest().version;
 const SENTRY_DSN =
     'https://e52a4e5c90224fe0800cc96aa2570581@o1314142.ingest.sentry.io/6761112';
 

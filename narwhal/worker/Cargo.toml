@@ -29,8 +29,10 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }
 types = { path = "../types", package = "narwhal-types" }
-mysten-network.workspace = true
 prometheus = "0.13.2"
+store = { path = "../../crates/typed-store", package = "typed-store" }
+mysten-network = { path = "../../crates/mysten-network"}
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 sui-metrics = { path = "../../crates/sui-metrics" }
 
@@ -38,13 +40,11 @@ anemo.workspace = true
 anemo-tower.workspace = true
 anyhow = "1.0.65"
 
-store.workspace = true
 workspace-hack.workspace = true
 
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }
 rand = "0.8.5"
-telemetry-subscribers.workspace = true
 tempfile = "3.3.0"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 reqwest = { version = "0.11.12", features = ["json"] }

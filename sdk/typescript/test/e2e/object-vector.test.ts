@@ -26,7 +26,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
     let packageId: ObjectId;
 
     async function mintObject(val: number) {
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: packageId,
         module: 'entry_point_vector',
         function: 'mint',
@@ -39,7 +39,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
     }
 
     async function destroyObjects(objects: ObjectId[]) {
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: packageId,
         module: 'entry_point_vector',
         function: 'two_obj_vec_destroy',
@@ -74,7 +74,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         toolbox.address()
       );
       const coinIDs = coins.map((coin) => Coin.getID(coin));
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: SUI_FRAMEWORK_ADDRESS,
         module: 'pay',
         function: 'join_vec',

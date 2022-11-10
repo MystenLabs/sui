@@ -457,7 +457,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             let obj1 = ts::take_immutable<Object>(&mut scenario);
-            transfer::share_object(obj1);
+            transfer::transfer(obj1, @0x0);
         };
         ts::next_tx(&mut scenario, sender);
         abort 42

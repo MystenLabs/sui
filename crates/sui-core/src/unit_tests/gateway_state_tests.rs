@@ -71,7 +71,7 @@ async fn public_transfer_object(
 
     let signature = key.sign(&data.to_bytes());
     let result = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await?;
     Ok(result)
 }
@@ -160,7 +160,7 @@ async fn test_publish() {
 
     let signature = key1.sign(&data.to_bytes());
     gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap();
 }
@@ -191,7 +191,7 @@ async fn test_coin_split() {
 
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap()
         .parsed_data
@@ -245,7 +245,7 @@ async fn test_coin_split_insufficient_gas() {
 
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await;
     // Tx should fail due to out of gas, and no transactions should remain pending.
     // Objects are not locked either.
@@ -291,7 +291,7 @@ async fn test_coin_merge() {
 
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap()
         .parsed_data
@@ -364,7 +364,7 @@ async fn test_equivocation_resilient() {
             let gateway_copy = gateway.clone();
             async move {
                 gateway_copy
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::from_data(data, signature))
                     .await
             }
         });
@@ -538,7 +538,7 @@ async fn test_get_owner_object() {
 
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap()
         .parsed_data
@@ -563,7 +563,7 @@ async fn test_get_owner_object() {
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap();
     let parent = &response.effects.created.first().unwrap().reference;
@@ -582,7 +582,7 @@ async fn test_get_owner_object() {
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap();
     let child = &response.effects.created.first().unwrap().reference;
@@ -606,7 +606,7 @@ async fn test_get_owner_object() {
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
     let response = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap();
     let field_object = &response.effects.created.first().unwrap().reference;
@@ -730,7 +730,7 @@ async fn test_batch_transaction() {
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
     let effects = gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(Transaction::from_data(data, signature))
         .await
         .unwrap()
         .effects;

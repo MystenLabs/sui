@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 use tonic_build::manual::{Builder, Method, Service};
 
 type Result<T> = ::std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -108,8 +111,39 @@ fn main() -> Result<()> {
         .out_dir(&out_dir)
         .compile(&[validator_service]);
 
+    build_anemo_services(&out_dir);
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=DUMP_GENERATED_GRPC");
 
     Ok(())
+}
+
+fn build_anemo_services(out_dir: &Path) {
+    let discovery = anemo_build::manual::Service::builder()
+        .name("Discovery")
+        .package("sui")
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_external_address")
+                .route_name("GetExternalAddress")
+                .request_type("()")
+                .response_type("std::net::SocketAddr")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_known_peers")
+                .route_name("GetKnownPeers")
+                .request_type("()")
+                .response_type("crate::discovery::GetKnownPeersResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .build();
+
+    anemo_build::manual::Builder::new()
+        .out_dir(out_dir)
+        .compile(&[discovery]);
 }

@@ -18,11 +18,11 @@ tower-http = { version = "0.3.4", features = ["cors"] }
 http = { version = "0.2.8" }
 
 workspace-hack.workspace = true
-telemetry-subscribers.workspace = true
 
 sui = { path = "../sui" }
 sui-faucet = { path = "../sui-faucet" }
 sui-cluster-test = { path = "../sui-cluster-test" }
 sui-types = { path = "../sui-types" }
+telemetry-subscribers.workspace = true
 
 move-package.workspace = true

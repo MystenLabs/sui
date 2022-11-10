@@ -10,7 +10,6 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use curve25519_dalek::ristretto::RistrettoPoint;
-use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -22,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha2::Sha512;
-use sha3::Sha3_256;
 
 pub use crate::committee::EpochId;
 use crate::crypto::{
@@ -35,6 +33,7 @@ use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use crate::waypoint::IntoPoint;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -446,7 +445,7 @@ impl TransactionDigest {
         let hash = hasher.finalize();
 
         // truncate into an ObjectID.
-        ObjectID::try_from(&hash[0..ObjectID::LENGTH]).unwrap()
+        ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
     // for testing

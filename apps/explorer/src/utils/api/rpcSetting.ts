@@ -2,22 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export enum Network {
-    Local = 'Local',
-    Static = 'Static',
-    Devnet = 'Devnet',
-    Staging = 'Staging',
-    Testnet = 'Testnet',
+    LOCAL = 'LOCAL',
+    STATIC = 'STATIC',
+    DEVNET = 'DEVNET',
+    STAGING = 'STAGING',
+    TESTNET = 'TESTNET',
     CI = 'CI',
 }
 
 const ENDPOINTS: Record<Network, string> = {
-    [Network.Local]: 'http://127.0.0.1:9000',
+    [Network.LOCAL]: 'http://127.0.0.1:9000',
     [Network.CI]: 'https://fullnode.devnet.sui.io:443',
-    [Network.Devnet]: 'https://fullnode.devnet.sui.io:443',
-    [Network.Staging]: 'https://fullnode.staging.sui.io:443',
+    [Network.DEVNET]: 'https://fullnode.devnet.sui.io:443',
+    [Network.STAGING]: 'https://fullnode.staging.sui.io:443',
+    [Network.TESTNET]: 'https://fullnode.testnet.sui.io:443',
+
     // NOTE: Static is pointed to devnet, but it shouldn't actually fetch data.
-    [Network.Static]: 'https://fullnode.devnet.sui.io:443',
-    [Network.Testnet]: 'https://fullnode.testnet.sui.io:443',
+    [Network.STATIC]: 'https://fullnode.devnet.sui.io:443',
 };
 
 export function getEndpoint(network: Network | string): string {

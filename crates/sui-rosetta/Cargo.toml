@@ -37,11 +37,8 @@ sui-metrics = { path = "../sui-metrics" }
 
 move-core-types.workspace = true
 
-typed-store = "0.4.0"
-typed-store-derive = "0.3.0"
-telemetry-subscribers = "0.1.0"
-
-workspace-hack = { path = "../workspace-hack" }
+telemetry-subscribers.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 sui-sdk = { path = "../sui-sdk" }

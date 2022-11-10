@@ -9,7 +9,7 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     metrics::initialise_metrics,
-    proposer::Proposer,
+    proposer::{OurDigestMessage, Proposer},
     state_handler::StateHandler,
     synchronizer::Synchronizer,
     BlockRemover,
@@ -92,11 +92,11 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         tx_new_certificates: Sender<Certificate>,
-        rx_committed_certificates: Receiver<Certificate>,
+        rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
-        tx_committed_certificates: Sender<Certificate>,
+        tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
         rx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
@@ -162,6 +162,11 @@ impl Primary {
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_state_handler,
             &primary_channel_metrics.tx_state_handler_total,
+        );
+        let (tx_commited_own_headers, rx_commited_own_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_commited_own_headers,
+            &primary_channel_metrics.tx_commited_own_headers_total,
         );
 
         // we need to hack the gauge from this consensus channel into the primary registry
@@ -427,6 +432,7 @@ impl Primary {
             rx_parents,
             rx_our_digests,
             tx_headers,
+            rx_commited_own_headers,
             node_metrics,
         );
 
@@ -439,6 +445,7 @@ impl Primary {
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
+            Some(tx_commited_own_headers),
             P2pNetwork::new(network.clone()),
         );
 
@@ -693,7 +700,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_our_digests: Sender<(BatchDigest, WorkerId, u64)>,
+    tx_our_digests: Sender<OurDigestMessage>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
@@ -705,15 +712,25 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        self.tx_our_digests
-            .send((
-                message.digest,
-                message.worker_id,
-                message.metadata.created_at,
-            ))
+        let (tx_ack, rx_ack) = oneshot::channel();
+        let response = self
+            .tx_our_digests
+            .send(OurDigestMessage {
+                digest: message.digest,
+                worker_id: message.worker_id,
+                timestamp: message.metadata.created_at,
+                ack_channel: tx_ack,
+            })
             .await
             .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        // If we are ok, then wait for the ack
+        rx_ack
+            .await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        Ok(response)
     }
 
     async fn report_others_batch(

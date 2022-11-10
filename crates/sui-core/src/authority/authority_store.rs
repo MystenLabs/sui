@@ -7,6 +7,7 @@ use super::{
 };
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use arc_swap::ArcSwap;
+use narwhal_executor::ExecutionIndices;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,7 @@ use sui_storage::{
 };
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::object::Owner;
 use sui_types::storage::{ChildObjectResolver, SingleTxContext, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
@@ -75,6 +77,9 @@ pub struct SuiDataStore<S> {
     // needed for re-opening epoch db.
     path: PathBuf,
     db_options: Option<Options>,
+
+    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    pub(crate) consensus_notify_read: NotifyRead<TransactionDigest, ()>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
@@ -119,6 +124,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             epoch_tables: epoch_tables.into(),
             path: path.into(),
             db_options,
+            effects_notify_read: NotifyRead::new(),
+            consensus_notify_read: NotifyRead::new(),
         })
     }
 
@@ -405,7 +412,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
-    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
             SuiError::ObjectLockUninitialized {
                 obj_ref: *object_ref,
@@ -553,11 +560,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 &(object.owner, object_ref.0),
                 &ObjectInfo::new(&object_ref, object),
             )?;
-            // Only initialize lock for owned objects.
-            // TODO: Skip this for quasi-shared objects.
-            self.lock_service
-                .initialize_locks(&[object_ref], false /* is_force_reset */)
-                .await?;
+            // Only initialize lock for address owned objects.
+            if !object.is_child_object() {
+                self.lock_service
+                    .initialize_locks(&[object_ref], false /* is_force_reset */)
+                    .await?;
+            }
         }
 
         // Update the parent
@@ -599,9 +607,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             )?
             .write()?;
 
-        let refs: Vec<_> = ref_and_objects.iter().map(|(oref, _)| *oref).collect();
+        let non_child_object_refs: Vec<_> = ref_and_objects
+            .iter()
+            .filter(|(_, object)| !object.is_child_object())
+            .map(|(oref, _)| *oref)
+            .collect();
         self.lock_service
-            .initialize_locks(&refs, false /* is_force_reset */)
+            .initialize_locks(&non_child_object_refs, false /* is_force_reset */)
             .await?;
 
         Ok(())
@@ -614,7 +626,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         epoch: EpochId,
         owned_input_objects: &[ObjectRef],
-        transaction: VerifiedTransactionEnvelope<S>,
+        transaction: VerifiedEnvelope<SenderSignedData, S>,
     ) -> Result<(), SuiError> {
         let tx_digest = *transaction.digest();
 
@@ -638,6 +650,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// It's called when we could not get a transaction to successfully execute,
     /// and have to roll back.
     pub async fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        // this object should not be a child object, since child objects can no longer be
+        // inputs, but
+        // TODO double check these are not child objects
         self.lock_service
             .initialize_locks(owned_input_objects, true /* is_force_reset */)
             .await?;
@@ -677,6 +692,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 effects_digest,
             )
             .await?;
+
+        self.effects_notify_read
+            .notify(transaction_digest, &effects.effects);
 
         // Cleanup the lock of the shared objects. This must be done after we write effects, as
         // effects_exists is used as the guard to avoid re-locking objects for a previously
@@ -829,7 +847,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         let owned_inputs: Vec<_> = active_inputs
             .iter()
-            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned_or_quasi_shared())
+            .filter(|(id, _, _)| objects.get(id).unwrap().is_address_owned())
             .cloned()
             .collect();
 
@@ -935,7 +953,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object, _kind))| {
-                    if new_object.is_owned_or_quasi_shared() {
+                    if new_object.is_address_owned() {
                         Some(*object_ref)
                     } else {
                         None
@@ -1139,6 +1157,22 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .contains_key(digest)?)
     }
 
+    pub async fn consensus_message_processed_notify(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<(), SuiError> {
+        let registration = self.consensus_notify_read.register_one(digest);
+        if self
+            .epoch_tables()
+            .consensus_message_processed
+            .contains_key(digest)?
+        {
+            return Ok(());
+        }
+        registration.await;
+        Ok(())
+    }
+
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
@@ -1266,7 +1300,47 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.epoch_tables().consensus_message_processed,
             [(transaction_digest, true)],
         )?;
-        Ok(batch.write()?)
+        batch.write()?;
+        self.consensus_notify_read.notify(certificate.digest(), &());
+        Ok(())
+    }
+
+    /// Returns transaction digests from consensus_message_order table in the "checkpoint range".
+    ///
+    /// Checkpoint range is defined from the last seen checkpoint(excluded) to the provided
+    /// to_height (included)
+    pub fn last_checkpoint(
+        &self,
+        to_height_included: u64,
+    ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
+        let epoch_tables = self.epoch_tables();
+
+        let Some((index, from_height_excluded)) = epoch_tables
+            .checkpoint_boundary
+            .iter()
+            .skip_to_last()
+            .next() else {
+            return Ok(None);
+        };
+        if from_height_excluded >= to_height_included {
+            // Due to crash recovery we might enter this function twice for same boundary
+            debug!("Not returning last checkpoint - already processed");
+            return Ok(None);
+        }
+
+        let iter = epoch_tables.consensus_message_order.iter();
+        let last_previous = ExecutionIndices::last_for_certificate(from_height_excluded);
+        let iter = iter.skip_to(&last_previous)?;
+        // skip_to lands to key the last_key or key after it
+        // technically here we need to check if first item in stream has a key equal to last_previous
+        // however in practice this can not happen because number of batches in certificate is
+        // limited and is less then u64::MAX
+        let roots = iter
+            .take_while(|(idx, _tx)| idx.next_certificate_index <= to_height_included)
+            .map(|(_idx, tx)| tx)
+            .collect();
+
+        Ok(Some((index, roots)))
     }
 
     pub fn record_checkpoint_boundary(&self, certificate_height: u64) -> SuiResult {
@@ -1329,7 +1403,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
+    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let transaction = self.epoch_tables().transactions.get(transaction_digest)?;
         Ok(transaction.map(|t| t.into()))
     }
@@ -1370,13 +1444,13 @@ impl SuiDataStore<AuthoritySignInfo> {
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
-        let tx: Option<VerifiedTransactionEnvelope<AuthoritySignInfo>> = self
+        let tx: Option<VerifiedSignedTransaction> = self
             .epoch_tables()
             .transactions
             .get(transaction_digest)?
             .map(|t| t.into());
         Ok(if let Some(signed_tx) = tx {
-            signed_tx.auth_sign_info.epoch == cur_epoch
+            signed_tx.auth_sig().epoch == cur_epoch
         } else {
             false
         })

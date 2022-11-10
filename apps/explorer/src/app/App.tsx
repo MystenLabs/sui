@@ -2,53 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import React, { useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import React from 'react';
 import { Toaster } from 'react-hot-toast';
 
 import Footer from '../components/footer/Footer';
 import Header from '../components/header/Header';
 import { NetworkContext, useNetwork } from '../context';
 import AppRoutes from '../pages/config/AppRoutes';
-import { growthbook, loadFeatures } from '../utils/growthbook';
 
 import styles from './App.module.css';
 
-import { usePrevious } from '~/hooks/usePrevious';
-
-const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            // We default the stale time to 5 minutes, which is an arbitrary number selected to
-            // strike the balance between stale data and cache hits.
-            // Individual queries can override this value based on their caching needs.
-            staleTime: 5 * 60 * 1000,
-            refetchInterval: false,
-            refetchIntervalInBackground: false,
-        },
-    },
-});
+import { growthbook, loadFeatures } from '~/utils/growthbook';
+import { queryClient } from '~/utils/queryClient';
 
 // As a side-effect of this module loading, we start loading the features:
 loadFeatures();
 
 function App() {
     const [network, setNetwork] = useNetwork();
-    const previousNetwork = usePrevious(network);
-
-    useEffect(() => {
-        if (network !== previousNetwork) {
-            queryClient.cancelQueries();
-            queryClient.clear();
-        }
-    }, [previousNetwork, network]);
-
-    useEffect(() => {
-        growthbook.setAttributes({
-            network,
-        });
-    }, [network]);
 
     return (
         // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
@@ -91,6 +65,7 @@ function App() {
                         />
 
                         <ReactQueryDevtools />
+                        <Analytics />
                     </NetworkContext.Provider>
                 </QueryClientProvider>
             </GrowthBookProvider>

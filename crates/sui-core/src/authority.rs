@@ -40,6 +40,7 @@ use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
+pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{
     AuthorityStore, GatewayStore, PendingDigest, ResolverWrapper, SuiDataStore, UpdateType,
 };
@@ -86,7 +87,9 @@ use sui_types::{
 };
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
+use crate::authority::authority_notify_read::NotifyRead;
 use crate::checkpoints::ConsensusSender;
+use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -123,6 +126,7 @@ mod gas_tests;
 pub mod authority_store_tables;
 
 pub mod authority_notifier;
+mod authority_notify_read;
 mod authority_store;
 
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
@@ -192,6 +196,8 @@ pub struct AuthorityMetrics {
     pub(crate) batch_service_total_tx_broadcasted: IntCounter,
     pub(crate) batch_service_latest_seq_broadcasted: IntGauge,
     pub(crate) batch_svc_is_running: IntCounter,
+
+    pending_notify_read: IntGauge,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -459,6 +465,12 @@ impl AuthorityMetrics {
                 "Sanity check to ensure batch service is running",
                 registry,
             ).unwrap(),
+            pending_notify_read: register_int_gauge_with_registry!(
+                "pending_notify_read",
+                "Pending notify read requests",
+                registry,
+            )
+                .unwrap(),
         }
     }
 }
@@ -501,6 +513,8 @@ pub struct AuthorityState {
 
     /// The checkpoint store
     pub checkpoints: Arc<Mutex<CheckpointStore>>,
+
+    checkpoint_service: Arc<CheckpointService>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -575,7 +589,7 @@ impl AuthorityState {
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
-            &transaction.signed_data.data,
+            &transaction.data().data,
         )
         .await?;
 
@@ -601,7 +615,7 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.data().data);
         let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
         self.metrics.tx_orders.inc();
@@ -675,7 +689,7 @@ impl AuthorityState {
                 ?observed_effects_digest,
                 ?effects.effects,
                 ?resp.signed_effects,
-                input_objects = ?certificate.signed_data.data.input_objects(),
+                input_objects = ?certificate.data().data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
@@ -732,7 +746,7 @@ impl AuthorityState {
         let span = tracing::debug_span!(
             "validator_acquire_tx_guard",
             ?tx_digest,
-            tx_kind = certificate.signed_data.data.kind_as_str()
+            tx_kind = certificate.data().data.kind_as_str()
         );
         let tx_guard = self
             .database
@@ -941,7 +955,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.signed_data.data.kind.batch_size() as f64);
+            .observe(certificate.data().data.kind.batch_size() as f64);
 
         Ok(VerifiedTransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -972,8 +986,7 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_change_epoch_tx()
-        {
+        if !shared_object_refs.is_empty() && !certificate.data().data.kind.is_change_epoch_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
@@ -996,7 +1009,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                certificate.signed_data.data.clone(),
+                certificate.data().data.clone(),
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -1066,7 +1079,7 @@ impl AuthorityState {
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
-            cert.signed_data
+            cert.data()
                 .data
                 .input_objects()?
                 .iter()
@@ -1075,7 +1088,7 @@ impl AuthorityState {
                 .effects
                 .all_mutated()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
-            cert.signed_data
+            cert.data()
                 .data
                 .move_calls()
                 .iter()
@@ -1263,8 +1276,8 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if !object.is_owned_or_quasi_shared() {
-                            // Unowned objects have no locks.
+                        let lock = if !object.is_address_owned() {
+                            // Only address owned objects have locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
@@ -1432,6 +1445,7 @@ impl AuthorityState {
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
         tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1481,6 +1495,7 @@ impl AuthorityState {
             consensus_guardrail: AtomicUsize::new(0),
             metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
             tx_reconfigure_consensus,
+            checkpoint_service,
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1586,6 +1601,12 @@ impl AuthorityState {
             None,
         ));
 
+        let checkpoint_service = CheckpointService::spawn(
+            &path.join("checkpoint2"),
+            Box::new(store.clone()),
+            LogCheckpointOutput::boxed(),
+        );
+
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
@@ -1600,6 +1621,7 @@ impl AuthorityState {
             genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
+            checkpoint_service,
         )
         .await
     }
@@ -2106,6 +2128,10 @@ impl AuthorityState {
             .tap_ok(|_| {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
             })?;
+        // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
+        self.metrics
+            .pending_notify_read
+            .set(self.database.effects_notify_read.num_pending() as i64);
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(seq)
@@ -2135,6 +2161,17 @@ impl AuthorityState {
             .consensus_message_processed(certificate.digest())
     }
 
+    /// Check whether certificate was processed by consensus.
+    /// Returned future is immediately ready if consensus message was already processed.
+    /// Otherwise returns future that waits for message to be processed by consensus.
+    pub async fn consensus_message_processed_notify(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<(), SuiError> {
+        self.database
+            .consensus_message_processed_notify(digest)
+            .await
+    }
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
         &self,
@@ -2190,7 +2227,7 @@ impl AuthorityState {
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
         // Check the certificate. Remember that Byzantine authorities may input anything into
         // consensus.
-        certificate.verify_signatures(&self.committee.load())
+        certificate.verify_signature(&self.committee.load())
     }
 
     /// Verifies transaction signatures and other data
@@ -2349,6 +2386,19 @@ impl AuthorityState {
         &self,
         consensus_output: &Arc<ConsensusOutput>,
     ) -> SuiResult {
+        debug!("Commit boundary at {}", consensus_output.consensus_index);
+        // This exchange is restart safe because of following:
+        //
+        // We try to read last checkpoint content and send it to the checkpoint service
+        // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
+        //
+        // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
+        if let Some((index, roots)) = self
+            .database
+            .last_checkpoint(consensus_output.consensus_index)?
+        {
+            self.checkpoint_service.notify_checkpoint(index, roots)?;
+        }
         self.database
             .record_checkpoint_boundary(consensus_output.consensus_index)
     }

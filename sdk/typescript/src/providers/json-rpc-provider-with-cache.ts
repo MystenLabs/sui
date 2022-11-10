@@ -66,7 +66,7 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
 
   // Transactions
 
-  async executeTransactionWithRequestType(
+  async executeTransaction(
     txnBytes: string,
     signatureScheme: SignatureScheme,
     signature: string,
@@ -76,11 +76,11 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
     if (requestType !== 'WaitForEffectsCert') {
       console.warn(
         `It's not recommended to use JsonRpcProviderWithCache with the request ` +
-          `type other than 'WaitForEffectsCert' for executeTransactionWithRequestType. Using ` +
+          `type other than 'WaitForEffectsCert' for executeTransaction. Using ` +
           `the '${requestType}' may result in stale cache and a failure in subsequent transactions.`
       );
     }
-    const resp = await super.executeTransactionWithRequestType(
+    const resp = await super.executeTransaction(
       txnBytes,
       signatureScheme,
       signature,
