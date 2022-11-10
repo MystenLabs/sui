@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useQuery } from '@tanstack/react-query';
 
-import { TxTimeType } from '../../components/tx-time/TxTimeType';
 import { truncate } from '../../utils/stringUtils';
+import { TxTimeType } from '../tx-time/TxTimeType';
 
 import type {
     SuiEventEnvelope,
@@ -85,7 +85,7 @@ export function RecentModulesCard() {
     });
 
     const { data, isLoading, isSuccess, isError } = useQuery(
-        ['normalized-module'],
+        ['recentPackage'],
         async () => {
             const recentPublishMod: PaginatedEvents = await rpc.getEvents(
                 {

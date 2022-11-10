@@ -13,9 +13,7 @@ export function TxTimeType({ timestamp }: Prop) {
     return (
         <section>
             <div
-                style={{
-                    width: '85px',
-                }}
+                className="text-caption w-20"
             >{`${timeAgo}`}</div>
         </section>
     );

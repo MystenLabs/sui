@@ -3,7 +3,7 @@
 import cl from 'clsx';
 import { lazy, Suspense } from 'react';
 
-import { RecentModulesCard } from '../../components/recent-modules-card/RecentModulesCard';
+import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import {
     TopValidatorsCardStatic,
     TopValidatorsCardAPI,
