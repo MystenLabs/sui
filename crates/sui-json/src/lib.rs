@@ -163,10 +163,10 @@ impl SuiJsonValue {
         // Double check that all numbers conform
         if let JsonValue::Number(n) = val {
             if n.as_u64().is_none() {
-                return Err(SuiJsonValueError::new(
-                    val,
-                    SuiJsonValueErrorKind::ValueTypeNotAllowed,
-                ));
+                return Err(anyhow!(format!(
+                    "{} is not a valid number. Only u64 allowed.",
+                    n
+                )));
             }
         }
 
