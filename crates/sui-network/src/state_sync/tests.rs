@@ -39,7 +39,7 @@ async fn server_push_checkpoint() {
             ..
         },
         server,
-    ) = Builder::new().checkpoint_store(store).build_internal();
+    ) = Builder::new().store(store).build_internal();
     let peer_id = PeerId([9; 32]); // fake PeerId
 
     let checkpoint = ordered_checkpoints[0].inner().to_owned();
@@ -78,7 +78,7 @@ async fn server_push_checkpoint() {
 #[tokio::test]
 async fn server_get_checkpoint() {
     let (builder, server) = Builder::new()
-        .checkpoint_store(SharedInMemoryStore::default())
+        .store(SharedInMemoryStore::default())
         .build_internal();
 
     // Requests for checkpoints that aren't in the server's store
@@ -146,14 +146,10 @@ async fn isolated_sync_job() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
 
     // Build and connect two nodes
-    let (builder, server) = Builder::new()
-        .checkpoint_store(SharedInMemoryStore::default())
-        .build();
+    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (mut event_loop_1, _handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new()
-        .checkpoint_store(SharedInMemoryStore::default())
-        .build();
+    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
@@ -230,14 +226,10 @@ async fn sync_with_checkpoints_being_inserted() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
 
     // Build and connect two nodes
-    let (builder, server) = Builder::new()
-        .checkpoint_store(SharedInMemoryStore::default())
-        .build();
+    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_1, handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new()
-        .checkpoint_store(SharedInMemoryStore::default())
-        .build();
+    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_2, handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
