@@ -141,14 +141,10 @@ async fn dead_node() {
 
     // We should commit 4 leaders (rounds 2, 4, 6, and 8).
     let mut committed = Vec::new();
-    let committed_sub_dag = rx_output.recv().await.unwrap();
-    committed.extend(committed_sub_dag.certificates);
-    let committed_sub_dag = rx_output.recv().await.unwrap();
-    committed.extend(committed_sub_dag.certificates);
-    let committed_sub_dag = rx_output.recv().await.unwrap();
-    committed.extend(committed_sub_dag.certificates);
-    let committed_sub_dag = rx_output.recv().await.unwrap();
-    committed.extend(committed_sub_dag.certificates);
+    for _commit_rounds in 1..=4 {
+        let committed_sub_dag = rx_output.recv().await.unwrap();
+        committed.extend(committed_sub_dag.certificates);
+    }
 
     let mut sequence = committed.into_iter();
     for i in 1..=21 {
