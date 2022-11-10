@@ -7,6 +7,7 @@ use move_core_types::gas_algebra::InternalGas;
 use move_package::BuildConfig as MoveBuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
 use natives::object_runtime::ObjectRuntime;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
@@ -142,7 +143,7 @@ pub fn run_move_unit_tests(
             ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
-        None,
+        Some(INITIAL_COST_SCHEDULE.clone()),
         compute_coverage,
         &mut std::io::stdout(),
     )
