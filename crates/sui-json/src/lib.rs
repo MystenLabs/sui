@@ -165,17 +165,22 @@ impl SuiJsonValue {
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => MoveValue::Bool(*b),
 
             // In constructor, we have already checked that the JSON number is unsigned int of at most U64
-            // Hence it is okay to unwrap() numbers
-            (JsonValue::Number(n), MoveTypeLayout::U8) => {
-                MoveValue::U8(u8::try_from(n.as_u64().unwrap())?)
-            }
-            (JsonValue::Number(n), MoveTypeLayout::U16) => {
-                MoveValue::U16(u16::try_from(n.as_u64().unwrap())?)
-            }
-            (JsonValue::Number(n), MoveTypeLayout::U32) => {
-                MoveValue::U32(u32::try_from(n.as_u64().unwrap())?)
-            }
-            (JsonValue::Number(n), MoveTypeLayout::U64) => MoveValue::U64(n.as_u64().unwrap()),
+            (JsonValue::Number(n), MoveTypeLayout::U8) => match n.as_u64() {
+                Some(x) => MoveValue::U8(u8::try_from(x)?),
+                None => return Err(anyhow!("{} is not a valid number. Only u8 allowed.", n)),
+            },
+            (JsonValue::Number(n), MoveTypeLayout::U16) => match n.as_u64() {
+                Some(x) => MoveValue::U16(u16::try_from(x)?),
+                None => return Err(anyhow!("{} is not a valid number. Only u16 allowed.", n)),
+            },
+            (JsonValue::Number(n), MoveTypeLayout::U32) => match n.as_u64() {
+                Some(x) => MoveValue::U32(u32::try_from(x)?),
+                None => return Err(anyhow!("{} is not a valid number. Only u32 allowed.", n)),
+            },
+            (JsonValue::Number(n), MoveTypeLayout::U64) => match n.as_u64() {
+                Some(x) => MoveValue::U64(x),
+                None => return Err(anyhow!("{} is not a valid number. Only u64 allowed.", n)),
+            },
 
             // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
