@@ -14,22 +14,18 @@ use futures::{
     Future, StreamExt,
 };
 use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, sync::Arc};
 use storage::CertificateStore;
-use store::Store;
+use store::{Store, StoreError};
 use sui_metrics::{monitored_future, spawn_monitored_task};
+use thiserror::Error;
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
     time::Instant,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info};
 use types::{
-    error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
     BatchDigest, CertificateDigest, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, ReconfigureNotification, Round, WorkerSynchronizeMessage,
@@ -38,6 +34,30 @@ use types::{
 #[cfg(test)]
 #[path = "tests/header_waiter_tests.rs"]
 pub mod header_waiter_tests;
+
+type HeaderResult = Result<Header, HeaderError>;
+
+#[derive(Debug, Error)]
+pub enum HeaderError {
+    #[error("Network error: {0}")]
+    NetworkError(String, Header),
+
+    #[error("Storage failure: {0}")]
+    StoreError(StoreError, Header),
+
+    #[error("Channel Full")]
+    ChannelFull(Header),
+}
+
+impl HeaderError {
+    fn header(self) -> Header {
+        match self {
+            HeaderError::NetworkError(_, h) => h,
+            HeaderError::StoreError(_, h) => h,
+            HeaderError::ChannelFull(h) => h,
+        }
+    }
+}
 
 /// The commands that can be sent to the `Waiter`.
 #[derive(Debug)]
@@ -75,11 +95,10 @@ pub struct HeaderWaiter {
     /// Network driver allowing to send messages.
     network: P2pNetwork,
 
-    /// Keeps the digests of the all certificates for which we sent a sync request,
-    /// along with a time stamp (`u128`) indicating when we sent the request.
-    parent_requests: HashMap<CertificateDigest, (Round, u128)>,
+    /// Keeps the digests of the all certificates for which we sent a sync request.
+    parent_requests: HashMap<CertificateDigest, Round>,
     /// Keeps the digests of the all TX batches for which we sent a sync request,
-    /// similarly to `header_requests`.
+    /// similarly to `parent_requests`.
     batch_requests: HashMap<BatchDigest, Round>,
     /// List of digests (headers or tx batch) that are waiting to be processed.
     /// Their processing will resume when we get all their dependencies.
@@ -141,18 +160,18 @@ impl HeaderWaiter {
         store: Store<(BatchDigest, WorkerId), PayloadToken>,
         deliver: Header,
         cancel: oneshot::Receiver<()>,
-    ) -> DagResult<Option<Header>> {
+    ) -> HeaderResult {
         tokio::select! {
             result = try_join_all(synchronize_handles) => {
-                result.map_err(|e| DagError::NetworkError(format!("{e:?}")))?;
+                result.map_err(|e| HeaderError::NetworkError(format!("{e:?}"), deliver.clone()))?;
                 for (worker_id, worker_digests) in digests {
                     for digest in worker_digests {
                         store.async_write((digest, worker_id), 0u8).await;
                     }
                 }
-                Ok(Some(deliver))
+                Ok(deliver)
             },
-            _ = cancel => Ok(None),
+            _ = cancel => Ok(deliver),
         }
     }
 
@@ -163,28 +182,28 @@ impl HeaderWaiter {
         store: CertificateStore,
         deliver: Header,
         mut cancel: oneshot::Receiver<()>,
-    ) -> DagResult<Option<Header>> {
+    ) -> HeaderResult {
         tokio::select! {
             Some(result) = network_future => {
                 let certificates = result
-                    .map_err(|e| DagError::NetworkError(format!("{e:?}")))?
+                    .map_err(|e| HeaderError::NetworkError(format!("{e:?}"), deliver.clone()))?
                     .certificates;
                 for certificate in certificates {
                     tx_primary_messages
                         .send(PrimaryMessage::Certificate(certificate))
                         .await
-                        .map_err(|_| DagError::ChannelFull)?;
+                        .map_err(|_| HeaderError::ChannelFull(deliver.clone()))?;
                 }
             },
-            _ = &mut cancel => return Ok(None),
+            _ = &mut cancel => return Ok(deliver.clone()),
         }
         // Wait on certificates to show up in the store so we know they're processed by Core.
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
         tokio::select! {
             result = try_join_all(waiting) => {
-                result.map(|_| Some(deliver)).map_err(DagError::from)
+                result.map(|_| deliver.clone()).map_err(|e|HeaderError::StoreError(e, deliver))
             }
-            _ = cancel => Ok(None),
+            _ = cancel => Ok(deliver),
         }
     }
 
@@ -203,13 +222,14 @@ impl HeaderWaiter {
                 Some(message) = self.rx_header_waiter.recv(), if waiting.len() < self.max_pending_header_waiter_requests() => {
                     match message {
                         WaiterMessage::SyncBatches(missing, header) => {
-                            debug!("Synching the payload of {header}");
+                            debug!("Synching the payload of {:?}", header);
                             let header_digest = header.digest();
                             let round = header.round;
                             let author = header.author.clone();
 
                             // Ensure we sync only once per header.
                             if self.pending.contains_key(&header_digest) {
+                                debug!("Ignore sync payload of {:?}, already pending", header);
                                 continue;
                             }
 
@@ -257,6 +277,7 @@ impl HeaderWaiter {
 
                             // Ensure we sync only once per header.
                             if self.pending.contains_key(&header_digest) {
+                                debug!("Ignore sync parents of {:?}, already pending", header);
                                 continue;
                             }
                             self.metrics.last_parent_missing_round
@@ -264,15 +285,11 @@ impl HeaderWaiter {
 
                             // Ensure we didn't already sent a sync request for these parents.
                             // Optimistically send a sync request to the node that created the certificate.
-                            let now = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .expect("Failed to measure time")
-                                .as_millis();
                             let mut requires_sync = Vec::new();
                             for missing in missing.clone() {
                                 self.parent_requests.entry(missing).or_insert_with(|| {
                                     requires_sync.push(missing);
-                                    (round, now)
+                                    round
                                 });
                             }
                             let network_future: OptionFuture<_> = if requires_sync.is_empty() {
@@ -305,27 +322,20 @@ impl HeaderWaiter {
                 },
 
                 // we poll the availability of a slot to send the result to the core simultaneously
-                Some(header) = waiting.next() => {
-                    let header = match header{
+                Some(result) = waiting.next() => {
+                    match result{
                         Err(err) => {
-                            warn!("Error fetching header {}", err);
-                            continue;
+                            error!("Error loading header's dependencies {:?}", err);
+
+                            self.cleanup_pending_requests(&err.header());
                         },
-                        Ok(header) => header,
+                        Ok(header) => {
+                            self.cleanup_pending_requests(&header);
+
+                            // Ok to drop the header if core is overloaded.
+                            let _ = self.tx_headers_loopback.try_send(header);
+                        },
                     };
-                    if let Some(header) = header {
-                        if let Some((_, tx_cancel)) = self.pending.remove(&header.digest()) {
-                            let _ = tx_cancel.send(());
-                        }
-                        for x in header.payload.keys() {
-                            let _ = self.batch_requests.remove(x);
-                        }
-                        for x in &header.parents {
-                            let _ = self.parent_requests.remove(x);
-                        }
-                        // Ok to drop the header if core is overloaded.
-                        let _ = self.tx_headers_loopback.try_send(header);
-                    }
                 },  // This request has been canceled when result is None.
 
                 // Check whether the committee changed.
@@ -379,7 +389,7 @@ impl HeaderWaiter {
                         })
                         .collect();
                     self.batch_requests.retain(|_, r| r > &mut gc_round);
-                    self.parent_requests.retain(|_, (r, _)| r > &mut gc_round);
+                    self.parent_requests.retain(|_, r| r > &mut gc_round);
 
                     self.metrics
                         .gc_header_waiter_latency
@@ -403,6 +413,18 @@ impl HeaderWaiter {
                 .waiting_elements_header_waiter
                 .with_label_values(&[&self.committee.epoch.to_string()])
                 .set(waiting.len() as i64);
+        }
+    }
+
+    fn cleanup_pending_requests(&mut self, header: &Header) {
+        if let Some((_, tx_cancel)) = self.pending.remove(&header.digest()) {
+            let _ = tx_cancel.send(());
+        }
+        for x in header.payload.keys() {
+            let _ = self.batch_requests.remove(x);
+        }
+        for x in &header.parents {
+            let _ = self.parent_requests.remove(x);
         }
     }
 }
