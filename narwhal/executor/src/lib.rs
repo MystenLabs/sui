@@ -149,8 +149,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             .collect();
 
         let leader = certificate_store
-            .read(compressed_sub_dag.leader)
-            .unwrap()
+            .read(compressed_sub_dag.leader)?
             .unwrap();
 
         sub_dags.push(CommittedSubDag {
