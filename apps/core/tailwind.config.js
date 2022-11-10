@@ -110,6 +110,9 @@ module.exports = {
       height: {
         'verticalListShort': '21vh',
         'verticalListLong': '57vh',
+      },
+      maxHeight: {
+        'verticalListLong': '57vh',
       }
     },
   },
