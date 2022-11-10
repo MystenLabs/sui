@@ -23,6 +23,15 @@ const ref =
         : 'HEAD^';
 
 async function main() {
+    // Run once without `--json` flag for better debugging.
+    await execFile('pnpm', [
+        'list',
+        '--filter',
+        `...[${ref}]`,
+        '--depth',
+        '-1',
+    ]);
+
     const { stdout, stderr } = await execFile('pnpm', [
         'list',
         '--filter',
@@ -47,7 +56,8 @@ async function main() {
 }
 
 main().catch((e) => {
+    console.log(e.message);
     // In the case of an error, play it safe and build:
     console.error('Vercel Ignored Build Step Failed', e);
-    doNotBuild();
+    requiresBuild();
 });
