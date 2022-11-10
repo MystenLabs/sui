@@ -416,6 +416,7 @@ impl ValidatorService {
         // 4) All certificates are sent to consensus (at least by some authorities)
         // For shared objects this will wait until either timeout or we have heard back from consensus.
         // For owned objects this will return without waiting for certificate to be sequenced
+        // First do quick dirty non-async check
         if !state.consensus_message_processed(&certificate)? {
             // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
             // This backpressure should not affect system transactions, e.g. for checkpointing.
@@ -428,7 +429,11 @@ impl ValidatorService {
             } else {
                 None
             };
-            consensus_adapter.submit(&state.name, &certificate).await?;
+            // Acquire more expensive registration
+            let processed_waiter = state.consensus_message_processed_notify(certificate.digest());
+            consensus_adapter
+                .submit(&state.name, &certificate, processed_waiter)
+                .await?;
         }
 
         // 5) Execute the certificate.

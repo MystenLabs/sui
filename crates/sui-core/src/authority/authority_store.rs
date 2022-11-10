@@ -78,7 +78,8 @@ pub struct SuiDataStore<S> {
     path: PathBuf,
     db_options: Option<Options>,
 
-    pub(crate) notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    pub(crate) consensus_notify_read: NotifyRead<TransactionDigest, ()>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
@@ -123,7 +124,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             epoch_tables: epoch_tables.into(),
             path: path.into(),
             db_options,
-            notify_read: NotifyRead::new(),
+            effects_notify_read: NotifyRead::new(),
+            consensus_notify_read: NotifyRead::new(),
         })
     }
 
@@ -691,7 +693,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             )
             .await?;
 
-        self.notify_read
+        self.effects_notify_read
             .notify(transaction_digest, &effects.effects);
 
         // Cleanup the lock of the shared objects. This must be done after we write effects, as
@@ -1155,6 +1157,22 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .contains_key(digest)?)
     }
 
+    pub async fn consensus_message_processed_notify(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<(), SuiError> {
+        let registration = self.consensus_notify_read.register_one(digest);
+        if self
+            .epoch_tables()
+            .consensus_message_processed
+            .contains_key(digest)?
+        {
+            return Ok(());
+        }
+        registration.await;
+        Ok(())
+    }
+
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
@@ -1282,7 +1300,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.epoch_tables().consensus_message_processed,
             [(transaction_digest, true)],
         )?;
-        Ok(batch.write()?)
+        batch.write()?;
+        self.consensus_notify_read.notify(certificate.digest(), &());
+        Ok(())
     }
 
     /// Returns transaction digests from consensus_message_order table in the "checkpoint range".

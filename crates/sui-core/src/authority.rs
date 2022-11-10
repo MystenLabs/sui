@@ -2131,7 +2131,7 @@ impl AuthorityState {
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
         self.metrics
             .pending_notify_read
-            .set(self.database.notify_read.num_pending() as i64);
+            .set(self.database.effects_notify_read.num_pending() as i64);
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(seq)
@@ -2161,6 +2161,17 @@ impl AuthorityState {
             .consensus_message_processed(certificate.digest())
     }
 
+    /// Check whether certificate was processed by consensus.
+    /// Returned future is immediately ready if consensus message was already processed.
+    /// Otherwise returns future that waits for message to be processed by consensus.
+    pub async fn consensus_message_processed_notify(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<(), SuiError> {
+        self.database
+            .consensus_message_processed_notify(digest)
+            .await
+    }
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
         &self,
