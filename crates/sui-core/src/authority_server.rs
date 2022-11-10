@@ -101,6 +101,7 @@ impl AuthorityServer {
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
+            state.clone_committee(),
             tx_consensus_listener,
             Duration::from_secs(20),
             ConsensusAdapterMetrics::new_test(),
@@ -308,6 +309,7 @@ impl ValidatorService {
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
+            state.clone_committee(),
             tx_consensus_listener.clone(),
             timeout,
             ca_metrics.clone(),
