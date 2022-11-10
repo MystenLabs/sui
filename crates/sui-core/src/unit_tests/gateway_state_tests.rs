@@ -76,7 +76,7 @@ async fn public_transfer_object(
     Ok(result)
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_public_transfer_object() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _key2): (_, AccountKeyPair) = get_key_pair();
@@ -165,7 +165,7 @@ async fn test_publish() {
         .unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_coin_split() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
 
@@ -698,7 +698,7 @@ async fn test_multiple_gateways() {
     assert!(response.effects.status.is_ok());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_batch_transaction() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _key2): (_, AccountKeyPair) = get_key_pair();

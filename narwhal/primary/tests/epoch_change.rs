@@ -17,7 +17,7 @@ use tokio::sync::watch;
 use types::ReconfigureNotification;
 
 /// The epoch changes but the stake distribution and network addresses stay the same.
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_simple_epoch_change() {
     ensure_test_environment();
 
