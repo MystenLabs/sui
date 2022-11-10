@@ -69,16 +69,16 @@ export function RecentModulesCard() {
                             {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
                         </Link>
                     ),
-             
-                txnDigest: (
-                    <Link
-                        variant="mono"
-                        to={`/transactions/${encodeURIComponent(txDigest)}`}
-                    >
-                        {truncate(txDigest, TRUNCATE_LENGTH)}
-                    </Link>
-                )
-            }),
+
+                    txnDigest: (
+                        <Link
+                            variant="mono"
+                            to={`/transactions/${encodeURIComponent(txDigest)}`}
+                        >
+                            {truncate(txDigest, TRUNCATE_LENGTH)}
+                        </Link>
+                    ),
+                }),
             };
         }),
         columns: [...columns],
