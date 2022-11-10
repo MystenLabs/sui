@@ -95,7 +95,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
 
 pub struct DataWithEpoch<T>
 where
-    T: Signable<Vec<u8>> + SignableBytes,
+    T: Signable<Vec<u8>> + SignableBytes + Message,
 {
     data: T,
     epoch: EpochId,
@@ -103,7 +103,7 @@ where
 
 impl<T> Serialize for DataWithEpoch<T>
 where
-    T: Signable<Vec<u8>> + SignableBytes,
+    T: Signable<Vec<u8>> + SignableBytes + Message,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -117,7 +117,7 @@ where
 }
 impl<'de, T> Deserialize<'de> for DataWithEpoch<T>
 where
-    T: Signable<Vec<u8>> + SignableBytes,
+    T: Signable<Vec<u8>> + SignableBytes + Message,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -133,7 +133,7 @@ where
 }
 impl<T> DataWithEpoch<T>
 where
-    T: Signable<Vec<u8>> + SignableBytes,
+    T: Signable<Vec<u8>> + SignableBytes + Message,
 {
     pub fn new(data: T, epoch: EpochId) -> Self {
         DataWithEpoch { data, epoch }
@@ -153,7 +153,7 @@ where
         let auth_signature = AuthoritySignInfo::new(epoch, &data, authority, secret);
         Self {
             digest: OnceCell::new(),
-            data,
+            data: DataWithEpoch { data, epoch },
             auth_signature,
         }
     }

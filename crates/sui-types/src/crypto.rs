@@ -32,7 +32,7 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::message_envelope::DataWithEpoch;
+use crate::message_envelope::{DataWithEpoch, Message};
 use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::{HashFunction, Sha3_256};
@@ -1083,7 +1083,7 @@ impl AuthoritySignInfo {
         secret: &dyn Signer<AuthoritySignature>,
     ) -> Self
     where
-        T: Signable<Vec<u8>> + Clone + SignableBytes,
+        T: Signable<Vec<u8>> + Clone + SignableBytes + Message,
     {
         Self {
             epoch,
@@ -1335,6 +1335,8 @@ where
 ///
 ///
 mod bcs_signable {
+    use crate::message_envelope::Message;
+
     use super::{Signable, SignableBytes};
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
@@ -1357,7 +1359,7 @@ mod bcs_signable {
     impl BcsSignable for crate::object::Object {}
     impl BcsSignable for u64 {}
     impl<T> BcsSignable for crate::message_envelope::DataWithEpoch<T> where
-        T: Signable<Vec<u8>> + SignableBytes
+        T: Signable<Vec<u8>> + SignableBytes + Message
     {
     }
     impl BcsSignable for super::bcs_signable_test::Foo {}
