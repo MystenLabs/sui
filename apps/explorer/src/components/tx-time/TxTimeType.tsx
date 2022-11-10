@@ -12,9 +12,7 @@ export function TxTimeType({ timestamp }: Prop) {
 
     return (
         <section>
-            <div
-                className="text-caption w-20"
-            >{`${timeAgo}`}</div>
+            <div className="text-caption w-20">{`${timeAgo}`}</div>
         </section>
     );
 }
