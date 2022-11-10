@@ -763,6 +763,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.effects_notify_read
             .notify(transaction_digest, effects.data());
 
+        // Cleanup the lock of the shared objects. This must be done after we write effects, as
+        // effects_exists is used as the guard to avoid re-locking objects for a previously
+        // executed tx. remove_shared_objects_locks.
+        self.remove_shared_objects_locks(transaction_digest, certificate)?;
+
         Ok(seq)
     }
 
@@ -1183,6 +1188,33 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.perpetual_tables.get_latest_parent_entry(object_id)
+    }
+
+    /// Remove the shared objects locks.
+    pub fn remove_shared_objects_locks(
+        &self,
+        transaction_digest: &TransactionDigest,
+        transaction: &VerifiedCertificate,
+    ) -> SuiResult {
+        let mut sequenced_to_delete = Vec::new();
+        let mut schedule_to_delete = Vec::new();
+        for (object_id, _) in transaction.shared_input_objects() {
+            sequenced_to_delete.push((*transaction_digest, *object_id));
+            if self.get_object(object_id)?.is_none() {
+                schedule_to_delete.push(*object_id);
+            }
+        }
+        let mut write_batch = self.epoch_tables().assigned_object_versions.batch();
+        write_batch = write_batch.delete_batch(
+            &self.epoch_tables().assigned_object_versions,
+            sequenced_to_delete,
+        )?;
+        write_batch = write_batch.delete_batch(
+            &self.epoch_tables().next_object_versions,
+            schedule_to_delete,
+        )?;
+        write_batch.write()?;
+        Ok(())
     }
 
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
