@@ -363,7 +363,7 @@ impl LockServiceImpl {
     /// Loop to continuously process mutating commands in a single thread from async senders.
     /// It terminates when the sender drops, which usually is when the containing data store is dropped.
     fn run_command_loop(&self, mut receiver: Receiver<LockServiceCommands>) {
-        info!("LockService command processing loop started");
+        debug!("LockService command processing loop started");
         // NOTE: we use blocking_recv() as its faster than using regular async recv() with awaits in a loop
         while let Some(msg) = receiver.blocking_recv() {
             match msg {
@@ -412,7 +412,7 @@ impl LockServiceImpl {
 
     /// Loop to continuously process queries in a single thread
     fn run_queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
-        info!("LockService queries processing loop started");
+        debug!("LockService queries processing loop started");
         while let Some(msg) = receiver.blocking_recv() {
             match msg {
                 LockServiceQueries::GetLock { object, resp } => {

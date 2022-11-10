@@ -1,27 +1,59 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
-
-use crate::authority_active::checkpoint_driver::CheckpointMetrics;
-use std::sync::Arc;
-use std::time::Duration;
-
-use sui_types::crypto::AccountKeyPair;
-use sui_types::{crypto::get_key_pair, messages::ExecutionStatus, object::Object};
-
-//use super::super::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::{
     crate_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     init_local_authorities, transfer_object_move_transaction,
 };
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 use crate::test_utils::wait_for_tx;
+use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::time::Duration;
+
+use itertools::Itertools;
+use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::messages::ExecutionStatus;
+use sui_types::messages::VerifiedCertificate;
+use sui_types::object::Object;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::time::timeout;
 use tracing::info;
+use typed_store::Map;
+
+async fn wait_for_certs(
+    stream: &mut UnboundedReceiver<VerifiedCertificate>,
+    certs: &Vec<VerifiedCertificate>,
+) {
+    if certs.is_empty() {
+        if timeout(Duration::from_secs(30), stream.recv())
+            .await
+            .is_err()
+        {
+            return;
+        } else {
+            panic!("Should not receive certificate!");
+        }
+    }
+    let mut certs: BTreeSet<TransactionDigest> = certs.iter().map(|c| *c.digest()).collect();
+    while !certs.is_empty() {
+        match timeout(Duration::from_secs(5), stream.recv()).await {
+            Err(_) => panic!("Timed out waiting for next certificate!"),
+            Ok(None) => panic!("Next certificate channel closed!"),
+            Ok(Some(cert)) => {
+                println!("Found cert {:?}", cert.digest());
+                certs.remove(cert.digest())
+            }
+        };
+    }
+}
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn pending_exec_storage_notify() {
+async fn pending_exec_notify_ready_certificates() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
 
@@ -35,6 +67,7 @@ async fn pending_exec_storage_notify() {
     } = setup;
 
     let authority_state = authorities[0].authority.clone();
+    let mut ready_certificates_stream = authority_state.ready_certificates_stream().await.unwrap();
 
     // TODO: duplicated with checkpoint_driver/tests.rs
     // Start active part of authority.
@@ -80,33 +113,33 @@ async fn pending_exec_storage_notify() {
     // Wait for all the sending to happen.
     let certs = _end_of_sending_join.await.expect("all ok");
 
-    // Insert the certificates
-    let num_certs = certs.len();
+    // Clear effects so their executions will happen below.
     authority_state
-        .add_pending_certificates(
-            certs
-                .into_iter()
-                .map(|cert| (*cert.digest(), Some(cert)))
-                .collect(),
-        )
+        .database
+        .perpetual_tables
+        .effects
+        .clear()
+        .expect("Clearing effects failed!");
+
+    // Insert the certificates
+    authority_state
+        .add_pending_certificates(certs.clone())
+        .await
         .expect("Storage is ok");
 
     tokio::task::yield_now().await;
 
-    // Wait for a notification (must arrive)
-    authority_state.database.wait_for_new_pending().await;
-    // get back the certificates
-    let certs_back = authority_state
-        .database
-        .get_pending_digests()
-        .expect("DB should be there");
-    assert_eq!(num_certs, certs_back.len());
+    // Wait to get back the certificates
+    wait_for_certs(&mut ready_certificates_stream, &certs).await;
+
+    // Should have no certificate any more.
+    wait_for_certs(&mut ready_certificates_stream, &vec![]).await;
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn pending_exec_full() {
-    // use telemetry_subscribers::init_for_testing;
-    // init_for_testing();
+    use telemetry_subscribers::init_for_testing;
+    init_for_testing();
 
     let setup = checkpoint_tests_setup(20, Duration::from_millis(200), true).await;
 
@@ -130,7 +163,13 @@ async fn pending_exec_full() {
                 )
                 .unwrap(),
             );
-
+            let batch_state = inner_state.authority.clone();
+            tokio::task::spawn(async move {
+                batch_state
+                    .run_batch_service(1, Duration::from_secs(1))
+                    .await
+            });
+            active_state.clone().spawn_transaction_manager_scanner();
             active_state.clone().spawn_execute_process().await;
             active_state
                 .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
@@ -167,56 +206,45 @@ async fn pending_exec_full() {
     let certs = _end_of_sending_join.await.expect("all ok");
 
     // Insert the certificates
-    let num_certs = certs.len();
     authority_state
-        .add_pending_certificates(
-            certs
-                .into_iter()
-                .map(|cert| (*cert.digest(), Some(cert)))
-                .collect(),
-        )
+        .add_pending_certificates(certs.clone())
+        .await
         .expect("Storage is ok");
-    let certs_back = authority_state
-        .database
-        .get_pending_digests()
-        .expect("DB should be there");
-    assert_eq!(num_certs, certs_back.len());
 
-    // In the time we are waiting the execution logic re-executes the
-    // transactions and therefore we have no certificate left pending at the end.
-    tokio::time::sleep(Duration::from_secs(5)).await;
-
-    // get back the certificates
-    let certs_back = authority_state
-        .database
-        .get_pending_digests()
-        .expect("DB should be there");
-    assert_eq!(0, certs_back.len());
+    // Wait for execution.
+    for cert in certs {
+        wait_for_tx(*cert.digest(), authority_state.clone()).await;
+    }
 }
 
-#[tokio::test]
-async fn test_parent_cert_exec() {
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_transaction_manager() {
     telemetry_subscribers::init_for_testing();
 
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
-    let gas_object1 = Object::with_owner_for_testing(addr1);
-    let gas_object2 = Object::with_owner_for_testing(addr1);
+    let gas_objects = vec![0..100]
+        .iter()
+        .map(|_| Object::with_owner_for_testing(addr1))
+        .collect_vec();
     let (aggregator, authorities, framework_obj_ref) =
-        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
+        init_local_authorities(4, gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()
         .map(|a| &aggregator.authority_clients[&a.name])
         .collect();
 
     // Make a schedule of transactions
-    let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let tx1 = crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
+    let gas_ref_0 = get_latest_ref(authority_clients[0], gas_objects[0].id()).await;
+    let tx1 = crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_0);
 
     // create an object and execute the cert on 3 authorities
     do_transaction(authority_clients[0], &tx1).await;
     do_transaction(authority_clients[1], &tx1).await;
     do_transaction(authority_clients[2], &tx1).await;
-    let cert1 = extract_cert(&authority_clients, &aggregator.committee, tx1.digest()).await;
+    let cert1 = extract_cert(&authority_clients, &aggregator.committee, tx1.digest())
+        .await
+        .verify(&aggregator.committee)
+        .unwrap();
 
     do_cert(authority_clients[0], &cert1).await;
     do_cert(authority_clients[1], &cert1).await;
@@ -239,12 +267,15 @@ async fn test_parent_cert_exec() {
     do_transaction(authority_clients[0], &tx2).await;
     do_transaction(authority_clients[1], &tx2).await;
     do_transaction(authority_clients[2], &tx2).await;
-    let cert2 = extract_cert(&authority_clients, &aggregator.committee, tx2.digest()).await;
+    let cert2 = extract_cert(&authority_clients, &aggregator.committee, tx2.digest())
+        .await
+        .verify(&aggregator.committee)
+        .unwrap();
     do_cert(authority_clients[0], &cert2).await;
     info!(digest = ?tx2.digest(), "cert2 finished");
 
     // the 4th authority has never heard of either of these transactions. Tell it to execute the
-    // cert and verify that it is able to fetch parents and apply.
+    // cert, sends it the missing dependency and verify that it is able to fetch parents and apply.
     let active_state = Arc::new(
         ActiveAuthority::new_with_ephemeral_storage_for_test(
             authorities[3].clone(),
@@ -252,26 +283,33 @@ async fn test_parent_cert_exec() {
         )
         .unwrap(),
     );
-
     let batch_state = authorities[3].clone();
     tokio::task::spawn(async move {
         batch_state
             .run_batch_service(1, Duration::from_secs(1))
             .await
     });
+    active_state.clone().spawn_transaction_manager_scanner();
     active_state.clone().spawn_execute_process().await;
 
+    // Basic test: add certs out of dependency order. They should still be executed.
     authorities[3]
-        .add_pending_certificates(vec![(*tx2.digest(), None)])
+        .add_pending_certificates(vec![cert2.clone()])
+        .await
+        .unwrap();
+    authorities[3]
+        .add_pending_certificates(vec![cert1.clone()])
+        .await
         .unwrap();
 
     wait_for_tx(*tx2.digest(), authorities[3].clone()).await;
-
-    // verify it has the cert.
+    // verify it has the effect.
     authority_clients[3]
         .handle_transaction_info_request((*tx2.digest()).into())
         .await
         .unwrap()
         .signed_effects
         .unwrap();
+
+    // TODO: more test cases.
 }

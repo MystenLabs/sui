@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    authority_store::{InternalSequenceNumber, ObjectKey, PendingDigest},
-    *,
-};
+use super::{authority_store::ObjectKey, *};
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -26,21 +23,23 @@ pub struct AuthorityEpochTables<S> {
     #[default_options_override_fn = "transactions_table_default_config"]
     pub(crate) transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, S>>,
 
-    /// The pending execution table holds a sequence of transactions that are present
-    /// in the certificates table, but may not have yet been executed, and should be executed.
-    /// The source of these certificates might be (1) the checkpoint proposal process (2) the
-    /// gossip processes (3) the shared object post-consensus task. An active authority process
-    /// reads this table and executes the certificates. The order is a hint as to their
-    /// causal dependencies. Note that there is no guarantee digests are unique. Once executed, and
-    /// effects are written the entry should be deleted.
-    pub(crate) pending_execution: DBMap<InternalSequenceNumber, PendingDigest>,
-
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
     /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
     /// TODO: These two maps should be merged into a single one (no reason to have two).
     pub(crate) assigned_object_versions: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     pub(crate) next_object_versions: DBMap<ObjectID, SequenceNumber>,
+
+    /// Certificates that have been received from clients or received from consensus, but not yet
+    /// executed. Entries are cleared after execution.
+    /// This table is critical for crash recovery, because usually the consensus output progress
+    /// is updated after a certificate is committed into this table.
+    ///
+    /// If theory, this table may be superseded by storing consensus and checkpoint execution
+    /// progress. But it is more complex, because it would be necessary to track inflight
+    /// executions not ordered by indices. For now, tracking inflight certificates as a map
+    /// seems easier.
+    pub(crate) pending_certificates: DBMap<(EpochId, TransactionDigest), TrustedCertificate>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_object_versions exactly once for each transaction we receive from
