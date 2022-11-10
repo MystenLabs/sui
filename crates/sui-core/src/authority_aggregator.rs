@@ -1959,10 +1959,10 @@ where
     }
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
-        let (object_map, cert_map) = self.get_object_by_id(object_id, false).await?;
+        let (object_map, _cert_map) = self.get_object_by_id(object_id, false).await?;
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
-        while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
+        while let Some(((obj_ref, _tx_digest), (obj_option, layout_option, authorities))) =
             object_ref_stack.pop()
         {
             let stake: StakeUnit = authorities
@@ -1970,31 +1970,9 @@ where
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();
 
-            let mut is_ok = false;
+            // If we have f+1 stake telling us of the latest version of the object, we just accept
+            // it.
             if stake >= self.committee.validity_threshold() {
-                // If we have f+1 stake telling us of the latest version of the object, we just accept it.
-                is_ok = true;
-            } else if cert_map.contains_key(&tx_digest) {
-                // If we have less stake telling us about the latest state of an object
-                // we re-run the certificate on all authorities to ensure it is correct.
-                if let Ok(effects) = self
-                    .process_certificate(cert_map[&tx_digest].clone().into())
-                    .await
-                {
-                    if effects.effects.is_object_mutated_here(obj_ref) {
-                        is_ok = true;
-                    } else {
-                        // TODO: Throw a byzantine fault here
-                        error!(
-                            ?object_id,
-                            ?tx_digest,
-                            "get_object_info_execute. Byzantine failure!"
-                        );
-                        continue;
-                    }
-                }
-            }
-            if is_ok {
                 match obj_option {
                     Some(obj) => {
                         return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
