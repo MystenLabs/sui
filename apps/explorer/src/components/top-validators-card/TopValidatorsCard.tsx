@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import Longtext from '../../components/longtext/Longtext';
 import {
     getValidatorState,
@@ -14,6 +15,7 @@ import { mockState } from '../../pages/validators/mockData';
 import { truncate } from '../../utils/stringUtils';
 
 import { useRpc } from '~/hooks/useRpc';
+import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
@@ -117,10 +119,10 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
     );
 
     // map the above data to match the table - combine stake and stake percent
-    // limit number validators to 5
+    // limit number validators to 10
     // TODO: add sorting
     const tableData = {
-        data: validatorsData.splice(0, 5).map((validator) => ({
+        data: validatorsData.splice(0, 10).map((validator) => ({
             name: validator.name,
             position: validator.position,
             address: (
@@ -172,6 +174,14 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
                             data={tableData.data}
                             columns={tableData.columns}
                         />
+                        <div className="mt-3">
+                            <Link to="/validators">
+                                <div className="flex items-center gap-2">
+                                    More Validators{' '}
+                                    <ArrowRight fill="currentColor" />
+                                </div>
+                            </Link>
+                        </div>
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
