@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.5.0
+
+### Minor Changes
+
+- 1a0968636: Remove usage of bn.js, and use native bigints instead.
+
 ## 0.4.0
 
 ### Minor Changes
