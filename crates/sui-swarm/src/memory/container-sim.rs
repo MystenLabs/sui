@@ -6,7 +6,7 @@ use prometheus::Registry;
 use std::net::{IpAddr, SocketAddr};
 use sui_config::NodeConfig;
 use sui_node::SuiNode;
-use tracing::{error, trace};
+use tracing::trace;
 
 use super::node::RuntimeType;
 
@@ -67,7 +67,7 @@ impl Container {
         let task_handle = node.spawn(async move {
             let _server = SuiNode::start(&config, Registry::new()).await.unwrap();
             // Notify that we've successfully started the node
-            error!("node started, sending oneshot");
+            trace!("node started, sending oneshot");
             let _ = startup_sender.send(());
             // run until canceled
             cancel_reciever.map(|_| ()).await;

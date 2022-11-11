@@ -36,7 +36,10 @@ class Keyring {
 
     constructor() {
         this.#vault = new VaultStorage();
-        this.#reviveDone = this.revive();
+        this.#reviveDone = this.revive().catch((e) => {
+            // if for some reason decrypting the vault fails or anything else catch
+            // the error to allow the user to login using the password
+        });
     }
 
     /**

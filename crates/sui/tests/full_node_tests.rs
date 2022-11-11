@@ -52,12 +52,7 @@ use tokio::time::{sleep, Duration};
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;
-    let node = if cfg!(msim) {
-        &sui_node
-    } else {
-        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
-    };
+    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
 
     let context = &mut test_cluster.wallet;
 
@@ -89,12 +84,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;
-    let node = if cfg!(msim) {
-        &sui_node
-    } else {
-        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
-    };
+    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
 
     let context = &mut test_cluster.wallet;
 
@@ -906,12 +896,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;
-    let node = if cfg!(msim) {
-        &sui_node
-    } else {
-        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
-    };
+    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = node

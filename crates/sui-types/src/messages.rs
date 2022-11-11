@@ -1675,34 +1675,6 @@ impl TransactionEffects {
         &self.gas_used
     }
 
-    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
-        // The mutated or created case
-        if self.all_mutated().any(|(oref, _, _)| *oref == obj_ref) {
-            return true;
-        }
-
-        // The deleted case
-        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
-            && self
-                .deleted
-                .iter()
-                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-        {
-            return true;
-        }
-
-        // The wrapped case
-        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
-            && self
-                .wrapped
-                .iter()
-                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-        {
-            return true;
-        }
-        false
-    }
-
     pub fn to_sign_effects(
         self,
         epoch: EpochId,

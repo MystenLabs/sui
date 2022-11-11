@@ -37,7 +37,7 @@ async fn basic_cluster_setup() {
     assert!(cluster.authorities().await.is_empty());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn cluster_setup_with_consensus_disabled() {
     ensure_test_environment();
     let mut cluster = Cluster::new(None, false);

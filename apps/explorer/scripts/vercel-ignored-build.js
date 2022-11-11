@@ -17,11 +17,25 @@ const requiresBuild = () => {
     process.exit(1);
 };
 
+const ref =
+    process.env.VERCEL === '1' && process.env.VERCEL_GIT_PREVIOUS_SHA
+        ? process.env.VERCEL_GIT_PREVIOUS_SHA
+        : 'HEAD^';
+
 async function main() {
+    // Run once without `--json` flag for better debugging.
+    await execFile('pnpm', [
+        'list',
+        '--filter',
+        `...[${ref}]`,
+        '--depth',
+        '-1',
+    ]);
+
     const { stdout, stderr } = await execFile('pnpm', [
         'list',
         '--filter',
-        '...[origin/main]',
+        `...[${ref}]`,
         '--depth',
         '-1',
         '--json',
@@ -42,7 +56,8 @@ async function main() {
 }
 
 main().catch((e) => {
+    console.log(e.message);
     // In the case of an error, play it safe and build:
     console.error('Vercel Ignored Build Step Failed', e);
-    doNotBuild();
+    requiresBuild();
 });

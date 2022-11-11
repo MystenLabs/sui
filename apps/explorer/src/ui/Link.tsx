@@ -20,6 +20,9 @@ const linkStyles = cva(
                 true: 'uppercase',
             },
         },
+        defaultVariants: {
+            variant: 'text',
+        },
     }
 );
 

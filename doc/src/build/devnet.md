@@ -46,19 +46,18 @@ To connect the Sui client to Sui Devnet, run the following command:
 ```shell
 $ sui client
 ```
-The Sui CLI prints the following line when the client starts up for the first time:
-```shell
-Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
-```
-Type `y` and then press `Enter`. You should see the following output:
-```shell
-Sui RPC server Url (Default to Sui Devnet if not specified) :
-```
-The Sui client prompts you for the RPC server URL; press 'Enter' and it defaults to Devnet. You can also enter a custom URL to connect to a custom RPC endpoint.
 
-If you previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint with the following command:
+The Sui client defaults to use localnet environment. You can also change it to Devnet fullnode RPC.
+
+Previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint to connect to Sui Devnet fullnode with the following commands:
 ```shell
-$ sui client switch --rpc https://fullnode.devnet.sui.io:443
+$ sui client switch --env devnet
+```
+
+To add a custom URL to connect to a custom RPC endpoint:
+```shell
+$ sui client new-env --alias <ALIAS> --rpc <RPC>
+$ sui client switch --env <ALIAS>
 ```
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).

@@ -5,7 +5,7 @@ use test_utils::cluster::{setup_tracing, Cluster};
 
 use types::{PublicKeyProto, RoundsRequest};
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_shutdown_bug() {
     // Enabled debug tracing so we can easily observe the
     // nodes logs.
