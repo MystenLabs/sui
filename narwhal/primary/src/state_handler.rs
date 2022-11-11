@@ -25,7 +25,7 @@ pub struct StateHandler {
     /// Receives the ordered certificates from consensus.
     rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
     /// Signals a new consensus round
-    tx_consensus_round_updates: watch::Sender<u64>,
+    tx_consensus_round_updates: watch::Sender<Round>,
     /// Receives notifications to reconfigure the system.
     rx_state_handler: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.

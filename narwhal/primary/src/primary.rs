@@ -177,6 +177,7 @@ impl Primary {
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
         let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+        let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
 
         let synchronizer = Arc::new(Synchronizer::new(
             name.clone(),
@@ -218,7 +219,7 @@ impl Primary {
             certificate_store: certificate_store.clone(),
             payload_store: payload_store.clone(),
             vote_digest_store,
-            rx_consensus_round_updates: rx_consensus_round_updates.clone(),
+            rx_narwhal_round_updates,
             metrics: node_metrics.clone(),
             request_vote_inflight: Arc::new(Mutex::new(HashSet::new())),
         });
@@ -432,6 +433,7 @@ impl Primary {
             rx_parents,
             rx_our_digests,
             tx_headers,
+            tx_narwhal_round_updates,
             rx_commited_own_headers,
             node_metrics,
         );
@@ -553,7 +555,7 @@ struct PrimaryReceiverHandler {
     /// The store to persist the last voted round per authority, used to ensure idempotence.
     vote_digest_store: Store<PublicKey, VoteInfo>,
     /// Get a signal when the round changes.
-    rx_consensus_round_updates: watch::Receiver<Round>,
+    rx_narwhal_round_updates: watch::Receiver<Round>,
     metrics: Arc<PrimaryMetrics>,
     /// Used to ensure a maximum of one inflight vote request per header.
     request_vote_inflight: Arc<Mutex<HashSet<PublicKey>>>,
@@ -629,11 +631,11 @@ impl PrimaryReceiverHandler {
 
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
-        let mut rx_consensus_round_updates = self.rx_consensus_round_updates.clone();
-        let mut consensus_round = *rx_consensus_round_updates.borrow();
+        let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
+        let mut narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            consensus_round <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, consensus_round)
+            narwhal_round <= header.round,
+            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
         );
 
         // If requester has provided us with parent certificates, process them all
@@ -658,12 +660,12 @@ impl PrimaryReceiverHandler {
                     results?;
                     break
                 },
-                result = rx_consensus_round_updates.changed() => {
+                result = rx_narwhal_round_updates.changed() => {
                     result.unwrap();
-                    consensus_round = *rx_consensus_round_updates.borrow();
+                    narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
-                        consensus_round <= header.round,
-                        DagError::TooOld(header.digest().into(), header.round, consensus_round)
+                        narwhal_round <= header.round,
+                        DagError::TooOld(header.digest().into(), header.round, narwhal_round)
                     )
                 },
             }
@@ -680,11 +682,10 @@ impl PrimaryReceiverHandler {
 
         // Now that we've got all the required certificates, ensure we're voting on a
         // current Header.
-        // DO NOT MERGE: There's no reason for us to vote on a Header with old round, is there?
-        consensus_round = *rx_consensus_round_updates.borrow();
+        narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            consensus_round <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, consensus_round)
+            narwhal_round <= header.round,
+            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
         );
 
         // Check the parent certificates. Ensure the parents form a quorum and are all from the
@@ -735,7 +736,7 @@ impl PrimaryReceiverHandler {
                 return Err(DagError::TooOld(
                     header.digest().into(),
                     header.round,
-                    consensus_round,
+                    narwhal_round,
                 ));
             }
             if header.epoch == vote_info.epoch && header.round == vote_info.round {
