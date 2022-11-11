@@ -170,11 +170,11 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
 
             let mut handles = FuturesUnordered::new();
             let request_batch_fn =
-                |mut client: WorkerToWorkerClient<anemo::Peer>, batch_request, timeout| {
+                |mut client: WorkerToWorkerClient<anemo::Peer>, batch_request, _timeout| {
                     // Wrapper function enables us to move `client` into the future.
                     monitored_future!(async move {
                         client
-                            .request_batch(anemo::Request::new(batch_request).with_timeout(timeout))
+                            .request_batch(anemo::Request::new(batch_request))
                             .await
                     })
                 };

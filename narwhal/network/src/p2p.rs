@@ -302,9 +302,7 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
             // Set a timeout on unreliable sends of synchronize, so it doesn't run forever.
             const UNRELIABLE_SYNCHRONIZE_TIMEOUT: Duration = Duration::from_secs(30);
             PrimaryToWorkerClient::new(peer)
-                .synchronize(
-                    anemo::Request::new(message).with_timeout(UNRELIABLE_SYNCHRONIZE_TIMEOUT),
-                )
+                .synchronize(anemo::Request::new(message))
                 .await
         };
         self.unreliable_send(peer, f)
@@ -427,8 +425,7 @@ impl PrimaryToWorkerRpc for P2pNetwork {
             .network
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let request = anemo::Request::new(WorkerDeleteBatchesMessage { digests })
-            .with_timeout(BATCH_DELETE_TIMEOUT);
+        let request = anemo::Request::new(WorkerDeleteBatchesMessage { digests });
         PrimaryToWorkerClient::new(peer)
             .delete_batches(request)
             .await
@@ -451,8 +448,7 @@ impl WorkerRpc for P2pNetwork {
             .network
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let request =
-            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
+        let request = anemo::Request::new(RequestBatchRequest { batch });
         let response = WorkerToWorkerClient::new(peer)
             .request_batch(request)
             .await
