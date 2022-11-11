@@ -24,13 +24,13 @@ export function SenderRecipient({
     recipients = [],
     transferCoin,
 }: SenderRecipientProps) {
-    const multipleRecipients = recipients?.length > 1;
+    const multipleRecipients = recipients.length > 1;
     const singleTransferCoin = !!(
         !multipleRecipients &&
         transferCoin &&
-        recipients?.length
+        recipients.length
     );
-    const primaryRecipient = singleTransferCoin && recipients?.[0];
+    const primaryRecipient = singleTransferCoin && recipients[0];
     const multipleRecipientsList = primaryRecipient
         ? recipients?.slice(1)
         : recipients;
@@ -38,7 +38,7 @@ export function SenderRecipient({
     return (
         <div className="flex flex-col justify-start text-sui-grey-100 gap-4">
             <Heading variant="heading4" weight="semibold">
-                {singleTransferCoin ? 'Sender' : 'Sender & Recipient'}
+                 {singleTransferCoin ? 'Sender & Recipient' : 'Sender'}
             </Heading>
             <div className="flex flex-col gap-[15px] justify-center relative">
                 {singleTransferCoin && (
