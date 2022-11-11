@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * TODO: Add a note about this
+ * This is an App UI Component, which is responsible for network selection.
+ * It's as context un-aware as it reasonably can be, being a controlled component.
+ * In the future, this should move outside of the base `~/ui/` directory, but for
+ * now we are including App UI Components in the base UI component directory.
  */
 
 import {
@@ -184,8 +187,6 @@ function NetworkSelectPanel({ networks, onChange, value }: NetworkSelectProps) {
     );
 }
 
-// TODO: Handle incoming custom RPC.
-// TODO: Handle save custom RPC.
 export function NetworkSelect({
     networks,
     value,
