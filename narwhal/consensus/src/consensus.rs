@@ -374,7 +374,7 @@ where
                             commited_certificates.push(output.certificate.clone());
                         }
 
-                        // NOTE: The size of the sub-dag can be arbitrarily large (depending on the network condition 
+                        // NOTE: The size of the sub-dag can be arbitrarily large (depending on the network condition
                         // and Byzantine leaders).
                         if let Err(e) = self.tx_sequence.send(committed_sub_dag).await {
                             tracing::warn!("Failed to output sub dag: {e}");
