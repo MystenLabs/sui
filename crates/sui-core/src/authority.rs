@@ -96,6 +96,7 @@ use crate::consensus_handler::{
 };
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
+use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::scoped_counter;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
@@ -1557,6 +1558,10 @@ impl AuthorityState {
             tx_reconfigure_consensus,
             checkpoint_service,
         };
+
+        prometheus_registry
+            .register(Box::new(ModuleCacheGauge::new(&state.module_cache)))
+            .unwrap();
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
         // don't observe partially-committed txes.
