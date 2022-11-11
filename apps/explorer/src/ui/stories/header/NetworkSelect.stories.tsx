@@ -20,15 +20,21 @@ export default {
     ],
 } as Meta;
 
+const NETWORKS = [
+    { id: 'DEVNET', label: 'Devnet' },
+    { id: 'TESTNET', label: 'Testnet' },
+    { id: 'LOCAL', label: 'Local' },
+];
+
 export const Default: StoryObj<NetworkSelectProps> = {
     render: (args) => {
-        const [network, setNetwork] = useState('Devnet');
+        const [network, setNetwork] = useState(NETWORKS[0].id);
 
         return (
             <NetworkSelect {...args} value={network} onChange={setNetwork} />
         );
     },
     args: {
-        networks: ['Devnet', 'Testnet', 'Local'],
+        networks: NETWORKS,
     },
 };

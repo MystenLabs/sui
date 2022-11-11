@@ -30,6 +30,7 @@ importers:
       '@growthbook/growthbook': ^0.18.1
       '@growthbook/growthbook-react': ^0.9.1
       '@headlessui/react': ^1.7.2
+      '@hookform/resolvers': ^2.9.10
       '@mysten/core': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-adapter-react': workspace:*
@@ -80,6 +81,7 @@ importers:
       prismjs: ^1.28.0
       react: ^18.2.0
       react-dom: ^18.2.0
+      react-hook-form: ^7.39.2
       react-hot-toast: ^2.4.0
       react-router-dom: ^6.2.1
       start-server-and-test: ^1.14.0
@@ -95,11 +97,13 @@ importers:
       vite-plugin-svgr: ^2.2.1
       vitest: ^0.22.1
       web-vitals: ^3.0.4
+      zod: ^3.19.1
     dependencies:
       '@floating-ui/react-dom-interactions': 0.10.1_7ey2zzynotv32rpkwno45fsx4e
       '@growthbook/growthbook': 0.18.1
       '@growthbook/growthbook-react': 0.9.1_react@18.2.0
       '@headlessui/react': 1.7.2_biqbaboplfbrettd7655fr4n2y
+      '@hookform/resolvers': 2.9.10_react-hook-form@7.39.2
       '@mysten/core': link:../core
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-adapter-react': link:../../sdk/wallet-adapter/packages/react-providers
@@ -124,10 +128,12 @@ importers:
       prismjs: 1.28.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
+      react-hook-form: 7.39.2_react@18.2.0
       react-hot-toast: 2.4.0_biqbaboplfbrettd7655fr4n2y
       react-router-dom: 6.3.0_biqbaboplfbrettd7655fr4n2y
       topojson-client: 3.1.0
       web-vitals: 3.0.4
+      zod: 3.19.1
     devDependencies:
       '@babel/core': 7.19.3
       '@storybook/addon-a11y': 7.0.0-alpha.38_biqbaboplfbrettd7655fr4n2y
@@ -2912,6 +2918,14 @@ packages:
     dependencies:
       tailwindcss: 3.1.8
     dev: true
+
+  /@hookform/resolvers/2.9.10_react-hook-form@7.39.2:
+    resolution: {integrity: sha512-JIL1DgJIlH9yuxcNGtyhsWX/PgNltz+5Gr6+8SX9fhXc/hPbEIk6wPI82nhgvp3uUb6ZfAM5mqg/x7KR7NAb+A==}
+    peerDependencies:
+      react-hook-form: ^7.0.0
+    dependencies:
+      react-hook-form: 7.39.2_react@18.2.0
+    dev: false
 
   /@httptoolkit/httpolyglot/2.0.1:
     resolution: {integrity: sha512-xhz5ilhpQfEeLTKJMQmlUbvuS7yeFrF5u0M5zUDNpBWu/QMHrnBRxIfqRSV8phJThOpo1DBXuBld6qF07UFk4g==}
@@ -16220,6 +16234,15 @@ packages:
     resolution: {integrity: sha512-suNP+J1VU1MWFKcyt7RtjiSWUjvidmQSlqu+eHslq+342xCbGTYmC0mEhPCOHxlW0CywylOC1u2DFAT+bv4dBw==}
     dev: false
 
+  /react-hook-form/7.39.2_react@18.2.0:
+    resolution: {integrity: sha512-rCeCa1+sIcgI9PjgGmev9bVqHCwYwhjkbsXitr+giQ/P0mf/AGwUBtCdKC1lRu7egrxbLwqO9cWNWpXW4FrsHA==}
+    engines: {node: '>=12.22.0'}
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18
+    dependencies:
+      react: 18.2.0
+    dev: false
+
   /react-hot-toast/2.4.0_biqbaboplfbrettd7655fr4n2y:
     resolution: {integrity: sha512-qnnVbXropKuwUpriVVosgo8QrB+IaPJCpL8oBI6Ov84uvHZ5QQcTp2qg6ku2wNfgJl6rlQXJIQU5q+5lmPOutA==}
     engines: {node: '>=10'}
@@ -20474,6 +20497,10 @@ packages:
       async: 3.2.2
       jszip: 3.7.1
     dev: true
+
+  /zod/3.19.1:
+    resolution: {integrity: sha512-LYjZsEDhCdYET9ikFu6dVPGp2YH9DegXjdJToSzD9rO6fy4qiRYFoyEYwps88OseJlPyl2NOe2iJuhEhL7IpEA==}
+    dev: false
 
   /zstd-codec/0.1.4:
     resolution: {integrity: sha512-KYnWoFWgGtWyQEKNnUcb3u8ZtKO8dn5d8u+oGpxPlopqsPyv60U8suDyfk7Z7UtAO6Sk5i1aVcAs9RbaB1n36A==}

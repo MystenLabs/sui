@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * TODO: Add a note about this
+ */
+
 import {
     autoUpdate,
     flip,
@@ -8,19 +12,29 @@ import {
     shift,
     useFloating,
 } from '@floating-ui/react-dom-interactions';
-import { Menu, Transition } from '@headlessui/react';
+import { Popover } from '@headlessui/react';
+import { zodResolver } from '@hookform/resolvers/zod';
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ComponentProps, forwardRef, Fragment, ReactNode, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
 import { NavItem } from './NavItem';
 
+import type { ComponentProps, ReactNode } from 'react';
+
+export interface NetworkOption {
+    id: string;
+    label: string;
+}
+
 export interface NetworkSelectProps {
-    networks: string[];
+    networks: NetworkOption[];
     value: string;
-    onChange(network: string): void;
+    onChange(networkId: string): void;
 }
 
 enum NetworkState {
@@ -29,65 +43,89 @@ enum NetworkState {
     SELECTED = 'SELECTED',
 }
 
-interface SelectableNetworkProps extends ComponentProps<'button'> {
-    state?: NetworkState;
+interface SelectableNetworkProps extends ComponentProps<'div'> {
+    state: NetworkState;
     children: ReactNode;
     onClick(): void;
 }
 
-const SelectableNetwork = forwardRef<HTMLButtonElement, SelectableNetworkProps>(
-    ({ state = NetworkState, children, onClick, ...props }, ref) => {
-        return (
-            <button
-                ref={ref}
-                type="button"
-                onClick={onClick}
-                className={clsx(
-                    // CSS Reset:
-                    'cursor-pointer border-0 bg-transparent text-left',
-                    'flex items-start gap-4 px-2 py-3 text-body font-semibold rounded-md transition hover:text-sui-grey-90 ui-active:text-sui-grey-90 hover:bg-sui-grey-40 ui-active:bg-sui-grey-40',
-                    state !== NetworkState.UNSELECTED
-                        ? 'text-sui-grey-90'
-                        : 'text-sui-grey-75'
-                )}
-                {...props}
-            >
-                <CheckIcon
-                    className={clsx('flex-shrink-0 transition', {
-                        'text-success': state === NetworkState.SELECTED,
-                        'text-sui-grey-60': state === NetworkState.PENDING,
-                        'text-sui-grey-45': state === NetworkState.UNSELECTED,
-                    })}
-                />
-                <div className="mt-px">{children}</div>
-            </button>
-        );
-    }
-);
+function SelectableNetwork({
+    state,
+    children,
+    onClick,
+    ...props
+}: SelectableNetworkProps) {
+    return (
+        <div
+            role="button"
+            onClick={onClick}
+            className={clsx(
+                // CSS Reset:
+                'cursor-pointer border-0 bg-transparent text-left',
+                'flex items-start gap-4 px-2 py-3 text-body font-semibold rounded-md hover:text-sui-grey-90 ui-active:text-sui-grey-90 hover:bg-sui-grey-40 ui-active:bg-sui-grey-40',
+                state !== NetworkState.UNSELECTED
+                    ? 'text-sui-grey-90'
+                    : 'text-sui-grey-75'
+            )}
+            {...props}
+        >
+            <CheckIcon
+                className={clsx('flex-shrink-0', {
+                    'text-success': state === NetworkState.SELECTED,
+                    'text-sui-grey-60': state === NetworkState.PENDING,
+                    'text-sui-grey-45': state === NetworkState.UNSELECTED,
+                })}
+            />
+            <div className="mt-px">{children}</div>
+        </div>
+    );
+}
 
-function CustomRPCInput() {
-    const [value, setValue] = useState('');
+const CustomRPCSchema = z.object({
+    url: z.string().url(),
+});
+
+function CustomRPCInput({
+    value,
+    onChange,
+}: {
+    value: string;
+    onChange(networkUrl: string): void;
+}) {
+    // TODO: Generalize into `useZodForm`.
+    const { register, handleSubmit, formState, reset } = useForm<
+        z.infer<typeof CustomRPCSchema>
+    >({
+        mode: 'all',
+        resolver: zodResolver(CustomRPCSchema),
+        defaultValues: {
+            url: value,
+        },
+    });
 
     return (
         <form
-            onSubmit={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('hi');
-            }}
+            onSubmit={handleSubmit((values) => {
+                onChange(values.url);
+            })}
             className="relative flex items-center rounded-md"
         >
             <input
+                {...register('url')}
                 type="text"
-                name="search"
-                className="block w-full rounded-md border-sui-grey-65 border border-solid shadow-sm outline-none text-sui-grey-90 p-3 pr-16"
-                onInput={(e) => e.preventDefault()}
+                className={clsx(
+                    'block w-full rounded-md border border-solid shadow-sm outline-none p-3 pr-16',
+                    formState.errors.url
+                        ? 'border-issue-dark text-issue-dark'
+                        : 'border-sui-grey-65 text-sui-grey-90'
+                )}
             />
 
             <div className="absolute inset-y-0 right-0 flex flex-col justify-center px-3">
                 <button
+                    disabled={!formState.isDirty || !formState.isValid}
                     type="submit"
-                    className="text-white uppercase text-captionSmall font-semibold rounded-full px-2 py-1 bg-sui-grey-90 flex items-center justify-center border-0"
+                    className="text-white uppercase text-captionSmall font-semibold rounded-full px-2 py-1 bg-sui-grey-90 flex items-center justify-center border-0 transition disabled:bg-sui-grey-45 disabled:text-sui-grey-65"
                 >
                     Save
                 </button>
@@ -97,35 +135,48 @@ function CustomRPCInput() {
 }
 
 function NetworkSelectPanel({ networks, onChange, value }: NetworkSelectProps) {
-    const [customOpen, setCustomOpen] = useState(false);
+    const isCustomNetwork = !networks.find(({ id }) => id === value);
+    const [customOpen, setCustomOpen] = useState(isCustomNetwork);
+
+    useEffect(() => {
+        setCustomOpen(isCustomNetwork);
+    }, [isCustomNetwork]);
 
     return (
         <>
             {networks.map((network) => (
-                <Menu.Item key={network}>
-                    <SelectableNetwork
-                        state={
-                            !customOpen && value === network
-                                ? NetworkState.SELECTED
-                                : NetworkState.UNSELECTED
-                        }
-                        onClick={() => onChange(network)}
-                    >
-                        {network}
-                    </SelectableNetwork>
-                </Menu.Item>
+                <SelectableNetwork
+                    key={network.id}
+                    state={
+                        !customOpen && value === network.id
+                            ? NetworkState.SELECTED
+                            : NetworkState.UNSELECTED
+                    }
+                    onClick={() => {
+                        onChange(network.id);
+                    }}
+                >
+                    {network.label}
+                </SelectableNetwork>
             ))}
 
             <SelectableNetwork
                 state={
-                    customOpen ? NetworkState.PENDING : NetworkState.UNSELECTED
+                    isCustomNetwork
+                        ? NetworkState.SELECTED
+                        : customOpen
+                        ? NetworkState.PENDING
+                        : NetworkState.UNSELECTED
                 }
                 onClick={() => setCustomOpen(true)}
             >
                 Custom RPC URL
                 {customOpen && (
                     <div className="mt-3">
-                        <CustomRPCInput />
+                        <CustomRPCInput
+                            value={isCustomNetwork ? value : ''}
+                            onChange={onChange}
+                        />
                     </div>
                 )}
             </SelectableNetwork>
@@ -134,29 +185,34 @@ function NetworkSelectPanel({ networks, onChange, value }: NetworkSelectProps) {
 }
 
 // TODO: Handle incoming custom RPC.
-// TODO: Handle invalid custom RPC.
 // TODO: Handle save custom RPC.
-export function NetworkSelect(props: NetworkSelectProps) {
+export function NetworkSelect({
+    networks,
+    value,
+    onChange,
+}: NetworkSelectProps) {
     const { x, y, reference, floating, strategy } = useFloating({
         placement: 'bottom-end',
         middleware: [offset(5), flip(), shift()],
         whileElementsMounted: autoUpdate,
     });
 
+    const selected = networks.find(({ id }) => id === value);
+
     return (
-        <Menu>
-            {({ open }) => (
+        <Popover>
+            {({ open, close }) => (
                 <>
-                    <Menu.Button
+                    <Popover.Button
                         ref={reference}
                         as={NavItem}
                         afterIcon={<ChevronDownIcon />}
                     >
-                        {props.value}
-                    </Menu.Button>
+                        {selected?.label || 'Custom'}
+                    </Popover.Button>
                     <AnimatePresence>
                         {open && (
-                            <Menu.Items
+                            <Popover.Panel
                                 static
                                 ref={floating}
                                 as={motion.div}
@@ -173,19 +229,26 @@ export function NetworkSelect(props: NetworkSelectProps) {
                                     scale: 0.95,
                                 }}
                                 transition={{ duration: 0.15 }}
-                                className="gap-3 flex flex-col w-56 rounded-lg bg-white shadow-lg focus:outline-none p-4"
+                                className="gap-3 flex flex-col w-64 rounded-lg bg-white shadow-lg focus:outline-none p-4"
                                 style={{
                                     position: strategy,
                                     top: y ?? 0,
                                     left: x ?? 0,
                                 }}
                             >
-                                <NetworkSelectPanel {...props} />
-                            </Menu.Items>
+                                <NetworkSelectPanel
+                                    networks={networks}
+                                    value={value}
+                                    onChange={(network) => {
+                                        onChange(network);
+                                        close();
+                                    }}
+                                />
+                            </Popover.Panel>
                         )}
                     </AnimatePresence>
                 </>
             )}
-        </Menu>
+        </Popover>
     );
 }

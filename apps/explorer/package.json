@@ -29,6 +29,7 @@
         "@growthbook/growthbook": "^0.18.1",
         "@growthbook/growthbook-react": "^0.9.1",
         "@headlessui/react": "^1.7.2",
+        "@hookform/resolvers": "^2.9.10",
         "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
         "@mysten/wallet-adapter-react": "workspace:*",
@@ -53,10 +54,12 @@
         "prismjs": "^1.28.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
+        "react-hook-form": "^7.39.2",
         "react-hot-toast": "^2.4.0",
         "react-router-dom": "^6.2.1",
         "topojson-client": "^3.1.0",
-        "web-vitals": "^3.0.4"
+        "web-vitals": "^3.0.4",
+        "zod": "^3.19.1"
     },
     "devDependencies": {
         "@babel/core": "^7.19.3",
