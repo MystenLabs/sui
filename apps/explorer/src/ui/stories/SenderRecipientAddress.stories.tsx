@@ -20,9 +20,15 @@ export default {
     ],
 } as Meta;
 
-export const TxnAddress: StoryObj<SenderRecipientAddressProps> = {
+export const Sender: StoryObj<SenderRecipientAddressProps> = {
     args: {
         address: '0x813f1adee5abb1e00dfa653bb827856106e56764',
         isSender: true,
+    },
+};
+
+export const Recipient: StoryObj<SenderRecipientAddressProps> = {
+    args: {
+        address: '0x813f1adee5abb1e00dfa653bb827856106e56764',
     },
 };

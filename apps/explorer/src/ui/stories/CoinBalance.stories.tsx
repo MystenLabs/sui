@@ -15,3 +15,9 @@ export const Default: StoryObj<CoinBalanceProps> = {
         symbol: 'SUI',
     },
 };
+
+export const WithoutSymbol: StoryObj<CoinBalanceProps> = {
+    args: {
+        amount: 1000,
+    },
+};

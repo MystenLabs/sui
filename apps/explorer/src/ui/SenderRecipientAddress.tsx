@@ -9,7 +9,6 @@ import { Link } from '~/ui/Link';
 export type SenderRecipientAddressProps = {
     isSender?: boolean;
     address: string;
-    isCoin?: boolean;
 };
 
 export function SenderRecipientAddress({
@@ -17,7 +16,7 @@ export function SenderRecipientAddress({
     address,
 }: SenderRecipientAddressProps) {
     return (
-        <div className="break-all flex flex-row gap-2 items-center">
+        <div className="break-all flex gap-2 items-center">
             <div className="w-4 mt-1">
                 {isSender ? <Sender /> : <Recipient />}
             </div>

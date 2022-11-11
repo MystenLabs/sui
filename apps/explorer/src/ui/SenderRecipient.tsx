@@ -21,10 +21,10 @@ export interface SenderRecipientProps {
 
 export function SenderRecipient({
     sender,
-    recipients,
+    recipients = [],
     transferCoin,
 }: SenderRecipientProps) {
-    const multipleRecipients = recipients && recipients?.length > 1;
+    const multipleRecipients = recipients?.length > 1;
     const singleTransferCoin = !!(
         !multipleRecipients &&
         transferCoin &&
@@ -32,13 +32,13 @@ export function SenderRecipient({
     );
     const primaryRecipient = singleTransferCoin && recipients?.[0];
     const multipleRecipientsList = primaryRecipient
-        ? recipients?.filter((_, i) => i !== 0)
+        ? recipients?.slice(1)
         : recipients;
 
     return (
         <div className="flex flex-col justify-start text-sui-grey-100 gap-4">
             <Heading variant="heading4" weight="semibold">
-                Sender {singleTransferCoin && '& Recipient'}
+                {singleTransferCoin ? 'Sender' : 'Sender & Recipient'}
             </Heading>
             <div className="flex flex-col gap-[15px] justify-center relative">
                 {singleTransferCoin && (
