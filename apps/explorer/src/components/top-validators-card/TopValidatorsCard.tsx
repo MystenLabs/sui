@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import Longtext from '../../components/longtext/Longtext';
 import {
     getValidatorState,
@@ -12,13 +13,12 @@ import {
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import { truncate } from '../../utils/stringUtils';
-import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 
 import { useRpc } from '~/hooks/useRpc';
+import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
-import { Link } from '~/ui/Link';
 
 export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
