@@ -17,13 +17,13 @@ You can use Sui Wallet to:
 * View your coins, tokens, and NFTs
 * View recent transactions
 * Auto split/merge coins to the exact transfer amount
-* Easily access transaction history in the [Sui Explorer](https://explorer.devnet.sui.io/)
+* Easily access transaction history in the [Sui Explorer](https://explorer.sui.io/)
 
-Note that in the current release, Sui Wallet includes buttons to **Buy**, **Swap**, and **Stake & Earn SUI**. These are placeholders for functionality included in future versions of Sui Wallet. 
+Note that in the current release, Sui Wallet includes buttons to **Buy**, **Swap**, and **Stake & Earn SUI**. These are placeholders for functionality included in future versions of Sui Wallet.
 
 ## Install the Sui Wallet browser extension
 
-To use Sui Wallet you must install a Chrome browser extension. You can use the extension with any browser that supports Chrome extensions from the Chrome Web Store. 
+To use Sui Wallet you must install a Chrome browser extension. You can use the extension with any browser that supports Chrome extensions from the Chrome Web Store.
 
 1. Open the [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) page on the Chrome Web Store.
 1. Click **Add to Chrome**.
@@ -49,7 +49,7 @@ If you lose access to your wallet, you can recover it only with the recovery phr
 
 ## Import an existing Sui Wallet
 
-You can use your Sui Wallet on multiple devices and browsers. After you create a Sui Wallet, use the 12-word recovery phrase to import your wallet to a new browser or device. 
+You can use your Sui Wallet on multiple devices and browsers. After you create a Sui Wallet, use the 12-word recovery phrase to import your wallet to a new browser or device.
 
 1. Open the Sui Wallet extension in your browser and then click **Get Started**.
 1. Click **Import an Existing Wallet**.
@@ -68,7 +68,7 @@ To view details about your Sui Wallet, including the Account ID, current network
 
 ## Reset your Sui Wallet password
 
-If you forget the password for your Sui Wallet you can reset it using your 12-word recovery phrase. 
+If you forget the password for your Sui Wallet you can reset it using your 12-word recovery phrase.
 
 1. Click **Forgot password?** on the **Welcome Back** page.
 1. Enter your 12-word recovery phrase, and then click **Continue**.
@@ -82,7 +82,7 @@ You can lock your wallet to prevent unauthorized access. You must enter your pas
 1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
 1. Click **Lock Wallet**.
 
-You can also set a timer to automatically lock your wallet after a period of idle time. 
+You can also set a timer to automatically lock your wallet after a period of idle time.
 
 1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
 1. Click **Account**.
@@ -96,7 +96,7 @@ You can change the active network for Sui Wallet. Currently, Sui Wallet supports
 
 1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
 1. Click **Network**.
-1. Click the network to use. 
+1. Click the network to use.
    A checkmark displays next to the active network.
 
 ## Add SUI tokens to your Sui Wallet
@@ -104,7 +104,7 @@ You can change the active network for Sui Wallet. Currently, Sui Wallet supports
 When you first open the wallet, you have no coins in it. You can add SUI tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
 
 1. Click **Coins**.
-1. Click the small clipboard icon next to your address to copy it. 
+1. Click the small clipboard icon next to your address to copy it.
 It's near the top of the wallet and starts with 0x.
 1. Open the Sui [devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel in Discord.
 1. Use the `!faucet` command with your wallet address to request tokens:
@@ -132,7 +132,7 @@ The wallet displays the recent transactions to and from your wallet on the **Act
 
 ## View all transactions in Sui Explorer
 
-You can view all transactions for your address in [Sui Explorer](https://explorer.devnet.sui.io/).
+You can view all transactions for your address in [Sui Explorer](https://explorer.sui.io/).
 
 To view all of the transactions for your address, click **Apps** and then click **View account on Sui Explorer**.
 
@@ -159,7 +159,7 @@ To mint a new NFT using the demo site
 
 After you successfully create a new NFT, you can transfer it to another wallet address. Enter the address to send it to in the **Recipient** field, then click **Transfer**. Click **Approve** in your wallet to allow the transfer.
 
-You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.devnet.sui.io/).
+You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.sui.io/).
 
 ## View your NFTs
 
@@ -188,7 +188,7 @@ To open the site associated with the app, click on the app and then click **View
 
 ## Disconnect from an app
 
-You can easily disconnect your wallet from a connected app. 
+You can easily disconnect your wallet from a connected app.
 1. Click **Apps** and then click **Active Connections**.
 1. Click the app to disconnect from your wallet, then click **Disconnect**.
 

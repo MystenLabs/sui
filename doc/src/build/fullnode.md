@@ -134,13 +134,13 @@ API](../build/json-rpc.md#sui-json-rpc-api) at:
 
 ## Sui Explorer with your Full node
 
-[Sui Explorer](https://explorer.devnet.sui.io/) supports connections to custom RPC URLS and local networks. You can point the Explorer to your local Full node and see the
+[Sui Explorer](https://explorer.sui.io/) supports connections to custom RPC URLS and local networks. You can point the Explorer to your local Full node and see the
 transactions it syncs from the network. To make this change:
 
-1. Open a browser and go to: https://explorer.devnet.sui.io/
+1. Open a browser and go to: https://explorer.sui.io/
 1. Click the **Devnet** button in the top right-hand corner of Sui Explorer and select
    **Local** from the drop-down menu.
-1. Close the **Choose a Network** menu to see the latest transactions. 
+1. Close the **Choose a Network** menu to see the latest transactions.
 
 Sui Explorer now uses your local Full node to explore the state of the chain.
 

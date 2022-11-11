@@ -4,9 +4,9 @@ title: Panzerdogs x Sui
 
 Lucky Kat teamed up with Mysten Labs to create a demo showcasing how Sui’s performance will help lead the synergies between gaming and blockchain technologies. In particular, our goal is to highlight how Sui can be used to create a tight feedback loop between on-chain asset ownership and gameplay.
 
-Panzerdogs, developed by Lucky Kat Studios, is an NFT gaming project where users can own their in-game assets and use them to battle against each other in tanks. Brawl Stars x Tanks x Play-To-Earn. 
+Panzerdogs, developed by Lucky Kat Studios, is an NFT gaming project where users can own their in-game assets and use them to battle against each other in tanks. Brawl Stars x Tanks x Play-To-Earn.
 
-## About Lucky Kat Studios 
+## About Lucky Kat Studios
 
 Lucky Kat Studios is an independent game studio located in the Hague, Netherlands. The studio’s mission is to create fun and challenging mobile games that are easily accessible for users of all age. Consisting of a young and driven team of artists, Lucky Kat is specialized in creating pixel art games that aim to make retro the present future.
 
@@ -37,12 +37,12 @@ The user can then visualize their overall NFT portfolio and choose which to Echo
 ![SuiEchoNFTPortfolio](/static/suipanzerdogs3.png)
 *And showcases the address’s NFT portfolio*
 
-Finally, users prove ownership to the Sui network by providing a signature confirming they indeed hold the private keys to the associated address and include the Sui address where the Sui-based NFT will be minted. 
+Finally, users prove ownership to the Sui network by providing a signature confirming they indeed hold the private keys to the associated address and include the Sui address where the Sui-based NFT will be minted.
 
 ![SuiEchoNFTMint](/static/suipanzerdogs4.png)
 *Letting the user select an NFT, prove ownership, and SuiEcho it*
 
-And that’s it! After following these steps, the user now owns a new Sui-based NFT that was brought into Sui through the SuiEcho white-label solution. To confirm ownership, the user can check the [Sui Explorer](https://explorer.devnet.sui.io/) and read additional information relevant to each NFT.
+And that’s it! After following these steps, the user now owns a new Sui-based NFT that was brought into Sui through the SuiEcho white-label solution. To confirm ownership, the user can check the [Sui Explorer](https://explorer.sui.io/) and read additional information relevant to each NFT.
 
 ![SuiExplorer](/static/suipanzerdogs5.png)
 *Sui NFTs can be viewed in the Sui Explorer*

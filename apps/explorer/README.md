@@ -1,6 +1,6 @@
 # Sui Explorer Frontend
 
-[Sui Explorer](https://explorer.devnet.sui.io/) is a network explorer for the Sui network, similar in functionality to [Etherscan](https://etherscan.io/) or [Solana Explorer](https://explorer.solana.com/). Use Sui Explorer to see the latest transactions and objects.
+[Sui Explorer](https://explorer.sui.io/) is a network explorer for the Sui network, similar in functionality to [Etherscan](https://etherscan.io/) or [Solana Explorer](https://explorer.solana.com/). Use Sui Explorer to see the latest transactions and objects.
 
 # Set Up
 
