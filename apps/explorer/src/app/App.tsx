@@ -43,23 +43,23 @@ function App() {
                         <Toaster
                             position="bottom-center"
                             gutter={8}
+                            containerStyle={{
+                                top: 40,
+                                left: 40,
+                                bottom: 40,
+                                right: 40,
+                            }}
                             toastOptions={{
                                 duration: 4000,
                                 success: {
+                                    icon: null,
                                     className:
                                         '!bg-success-light !text-success-dark',
-                                    iconTheme: {
-                                        primary: 'var(--success-light)',
-                                        secondary: 'var(--success-dark)',
-                                    },
                                 },
                                 error: {
+                                    icon: null,
                                     className:
                                         '!bg-issue-light !text-issue-dark',
-                                    iconTheme: {
-                                        primary: 'var(--issue-light)',
-                                        secondary: 'var(--issue-dark)',
-                                    },
                                 },
                             }}
                         />
