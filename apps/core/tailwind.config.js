@@ -7,9 +7,6 @@ module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
-      backgroundImage: {
-        "gradient-blue": "linear-gradient(135deg, #589AEA 0%, #4C75A6 100%);",
-      },
       // Line-heights that are found in the design:
       lineHeight: {
         80: "0.8",
