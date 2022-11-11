@@ -1428,7 +1428,7 @@ async fn test_fragment_full_flow() {
     let cps0 = &mut test_stores[0].1;
     let mut all_fragments = Vec::new();
     while let Ok(fragment) = rx.try_recv() {
-        fragment.verify().unwrap();
+        fragment.verify(committee.epoch).unwrap();
         all_fragments.push(fragment.clone());
         assert!(cps0
             .handle_internal_fragment(seq.clone(), fragment.message, &committee)

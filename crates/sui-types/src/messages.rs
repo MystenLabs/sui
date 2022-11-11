@@ -2037,7 +2037,7 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 certificate.verify_signature(committee)
             }
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(),
+            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(committee.epoch),
         }
     }
 }

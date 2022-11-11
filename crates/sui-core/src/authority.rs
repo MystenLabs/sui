@@ -2314,12 +2314,14 @@ impl AuthorityState {
                     })?;
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
-                fragment.verify().map_err(|err| {
-                    warn!(
-                        "Ignoring malformed fragment (failed to verify) from {}: {:?}",
-                        transaction.consensus_output.certificate.header.author, err
-                    );
-                })?;
+                fragment
+                    .verify(self.committee.load().epoch)
+                    .map_err(|err| {
+                        warn!(
+                            "Ignoring malformed fragment (failed to verify) from {}: {:?}",
+                            transaction.consensus_output.certificate.header.author, err
+                        );
+                    })?;
             }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
