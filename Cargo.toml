@@ -131,8 +131,3 @@ telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }
-
-# patch sqlx to a version using libsqlite3-sys v0.25.1 or later, see
-# https://github.com/launchbadge/sqlx/pull/2176
-[patch.crates-io]
-sqlx = { git="https://github.com/huitseeker/sqlx", branch="update_libsqlite3" }
