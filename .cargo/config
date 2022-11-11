@@ -9,3 +9,6 @@ xclippy = [
     "-Wclippy::disallowed_methods",
 ]
 xlint = "run --package x --bin x -- lint"
+
+[build]
+rustflags = ["-C", "force-frame-pointers=yes"]
