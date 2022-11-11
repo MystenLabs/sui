@@ -200,7 +200,12 @@ impl Core {
             } else {
                 let expected_count = missing_parents.len();
                 let parents: Vec<_> = certificate_store
-                    .read_all(missing_parents.into_iter())?
+                    .read_all(
+                        missing_parents
+                            .into_iter()
+                            // Only provide certs that are parents for the requested vote.
+                            .filter(|parent| header.parents.contains(parent)),
+                    )?
                     .into_iter()
                     .flatten()
                     .collect();
@@ -290,8 +295,6 @@ impl Core {
         }
 
         // Process the header.
-        // DO NOT MERGE: Any need to verify or protect against equivocation from self-produced
-        // headers? I'm thinking not but wanted to verify.
         metrics
             .headers_proposed
             .with_label_values(&[&header.epoch.to_string()])
@@ -424,7 +427,6 @@ impl Core {
         }
     }
 
-    // #[async_recursion]
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
         if self.certificate_store.read(certificate.digest())?.is_some() {
@@ -652,12 +654,10 @@ impl Core {
                 // We also receive here our new headers created by the `Proposer`.
                 Some(header) = self.rx_headers.recv() => {
                     let (tx_cancel, rx_cancel) = oneshot::channel();
-                    if self.cancel_proposed_header.is_some() {
-                        let cancel = std::mem::replace(&mut self.cancel_proposed_header, Some(tx_cancel));
-                        let _ = cancel.unwrap().send(());
-                    } else {
-                        self.cancel_proposed_header = Some(tx_cancel);
+                    if let Some(cancel) = self.cancel_proposed_header {
+                        let _ = cancel.send(());
                     }
+                    self.cancel_proposed_header = Some(tx_cancel);
 
                     self.try_update_committee().await;
 

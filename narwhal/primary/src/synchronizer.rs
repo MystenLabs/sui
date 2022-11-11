@@ -219,6 +219,14 @@ impl Synchronizer {
                         .map(|_| ())
                         .map_err(|e| DagError::NetworkError(format!("error synchronizing batches: {e:?}")))
                 },
+                // This aborts based on consensus round and not narwhal round. When this function
+                // is used as part of handling vote requests, this may cause us to wait a bit
+                // longer than needed to give up on synchronizing batches for headers that are
+                // too old to receive a vote. This shouldn't be a big deal (the requester can
+                // always abort their request at any point too), however if the extra resources
+                // used to attempt to synchronize batches for longer than strictly needed become
+                // problematic, this function could be augmented to also support cancellation based
+                // on narwhal round.
                 Ok(()) = rx_consensus_round_updates.changed() => {
                     consensus_round = *rx_consensus_round_updates.borrow();
                     ensure!(
