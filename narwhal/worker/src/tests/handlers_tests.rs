@@ -28,7 +28,6 @@ async fn synchronize() {
         committee: committee.into(),
         worker_cache,
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
     };
@@ -100,7 +99,6 @@ async fn synchronize_when_batch_exists() {
         committee: committee.into(),
         worker_cache,
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
     };
@@ -151,7 +149,6 @@ async fn delete_batches() {
         committee: committee.into(),
         worker_cache,
         store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
     };

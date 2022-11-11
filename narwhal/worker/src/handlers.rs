@@ -86,8 +86,6 @@ pub struct PrimaryReceiverHandler {
     pub worker_cache: SharedWorkerCache,
     // The batch store
     pub store: Store<BatchDigest, Batch>,
-    // Timeout on RequestBatch RPC.
-    pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batch_retry_nodes: usize,
     /// Send reconfiguration update to other tasks.
@@ -169,15 +167,15 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 })?;
 
             let mut handles = FuturesUnordered::new();
-            let request_batch_fn =
-                |mut client: WorkerToWorkerClient<anemo::Peer>, batch_request, timeout| {
-                    // Wrapper function enables us to move `client` into the future.
-                    monitored_future!(async move {
-                        client
-                            .request_batch(anemo::Request::new(batch_request).with_timeout(timeout))
-                            .await
-                    })
-                };
+            let request_batch_fn = |mut client: WorkerToWorkerClient<anemo::Peer>,
+                                    batch_request| {
+                // Wrapper function enables us to move `client` into the future.
+                monitored_future!(async move {
+                    client
+                        .request_batch(anemo::Request::new(batch_request))
+                        .await
+                })
+            };
             if first_attempt {
                 // Send first sync request to a single node.
                 let worker_name = match self.worker_cache.load().worker(&message.target, &self.id) {
@@ -195,11 +193,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         batch_requests
                     );
                     handles.extend(batch_requests.into_iter().map(|request| {
-                        request_batch_fn(
-                            WorkerToWorkerClient::new(peer.clone()),
-                            request,
-                            self.request_batch_timeout,
-                        )
+                        request_batch_fn(WorkerToWorkerClient::new(peer.clone()), request)
                     }));
                 } else {
                     warn!("Unable to reach primary peer {worker_name} on the network");
@@ -220,11 +214,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         .flat_map(|peer| {
                             batch_requests.iter().cloned().map(move |request| {
                                 let peer = peer.clone();
-                                request_batch_fn(
-                                    WorkerToWorkerClient::new(peer),
-                                    request,
-                                    self.request_batch_timeout,
-                                )
+                                request_batch_fn(WorkerToWorkerClient::new(peer), request)
                             })
                         }),
                 );
