@@ -90,12 +90,11 @@ bytes = { version = "1", features = ["serde", "std"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 camino = { version = "1", default-features = false, features = ["serde", "serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
-cargo_metadata-582f2526e08bb6a0 = { package = "cargo_metadata", version = "0.14" }
-cargo_metadata-3575ec1268b04181 = { package = "cargo_metadata", version = "0.15" }
+cargo_metadata = { version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
 cast = { version = "0.3", default-features = false }
 cbc = { version = "0.1", features = ["alloc", "block-padding", "std"] }
-cfg-expr = { version = "0.11", features = ["target-lexicon", "targets"] }
+cfg-expr = { version = "0.12", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
@@ -151,7 +150,7 @@ debug-ignore = { version = "1", default-features = false }
 der = { version = "0.6", default-features = false, features = ["alloc", "const-oid", "oid", "std", "zeroize"] }
 der-parser = { version = "8", features = ["bigint", "num-bigint", "std"] }
 derive_builder = { version = "0.11", features = ["std"] }
-determinator = { version = "0.9", default-features = false }
+determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 dhat = { version = "0.3", default-features = false }
 diff = { version = "0.1", default-features = false }
@@ -225,11 +224,11 @@ gloo-net = { version = "0.2", default-features = false, features = ["futures-cha
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
 gloo-utils = { version = "0.1", features = ["serde"] }
 group = { version = "0.12", default-features = false }
-guppy = { version = "0.14", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
+guppy = { version = "0.15", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
-hakari = { version = "0.10", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
+hakari = { version = "0.11", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
 hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
@@ -346,8 +345,8 @@ multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e", default-features = false }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e", default-features = false }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-a490c3000a992113 = { package = "nom", version = "6", features = ["alloc", "bitvec", "funty", "lexical", "lexical-core", "std"] }
@@ -720,14 +719,13 @@ bytes = { version = "1", features = ["serde", "std"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 camino = { version = "1", default-features = false, features = ["serde", "serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
-cargo_metadata-582f2526e08bb6a0 = { package = "cargo_metadata", version = "0.14" }
-cargo_metadata-3575ec1268b04181 = { package = "cargo_metadata", version = "0.15" }
+cargo_metadata = { version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
 cast = { version = "0.3", default-features = false }
 cbc = { version = "0.1", features = ["alloc", "block-padding", "std"] }
 cc = { version = "1", default-features = false, features = ["jobserver", "parallel"] }
 cexpr = { version = "0.6", default-features = false }
-cfg-expr = { version = "0.11", features = ["target-lexicon", "targets"] }
+cfg-expr = { version = "0.12", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
@@ -794,7 +792,7 @@ derive-syn-parse = { version = "0.1", default-features = false }
 derive_builder = { version = "0.11", features = ["std"] }
 derive_builder_core = { version = "0.11", default-features = false }
 derive_builder_macro = { version = "0.11", default-features = false }
-determinator = { version = "0.9", default-features = false }
+determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 dhat = { version = "0.3", default-features = false }
 diff = { version = "0.1", default-features = false }
@@ -872,11 +870,11 @@ gloo-net = { version = "0.2", default-features = false, features = ["futures-cha
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
 gloo-utils = { version = "0.1", features = ["serde"] }
 group = { version = "0.12", default-features = false }
-guppy = { version = "0.14", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
+guppy = { version = "0.15", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
-hakari = { version = "0.10", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
+hakari = { version = "0.11", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
 hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
@@ -1007,8 +1005,8 @@ multihash-derive = { version = "0.8", default-features = false, features = ["std
 multimap = { version = "0.8", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e", default-features = false }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e", default-features = false }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-a490c3000a992113 = { package = "nom", version = "6", features = ["alloc", "bitvec", "funty", "lexical", "lexical-core", "std"] }
