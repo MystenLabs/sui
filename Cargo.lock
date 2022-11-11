@@ -1002,28 +1002,16 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.14.2"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4acbb09d9ee8e23699b9634375c72795d095bf268439da88562cf9b501f181fa"
+checksum = "406c859255d568f4f742b3146d51851f3bfd49f734a2c289d9107c4395ee0062"
 dependencies = [
  "camino",
  "cargo-platform",
  "semver 1.0.14",
  "serde 1.0.147",
  "serde_json",
-]
-
-[[package]]
-name = "cargo_metadata"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3abb7553d5b9b8421c6de7cb02606ff15e0c6eea7d8eadd75ef013fd636bec36"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver 1.0.14",
- "serde 1.0.147",
- "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -1067,9 +1055,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0357a6402b295ca3a86bc148e84df46c02e41f41fef186bda662557ef6328aa"
+checksum = "0bbc13bf6290a6b202cc3efb36f7ec2b739a80634215630c8053a313edf6abef"
 dependencies = [
  "smallvec",
  "target-lexicon",
@@ -2033,9 +2021,9 @@ dependencies = [
 
 [[package]]
 name = "determinator"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5959f6abc089216f5c2ca94804c2a55312e60e2704f92da75e00cd069420e421"
+checksum = "c644b91adb5bcc66d3533607b6d3ee5c1c2d858d2d95e41dd6aae673e29e0509"
 dependencies = [
  "camino",
  "globset",
@@ -2938,12 +2926,12 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.14.3"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4390fb38495e617dbf1eb786eb2cacf9b00012df3fb10190853eaddbf716330"
+checksum = "8751f3598db532ad3e924c2ccb3f1f067931e4a13ae194f197a4cc19843be082"
 dependencies = [
  "camino",
- "cargo_metadata 0.14.2",
+ "cargo_metadata",
  "cfg-if",
  "debug-ignore",
  "fixedbitset 0.4.2",
@@ -3007,9 +2995,9 @@ dependencies = [
 
 [[package]]
 name = "hakari"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7649478c5835b557100f7fe98616cd9d25d82e8d8fa13b804d9eabc9f2d33c51"
+checksum = "641b3bb2a554e883dbbc1ca9571093aa6cdc61414de8f05b396a8ef58f71abc0"
 dependencies = [
  "atomicwrites",
  "bimap",
@@ -5420,7 +5408,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "nexlint"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/nexlint.git?rev=5926141c20414814290bb1b04bd3b2238bbbc90e#5926141c20414814290bb1b04bd3b2238bbbc90e"
+source = "git+https://github.com/nextest-rs/nexlint.git?rev=8df9c4ea982e2be6b528e7b288a82d79d2d4bf20#8df9c4ea982e2be6b528e7b288a82d79d2d4bf20"
 dependencies = [
  "camino",
  "debug-ignore",
@@ -5435,7 +5423,7 @@ dependencies = [
 [[package]]
 name = "nexlint-lints"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/nexlint.git?rev=5926141c20414814290bb1b04bd3b2238bbbc90e#5926141c20414814290bb1b04bd3b2238bbbc90e"
+source = "git+https://github.com/nextest-rs/nexlint.git?rev=8df9c4ea982e2be6b528e7b288a82d79d2d4bf20#8df9c4ea982e2be6b528e7b288a82d79d2d4bf20"
 dependencies = [
  "anyhow",
  "camino",
@@ -7531,9 +7519,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41feea4228a6f1cd09ec7a3593a682276702cd67b5273544757dae23c096f074"
+checksum = "6ce777b7b150d76b9cf60d28b55f5847135a003f7d7350c6be7a773508ce7d45"
 dependencies = [
  "indexmap",
  "itoa 1.0.4",
@@ -9139,15 +9127,15 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "target-lexicon"
-version = "0.12.4"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c02424087780c9b71cc96799eaeddff35af2bc513278cda5c99fc1f5d026d3c1"
+checksum = "9410d0f6853b1d94f0e519fb95df60f29d2c1eff2d921ffdf01a4c8a3b54f12d"
 
 [[package]]
 name = "target-spec"
-version = "1.2.0"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46b1748adaf6a95d3fa8cdf590403e789c5e172dcd9dc4b8c199c7f4be7fc11e"
+checksum = "6a4b9859e2d5bf61d17ccdf2659396d69b207d956f2cb60e09df319394a8ccd4"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
@@ -9255,7 +9243,7 @@ version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58071dc2471840e9f374eeb0f6e405a31bccb3cc5d59bb4598f02cafc274b5c4"
 dependencies = [
- "cargo_metadata 0.15.0",
+ "cargo_metadata",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "serde 1.0.147",
@@ -10684,8 +10672,7 @@ dependencies = [
  "bzip2-sys",
  "camino",
  "cargo-platform",
- "cargo_metadata 0.14.2",
- "cargo_metadata 0.15.0",
+ "cargo_metadata",
  "cassowary",
  "cast",
  "cbc",
