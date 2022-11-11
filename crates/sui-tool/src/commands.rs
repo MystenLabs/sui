@@ -9,9 +9,8 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_network::default_mysten_network_config;
-use std::time::Duration;
 use sui_config::{genesis::Genesis, ValidatorInfo};
+use sui_network::default_mysten_network_config;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use tokio::time::Instant;
 
@@ -29,6 +28,13 @@ use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::ObjectFormatOptions;
+
+#[derive(Parser, Clone, ArgEnum)]
+pub enum Verbosity {
+    Groupped,
+    Concise,
+    Verbose,
+}
 
 #[derive(Parser)]
 #[clap(
@@ -66,10 +72,21 @@ pub enum ToolCommand {
         ///
         ///     $ sui-tool fetch-object --id 0x260efde76ebccf57f4c5e951157f5c361cde822c \
         ///         --genesis $HOME/.sui/sui_config/genesis.blob \
-        ///         --history --concise
+        ///         --history --verbosity concise --concise-no-header
         ///
-        #[clap(long = "concise", help = "show concise output")]
-        concise: bool,
+        #[clap(
+            arg_enum,
+            long = "verbosity",
+            default_value = "groupped",
+            ignore_case = true
+        )]
+        verbosity: Verbosity,
+
+        #[clap(
+            long = "concise-no-header",
+            help = "don't show header in concise output"
+        )]
+        concise_no_header: bool,
     },
 
     #[clap(name = "fetch-transaction")]
@@ -226,10 +243,10 @@ impl std::fmt::Display for OwnerOutput {
     }
 }
 
-struct ConciseObjectOutput(ObjectData);
+struct GrouppedObjectOutput(ObjectData);
 
 #[allow(clippy::format_in_format_args)]
-impl std::fmt::Display for ConciseObjectOutput {
+impl std::fmt::Display for GrouppedObjectOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let responses = self
             .0
@@ -300,6 +317,58 @@ impl std::fmt::Display for ConciseObjectOutput {
                         }
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+}
+
+struct ConciseObjectOutput(ObjectData);
+
+impl ConciseObjectOutput {
+    fn header() -> String {
+        format!(
+            "{:<66} {:<8} {:<66} {:<45} {}",
+            "validator", "version", "digest", "parent_cert", "owner"
+        )
+    }
+}
+
+impl std::fmt::Display for ConciseObjectOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (name, _multi_addr, versions) in &self.0.responses {
+            for (version, resp, _time_elapsed) in versions {
+                write!(
+                    f,
+                    "{:<66} {:<8}",
+                    format!("{:?}", name),
+                    version.map(|s| s.value()).opt_debug("-")
+                )?;
+                match resp {
+                    Err(_) => writeln!(
+                        f,
+                        "{:<66} {:<45} {:<51}",
+                        "object-fetch-failed", "no-cert-available", "no-owner-available"
+                    )?,
+                    Ok(resp) => {
+                        let objref = resp
+                            .requested_object_reference
+                            .map(|(_, _, digest)| digest)
+                            .opt_debug("objref-not-available");
+                        let cert = resp
+                            .parent_certificate
+                            .as_ref()
+                            .map(|c| *c.digest())
+                            .opt_debug("<genesis>");
+                        let owner = resp
+                            .object_and_lock
+                            .as_ref()
+                            .map(|o| OwnerOutput(o.object.owner))
+                            .opt_display("no-owner-available");
+                        write!(f, " {:<66} {:<45} {:<51}", objref, cert, owner)?;
+                    }
+                }
+                writeln!(f)?;
             }
         }
         Ok(())
@@ -492,10 +561,10 @@ impl ToolCommand {
                 genesis,
                 version,
                 history,
-                concise,
+                verbosity,
+                concise_no_header,
             } => {
-                let genesis = Genesis::load(genesis)?;
-                let clients = make_clients(&genesis)?;
+                let clients = make_clients(genesis)?;
 
                 let responses = join_all(
                     clients
@@ -518,11 +587,19 @@ impl ToolCommand {
                     requested_id: id,
                     responses,
                 };
-
-                if concise {
-                    println!("{}", ConciseObjectOutput(output));
-                } else {
-                    println!("{}", VerboseObjectOutput(output));
+                match verbosity {
+                    Verbosity::Groupped => {
+                        println!("{}", GrouppedObjectOutput(output));
+                    }
+                    Verbosity::Verbose => {
+                        println!("{}", VerboseObjectOutput(output));
+                    }
+                    Verbosity::Concise => {
+                        if !concise_no_header {
+                            println!("{}", ConciseObjectOutput::header());
+                        }
+                        println!("{}", ConciseObjectOutput(output));
+                    }
                 }
             }
             ToolCommand::FetchTransaction { genesis, digest } => {
@@ -627,11 +704,11 @@ impl ToolCommand {
                 genesis,
                 sequence_number,
             } => {
+                let clients = make_clients(genesis.clone())?;
                 let genesis = Genesis::load(genesis)?;
-                let clients = make_clients(&genesis)?;
                 let committee = genesis.committee()?;
 
-                for (name, client) in clients {
+                for (name, (_val, client)) in clients {
                     let resp = client
                         .handle_checkpoint(CheckpointRequest::authenticated(sequence_number, true))
                         .await
