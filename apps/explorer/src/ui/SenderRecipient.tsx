@@ -32,13 +32,13 @@ export function SenderRecipient({
     );
     const primaryRecipient = singleTransferCoin && recipients[0];
     const multipleRecipientsList = primaryRecipient
-        ? recipients?.slice(1)
+        ? recipients.slice(1)
         : recipients;
 
     return (
         <div className="flex flex-col justify-start text-sui-grey-100 gap-4">
             <Heading variant="heading4" weight="semibold">
-                 {singleTransferCoin ? 'Sender & Recipient' : 'Sender'}
+                {singleTransferCoin ? 'Sender & Recipient' : 'Sender'}
             </Heading>
             <div className="flex flex-col gap-[15px] justify-center relative">
                 {singleTransferCoin && (
