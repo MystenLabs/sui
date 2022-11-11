@@ -19,7 +19,9 @@ tokio = { version = "1.20.1", features = ["full", "tracing"] }
 tokio-stream = "^0.1"
 rocksdb = "0.19.0"
 tracing = "0.1.36"
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite" ] }
+# patch sqlx to a version using libsqlite3-sys v0.25.1 or later, see
+# https://github.com/launchbadge/sqlx/pull/2176
+sqlx = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", features = [ "runtime-tokio-rustls", "sqlite" ] }
 strum = "^0.24"
 strum_macros = "^0.24"
 anyhow = "1.0.64"
