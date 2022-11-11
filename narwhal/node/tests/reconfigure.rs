@@ -12,12 +12,13 @@ use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use narwhal_node as node;
-use node::{restarter::NodeRestarter, Node, NodeStorage};
+use node::{restarter::NodeRestarter, Node};
 use prometheus::Registry;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use storage::NodeStorage;
 use test_utils::CommitteeFixture;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},

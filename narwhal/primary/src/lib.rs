@@ -37,5 +37,5 @@ pub use crate::{
     block_waiter::{BlockWaiter, GetBlockResponse},
     grpc_server::metrics::EndpointMetrics,
     metrics::PrimaryChannelMetrics,
-    primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY},
+    primary::{NetworkModel, Primary, CHANNEL_CAPACITY},
 };

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{NetworkModel, Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
-use crate::{common::create_db_stores, metrics::PrimaryChannelMetrics, PayloadToken};
+use crate::{common::create_db_stores, metrics::PrimaryChannelMetrics};
 use arc_swap::ArcSwap;
 use bincode::Options;
 use config::{Parameters, WorkerId};
@@ -9,7 +9,6 @@ use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use itertools::Itertools;
-use node::NodeStorage;
 use prometheus::Registry;
 use std::{
     borrow::Borrow,
@@ -18,6 +17,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use storage::NodeStorage;
+use storage::PayloadToken;
 use storage::{CertificateStore, ProposerStore};
 use store::rocks::DBMap;
 use store::Store;

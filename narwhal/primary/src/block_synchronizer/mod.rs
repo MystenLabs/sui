@@ -5,7 +5,7 @@ use crate::{
         peers::Peers,
         PendingIdentifier::{Header, Payload},
     },
-    utils, PayloadToken,
+    utils,
 };
 use anemo::PeerId;
 use anyhow::anyhow;
@@ -25,7 +25,7 @@ use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
-use storage::CertificateStore;
+use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use sui_metrics::{monitored_future, spawn_monitored_task};
 use thiserror::Error;
