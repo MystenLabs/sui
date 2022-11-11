@@ -15,44 +15,37 @@ The Sui Client CLI supports the following commands:
 | Command | Description |
 | --- | --- |
 | `active-address` | Default address used for commands when none specified |
+| `active-env` | Default environment used for commands when none specified |
 | `addresses` | Obtain the Addresses managed by the client |
 | `call` | Call Move function |
 | `create-example-nft` | Create an example NFT |
+| `envs` | List all Sui environments |
+| `execute-signed-tx` | Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute
 | `gas` | Obtain all gas objects owned by the address |
 | `help` | Print this message or the help of the given subcommand(s) |
 | `merge-coin` | Merge two coin objects into one coin |
 | `new-address` | Generate new address and keypair with keypair scheme flag {ed25519 or secp256k1} with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 |
+| `new-env` | Add new Sui environment |
 | `object` | Get object info |
 | `objects` | Obtain all objects owned by the address |
 | `pay` | Pay SUI to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts |
+| `pay_all_sui` | Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required |
+| `pay_sui` | Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required |
 | `publish` | Publish Move modules|
+| `serialize-transfer-sui` | Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere
 | `split-coin` | Split a coin object into multiple coins |
-| `switch` | Switch active address and network(such as devnet, local rpc server) |
+| `switch` | Switch active address and network(e.g., devnet, local rpc server) |
 | `sync` | Synchronize client state with authorities |
-| `transfer` | Transfer an object |
+| `transfer` | Transfer object |
 | `transfer-sui` | Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object. |
 
 > **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
 Use `sui client -h` to see a list of supported commands.
 
-Use `help <command>` to see more information on each command.
+Use `sui help <command>` to see more information on each command.
 
-You can start the client in two modes: interactive shell or command line interface.
-
-To configure the Sui client:
-```shell
-$ sui client
-```
-The Sui CLI prints the following line when the client starts up for the first time:
-```shell
-Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
-```
-Type `y` and then press `Enter`. You should see the following output:
-```shell
-Sui RPC server Url (Default to Sui Devnet if not specified) :
-```
-The Sui client prompts you for the RPC server URL. Press Enter to use the default value for Devnet. You can also enter a custom URL to connect to a custom RPC endpoint.
+You can start the client in two modes: interactive shell or command line interface [Configure Sui client](../build/devnet.md#configure-sui-client).
 
 ### Interactive shell
 
