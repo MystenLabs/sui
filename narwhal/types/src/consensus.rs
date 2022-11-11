@@ -132,6 +132,7 @@ impl ConsensusStore {
     }
 
     /// Persist a committed sub dag.
+    #[instrument(level = "trace", skip_all)]
     pub fn write_committed_sub_dag(
         &self,
         last_committed: &HashMap<PublicKey, Round>,
