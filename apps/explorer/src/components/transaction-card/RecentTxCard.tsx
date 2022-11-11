@@ -199,11 +199,11 @@ export function LatestTxCard({
         // If we were paused, immedietly refetch:
         if (paused) {
             countQuery.refetch();
-            toast(
+            toast.success(
                 `Auto-refreshing on - every ${TRANSACTION_POLL_TIME_SECONDS} seconds`
             );
         } else {
-            toast('Auto-refresh paused');
+            toast.success('Auto-refresh paused');
         }
 
         setPaused((paused) => !paused);
