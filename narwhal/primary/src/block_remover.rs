@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{utils, PayloadToken};
+use crate::utils;
 use anyhow::Result;
 use config::{SharedWorkerCache, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
@@ -10,7 +10,7 @@ use futures::future::try_join_all;
 use itertools::Either;
 use network::{P2pNetwork, PrimaryToWorkerRpc};
 use std::{collections::HashMap, sync::Arc};
-use storage::CertificateStore;
+use storage::{CertificateStore, PayloadToken};
 use store::{rocks::TypedStoreError, Store};
 
 use tracing::{debug, instrument, warn};

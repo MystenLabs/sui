@@ -4,10 +4,10 @@
 #![allow(clippy::mutable_key_type)]
 
 use fastcrypto::hash::Hash;
-use node::NodeStorage;
 use prometheus::Registry;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;

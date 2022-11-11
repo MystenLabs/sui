@@ -11,7 +11,6 @@ use fastcrypto::{
     traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
-use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
@@ -19,6 +18,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use storage::NodeStorage;
 use test_utils::{
     make_optimal_certificates, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
 };

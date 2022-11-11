@@ -1,7 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use crate::PayloadToken;
 use config::WorkerId;
 use crypto::NetworkKeyPair;
 use std::time::Duration;
@@ -17,6 +15,7 @@ use types::{
 };
 
 use crypto::PublicKey;
+use storage::PayloadToken;
 use tokio::{task::JoinHandle, time::Instant};
 
 pub fn create_db_stores() -> (
