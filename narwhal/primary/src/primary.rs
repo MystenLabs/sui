@@ -25,6 +25,7 @@ use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, NetworkPublicKey, PublicKey, Signature};
+use dashmap::DashSet;
 use fastcrypto::{
     hash::Hash,
     traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
@@ -36,9 +37,9 @@ use network::P2pNetwork;
 use prometheus::Registry;
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet},
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
     net::Ipv4Addr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 use storage::{CertificateStore, PayloadToken, ProposerStore};
 use store::Store;
@@ -221,7 +222,7 @@ impl Primary {
             vote_digest_store,
             rx_narwhal_round_updates,
             metrics: node_metrics.clone(),
-            request_vote_inflight: Arc::new(Mutex::new(HashSet::new())),
+            request_vote_inflight: Arc::new(DashSet::new()),
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
@@ -558,7 +559,7 @@ struct PrimaryReceiverHandler {
     rx_narwhal_round_updates: watch::Receiver<Round>,
     metrics: Arc<PrimaryMetrics>,
     /// Used to ensure a maximum of one inflight vote request per header.
-    request_vote_inflight: Arc<Mutex<HashSet<PublicKey>>>,
+    request_vote_inflight: Arc<DashSet<PublicKey>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -785,16 +786,12 @@ impl PrimaryReceiverHandler {
 
 // Deletes the tracked inflight request when the RequestVote RPC finishes or is dropped.
 struct RequestVoteInflightGuard {
-    request_vote_inflight: Arc<Mutex<HashSet<PublicKey>>>,
+    request_vote_inflight: Arc<DashSet<PublicKey>>,
     author: PublicKey,
 }
 impl Drop for RequestVoteInflightGuard {
     fn drop(&mut self) {
-        assert!(self
-            .request_vote_inflight
-            .lock()
-            .unwrap()
-            .remove(&self.author));
+        assert!(self.request_vote_inflight.remove(&self.author).is_some());
     }
 }
 
@@ -817,12 +814,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
         // TODO: Remove manual code for tracking inflight requests once Anemo issue #9 is resolved.
         let author = request.body().header.author.to_owned();
-        let _inflight_guard = if self
-            .request_vote_inflight
-            .lock()
-            .unwrap()
-            .insert(author.clone())
-        {
+        let _inflight_guard = if self.request_vote_inflight.insert(author.clone()) {
             RequestVoteInflightGuard {
                 request_vote_inflight: self.request_vote_inflight.clone(),
                 author,
