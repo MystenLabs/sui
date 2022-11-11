@@ -12,11 +12,13 @@ import {
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import { truncate } from '../../utils/stringUtils';
+import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 
 import { useRpc } from '~/hooks/useRpc';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
+import { Link } from '~/ui/Link';
 
 export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
@@ -172,6 +174,14 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
                             data={tableData.data}
                             columns={tableData.columns}
                         />
+                        <div className="mt-3">
+                            <Link to="/validators">
+                                <div className="flex items-center gap-2">
+                                    More Validators{' '}
+                                    <ArrowRight fill="currentColor" />
+                                </div>
+                            </Link>
+                        </div>
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
