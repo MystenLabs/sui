@@ -15,10 +15,6 @@ import type {
     SuiEvent,
 } from '@mysten/sui.js';
 
-// TODO: Move this to sui.js
-// Get the amount and recipient from a transaction
-// get symbol from coin
-// get the formatted amount and recipient from a transaction
 
 function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
     if (value === null || value === undefined) return false;
