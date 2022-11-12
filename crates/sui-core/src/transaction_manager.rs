@@ -67,11 +67,21 @@ impl TransactionManager {
     /// have many callsites. Investigate the alternatives here.
     pub(crate) async fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         for cert in certs {
+            let digest = *cert.digest();
+
+            // hold the tx lock until we have finished checking if objects are missing, so that we
+            // don't race with a concurrent execution of this tx.
+            let _tx_lock = self.authority_store.acquire_tx_lock(&digest);
+
             // Skip processing if the certificate is already enqueued.
             if self
                 .pending_certificates
-                .contains_key(&(cert.epoch(), *cert.digest()))
+                .contains_key(&(cert.epoch(), digest))
             {
+                continue;
+            }
+            // skip txes that are executed already
+            if self.authority_store.effects_exists(&digest)? {
                 continue;
             }
             let missing = self
@@ -82,7 +92,7 @@ impl TransactionManager {
                 self.certificate_ready(cert);
                 continue;
             }
-            let cert_key = (cert.epoch(), *cert.digest());
+            let cert_key = (cert.epoch(), digest);
             for obj_key in missing {
                 // TODO: verify the key does not already exist.
                 self.missing_inputs.insert(obj_key, cert_key);

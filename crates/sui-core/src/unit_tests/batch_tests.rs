@@ -38,6 +38,9 @@ use sui_types::messages::{
     TransactionInfoResponse,
 };
 
+use sui_macros::sim_test;
+use sui_simulator::nondeterministic;
+
 pub(crate) fn init_state_parameters_from_rng<R>(
     rng: &mut R,
 ) -> (Committee, SuiAddress, AuthorityKeyPair)
@@ -104,13 +107,13 @@ pub(crate) async fn init_state(
     .await
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_open_manager() {
     // let (_, authority_key) = get_key_pair();
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     let seed = [1u8; 32];
@@ -190,12 +193,12 @@ async fn test_open_manager() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_batch_manager_happy_path() {
     telemetry_subscribers::init_for_testing();
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     // Create an authority
@@ -256,11 +259,20 @@ async fn test_batch_manager_happy_path() {
     assert_eq!(authority_state.metrics.num_batch_service_tasks.get(), 0);
 }
 
-#[tokio::test]
+// get the next tx item, ignoring any batches that happen to come in.
+async fn get_next_tx(rx: &mut tokio::sync::broadcast::Receiver<UpdateItem>) -> UpdateItem {
+    loop {
+        if let UpdateItem::Transaction(tx) = rx.recv().await.unwrap() {
+            return UpdateItem::Transaction(tx);
+        }
+    }
+}
+
+#[sim_test]
 async fn test_batch_manager_out_of_order() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     // Create an authority
@@ -300,20 +312,20 @@ async fn test_batch_manager_out_of_order() {
 
     // Get transactions in order then batch.
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((0, _))
     ));
 
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((1, _))
     ));
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((2, _))
     ));
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((3, _))
     ));
 
@@ -326,11 +338,11 @@ async fn test_batch_manager_out_of_order() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_batch_manager_drop_out_of_order() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     // Create an authority
@@ -375,20 +387,20 @@ async fn test_batch_manager_drop_out_of_order() {
 
     // Get transactions in order then batch.
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((0, _))
     ));
 
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((1, _))
     ));
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((2, _))
     ));
     assert!(matches!(
-        rx.recv().await.unwrap(),
+        get_next_tx(&mut rx).await,
         UpdateItem::Transaction((3, _))
     ));
 
@@ -401,7 +413,7 @@ async fn test_batch_manager_drop_out_of_order() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_move_order_with_batch() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
@@ -708,11 +720,11 @@ impl ByzantineAuthorityClient {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_safe_batch_stream() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
