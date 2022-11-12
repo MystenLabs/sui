@@ -9,25 +9,23 @@
 -  [Struct `ValidatorPair`](#0x2_validator_set_ValidatorPair)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_validator_set_new)
--  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `request_add_validator`](#0x2_validator_set_request_add_validator)
 -  [Function `request_remove_validator`](#0x2_validator_set_request_remove_validator)
 -  [Function `request_add_stake`](#0x2_validator_set_request_add_stake)
 -  [Function `request_withdraw_stake`](#0x2_validator_set_request_withdraw_stake)
--  [Function `is_active_validator`](#0x2_validator_set_is_active_validator)
 -  [Function `request_add_delegation`](#0x2_validator_set_request_add_delegation)
--  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
--  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `request_withdraw_delegation`](#0x2_validator_set_request_withdraw_delegation)
 -  [Function `request_switch_delegation`](#0x2_validator_set_request_switch_delegation)
--  [Function `process_delegation_switches`](#0x2_validator_set_process_delegation_switches)
--  [Function `process_pending_delegations`](#0x2_validator_set_process_pending_delegations)
+-  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
+-  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
 -  [Function `derive_reference_gas_price`](#0x2_validator_set_derive_reference_gas_price)
 -  [Function `total_validator_stake`](#0x2_validator_set_total_validator_stake)
 -  [Function `total_delegation_stake`](#0x2_validator_set_total_delegation_stake)
 -  [Function `validator_stake_amount`](#0x2_validator_set_validator_stake_amount)
 -  [Function `validator_delegate_amount`](#0x2_validator_set_validator_delegate_amount)
+-  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
+-  [Function `is_active_validator`](#0x2_validator_set_is_active_validator)
 -  [Function `contains_duplicate_validator`](#0x2_validator_set_contains_duplicate_validator)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
 -  [Function `get_validator_mut`](#0x2_validator_set_get_validator_mut)
@@ -35,6 +33,8 @@
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
 -  [Function `process_pending_validators`](#0x2_validator_set_process_pending_validators)
 -  [Function `sort_removal_list`](#0x2_validator_set_sort_removal_list)
+-  [Function `process_pending_delegation_switches`](#0x2_validator_set_process_pending_delegation_switches)
+-  [Function `process_pending_delegations_and_withdraws`](#0x2_validator_set_process_pending_delegations_and_withdraws)
 -  [Function `calculate_total_stake_and_quorum_threshold`](#0x2_validator_set_calculate_total_stake_and_quorum_threshold)
 -  [Function `calculate_quorum_threshold`](#0x2_validator_set_calculate_quorum_threshold)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_set_adjust_stake_and_gas_price)
@@ -218,36 +218,11 @@
 
 </details>
 
-<a name="0x2_validator_set_next_epoch_validator_count"></a>
-
-## Function `next_epoch_validator_count`
-
-Get the total number of validators in the next epoch.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
-    <a href="_length">vector::length</a>(&self.next_epoch_validators)
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_set_request_add_validator"></a>
 
 ## Function `request_add_validator`
 
-Called by <code>SuiSystem</code>, add a new validator to <code>pending_validators</code>, which will be
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, add a new validator to <code>pending_validators</code>, which will be
 processed at the end of epoch.
 
 
@@ -279,7 +254,7 @@ processed at the end of epoch.
 
 ## Function `request_remove_validator`
 
-Called by <code>SuiSystem</code>, to remove a validator.
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to remove a validator.
 The index of the validator is added to <code>pending_removals</code> and
 will be processed at the end of epoch.
 Only an active validator can request to be removed.
@@ -319,10 +294,10 @@ Only an active validator can request to be removed.
 
 ## Function `request_add_stake`
 
-Called by <code>SuiSystem</code>, to add more stake to a validator.
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to add more stake to a validator.
 The new stake will be added to the validator's pending stake, which will be processed
 at the end of epoch.
-The total stake of the validator cannot exceed <code>max_validator_stake</code> with the <code>new_stake</code>.
+TODO: impl max stake requirement.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_stake">request_add_stake</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -355,7 +330,7 @@ The total stake of the validator cannot exceed <code>max_validator_stake</code> 
 
 ## Function `request_withdraw_stake`
 
-Called by <code>SuiSystem</code>, to withdraw stake from a validator.
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to withdraw stake from a validator.
 We send a withdraw request to the validator which will be processed at the end of epoch.
 The remaining stake of the validator cannot be lower than <code>min_validator_stake</code>.
 
@@ -387,37 +362,14 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
 
 </details>
 
-<a name="0x2_validator_set_is_active_validator"></a>
-
-## Function `is_active_validator`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(
-    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
-    validator_address: <b>address</b>,
-): bool {
-    <a href="_is_some">option::is_some</a>(&<a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address))
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_set_request_add_delegation"></a>
 
 ## Function `request_add_delegation`
 
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to add a new delegation to the validator.
+This request is added to the validator's staking pool's pending delegation entries, processed at the end
+of the epoch.
+TODO: impl max stake requirement.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, delegated_stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, locking_period: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -438,6 +390,115 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
 ) {
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, delegated_stake, locking_period, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
+    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_request_withdraw_delegation"></a>
+
+## Function `request_withdraw_delegation`
+
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to withdraw some share of a delegation from the validator. The share to withdraw
+is denoted by <code>withdraw_pool_token_amount</code>.
+This request is added to the validator's staking pool's pending delegation withdraw entries, processed at the end
+of the epoch.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_withdraw_delegation">request_withdraw_delegation</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, withdraw_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_withdraw_delegation">request_withdraw_delegation</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    delegation: &<b>mut</b> Delegation,
+    staked_sui: &<b>mut</b> StakedSui,
+    withdraw_pool_token_amount: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(delegation);
+    <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
+
+    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
+
+    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index);
+    <a href="validator.md#0x2_validator_request_withdraw_delegation">validator::request_withdraw_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, delegation, staked_sui, withdraw_pool_token_amount, ctx);
+    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_request_switch_delegation"></a>
+
+## Function `request_switch_delegation`
+
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to switch some share of a delegation from one validator to another.
+The amount to switch is denoted by <code>switch_pool_token_amount</code>.
+Both the principal and reward portions of the withdrawn delegation should be added to the
+new validator's staking pool. We do that in two parts in this function. We first withdraw the
+principal portion from the current staking pool and call <code>request_add_delegation</code> to add the
+principal SUI to the new staking pool. The amount of rewards to switch is only known at the
+end of the epoch, so we bookkeep the switch requests in <code>pending_delegation_switches</code>, and
+process them in <code>advance_epoch</code> by calling <code>process_pending_delegation_switches</code> at epoch changes.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_switch_delegation">request_switch_delegation</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, new_validator_address: <b>address</b>, switch_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_switch_delegation">request_switch_delegation</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    delegation: &<b>mut</b> Delegation,
+    staked_sui: &<b>mut</b> StakedSui,
+    new_validator_address: <b>address</b>,
+    switch_pool_token_amount: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> current_validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(delegation);
+
+    // check that the validators are not the same and they are both active.
+    <b>assert</b>!(current_validator_address != new_validator_address, 0);
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self, new_validator_address), 0);
+
+    // withdraw principal from the current <a href="validator.md#0x2_validator">validator</a>'s pool
+    <b>let</b> current_validator = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, current_validator_address);
+    <b>let</b> (current_validator_pool_token, principal_stake, time_lock) =
+        <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">staking_pool::withdraw_from_principal</a>(<a href="validator.md#0x2_validator_get_staking_pool_mut_ref">validator::get_staking_pool_mut_ref</a>(current_validator), delegation, staked_sui, switch_pool_token_amount);
+    <b>let</b> principal_sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_stake);
+    <a href="validator.md#0x2_validator_decrease_next_epoch_delegation">validator::decrease_next_epoch_delegation</a>(current_validator, principal_sui_amount);
+
+    // and deposit into the new <a href="validator.md#0x2_validator">validator</a>'s pool
+    <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self, new_validator_address, principal_stake, time_lock, ctx);
+
+    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+
+    // add pending switch entry, <b>to</b> be processed at epoch boundaries.
+    <b>let</b> key = <a href="validator_set.md#0x2_validator_set_ValidatorPair">ValidatorPair</a> { from: current_validator_address, <b>to</b>: new_validator_address };
+    <b>let</b> entry = <a href="staking_pool.md#0x2_staking_pool_new_pending_withdraw_entry">staking_pool::new_pending_withdraw_entry</a>(delegator,principal_sui_amount, current_validator_pool_token);
+    <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.pending_delegation_switches, &key)) {
+        <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.pending_delegation_switches, key, <a href="_singleton">vector::singleton</a>(entry));
+    } <b>else</b> {
+        <b>let</b> entries = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.pending_delegation_switches, &key);
+        <a href="_push_back">vector::push_back</a>(entries, entry);
+    };
+
     self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }
 </code></pre>
@@ -506,185 +567,6 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
 
 </details>
 
-<a name="0x2_validator_set_request_withdraw_delegation"></a>
-
-## Function `request_withdraw_delegation`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_withdraw_delegation">request_withdraw_delegation</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, withdraw_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_withdraw_delegation">request_withdraw_delegation</a>(
-    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
-    delegation: &<b>mut</b> Delegation,
-    staked_sui: &<b>mut</b> StakedSui,
-    withdraw_pool_token_amount: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(delegation);
-    <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
-
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
-
-    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
-    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index);
-    <a href="validator.md#0x2_validator_request_withdraw_delegation">validator::request_withdraw_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, delegation, staked_sui, withdraw_pool_token_amount, ctx);
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_validator_set_request_switch_delegation"></a>
-
-## Function `request_switch_delegation`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_switch_delegation">request_switch_delegation</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, new_validator_address: <b>address</b>, switch_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_switch_delegation">request_switch_delegation</a>(
-    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
-    delegation: &<b>mut</b> Delegation,
-    staked_sui: &<b>mut</b> StakedSui,
-    new_validator_address: <b>address</b>,
-    switch_pool_token_amount: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> current_validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(delegation);
-
-    // check that the validators are not the same and they are both active.
-    <b>assert</b>!(current_validator_address != new_validator_address, 0);
-    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self, new_validator_address), 0);
-    <b>let</b> current_validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, current_validator_address);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&current_validator_index_opt), 0);
-
-    // withdraw principal from the current <a href="validator.md#0x2_validator">validator</a>'s pool
-    <b>let</b> current_validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> current_validator_index_opt);
-    <b>let</b> current_validator = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, current_validator_index);
-    <b>let</b> (current_validator_pool_token, principal_stake, time_lock) =
-        <a href="staking_pool.md#0x2_staking_pool_withdraw_principal">staking_pool::withdraw_principal</a>(<a href="validator.md#0x2_validator_get_staking_pool_mut_ref">validator::get_staking_pool_mut_ref</a>(current_validator), delegation, staked_sui, switch_pool_token_amount);
-    <b>let</b> principal_sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_stake);
-    <a href="validator.md#0x2_validator_decrease_next_epoch_delegation">validator::decrease_next_epoch_delegation</a>(current_validator, principal_sui_amount);
-
-    // and deposit into the new <a href="validator.md#0x2_validator">validator</a>'s pool
-    <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self, new_validator_address, principal_stake, time_lock, ctx);
-
-    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-
-    // add pending switch entry, <b>to</b> be processed at epoch boundaries.
-    <b>let</b> key = <a href="validator_set.md#0x2_validator_set_ValidatorPair">ValidatorPair</a> { from: current_validator_address, <b>to</b>: new_validator_address };
-    <b>let</b> entry = <a href="staking_pool.md#0x2_staking_pool_new_pending_withdraw_entry">staking_pool::new_pending_withdraw_entry</a>(delegator,principal_sui_amount, current_validator_pool_token);
-    <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.pending_delegation_switches, &key)) {
-        <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.pending_delegation_switches, key, <a href="_singleton">vector::singleton</a>(entry));
-    } <b>else</b> {
-        <b>let</b> entries = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.pending_delegation_switches, &key);
-        <a href="_push_back">vector::push_back</a>(entries, entry);
-    };
-
-    self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_validator_set_process_delegation_switches"></a>
-
-## Function `process_delegation_switches`
-
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_delegation_switches">process_delegation_switches</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_delegation_switches">process_delegation_switches</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
-    // for each pair of (from, <b>to</b>) validators, complete the delegation switch
-    <b>while</b> (!<a href="vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&self.pending_delegation_switches)) {
-        <b>let</b> (<a href="validator_set.md#0x2_validator_set_ValidatorPair">ValidatorPair</a> { from, <b>to</b> }, entries) = <a href="vec_map.md#0x2_vec_map_pop">vec_map::pop</a>(&<b>mut</b> self.pending_delegation_switches);
-        <b>let</b> from_validator = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, from);
-        <b>let</b> from_pool = <a href="validator.md#0x2_validator_get_staking_pool_mut_ref">validator::get_staking_pool_mut_ref</a>(from_validator);
-        // withdraw rewards from the <b>old</b> <a href="validator.md#0x2_validator">validator</a>'s pool
-        <b>let</b> (delegators, rewards, rewards_withdraw_amount) = <a href="staking_pool.md#0x2_staking_pool_batch_rewards_withdraws">staking_pool::batch_rewards_withdraws</a>(from_pool, entries);
-        <a href="validator.md#0x2_validator_decrease_next_epoch_delegation">validator::decrease_next_epoch_delegation</a>(from_validator, rewards_withdraw_amount);
-
-        <b>assert</b>!(<a href="_length">vector::length</a>(&delegators) == <a href="_length">vector::length</a>(&rewards), 0);
-
-        <b>let</b> to_validator = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, <b>to</b>);
-        // add delegations <b>to</b> the new <a href="validator.md#0x2_validator">validator</a>
-        <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&rewards)) {
-            <b>let</b> delegator = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> delegators);
-            <b>let</b> new_stake = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> rewards);
-            <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(
-                to_validator,
-                new_stake,
-                <a href="_none">option::none</a>(), // no time lock for rewards
-                delegator,
-                ctx
-            );
-        };
-        <a href="_destroy_empty">vector::destroy_empty</a>(rewards);
-    };
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_validator_set_process_pending_delegations"></a>
-
-## Function `process_pending_delegations`
-
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations">process_pending_delegations</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations">process_pending_delegations</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> length = <a href="_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; length) {
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
-        <a href="validator.md#0x2_validator_process_pending_delegations">validator::process_pending_delegations</a>(<a href="validator.md#0x2_validator">validator</a>, ctx);
-        i = i + 1;
-    }
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_set_advance_epoch"></a>
 
 ## Function `advance_epoch`
@@ -693,8 +575,9 @@ Update the validator set at the end of epoch.
 It does the following things:
 1. Distribute stake award.
 2. Process pending stake deposits and withdraws for each validator (<code>adjust_stake</code>).
-3. Process pending validator application and withdraws.
-4. At the end, we calculate the total stake for the new epoch.
+3. Process pending delegation switches, deposits, and withdraws.
+4. Process pending validator application and withdraws.
+5. At the end, we calculate the total stake for the new epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, _validator_report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -738,9 +621,12 @@ It does the following things:
         ctx
     );
 
-    <a href="validator_set.md#0x2_validator_set_process_delegation_switches">process_delegation_switches</a>(self, ctx);
+    // Delegation switches must be processed before delgation deposits and withdraws so that the
+    // rewards portion of the delegation switch can be added <b>to</b> the new <a href="validator.md#0x2_validator">validator</a>'s pool when we
+    // process pending delegations.
+    <a href="validator_set.md#0x2_validator_set_process_pending_delegation_switches">process_pending_delegation_switches</a>(self, ctx);
 
-    <a href="validator_set.md#0x2_validator_set_process_pending_delegations">process_pending_delegations</a>(&<b>mut</b> self.active_validators, ctx);
+    <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(&<b>mut</b> self.active_validators, ctx);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(&<b>mut</b> self.active_validators, &<b>mut</b> self.pending_validators);
 
@@ -763,6 +649,7 @@ It does the following things:
 
 ## Function `derive_reference_gas_price`
 
+Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to derive reference gas price for the new epoch.
 Derive the reference gas price based on the gas price quote submitted by each validator.
 The returned gas price should be greater than or equal to 2/3 of the validators submitted
 gas price, weighted by stake.
@@ -900,6 +787,59 @@ gas price, weighted by stake.
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_validator_delegate_amount">validator_delegate_amount</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_delegate_amount">validator::delegate_amount</a>(<a href="validator.md#0x2_validator">validator</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_next_epoch_validator_count"></a>
+
+## Function `next_epoch_validator_count`
+
+Get the total number of validators in the next epoch.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
+    <a href="_length">vector::length</a>(&self.next_epoch_validators)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_is_active_validator"></a>
+
+## Function `is_active_validator`
+
+Returns true iff <code>validator_address</code> is a member of the active validators.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(
+    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    validator_address: <b>address</b>,
+): bool {
+    <a href="_is_some">option::is_some</a>(&<a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address))
 }
 </code></pre>
 
@@ -1142,6 +1082,89 @@ Sort all the pending removal indexes.
 
 </details>
 
+<a name="0x2_validator_set_process_pending_delegation_switches"></a>
+
+## Function `process_pending_delegation_switches`
+
+Go through all the delegation switches, withdraws the rewards portion of the switched stake from
+the <code>from</code> validator's pool, and deposits it into the <code><b>to</b></code> validator's pool.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegation_switches">process_pending_delegation_switches</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegation_switches">process_pending_delegation_switches</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext) {
+    // for each pair of (from, <b>to</b>) validators, complete the delegation switch
+    <b>while</b> (!<a href="vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&self.pending_delegation_switches)) {
+        <b>let</b> (<a href="validator_set.md#0x2_validator_set_ValidatorPair">ValidatorPair</a> { from, <b>to</b> }, entries) = <a href="vec_map.md#0x2_vec_map_pop">vec_map::pop</a>(&<b>mut</b> self.pending_delegation_switches);
+        <b>let</b> from_validator = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, from);
+        <b>let</b> from_pool = <a href="validator.md#0x2_validator_get_staking_pool_mut_ref">validator::get_staking_pool_mut_ref</a>(from_validator);
+        // withdraw rewards from the <b>old</b> <a href="validator.md#0x2_validator">validator</a>'s pool
+        <b>let</b> (delegators, rewards, rewards_withdraw_amount) =
+            <a href="staking_pool.md#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens">staking_pool::batch_withdraw_rewards_and_burn_pool_tokens</a>(from_pool, entries);
+        <a href="validator.md#0x2_validator_decrease_next_epoch_delegation">validator::decrease_next_epoch_delegation</a>(from_validator, rewards_withdraw_amount);
+
+        <b>assert</b>!(<a href="_length">vector::length</a>(&delegators) == <a href="_length">vector::length</a>(&rewards), 0);
+
+        <b>let</b> to_validator = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, <b>to</b>);
+        // add delegations <b>to</b> the new <a href="validator.md#0x2_validator">validator</a>
+        <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&rewards)) {
+            <b>let</b> delegator = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> delegators);
+            <b>let</b> new_stake = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> rewards);
+            <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(
+                to_validator,
+                new_stake,
+                <a href="_none">option::none</a>(), // no time lock for rewards
+                delegator,
+                ctx
+            );
+        };
+        <a href="_destroy_empty">vector::destroy_empty</a>(rewards);
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_process_pending_delegations_and_withdraws"></a>
+
+## Function `process_pending_delegations_and_withdraws`
+
+Process all active validators' pending delegation deposits and withdraws.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, ctx: &<b>mut</b> TxContext) {
+    <b>let</b> length = <a href="_length">vector::length</a>(validators);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; length) {
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
+        <a href="validator.md#0x2_validator_process_pending_delegations_and_withdraws">validator::process_pending_delegations_and_withdraws</a>(<a href="validator.md#0x2_validator">validator</a>, ctx);
+        i = i + 1;
+    }
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_set_calculate_total_stake_and_quorum_threshold"></a>
 
 ## Function `calculate_total_stake_and_quorum_threshold`
@@ -1333,7 +1356,7 @@ due to integer division loss.
         // Add rewards <b>to</b> the <a href="validator.md#0x2_validator">validator</a>. Because reward goes <b>to</b> pending <a href="stake.md#0x2_stake">stake</a>, it's the same <b>as</b> calling `request_add_stake`.
         <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, validator_reward, <a href="_none">option::none</a>(), ctx);
         // Add rewards <b>to</b> delegation staking pool <b>to</b> auto compound for delegators.
-        <a href="validator.md#0x2_validator_distribute_rewards">validator::distribute_rewards</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward, ctx);
+        <a href="validator.md#0x2_validator_deposit_delegation_rewards">validator::deposit_delegation_rewards</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward);
         i = i + 1;
     }
 }

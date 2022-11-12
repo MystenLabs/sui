@@ -183,7 +183,7 @@ module sui::validator {
         stake::withdraw_stake(stake, withdraw_amount, ctx);
     }
 
-    /// Process pending stake and pending withdraws.
+    /// Process pending stake and pending withdraws, and update the gas price.
     public(friend) fun adjust_stake_and_gas_price(self: &mut Validator) {
         self.stake_amount = self.stake_amount + self.pending_stake - self.pending_withdraw;
         self.pending_stake = 0;
@@ -193,6 +193,7 @@ module sui::validator {
         assert!(self.stake_amount == self.metadata.next_epoch_stake, 0);
     }
 
+    /// Request to add delegation to the validator's staking pool, processed at the end of the epoch.
     public(friend) fun request_add_delegation(
         self: &mut Validator,
         delegated_stake: Balance<SUI>,
@@ -203,14 +204,10 @@ module sui::validator {
         let delegate_amount = balance::value(&delegated_stake);
         assert!(delegate_amount > 0, 0);
         staking_pool::request_add_delegation(&mut self.delegation_staking_pool, delegated_stake, locking_period, delegator, ctx);
-
-        increase_next_epoch_delegation(self, delegate_amount);
+        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + delegate_amount;
     }
 
-    public(friend) fun increase_next_epoch_delegation(self: &mut Validator, amount: u64) {
-        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + amount;
-    }
-
+    /// Request to withdraw delegation from the validator's staking pool, processed at the end of the epoch.
     public(friend) fun request_withdraw_delegation(
         self: &mut Validator,
         delegation: &mut Delegation,
@@ -218,15 +215,17 @@ module sui::validator {
         withdraw_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let withdraw_sui_amount = staking_pool::request_withdraw_stake(
+        let withdraw_sui_amount = staking_pool::request_withdraw_delegation(
                 &mut self.delegation_staking_pool, delegation, staked_sui, withdraw_pool_token_amount, ctx);
         decrease_next_epoch_delegation(self, withdraw_sui_amount);
     }
 
+    /// Decrement the delegation amount for next epoch. Also called by `validator_set` when handling delegation switches.
     public(friend) fun decrease_next_epoch_delegation(self: &mut Validator, amount: u64) {
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - amount;
     }
 
+    /// Request to set new gas price for the next epoch.
     public(friend) fun request_set_gas_price(self: &mut Validator, new_price: u64) {
         self.metadata.next_epoch_gas_price = new_price;
     }
@@ -235,17 +234,22 @@ module sui::validator {
         self.metadata.next_epoch_commission_rate = new_commission_rate;
     }
 
-    public(friend) fun distribute_rewards(self: &mut Validator, reward: Balance<SUI>, ctx: &mut TxContext) {
+    /// Deposit delegations rewards into the validator's staking pool, called at the end of the epoch.
+    public(friend) fun deposit_delegation_rewards(self: &mut Validator, reward: Balance<SUI>) {
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + balance::value(&reward);
-        let reward_withdraw = staking_pool::distribute_rewards(&mut self.delegation_staking_pool, reward, ctx);
-        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - reward_withdraw;
+        staking_pool::deposit_rewards(&mut self.delegation_staking_pool, reward);
     }
 
-    public(friend) fun process_pending_delegations(self: &mut Validator, ctx: &mut TxContext) {
-        let _sui_deposit = staking_pool::process_pending_delegations(&mut self.delegation_staking_pool, ctx);
+    /// Process pending delegations and withdraws, called at the end of the epoch.
+    public(friend) fun process_pending_delegations_and_withdraws(self: &mut Validator, ctx: &mut TxContext) {
+        staking_pool::process_pending_delegations(&mut self.delegation_staking_pool, ctx);
+        let reward_withdraw_amount = staking_pool::process_pending_delegation_withdraws(
+            &mut self.delegation_staking_pool, ctx);
+        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - reward_withdraw_amount;
         assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0);
     }
 
+    /// Called by `validator_set` for handling delegation switches.
     public(friend) fun get_staking_pool_mut_ref(self: &mut Validator) : &mut StakingPool {
         &mut self.delegation_staking_pool
     }
