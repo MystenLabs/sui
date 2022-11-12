@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useCallback, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as SearchIcon } from '../../assets/search.svg';
 import { NetworkContext } from '../../context';
@@ -10,10 +9,12 @@ import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
+import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
+
 function Search() {
     const [input, setInput] = useState('');
     const [network] = useContext(NetworkContext);
-    const navigate = useNavigate();
+    const navigate = useNavigateWithQuery();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
 

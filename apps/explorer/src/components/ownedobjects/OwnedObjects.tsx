@@ -9,7 +9,6 @@ import {
     useContext,
     createContext,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -30,6 +29,7 @@ import OwnedObjectView from './views/OwnedObjectView';
 import styles from './styles/OwnedObjects.module.css';
 
 import { useRpc } from '~/hooks/useRpc';
+import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 
 const DATATYPE_DEFAULT: DataType = [
     {
@@ -56,7 +56,7 @@ const NavigateFunctionContext = createContext<(id: string) => () => void>(
 );
 
 function OwnedObjectStatic({ id }: { id: string }) {
-    const navigate = useNavigate();
+    const navigate = useNavigateWithQuery();
 
     const navigateFn = useCallback(
         (id: string) => () => navigateWithUnknown(id, navigate),
@@ -97,7 +97,7 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
     const [isFail, setIsFail] = useState(false);
     const [network] = useContext(NetworkContext);
     const rpc = useRpc();
-    const navigate = useNavigate();
+    const navigate = useNavigateWithQuery();
     const navigateFn = useCallback(
         (id: string) => () => navigateWithUnknown(id, navigate, network),
         [navigate, network]
