@@ -15,7 +15,6 @@ import type {
     SuiEvent,
 } from '@mysten/sui.js';
 
-
 function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
     if (value === null || value === undefined) return false;
     return true;
