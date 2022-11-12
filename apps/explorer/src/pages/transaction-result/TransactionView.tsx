@@ -461,6 +461,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     styles.txsender,
                                     'md:ml-4',
                                 ])}
+                                data-testid="transaction-timestamp"
                             >
                                 {txnTransfer?.[0].amount && (
                                     <section className="mb-10">
