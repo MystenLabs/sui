@@ -24,7 +24,7 @@ import {
     type LinkObj,
     TxAddresses,
 } from '../../components/transaction-card/TxCardUtils';
-import { getAmount } from '../../utils/getAmout';
+import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
 import type { DataType, Category } from './TransactionResultType';
@@ -463,7 +463,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {txnTransfer?.[0].amount && (
+                                {txnTransfer?.[0].amount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={txnTransfer[0].amount}
@@ -471,21 +471,20 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                             currency={txnTransfer[0].coinType}
                                         />
                                     </section>
-                                )}
-
-                                {!txnTransfer?.[0].amount &&
+                                ) : (
                                     txdata.timestamp_ms && (
-                                        <section className="mb-3">
+                                        <div className="mb-3">
                                             <DateCard
                                                 date={txdata.timestamp_ms}
                                             />
-                                        </section>
-                                    )}
-
+                                        </div>
+                                    )
+                                )}
                                 <SenderRecipient
                                     sender={sender}
-                                    transferCoin={txnTransfer?.[0].isSuiCoin}
+                                    transferCoin={txnTransfer?.[0].isCoin}
                                     recipients={sendReceiveRecipients}
+                                    data-testid="transaction-sender"
                                 />
                             </section>
 

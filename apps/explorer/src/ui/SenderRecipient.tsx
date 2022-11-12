@@ -44,11 +44,7 @@ export function SenderRecipient({
                 {singleTransferCoin && (
                     <div className="absolute border-dashed border border-sui-steel overflow-y-hidden h-[calc(57%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l" />
                 )}
-                <SenderRecipientAddress
-                    isSender
-                    address={sender}
-                    data-testid="transaction-sender"
-                />
+                <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (
                     <div className="ml-6">
                         <SenderRecipientAddress
@@ -80,6 +76,7 @@ export function SenderRecipient({
                                             <CoinBalance
                                                 amount={recipient.coin.amount}
                                                 symbol={recipient.coin?.symbol}
+                                                coinFormat="ROUNDED"
                                             />
                                         </div>
                                     )}

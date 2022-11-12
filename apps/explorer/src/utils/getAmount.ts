@@ -15,11 +15,6 @@ import type {
     SuiEvent,
 } from '@mysten/sui.js';
 
-function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
-    if (value === null || value === undefined) return false;
-    return true;
-}
-
 const getCoinType = (
     txEffects: TransactionEffects,
     address: string
@@ -32,14 +27,14 @@ const getCoinType = (
             );
             return data?.coinType;
         })
-        .filter(notEmpty);
+        .filter(Boolean);
     return coinType?.[0] ? coinType[0] : null;
 };
 
 type FormattedBalance = {
-    amount?: number | null;
+    amount?: number | bigint | null;
     coinType?: string | null;
-    isSuiCoin?: boolean;
+    isCoin?: boolean;
     recipientAddress: string;
 }[];
 
@@ -68,7 +63,7 @@ export function getAmount(
                       amount: txn?.amount,
                       coinType:
                           txnEffect && getCoinType(txnEffect, txn.recipient),
-                      isSuiCoin: true,
+                      isCoin: true,
                   },
               ]
             : null;
@@ -95,7 +90,7 @@ export function getAmount(
                     recipientAddress:
                         paySuiData.recipients[index] ||
                         paySuiData.recipients[0],
-                    isSuiCoin: true,
+                    isCoin: true,
                 },
             };
         },

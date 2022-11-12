@@ -28,13 +28,7 @@ export function StatAmount({
                         Amount
                     </Heading>
 
-                    <div className="flex flex-row items-start gap-1">
-                        <CoinBalance
-                            amount={amount}
-                            symbol={currency}
-                            format="large"
-                        />
-                    </div>
+                    <CoinBalance amount={amount} symbol={currency} size="lg" />
                 </div>
             </div>
             {dollarAmount && (
