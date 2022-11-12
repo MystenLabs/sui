@@ -8,6 +8,7 @@ use prometheus::{
     Registry,
 };
 use sui_metrics::spawn_monitored_task;
+use sui_types::error::SuiError;
 use tokio::{sync::Semaphore, time::sleep};
 use tracing::{debug, error, info, warn};
 
@@ -88,13 +89,9 @@ where
             sleep(std::time::Duration::from_secs(10)).await;
             continue;
         };
+        let epoch = certificate.epoch();
         let digest = *certificate.digest();
-        debug!(?digest, "Pending certificate execution activated.");
-
-        // Process any tx that failed to commit.
-        if let Err(err) = active_authority.state.process_tx_recovery_log(None).await {
-            tracing::error!("Error processing tx recovery log: {:?}", err);
-        }
+        debug!(tx_digest=?digest, "Pending certificate execution activated.");
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
@@ -115,36 +112,51 @@ where
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.state.handle_certificate(&certificate).await;
-                if let Err(e) = res {
-                    if attempts == EXECUTION_MAX_ATTEMPTS {
-                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.execution_driver_metrics.execution_failures.inc();
-                        return;
+                match authority.state.handle_certificate(&certificate).await {
+                    Ok(_) => {
+                        authority
+                            .execution_driver_metrics
+                            .executed_transactions
+                            .inc();
+                        authority
+                            .execution_driver_metrics
+                            .executing_transactions
+                            .dec();
+                        debug!(tx_digest=?digest, "Transaction execution succeeded.");
+                        break;
                     }
-                    // Assume only transient failure can happen. Permanent failure is probably
-                    // a bug. There would be nothing that can be done for permanent failures.
-                    warn!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
-                    sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
-                } else {
-                    break;
+                    Err(SuiError::ValidatorHaltedAtEpochEnd) => {
+                        // Unretriable error.
+                        debug!(tx_digest=?digest, "Validator halted. Aborting transaction execution.");
+                        break;
+                    }
+                    Err(e) => {
+                        if attempts == EXECUTION_MAX_ATTEMPTS {
+                            error!(tx_digest=?digest, "Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
+                            authority.execution_driver_metrics.execution_failures.inc();
+                            break;
+                        }
+                        // Assume only transient failure can happen. Permanent failure is probably
+                        // a bug. There would be nothing that can be done for permanent failures.
+                        warn!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                        sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+                    }
                 }
             }
 
-            // Remove the certificate that finished execution.
-            let _ = authority
-                .state
-                .database
-                .remove_pending_certificate(certificate.epoch(), &digest);
-
-            authority
-                .execution_driver_metrics
-                .executed_transactions
-                .inc();
-            authority
-                .execution_driver_metrics
-                .executing_transactions
-                .dec();
+            // Notifies transaction manager about a certificate is committed.
+            // After this, the transaction will no longer be retried if the effect is written.
+            //
+            // REQUIRED: this must be called after finishing all operations that must be retried
+            // for a transaction after crash recovery. Also, between calling enqueue_to_execute()
+            // to calling commit() on a transaction, all operations writing to storage need to be
+            // idempotent.
+            {
+                let mut transaction_manager = authority.state.transaction_manager.lock().await;
+                transaction_manager
+                    .commit(epoch, &digest)
+                    .expect("Transaction commit cannot fail!");
+            }
         });
     }
 }

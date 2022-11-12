@@ -762,7 +762,7 @@ impl AuthorityState {
         }
 
         let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "handle_confirmation_transaction");
+        debug!(?tx_digest, "handle_certificate_impl");
 
         if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
             debug!("shared object cert has not been sequenced by narwhal");
@@ -870,7 +870,6 @@ impl AuthorityState {
         // We also bypass validator halt if this is the system transaction.
         // TODO: Shared object transactions should also bypass validator halt.
         bypass_validator_halt |= certificate.is_system_tx();
-
         if self.is_halted() && !bypass_validator_halt {
             tx_guard.release();
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -971,18 +970,18 @@ impl AuthorityState {
             }
         };
 
-        // Notifies transaction manager about available input objects. This allows the transaction
+        // Notifies transaction manager about available objects. This allows the transaction
         // manager to schedule ready transactions.
         //
         // REQUIRED: this must be called after commit_certificate() (above), to ensure
         // TransactionManager can receive the notifications for objects that it did not find
         // in the objects table.
         //
-        // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
+        // REQUIRED: this must be called before TransactionManager::commit(), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
         {
             let mut transaction_manager = self.transaction_manager.lock().await;
-            transaction_manager.objects_committed(output_keys);
+            transaction_manager.objects_avaiable(output_keys);
         }
 
         // commit_certificate finished, the tx is fully committed to the store.
@@ -1691,9 +1690,8 @@ impl AuthorityState {
     pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         self.node_sync_store
             .batch_store_certs(certs.iter().cloned())?;
-        self.database.store_pending_certificates(&certs)?;
         let mut transaction_manager = self.transaction_manager.lock().await;
-        transaction_manager.enqueue(certs).await
+        transaction_manager.enqueue_to_execute(certs).await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2364,18 +2362,16 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
-                if certificate.contains_shared_object() {
-                    self.database
-                        .record_shared_object_cert_from_consensus(&certificate, consensus_index)
-                        .await?;
-                } else {
-                    self.database
-                        .record_owned_object_cert_from_consensus(&certificate, consensus_index)
-                        .await?;
-                }
-
                 let mut transaction_manager = self.transaction_manager.lock().await;
-                transaction_manager.enqueue(vec![certificate]).await
+                transaction_manager
+                    .enqueue_to_execute(vec![certificate.clone()])
+                    .await?;
+
+                // Note: if the node crashes here between enquequeing to TransactionManager and
+                // marking the consensus message as processed, it is ok because the consensus
+                // message will be resent to TransactionManager and gets deduplicated on recovery.
+                self.database
+                    .finish_consensus_message_process(&certificate, consensus_index)
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
                 match &fragment.message {
