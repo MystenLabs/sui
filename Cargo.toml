@@ -119,9 +119,9 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522be
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522bea01e4a3d19ecae63d789edcdcce2d66c", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
+anemo = { git = "https://github.com/mwtian/anemo.git", rev = "40a6691c9506710e8d7fc15b4682fa75a709fa91" }
+anemo-build = { git = "https://github.com/mwtian/anemo.git", rev = "40a6691c9506710e8d7fc15b4682fa75a709fa91" }
+anemo-tower = { git = "https://github.com/mwtian/anemo.git", rev = "40a6691c9506710e8d7fc15b4682fa75a709fa91" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
