@@ -3,7 +3,6 @@
 
 import { useCallback, useState, useContext } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { ReactComponent as ContentCopyIcon16 } from '../../assets/SVGIcons/16px/Copy.svg';
@@ -16,7 +15,7 @@ import type { ReactNode } from 'react';
 
 import styles from './Longtext.module.css';
 
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+import { LinkWithQuery, useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function Longtext({
     text,
@@ -43,7 +42,7 @@ function Longtext({
 }) {
     const [pleaseWait, setPleaseWait] = useState(false);
     const [network] = useContext(NetworkContext);
-    const navigate = useNavigate();
+    const navigate = useNavigateWithQuery();
 
     const handleCopyEvent = useCallback(() => {
         navigator.clipboard.writeText(text);
