@@ -33,5 +33,12 @@
         "link": "https://keepsake.gg/",
         "icon": "https://keepsake.gg/assets/icon/Favicon.png",
         "tags": ["Marketplace"]
+    },
+    {
+        "name": "Wizard Land NFT",
+        "description": "Expand the magic land",
+        "link": "https://twitter.com/WizardLandSui",
+        "icon": "https://i.ibb.co/svZSJL9/8080.png",
+        "tags": ["NFT"]
     }
 ]
