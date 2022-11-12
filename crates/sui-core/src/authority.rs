@@ -2374,6 +2374,8 @@ impl AuthorityState {
                         .await?;
                 }
 
+                // The certificate was already inserted into pending_certificates by
+                // finish_consensus_message_process.
                 let mut transaction_manager = self.transaction_manager.lock().await;
                 transaction_manager.enqueue(vec![certificate]).await
             }
