@@ -27,6 +27,5 @@ export const Default: StoryObj<CoinBalanceProps> = {
 export const WithoutSymbol: StoryObj<CoinBalanceProps> = {
     args: {
         amount: 10000,
-        
     },
 };

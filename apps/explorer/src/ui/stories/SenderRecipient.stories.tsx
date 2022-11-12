@@ -35,7 +35,7 @@ const data = {
         {
             address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
             coin: {
-                amount: "1000002",
+                amount: '1000002',
             },
         },
         {

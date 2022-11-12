@@ -3,7 +3,11 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { useFormatCoin, CoinFormat, formatBalance } from '~/hooks/useFormatCoin';
+import {
+    useFormatCoin,
+    CoinFormat,
+    formatBalance,
+} from '~/hooks/useFormatCoin';
 import { Heading } from '~/ui/Heading';
 
 const coinBalanceStyles = cva('', {
@@ -33,14 +37,17 @@ export function CoinBalance({ amount, symbol, format }: CoinBalanceProps) {
         CoinFormat.FULL
     );
 
-
-    const headingSize = coinBalanceStyles({ format }) as 'heading2' | 'heading6';
+    const headingSize = coinBalanceStyles({ format }) as
+        | 'heading2'
+        | 'heading6';
     const isLarge = format === 'large';
     const weight = isLarge ? 'bold' : 'semibold';
     return (
         <div className="flex items-end gap-1 text-sui-grey-100 break-words">
             <Heading variant={headingSize} weight={weight}>
-                {symbol ? formattedAmount : formatBalance(amount, DECIMALS, CoinFormat.ROUNDED)}
+                {symbol
+                    ? formattedAmount
+                    : formatBalance(amount, DECIMALS, CoinFormat.ROUNDED)}
             </Heading>
             {symbol && (
                 <div className="text-sui-grey-80 text-bodySmall font-medium leading-4">

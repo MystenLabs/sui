@@ -462,7 +462,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     'md:ml-4',
                                 ])}
                             >
-                                {txnTransfer?.[0].amount &&  (
+                                {txnTransfer?.[0].amount && (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={txnTransfer[0].amount}
@@ -471,12 +471,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         />
                                     </section>
                                 )}
-                                
-                                {!txnTransfer?.[0].amount && txdata.timestamp_ms && (
-                                    <section className="mb-3">
-                                       <DateCard date={txdata.timestamp_ms} />
-                                    </section>
-                                )}
+
+                                {!txnTransfer?.[0].amount &&
+                                    txdata.timestamp_ms && (
+                                        <section className="mb-3">
+                                            <DateCard
+                                                date={txdata.timestamp_ms}
+                                            />
+                                        </section>
+                                    )}
 
                                 <SenderRecipient
                                     sender={sender}

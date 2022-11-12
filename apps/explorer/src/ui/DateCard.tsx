@@ -17,13 +17,11 @@ export function DateCard({ date }: DateCardProps) {
         'hour',
         'minute',
     ]);
-    return (
-        dateStr && dateStr !== '' ? (
-            <div className="text-sui-grey-75">
-                <Text variant="bodySmall" weight="semibold">
-                    {dateStr}
-                </Text>
-            </div>
-        ) : null
-    );
+    return dateStr && dateStr !== '' ? (
+        <div className="text-sui-grey-75">
+            <Text variant="bodySmall" weight="semibold">
+                {dateStr}
+            </Text>
+        </div>
+    ) : null;
 }
