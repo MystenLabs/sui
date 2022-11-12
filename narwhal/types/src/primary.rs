@@ -61,22 +61,22 @@ fn now() -> TimestampMs {
     }
 }
 
-// Additional metadata information for an entity. Those data
+// Additional metadata information for an entity. 
+//
+// The structure as a whole is not signed. As a result this data
 // should not be treated as trustworthy data and should be used
 // for NON CRITICAL purposes only. For example should not be used
 // for any processes that are part of our protocol that can affect
 // safety or liveness.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+//
+// However selected fields, such as
+// - Header::metadata::created_at 
+// are signed to support commit timestamps.
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
     pub created_at: TimestampMs,
-}
-
-impl Default for Metadata {
-    fn default() -> Self {
-        Metadata { created_at: now() }
-    }
 }
 
 pub type Transaction = Vec<u8>;
@@ -90,7 +90,7 @@ impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Batch {
             transactions,
-            metadata: Metadata::default(),
+            metadata: Metadata { created_at : now() },
         }
     }
 }
@@ -219,7 +219,7 @@ impl Header {
             parents,
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata::default(),
+            metadata: Metadata { created_at: now() },
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
@@ -319,6 +319,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
         hasher.update(&self.author);
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
+        hasher.update(self.metadata.created_at.to_le_bytes());
         for (x, y) in self.payload.iter() {
             hasher.update(Digest::from(*x));
             hasher.update(y.to_le_bytes());
