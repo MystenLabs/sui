@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type Meta, type StoryObj } from '@storybook/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
 import { SenderRecipient, type SenderRecipientProps } from '../SenderRecipient';
@@ -20,21 +21,21 @@ const data = {
         {
             address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
             coin: {
-                amount: '1.345M',
+                amount: 120030,
                 symbol: 'COIN',
             },
         },
         {
             address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
             coin: {
-                amount: 100000230404050504,
+                amount: 10050504,
                 symbol: 'MIST',
             },
         },
         {
             address: '0x9798852b55fcbf352052c9414920ebf7811ce05e',
             coin: {
-                amount: 1000002,
+                amount: "1000002",
             },
         },
         {
@@ -47,9 +48,11 @@ export default {
     component: SenderRecipient,
     decorators: [
         (Story) => (
-            <MemoryRouter>
-                <Story />
-            </MemoryRouter>
+            <QueryClientProvider client={new QueryClient()}>
+                <MemoryRouter>
+                    <Story />
+                </MemoryRouter>
+            </QueryClientProvider>
         ),
     ],
 } as Meta;

@@ -19,6 +19,10 @@ const linkStyles = cva(
             uppercase: {
                 true: 'uppercase',
             },
+            size: {
+                md: '!text-body',
+                sm: '!text-bodySmall',
+            },
         },
         defaultVariants: {
             variant: 'text',
@@ -30,6 +34,8 @@ export interface LinkProps
     extends ButtonOrLinkProps,
         VariantProps<typeof linkStyles> {}
 
-export function Link({ variant, ...props }: LinkProps) {
-    return <ButtonOrLink className={linkStyles({ variant })} {...props} />;
+export function Link({ variant, size, ...props }: LinkProps) {
+    return (
+        <ButtonOrLink className={linkStyles({ variant, size })} {...props} />
+    );
 }
