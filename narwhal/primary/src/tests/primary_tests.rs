@@ -5,7 +5,6 @@ use crate::{
     common::create_db_stores,
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
     synchronizer::Synchronizer,
-    PayloadToken,
 };
 use arc_swap::ArcSwap;
 use bincode::Options;
@@ -27,9 +26,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use storage::CertificateStore;
 use storage::NodeStorage;
 use storage::PayloadToken;
-use storage::CertificateStore;
 use store::rocks::DBMap;
 use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};

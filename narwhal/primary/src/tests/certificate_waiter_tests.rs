@@ -15,8 +15,8 @@ use network::P2pNetwork;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
-use storage::NodeStorage;
 use storage::CertificateStore;
+use storage::NodeStorage;
 
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{

@@ -10,7 +10,7 @@ use store::rocks::DBMap;
 use store::{reopen, Store};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
-    Header, HeaderDigest, Round, RoundVoteDigestPair, SequenceNumber,
+    Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
 };
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -19,7 +19,7 @@ pub type PayloadToken = u8;
 /// All the data stores of the node.
 pub struct NodeStorage {
     pub proposer_store: ProposerStore,
-    pub vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
+    pub vote_digest_store: Store<PublicKey, VoteInfo>,
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -80,7 +80,7 @@ impl NodeStorage {
             temp_batch_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
-            Self::VOTES_CF;<PublicKey, RoundVoteDigestPair>,
+            Self::VOTES_CF;<PublicKey, VoteInfo>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,

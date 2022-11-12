@@ -1,7 +1,6 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::PayloadToken;
 use arc_swap::{ArcSwap, Guard};
 use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
