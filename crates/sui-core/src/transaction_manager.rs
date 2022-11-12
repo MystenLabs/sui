@@ -6,10 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use sui_types::{
-    base_types::TransactionDigest, committee::EpochId, error::SuiResult,
-    messages::VerifiedCertificate,
-};
+use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
 
@@ -23,8 +20,8 @@ use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthoritySt
 /// TODO: use TransactionManager for fullnode.
 pub(crate) struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    missing_inputs: BTreeMap<ObjectKey, (EpochId, TransactionDigest)>,
-    pending_certificates: BTreeMap<(EpochId, TransactionDigest), BTreeSet<ObjectKey>>,
+    missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
+    pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
 }
@@ -68,16 +65,12 @@ impl TransactionManager {
     pub(crate) async fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         for cert in certs {
             let digest = *cert.digest();
-
             // hold the tx lock until we have finished checking if objects are missing, so that we
             // don't race with a concurrent execution of this tx.
             let _tx_lock = self.authority_store.acquire_tx_lock(&digest);
 
             // Skip processing if the certificate is already enqueued.
-            if self
-                .pending_certificates
-                .contains_key(&(cert.epoch(), digest))
-            {
+            if self.pending_certificates.contains_key(&digest) {
                 continue;
             }
             // skip txes that are executed already
@@ -93,7 +86,7 @@ impl TransactionManager {
                 self.certificate_ready(cert);
                 continue;
             }
-            let cert_key = (cert.epoch(), digest);
+
             for obj_key in missing {
                 // A missing input object in TransactionManager will definitely be notified via
                 // objects_committed(), when the object actually gets committed, because:
@@ -104,9 +97,9 @@ impl TransactionManager {
                 // 3. TransactionManager is protected by a mutex. The notification via
                 // objects_committed() can only arrive after the current enqueue() call finishes.
                 // TODO: verify the key does not already exist.
-                self.missing_inputs.insert(obj_key, cert_key);
+                self.missing_inputs.insert(obj_key, digest);
                 self.pending_certificates
-                    .entry(cert_key)
+                    .entry(digest)
                     .or_default()
                     .insert(obj_key);
             }
@@ -123,31 +116,26 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects have been committed.
     pub(crate) fn objects_committed(&mut self, object_keys: Vec<ObjectKey>) {
         for object_key in object_keys {
-            let cert_key = if let Some(key) = self.missing_inputs.remove(&object_key) {
-                key
-            } else {
+            let Some(digest) =  self.missing_inputs.remove(&object_key) else {
                 continue;
             };
-            let set = self.pending_certificates.entry(cert_key).or_default();
+            let set = self.pending_certificates.entry(digest).or_default();
             set.remove(&object_key);
             // This certificate has no missing input. It is ready to execute.
             if set.is_empty() {
-                self.pending_certificates.remove(&cert_key);
+                self.pending_certificates.remove(&digest);
                 // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
                 // Otherwise, this has to crash.
-                let cert = match self
-                    .authority_store
-                    .get_pending_certificate(cert_key.0, &cert_key.1)
-                {
+                let cert = match self.authority_store.get_pending_certificate(&digest) {
                     Ok(Some(cert)) => cert,
                     Ok(None) => {
-                        error!(tx_digest = ?cert_key,
+                        error!(tx_digest = ?digest,
                             "Ready certificate not found in the pending table",
                         );
                         continue;
                     }
                     Err(e) => {
-                        error!(tx_digest = ?cert_key,
+                        error!(tx_digest = ?digest,
                             "Failed to read pending table: {e}",
                         );
 

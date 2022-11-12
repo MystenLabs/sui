@@ -39,7 +39,7 @@ pub struct AuthorityEpochTables<S> {
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
-    pub(crate) pending_certificates: DBMap<(EpochId, TransactionDigest), TrustedCertificate>,
+    pub(crate) pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_object_versions exactly once for each transaction we receive from
