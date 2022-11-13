@@ -52,20 +52,13 @@ function HomeAPI() {
                 />
             </section>
             <section className="right-item">
-                <TabGroup>
-                    <TabList>
-                        <Tab>Top Validators</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <TopValidatorsCardAPI />
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
+                <div className="mb-12">
+                    <TopValidatorsCardAPI />
+                </div>
                 <Suspense fallback={null}>
                     <ValidatorMap />
                 </Suspense>
-                <div className="mt-14">
+                <div className="mt-12">
                     <TabGroup>
                         <TabList>
                             <Tab>Recent Packages</Tab>
