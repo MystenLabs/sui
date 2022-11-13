@@ -116,6 +116,7 @@ module sui::sui_system {
         net_address: vector<u8>,
         stake: Coin<SUI>,
         gas_price: u64,
+        commission_rate: u64,
         ctx: &mut TxContext,
     ) {
         assert!(
@@ -137,6 +138,7 @@ module sui::sui_system {
             coin::into_balance(stake),
             option::none(),
             gas_price,
+            commission_rate,
             ctx
         );
 
@@ -168,6 +170,19 @@ module sui::sui_system {
         validator_set::request_set_gas_price(
             &mut self.validators,
             new_gas_price,
+            ctx
+        )
+    }
+
+    /// A validator can call this entry function to set a new commission rate, updated at the end of the epoch.
+    public entry fun request_set_commission_rate(
+        self: &mut SuiSystemState,
+        new_commission_rate: u64,
+        ctx: &mut TxContext,
+    ) {
+        validator_set::request_set_commission_rate(
+            &mut self.validators,
+            new_commission_rate,
             ctx
         )
     }

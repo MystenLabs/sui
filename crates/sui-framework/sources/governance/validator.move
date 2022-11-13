@@ -49,6 +49,8 @@ module sui::validator {
         next_epoch_delegation: u64,
         /// This validator's gas price quote for the next epoch.
         next_epoch_gas_price: u64,
+        /// The commission rate of the validator starting the next epoch, in basis point.
+        next_epoch_commission_rate: u64,
     }
 
     struct Validator has store {
@@ -65,6 +67,8 @@ module sui::validator {
         gas_price: u64,
         /// Staking pool for the stakes delegated to this validator.
         delegation_staking_pool: StakingPool,
+        /// Commission rate of the validator, in basis point.
+        commission_rate: u64,
     }
 
     const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[107, 111, 115, 107];
@@ -96,6 +100,7 @@ module sui::validator {
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
+        commission_rate: u64,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -123,12 +128,14 @@ module sui::validator {
                 next_epoch_stake: stake_amount,
                 next_epoch_delegation: 0,
                 next_epoch_gas_price: gas_price,
+                next_epoch_commission_rate: commission_rate,
             },
             stake_amount,
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
             delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1),
+            commission_rate,
         }
     }
 
@@ -140,6 +147,7 @@ module sui::validator {
             pending_withdraw: _,
             gas_price: _,
             delegation_staking_pool,
+            commission_rate: _,
         } = self;
         staking_pool::deactivate_staking_pool(delegation_staking_pool, ctx);
     }
@@ -181,6 +189,7 @@ module sui::validator {
         self.pending_stake = 0;
         self.pending_withdraw = 0;
         self.gas_price = self.metadata.next_epoch_gas_price;
+        self.commission_rate = self.metadata.next_epoch_commission_rate;
         assert!(self.stake_amount == self.metadata.next_epoch_stake, 0);
     }
 
@@ -221,6 +230,10 @@ module sui::validator {
         self.metadata.next_epoch_gas_price = new_price;
     }
 
+    public(friend) fun request_set_commission_rate(self: &mut Validator, new_commission_rate: u64) {
+        self.metadata.next_epoch_commission_rate = new_commission_rate;
+    }
+
     public(friend) fun distribute_rewards_and_new_delegations(self: &mut Validator, reward: Balance<SUI>, ctx: &mut TxContext) {
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + balance::value(&reward);
         staking_pool::advance_epoch(&mut self.delegation_staking_pool, reward, ctx);
@@ -259,6 +272,10 @@ module sui::validator {
         self.gas_price
     }
 
+    public fun commission_rate(self: &Validator): u64 {
+        self.commission_rate
+    }
+
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
@@ -278,6 +295,7 @@ module sui::validator {
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
+        commission_rate: u64,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -300,12 +318,14 @@ module sui::validator {
                 next_epoch_stake: stake_amount,
                 next_epoch_delegation: 0,
                 next_epoch_gas_price: gas_price,
+                next_epoch_commission_rate: commission_rate,
             },
             stake_amount,
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
             delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1),
+            commission_rate,
         }
     }
 }

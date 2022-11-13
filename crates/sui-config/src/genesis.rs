@@ -542,6 +542,7 @@ pub fn generate_genesis_system_object(
     let mut names = Vec::new();
     let mut stakes = Vec::new();
     let mut gas_prices = Vec::new();
+    let mut commission_rates = Vec::new();
 
     for GenesisValidatorInfo {
         info: validator,
@@ -556,6 +557,7 @@ pub fn generate_genesis_system_object(
         names.push(validator.name().to_owned().into_bytes());
         stakes.push(validator.stake());
         gas_prices.push(validator.gas_price());
+        commission_rates.push(validator.commission_rate());
     }
 
     adapter::execute(
@@ -573,6 +575,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
@@ -632,6 +635,7 @@ mod test {
             stake: 1,
             delegation: 0,
             gas_price: 1,
+            commission_rate: 0,
             network_address: utils::new_network_address(),
             narwhal_primary_address: utils::new_network_address(),
             narwhal_worker_address: utils::new_network_address(),

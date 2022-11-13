@@ -28,6 +28,7 @@ module sui::governance_test_utils {
             balance::create_for_testing<SUI>(init_stake_amount),
             option::none(),
             1,
+            0,
             ctx
         )
     }
@@ -115,6 +116,19 @@ module sui::governance_test_utils {
 
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             assert!(sui_system::validator_stake_amount(&mut system_state, validator_addr) == amount, 0);
+            test_scenario::return_shared(system_state);
+            i = i + 1;
+        };
+    }
+
+    public fun assert_validator_delegate_amounts(validator_addrs: vector<address>, delegate_amounts: vector<u64>, scenario: &mut Scenario) {
+        let i = 0;
+        while (i < vector::length(&validator_addrs)) {
+            let validator_addr = *vector::borrow(&validator_addrs, i);
+            let amount = *vector::borrow(&delegate_amounts, i);
+            test_scenario::next_tx(scenario, validator_addr);
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            assert!(sui_system::validator_delegate_amount(&mut system_state, validator_addr) == amount, 0);
             test_scenario::return_shared(system_state);
             i = i + 1;
         };

@@ -354,6 +354,7 @@ async fn create_and_register_new_validator(
             CallArg::Pure(bcs::to_bytes(&new_validator.network_address).unwrap()),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(validator_stake)),
             CallArg::Pure(bcs::to_bytes(&new_validator.gas_price()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator.commission_rate()).unwrap()),
         ],
     );
     submit_shared_object_transaction(validator_tx, validator_info).await
@@ -375,6 +376,7 @@ pub fn get_new_validator() -> (ValidatorInfo, AuthoritySignature) {
             stake: 1,
             delegation: 0,
             gas_price: 1,
+            commission_rate: 0,
             network_address: sui_config::utils::new_network_address(),
             narwhal_primary_address: sui_config::utils::new_network_address(),
             narwhal_worker_address: sui_config::utils::new_network_address(),

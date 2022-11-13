@@ -6,6 +6,7 @@
 
 
 -  [Struct `ValidatorSet`](#0x2_validator_set_ValidatorSet)
+-  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_validator_set_new)
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `request_add_validator`](#0x2_validator_set_request_add_validator)
@@ -15,6 +16,7 @@
 -  [Function `is_active_validator`](#0x2_validator_set_is_active_validator)
 -  [Function `request_add_delegation`](#0x2_validator_set_request_add_delegation)
 -  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
+-  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `request_withdraw_delegation`](#0x2_validator_set_request_withdraw_delegation)
 -  [Function `request_switch_delegation`](#0x2_validator_set_request_switch_delegation)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
@@ -122,6 +124,20 @@
 
 
 </details>
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_validator_set_BASIS_POINT_DENOMINATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+</code></pre>
+
+
 
 <a name="0x2_validator_set_new"></a>
 
@@ -409,6 +425,36 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
     <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_request_set_gas_price">validator::request_set_gas_price</a>(<a href="validator.md#0x2_validator">validator</a>, new_gas_price);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_request_set_commission_rate"></a>
+
+## Function `request_set_commission_rate`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    new_commission_rate: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
+    <a href="validator.md#0x2_validator_request_set_commission_rate">validator::request_set_commission_rate</a>(<a href="validator.md#0x2_validator">validator</a>, new_commission_rate);
 }
 </code></pre>
 
@@ -1140,13 +1186,18 @@ due to integer division loss.
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
-        <b>let</b> reward_amount = *<a href="_borrow">vector::borrow</a>(validator_reward_amounts, i);
-        <b>let</b> reward = <a href="balance.md#0x2_balance_split">balance::split</a>(validator_rewards, reward_amount);
-        // Because reward goes <b>to</b> pending <a href="stake.md#0x2_stake">stake</a>, it's the same <b>as</b> calling `request_add_stake`.
-        <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, reward, <a href="_none">option::none</a>(), ctx);
+        <b>let</b> validator_reward_amount = *<a href="_borrow">vector::borrow</a>(validator_reward_amounts, i);
+        <b>let</b> validator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(validator_rewards, validator_reward_amount);
 
         <b>let</b> delegator_reward_amount = *<a href="_borrow">vector::borrow</a>(delegator_reward_amounts, i);
         <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(delegator_rewards, delegator_reward_amount);
+
+        // Validator takes a cut of the rewards <b>as</b> commission.
+        <b>let</b> commission_amount = (delegator_reward_amount <b>as</b> u128) * (<a href="validator.md#0x2_validator_commission_rate">validator::commission_rate</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128) / <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> validator_reward, <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> delegator_reward, (commission_amount <b>as</b> u64)));
+
+        // Add rewards <b>to</b> the <a href="validator.md#0x2_validator">validator</a>. Because reward goes <b>to</b> pending <a href="stake.md#0x2_stake">stake</a>, it's the same <b>as</b> calling `request_add_stake`.
+        <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, validator_reward, <a href="_none">option::none</a>(), ctx);
         // Add rewards <b>to</b> delegation staking pool <b>to</b> auto compound for delegators.
         <a href="validator.md#0x2_validator_distribute_rewards_and_new_delegations">validator::distribute_rewards_and_new_delegations</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward, ctx);
         i = i + 1;
