@@ -31,6 +31,9 @@ use crate::{
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
+/// Packages are immutable, version is always 1
+pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;
+
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
@@ -427,7 +430,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Package(_) => SequenceNumber::from(1), // modules are immutable, version is always 1
+            Package(_) => PACKAGE_VERSION,
         }
     }
 

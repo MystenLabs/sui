@@ -9,6 +9,7 @@ use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
+use crate::base_types::random_object_ref;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
@@ -21,13 +22,6 @@ use crate::messages_checkpoint::CheckpointSummary;
 use crate::object::Owner;
 
 use super::*;
-fn random_object_ref() -> ObjectRef {
-    (
-        ObjectID::random(),
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    )
-}
 
 #[test]
 fn test_signed_values() {
