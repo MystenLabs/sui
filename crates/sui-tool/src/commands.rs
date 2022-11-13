@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
 use sui_network::default_mysten_network_config;
-use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
+use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
 use sui_core::authority_client::{
     AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,

@@ -23,6 +23,7 @@ strum_macros = "^0.24"
 strum = "0.24.1"
 serde = { version = "1.0.144", features = ["derive"] }
 eyre = "0.6.8"
+rocket = "0.5.0-rc.2"
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
