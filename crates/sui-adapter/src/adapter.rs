@@ -17,6 +17,7 @@ use move_binary_format::{
     errors::VMResult,
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
+use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -64,7 +65,17 @@ macro_rules! assert_invariant {
 }
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
-    MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
+    MoveVM::new_with_verifier_config(
+        natives,
+        VerifierConfig {
+            max_loop_depth: Some(5),
+            treat_friend_as_private: true,
+            max_generic_instantiation_length: Some(32),
+            max_function_parameters: Some(128),
+            max_basic_blocks: Some(1024),
+        },
+    )
+    .map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
 pub fn new_session<
