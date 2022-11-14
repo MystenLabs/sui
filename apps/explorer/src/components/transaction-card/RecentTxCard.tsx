@@ -9,6 +9,7 @@ import {
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -27,6 +28,7 @@ import styles from './RecentTxCard.module.css';
 import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { PlayPause } from '~/ui/PlayPause';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
@@ -34,6 +36,10 @@ import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
 const DEFAULT_PAGINATION_TYPE = 'more button';
+
+// We refresh transactions at checkpoint boundaries (currently ~10s).
+const TRANSACTION_POLL_TIME_SECONDS = 10;
+const TRANSACTION_POLL_TIME = TRANSACTION_POLL_TIME_SECONDS * 1000;
 
 type PaginationType = 'more button' | 'pagination' | 'none';
 
@@ -117,14 +123,12 @@ const statusToLoadState: Record<QueryStatus, string> = {
     success: 'loaded',
 };
 
-// Transactions frequently update, so we consider them stale after 10 seconds:
-const TRANSACTION_STALE_TIME = 10 * 1000;
-
 export function LatestTxCard({
     truncateLength = TRUNCATE_LENGTH,
     paginationtype = DEFAULT_PAGINATION_TYPE,
     txPerPage: initialTxPerPage,
 }: Props) {
+    const [paused, setPaused] = useState(false);
     const [txPerPage, setTxPerPage] = useState(
         initialTxPerPage || NUMBER_OF_TX_PER_PAGE
     );
@@ -152,7 +156,7 @@ export function LatestTxCard({
             return rpc.getTotalTransactionNumber();
         },
         {
-            staleTime: TRANSACTION_STALE_TIME,
+            refetchInterval: paused ? false : TRANSACTION_POLL_TIME,
         }
     );
 
@@ -174,7 +178,6 @@ export function LatestTxCard({
         {
             enabled: countQuery.isFetched,
             keepPreviousData: true,
-            staleTime: TRANSACTION_STALE_TIME,
         }
     );
 
@@ -190,6 +193,20 @@ export function LatestTxCard({
         count: countQuery?.data || 0,
         stats_text: 'Total transactions',
         loadState: statusToLoadState[countQuery.status],
+    };
+
+    const handlePauseChange = () => {
+        // If we were paused, immedietly refetch:
+        if (paused) {
+            countQuery.refetch();
+            toast.success(
+                `Auto-refreshing on - every ${TRANSACTION_POLL_TIME_SECONDS} seconds`
+            );
+        } else {
+            toast.success('Auto-refresh paused');
+        }
+
+        setPaused((paused) => !paused);
     };
 
     const PaginationWithStatsOrStatsWithLink =
@@ -229,9 +246,17 @@ export function LatestTxCard({
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
             <TabGroup size="lg">
-                <TabList>
-                    <Tab>Transactions</Tab>
-                </TabList>
+                <div className="relative">
+                    <TabList>
+                        <Tab>Transactions</Tab>
+                    </TabList>
+                    <div className="absolute inset-y-0 right-0">
+                        <PlayPause
+                            paused={paused}
+                            onChange={handlePauseChange}
+                        />
+                    </div>
+                </div>
                 <TabPanels>
                     <TabPanel>
                         {recentTx ? (
