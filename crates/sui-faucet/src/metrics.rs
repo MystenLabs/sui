@@ -8,21 +8,31 @@ use prometheus::{
 };
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+
+/// Metrics relevant to the requests coming into the service
 #[derive(Clone, Debug)]
-pub struct FaucetMetrics {
+pub struct RequestMetrics {
     pub(crate) total_requests_received: IntCounter,
     pub(crate) total_requests_succeeded: IntCounter,
+    pub(crate) total_requests_shed: IntCounter,
+    pub(crate) total_requests_failed: IntCounter,
     pub(crate) current_requests_in_flight: IntGauge,
-    pub(crate) current_executions_in_flight: IntGauge,
     pub(crate) process_latency: Histogram,
+}
+
+/// Metrics relevant to the running of the service
+#[derive(Clone, Debug)]
+pub struct FaucetMetrics {
+    pub(crate) current_executions_in_flight: IntGauge,
     pub(crate) total_available_coins: IntGauge,
     pub(crate) total_discarded_coins: IntGauge,
 }
+
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
-impl FaucetMetrics {
+impl RequestMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
             total_requests_received: register_int_counter_with_registry!(
@@ -37,15 +47,21 @@ impl FaucetMetrics {
                 registry,
             )
             .unwrap(),
-            current_requests_in_flight: register_int_gauge_with_registry!(
-                "current_requests_in_flight",
-                "Current number of requests being processed in Faucet",
+            total_requests_shed: register_int_counter_with_registry!(
+                "total_requests_shed",
+                "Total number of requests that were dropped because the service was saturated",
                 registry,
             )
             .unwrap(),
-            current_executions_in_flight: register_int_gauge_with_registry!(
-                "current_executions_in_flight",
-                "Current number of transactions being executed in Faucet",
+            total_requests_failed: register_int_counter_with_registry!(
+                "total_requests_failed",
+                "Total number of requests that started but failed with an uncaught error",
+                registry,
+            )
+            .unwrap(),
+            current_requests_in_flight: register_int_gauge_with_registry!(
+                "current_requests_in_flight",
+                "Current number of requests being processed in Faucet",
                 registry,
             )
             .unwrap(),
@@ -53,6 +69,19 @@ impl FaucetMetrics {
                 "process_latency",
                 "Latency of processing a Faucet request",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
+impl FaucetMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            current_executions_in_flight: register_int_gauge_with_registry!(
+                "current_executions_in_flight",
+                "Current number of transactions being executed in Faucet",
                 registry,
             )
             .unwrap(),

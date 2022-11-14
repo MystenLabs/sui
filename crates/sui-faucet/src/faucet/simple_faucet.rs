@@ -486,15 +486,6 @@ impl Faucet for SimpleFaucet {
     ) -> Result<FaucetReceipt, FaucetError> {
         info!(?recipient, uuid = ?id, "Getting faucet requests");
 
-        self.metrics.total_requests_received.inc();
-        self.metrics.current_requests_in_flight.inc();
-
-        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
-            metrics.current_requests_in_flight.dec();
-        });
-
-        let timer = self.metrics.process_latency.start_timer();
-
         let (digest, coin_ids, sent_amounts) = self.transfer_gases(amounts, recipient, id).await?;
         if coin_ids.len() != amounts.len() {
             error!(
@@ -504,10 +495,8 @@ impl Faucet for SimpleFaucet {
                 coin_ids.len()
             );
         }
-        let elapsed = timer.stop_and_record();
 
-        info!(uuid = ?id, ?recipient, ?digest, "PaySui txn succeeded in {} secs", elapsed);
-        self.metrics.total_requests_succeeded.inc();
+        info!(uuid = ?id, ?recipient, ?digest, "PaySui txn succeeded");
         Ok(FaucetReceipt {
             sent: coin_ids
                 .iter()
