@@ -411,8 +411,8 @@ relevant to the client.
 | Module         | Move module name                                                 |                      MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                       |                     `{"Module":"devnet_nft"}`                     |
 | MoveEventType  | Move event type defined in the move code                         |                                               MoveEvent                                                |        `{"MoveEventType":"0x2::devnet_nft::MintNFTEvent"}`        |
 | MoveEventField | Filter using the data fields in the move event object            |                                               MoveEvent                                                |   `{"MoveEventField":{ "path":"/name", "value":"Example NFT"}}`   |
-| SenderAddress  | Address that started the transaction                             |                MoveEvent<br/>Publish<br/>TzansferObject<br/>DeleteObject<br/>NewObject                 | `{"SenderAddress": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}` |
-| EventType      | Type of event described in the [Events](#type-of-events) section | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint |                     `"{EventType":"Publish"}`                     |
+| SenderAddress  | Address that started the transaction                             |                MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                 | `{"SenderAddress": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}` |
+| EventType      | Type of event described in the [Events](#type-of-events) section | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint |                     `{"EventType":"Publish"}`                     |
 | ObjectId       | Object ID                                                        |                             TransferObject<br/>DeleteObject<br/>NewObject                              |    `{"ObjectId":"0xe3a6bc7bf1dba4d17a91724009c461bd69870719"}`    |
 
 ### Combining filters
