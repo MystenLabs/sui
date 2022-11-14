@@ -15,7 +15,7 @@ futures = "0.3.23"
 tempfile = "3.3.0"
 tonic-health = "0.7.0"
 tap = "1.0.1"
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }

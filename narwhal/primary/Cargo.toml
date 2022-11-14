@@ -21,7 +21,7 @@ futures = "0.3.24"
 itertools = "0.10.5"
 multiaddr = "0.16.0"
 once_cell = "1.16"
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 prost = "0.10.4"
 rand = { version = "0.8.5", features = ["small_rng"] }
 roaring = "0.10.1"

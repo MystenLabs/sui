@@ -23,7 +23,7 @@ serde_with = { version = "2.0.1", features = ["hex"] }
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.15", features = ["time", "registry", "env-filter"] }
 clap = { version = "3.1.17", features = ["derive"] }
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 multiaddr = "0.16.0"
 rand = "0.8.5"
 base64 = "0.13.0"

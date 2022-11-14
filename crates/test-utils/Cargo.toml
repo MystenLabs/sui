@@ -15,7 +15,7 @@ signature = "1.6.0"
 bcs = "0.1.4"
 jsonrpsee-http-client = "0.15.1"
 jsonrpsee = { version = "0.15.1", features = ["full"] }
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 tokio = { version = "1.20.1", features = ["full", "tracing", "test-util"] }
 serde_json = "1.0.83"
 rand = "0.8.5"

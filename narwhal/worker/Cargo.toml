@@ -30,7 +30,7 @@ network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }
 types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}

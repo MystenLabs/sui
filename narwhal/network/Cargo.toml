@@ -13,7 +13,7 @@ bytes = "1.2.1"
 fastcrypto.workspace = true
 futures = "0.3.24"
 multiaddr = "0.16.0"
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 rand = { version = "0.8.5", features = ["small_rng"] }
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["rt", "net", "sync", "macros", "time"] }
