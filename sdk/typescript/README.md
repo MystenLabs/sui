@@ -74,9 +74,9 @@ The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and sho
 
 ```typescript
 import { JsonRpcProvider, Network } from '@mysten/sui.js';
-// connect to local RPC server
+// connect to Devnet
 const provider = new JsonRpcProvider(Network.DEVNET);
-// get tokens from the local faucet server
+// get tokens from the DevNet faucet server
 await provider.requestSuiFromFaucet(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
@@ -86,9 +86,9 @@ For local development, you can run `cargo run --bin sui-test-validator` to spin 
 
 ```typescript
 import { JsonRpcProvider, Network } from '@mysten/sui.js';
-// connect to Devnet
+// connect to local RPC server
 const provider = new JsonRpcProvider(Network.LOCAL);
-// get tokens from the DevNet faucet server
+// get tokens from the local faucet server
 await provider.requestSuiFromFaucet(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
