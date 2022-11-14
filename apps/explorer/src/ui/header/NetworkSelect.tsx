@@ -97,7 +97,7 @@ function CustomRPCInput({
     onChange(networkUrl: string): void;
 }) {
     // TODO: Generalize into `useZodForm`.
-    const { register, handleSubmit, formState, reset } = useForm<
+    const { register, handleSubmit, formState, } = useForm<
         z.infer<typeof CustomRPCSchema>
     >({
         mode: 'all',
