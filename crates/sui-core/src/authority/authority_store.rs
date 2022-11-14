@@ -206,7 +206,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 &self.epoch_tables().pending_certificates,
                 certs
                     .iter()
-                    .map(|cert| ((cert.epoch(), *cert.digest()), cert.clone().serializable())),
+                    .map(|cert| (*cert.digest(), cert.clone().serializable())),
             )?;
         batch.write()?;
         Ok(())
@@ -215,37 +215,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Gets one pending certificate.
     pub fn get_pending_certificate(
         &self,
-        epoch_id: EpochId,
         tx: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedCertificate>> {
         Ok(self
             .epoch_tables()
             .pending_certificates
-            .get(&(epoch_id, *tx))?
+            .get(tx)?
             .map(|c| c.into()))
     }
 
     /// Checks if a certificate is in the pending queue.
-    pub fn pending_certificate_exists(
-        &self,
-        epoch_id: EpochId,
-        tx: &TransactionDigest,
-    ) -> Result<bool, SuiError> {
-        Ok(self
-            .epoch_tables()
-            .pending_certificates
-            .contains_key(&(epoch_id, *tx))?)
+    pub fn pending_certificate_exists(&self, tx: &TransactionDigest) -> Result<bool, SuiError> {
+        Ok(self.epoch_tables().pending_certificates.contains_key(tx)?)
     }
 
     /// Deletes one pending certificate.
-    pub fn remove_pending_certificate(
-        &self,
-        epoch_id: EpochId,
-        digest: &TransactionDigest,
-    ) -> SuiResult<()> {
-        self.epoch_tables()
-            .pending_certificates
-            .remove(&(epoch_id, *digest))?;
+    pub fn remove_pending_certificate(&self, digest: &TransactionDigest) -> SuiResult<()> {
+        self.epoch_tables().pending_certificates.remove(digest)?;
         Ok(())
     }
 
@@ -340,7 +326,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// When making changes, please see if check_sequenced_input_objects() below needs
-    /// similiar changes as well.
+    /// similar changes as well.
     pub fn get_missing_input_objects(
         &self,
         digest: &TransactionDigest,
@@ -391,7 +377,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// When making changes, please see if get_missing_input_objects() above needs
-    /// similiar changes as well.
+    /// similar changes as well.
     pub fn check_sequenced_input_objects(
         &self,
         digest: &TransactionDigest,
@@ -1265,10 +1251,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         )?;
         let batch = batch.insert_batch(
             &self.epoch_tables().pending_certificates,
-            [(
-                (certificate.epoch(), *certificate.digest()),
-                certificate.clone().serializable(),
-            )],
+            [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         batch.write()?;
         Ok(())
