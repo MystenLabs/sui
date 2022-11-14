@@ -1360,7 +1360,7 @@ ciborium-io = { version = "0.2", default-features = false, features = ["alloc", 
 ciborium-ll = { version = "0.2", default-features = false }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
-cpp_demangle = { version = "0.3", features = ["std"] }
+cpp_demangle = { version = "0.4", features = ["alloc", "std"] }
 cpufeatures = { version = "0.2", default-features = false }
 criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
 criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
@@ -1407,7 +1407,7 @@ ciborium-io = { version = "0.2", default-features = false, features = ["alloc", 
 ciborium-ll = { version = "0.2", default-features = false }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
-cpp_demangle = { version = "0.3", features = ["std"] }
+cpp_demangle = { version = "0.4", features = ["alloc", "std"] }
 cpufeatures = { version = "0.2", default-features = false }
 criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
 criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
@@ -1453,7 +1453,7 @@ anes = { version = "0.1" }
 ciborium = { version = "0.2", features = ["std"] }
 ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
 ciborium-ll = { version = "0.2", default-features = false }
-cpp_demangle = { version = "0.3", features = ["std"] }
+cpp_demangle = { version = "0.4", features = ["alloc", "std"] }
 cpufeatures = { version = "0.2", default-features = false }
 criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
 criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
@@ -1502,7 +1502,7 @@ autotools = { version = "0.2", default-features = false }
 ciborium = { version = "0.2", features = ["std"] }
 ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
 ciborium-ll = { version = "0.2", default-features = false }
-cpp_demangle = { version = "0.3", features = ["std"] }
+cpp_demangle = { version = "0.4", features = ["alloc", "std"] }
 cpufeatures = { version = "0.2", default-features = false }
 criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
 criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
