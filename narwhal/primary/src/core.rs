@@ -16,7 +16,6 @@ use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
-use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -39,8 +38,6 @@ use types::{
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
-
-const LATEST_HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct Core {
     /// The public key of this primary.
@@ -197,10 +194,11 @@ impl Core {
 
         for peer in peers.iter() {
             let network = self.network.network();
-            let request = anemo::Request::new(LatestHeaderRequest {})
-                .with_timeout(LATEST_HEADER_REQUEST_TIMEOUT);
-
-            header_futures.push(async move { network.get_latest_header(peer, request).await });
+            header_futures.push(async move {
+                network
+                    .get_latest_header(peer, LatestHeaderRequest {})
+                    .await
+            });
         }
 
         let mut latest_headers = Vec::new();

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::anemo_ext::NetworkExt;
 use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
@@ -241,12 +242,12 @@ impl PrimaryToPrimaryRpc for anemo::Network {
     async fn get_latest_header(
         &self,
         peer: &NetworkPublicKey,
-        request: impl anemo::types::request::IntoRequest<LatestHeaderRequest> + Send,
+        request: LatestHeaderRequest,
     ) -> Result<LatestHeaderResponse> {
+        const LATEST_HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+        let request = anemo::Request::new(request).with_timeout(LATEST_HEADER_REQUEST_TIMEOUT);
         let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self
-            .peer(peer_id)
-            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let peer = self.waiting_peer(peer_id);
         let response = PrimaryToPrimaryClient::new(peer)
             .get_latest_header(request)
             .await

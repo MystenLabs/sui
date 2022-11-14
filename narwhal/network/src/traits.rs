@@ -111,7 +111,7 @@ pub trait PrimaryToPrimaryRpc {
     async fn get_latest_header(
         &self,
         peer: &NetworkPublicKey,
-        request: impl anemo::types::request::IntoRequest<LatestHeaderRequest> + Send,
+        request: LatestHeaderRequest,
     ) -> Result<LatestHeaderResponse>;
 }
 
