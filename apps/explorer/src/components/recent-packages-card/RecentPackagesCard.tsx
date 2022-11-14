@@ -41,42 +41,41 @@ const columns = [
 ];
 
 const transformTable = (events: SuiEvents) => ({
-    data: events.map((resp: SuiEventEnvelope) => {
-        const { event, timestamp, txDigest } = resp;
+    data: events.map(({ event, timestamp, txDigest }: SuiEventEnvelope) => {
+        if (!('publish' in event)) return {};
+
         return {
-            ...('publish' in event && {
-                time: <TxTimeType timestamp={timestamp} />,
+            time: <TxTimeType timestamp={timestamp} />,
 
-                sender: (
-                    <Link
-                        variant="mono"
-                        to={`/addresses/${encodeURIComponent(
-                            event.publish.sender
-                        )}`}
-                    >
-                        {truncate(event.publish.sender, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
-                packageId: (
-                    <Link
-                        variant="mono"
-                        to={`/objects/${encodeURIComponent(
-                            event.publish.packageId
-                        )}`}
-                    >
-                        {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
+            sender: (
+                <Link
+                    variant="mono"
+                    to={`/addresses/${encodeURIComponent(
+                        event.publish.sender
+                    )}`}
+                >
+                    {truncate(event.publish.sender, TRUNCATE_LENGTH)}
+                </Link>
+            ),
+            packageId: (
+                <Link
+                    variant="mono"
+                    to={`/objects/${encodeURIComponent(
+                        event.publish.packageId
+                    )}`}
+                >
+                    {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
+                </Link>
+            ),
 
-                txnDigest: (
-                    <Link
-                        variant="mono"
-                        to={`/transactions/${encodeURIComponent(txDigest)}`}
-                    >
-                        {truncate(txDigest, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
-            }),
+            txnDigest: (
+                <Link
+                    variant="mono"
+                    to={`/transactions/${encodeURIComponent(txDigest)}`}
+                >
+                    {truncate(txDigest, TRUNCATE_LENGTH)}
+                </Link>
+            ),
         };
     }),
     columns: [...columns],
