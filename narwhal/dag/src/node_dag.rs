@@ -277,13 +277,13 @@ mod tests {
 
     impl fmt::Debug for TestDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", Hex::encode(self.0).get(0..16).unwrap())
+            write!(f, "{}", Hex::encode(self.0).get(0..16).ok_or(fmt::Error)?)
         }
     }
 
     impl fmt::Display for TestDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", Hex::encode(self.0).get(0..16).unwrap())
+            write!(f, "{}", Hex::encode(self.0).get(0..16).ok_or(fmt::Error)?)
         }
     }
 
