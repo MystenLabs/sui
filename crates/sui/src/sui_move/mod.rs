@@ -45,7 +45,7 @@ pub fn execute_move_command(
         Command::Prove(c) => c.execute(package_path, build_config),
         Command::Test(c) => {
             let unit_test_config = UnitTestingConfig {
-                instruction_execution_bound: c.test.instruction_execution_bound,
+                gas_limit: c.test.gas_limit,
                 filter: c.test.filter.clone(),
                 list: c.test.list,
                 num_threads: c.test.num_threads,

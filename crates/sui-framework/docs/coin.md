@@ -479,7 +479,7 @@ Consume the coin <code>c</code> and add its value to <code>self</code>.
 Aborts if <code>c.value + self.value &gt; U64_MAX</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -755,7 +755,7 @@ accordingly.
 Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> and send it to <code>recipient</code>. Invokes <code><a href="coin.md#0x2_coin_mint">mint</a>()</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -782,7 +782,7 @@ Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code
 Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin_burn">burn</a>()</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 

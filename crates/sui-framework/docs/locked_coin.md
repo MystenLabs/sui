@@ -154,7 +154,7 @@ is transferred to the <code>recipient</code>. This function aborts if the <code>
 or equal to the current epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_lock_coin">lock_coin</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, recipient: <b>address</b>, locked_until_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_lock_coin">lock_coin</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, recipient: <b>address</b>, locked_until_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -184,7 +184,7 @@ of the coin. If the check is successful, the locked coin is deleted and a Coin<T
 to the sender.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_unlock_coin">unlock_coin</a>&lt;T&gt;(<a href="locked_coin.md#0x2_locked_coin">locked_coin</a>: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_unlock_coin">unlock_coin</a>&lt;T&gt;(<a href="locked_coin.md#0x2_locked_coin">locked_coin</a>: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
