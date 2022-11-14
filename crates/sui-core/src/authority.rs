@@ -1665,6 +1665,7 @@ impl AuthorityState {
             &path.join("checkpoint2"),
             Box::new(store.clone()),
             LogCheckpointOutput::boxed(),
+            0,
         );
 
         // add the object_basics module
@@ -2323,6 +2324,14 @@ impl AuthorityState {
                         );
                     })?;
             }
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                data.verify(&self.committee.load()).map_err(|err|{
+                    warn!(
+                        "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
+                        transaction.consensus_output.certificate.header.author, data.summary.summary.sequence_number, err
+                    );
+                })?;
+            }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
@@ -2429,6 +2438,9 @@ impl AuthorityState {
                 let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
 
                 Ok(())
+            }
+            ConsensusTransactionKind::CheckpointSignature(info) => {
+                self.checkpoint_service.notify_checkpoint_signature(info)
             }
         }
     }

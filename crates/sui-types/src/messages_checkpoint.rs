@@ -436,6 +436,12 @@ impl CheckpointProposalContents {
     }
 }
 
+/// This is a message validators publish to consensus in order to sign checkpoint
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointSignatureMessage {
+    pub summary: SignedCheckpointSummary,
+}
+
 /// CheckpointContents are the transactions included in an upcoming checkpoint.
 /// They must have already been causally ordered. Since the causal order algorithm
 /// is the same among validators, we expect all honest validators to come up with
@@ -443,6 +449,12 @@ impl CheckpointProposalContents {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
+}
+
+impl CheckpointSignatureMessage {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.summary.verify(committee, None)
+    }
 }
 
 impl CheckpointContents {
