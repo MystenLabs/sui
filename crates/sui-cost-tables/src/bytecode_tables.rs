@@ -150,7 +150,6 @@ fn get_simple_instruction_opcode(instr: SimpleInstruction) -> Opcodes {
         BrFalse => BR_FALSE,
         Branch => BRANCH,
 
-        Pop => POP,
         LdU8 => LD_U8,
         LdU16 => LD_U16,
         LdU32 => LD_U32,
