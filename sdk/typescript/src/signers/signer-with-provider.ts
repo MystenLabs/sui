@@ -332,8 +332,8 @@ export abstract class SignerWithProvider implements Signer {
    * @returns total gas cost estimation
    * @throws whens fails to estimate the gas cost
    */
-  async getGasCostEstimation(tx: Parameters<SignerWithProvider['dryRunTransaction']>['0']) {
-    const txEffects = await this.dryRunTransaction(tx);
+  async getGasCostEstimation(...args: Parameters<SignerWithProvider['dryRunTransaction']>) {
+    const txEffects = await this.dryRunTransaction(...args);
     const gasEstimation = getTotalGasUsed(txEffects);
     if (typeof gasEstimation === 'undefined') {
       throw new Error('Failed to estimate the gas cost from transaction');
