@@ -40,27 +40,46 @@ If the command doesn't return a path to the command you need to install Sui.
 
 ## Configure Sui client
 
-Now set up your Sui Client CLI to connect to Sui Devnet.
+> **Tip:** If you ran `sui genesis -f` before it created configuration files of Sui client and connecting to localhost `http://0.0.0.0:9000`. You can skip next step and continue on connect to custom RPC endpoint.
 
 To connect the Sui client to Sui Devnet, run the following command:
 ```shell
 $ sui client
 ```
+The Sui CLI prints the following line when the client starts up for the first time:
 
-The Sui client defaults to use localnet environment. You can also change it to Devnet fullnode RPC.
-
-Previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint to connect to Sui Devnet fullnode with the following commands:
 ```shell
-$ sui client switch --env devnet
+Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
 ```
+Type `y` and then press `Enter`. You should see the following output:
 
-To add a custom URL to connect to a custom RPC endpoint:
+```shell
+Sui RPC server Url (Default to Sui Devnet if not specified) :
+```
+The Sui client prompts you for the RPC server URL. Press Enter to use the default value for Devnet. You can also enter a custom URL to connect to a custom RPC endpoint.
+
+```shell
+Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1):
+```
+Type `0` or `1` to select key scheme.
+
+### Connect to custom RPC endpoint
+
+> **Tip:** If you configured with `sui genesis -f` you already have two RPC endpoints (localnet `http://0.0.0.0:9000` and devnet `https://fullnode.devnet.sui.io:443`), check the list `sui client envs`. You can switch to suitable for you.
+
+If you previously installed a Sui client that connected to the Devnet network, you can modify your existing  `client.yaml` to change the RPC endpoint to connect to a custom RPC endpoint:
+
+To add a custom RPC endpoint run the following command with your data:
 ```shell
 $ sui client new-env --alias <ALIAS> --rpc <RPC>
+```
+To switch an active network, run the following commands:
+```shell
 $ sui client switch --env <ALIAS>
 ```
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
+
 
 ## Validating
 
