@@ -73,7 +73,7 @@ To add a custom RPC endpoint run the following command with your data:
 ```shell
 $ sui client new-env --alias <ALIAS> --rpc <RPC>
 ```
-To switch an active network, run the following comands:
+To switch an active network, run the following commands:
 ```shell
 $ sui client switch --env <ALIAS>
 ```
