@@ -139,12 +139,14 @@ export abstract class SignerWithProvider implements Signer {
    * @param tx the transaction as SignableTransaction or string (in base64) that will dry run
    * @returns The transaction effects
    */
-  async dryRunTransaction(tx: SignableTransaction | string): Promise<TransactionEffects> {
+  async dryRunTransaction(tx: SignableTransaction | string | Base64DataBuffer): Promise<TransactionEffects> {
     const address = await this.getAddress();
     let dryRunTxBytes: string;
     if (typeof tx === 'string') {
       dryRunTxBytes = tx;
-    } else {
+    } else if (tx instanceof Base64DataBuffer){
+      dryRunTxBytes = tx.toString();
+    }else{
       switch (tx.kind) {
         case 'bytes':
           dryRunTxBytes = new Base64DataBuffer(tx.data).toString();
@@ -330,7 +332,7 @@ export abstract class SignerWithProvider implements Signer {
    * @returns total gas cost estimation
    * @throws whens fails to estimate the gas cost
    */
-  async getGasCostEstimation(tx: SignableTransaction | string) {
+  async getGasCostEstimation(tx: Parameters<SignerWithProvider['dryRunTransaction']>['0']) {
     const txEffects = await this.dryRunTransaction(tx);
     const gasEstimation = getTotalGasUsed(txEffects);
     if (typeof gasEstimation === 'undefined') {
