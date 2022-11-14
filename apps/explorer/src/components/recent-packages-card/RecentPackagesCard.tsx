@@ -109,7 +109,7 @@ export function RecentModulesCard() {
         [data]
     );
 
-    if (isError || !tableData) {
+    if (isError) {
         return (
             <Banner variant="error" fullWidth>
                 No Package Found
@@ -132,7 +132,7 @@ export function RecentModulesCard() {
                     colWidths={['25px', '135px', '220px', '220px']}
                 />
             )}
-            {isSuccess && (
+            {isSuccess && tableData && (
                 <TableCard data={tableData.data} columns={tableData.columns} />
             )}
         </section>
