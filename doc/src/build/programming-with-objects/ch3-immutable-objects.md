@@ -75,7 +75,7 @@ let sender2 = @0x2;
 test_scenario::next_tx(scenario, sender2);
 {
     let object = test_scenario::take_immutable<ColorObject>(scenario);
-    let (red, green, blue) = color_object::get_color(object);
+    let (red, green, blue) = color_object::get_color(&object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
     test_scenario::return_immutable(object);
 };
