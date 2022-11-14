@@ -11,6 +11,7 @@
 import {
     autoUpdate,
     flip,
+    FloatingPortal,
     offset,
     shift,
     useFloating,
@@ -211,43 +212,45 @@ export function NetworkSelect({
                     >
                         {selected?.label || 'Custom'}
                     </Popover.Button>
-                    <AnimatePresence>
-                        {open && (
-                            <Popover.Panel
-                                static
-                                ref={floating}
-                                as={motion.div}
-                                initial={{
-                                    opacity: 0,
-                                    scale: 0.95,
-                                }}
-                                animate={{
-                                    opacity: 1,
-                                    scale: 1,
-                                }}
-                                exit={{
-                                    opacity: 0,
-                                    scale: 0.95,
-                                }}
-                                transition={{ duration: 0.15 }}
-                                className="gap-3 flex flex-col w-64 rounded-lg bg-white shadow-lg focus:outline-none p-4"
-                                style={{
-                                    position: strategy,
-                                    top: y ?? 0,
-                                    left: x ?? 0,
-                                }}
-                            >
-                                <NetworkSelectPanel
-                                    networks={networks}
-                                    value={value}
-                                    onChange={(network) => {
-                                        onChange(network);
-                                        close();
+                    <FloatingPortal>
+                        <AnimatePresence>
+                            {open && (
+                                <Popover.Panel
+                                    static
+                                    ref={floating}
+                                    as={motion.div}
+                                    initial={{
+                                        opacity: 0,
+                                        scale: 0.95,
                                     }}
-                                />
-                            </Popover.Panel>
-                        )}
-                    </AnimatePresence>
+                                    animate={{
+                                        opacity: 1,
+                                        scale: 1,
+                                    }}
+                                    exit={{
+                                        opacity: 0,
+                                        scale: 0.95,
+                                    }}
+                                    transition={{ duration: 0.15 }}
+                                    className="z-10 gap-3 flex flex-col w-64 rounded-lg bg-white shadow-lg focus:outline-none p-4"
+                                    style={{
+                                        position: strategy,
+                                        top: y ?? 0,
+                                        left: x ?? 0,
+                                    }}
+                                >
+                                    <NetworkSelectPanel
+                                        networks={networks}
+                                        value={value}
+                                        onChange={(network) => {
+                                            onChange(network);
+                                            close();
+                                        }}
+                                    />
+                                </Popover.Panel>
+                            )}
+                        </AnimatePresence>
+                    </FloatingPortal>
                 </>
             )}
         </Popover>
