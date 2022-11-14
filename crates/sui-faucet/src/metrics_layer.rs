@@ -59,7 +59,7 @@ where
     type Future = RequestMetricsFuture<Self::Response>;
 
     fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(ctx).map_err(Into::into)
+        self.inner.poll_ready(ctx)
     }
 
     fn call(&mut self, req: Req) -> Self::Future {

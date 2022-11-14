@@ -55,7 +55,7 @@ impl RequestMetrics {
             .unwrap(),
             total_requests_failed: register_int_counter_with_registry!(
                 "total_requests_failed",
-                "Total number of requests that started but failed for some reason",
+                "Total number of requests that started but failed with an uncaught error",
                 registry,
             )
             .unwrap(),
