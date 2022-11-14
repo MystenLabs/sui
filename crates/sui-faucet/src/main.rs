@@ -50,9 +50,6 @@ struct FaucetConfig {
     #[clap(long, default_value_t = 10)]
     request_buffer_size: usize,
 
-    #[clap(long, default_value_t = 120)]
-    timeout_in_seconds: u64,
-
     #[clap(long, default_value_t = 10)]
     max_request_per_second: u64,
 }
@@ -86,7 +83,6 @@ async fn main() -> Result<(), anyhow::Error> {
         host_ip,
         port,
         request_buffer_size,
-        timeout_in_seconds,
         max_request_per_second,
         ..
     } = config;
@@ -115,13 +111,13 @@ async fn main() -> Result<(), anyhow::Error> {
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
                 .layer(cors)
+                .load_shed()
                 .buffer(request_buffer_size)
                 .layer(RateLimitLayer::new(
                     max_request_per_second,
                     Duration::from_secs(1),
                 ))
                 .concurrency_limit(max_concurrency)
-                .timeout(Duration::from_secs(timeout_in_seconds))
                 .layer(Extension(app_state))
                 .into_inner(),
         );
@@ -187,14 +183,10 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {
-    if error.is::<tower::timeout::error::Elapsed>() {
-        return (StatusCode::REQUEST_TIMEOUT, Cow::from("request timed out"));
-    }
-
     if error.is::<tower::load_shed::error::Overloaded>() {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Cow::from("service is overloaded, try again later"),
+            Cow::from("service is overloaded, please try again later"),
         );
     }
 
