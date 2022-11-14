@@ -22,7 +22,7 @@ tokio = { version = "1.20.1", features = ["sync"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"
 tracing = "0.1.36"
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 backoff = { version = "0.4.0", features = ["tokio"] }
 storage = { path = "../storage", package = "narwhal-storage" }
 itertools = "0.10.5"

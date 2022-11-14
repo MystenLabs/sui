@@ -22,7 +22,7 @@ fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 storage = { path = "../storage", package = "narwhal-storage" }
 dag = { path = "../dag", package = "narwhal-dag" }
-prometheus = "0.13.2"
+prometheus = "0.13.3"
 types = { path = "../types", package = "narwhal-types" }
 workspace-hack.workspace = true
 cfg-if = "1.0.0"
