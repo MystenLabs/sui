@@ -231,7 +231,7 @@ impl Core {
         self
     }
 
-    #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
+    #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest(), round = ?header.round))]
     async fn process_own_header(&mut self, header: Header) -> DagResult<()> {
         if header.epoch < self.committee.epoch() {
             debug!("Proposer outdated");
@@ -274,12 +274,15 @@ impl Core {
     #[async_recursion]
     #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
     async fn process_header_internal(&mut self, header: &Header, signed: bool) -> DagResult<()> {
-        debug!("Processing {:?} round:{:?}", header, header.round);
         let header_source = if self.name.eq(&header.author) {
             "own"
         } else {
             "other"
         };
+        debug!(
+            "Processing {header_source} header {:?} round:{:?}",
+            header, header.round
+        );
 
         // Indicate that we are processing this header.
         let inserted = self
@@ -318,10 +321,7 @@ impl Core {
                 .headers_suspended
                 .with_label_values(&[&header.epoch.to_string(), "missing_parents"])
                 .inc();
-            debug!(
-                "Processing of {} suspended: missing parent(s)",
-                header.digest()
-            );
+            debug!("Processing header {header} suspended: missing parent(s)");
             return Ok(());
         }
 
@@ -346,7 +346,7 @@ impl Core {
                 .headers_suspended
                 .with_label_values(&[&header.epoch.to_string(), "missing_payload"])
                 .inc();
-            debug!("Processing of {header} suspended: missing payload");
+            debug!("Processing header {header} suspended: missing payload");
             return Ok(());
         }
 
@@ -451,9 +451,9 @@ impl Core {
     }
 
     #[async_recursion]
-    #[instrument(level = "debug", skip_all, fields(vote_digest = ?vote.digest()))]
+    #[instrument(level = "debug", skip_all, fields(vote_digest = ?vote.digest(), round = ?vote.round, from = ?vote.author))]
     async fn process_vote(&mut self, vote: Vote) -> DagResult<()> {
-        debug!("Processing {:?}", vote);
+        debug!("Processing vote {:?}", vote);
 
         // Add it to the votes' aggregator and try to make a new certificate.
         if let Some(certificate) =
@@ -515,7 +515,7 @@ impl Core {
         }
 
         debug!(
-            "Processing {:?} round:{:?}",
+            "Processing certificate {:?} round:{:?}",
             certificate,
             certificate.round()
         );
@@ -564,7 +564,7 @@ impl Core {
             && !self.synchronizer.check_parents(&certificate).await?
         {
             debug!(
-                "Processing of {:?} suspended: missing ancestors",
+                "Processing certificate {:?} suspended: missing ancestors",
                 certificate
             );
             self.metrics

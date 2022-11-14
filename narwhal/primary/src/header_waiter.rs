@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
     time::Instant,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, CertificateDigest, GetCertificatesRequest, GetCertificatesResponse, Header,
@@ -186,17 +186,25 @@ impl HeaderWaiter {
                     let certificates = result
                         .map_err(|e| HeaderError::NetworkError(format!("{e:?}"), deliver.clone()))?
                         .certificates;
+                    debug!("HeaderWaiter: GetCertificates returned successfully for parents of {} num={}", deliver.clone(), certificates.len());
                     for certificate in certificates {
                         tx_primary_messages
                             .send(PrimaryMessage::Certificate(certificate))
                             .await
                             .map_err(|_| HeaderError::ChannelFull(deliver.clone()))?;
                     }
+                } else {
+                    debug!("HeaderWaiter: No GetCertificates call needed for {}", deliver.clone());
                 }
             },
             _ = &mut cancel => return Ok(deliver.clone()),
         }
         // Wait on certificates to show up in the store so we know they're processed by Core.
+        debug!(
+            "HeaderWaiter: Waiting for parents of {} to become available in store. num_missing={}",
+            deliver.clone(),
+            missing.len()
+        );
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
         tokio::select! {
             result = try_join_all(waiting) => {
@@ -247,7 +255,6 @@ impl HeaderWaiter {
                                     .worker(&self.name, &worker_id)
                                     .expect("Author of valid header is not in the worker cache")
                                     .name;
-
                                 let message = WorkerSynchronizeMessage{digests, target: author.clone()};
                                 synchronize_handles.push(self.network.send(worker_name, &message).await);
                             }
@@ -269,7 +276,7 @@ impl HeaderWaiter {
                         }
 
                         WaiterMessage::SyncParents(missing, header) => {
-                            debug!("Synching the parents of {header}");
+                            debug!("HeaderWaiter: Synching the parents of {header}");
                             let header_digest = header.digest();
                             let round = header.round;
                             let author = header.author.clone();
@@ -292,8 +299,10 @@ impl HeaderWaiter {
                                 });
                             }
                             let network_future: OptionFuture<_> = if requires_sync.is_empty() {
+                                debug!("HeaderWaiter: sync requests inflight for missing parents of {header}");
                                 None
                             } else {
+                                debug!("HeaderWaiter: sending GetCertificates to {author}, to fetch missing parents {:?} of {header}", requires_sync);
                                 let network = self.network.network();
                                 let target = self.committee.network_key(&author).unwrap();
                                 let message = GetCertificatesRequest{digests: requires_sync};
@@ -330,9 +339,12 @@ impl HeaderWaiter {
                         },
                         Ok(header) => {
                             self.cleanup_pending_requests(&header);
-
                             // Ok to drop the header if core is overloaded.
-                            let _ = self.tx_headers_loopback.try_send(header);
+                            if let Err(e) = self.tx_headers_loopback.try_send(header.clone()) {
+                                warn!("Failed to loop back ready header {header} {e}");
+                            } else {
+                                debug!("Header looped back to core: {header}");
+                            }
                         },
                     };
                 },  // This request has been canceled when result is None.
