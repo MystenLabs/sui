@@ -31,6 +31,7 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
+  TransactionEffects,
 } from '../types';
 
 ///////////////////////////////
@@ -256,4 +257,6 @@ export abstract class Provider {
    */
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
   // TODO: add more interface methods
+
+  abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
 }

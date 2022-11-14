@@ -16,6 +16,7 @@ import {
   isSuiMoveNormalizedModules,
   isSuiMoveNormalizedStruct,
   isSuiTransactionResponse,
+  isTransactionEffects,
 } from '../types/index.guard';
 import {
   Coin,
@@ -51,6 +52,7 @@ import {
   PaginatedEvents,
   FaucetResponse,
   Order,
+  TransactionEffects,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -603,5 +605,19 @@ export class JsonRpcProvider extends Provider {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     return this.wsClient.unsubscribeEvent(id);
+  }
+
+  async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_dryRunTransaction',
+        [txBytes],
+        isTransactionEffects,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error dry running transaction with request type: ${err}}`);
+    }
   }
 }

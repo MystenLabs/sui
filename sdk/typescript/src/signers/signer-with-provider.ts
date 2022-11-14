@@ -11,6 +11,7 @@ import {
   FaucetResponse,
   SuiAddress,
   SuiExecuteTransactionResponse,
+  TransactionEffects,
 } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
@@ -130,6 +131,55 @@ export abstract class SignerWithProvider implements Signer {
           `Unknown transaction kind: "${(transaction as any).kind}"`
         );
     }
+  }
+
+  /**
+   * Dry run a transaction and return the result.
+   * @param tx the transaction as SignableTransaction or string (in base64) that will dry run
+   * @returns The transaction effects
+   */
+  async dryRunTransaction(tx: SignableTransaction | string): Promise<TransactionEffects> {
+    const address = await this.getAddress();
+    let dryRunTxBytes: string;
+    if (typeof tx === 'string') {
+      dryRunTxBytes = tx;
+    } else {
+      switch (tx.kind) {
+        case 'bytes':
+          dryRunTxBytes = new Base64DataBuffer(tx.data).toString();
+          break;
+        case 'mergeCoin':
+          dryRunTxBytes = (await this.serializer.newMergeCoin(address, tx.data)).toString();
+          break;
+        case 'moveCall':
+          dryRunTxBytes = (await this.serializer.newMoveCall(address, tx.data)).toString();
+          break;
+        case 'pay':
+          dryRunTxBytes = (await this.serializer.newPay(address, tx.data)).toString();
+          break;
+        case 'payAllSui':
+          dryRunTxBytes = (await this.serializer.newPayAllSui(address, tx.data)).toString();
+          break;
+        case 'paySui':
+          dryRunTxBytes = (await this.serializer.newPaySui(address, tx.data)).toString();
+          break;
+        case 'publish':
+          dryRunTxBytes = (await this.serializer.newPublish(address, tx.data)).toString();
+          break;
+        case 'splitCoin':
+          dryRunTxBytes = (await this.serializer.newSplitCoin(address, tx.data)).toString();
+          break;
+        case 'transferObject':
+          dryRunTxBytes = (await this.serializer.newTransferObject(address, tx.data)).toString();
+          break;
+        case 'transferSui':
+          dryRunTxBytes = (await this.serializer.newTransferSui(address, tx.data)).toString();
+          break;
+        default:
+          throw new Error(`Error, unknown transaction kind ${(tx as any).kind}. Can't dry run transaction.`);
+      }
+    }
+    return this.provider.dryRunTransaction(dryRunTxBytes);
   }
 
   /**
