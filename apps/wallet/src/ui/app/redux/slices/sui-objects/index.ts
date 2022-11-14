@@ -16,7 +16,10 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
+import {
+    DEFAULT_NFT_TRANSFER_GAS_FEE,
+    SUI_SYSTEM_STATE_OBJECT_ID,
+} from './Coin';
 import { ExampleNFT } from './NFT';
 
 import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
@@ -103,32 +106,26 @@ type NFTTxResponse = {
     txId?: string;
 };
 
-export const transferSuiNFT = createAsyncThunk<
+export const transferNFT = createAsyncThunk<
     NFTTxResponse,
-    { nftId: ObjectId; recipientAddress: SuiAddress; transferCost: number },
+    { nftId: ObjectId; recipientAddress: SuiAddress },
     AppThunkConfig
->(
-    'transferSuiNFT',
-    async (data, { extra: { api, keypairVault }, dispatch }) => {
-        const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        const txn = await ExampleNFT.TransferNFT(
-            signer,
-            data.nftId,
-            data.recipientAddress,
-            data.transferCost
-        );
-
-        await dispatch(fetchAllOwnedAndRequiredObjects());
-        const txnResp = {
-            timestamp_ms: getTimestampFromTransactionResponse(txn),
-            status: getExecutionStatusType(txn),
-            gasFee: txn ? getTotalGasUsed(txn) : 0,
-            txId: getTransactionDigest(txn),
-        };
-
-        return txnResp as NFTTxResponse;
-    }
-);
+>('transferNFT', async (data, { extra: { api, keypairVault }, dispatch }) => {
+    const signer = api.getSignerInstance(keypairVault.getKeyPair());
+    const txn = await signer.transferObject({
+        objectId: data.nftId,
+        recipient: data.recipientAddress,
+        gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
+    });
+    await dispatch(fetchAllOwnedAndRequiredObjects());
+    const txnResp = {
+        timestamp_ms: getTimestampFromTransactionResponse(txn),
+        status: getExecutionStatusType(txn),
+        gasFee: txn ? getTotalGasUsed(txn) : 0,
+        txId: getTransactionDigest(txn),
+    };
+    return txnResp as NFTTxResponse;
+});
 interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
