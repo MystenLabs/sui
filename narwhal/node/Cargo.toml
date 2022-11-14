@@ -15,7 +15,7 @@ cfg-if = "1.0.0"
 clap = "2.34"
 dhat = { version = "0.3.2", optional = true }
 futures = "0.3.24"
-multiaddr = "0.15.0"
+multiaddr = "0.16.0"
 rand = "0.8.5"
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["full"] }

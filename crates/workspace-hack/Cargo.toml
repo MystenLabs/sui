@@ -340,7 +340,7 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "c055a38
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "c055a38d04dd70092b7c5dde537b368224a08bf8", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "c055a38d04dd70092b7c5dde537b368224a08bf8" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "c055a38d04dd70092b7c5dde537b368224a08bf8" }
-multiaddr = { version = "0.15", features = ["url"] }
+multiaddr = { version = "0.16", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 named-lock = { version = "0.2", default-features = false }
@@ -998,7 +998,7 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "c055a38
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "c055a38d04dd70092b7c5dde537b368224a08bf8", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "c055a38d04dd70092b7c5dde537b368224a08bf8" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "c055a38d04dd70092b7c5dde537b368224a08bf8" }
-multiaddr = { version = "0.15", features = ["url"] }
+multiaddr = { version = "0.16", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
