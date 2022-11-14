@@ -9,6 +9,7 @@ import { Base64DataBuffer } from '../serialization/base64';
 import {
   ExecuteTransactionRequestType,
   FaucetResponse,
+  getTotalGasUsed,
   SuiAddress,
   SuiExecuteTransactionResponse,
   TransactionEffects,
@@ -321,5 +322,20 @@ export abstract class SignerWithProvider implements Signer {
       transaction
     );
     return await this.signAndExecuteTransaction(txBytes, requestType);
+  }
+
+  /**
+   * Returns the estimated gas cost for the transaction
+   * @param tx The transaction to estimate the gas cost. When string it is assumed it's a serialized tx in base64
+   * @returns total gas cost estimation
+   * @throws whens fails to estimate the gas cost
+   */
+  async getGasCostEstimation(tx: SignableTransaction | string) {
+    const txEffects = await this.dryRunTransaction(tx);
+    const gasEstimation = getTotalGasUsed(txEffects);
+    if (typeof gasEstimation === 'undefined') {
+      throw new Error('Failed to estimate the gas cost from transaction');
+    }
+    return gasEstimation;
   }
 }
