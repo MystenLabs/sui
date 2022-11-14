@@ -67,7 +67,7 @@ Type `0` or `1` to select key scheme.
 
 > **Tip:** If you configured with `sui genesis -f` you already have two RPC endpoints (localnet `http://0.0.0.0:9000` and devnet `https://fullnode.devnet.sui.io:443`), check the list `sui client envs`. You can switch to suitable for you.
 
-Previously installed a Sui client with a Devnet network, modify your existing  `client.yaml` to change the RPC endpoint to connect to a custom RPC endpoint:
+If you previously installed a Sui client that connected to the Devnet network, you can modify your existing  `client.yaml` to change the RPC endpoint to connect to a custom RPC endpoint:
 
 To add a custom RPC endpoint run the following command with your data:
 ```shell
