@@ -176,6 +176,7 @@ module sui::validator_set_tests {
             init_stake,
             option::none(),
             1,
+            0,
             ctx
         )
     }
@@ -194,6 +195,7 @@ module sui::validator_set_tests {
             init_stake,
             option::none(),
             gas_price,
+            0,
             ctx
         )
     }

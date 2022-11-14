@@ -165,6 +165,7 @@ async fn submit_transaction_to_consensus_adapter() {
     // Make a new consensus adapter instance.
     let adapter = ConsensusAdapter::new_test(
         Box::new(SubmitDirectly(state.clone())),
+        committee.clone(),
         tx_consensus_listener,
         /* timeout */ Duration::from_secs(5),
         metrics,

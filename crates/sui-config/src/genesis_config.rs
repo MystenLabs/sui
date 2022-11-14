@@ -19,7 +19,7 @@ use sui_types::sui_serde::KeyPairBase64;
 
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
-use crate::{utils, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
+use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
 
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
@@ -102,6 +102,7 @@ pub struct ValidatorGenesisInfo {
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
     pub gas_price: u64,
+    pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
     pub narwhal_consensus_address: Multiaddr,
@@ -122,6 +123,7 @@ impl ValidatorGenesisInfo {
             network_address: utils::new_network_address(),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
+            commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_network_address(),
             narwhal_worker_address: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
@@ -151,6 +153,7 @@ impl ValidatorGenesisInfo {
             network_address: make_addr(1000 + port_offset),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
+            commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_addr(2000 + port_offset),
             narwhal_worker_address: make_addr(3000 + port_offset),
             narwhal_consensus_address: make_addr(4000 + port_offset),

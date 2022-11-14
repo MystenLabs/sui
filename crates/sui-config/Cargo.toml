@@ -17,7 +17,7 @@ serde_with = "2.0.1"
 serde_yaml = "0.8.26"
 rand = "0.8.5"
 dirs = "4.0.0"
-multiaddr = "0.15.0"
+multiaddr = "0.16.0"
 once_cell = "1.16"
 tracing = "0.1.36"
 

@@ -36,6 +36,7 @@ module sui::genesis {
         validator_net_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
+        validator_commission_rates: vector<u64>,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
@@ -47,7 +48,8 @@ module sui::genesis {
                 && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
                 && vector::length(&validator_net_addresses) == count
-                && vector::length(&validator_gas_prices) == count,
+                && vector::length(&validator_gas_prices) == count
+                && vector::length(&validator_commission_rates) == count,
             1
         );
         let i = 0;
@@ -60,6 +62,7 @@ module sui::genesis {
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
+            let commission_rate = *vector::borrow(&validator_commission_rates, i);
             vector::push_back(&mut validators, validator::new(
                 sui_address,
                 pubkey,
@@ -70,6 +73,7 @@ module sui::genesis {
                 balance::increase_supply(&mut sui_supply, stake),
                 option::none(),
                 gas_price,
+                commission_rate,
                 ctx
             ));
             i = i + 1;

@@ -21,7 +21,6 @@ describe('Transaction Reading API', () => {
       'All',
       null,
       1,
-      true
     );
     const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
@@ -39,7 +38,6 @@ describe('Transaction Reading API', () => {
       'All',
       null,
       10,
-      false
     );
     expect(allTransactions.data.length).to.greaterThan(0);
 
@@ -47,13 +45,11 @@ describe('Transaction Reading API', () => {
       { ToAddress: toolbox.address() },
       null,
       null,
-      false
     );
     const resp3 = await toolbox.provider.getTransactions(
       { FromAddress: toolbox.address() },
       null,
       null,
-      false
     );
     expect([...resp2.data, ...resp3.data]).toEqual(resp);
   });

@@ -570,8 +570,17 @@ impl From<&str> for SuiError {
 
 impl SuiError {
     pub fn indicates_epoch_change(&self) -> bool {
-        matches!(self, SuiError::ValidatorHaltedAtEpochEnd)
-            || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
+        match self {
+            SuiError::QuorumFailedToProcessTransaction { errors, .. }
+            | SuiError::QuorumFailedToExecuteCertificate { errors, .. } => {
+                errors.iter().any(|err| {
+                    matches!(err, SuiError::ValidatorHaltedAtEpochEnd)
+                        || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
+                })
+            }
+            SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
+            _ => false,
+        }
     }
 }
 

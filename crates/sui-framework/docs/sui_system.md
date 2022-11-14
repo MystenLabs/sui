@@ -12,6 +12,7 @@
 -  [Function `request_add_validator`](#0x2_sui_system_request_add_validator)
 -  [Function `request_remove_validator`](#0x2_sui_system_request_remove_validator)
 -  [Function `request_set_gas_price`](#0x2_sui_system_request_set_gas_price)
+-  [Function `request_set_commission_rate`](#0x2_sui_system_request_set_commission_rate)
 -  [Function `request_add_stake`](#0x2_sui_system_request_add_stake)
 -  [Function `request_add_stake_with_locked_coin`](#0x2_sui_system_request_add_stake_with_locked_coin)
 -  [Function `request_withdraw_stake`](#0x2_sui_system_request_withdraw_stake)
@@ -271,7 +272,7 @@ The <code><a href="validator.md#0x2_validator">validator</a></code> object needs
 The amount of stake in the <code><a href="validator.md#0x2_validator">validator</a></code> object must meet the requirements.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -289,6 +290,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
     net_address: <a href="">vector</a>&lt;u8&gt;,
     <a href="stake.md#0x2_stake">stake</a>: Coin&lt;SUI&gt;,
     gas_price: u64,
+    commission_rate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(
@@ -310,6 +312,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="stake.md#0x2_stake">stake</a>),
         <a href="_none">option::none</a>(),
         gas_price,
+        commission_rate,
         ctx
     );
 
@@ -381,6 +384,39 @@ used for the reference gas price calculation at the end of the epoch.
     <a href="validator_set.md#0x2_validator_set_request_set_gas_price">validator_set::request_set_gas_price</a>(
         &<b>mut</b> self.validators,
         new_gas_price,
+        ctx
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_request_set_commission_rate"></a>
+
+## Function `request_set_commission_rate`
+
+A validator can call this entry function to set a new commission rate, updated at the end of the epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_set_commission_rate">request_set_commission_rate</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    new_commission_rate: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <a href="validator_set.md#0x2_validator_set_request_set_commission_rate">validator_set::request_set_commission_rate</a>(
+        &<b>mut</b> self.validators,
+        new_commission_rate,
         ctx
     )
 }

@@ -19,6 +19,7 @@
 -  [Function `request_withdraw_delegation`](#0x2_validator_request_withdraw_delegation)
 -  [Function `decrease_next_epoch_delegation`](#0x2_validator_decrease_next_epoch_delegation)
 -  [Function `request_set_gas_price`](#0x2_validator_request_set_gas_price)
+-  [Function `request_set_commission_rate`](#0x2_validator_request_set_commission_rate)
 -  [Function `distribute_rewards_and_new_delegations`](#0x2_validator_distribute_rewards_and_new_delegations)
 -  [Function `get_staking_pool_mut_ref`](#0x2_validator_get_staking_pool_mut_ref)
 -  [Function `metadata`](#0x2_validator_metadata)
@@ -28,6 +29,7 @@
 -  [Function `pending_stake_amount`](#0x2_validator_pending_stake_amount)
 -  [Function `pending_withdraw`](#0x2_validator_pending_withdraw)
 -  [Function `gas_price`](#0x2_validator_gas_price)
+-  [Function `commission_rate`](#0x2_validator_commission_rate)
 -  [Function `is_duplicate`](#0x2_validator_is_duplicate)
 
 
@@ -119,6 +121,12 @@
 <dd>
  This validator's gas price quote for the next epoch.
 </dd>
+<dt>
+<code>next_epoch_commission_rate: u64</code>
+</dt>
+<dd>
+ The commission rate of the validator starting the next epoch, in basis point.
+</dd>
 </dl>
 
 
@@ -176,6 +184,12 @@
 </dt>
 <dd>
  Staking pool for the stakes delegated to this validator.
+</dd>
+<dt>
+<code>commission_rate: u64</code>
+</dt>
+<dd>
+ Commission rate of the validator, in basis point.
 </dd>
 </dl>
 
@@ -239,7 +253,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -258,6 +272,7 @@
     <a href="stake.md#0x2_stake">stake</a>: Balance&lt;SUI&gt;,
     coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
     gas_price: u64,
+    commission_rate: u64,
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>assert</b>!(
@@ -285,12 +300,14 @@
             next_epoch_stake: stake_amount,
             next_epoch_delegation: 0,
             next_epoch_gas_price: gas_price,
+            next_epoch_commission_rate: commission_rate,
         },
         stake_amount,
         pending_stake: 0,
         pending_withdraw: 0,
         gas_price,
         delegation_staking_pool: <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(sui_address, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1),
+        commission_rate,
     }
 }
 </code></pre>
@@ -322,6 +339,7 @@
         pending_withdraw: _,
         gas_price: _,
         delegation_staking_pool,
+        commission_rate: _,
     } = self;
     <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(delegation_staking_pool, ctx);
 }
@@ -423,6 +441,7 @@ Process pending stake and pending withdraws.
     self.pending_stake = 0;
     self.pending_withdraw = 0;
     self.gas_price = self.metadata.next_epoch_gas_price;
+    self.commission_rate = self.metadata.next_epoch_commission_rate;
     <b>assert</b>!(self.stake_amount == self.metadata.next_epoch_stake, 0);
 }
 </code></pre>
@@ -561,6 +580,30 @@ Process pending stake and pending withdraws.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_gas_price">request_set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_price: u64) {
     self.metadata.next_epoch_gas_price = new_price;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_request_set_commission_rate"></a>
+
+## Function `request_set_commission_rate`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, new_commission_rate: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_commission_rate: u64) {
+    self.metadata.next_epoch_commission_rate = new_commission_rate;
 }
 </code></pre>
 
@@ -779,6 +822,30 @@ Process pending stake and pending withdraws.
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_gas_price">gas_price</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
     self.gas_price
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_commission_rate"></a>
+
+## Function `commission_rate`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_commission_rate">commission_rate</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_commission_rate">commission_rate</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    self.commission_rate
 }
 </code></pre>
 

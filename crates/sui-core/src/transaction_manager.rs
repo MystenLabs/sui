@@ -67,22 +67,33 @@ impl TransactionManager {
     /// have many callsites. Investigate the alternatives here.
     pub(crate) async fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         for cert in certs {
+            let digest = *cert.digest();
+
+            // hold the tx lock until we have finished checking if objects are missing, so that we
+            // don't race with a concurrent execution of this tx.
+            let _tx_lock = self.authority_store.acquire_tx_lock(&digest);
+
             // Skip processing if the certificate is already enqueued.
             if self
                 .pending_certificates
-                .contains_key(&(cert.epoch(), *cert.digest()))
+                .contains_key(&(cert.epoch(), digest))
             {
+                continue;
+            }
+            // skip txes that are executed already
+            if self.authority_store.effects_exists(&digest)? {
                 continue;
             }
             let missing = self
                 .authority_store
-                .get_missing_input_objects(cert.digest(), &cert.data().data.input_objects()?)
+                .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
                 .expect("Are shared object locks set prior to enqueueing certificates?");
+
             if missing.is_empty() {
                 self.certificate_ready(cert);
                 continue;
             }
-            let cert_key = (cert.epoch(), *cert.digest());
+            let cert_key = (cert.epoch(), digest);
             for obj_key in missing {
                 // A missing input object in TransactionManager will definitely be notified via
                 // objects_committed(), when the object actually gets committed, because:

@@ -10,6 +10,7 @@ expression: genesis.validator_set()
   stake: 1
   delegation: 0
   gas-price: 1
+  commission-rate: 0
   network-address: ""
   narwhal-primary-address: ""
   narwhal-worker-address: ""
