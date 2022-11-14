@@ -288,7 +288,7 @@ fn test_transaction_digest_serde_human_readable() {
 #[test]
 fn test_authority_signature_serde_not_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), 0, &key);
     let serialized = bincode::serialize(&sig).unwrap();
     let bcs_serialized = bcs::to_bytes(&sig).unwrap();
 
@@ -300,7 +300,7 @@ fn test_authority_signature_serde_not_human_readable() {
 #[test]
 fn test_authority_signature_serde_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), 0, &key);
     let serialized = serde_json::to_string(&sig).unwrap();
     assert_eq!(
         format!(r#"{{"sig":"{}"}}"#, Base64::encode(sig.as_ref())),

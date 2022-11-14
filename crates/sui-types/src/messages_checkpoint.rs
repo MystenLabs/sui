@@ -391,7 +391,7 @@ impl CertifiedCheckpointSummary {
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
         let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(&self.summary);
+        let idx = obligation.add_message(&self.summary, self.auth_signature.epoch);
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -689,7 +689,13 @@ impl CheckpointFragment {
     ) -> Vec<SignedCheckpointFragmentMessage> {
         self.to_message_chunks()
             .into_iter()
-            .map(|message| SignedCheckpointFragmentMessage::new(message, signer))
+            .map(|message| {
+                SignedCheckpointFragmentMessage::new(
+                    message,
+                    self.proposer.auth_signature.epoch,
+                    signer,
+                )
+            })
             .collect()
     }
 
@@ -798,18 +804,19 @@ impl Hash for SignedCheckpointFragmentMessage {
 impl SignedCheckpointFragmentMessage {
     pub fn new(
         message: CheckpointFragmentMessage,
+        epoch: EpochId,
         signer: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = AuthoritySignature::new(&message, signer);
+        let signature = AuthoritySignature::new(&message, epoch, signer);
         Self { message, signature }
     }
 
-    pub fn verify(&self) -> SuiResult {
+    pub fn verify(&self, epoch: EpochId) -> SuiResult {
         let proposer = match &self.message {
             CheckpointFragmentMessage::Header(header) => *header.proposer.authority(),
             CheckpointFragmentMessage::Chunk(chunk) => chunk.proposer,
         };
-        self.signature.verify(&self.message, proposer)
+        self.signature.verify(&self.message, epoch, proposer)
     }
 }
 
