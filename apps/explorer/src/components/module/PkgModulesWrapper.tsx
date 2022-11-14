@@ -69,8 +69,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                   .map(([name]) => name);
 
     useEffect(() => {
-        setSearchParams({ module: selectedModule });
-    }, [selectedModule, setSearchParams]);
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.set('module', selectedModule);
+        setSearchParams(newSearchParams);
+    }, [selectedModule, setSearchParams, searchParams]);
 
     const submitSearch = useCallback(() => {
         setSelectedModule((prev: string) =>
