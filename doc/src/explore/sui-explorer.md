@@ -2,10 +2,10 @@
 title: Sui Explorer
 ---
 
-[Sui Explorer](https://explorer.devnet.sui.io/) lets you view data about transactions and activity on the Sui network. In addition to viewing activity on the network, you can use the Explorer to:
+[Sui Explorer](https://explorer.sui.io/) lets you view data about transactions and activity on the Sui network. In addition to viewing activity on the network, you can use the Explorer to:
  * View up-to-date information about the activity and metrics on the Sui network.
  * Look up, verify, and track your assets and contracts.
- * Utilize fast, reliable, and transparent debugging and auditing data to help identify and resolve issues. 
+ * Utilize fast, reliable, and transparent debugging and auditing data to help identify and resolve issues.
  * Get go-to-definition support for all smart contracts, referred to as packages in Sui.
  * View validators and geographic locations of currently active full nodes.
 
@@ -17,12 +17,12 @@ When you start Sui Explorer, it displays the transactions for the Devnet network
 
 ## Finding your transaction
 
-You can search for the transactions using an address, object ID, or transaction ID. For example, you can search for your wallet address to confirm a transaction or view additional details about a transaction you’ve approved. See [Sui Wallet](../explore/wallet-browser.md) to learn how to create a wallet.  
+You can search for the transactions using an address, object ID, or transaction ID. For example, you can search for your wallet address to confirm a transaction or view additional details about a transaction you’ve approved. See [Sui Wallet](../explore/wallet-browser.md) to learn how to create a wallet.
 
 **To search for a transaction made using the Sui Wallet**
 1. Open your Sui Wallet.
 1. Click the clipboard icon to copy your wallet address.
-1. Open the Sui Explorer. 
+1. Open the Sui Explorer.
 1. Select the **Coins** tab if it is not currently selected.
 1. In the search field, paste your wallet address and then press **Enter**.
 
@@ -45,7 +45,7 @@ The **Transactions** page lists all transactions on the network. You can display
 The **Transactions** table on the page includes the following columns:
  * **Time** - The time at which the transaction occurred.
  * **Type** - The type of transaction, one of Call, TransferSui, TransferObject, or Publish.
-     * **Call** - A transaction that calls a move module. For Call transactions, the table includes only the sender address. 
+     * **Call** - A transaction that calls a move module. For Call transactions, the table includes only the sender address.
      * **TransferSui** - A transaction to transfer Sui from one address to another.
      * **TransferObject** - A transaction to transfer an object to a different address.
      * **Publish** - A transaction to publish a package.
@@ -76,7 +76,7 @@ The transaction details pages include the following tabs:
  * **Signatures** - Lists the signatures from validators for the transaction.
 
 The **Details** tab includes the following fields:
- * **Package Details** - Displayed only for Call transactions. 
+ * **Package Details** - Displayed only for Call transactions.
      * **Package ID** - The ID of the package associated with the Call transaction.
      * **Module** - The module used for the transaction.
      * **Function** - The function called for the transaction.
@@ -87,9 +87,9 @@ The **Details** tab includes the following fields:
  * **Sender** - The address of the sender of the transaction. Displayed only for Publish transactions.
  * **Sender & Recipients** - The addresses associated with the transaction. The first value is the sender's address, and the address next to the green checkmark is the recipient's address. When there are multiple recipients, the field includes multiple addresses.
  * **Modules** - Shows the module code used to create and execute the transaction.
- * **Gas and storage fees** - Details about the gas and fees for the transaction. 
+ * **Gas and storage fees** - Details about the gas and fees for the transaction.
 The value for **Gas Payment** is the object ID for the coin object used for the transaction.
- * **Gas Fees** - The number of gas units used for the transaction. 
+ * **Gas Fees** - The number of gas units used for the transaction.
  * **Gas Budget** - The maximum number of gas units allowed for the transaction.
 
 The **Events** tab lists the events the transaction generated and the details about each event. TransferSui transactions do not include events.
@@ -106,9 +106,9 @@ The page includes the following details:
 
  * **Description**
      * **Type** - The type of the object, such as coin.
-     * **Object ID** - The ID of the object. 	
+     * **Object ID** - The ID of the object.
      * **Last Transaction ID** - The ID of the most recent transaction associated with the object.
-     * **Version** - The version of the object. 
+     * **Version** - The version of the object.
      * **Owner** - The address of the owner of the object.
  * **Properties** - Details such as the coin balance for the object.
  * **Child Objects** - The objects that this object owns.

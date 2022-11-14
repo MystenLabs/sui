@@ -3,7 +3,7 @@
 
 import { memo, useCallback, useMemo } from 'react';
 
-import { Explorer } from './Explorer';
+import { getObjectUrl, getAddressUrl, getTransactionUrl } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
 import { API_ENV } from '_app/ApiProvider';
 import ExternalLink from '_components/external-link';
@@ -60,19 +60,19 @@ function ExplorerLink(props: ExplorerLinkProps) {
                 return (
                     address &&
                     notCustomRPC &&
-                    Explorer.getAddressUrl(address, selectedApiEnv)
+                    getAddressUrl(address, selectedApiEnv)
                 );
             case ExplorerLinkType.object:
                 return (
                     objectID &&
                     notCustomRPC &&
-                    Explorer.getObjectUrl(objectID, selectedApiEnv)
+                    getObjectUrl(objectID, selectedApiEnv)
                 );
             case ExplorerLinkType.transaction:
                 return (
                     transactionID &&
                     notCustomRPC &&
-                    Explorer.getTransactionUrl(transactionID, selectedApiEnv)
+                    getTransactionUrl(transactionID, selectedApiEnv)
                 );
         }
     }, [type, address, notCustomRPC, selectedApiEnv, objectID, transactionID]);

@@ -51,7 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Full node.
+You can verify the result with the [Sui Explorer](https://explorer.sui.io/) if you are using the Sui Devnet Full node.
 
 ### Example 2 - Create and execute transaction
 

@@ -3,7 +3,7 @@
 Run a Sui DevNet [fullnode](../../doc/src/build/fullnode.md) locally for testing/experimenting by following the instructions below. This has been tested and should work for:
 
 - linux/amd64
-- darwin/amd64 
+- darwin/amd64
 - darwin/arm64
 
 ## Prerequisites
@@ -32,7 +32,7 @@ Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.c
 
 ## Start the fullnode
 
-> **Important:** This document reflects Docker Compose V1. If you are using [Docker Compose V2](https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command), replace the hyphen (-) in the `docker-compose` commands below with a space, like so: `docker compose` 
+> **Important:** This document reflects Docker Compose V1. If you are using [Docker Compose V2](https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command), replace the hyphen (-) in the `docker-compose` commands below with a space, like so: `docker compose`
 
 To start the fullnode using Docker, run:
 
@@ -44,13 +44,13 @@ docker-compose up
 
 Once the fullnode is up and running, test some of the JSON-RPC interfaces.
 
-## Use your fullnode with Explorer 
+## Use your fullnode with Explorer
 
 To use the Sui Explorer with your fullnode, follow these steps:
-1. Open a browser and go to: https://explorer.devnet.sui.io/
+1. Open a browser and go to: https://explorer.sui.io/
 1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
    the *Local* network from the drop-down menu.
-1. Close the *Choose a Network* menu to see the latest transactions. 
+1. Close the *Choose a Network* menu to see the latest transactions.
 
 ## Troubleshoot / tips / documentation
 

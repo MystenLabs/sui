@@ -7,7 +7,7 @@ The Sui Devnet network lets you experiment with Sui and provide feedback to help
 The Sui Devnet network currently consists of:
 
 * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.devnet.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
-* A public network [Sui Explorer](https://explorer.devnet.sui.io) for browsing transaction history.
+* A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
 Watch for update announcements in the [#devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) Discord channel.
@@ -114,8 +114,8 @@ Type: 0x2::devnet_nft::DevNetNFT
 
 The preceding command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Use the `Sui CLI client` to [view objects owned by the address](../build/cli-client.md#view-objects-owned-by-the-address).
 
-Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) by appending the object ID to:
-https://explorer.devnet.sui.io/objects/
+Now you can view the created object in the [Sui Explorer](https://explorer.sui.io) by appending the object ID to:
+https://explorer.sui.io/objects/
 
 ![Example NFT](../../static/example-nft.png "Example NFT")
 
@@ -135,7 +135,7 @@ Type: 0x2::devnet_nft::DevNetNFT
 ```
 
 You can view details about the object in Sui Explorer:
-https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
+https://explorer.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
 ## Publish a Move module
 
@@ -216,7 +216,7 @@ Mutated Objects:
 Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310CFBAA953D2188E6A84FD21`, in this example). You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
 
 As above, replace the object ID in the Explorer link with the object ID of the created object you observed in your own command output, appended to:
-https://explorer.devnet.sui.io/objects/
+https://explorer.sui.io/objects/
 
 ![Magic sword](../../static/magic-sword.png "Magic sword")
 
