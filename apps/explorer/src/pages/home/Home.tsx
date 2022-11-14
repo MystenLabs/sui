@@ -45,20 +45,18 @@ function HomeAPI() {
             id="home"
             className={cl([styles.home, styles.container])}
         >
-            <section className="left-item">
+            <section className="left-item mb-4 md:mb-0">
                 <LatestTxCard
                     txPerPage={TXN_PER_PAGE}
                     paginationtype="more button"
                 />
             </section>
-            <section className="right-item">
-                <div className="mb-12">
-                    <TopValidatorsCardAPI />
-                </div>
+            <section className="right-item flex flex-col gap-10 md:gap-12">
+                <TopValidatorsCardAPI />
                 <Suspense fallback={null}>
                     <ValidatorMap />
                 </Suspense>
-                <div className="mt-12">
+                <div>
                     <TabGroup>
                         <TabList>
                             <Tab>Recent Packages</Tab>
