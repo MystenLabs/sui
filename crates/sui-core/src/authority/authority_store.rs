@@ -356,7 +356,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub fn get_missing_input_objects(
+    pub async fn get_missing_input_objects(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
@@ -364,6 +364,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut missing = Vec::new();
+        let mut probe_lock_exists = Vec::new();
         for kind in objects {
             match kind {
                 InputObjectKind::SharedMoveObject { id, .. } => {
@@ -393,11 +394,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     }
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    if !self.object_exists(&objref.0, objref.1)? {
+                    if let Some(obj) = self.get_object_by_key(&objref.0, objref.1)? {
+                        if !obj.is_immutable() {
+                            probe_lock_exists.push(*objref);
+                        }
+                    } else {
                         missing.push(ObjectKey::from(objref));
                     }
                 }
             };
+        }
+
+        if !probe_lock_exists.is_empty() {
+            missing.extend(
+                self.lock_service
+                    .get_missing_locks(probe_lock_exists)
+                    .await?,
+            );
         }
 
         Ok(missing)
@@ -584,6 +597,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .assigned_object_versions
             .multi_get(keys)
             .map_err(SuiError::from)
+    }
+
+    pub async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        self.lock_service
+            .locks_exist(owned_object_refs.into())
+            .await
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
