@@ -13,7 +13,7 @@ bytes = "1.2.1"
 eyre = "0.6.8"
 futures = "0.3.21"
 http = "0.2.8"
-multiaddr = "0.15.0"
+multiaddr = "0.16.0"
 serde = { version = "1.0.140", features = ["derive"] }
 tokio = { version = "1.21.2", features = ["sync", "rt", "macros"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
