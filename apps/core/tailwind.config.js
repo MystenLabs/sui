@@ -107,16 +107,10 @@ module.exports = {
       animation: {
         shimmer: 'shimmer 2s infinite linear',
       },
-      height: {
-        'verticalListShort': '21vh',
-        'verticalListLong': '57vh',
-        '4.5': '1.125rem'
-      },
-      width: {
-        '4.5': '1.125rem'
-      },
-      maxHeight: {
-        'verticalListLong': '57vh',
+      spacing: {
+        '4.5': '1.125rem',
+        'verticalListShort': '13.0625rem',
+        'verticalListLong': '35.6875rem',
       }
     },
   },

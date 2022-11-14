@@ -54,7 +54,7 @@ function ModuleViewWrapper({
 }
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
-    const modulenames = modules.map(([name], idx) => name);
+    const modulenames = modules.map(([name]) => name);
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
     const [selectedModule, setSelectedModule] = useState(
@@ -112,7 +112,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     No results
                                 </div>
                             )}
-                            {filteredModules.map((name, idx) => (
+                            {filteredModules.map((name) => (
                                 <Combobox.Option
                                     key={name}
                                     value={name}
@@ -139,7 +139,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                 <div className="h-verticalListShort md:h-verticalListLong overflow-auto pt-3">
                     <VerticalList>
                         {modulenames.map((name) => (
-                            <div key={name} className="md:min-w-fit mx-0.5">
+                            <div
+                                key={name}
+                                className="md:min-w-fit mx-0.5 mt-0.5"
+                            >
                                 <ListItem
                                     active={selectedModule === name}
                                     onClick={() => setSelectedModule(name)}
