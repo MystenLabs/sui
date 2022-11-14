@@ -31,7 +31,7 @@ use types::{
 };
 use worker::{metrics::initialise_metrics, Worker};
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_get_collections() {
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -148,7 +148,7 @@ async fn test_get_collections() {
     );
 
     // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
 
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(parameters.clone());
@@ -220,7 +220,7 @@ async fn test_get_collections() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 // #[cfg_attr(windows, ignore)]
 #[ignore]
 async fn test_remove_collections() {
@@ -324,7 +324,7 @@ async fn test_remove_collections() {
     );
 
     // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
 
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(parameters.clone());
@@ -427,7 +427,7 @@ async fn test_remove_collections() {
     assert_eq!(Empty {}, actual_result);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_read_causal_signed_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -577,7 +577,7 @@ async fn test_read_causal_signed_certificates() {
     );
 
     // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
 
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(primary_1_parameters.clone());
@@ -624,7 +624,7 @@ async fn test_read_causal_signed_certificates() {
     assert_eq!(1, response.into_inner().collection_ids.len());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_read_causal_unsigned_certificates() {
     telemetry_subscribers::init_for_testing();
 
@@ -781,7 +781,7 @@ async fn test_read_causal_unsigned_certificates() {
     );
 
     // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
 
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(primary_1_parameters.clone());
@@ -849,6 +849,8 @@ async fn test_read_causal_unsigned_certificates() {
 /// * Primary 1 be able to fetch the payload for certificates 1 & 2
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_get_collections_with_missing_certificates() {
+    telemetry_subscribers::init_for_testing();
+
     // GIVEN keys for two primary nodes
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -1019,7 +1021,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
 
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(parameters_1.clone());
