@@ -181,15 +181,17 @@ impl HeaderWaiter {
         mut cancel: oneshot::Receiver<()>,
     ) -> HeaderResult {
         tokio::select! {
-            Some(result) = network_future => {
-                let certificates = result
-                    .map_err(|e| HeaderError::NetworkError(format!("{e:?}"), deliver.clone()))?
-                    .certificates;
-                for certificate in certificates {
-                    tx_primary_messages
-                        .send(PrimaryMessage::Certificate(certificate))
-                        .await
-                        .map_err(|_| HeaderError::ChannelFull(deliver.clone()))?;
+            maybe_result = network_future => {
+                if let Some(result) = maybe_result {
+                    let certificates = result
+                        .map_err(|e| HeaderError::NetworkError(format!("{e:?}"), deliver.clone()))?
+                        .certificates;
+                    for certificate in certificates {
+                        tx_primary_messages
+                            .send(PrimaryMessage::Certificate(certificate))
+                            .await
+                            .map_err(|_| HeaderError::ChannelFull(deliver.clone()))?;
+                    }
                 }
             },
             _ = &mut cancel => return Ok(deliver.clone()),
