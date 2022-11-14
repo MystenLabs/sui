@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::anemo_ext::NetworkExt;
 use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
