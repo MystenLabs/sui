@@ -1,3 +1,13 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+
+/// Satoshi flip is a fair and secure way to conduct a coin flip.
+/// A player called "house" chooses a random secret and uploads its hash on chain
+/// Another player called "player",  makes a guess on a predetermined bit (eg. last) of the secret
+/// House reveals the secret and the winner is determined
+/// 
+/// This implementation checks the last bit of the first byte of the secret
 module games_with_chance::satoshi_flip {
     // imports
     use std::option::{Self, Option};
@@ -13,7 +23,7 @@ module games_with_chance::satoshi_flip {
     use sui::transfer;
     
     /* Terminology
-        house: The player who picks the secret
+        house: The user who picks the secret
         player: The user who wages an amount on his guess
         max_bet: the maximum amount the house is willing to potentialy lose or win
         min_bet: the minimum amount the house is willing to accept as a wager/stake (too low of an amount might be worth the gas) min_bet <= max_bet
@@ -26,10 +36,10 @@ module games_with_chance::satoshi_flip {
         A guess = 3 in the outcome means player has bet but house refused to reveal in time
     */
 
-    // everyone should know which hashing function is going to be used
+    /// Hash function the house will use
     const HASH: vector<u8> = b"SHA3-256";
 
-    // After how many epochs is cancelling possible
+    /// How many epochs must pass after `fun bet` was called, until the player may cancel a game
     const EpochsCancelAfter: u64 = 5;
 
     // errors
@@ -44,27 +54,38 @@ module games_with_chance::satoshi_flip {
     const ECannotCancelBeforeBetting: u64 = 8; // Only a game that has received a bet may be cancelled
     const EHouseCoinNotEnough: u64 = 9; // House provided coin with insuficient balance to cover max bet
     const EPlayerCoinNotEnoughBalance: u64 = 10; // Player provided a coin with insufficient balance to cover his stake
+    const EGameNotEnded: u64 = 11;
+    const EAlreadyAcceptedBet: u64 = 12;
 
     // structs
 
-    // use separate structs for bet and house so we can extract the coins later
-    // BetData holds info about the player and HouseData holds info about the house
+    /// Player's data, the stake of the wager and his guess
     struct BetData has store {
         stake: Balance<SUI>,
         guess: u8,
     }
 
+    /// House's data, min_bet is the minimum amount accepted for a bet
+    /// max_bet is the maximum amount accepted for a bet
     struct HouseData has store {
         house_balance: Balance<SUI>,
         min_bet: u64,
         max_bet: u64
     }
 
+    /// Outcome will hold end game data, the secret the house picked, the player's guess and if the player won
+    /// This way anyone can check if the winner was correctly determined
     struct Outcome has store {
         secret: vector<u8>,
         guess: u8,
         player_won: bool
     }
+
+    /// Each Game is a shared object, the address who created it must also end it.
+    /// The player can only be a single address for each game
+    ///
+    ///  @ownership: Shared
+    ///
 
     struct Game has key {
         id: UID,
@@ -79,8 +100,8 @@ module games_with_chance::satoshi_flip {
 
     // fun(ctions)!
 
-    // this is invoked by house
-    // each game will be a shared object so the player can cancel it in case the house refuses to end after EpochsCancelAfter epochs have passed
+    /// creates a new game and makes it a transfered object
+    /// a user who wants to become house should call this function
     public entry fun start_game(hash: vector<u8>, house_coin: Coin<SUI>, max_bet: u64, min_bet: u64, ctx: &mut TxContext) {
         assert!(max_bet >= min_bet, EMinBetTooHigh);
         assert!(coin::value(&house_coin) >= max_bet, EHouseCoinNotEnough);
@@ -107,39 +128,49 @@ module games_with_chance::satoshi_flip {
         transfer::share_object(new_game); // this should be deleted when shared objects acquire this ability
     }
 
-    // accessors for player to check
+    // accessors
+
+    /// check the house's address on Sui
     public fun house(game: &Game): address {
         game.house
     }
 
+    /// check the maximum stake the house is willing to accept
     public fun max_bet(game: &Game): u64 {
         let house_data = option::borrow(&game.house_data);
         house_data.max_bet
     }
 
+    /// check the minimum stake the house is willing to accept
     public fun min_bet(game: &Game): u64 {
         let house_data = option::borrow(&game.house_data);
         house_data.min_bet
     }
     
-    // these are to view a finished game's result
+    /// On an ended game (that has a non null outcome value) check if player won
     public fun is_player_winner(game: &mut Game): bool {
+        assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.player_won
     }
 
+    /// On an ended game (that has a non null outcome value) check what secret did the house pick
     public fun secret(game: &mut Game): vector<u8> {
+        assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.secret
     }
 
+    /// On an ended game (that has a non null outcome value) check what did the player guess
     public fun guess(game: &mut Game): u8 {
+        assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.guess
     }
 
-    // this is invoked by player
+    /// Called by the player for a game with null BetData
     public entry fun bet(game: &mut Game, guess: u8, stake_coin: Coin<SUI>, stake_amount: u64, ctx: &mut TxContext) {
+        assert!(option::is_none(&game.bet_data), EAlreadyAcceptedBet);
         let house_data = option::borrow(&game.house_data);
         assert!(stake_amount <= house_data.max_bet, EStakeTooHigh);
         assert!(stake_amount > house_data.min_bet, EStakeTooLow);
@@ -162,6 +193,11 @@ module games_with_chance::satoshi_flip {
         option::fill(&mut game.player, tx_context::sender(ctx));
     }
 
+    /// Called by the house either after `fun bet` has been called by some player to end the game,
+    /// either before bet was called to "cancel" the game.
+    ///
+    /// If the house has "forgotten" the secret, then it can use a random secret and it will
+    /// cancel the game, as long as `fun bet` has not been called.
     public entry fun end_game(game: &mut Game, secret: vector<u8>, ctx: &mut TxContext) {
         // only house should be able to end the game
         assert!(game.house == tx_context::sender(ctx), ENotAllowedToEndGame);
@@ -221,7 +257,9 @@ module games_with_chance::satoshi_flip {
         }
     }
 
-    // usually called by player when house refuses to reveal
+    /// Called by anyone after the required epochs have passed and house has not revealed the secret.
+    /// The house automatically loses.
+    /// Check EpochsCancelAfter for the number of epochs required to pass after `fun bet` has been called
     public entry fun cancel_game(game: &mut Game, ctx: &mut TxContext) {
         // this can't be called on an ended game
         assert!(option::is_none<Outcome>(&game.outcome), EGameAlreadyEnded);
@@ -245,6 +283,7 @@ module games_with_chance::satoshi_flip {
 
     // helper functions
 
+    /// helper function to calculate and send SUI Coins with proper balances to each party
     fun pay_player(player: address, house: address, stake: Balance<SUI>, house_balance: Balance<SUI>, ctx: &mut TxContext) {
         // if bet is less than max_bet, return the difference to player A after paying the wins
          if (balance::value(&stake) < balance::value(&house_balance)) {
