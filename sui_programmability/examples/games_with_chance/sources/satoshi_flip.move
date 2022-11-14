@@ -40,7 +40,8 @@ module games_with_chance::satoshi_flip {
     const HASH: vector<u8> = b"SHA3-256";
 
     /// How many epochs must pass after `fun bet` was called, until the player may cancel a game
-    const EpochsCancelAfter: u64 = 5;
+    // TODO: This should be possible to be set by house up to a max limit
+    const EpochsCancelAfter: u64 = 7;
 
     // errors
     const EStakeTooHigh: u64 = 0; // this should hold stake <= max bet
@@ -130,38 +131,38 @@ module games_with_chance::satoshi_flip {
 
     // accessors
 
-    /// check the house's address on Sui
+    /// get the house's address on Sui
     public fun house(game: &Game): address {
         game.house
     }
 
-    /// check the maximum stake the house is willing to accept
+    /// get the maximum stake the house is willing to accept
     public fun max_bet(game: &Game): u64 {
         let house_data = option::borrow(&game.house_data);
         house_data.max_bet
     }
 
-    /// check the minimum stake the house is willing to accept
+    /// get the minimum stake the house is willing to accept
     public fun min_bet(game: &Game): u64 {
         let house_data = option::borrow(&game.house_data);
         house_data.min_bet
     }
     
-    /// On an ended game (that has a non null outcome value) check if player won
+    /// On an ended game (that has a non null outcome value) get if player won
     public fun is_player_winner(game: &mut Game): bool {
         assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.player_won
     }
 
-    /// On an ended game (that has a non null outcome value) check what secret did the house pick
+    /// On an ended game (that has a non null outcome value) get what secret did the house pick
     public fun secret(game: &mut Game): vector<u8> {
         assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.secret
     }
 
-    /// On an ended game (that has a non null outcome value) check what did the player guess
+    /// On an ended game (that has a non null outcome value) get what did the player guess
     public fun guess(game: &mut Game): u8 {
         assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
@@ -265,9 +266,9 @@ module games_with_chance::satoshi_flip {
         assert!(option::is_none<Outcome>(&game.outcome), EGameAlreadyEnded);
         // a bet has to have been placed
         assert!(option::is_some<BetData>(&game.bet_data), ECannotCancelBeforeBetting);
-        // this call can only be called 2 epochs after the bet has been placed
+        // this can only be called  `CancelEpochsAfter` epochs after the bet has been placed
         assert!(game.epoch + EpochsCancelAfter <= tx_context::epoch(ctx), ENotEnoughEpochsPassedToCancel);
-        // if player has bet and house has not revealed 2 epochs later, pay player
+
         let HouseData {house_balance, min_bet: _, max_bet: _} = option::extract(&mut game.house_data);
         let BetData {stake, guess: _} = option::extract(&mut game.bet_data);
         
