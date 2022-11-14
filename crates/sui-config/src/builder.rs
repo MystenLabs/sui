@@ -8,19 +8,17 @@ use crate::{
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME,
 };
+use fastcrypto::encoding::{Encoding, Hex};
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
 };
-use sui_types::{
-    base_types::encode_bytes_hex,
-    crypto::{
-        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
-        SuiKeyPair,
-    },
+use sui_types::crypto::{
+    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
+    SuiKeyPair,
 };
 
 pub enum CommitteeConfig {
@@ -250,13 +248,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(public_key));
+                    .join(Hex::encode(public_key));
                 let network_address = validator.network_address;
                 let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(public_key));
+                    .join(Hex::encode(public_key));
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,

@@ -7,7 +7,11 @@ use bincode::Options;
 use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
-use fastcrypto::{hash::Hash, traits::KeyPair};
+use fastcrypto::{
+    encoding::{Encoding, Hex},
+    hash::Hash,
+    traits::KeyPair,
+};
 use itertools::Itertools;
 use prometheus::Registry;
 use std::{
@@ -210,9 +214,9 @@ async fn get_network_peers_from_admin_server() {
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let primary_1_peer_id = hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
-    let primary_2_peer_id = hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
-    let worker_1_peer_id = hex::encode(worker_1_keypair.copy().public().0.as_bytes());
+    let primary_1_peer_id = Hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
+    let primary_2_peer_id = Hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
+    let worker_1_peer_id = Hex::encode(worker_1_keypair.copy().public().0.as_bytes());
 
     // Test getting all connected peers for primary 1
     let resp = reqwest::get(format!(

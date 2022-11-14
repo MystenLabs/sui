@@ -52,7 +52,6 @@ reqwest = { version = "0.11.12", features = ["json"] }
 node = { path = "../node", package = "narwhal-node" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }
-hex = "0.4.3"
 
 [features]
 benchmark = []

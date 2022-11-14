@@ -10,6 +10,7 @@ use crate::checkpoints2::checkpoint_output::{CertifiedCheckpointOutput, Checkpoi
 pub use crate::checkpoints2::checkpoint_output::{
     LogCheckpointOutput, SubmitCheckpointToConsensus,
 };
+use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
 use parking_lot::Mutex;
@@ -370,9 +371,9 @@ impl SignatureAggregator {
             warn!(
                 "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
                 author.concise(),
-                hex::encode(their_digest),
+                Hex::encode(their_digest),
                 self.summary.sequence_number,
-                hex::encode(self.digest)
+                Hex::encode(self.digest)
             );
             return Err(());
         }
@@ -516,7 +517,7 @@ impl CheckpointService {
         info!(
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
-            hex::encode(info.summary.summary.digest()),
+            Hex::encode(info.summary.summary.digest()),
             info.summary.auth_signature.authority
         );
         // While it can be tempting to make last_signature_index into AtomicU64, this won't work

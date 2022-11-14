@@ -21,7 +21,6 @@ workspace-hack.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 
 [dev-dependencies]
-hex = "0.4.3"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 rayon = "1.5.3"
