@@ -34,6 +34,7 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
+  TransactionEffects,
 } from '../types';
 import { Provider } from './provider';
 
@@ -114,6 +115,10 @@ export class VoidProvider extends Provider {
     _requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
+  }
+
+  dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
+    throw this.newError('dryRunTransaction');
   }
 
   async getTotalTransactionNumber(): Promise<number> {
