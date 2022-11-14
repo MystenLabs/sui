@@ -186,6 +186,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666699837426,
                 "txDigest": "cZXsToU6r0Uia6HIAwvr1eMlGsrg6b9+2oYZAskJ0wc=",
+                "id": {
+                    "txSeq": 1001,
+                    "eventSeq": 1,
+                },
                 "event": {
                     "moveEvent": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -204,6 +208,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666699837426,
                 "txDigest": "cZXsToU6r0Uia6HIAwvr1eMlGsrg6b9+2oYZAskJ0wc=",
+                "id": {
+                    "txSeq": 1001,
+                    "eventSeq": 0,
+                },
                 "event": {
                     "newObject": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -219,6 +227,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666698739180,
                 "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
+                "id": {
+                    "txSeq": 998,
+                    "eventSeq": 1,
+                },
                 "event": {
                     "moveEvent": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -237,6 +249,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666698739180,
                 "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
+                "id": {
+                    "txSeq": 998,
+                    "eventSeq": 0,
+                },
                 "event": {
                     "newObject": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -282,6 +298,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666699837426,
                 "txDigest": "cZXsToU6r0Uia6HIAwvr1eMlGsrg6b9+2oYZAskJ0wc=",
+                "id": {
+                    "txSeq": 1001,
+                    "eventSeq": 1,
+                },
                 "event": {
                     "moveEvent": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -300,6 +320,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666698739180,
                 "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
+                "id": {
+                    "txSeq": 998,
+                    "eventSeq": 1,
+                },
                 "event": {
                     "moveEvent": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -348,6 +372,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666698739180,
                 "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
+                "id": {
+                    "txSeq": 998,
+                    "eventSeq": 0,
+                },
                 "event": {
                     "newObject": {
                         "packageId": "0x0000000000000000000000000000000000000002",
@@ -363,6 +391,10 @@ curl --location --request POST '127.0.0.1:9000' \
             {
                 "timestamp": 1666698739180,
                 "txDigest": "WF2V6FM6y/kpAgRqzsQmR/osy4pmTgVVbE6qvSJxWh4=",
+                "id": {
+                    "txSeq": 998,
+                    "eventSeq": 1,
+                },
                 "event": {
                     "moveEvent": {
                         "packageId": "0x0000000000000000000000000000000000000002",
