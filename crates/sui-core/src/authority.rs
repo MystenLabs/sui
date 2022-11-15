@@ -81,7 +81,7 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
+use crate::checkpoints2::{CheckpointMetrics, CheckpointService, LogCheckpointOutput};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -1528,6 +1528,7 @@ impl AuthorityState {
             LogCheckpointOutput::boxed(),
             LogCheckpointOutput::boxed_certified(),
             epochs.get_latest_committee(),
+            CheckpointMetrics::new_for_tests(),
         );
 
         // add the object_basics module

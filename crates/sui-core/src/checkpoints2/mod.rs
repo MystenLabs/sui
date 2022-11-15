@@ -3,6 +3,7 @@
 
 mod casual_order;
 mod checkpoint_output;
+mod metrics;
 
 use crate::authority::EffectsNotifyRead;
 use crate::checkpoints2::casual_order::CasualOrder;
@@ -10,6 +11,8 @@ use crate::checkpoints2::checkpoint_output::{CertifiedCheckpointOutput, Checkpoi
 pub use crate::checkpoints2::checkpoint_output::{
     LogCheckpointOutput, SubmitCheckpointToConsensus,
 };
+pub use crate::checkpoints2::metrics::CheckpointMetrics;
+use crate::metrics::TaskUtilizationExt;
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
@@ -78,6 +81,7 @@ pub struct CheckpointBuilder {
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
     epoch: EpochId,
+    metrics: Arc<CheckpointMetrics>,
 }
 
 pub struct CheckpointAggregator {
@@ -87,6 +91,7 @@ pub struct CheckpointAggregator {
     current: Option<SignatureAggregator>,
     committee: Committee,
     output: Box<dyn CertifiedCheckpointOutput>,
+    metrics: Arc<CheckpointMetrics>,
 }
 
 // This holds information to aggregate signatures for one checkpoint
@@ -107,6 +112,7 @@ impl CheckpointBuilder {
         exit: watch::Receiver<()>,
         epoch: EpochId,
         notify_aggregator: Arc<Notify>,
+        metrics: Arc<CheckpointMetrics>,
     ) -> Self {
         Self {
             tables,
@@ -116,6 +122,7 @@ impl CheckpointBuilder {
             exit,
             epoch,
             notify_aggregator,
+            metrics,
         }
     }
 
@@ -125,6 +132,7 @@ impl CheckpointBuilder {
                 if let Err(e) = self.make_checkpoint(height, roots).await {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
+                    self.metrics.checkpoint_errors.inc();
                     continue;
                 }
             }
@@ -143,6 +151,10 @@ impl CheckpointBuilder {
         height: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
     ) -> SuiResult {
+        let _timer = self.metrics.builder_utilization.utilization_timer();
+        self.metrics
+            .checkpoint_roots_count
+            .inc_by(roots.len() as u64);
         let roots = self.effects_store.notify_read(roots).await?;
         let unsorted = self.complete_checkpoint(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
@@ -191,6 +203,13 @@ impl CheckpointBuilder {
 
         self.output.checkpoint_created(&summary, &contents).await?;
 
+        self.metrics
+            .transactions_included_in_checkpoint
+            .inc_by(contents.size() as u64);
+        self.metrics
+            .last_constructed_checkpoint
+            .set(sequence_number as i64);
+
         batch = batch.insert_batch(
             &self.tables.checkpoint_content,
             [(sequence_number, contents)],
@@ -205,6 +224,7 @@ impl CheckpointBuilder {
                 [(txn.transaction_digest, sequence_number)],
             )?;
         }
+
         Ok(batch)
     }
 
@@ -259,6 +279,7 @@ impl CheckpointAggregator {
         exit: watch::Receiver<()>,
         committee: Committee,
         output: Box<dyn CertifiedCheckpointOutput>,
+        metrics: Arc<CheckpointMetrics>,
     ) -> Self {
         let current = None;
         Self {
@@ -268,6 +289,7 @@ impl CheckpointAggregator {
             current,
             committee,
             output,
+            metrics,
         }
     }
 
@@ -278,6 +300,7 @@ impl CheckpointAggregator {
                     "Error while aggregating checkpoint, will retry in 1s: {:?}",
                     e
                 );
+                self.metrics.checkpoint_errors.inc();
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
@@ -293,6 +316,7 @@ impl CheckpointAggregator {
     }
 
     async fn run_inner(&mut self) -> SuiResult {
+        let _timer = self.metrics.aggregator_utilization.utilization_timer();
         'outer: loop {
             let current = if let Some(current) = &mut self.current {
                 current
@@ -325,6 +349,13 @@ impl CheckpointAggregator {
                     current.summary.sequence_number,
                     data.summary.auth_signature.authority.concise()
                 );
+                self.metrics
+                    .checkpoint_participation
+                    .with_label_values(&[&format!(
+                        "{:?}",
+                        data.summary.auth_signature.authority.concise()
+                    )])
+                    .inc();
                 if let Ok(auth_signature) = current.try_aggregate(&self.committee, data) {
                     let summary = CertifiedCheckpointSummary {
                         summary: current.summary.clone(),
@@ -333,6 +364,9 @@ impl CheckpointAggregator {
                     self.tables
                         .certified_checkpoints
                         .insert(&current.summary.sequence_number, &summary)?;
+                    self.metrics
+                        .last_certified_checkpoint
+                        .set(current.summary.sequence_number as i64);
                     self.output.certified_checkpoint_created(&summary).await?;
                     self.current = None;
                     continue 'outer;
@@ -423,6 +457,7 @@ impl CheckpointService {
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         committee: Committee, // todo - figure out how this is updated
+        metrics: Arc<CheckpointMetrics>,
     ) -> Arc<Self> {
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
@@ -440,6 +475,7 @@ impl CheckpointService {
             exit_rcv.clone(),
             committee.epoch,
             notify_aggregator.clone(),
+            metrics.clone(),
         );
 
         spawn_monitored_task!(builder.run());
@@ -450,6 +486,7 @@ impl CheckpointService {
             exit_rcv,
             committee,
             certified_checkpoint_output,
+            metrics,
         );
 
         spawn_monitored_task!(aggregator.run());
@@ -564,6 +601,7 @@ mod tests {
             Box::new(output),
             Box::new(certified_output),
             committee,
+            CheckpointMetrics::new_for_tests(),
         );
         checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
         // Verify that sending same digests at same height is noop
