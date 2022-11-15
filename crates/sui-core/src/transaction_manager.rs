@@ -6,9 +6,14 @@ use std::{
     sync::Arc,
 };
 
-use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
+use sui_storage::node_sync_store::NodeSyncStore;
+use sui_types::{
+    base_types::TransactionDigest, committee::EpochId, error::SuiResult,
+    messages::VerifiedCertificate,
+};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, warn};
+use typed_store::Map;
 
 use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
 
@@ -31,6 +36,8 @@ impl TransactionManager {
     /// other persistent data.
     pub(crate) async fn new(
         authority_store: Arc<AuthorityStore>,
+        node_sync_store: Arc<NodeSyncStore>,
+        epoch: EpochId,
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
@@ -41,6 +48,29 @@ impl TransactionManager {
             pending_certificates: BTreeMap::new(),
             tx_ready_certificates,
         };
+
+        // Temporary change to recover pending certificates from 0.15.1, then clearing those data.
+        let mut pending_certs = Vec::new();
+        for (_, (_, digest)) in transaction_manager
+            .authority_store
+            .epoch_tables()
+            .pending_execution
+            .iter()
+        {
+            let cert = node_sync_store.get_cert(epoch, &digest).unwrap().unwrap();
+            pending_certs.push(cert);
+        }
+        transaction_manager
+            .authority_store
+            .store_pending_certificates(&pending_certs)
+            .unwrap();
+        transaction_manager
+            .authority_store
+            .epoch_tables()
+            .pending_execution
+            .clear()
+            .unwrap();
+
         transaction_manager
             .enqueue(
                 transaction_manager

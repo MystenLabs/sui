@@ -1468,7 +1468,14 @@ impl AuthorityState {
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(tokio::sync::Mutex::new(
-            TransactionManager::new(store.clone(), tx_ready_certificates, metrics.clone()).await,
+            TransactionManager::new(
+                store.clone(),
+                node_sync_store.clone(),
+                committee.epoch(),
+                tx_ready_certificates,
+                metrics.clone(),
+            )
+            .await,
         ));
 
         let mut state = AuthorityState {

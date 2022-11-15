@@ -66,9 +66,9 @@ pub(crate) async fn init_state(
     let name = authority_key.public().into();
     let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
-    let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    let checkpoint_path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    let node_sync_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
+    let checkpoint_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
+    let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
