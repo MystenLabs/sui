@@ -14,7 +14,7 @@ View [example](../explore/examples.md) Sui projects that help you learn how to w
 
 ## App examples
 
-View the code for our [wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet) or [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) for examples of web apps that interact with Sui using the Typescript SDK.
+View the code for [Sui Wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet) or [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) for examples of web apps that interact with Sui using the Typescript SDK.
 
 ## Sui prototypes
 
