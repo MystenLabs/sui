@@ -12,6 +12,10 @@ View the [Tic Tac Toe tutorial](../explore/tutorials.md) to learn how to create 
 
 View [example](../explore/examples.md) Sui projects that help you learn how to work with Sui.
 
+## App examples
+
+View the code for [Sui Wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet) or [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) for examples of web apps that interact with Sui using the Typescript SDK.
+
 ## Sui prototypes
 
 To learn about how the implementation details for the Sui Monstar example prototype, see [Sui Prototypes](../explore/prototypes.md).
