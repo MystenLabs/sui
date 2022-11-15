@@ -82,7 +82,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
     let result = execute_transfer(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
     let gas_cost = effects.gas_used;
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
     assert!(gas_cost.storage_cost > 0);
@@ -125,12 +125,12 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_price_2 = gas_price_1 * 2;
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, gas_price_1, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
     let gas_summary_1 = effects.gas_cost_summary();
 
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET / 2, gas_price_2, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
     let gas_summary_2 = effects.gas_cost_summary();
 
     assert_eq!(
@@ -179,7 +179,7 @@ async fn test_transfer_sui_insufficient_gas() {
         .unwrap()
         .signed_effects
         .unwrap()
-        .effects;
+        .into_data();
     // We expect this to fail due to insufficient gas.
     assert_eq!(
         effects.status,
@@ -197,7 +197,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     let balance = *MIN_GAS_BUDGET + 1;
     let result = execute_transfer(balance, balance, true).await;
     // The transaction should still execute to effects, but with execution status as failure.
-    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
     assert_eq!(
         effects.status.unwrap_err(),
         ExecutionFailureStatus::InsufficientGas
@@ -216,12 +216,12 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .unwrap()
         .signed_effects
         .unwrap()
-        .effects
+        .data()
         .gas_used
         .gas_used();
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
     // We won't drain the entire budget because we don't charge for storage if tx failed.
     assert!(effects.gas_used.gas_used() < budget);
     let gas_object = result
@@ -260,7 +260,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         GAS_VALUE_FOR_TESTING,
     )
     .await;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     let gas_cost = effects.gas_used;
     assert!(gas_cost.storage_cost > 0);
 
@@ -327,7 +327,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         budget,
     )
     .await;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
 
@@ -358,7 +358,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         budget,
     )
     .await;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
@@ -394,7 +394,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     let created_object_ref = effects.created[0].0;
     assert!(effects.status.is_ok());
     let gas_cost = effects.gas_used;
@@ -457,7 +457,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     assert!(effects.status.is_ok());
     let gas_cost = effects.gas_used;
     // storage_cost should be less than rebate because for object deletion, we only
@@ -483,7 +483,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
     // We will run out of gas during VM execution.

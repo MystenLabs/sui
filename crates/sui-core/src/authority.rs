@@ -683,7 +683,7 @@ impl AuthorityState {
         let digest = *certificate.digest();
         debug!(?digest, "handle_certificate_with_effects");
         fp_ensure!(
-            effects.effects.transaction_digest == digest,
+            effects.data().transaction_digest == digest,
             SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -694,7 +694,7 @@ impl AuthorityState {
         if certificate.contains_shared_object() {
             self.database.acquire_shared_locks_from_effects(
                 certificate,
-                &effects.effects,
+                effects.data(),
                 &tx_guard,
             )?;
         }
@@ -710,7 +710,7 @@ impl AuthorityState {
             error!(
                 ?expected_effects_digest,
                 ?observed_effects_digest,
-                ?effects.effects,
+                expected_effects=?effects.data(),
                 ?resp.signed_effects,
                 input_objects = ?certificate.data().data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
@@ -878,7 +878,7 @@ impl AuthorityState {
             };
 
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = signed_effects.effects.shared_objects.len();
+        let shared_object_count = signed_effects.data().shared_objects.len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
@@ -1060,7 +1060,8 @@ impl AuthorityState {
             );
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
+        let signed_effects =
+            SignedTransactionEffects::new(self.epoch(), effects, &*self.secret, self.name);
         Ok((inner_temp_store, signed_effects))
     }
 
@@ -1126,7 +1127,7 @@ impl AuthorityState {
                 .iter()
                 .map(|o| o.object_id()),
             effects
-                .effects
+                .data()
                 .all_mutated()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
@@ -1191,14 +1192,14 @@ impl AuthorityState {
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             event_handler
-                .process_events(&effects.effects, timestamp_ms, seq)
+                .process_events(effects.data(), timestamp_ms, seq)
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_had_event_processed.inc())
                 .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't process events for tx: {}", e))?;
 
             self.metrics
                 .post_processing_total_events_emitted
-                .inc_by(effects.effects.events.len() as u64);
+                .inc_by(effects.data().events.len() as u64);
         }
 
         Ok(())
@@ -1968,15 +1969,18 @@ impl AuthorityState {
         // obtain an effects certificate at the current epoch.
         if let Some(effects) = info.signed_effects.take() {
             let cur_epoch = self.epoch();
-            let new_effects = if effects.auth_signature.epoch < cur_epoch {
+            let new_effects = if effects.epoch() < cur_epoch {
                 debug!(
-                    effects_epoch=?effects.auth_signature.epoch,
+                    effects_epoch=?effects.epoch(),
                     ?cur_epoch,
                     "Re-signing the effects with the current epoch"
                 );
-                effects
-                    .effects
-                    .to_sign_effects(cur_epoch, &self.name, &*self.secret)
+                SignedTransactionEffects::new(
+                    cur_epoch,
+                    effects.into_data(),
+                    &*self.secret,
+                    self.name,
+                )
             } else {
                 effects
             };

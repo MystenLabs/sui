@@ -1774,10 +1774,12 @@ impl SuiCertifiedTransactionEffects {
         cert: CertifiedTransactionEffects,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
+        let digest = *cert.digest();
+        let (effects, auth_sign_info) = cert.into_data_and_sig();
         Ok(Self {
-            transaction_effects_digest: *cert.digest(),
-            effects: SuiTransactionEffects::try_from(cert.effects, resolver)?,
-            auth_sign_info: cert.auth_signature,
+            transaction_effects_digest: digest,
+            effects: SuiTransactionEffects::try_from(effects, resolver)?,
+            auth_sign_info,
         })
     }
 }

@@ -95,7 +95,7 @@ async fn pending_exec_notify_ready_certificates() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.data().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
@@ -186,7 +186,7 @@ async fn pending_exec_full() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.data().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());

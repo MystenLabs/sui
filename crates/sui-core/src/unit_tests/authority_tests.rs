@@ -686,7 +686,7 @@ async fn test_publish_dependent_module_ok() {
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap();
-    response.signed_effects.unwrap().effects.status.unwrap();
+    response.signed_effects.unwrap().into_data().status.unwrap();
 
     // check that the dependent module got published
     assert!(authority.get_object(&dependent_module_id).await.is_ok());
@@ -713,7 +713,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap();
-    response.signed_effects.unwrap().effects.status.unwrap();
+    response.signed_effects.unwrap().into_data().status.unwrap();
 
     // check that the module actually got published
     assert!(response.certified_transaction.is_some());
@@ -1009,7 +1009,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
-    response.signed_effects.unwrap().effects.status.unwrap();
+    response.signed_effects.unwrap().into_data().status.unwrap();
     let account = authority_state
         .get_object(&object_id)
         .await
@@ -1063,7 +1063,7 @@ async fn test_handle_confirmation_transaction_ok() {
         .handle_certificate(&certified_transfer_transaction.clone())
         .await
         .unwrap();
-    info.signed_effects.unwrap().effects.status.unwrap();
+    info.signed_effects.unwrap().into_data().status.unwrap();
     // Key check: the ownership has changed
 
     let new_account = authority_state
@@ -1271,19 +1271,13 @@ async fn test_handle_confirmation_transaction_idempotent() {
         .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
-    assert!(info.signed_effects.as_ref().unwrap().effects.status.is_ok());
+    assert!(info.signed_effects.as_ref().unwrap().data().status.is_ok());
 
     let info2 = authority_state
         .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
-    assert!(info2
-        .signed_effects
-        .as_ref()
-        .unwrap()
-        .effects
-        .status
-        .is_ok());
+    assert!(info2.signed_effects.as_ref().unwrap().data().status.is_ok());
 
     // this is valid because we're checking the authority state does not change the certificate
     compare_transaction_info_responses(&info, &info2);
@@ -1415,7 +1409,7 @@ async fn test_move_call_insufficient_gas() {
         .unwrap()
         .signed_effects
         .unwrap()
-        .effects;
+        .into_data();
     let gas_used = effects.gas_used.gas_used();
     let obj_ref = authority_state
         .get_object(&object_id)
@@ -1443,7 +1437,7 @@ async fn test_move_call_insufficient_gas() {
     let response = send_and_confirm_transaction(&authority_state, transaction)
         .await
         .unwrap();
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     assert!(effects.status.is_err());
     let obj = authority_state
         .get_object(&object_id)
@@ -1748,8 +1742,8 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result2.is_ok());
     assert_eq!(
-        result1.unwrap().signed_effects.unwrap().effects,
-        result2.unwrap().signed_effects.unwrap().effects
+        result1.unwrap().signed_effects.unwrap().into_data(),
+        result2.unwrap().signed_effects.unwrap().into_data()
     );
 }
 
@@ -1805,7 +1799,7 @@ async fn test_change_epoch_transaction() {
         .handle_certificate(&certificate)
         .await
         .unwrap();
-    assert!(result.signed_effects.unwrap().effects.status.is_ok());
+    assert!(result.signed_effects.unwrap().into_data().status.is_ok());
     let sui_system_object = authority_state.get_sui_system_state_object().await.unwrap();
     assert_eq!(sui_system_object.epoch, 1);
 }
@@ -1839,7 +1833,7 @@ async fn test_transfer_sui_no_amount() {
         .handle_certificate(&certificate)
         .await
         .unwrap();
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     // Check that the transaction was successful, and the gas object is the only mutated object,
     // and got transferred. Also check on its version and new balance.
     assert!(effects.status.is_ok());
@@ -1882,7 +1876,7 @@ async fn test_transfer_sui_with_amount() {
         .handle_certificate(&certificate)
         .await
         .unwrap();
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     // Check that the transaction was successful, the gas object remains in the original owner,
     // and an amount is split out and send to the recipient.
     assert!(effects.status.is_ok());
@@ -2226,7 +2220,7 @@ pub async fn call_move_with_shared(
     let transaction = to_sender_signed_transaction(data, sender_key);
     let response =
         send_and_confirm_transaction_with_shared(authority, transaction, with_shared).await?;
-    Ok(response.signed_effects.unwrap().effects)
+    Ok(response.signed_effects.unwrap().into_data())
 }
 
 pub async fn create_move_object(
@@ -2474,7 +2468,7 @@ async fn test_consensus_message_processed() {
                 .unwrap()
         };
 
-        assert_eq!(effects1.effects, effects2.effects);
+        assert_eq!(effects1.data(), effects2.data());
 
         // If we didn't send consensus before handle_node_sync_certificate, we need to do it now.
         if !send_first {
@@ -2488,7 +2482,7 @@ async fn test_consensus_message_processed() {
 
         // Update to the new gas object for new tx
         gas_object_ref = *effects1
-            .effects
+            .data()
             .mutated
             .iter()
             .map(|(objref, _)| objref)

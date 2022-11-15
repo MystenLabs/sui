@@ -21,6 +21,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
@@ -477,7 +478,7 @@ pub async fn submit_shared_object_transaction_with_committee(
 pub fn get_unique_effects(replies: Vec<TransactionInfoResponse>) -> TransactionEffects {
     let mut all_effects = HashMap::new();
     for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
+        let effects = reply.signed_effects.unwrap().into_data();
         all_effects.insert(effects.digest(), effects);
     }
     assert_eq!(all_effects.len(), 1);

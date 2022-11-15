@@ -358,7 +358,7 @@ where
         .unwrap()
         .signed_effects
         .unwrap()
-        .effects
+        .into_data()
 }
 
 pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)

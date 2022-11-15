@@ -233,7 +233,7 @@ impl<C> SafeClient<C> {
         } = response;
 
         let signed_transaction = if let Some(signed_transaction) = signed_transaction {
-            committee = Some(self.get_committee(&signed_transaction.auth_sig().epoch)?);
+            committee = Some(self.get_committee(&signed_transaction.epoch())?);
             // Check the transaction signature
             let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;
             // Check it has the right signer
@@ -260,7 +260,7 @@ impl<C> SafeClient<C> {
         let certified_transaction = match certified_transaction {
             Some(certificate) => {
                 if committee.is_none() {
-                    committee = Some(self.get_committee(&certificate.auth_sig().epoch)?);
+                    committee = Some(self.get_committee(&certificate.epoch())?);
                 }
                 // Check signatures and quorum
                 let certificate = certificate.verify(committee.as_ref().unwrap())?;
@@ -279,13 +279,13 @@ impl<C> SafeClient<C> {
 
         if let Some(signed_effects) = &signed_effects {
             if committee.is_none() {
-                committee = Some(self.get_committee(&signed_effects.auth_signature.epoch)?);
+                committee = Some(self.get_committee(&signed_effects.epoch())?);
             }
             // Check signature
-            signed_effects.verify(committee.as_ref().unwrap())?;
+            signed_effects.verify_signature(committee.as_ref().unwrap())?;
             // Check it has the right signer
             fp_ensure!(
-                signed_effects.auth_signature.authority == self.address,
+                signed_effects.auth_sig().authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Unexpected validator address in the signed effects signature"
@@ -294,7 +294,7 @@ impl<C> SafeClient<C> {
             );
             // Checks it concerns the right tx
             fp_ensure!(
-                signed_effects.effects.transaction_digest == *digest,
+                signed_effects.data().transaction_digest == *digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Unexpected tx digest in the signed effects".to_string()
@@ -337,7 +337,7 @@ impl<C> SafeClient<C> {
         let parent_certificate = if skip_committee_check_during_reconfig {
             parent_certificate.map(VerifiedCertificate::new_unchecked)
         } else if let Some(certificate) = parent_certificate {
-            let epoch = certificate.auth_sig().epoch;
+            let epoch = certificate.epoch();
             Some(certificate.verify(&self.get_committee(&epoch)?)?)
         } else {
             None
@@ -412,7 +412,7 @@ impl<C> SafeClient<C> {
             let signed_transaction = if let Some(signed_transaction) = lock {
                 // We cannot reuse the committee fetched above since they may not be from the same
                 // epoch.
-                let epoch = signed_transaction.auth_sig().epoch;
+                let epoch = signed_transaction.epoch();
                 let signed_transaction = signed_transaction.verify(&self.get_committee(&epoch)?)?;
                 // Check it has the right signer
                 fp_ensure!(
@@ -454,7 +454,7 @@ impl<C> SafeClient<C> {
         )>,
     ) -> SuiResult {
         // check the signature of the batch
-        let epoch = signed_batch.auth_sig().epoch;
+        let epoch = signed_batch.epoch();
         signed_batch.verify_signature(&self.get_committee(&epoch)?)?;
 
         // ensure transactions enclosed match requested range

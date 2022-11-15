@@ -13,7 +13,8 @@ use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
 use crate::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, SuiAuthoritySignature,
+    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
+    AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::messages_checkpoint::CheckpointContents;
 use crate::messages_checkpoint::CheckpointSummary;
@@ -470,14 +471,18 @@ fn test_digest_caching() {
         ..Default::default()
     };
 
-    let mut signed_effects = effects.to_sign_effects(
+    let mut signed_effects = SignedTransactionEffects::new(
         committee.epoch(),
-        &AuthorityPublicKeyBytes::from(sec1.public()),
+        effects,
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     let initial_effects_digest = *signed_effects.digest();
-    signed_effects.effects.gas_used.computation_cost += 1;
+    signed_effects
+        .data_mut_for_testing()
+        .gas_used
+        .computation_cost += 1;
 
     // digest is cached
     assert_eq!(initial_effects_digest, *signed_effects.digest());

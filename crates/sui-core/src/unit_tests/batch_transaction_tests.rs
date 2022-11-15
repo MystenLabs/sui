@@ -66,7 +66,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     assert!(effects.status.is_ok());
     assert_eq!((effects.created.len(), effects.mutated.len()), (N, N + 1),);
     assert!(effects
@@ -131,7 +131,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
-    let effects = response.signed_effects.unwrap().effects;
+    let effects = response.signed_effects.unwrap().into_data();
     assert!(effects.status.is_err());
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, N + 1));
 
