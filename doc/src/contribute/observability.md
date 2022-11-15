@@ -2,13 +2,9 @@
 title: Logging, Tracing, Metrics, and Observability
 ---
 
-Good observability facilities are key to the development and growth of Sui. This is made
-more challenging by the distributed and asynchronous nature of Sui, with multiple client and validator
-processes distributed over a potentially global network.
+Good observability capabilities are key to the development and growth of Sui. This is made more challenging by the distributed and asynchronous nature of Sui, with multiple client and validator processes distributed over a potentially global network.
 
-The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library.
-The rest of this document highlights specific aspects of achieving good observability through structured logging
-and metrics in Sui.
+The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library. The rest of this document highlights specific aspects of achieving good observability through structured logging and metrics in Sui.
 
 NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers. The
 content of logs and traces do not represent the authoritative, certified output of validators and are subject

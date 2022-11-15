@@ -8,7 +8,7 @@ You can find answers to common questions in our [FAQ](../contribute/faq.md).
 
 ## See our roadmap
 
-Sui is evolving quickly. See our [roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) for the planned updates over the next 30 days.
+Sui is evolving quickly. See our [Developer Experience Roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) for the planned updates over the next 30 days.
 
 ## Join the community
 

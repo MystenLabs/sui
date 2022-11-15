@@ -101,8 +101,14 @@ You can change the active network for Sui Wallet. Currently, Sui Wallet supports
 
 ## Add SUI tokens to your Sui Wallet
 
-When you first open the wallet, you have no coins in it. You can add SUI tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
+When you first open the wallet, you have no coins in it. You can add test SUI coins to your wallet directly from the wallet interface, or you can use the faucet in Discord. You need an active Discord account to access the Sui channels.
 
+**To get SUI test coins from Sui Wallet**
+If you have no coins in your wallet, click **Request Devnet SUI tokens** to add coins to your wallet. You can request coins 5 times every 60 minutes. After you request tokens the first time, the button moves to the menu so it doesn't take up space on your wallet interface.
+
+If you don't yet have coins in your wallet, click the menu in the top-right corner, and then click **Request Devnet SUI tokens**.
+
+**To get SUI test coins through Discord**
 1. Click **Coins**.
 1. Click the small clipboard icon next to your address to copy it.
 It's near the top of the wallet and starts with 0x.
@@ -193,7 +199,3 @@ You can easily disconnect your wallet from a connected app.
 1. Click the app to disconnect from your wallet, then click **Disconnect**.
 
 Your wallet immediately disconnects from the app and returns to the **Apps** tab.
-
-
-
-
