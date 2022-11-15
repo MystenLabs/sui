@@ -19,8 +19,8 @@ use crate::authority::*;
 use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
-use crate::checkpoints2::CheckpointMetrics;
-use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
+use crate::checkpoints::CheckpointMetrics;
+use crate::checkpoints::{CheckpointService, LogCheckpointOutput};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
 use async_trait::async_trait;

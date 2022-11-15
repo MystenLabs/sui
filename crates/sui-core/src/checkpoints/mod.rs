@@ -6,12 +6,10 @@ mod checkpoint_output;
 mod metrics;
 
 use crate::authority::EffectsNotifyRead;
-use crate::checkpoints2::casual_order::CasualOrder;
-use crate::checkpoints2::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
-pub use crate::checkpoints2::checkpoint_output::{
-    LogCheckpointOutput, SubmitCheckpointToConsensus,
-};
-pub use crate::checkpoints2::metrics::CheckpointMetrics;
+use crate::checkpoints::casual_order::CasualOrder;
+use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
+pub use crate::checkpoints::checkpoint_output::{LogCheckpointOutput, SubmitCheckpointToConsensus};
+pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::metrics::TaskUtilizationExt;
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
