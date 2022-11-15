@@ -40,44 +40,55 @@ const columns = [
     },
 ];
 
+type PackageTableData = {
+    time?: string | JSX.Element;
+    packageId?: string | JSX.Element;
+    txnDigest?: string | JSX.Element;
+    sender?: string | JSX.Element;
+};
+
 const transformTable = (events: SuiEvents) => ({
-    data: events.map(({ event, timestamp, txDigest }: SuiEventEnvelope) => {
-        if (!('publish' in event)) return {};
+    data: events.map(
+        ({
+            event,
+            timestamp,
+            txDigest,
+        }: SuiEventEnvelope): PackageTableData => {
+            if (!('publish' in event)) return {};
+            return {
+                time: <TxTimeType timestamp={timestamp} />,
+                sender: (
+                    <Link
+                        variant="mono"
+                        to={`/addresses/${encodeURIComponent(
+                            event.publish.sender
+                        )}`}
+                    >
+                        {truncate(event.publish.sender, TRUNCATE_LENGTH)}
+                    </Link>
+                ),
+                packageId: (
+                    <Link
+                        variant="mono"
+                        to={`/objects/${encodeURIComponent(
+                            event.publish.packageId
+                        )}`}
+                    >
+                        {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
+                    </Link>
+                ),
 
-        return {
-            time: <TxTimeType timestamp={timestamp} />,
-
-            sender: (
-                <Link
-                    variant="mono"
-                    to={`/addresses/${encodeURIComponent(
-                        event.publish.sender
-                    )}`}
-                >
-                    {truncate(event.publish.sender, TRUNCATE_LENGTH)}
-                </Link>
-            ),
-            packageId: (
-                <Link
-                    variant="mono"
-                    to={`/objects/${encodeURIComponent(
-                        event.publish.packageId
-                    )}`}
-                >
-                    {truncate(event.publish.packageId, TRUNCATE_LENGTH)}
-                </Link>
-            ),
-
-            txnDigest: (
-                <Link
-                    variant="mono"
-                    to={`/transactions/${encodeURIComponent(txDigest)}`}
-                >
-                    {truncate(txDigest, TRUNCATE_LENGTH)}
-                </Link>
-            ),
-        };
-    }),
+                txnDigest: (
+                    <Link
+                        variant="mono"
+                        to={`/transactions/${encodeURIComponent(txDigest)}`}
+                    >
+                        {truncate(txDigest, TRUNCATE_LENGTH)}
+                    </Link>
+                ),
+            };
+        }
+    ),
     columns: [...columns],
 });
 
