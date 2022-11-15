@@ -294,7 +294,11 @@ impl Core {
         mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
         if header.epoch < committee.epoch() {
-            debug!("Proposer outdated");
+            debug!(
+                "Core received outdated header proposal for epoch {}, already at epoch {}",
+                header.epoch,
+                committee.epoch()
+            );
             return Err(DagError::InvalidEpoch {
                 expected: committee.epoch(),
                 received: header.epoch,
@@ -422,10 +426,13 @@ impl Core {
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        let tasks = self.network.broadcast(
-            network_keys,
-            &PrimaryMessage::Certificate(certificate.clone()),
-        ).await;
+        let tasks = self
+            .network
+            .broadcast(
+                network_keys,
+                &PrimaryMessage::Certificate(certificate.clone()),
+            )
+            .await;
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 certificate.header.round,
