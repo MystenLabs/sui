@@ -25,7 +25,7 @@ test the code we have written.
 ## Testing a package
 
 Sui includes support for the
-[Move testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md)
+[Move testing framework](https://github.com/oxade/move/blob/main/language/documentation/book/src/unit-testing.md)
 that allows you to write unit tests to test Move code much like test
 frameworks for other languages (e.g., the built-in
 [Rust testing framework](https://doc.rust-lang.org/rust-by-example/testing/unit_testing.html)
@@ -198,7 +198,7 @@ Sui-specific testing is supported via the
 [test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
-[testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
+[testing framework](https://github.com/oxade/move/blob/main/language/documentation/book/src/unit-testing.md).
 
 The main concept in the `test_scenario` is a scenario that emulates a
 series of Sui transactions, each executed by a (potentially) different

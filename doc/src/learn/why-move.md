@@ -2,7 +2,7 @@
 title: Why Move?
 ---
 
-In Sui, you write [Smart Contracts](../build/move/index.md) with the Move Programming language. This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/move-language/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
+In Sui, you write [Smart Contracts](../build/move/index.md) with the Move Programming language. This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/oxade/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
 
 ## Sui Move
 
@@ -19,10 +19,10 @@ This section aggregates links to external resources on the Move programming lang
 
 * [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
 * Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
-* [Core Move](https://github.com/move-language/move/tree/main/language/documentation) documentation, including:
-  * [Tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
-  * [Book](https://github.com/move-language/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/move-language/move/tree/main/language/documentation/book/src).
-  * [Examples](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/coin-swap).
+* [Core Move](https://github.com/oxade/move/tree/main/language/documentation) documentation, including:
+  * [Tutorial](https://github.com/oxade/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
+  * [Book](https://github.com/oxade/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/oxade/move/tree/main/language/documentation/book/src).
+  * [Examples](https://github.com/oxade/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/oxade/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/oxade/move/tree/main/language/documentation/examples/experimental/coin-swap).
 * [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
 
 ## Move vs. Solidity

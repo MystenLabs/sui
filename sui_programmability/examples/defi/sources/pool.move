@@ -31,7 +31,7 @@
 /// ```
 ///
 /// This solution is rather simple and is based on the example from the Move repo:
-/// https://github.com/move-language/move/blob/main/language/documentation/examples/experimental/coin-swap/sources/CoinSwap.move
+/// https://github.com/oxade/move/blob/main/language/documentation/examples/experimental/coin-swap/sources/CoinSwap.move
 module defi::pool {
     use sui::object::{Self, UID};
     use sui::coin::{Self, Coin};

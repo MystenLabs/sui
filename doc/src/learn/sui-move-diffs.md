@@ -9,7 +9,7 @@ To learn more about the motivations behind creating Sui Move, see [Why We Create
 In general, Move code written for other systems will work in Sui with these exceptions:
 
 * [Global Storage operators](https://move-language.github.io/move/global-storage-operators.html)
-* [Key Abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key)
+* [Key Abilities](https://github.com/oxade/move/blob/main/language/documentation/book/src/abilities.md#key)
 
 Here is a summary of key differences:
 
@@ -39,7 +39,7 @@ In Sui, since we don’t support global storage in Move, we don’t need the _ad
 
 We need a way to distinguish between objects that are internal to Move and objects that can be passed across the Move-Sui boundary (i.e. objects that can be stored in Sui storage). This is important because we need to be able to serialize/deserialize objects in the Move-Sui boundary, and this process makes assumptions on the shape of the objects.
 
-We take advantage of the _key_ ability in Move to annotate a Sui object. In core Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) is used to tell that the type can be used as a key for global storage. Since we don’t touch global storage in Sui Move, we are able to repurpose this ability. We require that any struct with key ability must start with an _id_ field with the _ID_ type. The ID type contains both the ObjectID and the sequence number (a.k.a. version). We have bytecode verifiers in place to make sure that the ID field is immutable and cannot be transferred to other objects (as each object must have a unique ID).
+We take advantage of the _key_ ability in Move to annotate a Sui object. In core Move, the [key ability](https://github.com/oxade/move/blob/main/language/documentation/book/src/abilities.md#key) is used to tell that the type can be used as a key for global storage. Since we don’t touch global storage in Sui Move, we are able to repurpose this ability. We require that any struct with key ability must start with an _id_ field with the _ID_ type. The ID type contains both the ObjectID and the sequence number (a.k.a. version). We have bytecode verifiers in place to make sure that the ID field is immutable and cannot be transferred to other objects (as each object must have a unique ID).
 
 ## Module initializers
 

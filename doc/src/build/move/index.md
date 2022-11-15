@@ -28,10 +28,10 @@ and existing platforms (e.g.,
 
 
 The Move language documentation is available in the
-[Move GitHub](https://github.com/move-language/move) repository and includes a
-[tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md)
+[Move GitHub](https://github.com/oxade/move) repository and includes a
+[tutorial](https://github.com/oxade/move/blob/main/language/documentation/tutorial/README.md)
 and a
-[book](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md)
+[book](https://github.com/oxade/move/blob/main/language/documentation/book/src/SUMMARY.md)
 describing language features in detail. These are invaluable resources
 to deepen your understanding of the Move language but not strict prerequisites
 to following the Sui tutorial, which we strived to make self-contained.
@@ -58,7 +58,7 @@ files with the `.move` extension. These files include Move functions and
 type definitions. A package must include the `Move.toml` manifest file
 describing package configuration, for example package metadata or
 package dependencies. See
-[Move.toml](https://github.com/move-language/move/blob/main/language/documentation/book/src/packages.md#movetoml)
+[Move.toml](https://github.com/oxade/move/blob/main/language/documentation/book/src/packages.md#movetoml)
 for more information about package manifest files.
 
 The minimal package source directory structure looks as follows and
@@ -73,7 +73,7 @@ my_move_package
 ```
 
 See
-[Package Layout and Manifest Syntax](https://github.com/move-language/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax)
+[Package Layout and Manifest Syntax](https://github.com/oxade/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax)
 for more information on package layout.
 
 We are now ready to look at some Move code! You can either keep
@@ -104,7 +104,7 @@ module sui::coin {
 
 (Let's not worry about the rest of the module contents for now; you can
 read more about
-[modules](https://github.com/move-language/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
+[modules](https://github.com/oxade/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
 in the Move book later.)
 
 > **Important:** In Sui Move, package names are always in CamelCase, while
@@ -156,8 +156,8 @@ of typed fields. In particular, struct fields can be of a primitive
 type, such as an integer type, or of a struct type.
 
 You can read more about
-Move [primitive types](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types)
-and [structs](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md)
+Move [primitive types](https://github.com/oxade/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types)
+and [structs](https://github.com/oxade/move/blob/main/language/documentation/book/src/structs-and-resources.md)
 in the Move book.
 
 In order for a Move struct type to define a Sui object type such as
@@ -172,7 +172,7 @@ lack thereof) helps enforcing various properties on a definition or on
 instances of a given struct.
 
 You can read more about struct
-[abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md)
+[abilities](https://github.com/oxade/move/blob/main/language/documentation/book/src/abilities.md)
 in the Move book.
 
 The reason that the `Coin` struct can represent different types of
@@ -182,9 +182,9 @@ be passed an arbitrary concrete Move type (e.g. another struct type)
 to distinguish different types of coins from one another.
 
 Learn about Move type parameters known as
-[generics](https://github.com/move-language/move/blob/main/language/documentation/book/src/generics.md)
+[generics](https://github.com/oxade/move/blob/main/language/documentation/book/src/generics.md)
 and also about the optional
-[phantom keyword](https://github.com/move-language/move/blob/main/language/documentation/book/src/generics.md#phantom-type-parameters))
+[phantom keyword](https://github.com/oxade/move/blob/main/language/documentation/book/src/generics.md#phantom-type-parameters))
 at your leisure.
 
 In particular, one type of custom coin already defined in Sui is
@@ -219,7 +219,7 @@ This _public_ function can be called by functions in other modules to
 return the unsigned integer value currently stored in a given
 instance of the `Coin` struct. Direct access to fields of a struct is
 allowed only within the module defining a given struct as described in
-[Privileged Struct Operations](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations).
+[Privileged Struct Operations](https://github.com/oxade/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations).
 The body of the function simply retrieves the `value` field from the
 `Coin` struct instance parameter and returns it. Note that the
 coin parameter is a read-only reference to the `Coin` struct instance,
@@ -229,7 +229,7 @@ read-only references (as opposed to mutable references) cannot be
 modified in the body of a function.
 
 You can read more about Move
-[references](https://github.com/move-language/move/blob/main/language/documentation/book/src/references.md#references) in the Move book.
+[references](https://github.com/oxade/move/blob/main/language/documentation/book/src/references.md#references) in the Move book.
 
 We will show how to call Move functions from other functions and how
 to define the new ones in the section describing how to
@@ -245,7 +245,7 @@ must satisfy a certain set of properties.
 #### Entry functions
 
 One of the basic operations in Sui is transfer of gas objects between
-[addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
+[addresses](https://github.com/oxade/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the
 [SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move)
@@ -274,7 +274,7 @@ value, and has three parameters:
 
 - `c` - represents a gas object whose ownership is to be
   transferred
-- `recipient` - the [address](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
+- `recipient` - the [address](https://github.com/oxade/move/blob/main/language/documentation/book/src/address.md)
    of the intended recipient
 - `_ctx` - a mutable reference to an instance of the `TxContext`
   struct (in this particular case, this parameter is not actually used
