@@ -61,7 +61,7 @@ fn now() -> TimestampMs {
     }
 }
 
-// Additional metadata information for an entity. 
+// Additional metadata information for an entity.
 //
 // The structure as a whole is not signed. As a result this data
 // should not be treated as trustworthy data and should be used
@@ -70,7 +70,7 @@ fn now() -> TimestampMs {
 // safety or liveness.
 //
 // However selected fields, such as
-// - Header::metadata::created_at 
+// - Header::metadata::created_at
 // are signed to support commit timestamps.
 #[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
@@ -90,7 +90,7 @@ impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Batch {
             transactions,
-            metadata: Metadata { created_at : now() },
+            metadata: Metadata { created_at: now() },
         }
     }
 }
