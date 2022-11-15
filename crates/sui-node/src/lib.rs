@@ -64,7 +64,7 @@ pub mod metrics;
 mod handle;
 pub use handle::SuiNodeHandle;
 use narwhal_types::TransactionsClient;
-use sui_core::checkpoints2::{
+use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, LogCheckpointOutput, SubmitCheckpointToConsensus,
 };
 
@@ -164,7 +164,7 @@ impl SuiNode {
         };
 
         let checkpoint_service = CheckpointService::spawn(
-            &config.db_path().join("checkpoints2"),
+            &config.db_path().join("checkpoints"),
             Box::new(store.clone()),
             checkpoint_output,
             LogCheckpointOutput::boxed_certified(),
