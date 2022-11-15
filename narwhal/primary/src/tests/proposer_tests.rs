@@ -158,12 +158,15 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         assert!(rx_ack.await.is_ok());
     }
 
-    // WHEN wait to fetch again from the rx_headers. In theory after header_resend_delay
-    // we should receive again the last created header.
-    let resent_header = rx_headers.recv().await.unwrap();
+    // WHEN wait to fetch again from the rx_headers a few times.
+    // In theory after header_resend_delay we should receive again
+    // the last created header.
+    for _ in 0..3 {
+        let resent_header = rx_headers.recv().await.unwrap();
 
-    // THEN should be the exact same as the last sent
-    assert_eq!(header, resent_header);
+        // THEN should be the exact same as the last sent
+        assert_eq!(header, resent_header);
+    }
 }
 
 #[tokio::test]
