@@ -519,7 +519,7 @@ impl WorkerCache {
             .collect()
     }
 
-    /// Returns the addresses of all workers
+    /// Returns the addresses of all workers that are not of our node.
     pub fn others_workers(&self, myself: &PublicKey) -> Vec<(PublicKey, WorkerInfo)> {
         self.workers
             .iter()
