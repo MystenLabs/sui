@@ -206,14 +206,13 @@ export class Coin {
 
   /**
    * Creates and executes a transaction to transfer coins to a recipient address.
-   * see {@link Coin.newTransferTx}
-   * @param signer
-   * @param allCoins
-   * @param coinTypeArg
-   * @param amountToSend
-   * @param recipient
-   * @param gasBudget
-   * @returns
+   * @param signer User's signer
+   * @param allCoins All the coins that are owned by the user. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.
+   * @param coinTypeArg The coin type argument (Coin<T> the T) of the coin to send
+   * @param amountToSend Total amount to send to recipient
+   * @param recipient Recipient's address
+   * @param gasBudget Gas budget for the tx
+   * @throws in case of insufficient funds, network errors etc
    */
   public static async transfer(
     signer: SignerWithProvider,
@@ -235,7 +234,7 @@ export class Coin {
   }
 
   /**
-   * Create a new transaction for sending coins ready to be singed and executed.
+   * Create a new transaction for sending coins ready to be signed and executed.
    * @param signer User's signer
    * @param allCoins All the coins that are owned by the user. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.
    * @param coinTypeArg The coin type argument (Coin<T> the T) of the coin to send

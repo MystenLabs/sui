@@ -12,11 +12,7 @@ import AddressInput from '_components/address-input';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useCoinDecimals, useFormatCoin } from '_hooks';
-import {
-    DEFAULT_GAS_BUDGET_FOR_TRANSFER,
-    GAS_SYMBOL,
-    GAS_TYPE_ARG,
-} from '_redux/slices/sui-objects/Coin';
+import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from '../';
 
@@ -24,17 +20,17 @@ import st from './TransferCoinForm.module.scss';
 
 export type TransferCoinFormProps = {
     submitError: string | null;
-    coinBalance: string;
     coinSymbol: string;
     coinType: string;
+    gasBudget: number;
     onClearSubmitError: () => void;
 };
 
 function StepTwo({
     submitError,
-    coinBalance,
     coinSymbol,
     coinType,
+    gasBudget,
     onClearSubmitError,
 }: TransferCoinFormProps) {
     const {
@@ -57,7 +53,7 @@ function StepTwo({
         [amount, decimals]
     );
 
-    const totalAmount = new BigNumber(DEFAULT_GAS_BUDGET_FOR_TRANSFER)
+    const totalAmount = new BigNumber(gasBudget)
         .plus(GAS_SYMBOL === coinSymbol ? amountWithoutDecimals : 0)
         .toString();
 
@@ -65,10 +61,7 @@ function StepTwo({
 
     const [formattedBalance] = useFormatCoin(amountWithoutDecimals, coinType);
     const [formattedTotal] = useFormatCoin(totalAmount, GAS_TYPE_ARG);
-    const [formattedGas] = useFormatCoin(
-        DEFAULT_GAS_BUDGET_FOR_TRANSFER,
-        GAS_TYPE_ARG
-    );
+    const [formattedGas] = useFormatCoin(gasBudget, GAS_TYPE_ARG);
 
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
