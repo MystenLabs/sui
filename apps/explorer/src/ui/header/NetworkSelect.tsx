@@ -24,9 +24,9 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ReactComponent as MenuIcon } from '../icons/menu.svg';
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
+import { ReactComponent as MenuIcon } from '../icons/menu.svg';
 import { NavItem } from './NavItem';
 
 import type { ComponentProps, ReactNode } from 'react';
