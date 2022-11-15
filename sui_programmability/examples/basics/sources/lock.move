@@ -84,7 +84,7 @@ module basics::lock {
     }
 
     /// Unlock the Lock and transfer its contents to the transaction sender.
-    public fun take<T: store + key>(
+    public entry fun take<T: store + key>(
         lock: &mut Lock<T>,
         key: &Key<T>,
         ctx: &mut TxContext,
