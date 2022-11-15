@@ -2365,14 +2365,8 @@ async fn shared_object() {
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
     // Finally process the certificate and execute the contract. Ensure that the
-    // shared object lock is cleaned up and that its sequence number increased.
+    // shared object sequence number increased.
     authority.handle_certificate(&certificate).await.unwrap();
-
-    let shared_object_lock = authority
-        .db()
-        .get_assigned_object_versions(transaction_digest, [shared_object_id].iter())
-        .unwrap()[0];
-    assert!(shared_object_lock.is_none());
 
     let shared_object_version = authority
         .get_object(&shared_object_id)

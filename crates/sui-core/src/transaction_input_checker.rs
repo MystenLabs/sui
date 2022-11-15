@@ -67,7 +67,7 @@ where
     transaction.signed_data.data.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.signed_data.data.input_objects()?;
-    let objects = store.get_input_objects(&input_objects)?;
+    let objects = store.check_input_objects(&input_objects)?;
     let input_objects =
         check_objects(&transaction.signed_data.data, input_objects, objects).await?;
     Ok((gas_status, input_objects))
@@ -81,17 +81,21 @@ where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let gas_status = get_gas_status(store, cert).await?;
-    let input_objects = cert.signed_data.data.input_objects()?;
-
+    let input_object_kinds = cert.signed_data.data.input_objects()?;
     let tx_data = &cert.signed_data.data;
-    let objects = if tx_data.kind.is_change_epoch_tx() {
+    let input_object_data = if tx_data.kind.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
         // through sequencing, so we must bypass the sequence checks here.
-        store.get_input_objects(&input_objects)?
+        store.check_input_objects(&input_object_kinds)?
     } else {
-        store.get_sequenced_input_objects(cert.digest(), &input_objects)?
+        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds)?
     };
-    let input_objects = check_objects(&cert.signed_data.data, input_objects, objects).await?;
+    let input_objects = check_objects(
+        &cert.signed_data.data,
+        input_object_kinds,
+        input_object_data,
+    )
+    .await?;
     Ok((gas_status, input_objects))
 }
 
@@ -122,7 +126,7 @@ where
             }],
         })?;
 
-        //TODO: cache this storage_gas_price in memory
+        // TODO: cache this storage_gas_price in memory
         let storage_gas_price = store
             .get_sui_system_state_object()?
             .parameters
