@@ -19,6 +19,7 @@ use crate::authority::*;
 use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::checkpoints2::CheckpointMetrics;
 use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
@@ -82,6 +83,7 @@ pub(crate) async fn init_state(
         LogCheckpointOutput::boxed(),
         LogCheckpointOutput::boxed_certified(),
         committee,
+        CheckpointMetrics::new_for_tests(),
     );
 
     AuthorityState::new(

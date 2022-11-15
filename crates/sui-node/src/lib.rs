@@ -64,7 +64,9 @@ pub mod metrics;
 mod handle;
 pub use handle::SuiNodeHandle;
 use narwhal_types::TransactionsClient;
-use sui_core::checkpoints2::{CheckpointService, LogCheckpointOutput, SubmitCheckpointToConsensus};
+use sui_core::checkpoints2::{
+    CheckpointMetrics, CheckpointService, LogCheckpointOutput, SubmitCheckpointToConsensus,
+};
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
@@ -167,6 +169,7 @@ impl SuiNode {
             checkpoint_output,
             LogCheckpointOutput::boxed_certified(),
             committee.clone(),
+            CheckpointMetrics::new(&prometheus_registry),
         );
 
         let state = Arc::new(
