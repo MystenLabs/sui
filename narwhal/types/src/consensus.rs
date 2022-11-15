@@ -55,6 +55,10 @@ impl CommittedSubDag {
             .last()
             .map_or_else(|| false, |x| x == output)
     }
+
+    pub fn round(&self) -> Round {
+        self.leader.round()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

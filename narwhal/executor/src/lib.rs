@@ -57,7 +57,7 @@ pub trait ExecutionState {
     /// Current implementation sends this notification at the end of narwhal certificate
     ///
     /// In the future this will be triggered on the actual commit boundary, once per narwhal commit
-    async fn notify_commit_boundary(&self, _consensus_output: &Arc<ConsensusOutput>) {}
+    async fn notify_commit_boundary(&self, _committed_dag: &Arc<CommittedSubDag>) {}
 
     /// Load the last consensus index from storage.
     async fn load_execution_indices(&self) -> ExecutionIndices;
@@ -172,8 +172,8 @@ impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
             .await
     }
 
-    async fn notify_commit_boundary(&self, consensus_output: &Arc<ConsensusOutput>) {
-        self.as_ref().notify_commit_boundary(consensus_output).await
+    async fn notify_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) {
+        self.as_ref().notify_commit_boundary(committed_dag).await
     }
 
     async fn load_execution_indices(&self) -> ExecutionIndices {

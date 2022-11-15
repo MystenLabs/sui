@@ -1329,7 +1329,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
 
         let iter = epoch_tables.consensus_message_order.iter();
-        let last_previous = ExecutionIndices::last_for_certificate(from_height_excluded);
+        let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
         let iter = iter.skip_to(&last_previous)?;
         // skip_to lands to key the last_key or key after it
         // technically here we need to check if first item in stream has a key equal to last_previous
@@ -1343,7 +1343,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(Some((index, roots)))
     }
 
-    pub fn record_checkpoint_boundary(&self, certificate_height: u64) -> SuiResult {
+    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
         if let Some((index, height)) = self
             .epoch_tables()
             .checkpoint_boundary
@@ -1351,28 +1351,25 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .skip_to_last()
             .next()
         {
-            if height >= certificate_height {
+            if height >= commit_round {
                 // Due to crash recovery we might see same boundary twice
                 debug!("Not recording checkpoint boundary - already updated");
             } else {
                 let index = index + 1;
                 debug!(
                     "Recording checkpoint boundary {} at {}",
-                    index, certificate_height
+                    index, commit_round
                 );
                 self.epoch_tables()
                     .checkpoint_boundary
-                    .insert(&index, &certificate_height)?;
+                    .insert(&index, &commit_round)?;
             }
         } else {
             // Table is empty
-            debug!(
-                "Recording first checkpoint boundary at {}",
-                certificate_height
-            );
+            debug!("Recording first checkpoint boundary at {}", commit_round);
             self.epoch_tables()
                 .checkpoint_boundary
-                .insert(&0, &certificate_height)?;
+                .insert(&0, &commit_round)?;
         }
         Ok(())
     }

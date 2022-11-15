@@ -5,7 +5,7 @@ use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::ConsensusOutput;
+use narwhal_types::{CommittedSubDag, ConsensusOutput};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -123,9 +123,9 @@ impl ExecutionState for ConsensusHandler {
     }
 
     #[instrument(level = "trace", skip_all)]
-    async fn notify_commit_boundary(&self, consensus_output: &Arc<ConsensusOutput>) {
+    async fn notify_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) {
         self.state
-            .handle_commit_boundary(consensus_output)
+            .handle_commit_boundary(committed_dag)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 }

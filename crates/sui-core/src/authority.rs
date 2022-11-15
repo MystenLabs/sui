@@ -44,7 +44,7 @@ use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-use narwhal_types::ConsensusOutput;
+use narwhal_types::CommittedSubDag;
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{
@@ -2244,24 +2244,18 @@ impl AuthorityState {
         }
     }
 
-    pub(crate) fn handle_commit_boundary(
-        &self,
-        consensus_output: &Arc<ConsensusOutput>,
-    ) -> SuiResult {
-        debug!("Commit boundary at {}", consensus_output.consensus_index);
+    pub(crate) fn handle_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) -> SuiResult {
+        let round = committed_dag.round();
+        debug!("Commit boundary at {}", round);
         // This exchange is restart safe because of following:
         //
         // We try to read last checkpoint content and send it to the checkpoint service
         // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
-        if let Some((index, roots)) = self
-            .database
-            .last_checkpoint(consensus_output.consensus_index)?
-        {
+        if let Some((index, roots)) = self.database.last_checkpoint(round)? {
             self.checkpoint_service.notify_checkpoint(index, roots)?;
         }
-        self.database
-            .record_checkpoint_boundary(consensus_output.consensus_index)
+        self.database.record_checkpoint_boundary(round)
     }
 }
