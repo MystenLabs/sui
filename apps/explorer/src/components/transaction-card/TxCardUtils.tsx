@@ -25,6 +25,7 @@ import Longtext from '../../components/longtext/Longtext';
 import { getAmount } from '../../utils/getAmount';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
+import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
 
