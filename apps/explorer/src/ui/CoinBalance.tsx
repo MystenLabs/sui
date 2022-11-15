@@ -6,7 +6,7 @@ import {
     CoinFormat,
     formatBalance,
 } from '~/hooks/useFormatCoin';
-import { Heading } from '~/ui/Heading';
+import { Amount } from '~/ui/Amount';
 
 export interface CoinBalanceProps {
     amount: number | string | bigint;
@@ -16,11 +16,6 @@ export interface CoinBalanceProps {
 }
 
 const DECIMALS = 0;
-
-const SIZE_FORMAT = {
-    lg: 'heading2',
-    md: 'heading6',
-} as const;
 
 // Passing amount as a string or number for optional number suffix
 export function CoinBalance({
@@ -35,27 +30,9 @@ export function CoinBalance({
         CoinFormat[coinFormat]
     );
 
-    const isLarge = size === 'lg';
+    const formattedBalance = symbol
+        ? formattedAmount
+        : formatBalance(amount, DECIMALS, CoinFormat[coinFormat]);
 
-    return (
-        <div className="flex items-end gap-1 text-sui-grey-100 break-words">
-            <Heading
-                variant={SIZE_FORMAT[size]}
-                weight={isLarge ? 'bold' : 'semibold'}
-            >
-                {symbol
-                    ? formattedAmount
-                    : formatBalance(amount, DECIMALS, CoinFormat[coinFormat])}
-            </Heading>
-            {symbol && (
-                <div className="text-sui-grey-80 text-bodySmall font-medium leading-4">
-                    {isLarge ? (
-                        <sup className="text-bodySmall">{suffix}</sup>
-                    ) : (
-                        suffix
-                    )}
-                </div>
-            )}
-        </div>
-    );
+    return <Amount amount={formattedBalance} symbol={suffix} size={size} />;
 }
