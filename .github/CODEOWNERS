@@ -1,7 +1,7 @@
 /crates/sui-types/src/crypto.rs @huitseeker
 /crates/sui-sdk/src/crypto.rs @huitseeker @patrickkuo
 
-*.md @randall-Mysten
+*.md @randall-Mysten @ronny-mysten
 # Omit auto-generated changelogs and changesets from docs review:
 /.changeset/*.md
 CHANGELOG.md
