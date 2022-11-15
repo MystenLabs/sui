@@ -77,6 +77,12 @@ impl Worker {
         store: Store<BatchDigest, Batch>,
         metrics: Metrics,
     ) -> Vec<JoinHandle<()>> {
+        info!(
+            "Boot worker node with id {} peer id {}",
+            id,
+            PeerId(keypair.public().0.to_bytes())
+        );
+
         // Define a worker instance.
         let worker = Self {
             primary_name: primary_name.clone(),
@@ -180,7 +186,7 @@ impl Worker {
             config
         };
 
-        let network = anemo::Network::bind(addr)
+        let network = Network::bind(addr)
             .server_name("narwhal")
             .private_key(worker.keypair.copy().private().0.to_bytes())
             .config(anemo_config)

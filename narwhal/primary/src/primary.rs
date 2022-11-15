@@ -100,6 +100,13 @@ impl Primary {
         // Write the parameters to the logs.
         parameters.tracing();
 
+        // Some info statements
+        info!(
+            "Boot primary node with peer id {} and public key {}",
+            PeerId(network_signer.public().0.to_bytes()),
+            name.encode_base64()
+        );
+
         // Initialize the metrics
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
