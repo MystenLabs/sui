@@ -50,12 +50,7 @@ export type LinkObj = {
     isLink?: boolean;
 };
 
-type Category =
-    | 'objects'
-    | 'transactions'
-    | 'addresses'
-    | 'ethAddress'
-    | 'unknown';
+type Category = 'objects' | 'transactions' | 'addresses' | 'unknown';
 
 type TxStatus = {
     txTypeName: TransactionKindName | undefined;
