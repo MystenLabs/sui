@@ -3,7 +3,6 @@
 
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
-use crate::consensus_adapter::ConsensusListenerMessage;
 use async_trait::async_trait;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
@@ -11,23 +10,17 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use sui_types::messages::ConsensusTransaction;
-use tokio::sync::mpsc;
 use tracing::{debug, instrument, warn};
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
-    sender: mpsc::Sender<ConsensusListenerMessage>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: mpsc::Sender<ConsensusListenerMessage>) -> Self {
+    pub fn new(state: Arc<AuthorityState>) -> Self {
         let last_seen = Mutex::new(Default::default());
-        Self {
-            state,
-            sender,
-            last_seen,
-        }
+        Self { state, last_seen }
     }
 
     fn update_hash(
@@ -112,14 +105,6 @@ impl ExecutionState for ConsensusHandler {
             .handle_consensus_transaction(verified_transaction)
             .await
             .expect("Unrecoverable error in consensus handler");
-        if self
-            .sender
-            .send(ConsensusListenerMessage::Processed(serialized_transaction))
-            .await
-            .is_err()
-        {
-            warn!("Consensus handler outbound channel closed");
-        }
     }
 
     #[instrument(level = "debug", skip_all, fields(result))]

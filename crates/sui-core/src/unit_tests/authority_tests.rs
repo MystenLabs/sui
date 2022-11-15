@@ -232,13 +232,11 @@ async fn test_handle_transfer_transaction_bad_signature() {
     );
 
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         authority_state.clone(),
         consensus_address,
-        tx_consensus_listener,
     );
     let metrics = server.metrics.clone();
 
