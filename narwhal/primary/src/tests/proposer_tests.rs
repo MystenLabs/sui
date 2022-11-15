@@ -33,6 +33,7 @@ async fn propose_empty() {
         /* header_num_of_batches_threshold */ 32,
         /* max_header_num_of_batches */ 100,
         /* max_header_delay */ Duration::from_millis(20),
+        None,
         NetworkModel::PartiallySynchronous,
         rx_reconfigure,
         /* rx_core */ rx_parents,
@@ -49,12 +50,13 @@ async fn propose_empty() {
 }
 
 #[tokio::test]
-async fn propose_payload() {
+async fn propose_payload_and_repropose_after_n_seconds() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let shared_worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
+    let header_resend_delay = Duration::from_secs(3);
     let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_tx_reconfigure, rx_reconfigure) =
@@ -77,6 +79,7 @@ async fn propose_payload() {
         /* max_header_num_of_batches */ max_num_of_batches,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        Some(header_resend_delay),
         NetworkModel::PartiallySynchronous,
         rx_reconfigure,
         /* rx_core */ rx_parents,
@@ -121,6 +124,16 @@ async fn propose_payload() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 2);
     assert_eq!(header.payload.len(), max_num_of_batches);
+
+    // WHEN wait to fetch again from the rx_headers a few times.
+    // In theory after header_resend_delay we should receive again
+    // the last created header.
+    for _ in 0..3 {
+        let resent_header = rx_headers.recv().await.unwrap();
+
+        // THEN should be the exact same as the last sent
+        assert_eq!(header, resent_header);
+    }
 }
 
 #[tokio::test]
@@ -151,6 +164,7 @@ async fn equivocation_protection() {
         /* max_header_num_of_batches */ 10,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        None,
         NetworkModel::PartiallySynchronous,
         rx_reconfigure,
         /* rx_core */ rx_parents,
@@ -205,6 +219,7 @@ async fn equivocation_protection() {
         /* max_header_num_of_batches */ 10,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        None,
         NetworkModel::PartiallySynchronous,
         rx_reconfigure,
         /* rx_core */ rx_parents,
