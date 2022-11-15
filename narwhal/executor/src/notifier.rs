@@ -48,10 +48,10 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             let mut bytes = 0usize;
             for (transaction_index, transaction) in batch.transactions.into_iter().enumerate() {
                 let execution_indices = ExecutionIndices {
+                    last_committed_round: index.sub_dag.round(),
                     next_certificate_index: index.next_certificate_index,
                     next_batch_index: index.batch_index + 1,
                     next_transaction_index: transaction_index as u64 + 1,
-                    last_committed_round: index.sub_dag.leader.round(),
                 };
                 bytes += transaction.len();
 
@@ -66,7 +66,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             if index.batch_index + 1 == index.output.certificate.header.payload.len() as u64
                 && index.sub_dag.is_last(&index.output)
             {
-                self.callback.notify_commit_boundary(&index.output).await;
+                self.callback.notify_commit_boundary(&index.sub_dag).await;
             }
 
             self.metrics

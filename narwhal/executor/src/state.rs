@@ -18,10 +18,10 @@ pub struct ExecutionIndices {
 }
 
 impl ExecutionIndices {
-    pub fn last_for_certificate(certificate_index: u64) -> Self {
+    pub fn end_for_commit(commit_round: u64) -> Self {
         ExecutionIndices {
-            last_committed_round: 0,
-            next_certificate_index: certificate_index,
+            last_committed_round: commit_round,
+            next_certificate_index: SequenceNumber::MAX,
             next_batch_index: SequenceNumber::MAX,
             next_transaction_index: SequenceNumber::MAX,
         }
