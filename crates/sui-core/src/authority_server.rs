@@ -4,9 +4,7 @@
 
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
-    consensus_adapter::{
-        ConsensusAdapter, ConsensusAdapterMetrics, ConsensusListener, ConsensusListenerMessage,
-    },
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
     metrics::start_timer,
 };
 use anyhow::anyhow;
@@ -29,10 +27,7 @@ use sui_network::{
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
 use tokio::time::sleep;
-use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
-    task::JoinHandle,
-};
+use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
 use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
@@ -97,7 +92,6 @@ impl AuthorityServer {
         address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
-        tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         use narwhal_types::TransactionsClient;
         let consensus_client = Box::new(TransactionsClient::new(
@@ -107,7 +101,6 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.clone_committee(),
-            tx_consensus_listener,
             Duration::from_secs(20),
             ConsensusAdapterMetrics::new_test(),
         );
@@ -272,8 +265,6 @@ impl ValidatorService {
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
-        let (tx_consensus_listener, rx_consensus_listener) = channel(1_000);
-
         // Spawn the consensus node of this authority.
         let consensus_config = config
             .consensus_config()
@@ -283,8 +274,7 @@ impl ValidatorService {
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state =
-            ConsensusHandler::new(state.clone(), tx_consensus_listener.clone());
+        let consensus_execution_state = ConsensusHandler::new(state.clone());
         let consensus_execution_state = Arc::new(consensus_execution_state);
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
@@ -303,10 +293,6 @@ impl ValidatorService {
             &registry,
         ));
 
-        // Spawn a consensus listener. It listen for consensus outputs and notifies the
-        // authority server when a sequenced transaction is ready for execution.
-        ConsensusListener::spawn(rx_consensus_listener);
-
         let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
@@ -314,7 +300,6 @@ impl ValidatorService {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.clone_committee(),
-            tx_consensus_listener,
             timeout,
             ca_metrics,
         );

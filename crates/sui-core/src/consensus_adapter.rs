@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use prometheus::register_int_gauge_with_registry;
@@ -18,12 +16,6 @@ use std::future::Future;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::{Hash, Hasher},
-};
-use sui_metrics::monitored_future;
-use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::{
@@ -34,30 +26,13 @@ use sui_types::{
 use tap::prelude::*;
 
 use sui_types::base_types::AuthorityName;
-use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        oneshot,
-    },
-    task::JoinHandle,
-    time::{timeout, Duration},
-};
+use tokio::time::{timeout, Duration};
 use tracing::debug;
 use tracing::error;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
-
-/// A serialized consensus transaction.
-type SerializedConsensusTransaction = Vec<u8>;
-
-/// The digest of a consensus transactions.
-type ConsensusTransactionDigest = u64;
-
-/// Channel to notify the caller when the Sui certificate has been sequenced.
-type TxSequencedNotifier = oneshot::Sender<SuiResult<()>>;
-type TxSequencedNotifierClose = oneshot::Sender<()>;
 
 const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
@@ -154,62 +129,12 @@ impl ConsensusAdapterMetrics {
     }
 }
 
-/// Message to notify the consensus listener that a new transaction has been sent to consensus
-/// or that the caller timed out on a specific transaction.
-#[derive(Debug)]
-pub enum ConsensusListenerMessage {
-    New(
-        SerializedConsensusTransaction,
-        (TxSequencedNotifier, TxSequencedNotifierClose),
-    ),
-    Processed(Vec<u8>),
-}
-
-pub struct ConsensusWaiter {
-    // This channel is used to signal the result if the transaction gets
-    // sequenced and observed at the output of consensus.
-    signal_back: oneshot::Receiver<SuiResult<()>>,
-    // We use this channel as a signaling mechanism, to detect if the ConsensusWaiter
-    // struct is dropped, and to clean up the ConsensusListener structures to prevent
-    // memory leaks.
-    signal_close: oneshot::Receiver<()>,
-}
-
-impl ConsensusWaiter {
-    pub fn new() -> (
-        ConsensusWaiter,
-        (TxSequencedNotifier, TxSequencedNotifierClose),
-    ) {
-        let (notif, signal_back) = oneshot::channel();
-        let (close, signal_close) = oneshot::channel();
-        (
-            ConsensusWaiter {
-                signal_back,
-                signal_close,
-            },
-            (notif, close),
-        )
-    }
-
-    pub fn close(&mut self) {
-        self.signal_close.close();
-    }
-
-    pub async fn wait_for_result(self) -> SuiResult<()> {
-        self.signal_back
-            .await
-            .map_err(|e| SuiError::FailedToHearBackFromConsensus(e.to_string()))?
-    }
-}
-
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Box<dyn SubmitToConsensus>,
     /// The Sui committee information.
     committee: Committee,
-    /// A channel to notify the consensus listener to take action for a transactions.
-    _tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
     timeout: Duration,
     /// Number of submitted transactions still inflight at this node.
@@ -245,7 +170,6 @@ impl ConsensusAdapter {
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
         committee: Committee,
-        tx_consensus_listener: Sender<ConsensusListenerMessage>,
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Self {
@@ -253,7 +177,6 @@ impl ConsensusAdapter {
         Self {
             consensus_client,
             committee,
-            _tx_consensus_listener: tx_consensus_listener,
             timeout,
             num_inflight_transactions,
             opt_metrics,
@@ -406,106 +329,6 @@ impl<'a> Drop for InflightDropGuard<'a> {
         // Store the latest latency
         if let Some(metrics) = self.adapter.opt_metrics.as_ref() {
             metrics.sequencing_certificate_inflight.set(inflight as i64);
-        }
-    }
-}
-
-/// This module interfaces the consensus with Sui. It receives certificates input to consensus and
-/// notify the called when they are sequenced.
-pub struct ConsensusListener {
-    /// Receive messages input to the consensus.
-    rx_consensus_listener: Receiver<ConsensusListenerMessage>,
-    /// Keep a map of all consensus inputs that are currently being sequenced.
-    /// Maximum size of the pending notifiers is bounded by the maximum pending transactions of the node.
-    pending: HashMap<ConsensusTransactionDigest, Vec<(u64, TxSequencedNotifier)>>,
-}
-
-impl ConsensusListener {
-    /// Spawn a new consensus adapter in a dedicated tokio task.
-    pub fn spawn(rx_consensus_listener: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
-        spawn_monitored_task!(Self {
-            rx_consensus_listener,
-            pending: HashMap::new(),
-        }
-        .run())
-    }
-
-    /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
-    /// only collision resistance.
-    pub fn hash_serialized_transaction(
-        serialized: &SerializedConsensusTransaction,
-    ) -> ConsensusTransactionDigest {
-        let mut hasher = DefaultHasher::new();
-        let len = serialized.len();
-        if len > 8 {
-            // The first 8 bytes are the tracking id, and we don't want to hash that so that
-            // certificates submitted by different validators are considered the same message.
-            (serialized[8..]).hash(&mut hasher);
-        } else {
-            // If somehow the length is <= 8 (which is invalid), we just don't care and hash
-            // the whole thing.
-            serialized.hash(&mut hasher);
-        }
-        hasher.finish()
-    }
-
-    /// Main loop receiving messages input to consensus and notifying the caller once the inputs
-    /// are sequenced (or if an error happened).
-    async fn run(mut self) {
-        let mut closed_notifications = FuturesUnordered::new();
-        let mut id_counter: u64 = 0;
-
-        loop {
-            tokio::select! {
-                // A new transaction has been sent to consensus or is no longer needed.
-                Some(message) = self.rx_consensus_listener.recv() => {
-                    match message {
-                        // Keep track of this certificates so we can notify the user later.
-                        ConsensusListenerMessage::New(transaction, (replier, mut closer)) => {
-                            let digest = Self::hash_serialized_transaction(&transaction);
-                            let id = id_counter;
-                            id_counter += 1;
-
-                            let list = self.pending.entry(digest).or_insert_with(Vec::new);
-                            list.push((id, replier));
-
-                            // Register with the close notification.
-                            closed_notifications.push(monitored_future!(async move {
-                                // Wait for the channel to close
-                                closer.closed().await;
-                                // Return he digest concerned
-                                (digest, id)
-                            }));
-                        },
-                        ConsensusListenerMessage::Processed(serialized) => {
-                            let digest = Self::hash_serialized_transaction(&serialized);
-                            if let Some(repliers) = self.pending.remove(&digest) {
-                                for (_, replier) in repliers {
-                                    if replier.send(Ok(())).is_err() {
-                                        debug!("No replier to listen to consensus output {digest}");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-
-                Some((digest, id)) = closed_notifications.next() => {
-                    let should_delete = if let Some(list) = self.pending.get_mut(&digest) {
-                        // First clean up the list
-                        list.retain(|(item_id, _)| *item_id != id);
-                        // if the resuting list is empty we should delete the entry.
-                        list.is_empty()
-                    } else { false };
-
-                    // Secondly we determine if we need to delete the entry
-                    if should_delete {
-                        self.pending.remove(&digest);
-                    }
-
-                }
-
-            }
         }
     }
 }

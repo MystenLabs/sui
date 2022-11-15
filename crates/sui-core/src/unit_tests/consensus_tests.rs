@@ -19,6 +19,7 @@ use sui_types::{
 };
 use test_utils::test_account_keys;
 use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
@@ -96,51 +97,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 }
 
 #[tokio::test]
-async fn listen_to_sequenced_transaction() {
-    let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1);
-
-    // Make an authority state.
-    let mut objects = test_gas_objects();
-    objects.push(test_shared_object());
-    let state = init_state_with_objects(objects).await;
-
-    // Make a sample (serialized) consensus transaction.
-    let certificate = test_certificates(&state).await.pop().unwrap();
-    let message = ConsensusTransaction::new_certificate_message(&state.name, certificate.clone());
-    let serialized = bincode::serialize(&message).unwrap();
-
-    // Set the shared object locks.
-    state
-        .handle_consensus_transaction(VerifiedSequencedConsensusTransaction::new_test(
-            ConsensusTransaction::new_certificate_message(&state.name, certificate),
-        ))
-        .await
-        .unwrap();
-
-    // Spawn a consensus listener.
-    ConsensusListener::spawn(/* rx_consensus_listener */ rx_sui_to_consensus);
-
-    // Submit a sample consensus transaction.
-    let (waiter, signals) = ConsensusWaiter::new();
-
-    let message = ConsensusListenerMessage::New(serialized.clone(), signals);
-    tx_sui_to_consensus.send(message).await.unwrap();
-
-    // Notify the consensus listener that the transaction has been sequenced.
-    tokio::task::yield_now().await;
-    tx_sui_to_consensus
-        .send(ConsensusListenerMessage::Processed(serialized.clone()))
-        .await
-        .unwrap();
-
-    // Ensure the caller get notified from the consensus listener.
-    assert!(waiter.wait_for_result().await.is_ok());
-}
-
-#[tokio::test]
 async fn submit_transaction_to_consensus_adapter() {
-    let (tx_consensus_listener, _rx_consensus_listener) = channel(1);
-
     // Initialize an authority with a (owned) gas object and a shared object; then
     // make a test certificate.
     let mut objects = test_gas_objects();
@@ -170,7 +127,6 @@ async fn submit_transaction_to_consensus_adapter() {
     let adapter = ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
         committee.clone(),
-        tx_consensus_listener,
         /* timeout */ Duration::from_secs(5),
         metrics,
     );
