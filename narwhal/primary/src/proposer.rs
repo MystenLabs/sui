@@ -15,7 +15,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
@@ -36,6 +36,8 @@ pub struct OurDigestMessage {
 #[path = "tests/proposer_tests.rs"]
 pub mod proposer_tests;
 
+const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
     /// The public key of this primary.
@@ -53,6 +55,10 @@ pub struct Proposer {
     max_header_num_of_batches: usize,
     /// The maximum delay to wait for batches' digests.
     max_header_delay: Duration,
+    /// The delay to wait until resending the last proposed header if proposer
+    /// hasn't proposed anything new since then. If None is provided then the
+    /// default value will be used instead.
+    header_resend_timeout: Option<Duration>,
     /// The network model in which the node operates.
     network_model: NetworkModel,
 
@@ -98,6 +104,7 @@ impl Proposer {
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
+        header_resend_timeout: Option<Duration>,
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
@@ -115,6 +122,7 @@ impl Proposer {
                 header_num_of_batches_threshold,
                 max_header_num_of_batches,
                 max_header_delay,
+                header_resend_timeout,
                 network_model,
                 rx_reconfigure,
                 rx_parents,
@@ -303,12 +311,18 @@ impl Proposer {
         let mut advance = true;
 
         let timer = sleep(self.max_header_delay);
-        let mut header_repeat_timer = Box::pin(sleep(Duration::from_secs(60)));
+        let header_resend_timeout = self
+            .header_resend_timeout
+            .unwrap_or(DEFAULT_HEADER_RESEND_TIMEOUT);
+        let mut header_repeat_timer = Box::pin(sleep(header_resend_timeout));
         let mut opt_latest_header = None;
 
         tokio::pin!(timer);
 
-        info!("Proposer on node {} has started successfully.", self.name);
+        info!(
+            "Proposer on node {} has started successfully with header resend timeout {:?}.",
+            self.name, header_resend_timeout
+        );
         loop {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
             // and one of the following conditions is met:
@@ -352,7 +366,7 @@ impl Proposer {
 
                         // Save the header
                         opt_latest_header = Some(header);
-                        header_repeat_timer = Box::pin(sleep(Duration::from_secs(60)));
+                        header_repeat_timer = Box::pin(sleep(header_resend_timeout));
 
                         self.metrics
                             .num_of_batch_digests_in_header
@@ -370,21 +384,20 @@ impl Proposer {
             tokio::select! {
 
                 () = &mut header_repeat_timer => {
-                    // If the round has not advanced within 60sec then try to re-process our own header.
-
-
+                    // If the round has not advanced within header_resend_timeout then try to
+                    // re-process our own header.
                     if let Some(header) = &opt_latest_header {
-                        debug!("Resend Header {:?}", header);
+                        debug!("resend header {:?}", header);
 
-                        let _ = self.tx_headers
-                        .send(header.clone())
-                        .await
-                        .map_err(|_| DagError::ShuttingDown);
+                        if let Err(err) = self.tx_headers.send(header.clone()).await.map_err(|_| DagError::ShuttingDown) {
+                            error!("failed to resend header {:?} : {:?}", header, err);
+                        }
+
+                        // we want to reset the timer only when there is already a previous header
+                        // created.
+                        header_repeat_timer = Box::pin(sleep(header_resend_timeout));
                     }
-
-                    header_repeat_timer = Box::pin(sleep(Duration::from_secs(60)));
                 }
-
 
                 Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
                     // Remove committed headers from the list of pending

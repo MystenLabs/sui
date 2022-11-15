@@ -424,6 +424,7 @@ impl Primary {
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
             parameters.max_header_delay,
+            None,
             network_model,
             tx_reconfigure.subscribe(),
             rx_parents,
