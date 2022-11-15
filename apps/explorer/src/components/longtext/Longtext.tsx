@@ -9,13 +9,13 @@ import { ReactComponent as ContentCopyIcon16 } from '../../assets/SVGIcons/16px/
 import { ReactComponent as ContentCopyIcon24 } from '../../assets/SVGIcons/24px/Copy.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
-import ExternalLink from '../external-link/ExternalLink';
 
 import type { ReactNode } from 'react';
 
 import styles from './Longtext.module.css';
 
-import { LinkWithQuery, useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
+import { Link } from '~/ui/Link';
+import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function Longtext({
     text,
@@ -31,7 +31,6 @@ function Longtext({
         | 'objects'
         | 'transactions'
         | 'addresses'
-        | 'ethAddress'
         | 'validators'
         | 'unknown';
     isLink?: boolean;
@@ -97,33 +96,25 @@ function Longtext({
     if (isLink) {
         if (category === 'unknown') {
             textComponent = (
-                <div className={styles.longtext} onClick={navigateUnknown}>
+                <Link variant="mono" onClick={navigateUnknown}>
                     {alttext ? alttext : text}
-                </div>
-            );
-        } else if (category === 'ethAddress') {
-            textComponent = (
-                <ExternalLink
-                    href={`https://etherscan.io/address/${text}`}
-                    label={text}
-                    className={styles.longtext}
-                />
+                </Link>
             );
         } else {
             textComponent = (
-                <div>
-                    <LinkWithQuery
-                        className={styles.longtext}
-                        to={`/${category}/${encodeURIComponent(text)}`}
-                    >
-                        {alttext ? alttext : text} {iconButton}
-                    </LinkWithQuery>
-                </div>
+                <Link
+                    variant="mono"
+                    to={`/${category}/${encodeURIComponent(text)}`}
+                >
+                    {alttext ? alttext : text} {iconButton}
+                </Link>
             );
         }
     } else {
         textComponent = (
-            <div className={styles.linktext}>{alttext ? alttext : text}</div>
+            <div className="text-sui-grey-90 font-medium font-mono">
+                {alttext ? alttext : text}
+            </div>
         );
     }
 
