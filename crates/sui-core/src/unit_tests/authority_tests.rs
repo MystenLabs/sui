@@ -2015,7 +2015,6 @@ pub async fn init_state_with_committee(
         &authority_key,
         None,
         None,
-        None,
         tx_reconfigure_consensus,
     )
     .await

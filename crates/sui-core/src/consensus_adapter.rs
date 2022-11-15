@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::CheckpointStore;
-use crate::checkpoints::ConsensusSender;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use multiaddr::Multiaddr;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
-use parking_lot::Mutex;
 use prometheus::register_int_gauge_with_registry;
 use prometheus::IntCounter;
 use prometheus::IntGauge;
@@ -18,7 +14,6 @@ use prometheus::{register_histogram_with_registry, register_int_counter_with_reg
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
-use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -31,15 +26,12 @@ use sui_metrics::monitored_future;
 use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::{ConsensusTransaction, VerifiedCertificate},
 };
 
 use tap::prelude::*;
-use tokio::time::Instant;
 
 use sui_types::base_types::AuthorityName;
 use tokio::{
@@ -513,232 +505,6 @@ impl ConsensusListener {
 
                 }
 
-            }
-        }
-    }
-}
-
-/// Send checkpoint fragments through consensus.
-pub struct CheckpointSender {
-    tx_checkpoint_consensus_adapter: Sender<SignedCheckpointFragmentMessage>,
-}
-
-impl CheckpointSender {
-    pub fn new(tx_checkpoint_consensus_adapter: Sender<SignedCheckpointFragmentMessage>) -> Self {
-        Self {
-            tx_checkpoint_consensus_adapter,
-        }
-    }
-}
-
-impl ConsensusSender for CheckpointSender {
-    fn send_to_consensus(&self, fragment_messages: SignedCheckpointFragmentMessage) -> SuiResult {
-        self.tx_checkpoint_consensus_adapter
-            .try_send(fragment_messages)
-            .map_err(|e| SuiError::from(&e.to_string()[..]))
-    }
-}
-
-fn weighted_average_half(old_average: u64, new_value: u64) -> u64 {
-    (500 * old_average + 500 * new_value) / 1000
-}
-
-/// Reliably submit checkpoints fragments to consensus.
-pub struct CheckpointConsensusAdapter {
-    /// The network client connecting to the consensus node of this authority.
-    consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
-    /// Channel to request to be notified when a given consensus transaction is sequenced.
-    _tx_consensus_listener: Sender<ConsensusListenerMessage>,
-    /// Receive new checkpoint fragments to sequence.
-    rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
-    /// A pointer to the checkpoints local store.
-    checkpoint_db: Arc<Mutex<CheckpointStore>>,
-    /// The initial delay to wait before re-attempting a connection with consensus (in ms).
-    retry_delay: Duration,
-    /// The maximum number of checkpoint fragment pending sequencing.
-    max_pending_transactions: usize,
-    /// Keep all checkpoint fragment waiting to be sequenced.
-    buffer: VecDeque<(SerializedConsensusTransaction, CheckpointSequenceNumber)>,
-
-    /// A structure to register metrics
-    opt_metrics: OptArcConsensusAdapterMetrics,
-}
-
-impl CheckpointConsensusAdapter {
-    /// Create a new `CheckpointConsensusAdapter`.
-    pub fn new(
-        consensus_address: Multiaddr,
-        tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
-        checkpoint_db: Arc<Mutex<CheckpointStore>>,
-        retry_delay: Duration,
-        max_pending_transactions: usize,
-        opt_metrics: OptArcConsensusAdapterMetrics,
-    ) -> Self {
-        // Create a new network client.
-        let connection = mysten_network::client::connect_lazy(&consensus_address)
-            .expect("Failed to connect to consensus");
-        let consensus_client = TransactionsClient::new(connection);
-
-        // Create the new instance.
-        Self {
-            consensus_client,
-            _tx_consensus_listener: tx_consensus_listener,
-            rx_checkpoint_consensus_adapter,
-            checkpoint_db,
-            retry_delay,
-            max_pending_transactions,
-            buffer: VecDeque::with_capacity(max_pending_transactions),
-            opt_metrics,
-        }
-    }
-
-    /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
-    pub fn spawn(mut self) -> JoinHandle<()> {
-        spawn_monitored_task!(self.run())
-    }
-
-    /// Submit a transaction to consensus.
-    // Use .inspect when its stable.
-    #[allow(clippy::option_map_unit_fn)]
-    async fn submit(&self, serialized: SerializedConsensusTransaction) -> SuiResult {
-        let transaction = Bytes::from(serialized);
-        let proto_transaction = TransactionProto { transaction };
-
-        // Increment the attempted fragment sequencing failure
-        self.opt_metrics.as_ref().map(|metrics| {
-            metrics.sequencing_fragment_attempt.inc();
-        });
-
-        self.consensus_client
-            .clone()
-            .submit_transaction(proto_transaction)
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
-            .map(|_| ())
-    }
-
-    /// Wait for a transaction to be sequenced by consensus (or to timeout).
-    async fn waiter<T>(
-        receiver: ConsensusWaiter,
-        retry_delay: Duration,
-        deliver: T,
-    ) -> (SuiResult<()>, u64, T) {
-        let now = Instant::now();
-        let outcome = match timeout(retry_delay, receiver.wait_for_result()).await {
-            Ok(reply) => reply,
-            Err(e) => Err(SuiError::FailedToHearBackFromConsensus(e.to_string())),
-        };
-        let conensus_latency = now.elapsed().as_millis() as u64;
-        (outcome, conensus_latency, deliver)
-    }
-
-    /// Main loop receiving checkpoint fragments to reliably submit to consensus.
-    // Use .inspect when its stable.
-    #[allow(clippy::option_map_unit_fn)]
-    async fn run(&mut self) {
-        let mut waiting = FuturesUnordered::new();
-
-        // Fragment sequencing latency estimation
-        let mut latency_estimate = self.retry_delay.as_millis() as u64;
-        let max_latency = latency_estimate * 100;
-
-        // Continuously listen to checkpoint fragments and re-attempt sequencing if needed.
-        loop {
-            // Try to submit all pending checkpoint fragments to consensus.
-            while let Some((serialized, sequence_number)) = self.buffer.pop_back() {
-                match self.submit(serialized.clone()).await {
-                    Ok(_) => {
-                        // Notify the consensus listener that we wish to be notified once our
-                        // consensus transaction is sequenced.
-                        let (waiter, signals) = ConsensusWaiter::new();
-
-                        let consensus_input =
-                            ConsensusListenerMessage::New(serialized.clone(), signals);
-
-                        // Add the receiver to the waiter. So we can retransmit if the
-                        // connection fails.
-                        let deliver = (serialized, sequence_number);
-                        let timeout_delay =
-                            Duration::from_millis(latency_estimate) + self.retry_delay;
-                        let future =
-                            monitored_future!(Self::waiter(waiter, timeout_delay, deliver));
-                        waiting.push(future);
-
-                        // Finally sent to consensus, after registering to avoid a race condition
-                        self._tx_consensus_listener
-                            .send(consensus_input)
-                            .await
-                            .expect("Failed to notify consensus listener");
-                    }
-                    Err(e) => {
-                        error!("Checkpoint fragment submit failed: {:?}", e);
-                        self.buffer.push_back((serialized, sequence_number));
-                        break;
-                    }
-                }
-            }
-
-            // Process new events.
-            tokio::select! {
-                // Listen to new checkpoint fragments.
-                Some(fragment) = self.rx_checkpoint_consensus_adapter.recv() => {
-                    let sequence_number = fragment.message.proposer_sequence_number();
-
-                    // Cleanup the buffer.
-                    if self.buffer.len() >= self.max_pending_transactions {
-                        // Drop the earliest fragments. They are not needed for liveness.
-                        if let Some(proposal) = &self.checkpoint_db.lock().get_locals().current_proposal {
-                            let current_sequence_number = proposal.sequence_number();
-                            self.buffer.retain(|(_, s)| s >= current_sequence_number);
-                        }
-                    }
-
-                    // Add the fragment to the buffer.
-                    let (cp_seq, proposer, other) = fragment.message.message_key();
-                    let transaction = ConsensusTransaction::new_checkpoint_message(fragment);
-                    let tracking_id = transaction.get_tracking_id();
-                    let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
-                    debug!(
-                        ?tracking_id,
-                        ?cp_seq,
-                        size=?serialized.len(),
-                        "Checkpoint fragment consensus message created. Proposer: {}, Other: {}",
-                        proposer,
-                        other,
-                    );
-                    self.buffer.push_front((serialized, sequence_number));
-                },
-
-                // Listen to checkpoint fragments who failed to be sequenced and need retries.
-                Some((outcome, latency_ms, identifier)) = waiting.next() => {
-
-                    // Update the latency estimate using a weigted average
-                    // But also cap it upwards by max_latency
-                    latency_estimate = max_latency.min(weighted_average_half(latency_estimate, latency_ms));
-
-                    // Record the latest consensus latency estimate for fragments
-                    self.opt_metrics.as_ref().map(|metrics| {
-                        metrics.sequencing_fragment_control_delay.set(latency_estimate as i64);
-                    });
-
-                   if let Err(error) = outcome {
-                       tracing::warn!("Failed to sequence checkpoint fragment, and re-submitting fragment: {error}");
-                       let (serialized_transaction, checkpoint_sequence_number) = identifier;
-
-                            // Increment the attempted fragment sequencing failure
-                            self.opt_metrics.as_ref().map(|metrics| {
-                                metrics.sequencing_fragment_timeouts.inc();
-                            });
-
-                       self.buffer.push_back((serialized_transaction, checkpoint_sequence_number));
-                   } else {
-                            // Increment the attempted fragment sequencing success
-                            self.opt_metrics.as_ref().map(|metrics| {
-                                metrics.sequencing_fragment_success.inc();
-                            });
-                   }
-                },
             }
         }
     }

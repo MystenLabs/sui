@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
+use multiaddr::Multiaddr;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};

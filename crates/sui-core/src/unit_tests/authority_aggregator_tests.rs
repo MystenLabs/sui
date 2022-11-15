@@ -28,9 +28,8 @@ use super::*;
 use crate::authority::AuthorityState;
 use crate::authority_client::make_authority_clients;
 use crate::authority_client::{
-    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
-    LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
-    NetworkAuthorityClientMetrics,
+    AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
+    LocalAuthorityClientFaultConfig, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
 use crate::test_utils::to_sender_signed_transaction;
 use crate::validator_info::make_committee;
@@ -999,13 +998,6 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unreachable!();
-    }
-
-    async fn handle_checkpoint_stream(
-        &self,
-        _request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
         unreachable!();
     }
 

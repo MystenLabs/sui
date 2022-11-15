@@ -1,6 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority_client::NetworkAuthorityClientMetrics;
+use async_trait::async_trait;
+use std::sync::Arc;
+use sui_network::tonic;
+
+#[async_trait]
+pub trait Reconfigurable {
+    fn needs_network_recreation() -> bool;
+
+    fn recreate(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self;
+}
+/*
+
 use crate::authority_active::ActiveAuthority;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
@@ -19,16 +35,6 @@ use sui_types::messages::VerifiedSignedTransaction;
 use sui_types::sui_system_state::SuiSystemState;
 use tracing::{debug, error, info, warn};
 use typed_store::Map;
-
-#[async_trait]
-pub trait Reconfigurable {
-    fn needs_network_recreation() -> bool;
-
-    fn recreate(
-        channel: tonic::transport::Channel,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> Self;
-}
 
 const WAIT_BETWEEN_QUORUM_QUERY_RETRY: Duration = Duration::from_millis(300);
 
@@ -291,3 +297,4 @@ where
         Ok(())
     }
 }
+ */

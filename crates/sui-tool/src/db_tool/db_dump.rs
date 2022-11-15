@@ -9,7 +9,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_core::authority::authority_store_tables::{AuthorityEpochTables, AuthorityPerpetualTables};
-use sui_core::checkpoints::CheckpointStoreTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
@@ -25,9 +24,9 @@ pub enum StoreName {
     Index,
     LocksService,
     NodeSync,
-    Checkpoints,
     Wal,
     Epoch,
+    // TODO: Add the new checkpoint v2 tables.
 }
 impl std::fmt::Display for StoreName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -114,8 +113,6 @@ pub fn dump_table(
             page_size,
             page_number,
         ),
-        StoreName::Checkpoints => CheckpointStoreTables::get_read_only_handle(db_path, None, None)
-            .dump(table_name, page_size, page_number),
         StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),

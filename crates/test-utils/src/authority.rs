@@ -6,15 +6,8 @@ use rand::{prelude::StdRng, SeedableRng};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
-use sui_core::{
-    authority_active::{
-        checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
-        ActiveAuthority,
-    },
-    authority_aggregator::AuthorityAggregatorBuilder,
-    authority_client::NetworkAuthorityClient,
-};
 use sui_types::object::Object;
 
 pub use sui_node::{SuiNode, SuiNodeHandle};
@@ -107,38 +100,6 @@ where
         handles.push(node);
     }
     handles
-}
-
-/// Spawn checkpoint processes with very short checkpointing intervals.
-pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiNodeHandle]) {
-    // Start active part of each authority.
-    for handle in handles {
-        handle
-            .with_async(|authority| async move {
-                let state = authority.state();
-
-                let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
-                    .with_committee_store(authority.state().committee_store().clone())
-                    .build()
-                    .unwrap();
-
-                let inner_agg = aggregator.clone();
-                let active_state = Arc::new(
-                    ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
-                );
-                let checkpoint_process_control = CheckpointProcessControl {
-                    long_pause_between_checkpoints: Duration::from_millis(10),
-                    ..CheckpointProcessControl::default()
-                };
-                let _active_authority_handle = active_state
-                    .spawn_checkpoint_process_with_config(
-                        checkpoint_process_control,
-                        CheckpointMetrics::new_for_tests(),
-                    )
-                    .await;
-            })
-            .await;
-    }
 }
 
 /// Get a network client to communicate with the consensus.

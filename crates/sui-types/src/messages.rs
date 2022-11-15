@@ -12,7 +12,6 @@ use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
-    SignedCheckpointFragmentMessage,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
@@ -1998,7 +1997,6 @@ pub struct ConsensusTransaction {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
-    Checkpoint(Box<SignedCheckpointFragmentMessage>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
 }
 
@@ -2015,16 +2013,6 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
-        }
-    }
-
-    pub fn new_checkpoint_message(fragment: SignedCheckpointFragmentMessage) -> Self {
-        let mut hasher = DefaultHasher::new();
-        fragment.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::Checkpoint(Box::new(fragment)),
         }
     }
 
@@ -2049,7 +2037,6 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 certificate.verify_signature(committee)
             }
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(committee.epoch),
             ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
         }
     }

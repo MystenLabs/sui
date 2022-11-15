@@ -108,6 +108,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn reopen_epoch_db(&self, new_epoch: EpochId) {
         info!(?new_epoch, "re-opening AuthorityEpochTables for new epoch");
         let epoch_tables = Arc::new(AuthorityEpochTables::open(
@@ -1581,4 +1582,26 @@ impl From<&ObjectRef> for ObjectKey {
 pub enum UpdateType {
     Transaction(TxSequenceNumber, TransactionEffectsDigest),
     Genesis,
+}
+
+pub trait EffectsStore {
+    fn get_effects<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
+    ) -> SuiResult<Vec<Option<TransactionEffects>>>;
+}
+
+impl EffectsStore for Arc<AuthorityStore> {
+    fn get_effects<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(self
+            .perpetual_tables
+            .effects
+            .multi_get(transactions)?
+            .into_iter()
+            .map(|item| item.map(|x| x.effects))
+            .collect())
+    }
 }

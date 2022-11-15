@@ -5,8 +5,7 @@
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
     consensus_adapter::{
-        CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusAdapterMetrics,
-        ConsensusListener, ConsensusListenerMessage,
+        ConsensusAdapter, ConsensusAdapterMetrics, ConsensusListener, ConsensusListenerMessage,
     },
     metrics::start_timer,
 };
@@ -159,7 +158,6 @@ impl AuthorityServer {
             .add_service(ValidatorServer::new(ValidatorService {
                 state: self.state,
                 consensus_adapter: Arc::new(self.consensus_adapter),
-                _checkpoint_consensus_handle: None,
                 metrics: self.metrics.clone(),
             }))
             .bind(&address)
@@ -261,7 +259,6 @@ impl ValidatorServiceMetrics {
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    _checkpoint_consensus_handle: Option<JoinHandle<()>>,
     metrics: Arc<ValidatorServiceMetrics>,
 }
 
@@ -317,36 +314,14 @@ impl ValidatorService {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.clone_committee(),
-            tx_consensus_listener.clone(),
+            tx_consensus_listener,
             timeout,
-            ca_metrics.clone(),
-        );
-
-        // Update the checkpoint store with a consensus client.
-        let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
-        let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
-        state
-            .checkpoints
-            .lock()
-            .set_consensus(Box::new(consensus_sender))?;
-
-        let checkpoint_consensus_handle = Some(
-            CheckpointConsensusAdapter::new(
-                /* consensus_address */ consensus_config.address().to_owned(),
-                /* tx_consensus_listener */ tx_consensus_listener,
-                rx_checkpoint_consensus_adapter,
-                /* checkpoint_locals */ state.checkpoints(),
-                /* retry_delay */ timeout,
-                /* max_pending_transactions */ 10_000,
-                ca_metrics,
-            )
-            .spawn(),
+            ca_metrics,
         );
 
         Ok(Self {
             state,
             consensus_adapter: Arc::new(consensus_adapter),
-            _checkpoint_consensus_handle: checkpoint_consensus_handle,
             metrics: Arc::new(ValidatorServiceMetrics::new(&prometheus_registry)),
         })
     }
@@ -583,20 +558,6 @@ impl Validator for ValidatorService {
         let response = self.state.handle_checkpoint_request(&request)?;
 
         return Ok(tonic::Response::new(response));
-    }
-
-    type FollowCheckpointStreamStream =
-        BoxStream<'static, Result<CheckpointStreamResponseItem, tonic::Status>>;
-    async fn checkpoint_info(
-        &self,
-        request: tonic::Request<CheckpointStreamRequest>,
-    ) -> Result<tonic::Response<Self::FollowCheckpointStreamStream>, tonic::Status> {
-        let request = request.into_inner();
-        let xstream = self.state.handle_checkpoint_streaming(request).await?;
-
-        let response = xstream.map_err(tonic::Status::from);
-
-        Ok(tonic::Response::new(Box::pin(response)))
     }
 
     async fn committee_info(

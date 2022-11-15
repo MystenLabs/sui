@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_store::EffectsStore;
 use crate::authority::AuthorityStore;
-use crate::checkpoints::causal_order_effects::EffectsStore;
 use async_trait::async_trait;
 use either::Either;
 use futures::future::join_all;
@@ -202,7 +202,6 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        // todo - delete checkpoint v1 EffectsStore trait and inline implementation here
         EffectsStore::get_effects(self, digests.iter())
     }
 }
