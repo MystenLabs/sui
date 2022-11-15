@@ -830,10 +830,15 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
         let batch = self.perpetual_tables.effects.batch();
-        let batch = batch.insert_batch(
-            &self.perpetual_tables.effects,
-            [(transaction_digest, effects)].into_iter(),
-        )?;
+        let batch = batch
+            .insert_batch(
+                &self.perpetual_tables.effects,
+                [(transaction_digest, effects)],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.effects2,
+                [(effects_digest, effects.data())],
+            )?;
 
         // Writing to executed_sequence must be done *after* writing to effects, so that we never
         // broadcast a sequenced transaction (via the batch system) for which no effects can be

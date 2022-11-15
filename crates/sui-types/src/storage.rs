@@ -4,7 +4,7 @@
 use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest};
 use crate::committee::{Committee, EpochId};
 use crate::message_envelope::Message;
-use crate::messages::{Transaction, TransactionEffects};
+use crate::messages::{TransactionEffects, VerifiedCertificate};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     VerifiedCheckpoint,
@@ -184,7 +184,7 @@ pub trait ReadStore {
 
     fn get_committee(&self, epoch: EpochId) -> Option<Committee>;
 
-    fn get_transaction(&self, digest: &TransactionDigest) -> Option<Transaction>;
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedCertificate>;
 
     fn get_transaction_effects(
         &self,
@@ -223,7 +223,7 @@ impl<T: ReadStore> ReadStore for &T {
         ReadStore::get_committee(*self, epoch)
     }
 
-    fn get_transaction(&self, digest: &TransactionDigest) -> Option<Transaction> {
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedCertificate> {
         ReadStore::get_transaction(*self, digest)
     }
 
@@ -242,7 +242,7 @@ pub trait WriteStore: ReadStore {
 
     fn insert_committee(&self, new_committee: Committee);
 
-    fn insert_transaction(&self, transaction: Transaction);
+    fn insert_transaction(&self, transaction: VerifiedCertificate);
     fn insert_transaction_effects(&self, transaction_effects: TransactionEffects);
 }
 
@@ -263,7 +263,7 @@ impl<T: WriteStore> WriteStore for &T {
         WriteStore::insert_committee(*self, new_committee)
     }
 
-    fn insert_transaction(&self, transaction: Transaction) {
+    fn insert_transaction(&self, transaction: VerifiedCertificate) {
         WriteStore::insert_transaction(*self, transaction)
     }
 
@@ -279,7 +279,7 @@ pub struct InMemoryStore {
     checkpoints: HashMap<CheckpointDigest, VerifiedCheckpoint>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
-    transactions: HashMap<TransactionDigest, Transaction>,
+    transactions: HashMap<TransactionDigest, VerifiedCertificate>,
     effects: HashMap<TransactionEffectsDigest, TransactionEffects>,
 
     epoch_to_committee: Vec<Committee>,
@@ -382,7 +382,7 @@ impl InMemoryStore {
         }
     }
 
-    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&Transaction> {
+    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedCertificate> {
         self.transactions.get(digest)
     }
 
@@ -393,7 +393,7 @@ impl InMemoryStore {
         self.effects.get(digest)
     }
 
-    pub fn insert_transaction(&mut self, transaction: Transaction) {
+    pub fn insert_transaction(&mut self, transaction: VerifiedCertificate) {
         self.transactions.insert(*transaction.digest(), transaction);
     }
 
@@ -448,7 +448,7 @@ impl ReadStore for SharedInMemoryStore {
         self.inner().get_committee_by_epoch(epoch).cloned()
     }
 
-    fn get_transaction(&self, digest: &TransactionDigest) -> Option<Transaction> {
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedCertificate> {
         self.inner().get_transaction(digest).cloned()
     }
 
@@ -478,7 +478,7 @@ impl WriteStore for SharedInMemoryStore {
         self.inner_mut().insert_committee(new_committee)
     }
 
-    fn insert_transaction(&self, transaction: Transaction) {
+    fn insert_transaction(&self, transaction: VerifiedCertificate) {
         self.inner_mut().insert_transaction(transaction)
     }
 

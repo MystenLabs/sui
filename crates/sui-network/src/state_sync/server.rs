@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use sui_types::{
     base_types::ExecutionDigests,
-    messages::{Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, TransactionEffects},
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
         CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
@@ -96,7 +96,7 @@ where
     async fn get_transaction_and_effects(
         &self,
         request: Request<ExecutionDigests>,
-    ) -> Result<Response<Option<(Transaction, TransactionEffects)>>, Status> {
+    ) -> Result<Response<Option<(CertifiedTransaction, TransactionEffects)>>, Status> {
         let ExecutionDigests {
             transaction,
             effects,
@@ -110,6 +110,6 @@ where
             return Ok(Response::new(None));
         };
 
-        Ok(Response::new(Some((transaction, effects))))
+        Ok(Response::new(Some((transaction.into_inner(), effects))))
     }
 }

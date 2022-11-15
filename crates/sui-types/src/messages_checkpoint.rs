@@ -378,6 +378,10 @@ impl VerifiedCheckpoint {
         }
     }
 
+    pub fn new_unchecked(checkpoint: CertifiedCheckpointSummary) -> Self {
+        Self(checkpoint)
+    }
+
     pub fn inner(&self) -> &CertifiedCheckpointSummary {
         &self.0
     }

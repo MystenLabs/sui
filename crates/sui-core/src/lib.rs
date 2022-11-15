@@ -15,6 +15,7 @@ pub mod gateway_state;
 pub mod metrics;
 pub mod quorum_driver;
 pub mod safe_client;
+pub mod storage;
 pub mod streamer;
 pub mod transaction_input_checker;
 pub mod transaction_orchestrator;
