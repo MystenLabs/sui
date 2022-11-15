@@ -15,7 +15,8 @@ use crate::{
     BlockRemover,
 };
 
-use anemo::{types::PeerInfo, PeerId};
+use anemo::types::Address;
+use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
@@ -24,12 +25,12 @@ use anemo_tower::{
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
-use crypto::{KeyPair, NetworkKeyPair, PublicKey};
+use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair as _},
     SignatureService,
 };
-use multiaddr::Protocol;
+use multiaddr::{Multiaddr, Protocol};
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
@@ -72,8 +73,6 @@ pub enum NetworkModel {
 pub struct Primary;
 
 impl Primary {
-    const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
-
     // Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
@@ -100,6 +99,13 @@ impl Primary {
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
+
+        // Some info statements
+        info!(
+            "Boot primary node with peer id {} and public key {}",
+            PeerId(network_signer.public().0.to_bytes()),
+            name.encode_base64()
+        );
 
         // Initialize the metrics
         let metrics = initialise_metrics(registry);
@@ -194,7 +200,7 @@ impl Primary {
             .primary(&name)
             .expect("Our public key or worker id is not in the committee");
         let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
+            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
         let primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             tx_primary_messages: tx_primary_messages.clone(),
@@ -271,21 +277,39 @@ impl Primary {
             network_connection_metrics,
         );
 
+        // Add my workers
+        for worker in worker_cache.load().our_workers(&name).unwrap() {
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            info!(
+                "Adding our worker with peer id {} and address {}",
+                peer_id, address
+            );
+        }
+
+        // Add others workers
+        for (_, worker) in worker_cache.load().others_workers(&name) {
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            info!(
+                "Adding others worker with peer id {} and address {}",
+                peer_id, address
+            );
+        }
+
+        // Add other primaries
         let primaries = committee
             .load()
             .others_primaries(&name)
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
-        let workers = worker_cache.load().all_workers().into_iter();
-        for (public_key, address) in primaries.chain(workers) {
-            let peer_id = PeerId(public_key.0.to_bytes());
-            let address = network::multiaddr_to_address(&address).unwrap();
-            let peer_info = PeerInfo {
-                peer_id,
-                affinity: anemo::types::PeerAffinity::High,
-                address: vec![address],
-            };
-            network.known_peers().insert(peer_info);
+
+        for (public_key, address) in primaries {
+            let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
+            info!(
+                "Adding others primaries with peer id {} and address {}",
+                peer_id, address
+            );
         }
 
         info!(
@@ -515,6 +539,23 @@ impl Primary {
         }
 
         handles
+    }
+
+    fn add_peer_in_network(
+        network: &Network,
+        peer_name: NetworkPublicKey,
+        address: &Multiaddr,
+    ) -> (PeerId, Address) {
+        let peer_id = PeerId(peer_name.0.to_bytes());
+        let address = network::multiaddr_to_address(address).unwrap();
+        let peer_info = PeerInfo {
+            peer_id,
+            affinity: anemo::types::PeerAffinity::High,
+            address: vec![address.clone()],
+        };
+        network.known_peers().insert(peer_info);
+
+        (peer_id, address)
     }
 }
 

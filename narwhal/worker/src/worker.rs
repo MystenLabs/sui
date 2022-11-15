@@ -8,7 +8,8 @@ use crate::{
     primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
 };
-use anemo::{types::PeerInfo, PeerId};
+use anemo::types::Address;
+use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
@@ -16,7 +17,7 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
-use crypto::{traits::KeyPair as _, NetworkKeyPair, PublicKey};
+use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use network::metrics::MetricsMakeCallbackHandler;
@@ -76,6 +77,12 @@ impl Worker {
         store: Store<BatchDigest, Batch>,
         metrics: Metrics,
     ) -> Vec<JoinHandle<()>> {
+        info!(
+            "Boot worker node with id {} peer id {}",
+            id,
+            PeerId(keypair.public().0.to_bytes())
+        );
+
         // Define a worker instance.
         let worker = Self {
             primary_name: primary_name.clone(),
@@ -179,7 +186,7 @@ impl Worker {
             config
         };
 
-        let network = anemo::Network::bind(addr)
+        let network = Network::bind(addr)
             .server_name("narwhal")
             .private_key(worker.keypair.copy().private().0.to_bytes())
             .config(anemo_config)
@@ -197,25 +204,36 @@ impl Worker {
         let other_workers = worker
             .worker_cache
             .load()
-            .others_workers(&primary_name, &id)
+            .others_workers_by_id(&primary_name, &id)
             .into_iter()
             .map(|(_, info)| (info.name, info.worker_address));
-        let our_primary = std::iter::once((
-            committee.load().network_key(&primary_name).unwrap(),
-            committee.load().primary(&primary_name).unwrap(),
-        ));
 
         // Add other workers we want to talk with to the known peers set.
-        for (public_key, address) in other_workers.chain(our_primary) {
-            let peer_id = PeerId(public_key.0.to_bytes());
-            let address = network::multiaddr_to_address(&address).unwrap();
-            let peer_info = PeerInfo {
-                peer_id,
-                affinity: anemo::types::PeerAffinity::High,
-                address: vec![address],
-            };
-            network.known_peers().insert(peer_info);
+        for (public_key, address) in other_workers {
+            let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
+            info!(
+                "Adding others workers with peer id {} and address {}",
+                peer_id, address
+            );
         }
+
+        // Connect worker to its corresponding primary.
+        let primary_address = committee
+            .load()
+            .primary(&primary_name)
+            .expect("Our primary is not in the committee");
+
+        let primary_network_key = committee
+            .load()
+            .network_key(&primary_name)
+            .expect("Our primary is not in the committee");
+
+        let (peer_id, address) =
+            Self::add_peer_in_network(&network, primary_network_key.clone(), &primary_address);
+        info!(
+            "Adding our primary with peer id {} and address {}",
+            peer_id, address
+        );
 
         let network_admin_server_base_port = parameters
             .network_admin_server
@@ -234,23 +252,6 @@ impl Worker {
             None,
         );
 
-        // Connect worker to its corresponding primary.
-        let primary_address = network::multiaddr_to_address(
-            &committee
-                .load()
-                .primary(&primary_name)
-                .expect("Our primary is not in the committee"),
-        )
-        .unwrap();
-        let primary_network_key = committee
-            .load()
-            .network_key(&primary_name)
-            .expect("Our primary is not in the committee");
-        network.known_peers().insert(PeerInfo {
-            peer_id: PeerId(primary_network_key.0.to_bytes()),
-            affinity: anemo::types::PeerAffinity::High,
-            address: vec![primary_address],
-        });
         let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
             rx_reconfigure.clone(),
@@ -283,6 +284,23 @@ impl Worker {
         handles.extend(admin_handles);
         handles.extend(client_flow_handles);
         handles
+    }
+
+    fn add_peer_in_network(
+        network: &Network,
+        peer_name: NetworkPublicKey,
+        address: &Multiaddr,
+    ) -> (PeerId, Address) {
+        let peer_id = PeerId(peer_name.0.to_bytes());
+        let address = network::multiaddr_to_address(address).unwrap();
+        let peer_info = PeerInfo {
+            peer_id,
+            affinity: anemo::types::PeerAffinity::High,
+            address: vec![address.clone()],
+        };
+        network.known_peers().insert(peer_info);
+
+        (peer_id, address)
     }
 
     /// Spawn all tasks responsible to handle clients transactions.

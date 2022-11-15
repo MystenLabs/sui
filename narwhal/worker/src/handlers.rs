@@ -209,7 +209,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 let names: Vec<_> = self
                     .worker_cache
                     .load()
-                    .others_workers(&self.name, &self.id)
+                    .others_workers_by_id(&self.name, &self.id)
                     .into_iter()
                     .map(|(_, info)| info.name)
                     .collect();
