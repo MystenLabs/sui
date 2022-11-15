@@ -7,10 +7,13 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
-use sui_core::test_utils::{dummy_transaction_effects, to_sender_signed_transaction};
+use sui_core::test_utils::{
+    dummy_transaction_effects, to_sender_signed_transaction, to_sender_signed_transaction_arc,
+};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_keys::keystore::AccountKeystore;
@@ -355,7 +358,7 @@ pub fn make_counter_increment_transaction(
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     sender: SuiAddress,
-    keypair: &AccountKeyPair,
+    keypair: &Arc<AccountKeyPair>,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_move_call(
         sender,
@@ -370,7 +373,7 @@ pub fn make_counter_increment_transaction(
         })],
         MAX_GAS,
     );
-    to_sender_signed_transaction(data, keypair)
+    to_sender_signed_transaction_arc(data, keypair)
 }
 
 /// Make a transaction calling a specific move module & function.

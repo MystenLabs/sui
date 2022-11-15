@@ -10,7 +10,9 @@ use std::time::Duration;
 use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::{get_key_pair, AccountKeyPair, Signature},
+    crypto::{
+        get_key_pair, AccountKeyPair, AuthoritySignInfo, AuthoritySignature, Signable, Signature,
+    },
     messages::{
         BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData, VerifiedTransaction,
     },
@@ -20,7 +22,6 @@ use sui_types::{
 use futures::StreamExt;
 use sui_types::base_types::{random_object_ref, AuthorityName, ExecutionDigests};
 use sui_types::committee::Committee;
-use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects};
 use sui_types::object::Owner;
@@ -147,6 +148,16 @@ pub fn to_sender_signed_transaction(
 ) -> VerifiedTransaction {
     let signature = Signature::new(&data, signer);
     // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
+    VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
+}
+
+pub fn to_sender_signed_transaction_arc(
+    data: TransactionData,
+    signer: &Arc<fastcrypto::ed25519::Ed25519KeyPair>,
+) -> VerifiedTransaction {
+    let mut message = Vec::new();
+    data.write(&mut message);
+    let signature: Signature = signer.sign(&message);
     VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
 }
 
