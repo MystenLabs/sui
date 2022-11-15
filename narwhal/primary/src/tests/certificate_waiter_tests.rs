@@ -171,8 +171,9 @@ async fn fetch_certificates_basic() {
     let certificate_store = store.certificate_store.clone();
     let payload_store = store.payload_store.clone();
 
-    // Signal consensus round
+    // Signal rounds
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
 
     // Make a synchronizer for the core.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -230,6 +231,7 @@ async fn fetch_certificates_basic() {
         synchronizer.clone(),
         signature_service,
         rx_consensus_round_updates,
+        rx_narwhal_round_updates,
         gc_depth,
         rx_reconfigure,
         rx_certificates,

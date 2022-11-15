@@ -9,12 +9,13 @@ use crate::{
     synchronizer::Synchronizer,
 };
 
+use anyhow::Result;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
-use network::{anemo_ext::NetworkExt, P2pNetwork, UnreliableNetwork};
+use network::{anemo_ext::NetworkExt, CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use storage::CertificateStore;
@@ -52,8 +53,10 @@ pub struct Core {
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-    /// Get a signal when the round changes
+    /// Get a signal when the consensus round changes
     rx_consensus_round_updates: watch::Receiver<Round>,
+    /// Get a signal when the narwhal round changes
+    rx_narwhal_round_updates: watch::Receiver<Round>,
     /// The depth of the garbage collector.
     gc_depth: Round,
 
@@ -78,8 +81,10 @@ pub struct Core {
     highest_processed_round: Round,
     /// Certificates awaiting processing due to missing ancestors.
     pending_certificates: HashMap<CertificateDigest, Vec<oneshot::Sender<DagResult<()>>>>,
-    /// Contains tasks that are synchronizing worker batches for processed certificates.
-    batch_sync_tasks: JoinSet<DagResult<()>>,
+    /// Contains background tasks for:
+    /// - synchronizing worker batches for processed certificates
+    /// - broadcasting newly formed certificates
+    background_tasks: JoinSet<DagResult<()>>,
     /// Used to cancel vote requests for a previously-proposed header that is being replaced
     /// before a certificate could be formed.
     cancel_proposed_header: Option<oneshot::Sender<()>>,
@@ -104,7 +109,8 @@ impl Core {
         certificate_store: CertificateStore,
         synchronizer: Arc<Synchronizer>,
         signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-        rx_consensus_round_updates: watch::Receiver<u64>,
+        rx_consensus_round_updates: watch::Receiver<Round>,
+        rx_narwhal_round_updates: watch::Receiver<Round>,
         gc_depth: Round,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
@@ -125,6 +131,7 @@ impl Core {
                 synchronizer,
                 signature_service,
                 rx_consensus_round_updates,
+                rx_narwhal_round_updates,
                 gc_depth,
                 rx_reconfigure,
                 rx_certificates,
@@ -136,7 +143,7 @@ impl Core {
                 highest_received_round: 0,
                 highest_processed_round: 0,
                 pending_certificates: HashMap::new(),
-                batch_sync_tasks: JoinSet::new(),
+                background_tasks: JoinSet::new(),
                 cancel_proposed_header: None,
                 propose_header_future: None.into(),
                 certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
@@ -357,6 +364,39 @@ impl Core {
         Ok(certificate)
     }
 
+    // Awaits completion of the given certificate broadcasts, aborting if narwhal round
+    // advances past certificate round.
+    #[instrument(level = "debug", skip_all, fields(certificate_round = certificate_round))]
+    async fn send_certificates_while_current(
+        certificate_round: Round,
+        tasks: Vec<CancelOnDropHandler<Result<anemo::Response<()>>>>,
+        mut rx_narwhal_round_updates: watch::Receiver<Round>,
+    ) -> DagResult<()> {
+        let mut narwhal_round = *rx_narwhal_round_updates.borrow();
+        if narwhal_round > certificate_round {
+            return Ok(());
+        }
+
+        let mut join_all = futures::future::try_join_all(tasks);
+        loop {
+            tokio::select! {
+                _result = &mut join_all => {
+                    // Reliable broadcast will not return errors.
+                    return Ok(())
+                },
+                result = rx_narwhal_round_updates.changed() => {
+                    result.unwrap();
+                    narwhal_round = *rx_narwhal_round_updates.borrow();
+                    if narwhal_round > certificate_round {
+                        // Round has advanced. No longer need to broadcast this cert to
+                        // ensure liveness.
+                        return Ok(())
+                    }
+                },
+            }
+        }
+    }
+
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_own_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
         self.metrics
@@ -382,10 +422,16 @@ impl Core {
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        self.network.unreliable_broadcast(
+        let tasks = self.network.broadcast(
             network_keys,
             &PrimaryMessage::Certificate(certificate.clone()),
-        );
+        ).await;
+        self.background_tasks
+            .spawn(Self::send_certificates_while_current(
+                certificate.header.round,
+                tasks,
+                self.rx_narwhal_round_updates.clone(),
+            ));
 
         // Process the new certificate.
         match self.process_certificate_internal(certificate).await {
@@ -474,7 +520,7 @@ impl Core {
         let header = certificate.header.clone();
         let network = self.network.network();
         let max_age = self.gc_depth.saturating_sub(1);
-        self.batch_sync_tasks
+        self.background_tasks
             .spawn(async move { synchronizer.sync_batches(&header, network, max_age).await });
 
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
@@ -696,9 +742,9 @@ impl Core {
                     }
                 },
 
-                // Process any errors syncing batches.
-                Some(result) = self.batch_sync_tasks.join_next() => {
-                    result.unwrap()
+                // Process any background task errors.
+                Some(result) = self.background_tasks.join_next() => {
+                    result.unwrap()  // propagate any panics
                 },
 
                 // Check whether the committee changed.

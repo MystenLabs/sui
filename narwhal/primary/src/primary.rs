@@ -220,7 +220,7 @@ impl Primary {
             certificate_store: certificate_store.clone(),
             payload_store: payload_store.clone(),
             vote_digest_store,
-            rx_narwhal_round_updates,
+            rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
             metrics: node_metrics.clone(),
             request_vote_inflight: Arc::new(DashSet::new()),
         });
@@ -365,6 +365,7 @@ impl Primary {
             synchronizer,
             signature_service.clone(),
             rx_consensus_round_updates.clone(),
+            rx_narwhal_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
             rx_certificates,
@@ -802,10 +803,14 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let PrimaryMessage::Certificate(certificate) = request.into_body();
+        let (tx_ack, rx_ack) = oneshot::channel();
         self.tx_certificates
-            .try_send((certificate, None))
-            .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+            .send((certificate, Some(tx_ack))).await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        rx_ack.await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        Ok(anemo::Response::new(()))
     }
 
     async fn request_vote(
