@@ -18,7 +18,8 @@ export function createValidationSchemaStepOne(
     coinSymbol: string,
     gasBalance: bigint,
     decimals: number,
-    gasDecimals: number
+    gasDecimals: number,
+    gasBudget: number
 ) {
     return Yup.object({
         amount: createTokenValidation(
@@ -27,7 +28,8 @@ export function createValidationSchemaStepOne(
             coinSymbol,
             gasBalance,
             decimals,
-            gasDecimals
+            gasDecimals,
+            gasBudget
         ),
     });
 }
