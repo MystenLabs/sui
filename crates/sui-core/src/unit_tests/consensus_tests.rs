@@ -106,7 +106,6 @@ async fn submit_transaction_to_consensus_adapter() {
     let certificate = test_certificates(&state).await.pop().unwrap();
 
     let committee = state.clone_committee();
-    let name = state.name;
     let state = Arc::new(state);
     let metrics = ConsensusAdapterMetrics::new_test();
 
@@ -126,7 +125,7 @@ async fn submit_transaction_to_consensus_adapter() {
     // Make a new consensus adapter instance.
     let adapter = ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
-        committee.clone(),
+        state.clone(),
         /* timeout */ Duration::from_secs(5),
         metrics,
     );
@@ -137,8 +136,7 @@ async fn submit_transaction_to_consensus_adapter() {
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
     loop {
-        let w = state.consensus_message_processed_notify(certificate.digest());
-        match adapter.submit(&name, &certificate, w).await {
+        match adapter.submit(&certificate).await {
             Ok(_) => break,
             Err(SuiError::ConsensusConnectionBroken(..)) => (),
             Err(e) => panic!("Unexpected error message: {e}"),
