@@ -5,8 +5,8 @@ use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use crate::consensus_adapter::ConsensusListenerMessage;
 use async_trait::async_trait;
-use narwhal_consensus::ConsensusOutput;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
+use narwhal_types::ConsensusOutput;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -146,7 +146,7 @@ impl ExecutionState for ConsensusHandler {
 }
 
 pub struct SequencedConsensusTransaction {
-    pub consensus_output: Arc<narwhal_consensus::ConsensusOutput>,
+    pub consensus_output: Arc<narwhal_types::ConsensusOutput>,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: ConsensusTransaction,
 }
@@ -177,16 +177,19 @@ pub fn test_update_hash() {
         next_certificate_index: 0,
         next_batch_index: 0,
         next_transaction_index: 0,
+        last_committed_round: 0,
     };
     let index1 = ExecutionIndices {
         next_certificate_index: 0,
         next_batch_index: 1,
         next_transaction_index: 0,
+        last_committed_round: 0,
     };
     let index2 = ExecutionIndices {
         next_certificate_index: 0,
         next_batch_index: 2,
         next_transaction_index: 0,
+        last_committed_round: 0,
     };
 
     let last_seen = ExecutionIndicesWithHash {

@@ -4,21 +4,33 @@ use crypto::PublicKey;
 use std::sync::Arc;
 use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap};
-use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore, Round, SequenceNumber,
+};
 
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
+    const SUB_DAG_CF: &str = "sub_dag";
 
-    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
-        .expect("Failed to create database");
+    let rocksdb = rocks::open_cf(
+        store_path,
+        None,
+        &[LAST_COMMITTED_CF, SEQUENCE_CF, SUB_DAG_CF],
+    )
+    .expect("Failed to create database");
 
-    let (last_committed_map, sequence_map) = reopen!(&rocksdb,
+    let (last_committed_map, sequence_map, sub_dag_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<PublicKey, Round>,
-        SEQUENCE_CF;<SequenceNumber, CertificateDigest>
+        SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
+        SUB_DAG_CF;<SequenceNumber, CommittedSubDagShell>
     );
 
-    Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
+    Arc::new(ConsensusStore::new(
+        last_committed_map,
+        sequence_map,
+        sub_dag_map,
+    ))
 }
 
 pub fn make_certificate_store(store_path: &std::path::Path) -> CertificateStore {

@@ -4,7 +4,6 @@ use crate::notifier::BatchIndex;
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics};
 
 use config::{Committee, SharedWorkerCache, WorkerId};
-use consensus::ConsensusOutput;
 use crypto::{NetworkPublicKey, PublicKey};
 
 use futures::stream::FuturesOrdered;
@@ -31,7 +30,10 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
-use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification, Timestamp};
+use types::{
+    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ReconfigureNotification,
+    Timestamp,
+};
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
@@ -40,7 +42,7 @@ pub struct Subscriber<Network> {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive sequenced consensus messages.
-    rx_sequence: metered_channel::Receiver<ConsensusOutput>,
+    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     /// Ordered batches for the consumer
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     /// The metrics handler
@@ -60,10 +62,10 @@ pub fn spawn_subscriber(
     worker_cache: SharedWorkerCache,
     committee: Committee,
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    rx_sequence: metered_channel::Receiver<ConsensusOutput>,
+    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     metrics: Arc<ExecutorMetrics>,
-    restored_consensus_output: Vec<ConsensusOutput>,
+    restored_consensus_output: Vec<CommittedSubDag>,
 ) -> JoinHandle<()> {
     spawn_monitored_task!(async move {
         // This is ugly but has to be done this way for now
@@ -103,7 +105,7 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
     /// Main loop connecting to the consensus to listen to sequence messages.
     async fn run(
         mut self,
-        restored_consensus_output: Vec<ConsensusOutput>,
+        restored_consensus_output: Vec<CommittedSubDag>,
     ) -> SubscriberResult<()> {
         // It's important to have the futures in ordered fashion as we want
         // to guarantee that will deliver to the executor the certificates
@@ -128,11 +130,11 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
         loop {
             tokio::select! {
                 // Receive the ordered sequence of consensus messages from a consensus node.
-                Some(message) = self.rx_sequence.recv(), if waiting.len() < Self::MAX_PENDING_PAYLOADS => {
+                Some(sub_dag) = self.rx_sequence.recv(), if waiting.len() < Self::MAX_PENDING_PAYLOADS => {
                     // We can schedule more then MAX_PENDING_PAYLOADS payloads but
                     // don't process more consensus messages when more
                     // then MAX_PENDING_PAYLOADS is pending
-                    for future in self.fetcher.fetch_payloads(message) {
+                    for future in self.fetcher.fetch_payloads(sub_dag) {
                         waiting.push_back(future);
                     }
                 },
@@ -166,25 +168,12 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     /// Returns ordered vector of futures for downloading individual payloads for certificate
     /// Order of futures returned follows order of payloads in the certificate
     /// See fetch_payload for more details
-    #[instrument(level = "debug", skip_all, fields(certificate = % deliver.certificate.digest()))]
+    #[instrument(level = "debug", skip_all, fields(certificate = % deliver.leader.digest()))]
     fn fetch_payloads(
         &self,
-        deliver: ConsensusOutput,
+        deliver: CommittedSubDag,
     ) -> Vec<impl Future<Output = (BatchIndex, Batch)> + '_> {
-        self.metrics
-            .subscriber_current_round
-            .set(deliver.certificate.round() as i64);
-        self.metrics.subscriber_processed_certificates.inc();
-        self.metrics.subscriber_certificate_latency.observe(
-            deliver
-                .certificate
-                .metadata
-                .created_at
-                .elapsed()
-                .as_secs_f64(),
-        );
-
-        let num_of_batches = deliver.certificate.header.payload.len();
+        let num_of_batches = deliver.num_of_batches();
         if num_of_batches == 0 {
             debug!("No batches to fetch, payload is empty");
             return vec![];
@@ -193,24 +182,44 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         let mut ret = Vec::with_capacity(num_of_batches);
 
         let deliver = Arc::new(deliver);
-        for (batch_index, (digest, worker_id)) in
-            deliver.certificate.header.payload.iter().enumerate()
-        {
-            let mut workers = self
-                .network
-                .workers_for_certificate(&deliver.certificate, worker_id);
-            let batch_index = BatchIndex {
-                consensus_output: deliver.clone(),
-                next_certificate_index: deliver.consensus_index,
-                batch_index: batch_index as u64,
-            };
-            workers.shuffle(&mut ThreadRng::default());
+        for output in &deliver.certificates {
+            let output_arc = Arc::new(output.clone());
+            for (batch_index, (digest, worker_id)) in
+                output.certificate.header.payload.iter().enumerate()
+            {
+                self.metrics
+                    .subscriber_current_round
+                    .set(output.certificate.round() as i64);
+                self.metrics.subscriber_processed_certificates.inc();
+                self.metrics.subscriber_certificate_latency.observe(
+                    output
+                        .certificate
+                        .metadata
+                        .created_at
+                        .elapsed()
+                        .as_secs_f64(),
+                );
 
-            debug!("Scheduling fetching batch {}", digest);
-            let fut = self
-                .fetch_payload(*digest, *worker_id, workers)
-                .map(move |batch| (batch_index, batch));
-            ret.push(monitored_future!(fut));
+                let mut workers = self
+                    .network
+                    .workers_for_certificate(&output.certificate, worker_id);
+                let batch_index = BatchIndex {
+                    sub_dag: deliver.clone(),
+                    output: output_arc.clone(),
+                    next_certificate_index: output.consensus_index,
+                    batch_index: batch_index as u64,
+                };
+                workers.shuffle(&mut ThreadRng::default());
+
+                debug!(
+                    "Scheduling fetching batch {digest} (from certificate {})",
+                    output.certificate.digest()
+                );
+                let fut = self
+                    .fetch_payload(*digest, *worker_id, workers)
+                    .map(move |batch| (batch_index, batch));
+                ret.push(monitored_future!(fut));
+            }
         }
 
         ret

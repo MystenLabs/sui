@@ -49,7 +49,7 @@ use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-use narwhal_consensus::ConsensusOutput;
+use narwhal_types::ConsensusOutput;
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{

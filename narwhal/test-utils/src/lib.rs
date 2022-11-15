@@ -28,13 +28,14 @@ use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
-    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
+    FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
+    GetCertificatesResponse, Header, HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
+    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
+    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -123,16 +124,26 @@ pub fn random_key() -> KeyPair {
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
+    const SUB_DAG_CF: &str = "sub_dag";
 
-    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
-        .expect("Failed creating database");
+    let rocksdb = rocks::open_cf(
+        store_path,
+        None,
+        &[LAST_COMMITTED_CF, SEQUENCE_CF, SUB_DAG_CF],
+    )
+    .expect("Failed creating database");
 
-    let (last_committed_map, sequence_map) = reopen!(&rocksdb,
+    let (last_committed_map, sequence_map, sub_dag_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<PublicKey, Round>,
-        SEQUENCE_CF;<SequenceNumber, CertificateDigest>
+        SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
+        SUB_DAG_CF;<Round, CommittedSubDagShell>
     );
 
-    Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
+    Arc::new(ConsensusStore::new(
+        last_committed_map,
+        sequence_map,
+        sub_dag_map,
+    ))
 }
 
 pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, WorkerId> {

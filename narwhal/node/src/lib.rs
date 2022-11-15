@@ -5,13 +5,12 @@ use consensus::{
     bullshark::Bullshark,
     dag::Dag,
     metrics::{ChannelMetrics, ConsensusMetrics},
-    Consensus, ConsensusOutput,
+    Consensus,
 };
 
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
-use itertools::Itertools;
 use network::P2pNetwork;
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
@@ -204,21 +203,18 @@ impl Node {
             store.certificate_store.clone(),
             &execution_state,
         )
-        .await?
-        .into_iter()
-        .sorted_by(|a, b| a.consensus_index.cmp(&b.consensus_index))
-        .collect::<Vec<ConsensusOutput>>();
+        .await?;
 
-        let len_restored = restored_consensus_output.len() as u64;
-        if len_restored > 0 {
+        let num_leaders = restored_consensus_output.len() as u64;
+        let num_certificates: usize = restored_consensus_output.iter().map(|x| x.len()).sum();
+        if num_leaders > 0 {
             info!(
-                "Consensus output on its way to the executor was restored for {} certificates",
-                len_restored
+                "Consensus output on its way to the executor was restored for {num_leaders} leaders and {num_certificates} certificates",
             );
         }
         consensus_metrics
             .recovered_consensus_output
-            .inc_by(len_restored);
+            .inc_by(num_certificates as u64);
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
