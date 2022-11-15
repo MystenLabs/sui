@@ -12,6 +12,7 @@ use std::sync::Arc;
 use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_network::default_mysten_network_config;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
+use sui_types::message_envelope::Message;
 use tokio::time::Instant;
 
 use sui_core::authority_client::{
@@ -645,7 +646,7 @@ impl ToolCommand {
                         resp.as_ref().map(|ok_result| {
                             (ok_result.signed_effects)
                                 .as_ref()
-                                .map(|effects| (&effects.effects, *effects.digest()))
+                                .map(|effects| (effects.data(), effects.data().digest()))
                         })
                     });
                 for (i, (st, group)) in (&responses).into_iter().enumerate() {
