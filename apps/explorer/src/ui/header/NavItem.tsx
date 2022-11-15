@@ -19,7 +19,7 @@ export const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(
                 {...props}
             >
                 {beforeIcon}
-                <span>{children}</span>
+                {children}
                 {afterIcon}
             </button>
         );

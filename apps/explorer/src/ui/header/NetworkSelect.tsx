@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { ReactComponent as MenuIcon } from '../icons/menu.svg';
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
 import { NavItem } from './NavItem';
@@ -188,6 +189,15 @@ function NetworkSelectPanel({ networks, onChange, value }: NetworkSelectProps) {
     );
 }
 
+function ResponsiveIcon() {
+    return (
+        <div>
+            <ChevronDownIcon className="hidden md:block" />
+            <MenuIcon className="block md:hidden" />
+        </div>
+    );
+}
+
 export function NetworkSelect({
     networks,
     value,
@@ -208,9 +218,11 @@ export function NetworkSelect({
                     <Popover.Button
                         ref={reference}
                         as={NavItem}
-                        afterIcon={<ChevronDownIcon />}
+                        afterIcon={<ResponsiveIcon />}
                     >
-                        {selected?.label || 'Custom'}
+                        <span className="hidden md:block">
+                            {selected?.label || 'Custom'}
+                        </span>
                     </Popover.Button>
                     <FloatingPortal>
                         <AnimatePresence>

@@ -3,6 +3,7 @@
 
 const defaultTheme = require("tailwindcss/defaultTheme");
 
+/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
@@ -111,6 +112,9 @@ module.exports = {
         '4.5': '1.125rem',
         'verticalListShort': '13.0625rem',
         'verticalListLong': '35.6875rem',
+      }
+      height: {
+        header: '68px'
       }
     },
   },
