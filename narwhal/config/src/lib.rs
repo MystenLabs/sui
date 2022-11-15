@@ -505,7 +505,7 @@ impl WorkerCache {
 
     /// Returns the addresses of all workers with a specific id except the ones of the authority
     /// specified by `myself`.
-    pub fn others_workers(
+    pub fn others_workers_by_id(
         &self,
         myself: &PublicKey,
         id: &WorkerId,
@@ -516,6 +516,15 @@ impl WorkerCache {
             .flat_map(
                 |(name, authority)|  authority.0.iter().flat_map(
                     |v| match_opt::match_opt!(v,(worker_id, addresses) if worker_id == id => (name.clone(), addresses.clone()))))
+            .collect()
+    }
+
+    /// Returns the addresses of all workers that are not of our node.
+    pub fn others_workers(&self, myself: &PublicKey) -> Vec<(PublicKey, WorkerInfo)> {
+        self.workers
+            .iter()
+            .filter(|(name, _)| *name != myself)
+            .flat_map(|(name, authority)| authority.0.iter().map(|v| (name.clone(), v.1.clone())))
             .collect()
     }
 
