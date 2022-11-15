@@ -18,10 +18,7 @@ use crate::authority::authority_tests::*;
 use crate::authority::*;
 use crate::safe_client::SafeClient;
 
-use crate::authority_client::{
-    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
-};
-use crate::checkpoints::CheckpointStore;
+use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
@@ -34,9 +31,8 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, CheckpointStreamRequest, CommitteeInfoRequest, CommitteeInfoResponse,
-    ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionInfoRequest,
-    TransactionInfoResponse,
+    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
+    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 
 use sui_macros::sim_test;
@@ -68,23 +64,11 @@ pub(crate) async fn init_state(
     let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
-    let checkpoint_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     let checkpoint2_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
-    let checkpoint_store = Arc::new(parking_lot::Mutex::new(
-        CheckpointStore::open(
-            &checkpoint_path,
-            None,
-            &committee,
-            name,
-            secrete.clone(),
-            false,
-        )
-        .unwrap(),
-    ));
 
     let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
         node_sync_path,
@@ -109,7 +93,6 @@ pub(crate) async fn init_state(
         None,
         None,
         None,
-        checkpoint_store,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
         tx_reconfigure_consensus,
@@ -533,13 +516,6 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         unimplemented!();
     }
 
-    async fn handle_checkpoint_stream(
-        &self,
-        _request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        unimplemented!();
-    }
-
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -660,13 +636,6 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         unimplemented!()
-    }
-
-    async fn handle_checkpoint_stream(
-        &self,
-        _request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        unimplemented!();
     }
 
     /// Handle Batch information requests for this authority.
@@ -792,7 +761,6 @@ async fn test_safe_batch_stream() {
     let state_b = AuthorityState::new_for_testing(
         committee.clone(),
         &authority_key,
-        None,
         None,
         None,
         tx_reconfigure_consensus,

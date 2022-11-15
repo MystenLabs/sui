@@ -545,7 +545,6 @@ impl ToolCommand {
                                 c.verify(&committee, contents.as_ref())?;
                             }
                         }
-                        _ => unreachable!(),
                     }
                 }
             }

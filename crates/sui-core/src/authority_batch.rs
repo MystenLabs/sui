@@ -239,16 +239,6 @@ impl crate::authority::AuthorityState {
                     .insert(&new_batch.data().next_sequence_number, &new_batch)?;
                 debug!(next_sequence_number=?new_batch.data().next_sequence_number, "New batch created. Transactions: {:?}", current_batch);
 
-                // If a checkpointing service is present, register the batch with it
-                // to insert the transactions into future checkpoint candidates
-                if let Err(err) = self
-                    .checkpoints
-                    .lock()
-                    .handle_internal_batch(new_batch.data().next_sequence_number, &current_batch)
-                {
-                    error!("Checkpointing service error: {}", err);
-                }
-
                 // Send the update
                 let _ = self
                     .batch_channels
@@ -354,7 +344,7 @@ impl crate::authority::AuthorityState {
                 if local_state.pending_batch.is_some()
                     && local_state.next_item == NextItemToPublish::Batch
                 {
-                    // We already publihsed all txns for this pending batch, now is the time to
+                    // We already published all txns for this pending batch, now is the time to
                     // publish the batch
                     let batch = local_state.pending_batch.unwrap();
                     local_state.pending_batch = None;

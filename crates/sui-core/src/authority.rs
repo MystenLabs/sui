@@ -19,24 +19,19 @@ use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
-use futures::stream::{self, Stream};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use parking_lot::Mutex;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use tap::TapFallible;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use tokio::sync::{
-    broadcast::{self, error::RecvError},
-    mpsc,
-};
+use tokio::sync::{broadcast::error::RecvError, mpsc};
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -65,10 +60,7 @@ use sui_storage::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::event::{Event, EventID};
-use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointFragmentMessage,
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
-};
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::SuiSystemState;
@@ -89,7 +81,6 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::checkpoints::ConsensusSender;
 use crate::checkpoints2::{CheckpointService, LogCheckpointOutput};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
@@ -99,7 +90,6 @@ use crate::metrics::TaskUtilizationExt;
 use crate::scoped_counter;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
-    checkpoints::CheckpointStore,
     event_handler::EventHandler,
     execution_engine,
     metrics::start_timer,
@@ -537,9 +527,6 @@ pub struct AuthorityState {
     pub event_handler: Option<Arc<EventHandler>>,
     pub transaction_streamer: Option<Arc<TransactionStreamer>>,
 
-    /// The checkpoint store
-    pub checkpoints: Arc<Mutex<CheckpointStore>>,
-
     checkpoint_service: Arc<CheckpointService>,
 
     committee_store: Arc<CommitteeStore>,
@@ -569,7 +556,7 @@ pub struct AuthorityState {
     pub metrics: Arc<AuthorityMetrics>,
 
     /// A channel to tell consensus to reconfigure.
-    tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+    _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1386,85 +1373,11 @@ impl AuthorityState {
 
     pub fn handle_checkpoint_request(
         &self,
-        request: &CheckpointRequest,
+        _request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        let mut checkpoint_store = self.checkpoints.lock();
-        match &request.request_type {
-            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
-                checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
-            }
-            CheckpointRequestType::CheckpointProposal => {
-                checkpoint_store.handle_proposal(request.detail)
-            }
-        }
-    }
-
-    pub async fn handle_checkpoint_streaming(
-        &self,
-        _request: CheckpointStreamRequest,
-    ) -> Result<impl Stream<Item = Result<CheckpointStreamResponseItem, SuiError>>, SuiError> {
-        struct Locals {
-            from_db: Option<AuthenticatedCheckpoint>,
-            latest_sequence_sent: Option<CheckpointSequenceNumber>,
-            subscriber: broadcast::Receiver<CertifiedCheckpointSummary>,
-            exit: bool,
-        }
-
-        let checkpoints = self.checkpoints.lock();
-        let subscriber = checkpoints.subscribe_to_checkpoints();
-        let from_db = checkpoints.latest_certified_checkpoint();
-        std::mem::drop(checkpoints);
-
-        let latest_sequence_sent = from_db.as_ref().map(|c| c.sequence_number());
-        let locals = Locals {
-            from_db,
-            latest_sequence_sent,
-            subscriber,
-            exit: false,
-        };
-
-        Ok(stream::unfold(locals, move |mut locals| async move {
-            if let Some(checkpoint) = locals.from_db.take() {
-                Some((
-                    Ok(CheckpointStreamResponseItem {
-                        first_available_sequence: 0,
-                        checkpoint,
-                    }),
-                    locals,
-                ))
-            } else {
-                match locals.subscriber.recv().await {
-                    Ok(checkpoint) => {
-                        let sequence_number = *checkpoint.summary.sequence_number();
-                        if locals.latest_sequence_sent.is_none()
-                            || sequence_number > locals.latest_sequence_sent.unwrap()
-                        {
-                            locals.latest_sequence_sent = Some(sequence_number);
-                            Some((
-                                Ok(CheckpointStreamResponseItem {
-                                    first_available_sequence: 0,
-                                    checkpoint: AuthenticatedCheckpoint::Certified(checkpoint),
-                                }),
-                                locals,
-                            ))
-                        } else {
-                            None
-                        }
-                    }
-                    Err(RecvError::Closed) => {
-                        locals.exit = true;
-                        Some((Err(SuiError::SubscriptionServiceClosed), locals))
-                    }
-                    Err(RecvError::Lagged(number_skipped)) => {
-                        locals.exit = true;
-                        Some((
-                            Err(SuiError::SubscriptionItemsDroppedError(number_skipped)),
-                            locals,
-                        ))
-                    }
-                }
-            }
-        }))
+        Err(SuiError::UnsupportedFeatureError {
+            error: "Re-enable this once we can serve them from checkpoint v2".to_string(),
+        })
     }
 
     pub fn handle_committee_info_request(
@@ -1496,10 +1409,9 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        checkpoints: Arc<Mutex<CheckpointStore>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
-        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
         checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
@@ -1543,7 +1455,6 @@ impl AuthorityState {
             module_cache,
             event_handler,
             transaction_streamer,
-            checkpoints,
             committee_store,
             transaction_manager: transaction_manager.clone(),
             rx_ready_certificates: tokio::sync::Mutex::new(Some(rx_ready_certificates)),
@@ -1554,7 +1465,7 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics,
-            tx_reconfigure_consensus,
+            _tx_reconfigure_consensus,
             checkpoint_service,
         };
 
@@ -1569,41 +1480,6 @@ impl AuthorityState {
             .init_batches_from_database()
             .expect("Init batches failed!");
 
-        // Ensure it is up-to-date with the latest batches.
-        let next_expected_tx = state
-            .checkpoints
-            .lock()
-            .next_transaction_sequence_expected();
-
-        // Get all unprocessed checkpoints
-        for (_seq, batch) in state
-            .database
-            .perpetual_tables
-            .batches
-            .iter()
-            .skip_to(&next_expected_tx)
-            .expect("Seeking batches should never fail at this point")
-        {
-            let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
-                .database
-                .perpetual_tables
-                .executed_sequence
-                .iter()
-                .skip_to(&batch.data().initial_sequence_number)
-                .expect("Should never fail to get an iterator")
-                .take_while(|(seq, _tx)| *seq < batch.data().next_sequence_number)
-                .collect();
-
-            if batch.data().next_sequence_number > next_expected_tx {
-                // Update the checkpointing mechanism
-                state
-                    .checkpoints
-                    .lock()
-                    .handle_internal_batch(batch.data().next_sequence_number, &transactions)
-                    .expect("Should see no errors updating the checkpointing mechanism.");
-            }
-        }
-
         state
     }
 
@@ -1613,7 +1489,6 @@ impl AuthorityState {
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
-        consensus_sender: Option<Box<dyn ConsensusSender>>,
         tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
@@ -1634,20 +1509,6 @@ impl AuthorityState {
 
         // unwrap ok - for testing only.
         let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
-        let mut checkpoints = CheckpointStore::open(
-            &path.join("checkpoints"),
-            None,
-            &genesis_committee,
-            secret.public().into(),
-            secret.clone(),
-            false,
-        )
-        .expect("Should not fail to open local checkpoint DB");
-        if let Some(consensus_sender) = consensus_sender {
-            checkpoints
-                .set_consensus(consensus_sender)
-                .expect("No issues");
-        }
 
         let epochs = Arc::new(CommitteeStore::new(
             path.join("epochs"),
@@ -1679,7 +1540,6 @@ impl AuthorityState {
             None,
             None,
             None,
-            Arc::new(Mutex::new(checkpoints)),
             genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
@@ -1737,10 +1597,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub fn checkpoints(&self) -> Arc<Mutex<CheckpointStore>> {
-        self.checkpoints.clone()
-    }
-
+    #[allow(dead_code)]
     pub(crate) fn update_committee(&self, new_committee: Committee) -> SuiResult {
         // TODO: It's likely safer to do the following operations atomically, in case this function
         // gets called from different threads. It cannot happen today, but worth the caution.
@@ -1759,10 +1616,12 @@ impl AuthorityState {
         self.batch_notifier.is_paused()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn halt_validator(&self) {
         self.batch_notifier.pause();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn unhalt_validator(&self) {
         self.batch_notifier.unpause();
     }
@@ -2315,16 +2174,6 @@ impl AuthorityState {
                         );
                     })?;
             }
-            ConsensusTransactionKind::Checkpoint(fragment) => {
-                fragment
-                    .verify(self.committee.load().epoch)
-                    .map_err(|err| {
-                        warn!(
-                            "Ignoring malformed fragment (failed to verify) from {}: {:?}",
-                            transaction.consensus_output.certificate.header.author, err
-                        );
-                    })?;
-            }
             ConsensusTransactionKind::CheckpointSignature(data) => {
                 data.verify(&self.committee.load()).map_err(|err|{
                     warn!(
@@ -2361,14 +2210,7 @@ impl AuthorityState {
                 // is constructed.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate);
 
-                if self
-                    .checkpoints
-                    .lock()
-                    .should_reject_consensus_transaction()
-                {
-                    debug!("Validator has stopped accepting consensus transactions, skipping {:?} from {:?}", certificate.digest(), consensus_index);
-                    return Ok(());
-                }
+                // TODO: Decide whether to accept the certificate at epoch boundaries.
                 debug!(
                     ?consensus_index,
                     ?tracking_id,
@@ -2390,55 +2232,6 @@ impl AuthorityState {
                 // finish_consensus_message_process.
                 let mut transaction_manager = self.transaction_manager.lock().await;
                 transaction_manager.enqueue(vec![certificate]).await
-            }
-            ConsensusTransactionKind::Checkpoint(fragment) => {
-                match &fragment.message {
-                    CheckpointFragmentMessage::Header(header) => {
-                        debug!(
-                            ?consensus_index,
-                            cp_seq=?header.proposer.summary.sequence_number,
-                            proposer=?header.proposer.authority().concise(),
-                            other=?header.other.authority().concise(),
-                            chunk_count=?header.chunk_count,
-                            "handle_consensus_transaction Checkpoint header message",
-                        );
-                    }
-                    CheckpointFragmentMessage::Chunk(chunk) => {
-                        debug!(
-                            ?consensus_index,
-                            cp_seq=?chunk.sequence_number,
-                            proposer=?chunk.proposer.concise(),
-                            other=?chunk.other.concise(),
-                            chunk_id=?chunk.chunk_id,
-                            "handle_consensus_transaction Checkpoint chunk message",
-                        );
-                    }
-                }
-
-                let mut checkpoint = self.checkpoints.lock();
-                checkpoint.handle_internal_fragment(
-                    consensus_index.index,
-                    fragment.message,
-                    &self.committee.load(),
-                )?;
-
-                // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
-                // to persist the consensus index. If the validator crashes, this transaction
-                // may be resent to the checkpoint logic that will simply ignore it.
-
-                // TODO: At this point we should know whether we want to change epoch. If we do,
-                // we should have (i) the new committee and (ii) the new keypair of this authority.
-                // We then call:
-                // ```
-                //  self
-                //      .tx_reconfigure_consensus
-                //      .send((new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache))
-                //      .await
-                //      .expect("Failed to reconfigure consensus");
-                // ```
-                let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
-
-                Ok(())
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
                 self.checkpoint_service.notify_checkpoint_signature(info)

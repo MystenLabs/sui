@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*
+
 use futures::future::join_all;
 use multiaddr::Multiaddr;
 use prometheus::Registry;
@@ -487,3 +489,4 @@ async fn increment_counter(
             .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
+*/

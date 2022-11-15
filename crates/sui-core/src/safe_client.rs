@@ -2,9 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{
-    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
-};
+use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
@@ -740,67 +738,20 @@ where
         // Verify response data was correct for request
         match &request.request_type {
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
-                if let CheckpointResponse::AuthenticatedCheckpoint {
+                let CheckpointResponse::AuthenticatedCheckpoint {
                     checkpoint,
                     contents,
-                } = &response
-                {
-                    // Checks that the sequence number is correct.
-                    self.verify_checkpoint_sequence(*seq, checkpoint)?;
-                    self.verify_contents_exist(request.detail, checkpoint, contents)?;
-                    // Verify signature.
-                    match checkpoint {
-                        Some(c) => {
-                            let epoch_id = c.summary().epoch;
-                            c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
-                        }
-                        None => Ok(()),
+                } = &response;
+                // Checks that the sequence number is correct.
+                self.verify_checkpoint_sequence(*seq, checkpoint)?;
+                self.verify_contents_exist(request.detail, checkpoint, contents)?;
+                // Verify signature.
+                match checkpoint {
+                    Some(c) => {
+                        let epoch_id = c.summary().epoch;
+                        c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
                     }
-                } else {
-                    Err(SuiError::from(
-                        "Invalid AuthorityCheckpointInfo type in the response",
-                    ))
-                }
-            }
-            CheckpointRequestType::CheckpointProposal => {
-                if let CheckpointResponse::CheckpointProposal {
-                    proposal,
-                    prev_cert,
-                    proposal_contents,
-                } = &response
-                {
-                    // Verify signature.
-                    if let Some(signed_proposal) = proposal {
-                        let mut committee =
-                            self.get_committee(&signed_proposal.auth_signature.epoch)?;
-                        signed_proposal.verify(&committee, proposal_contents.as_ref())?;
-                        if signed_proposal.summary.sequence_number > 0 {
-                            let cert = prev_cert.as_ref().ok_or_else(|| {
-                                SuiError::from("No checkpoint cert provided along with proposal")
-                            })?;
-                            if cert.auth_signature.epoch != signed_proposal.auth_signature.epoch {
-                                // It's possible that the previous checkpoint cert is from the
-                                // previous epoch, and in that case we verify them using different
-                                // committee.
-                                fp_ensure!(
-                                    cert.auth_signature.epoch + 1
-                                        == signed_proposal.auth_signature.epoch,
-                                    SuiError::from("Unexpected epoch for checkpoint cert")
-                                );
-                                committee = self.get_committee(&cert.auth_signature.epoch)?;
-                            }
-                            cert.verify(&committee, None)?;
-                            fp_ensure!(
-                                signed_proposal.summary.sequence_number - 1 == cert.summary.sequence_number,
-                                SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
-                            );
-                        }
-                    }
-                    self.verify_contents_exist(request.detail, proposal, proposal_contents)
-                } else {
-                    Err(SuiError::from(
-                        "Invalid AuthorityCheckpointInfo type in the response",
-                    ))
+                    None => Ok(()),
                 }
             }
         }
@@ -819,29 +770,6 @@ where
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
-    }
-
-    pub async fn handle_checkpoint_stream(
-        &self,
-        request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        let checkpoint_info_items = self
-            .authority_client
-            .handle_checkpoint_stream(request)
-            .await?;
-
-        let client = self.clone();
-
-        let stream = Box::pin(checkpoint_info_items.scan((), move |_, item| {
-            let process_item = |item: SuiResult<CheckpointStreamResponseItem>| -> SuiResult<CheckpointStreamResponseItem> {
-                let item = item?;
-                let CheckpointStreamResponseItem { ref checkpoint, .. } = item;
-                checkpoint.verify(&client.get_committee(&checkpoint.epoch())?, None)?;
-                Ok(item)
-            };
-            futures::future::ready(Some(process_item(item)))
-        }));
-        Ok(Box::pin(stream))
     }
 
     /// Handle Batch information requests for this authority.
