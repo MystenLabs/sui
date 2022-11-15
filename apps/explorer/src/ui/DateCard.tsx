@@ -20,7 +20,7 @@ export function DateCard({ date }: DateCardProps) {
     return dateStr && dateStr !== '' ? (
         <div className="text-sui-grey-75">
             <Text variant="bodySmall" weight="semibold">
-                {dateStr}
+                <time dateTime={dateStr}>{dateStr}</time>
             </Text>
         </div>
     ) : null;
