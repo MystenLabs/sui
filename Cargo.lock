@@ -1230,6 +1230,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmake"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db34956e100b30725f2eb215f90d4871051239535632f84fea3bc92722c66b7c"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "coarsetime"
 version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1359,8 +1368,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
  "prost 0.11.0",
- "prost-types",
- "tonic",
+ "prost-types 0.11.1",
+ "tonic 0.8.2",
  "tracing-core",
 ]
 
@@ -1376,13 +1385,13 @@ dependencies = [
  "futures",
  "hdrhistogram",
  "humantime",
- "prost-types",
+ "prost-types 0.11.1",
  "serde 1.0.147",
  "serde_json",
  "thread_local",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.8.2",
  "tracing",
  "tracing-core",
  "tracing-subscriber 0.3.15",
@@ -4793,6 +4802,24 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c580bfdd8803cce319b047d239559a22f809094aaea4ac13902a1fdcfcd4261"
+dependencies = [
+ "arrayref",
+ "bs58",
+ "byteorder",
+ "data-encoding",
+ "multihash",
+ "percent-encoding",
+ "serde 1.0.147",
+ "static_assertions",
+ "unsigned-varint",
+ "url",
+]
+
+[[package]]
+name = "multiaddr"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4aebdb21e90f81d13ed01dc84123320838e53963c2ca94b60b305d3fa64f31e"
@@ -4853,6 +4880,28 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
 name = "mysten-network"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e706e64bf9aeab7958ccc2de336e358c89869099f4e268d26833d5afd19f23fa"
+dependencies = [
+ "bincode",
+ "bytes",
+ "eyre",
+ "futures",
+ "http",
+ "multiaddr 0.14.0",
+ "serde 1.0.147",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.7.2",
+ "tonic-health 0.6.0",
+ "tower",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
+name = "mysten-network"
 version = "0.2.0"
 dependencies = [
  "bincode",
@@ -4860,12 +4909,12 @@ dependencies = [
  "eyre",
  "futures",
  "http",
- "multiaddr",
+ "multiaddr 0.16.0",
  "serde 1.0.147",
  "tokio",
  "tokio-stream",
- "tonic",
- "tonic-health",
+ "tonic 0.8.2",
+ "tonic-health 0.7.1",
  "tower",
  "tower-http",
  "tracing",
@@ -4938,7 +4987,7 @@ dependencies = [
  "fastcrypto",
  "insta",
  "match_opt",
- "multiaddr",
+ "multiaddr 0.16.0",
  "narwhal-crypto",
  "narwhal-test-utils",
  "rand 0.8.5",
@@ -5040,8 +5089,8 @@ dependencies = [
  "prost 0.11.0",
  "protobuf-src",
  "tokio",
- "tonic",
- "tonic-build",
+ "tonic 0.8.2",
+ "tonic-build 0.8.2",
  "workspace-hack",
 ]
 
@@ -5060,7 +5109,7 @@ dependencies = [
  "itertools",
  "match_opt",
  "mockall",
- "multiaddr",
+ "multiaddr 0.16.0",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5079,7 +5128,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.8.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -5101,7 +5150,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
- "multiaddr",
+ "multiaddr 0.16.0",
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
@@ -5112,7 +5161,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.8.2",
  "tower",
  "tracing",
  "workspace-hack",
@@ -5135,8 +5184,8 @@ dependencies = [
  "fastcrypto",
  "futures",
  "itertools",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5190,8 +5239,8 @@ dependencies = [
  "indexmap",
  "itertools",
  "mockall",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5217,7 +5266,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.8.2",
  "tower",
  "tracing",
  "tracing-test",
@@ -5240,7 +5289,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.8.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -5261,8 +5310,8 @@ dependencies = [
  "futures",
  "indexmap",
  "itertools",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-executor",
@@ -5281,7 +5330,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.8.2",
  "tower",
  "tracing",
  "typed-store",
@@ -5315,7 +5364,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "prost 0.11.0",
- "prost-build",
+ "prost-build 0.11.1",
  "protobuf-src",
  "rand 0.8.5",
  "roaring",
@@ -5327,8 +5376,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
- "tonic-build",
+ "tonic 0.8.2",
+ "tonic-build 0.8.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -5348,8 +5397,8 @@ dependencies = [
  "bytes",
  "fastcrypto",
  "futures",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5370,7 +5419,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.8.2",
  "tower",
  "tracing",
  "typed-store",
@@ -6485,6 +6534,28 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ae5a4388762d5815a9fc0dea33c56b021cdc8dde0c55e0c9ca57197254b0cab"
+dependencies = [
+ "bytes",
+ "cfg-if",
+ "cmake",
+ "heck 0.4.0",
+ "itertools",
+ "lazy_static 1.4.0",
+ "log",
+ "multimap",
+ "petgraph 0.6.2",
+ "prost 0.10.4",
+ "prost-types 0.10.1",
+ "regex",
+ "tempfile",
+ "which",
+]
+
+[[package]]
+name = "prost-build"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f835c582e6bd972ba8347313300219fed5bfa52caf175298d860b61ff6069bb"
@@ -6497,7 +6568,7 @@ dependencies = [
  "multimap",
  "petgraph 0.6.2",
  "prost 0.11.0",
- "prost-types",
+ "prost-types 0.11.1",
  "regex",
  "tempfile",
  "which",
@@ -6527,6 +6598,16 @@ dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
+dependencies = [
+ "bytes",
+ "prost 0.10.4",
 ]
 
 [[package]]
@@ -8099,8 +8180,8 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-unit-test",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-executor",
  "prometheus",
  "rand 0.8.5",
@@ -8184,7 +8265,7 @@ dependencies = [
  "hdrhistogram",
  "indicatif",
  "move-core-types",
- "multiaddr",
+ "multiaddr 0.16.0",
  "narwhal-node",
  "num_cpus",
  "prometheus",
@@ -8269,7 +8350,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-runtime",
- "multiaddr",
+ "multiaddr 0.16.0",
  "narwhal-config",
  "narwhal-crypto",
  "once_cell",
@@ -8307,8 +8388,8 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-runtime",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-executor",
@@ -8629,8 +8710,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "rand 0.8.5",
  "serde 1.0.147",
  "sui-config",
@@ -8638,8 +8719,8 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tokio",
- "tonic",
- "tonic-build",
+ "tonic 0.8.2",
+ "tonic-build 0.8.2",
  "tracing",
  "workspace-hack",
 ]
@@ -8655,8 +8736,8 @@ dependencies = [
  "chrono",
  "clap 3.2.22",
  "futures",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "narwhal-network",
  "narwhal-types",
  "parking_lot 0.12.1",
@@ -8846,7 +8927,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
- "mysten-network",
+ "mysten-network 0.2.0",
  "prometheus",
  "rand 0.8.5",
  "sui-config",
@@ -8857,7 +8938,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
- "tonic-health",
+ "tonic-health 0.7.1",
  "tracing",
  "workspace-hack",
 ]
@@ -8904,7 +8985,9 @@ dependencies = [
  "colored",
  "eyre",
  "futures",
- "narwhal-executor",
+ "itertools",
+ "multiaddr 0.16.0",
+ "mysten-network 0.1.0",
  "rocksdb",
  "serde 1.0.147",
  "serde_with",
@@ -9005,7 +9088,7 @@ dependencies = [
  "sui-cost-tables",
  "test-utils",
  "thiserror",
- "tonic",
+ "tonic 0.8.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -9288,8 +9371,8 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-http-client",
  "move-core-types",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.16.0",
+ "mysten-network 0.2.0",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -9627,6 +9710,38 @@ dependencies = [
 
 [[package]]
 name = "tonic"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5be9d60db39854b30b835107500cf0aca0b0d14d6e1c3de124217c23a29c2ddb"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "hyper",
+ "hyper-timeout",
+ "percent-encoding",
+ "pin-project",
+ "prost 0.10.4",
+ "prost-derive 0.10.1",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.4",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "tonic"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55b9af819e54b8f33d453655bef9b9acc171568fb49523078d0cc4e7484200ec"
@@ -9661,15 +9776,43 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9263bf4c9bfaae7317c1c2faf7f18491d2fe476f70c414b73bf5d445b00ffa1"
+dependencies = [
+ "prettyplease",
+ "proc-macro2 1.0.47",
+ "prost-build 0.10.4",
+ "quote 1.0.21",
+ "syn 1.0.103",
+]
+
+[[package]]
+name = "tonic-build"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c6fd7c2581e36d63388a9e04c350c21beb7a8b059580b2e93993c526899ddc"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
- "prost-build",
+ "prost-build 0.11.1",
  "quote 1.0.21",
  "syn 1.0.103",
+]
+
+[[package]]
+name = "tonic-health"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da1806c3ff2f02fb6d9b62fc72a2f3b6429c7f2f5d87861f548156708afcd71"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "prost 0.10.4",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.7.2",
+ "tonic-build 0.7.2",
 ]
 
 [[package]]
@@ -9683,7 +9826,7 @@ dependencies = [
  "prost 0.11.0",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.8.2",
 ]
 
 [[package]]
@@ -10690,6 +10833,7 @@ dependencies = [
  "clap_lex",
  "clear_on_drop",
  "clipboard-win",
+ "cmake",
  "coarsetime",
  "codespan",
  "codespan-reporting",
@@ -10978,11 +11122,13 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
- "multiaddr",
+ "multiaddr 0.14.0",
+ "multiaddr 0.16.0",
  "multibase",
  "multihash",
  "multihash-derive",
  "multimap",
+ "mysten-network 0.1.0",
  "named-lock",
  "native-tls",
  "nested",
@@ -11087,10 +11233,12 @@ dependencies = [
  "proptest-derive",
  "prost 0.10.4",
  "prost 0.11.0",
- "prost-build",
+ "prost-build 0.10.4",
+ "prost-build 0.11.1",
  "prost-derive 0.10.1",
  "prost-derive 0.11.0",
- "prost-types",
+ "prost-types 0.10.1",
+ "prost-types 0.11.1",
  "protobuf",
  "protobuf-src",
  "ptree",
@@ -11277,9 +11425,12 @@ dependencies = [
  "tokio-util 0.7.4",
  "toml",
  "toml_edit",
- "tonic",
- "tonic-build",
- "tonic-health",
+ "tonic 0.7.2",
+ "tonic 0.8.2",
+ "tonic-build 0.7.2",
+ "tonic-build 0.8.2",
+ "tonic-health 0.6.0",
+ "tonic-health 0.7.1",
  "toolchain_find",
  "tower",
  "tower-http",

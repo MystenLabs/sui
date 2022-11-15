@@ -79,7 +79,7 @@ block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", d
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2-with-parallelism-toggle", default-features = false, features = ["parallel"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", default-features = false, features = ["check", "sha2"] }
+bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 byte-slice-cast = { version = "1", default-features = false, features = ["std"] }
@@ -340,9 +340,11 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "0800fc7
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
-multiaddr = { version = "0.16", features = ["url"] }
+multiaddr-582f2526e08bb6a0 = { package = "multiaddr", version = "0.14", features = ["url"] }
+multiaddr-986da7b5efc2b80e = { package = "multiaddr", version = "0.16", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
+mysten-network = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
@@ -416,7 +418,7 @@ prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
 prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
 prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
-prost-types = { version = "0.11", features = ["std"] }
+prost-types-a6292c17cd707f01 = { package = "prost-types", version = "0.11", features = ["std"] }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -562,8 +564,10 @@ tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "toki
 tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
 toml_edit = { version = "0.14", features = ["easy", "serde"] }
-tonic = { version = "0.8", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
-tonic-health = { version = "0.7", features = ["transport"] }
+tonic-ca01ad9e24f5d932 = { package = "tonic", version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "tokio", "tower", "tracing-futures", "transport"] }
+tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
+tonic-health-3b31131e45eafb45 = { package = "tonic-health", version = "0.6", features = ["transport"] }
+tonic-health-ca01ad9e24f5d932 = { package = "tonic-health", version = "0.7", features = ["transport"] }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
 tower-http = { version = "0.3", features = ["cors", "map-response-body", "propagate-header", "set-header", "tower", "trace", "tracing", "util"] }
 tower-layer = { version = "0.3", default-features = false }
@@ -707,7 +711,7 @@ block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", d
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2-with-parallelism-toggle", default-features = false, features = ["parallel"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", default-features = false, features = ["check", "sha2"] }
+bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
@@ -737,6 +741,7 @@ clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "
 clap_derive = { version = "3" }
 clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
+cmake = { version = "0.1", default-features = false }
 coarsetime = { version = "0.1", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
@@ -998,11 +1003,13 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "0800fc7
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
-multiaddr = { version = "0.16", features = ["url"] }
+multiaddr-582f2526e08bb6a0 = { package = "multiaddr", version = "0.14", features = ["url"] }
+multiaddr-986da7b5efc2b80e = { package = "multiaddr", version = "0.16", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
+mysten-network = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
@@ -1096,10 +1103,12 @@ proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "l
 proptest-derive = { version = "0.3", default-features = false }
 prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
 prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
-prost-build = { version = "0.11" }
+prost-build-93f6ce9d446188ac = { package = "prost-build", version = "0.10" }
+prost-build-a6292c17cd707f01 = { package = "prost-build", version = "0.11" }
 prost-derive-93f6ce9d446188ac = { package = "prost-derive", version = "0.10", default-features = false }
 prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
-prost-types = { version = "0.11", features = ["std"] }
+prost-types-93f6ce9d446188ac = { package = "prost-types", version = "0.10", default-features = false }
+prost-types-a6292c17cd707f01 = { package = "prost-types", version = "0.11", features = ["std"] }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -1269,9 +1278,12 @@ tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "toki
 tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
 toml_edit = { version = "0.14", features = ["easy", "serde"] }
-tonic = { version = "0.8", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
-tonic-build = { version = "0.8", features = ["prost", "prost-build", "transport"] }
-tonic-health = { version = "0.7", features = ["transport"] }
+tonic-ca01ad9e24f5d932 = { package = "tonic", version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "tokio", "tower", "tracing-futures", "transport"] }
+tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
+tonic-build-ca01ad9e24f5d932 = { package = "tonic-build", version = "0.7", features = ["prost", "prost-build", "transport"] }
+tonic-build-c38e5c1d305a1b54 = { package = "tonic-build", version = "0.8", features = ["prost", "prost-build", "transport"] }
+tonic-health-3b31131e45eafb45 = { package = "tonic-health", version = "0.6", features = ["transport"] }
+tonic-health-ca01ad9e24f5d932 = { package = "tonic-health", version = "0.7", features = ["transport"] }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
 tower-http = { version = "0.3", features = ["cors", "map-response-body", "propagate-header", "set-header", "tower", "trace", "tracing", "util"] }
