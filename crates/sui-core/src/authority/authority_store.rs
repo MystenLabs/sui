@@ -1335,10 +1335,17 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // technically here we need to check if first item in stream has a key equal to last_previous
         // however in practice this can not happen because number of batches in certificate is
         // limited and is less then u64::MAX
-        let roots = iter
-            .take_while(|(idx, _tx)| idx.next_certificate_index <= to_height_included)
+        let roots: Vec<_> = iter
+            .take_while(|(idx, _tx)| idx.last_committed_round <= to_height_included)
             .map(|(_idx, tx)| tx)
             .collect();
+
+        debug!(
+            "Selected {} roots between narwhal commit rounds {} and {}",
+            roots.len(),
+            from_height_excluded,
+            to_height_included
+        );
 
         Ok(Some((index, roots)))
     }
