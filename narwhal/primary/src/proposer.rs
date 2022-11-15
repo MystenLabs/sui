@@ -137,7 +137,7 @@ impl Proposer {
     /// make_header creates a new Header, persists it to database
     /// and sends it to core for processing. If successful, it returns
     /// the number of batch digests included in header.
-    async fn make_header(&mut self) -> DagResult<usize> {
+    async fn make_header(&mut self) -> DagResult<(Header, usize)> {
         // Make a new header.
         let header = self.create_new_header().await?;
 
@@ -154,11 +154,11 @@ impl Proposer {
 
         // Send the new header to the `Core` that will broadcast and process it.
         self.tx_headers
-            .send(header)
+            .send(header.clone())
             .await
             .map_err(|_| DagError::ShuttingDown)?;
 
-        Ok(num_of_included_digests)
+        Ok((header, num_of_included_digests))
     }
 
     // Creates a new header. Also the method ensures we are protected against equivocation.
@@ -303,6 +303,9 @@ impl Proposer {
         let mut advance = true;
 
         let timer = sleep(self.max_header_delay);
+        let mut header_repeat_timer = Box::pin(sleep(Duration::from_secs(60)));
+        let mut opt_latest_header = None;
+
         tokio::pin!(timer);
 
         info!("Proposer on node {} has started successfully.", self.name);
@@ -340,12 +343,16 @@ impl Proposer {
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
-                    Ok(digests) => {
+                    Ok((header, digests)) => {
                         let reason = if timer_expired {
                             "timeout"
                         } else {
                             "threshold_size_reached"
                         };
+
+                        // Save the header
+                        opt_latest_header = Some(header);
+                        header_repeat_timer = Box::pin(sleep(Duration::from_secs(60)));
 
                         self.metrics
                             .num_of_batch_digests_in_header
@@ -361,6 +368,23 @@ impl Proposer {
             }
 
             tokio::select! {
+
+                () = &mut header_repeat_timer => {
+                    // If the round has not advanced within 60sec then try to re-process our own header.
+
+
+                    if let Some(header) = &opt_latest_header {
+                        debug!("Resend Header {:?}", header);
+
+                        let _ = self.tx_headers
+                        .send(header.clone())
+                        .await
+                        .map_err(|_| DagError::ShuttingDown);
+                    }
+
+                    header_repeat_timer = Box::pin(sleep(Duration::from_secs(60)));
+                }
+
 
                 Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
                     // Remove committed headers from the list of pending
