@@ -465,7 +465,7 @@ async fn test_request_vote_missing_batches() {
         None,
     ));
     let handler = PrimaryReceiverHandler {
-        name,
+        name: name.clone(),
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -482,11 +482,11 @@ async fn test_request_vote_missing_batches() {
 
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
-    for _ in 0..3 {
-        let header = author
+    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+        let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
-            .build(author.keypair())
+            .build(primary.keypair())
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -584,7 +584,7 @@ async fn test_request_vote_already_voted() {
         None,
     ));
     let handler = PrimaryReceiverHandler {
-        name,
+        name: name.clone(),
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -601,11 +601,11 @@ async fn test_request_vote_already_voted() {
 
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
-    for _ in 0..3 {
-        let header = author
+    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+        let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
-            .build(author.keypair())
+            .build(primary.keypair())
             .unwrap();
 
         let certificate = fixture.certificate(&header);
