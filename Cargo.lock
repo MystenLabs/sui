@@ -11463,7 +11463,7 @@ dependencies = [
 [[package]]
 name = "ying-profiler"
 version = "0.1.0"
-source = "git+https://github.com/velvia/ying-profiler#885208a28c25d35a1e69387ca0ed4ada1abea9d3"
+source = "git+https://github.com/velvia/ying-profiler#b3babafa758c3ec7e29d487d5d14483e5350f0ce"
 dependencies = [
  "backtrace",
  "chrono",
