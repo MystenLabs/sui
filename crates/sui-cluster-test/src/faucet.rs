@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::cluster::{new_wallet_context_from_cluster, Cluster};
 use async_trait::async_trait;
+use fastcrypto::encoding::{Encoding, Hex};
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 use sui_faucet::{Faucet, FaucetResponse, SimpleFaucet};
-use sui_types::base_types::{encode_bytes_hex, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use tracing::{debug, info, info_span, Instrument};
 use uuid::Uuid;
@@ -64,7 +65,7 @@ impl FaucetClient for RemoteFaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let gas_url = format!("{}/gas", self.remote_url);
         debug!("Getting coin from remote faucet {}", gas_url);
-        let data = HashMap::from([("recipient", encode_bytes_hex(request_address))]);
+        let data = HashMap::from([("recipient", Hex::encode(request_address))]);
         let map = HashMap::from([("FixedAmountRequest", data)]);
 
         let auth_header = match env::var("FAUCET_AUTH_HEADER") {

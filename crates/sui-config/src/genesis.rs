@@ -4,7 +4,7 @@
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
@@ -32,7 +32,7 @@ use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
-    base_types::{encode_bytes_hex, TxContext},
+    base_types::TxContext,
     committee::{Committee, EpochId},
     error::SuiResult,
     object::Object,
@@ -401,7 +401,7 @@ impl Builder {
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = encode_bytes_hex(object.digest());
+            let hex_digest = Hex::encode(object.digest());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
@@ -411,7 +411,7 @@ impl Builder {
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = encode_bytes_hex(validator.info.protocol_key());
+            let hex_name = Hex::encode(validator.info.protocol_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
         }
 

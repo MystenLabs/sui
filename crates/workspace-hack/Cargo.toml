@@ -183,7 +183,7 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522bea01e4a3d19ecae63d789edcdcce2d66c", features = ["copy_key", "secure", "threads-bls_12_377"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b6411e014255c9e2a0f6dff00478bc45d76e9f5d", features = ["copy_key", "secure", "threads-bls_12_377"] }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -827,8 +827,8 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522bea01e4a3d19ecae63d789edcdcce2d66c", features = ["copy_key", "secure", "threads-bls_12_377"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "12c522bea01e4a3d19ecae63d789edcdcce2d66c", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b6411e014255c9e2a0f6dff00478bc45d76e9f5d", features = ["copy_key", "secure", "threads-bls_12_377"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b6411e014255c9e2a0f6dff00478bc45d76e9f5d", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }

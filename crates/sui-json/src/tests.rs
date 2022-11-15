@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use fastcrypto::encoding::{Encoding, Hex};
 use move_core_types::u256::U256;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
@@ -334,7 +335,7 @@ fn test_basic_args_linter_pure_args_good() {
         (
             Value::from(good_hex_val),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
+            bcs::to_bytes(&Hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
                 .unwrap(),
         ),
         // u8 vector from u8 array

@@ -11,7 +11,6 @@ fastcrypto.workspace = true
 workspace-hack.workspace = true
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
 eyre = "0.6.8"
-hex = "0.4.3"
 rand = { version = "0.8.5", features = ["std"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_bytes = "0.11.7"

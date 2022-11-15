@@ -101,8 +101,7 @@ fn test_object_id_display() {
     let hex = "ca843279e3427144cead5e4d5999a3d05999a3d0";
     let upper_hex = "CA843279E3427144CEAD5E4D5999A3D05999A3D0";
 
-    let id = ObjectID::from_hex(hex).unwrap();
-
+    let id = ObjectID::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
     assert_eq!(format!("{:X}", id), upper_hex);
     assert_eq!(format!("{:x}", id), hex);
@@ -112,9 +111,9 @@ fn test_object_id_display() {
 
 #[test]
 fn test_object_id_str_lossless() {
-    let id = ObjectID::from_hex("0000000000c0f1f95c5b1c5f0eda533eff269000").unwrap();
-    let id_empty = ObjectID::from_hex("0000000000000000000000000000000000000000").unwrap();
-    let id_one = ObjectID::from_hex("0000000000000000000000000000000000000001").unwrap();
+    let id = ObjectID::from_str("0000000000c0f1f95c5b1c5f0eda533eff269000").unwrap();
+    let id_empty = ObjectID::from_str("0000000000000000000000000000000000000000").unwrap();
+    let id_one = ObjectID::from_str("0000000000000000000000000000000000000001").unwrap();
 
     assert_eq!(id.short_str_lossless(), "c0f1f95c5b1c5f0eda533eff269000",);
     assert_eq!(id_empty.short_str_lossless(), "0",);
@@ -127,7 +126,7 @@ fn test_object_id_from_hex_literal() {
     let hex = "0000000000000000000000000000000000000001";
 
     let obj_id_from_literal = ObjectID::from_hex_literal(hex_literal).unwrap();
-    let obj_id = ObjectID::from_hex(hex).unwrap();
+    let obj_id = ObjectID::from_str(hex).unwrap();
 
     assert_eq!(obj_id_from_literal, obj_id);
     assert_eq!(hex_literal, obj_id.to_hex_literal());
@@ -204,7 +203,7 @@ fn test_object_id_zero_padding() {
     let long_hex_alt = "0000000000000000000000000000000000000002";
     let obj_id_1 = ObjectID::from_hex_literal(hex).unwrap();
     let obj_id_2 = ObjectID::from_hex_literal(long_hex).unwrap();
-    let obj_id_3 = ObjectID::from_hex(long_hex_alt).unwrap();
+    let obj_id_3 = ObjectID::from_str(long_hex_alt).unwrap();
     let obj_id_4: ObjectID = serde_json::from_str(&format!("\"{}\"", hex)).unwrap();
     let obj_id_5: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex)).unwrap();
     let obj_id_6: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex_alt)).unwrap();
@@ -245,7 +244,7 @@ fn test_address_serde_not_human_readable() {
 fn test_address_serde_human_readable() {
     let address = SuiAddress::random_for_testing_only();
     let serialized = serde_json::to_string(&address).unwrap();
-    assert_eq!(format!("\"0x{}\"", hex::encode(address)), serialized);
+    assert_eq!(format!("\"0x{}\"", Hex::encode(address)), serialized);
     let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
@@ -359,11 +358,10 @@ fn derive_sample_address() -> (SuiAddress, AccountKeyPair) {
 // Required to capture address derivation algorithm updates that break some tests and deployments.
 #[test]
 fn test_address_backwards_compatibility() {
-    use hex;
     let (address, _) = derive_sample_address();
     assert_eq!(
         address.to_vec(),
-        hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),
+        Hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),
         "If this test broke, then the algorithm for deriving addresses from public keys has \
                changed. If this was intentional, please compute a new sample address in hex format \
                from `derive_sample_address` and update the SAMPLE_ADDRESS const above with the new \

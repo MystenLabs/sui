@@ -6,7 +6,10 @@ use crate::metrics::initialise_metrics;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use fastcrypto::hash::Hash;
+use fastcrypto::{
+    encoding::{Encoding, Hex},
+    hash::Hash,
+};
 use futures::stream::FuturesOrdered;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
@@ -200,8 +203,8 @@ async fn get_network_peers_from_admin_server() {
         metrics_1.clone(),
     );
 
-    let primary_1_peer_id = hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
-    let worker_1_peer_id = hex::encode(worker_1_keypair.copy().public().0.as_bytes());
+    let primary_1_peer_id = Hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
+    let worker_1_peer_id = Hex::encode(worker_1_keypair.copy().public().0.as_bytes());
 
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -315,8 +318,8 @@ async fn get_network_peers_from_admin_server() {
     // have  a chance to connect to each other.
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let primary_2_peer_id = hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
-    let worker_2_peer_id = hex::encode(worker_2_keypair.copy().public().0.as_bytes());
+    let primary_2_peer_id = Hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
+    let worker_2_peer_id = Hex::encode(worker_2_keypair.copy().public().0.as_bytes());
 
     // Test getting all known peers for worker 2 (worker at index 0 for primary 2)
     let resp = reqwest::get(format!(

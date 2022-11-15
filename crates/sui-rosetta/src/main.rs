@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use clap::Parser;
+use fastcrypto::encoding::{Encoding, Hex};
 use serde_json::{json, Value};
 use tracing::info;
 
@@ -17,7 +18,7 @@ use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KE
 use sui_node::{metrics, SuiNode};
 use sui_rosetta::types::{AccountIdentifier, CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_types::base_types::{encode_bytes_hex, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
 
 #[derive(Parser)]
@@ -149,14 +150,12 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .into_iter()
         .map(|(address, key)| {
             let (privkey, curve_type) = match key {
-                SuiKeyPair::Ed25519SuiKeyPair(k) => (
-                    encode_bytes_hex(k.private().as_bytes()),
-                    CurveType::Edwards25519,
-                ),
-                SuiKeyPair::Secp256k1SuiKeyPair(k) => (
-                    encode_bytes_hex(k.private().as_bytes()),
-                    CurveType::Secp256k1,
-                ),
+                SuiKeyPair::Ed25519SuiKeyPair(k) => {
+                    (Hex::encode(k.private().as_bytes()), CurveType::Edwards25519)
+                }
+                SuiKeyPair::Secp256k1SuiKeyPair(k) => {
+                    (Hex::encode(k.private().as_bytes()), CurveType::Secp256k1)
+                }
             };
             PrefundedAccount {
                 privkey,

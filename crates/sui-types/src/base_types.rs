@@ -2,15 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use std::str::FromStr;
-
 use anyhow::anyhow;
 use curve25519_dalek::ristretto::RistrettoPoint;
-use hex::FromHex;
+use fastcrypto::encoding::decode_bytes_hex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -21,6 +15,11 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha2::Sha512;
+use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
+use std::fmt;
+use std::str::FromStr;
 
 pub use crate::committee::EpochId;
 use crate::crypto::{
@@ -157,7 +156,7 @@ impl SuiAddress {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&key.map(encode_bytes_hex).unwrap_or_default())
+        serializer.serialize_str(&key.map(Hex::encode).unwrap_or_default())
     }
 
     pub fn optional_address_from_hex<'de, D>(
@@ -474,8 +473,7 @@ pub fn context_from_digest(digest: TransactionDigest) -> Context {
     // TODO: don't create a HashMap, that wastes memory and costs an allocation!
     let mut carrier = HashMap::new();
     // TODO: figure out exactly what key to use.  I suspect it has to be the parent span ID in OpenTelemetry format.
-    carrier.insert("traceparent".to_string(), hex::encode(digest.0));
-    // carrier.insert("tx_digest".to_string(), hex::encode(digest.0));
+    carrier.insert("traceparent".to_string(), Hex::encode(digest.0));
 
     global::get_text_map_propagator(|propagator| propagator.extract(&carrier))
 }
@@ -533,7 +531,7 @@ where
     B: AsRef<[u8]>,
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&encode_bytes_hex(bytes))
+    serializer.serialize_str(&Hex::encode(bytes))
 }
 
 pub fn bytes_from_hex<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -544,16 +542,6 @@ where
     let s = String::deserialize(deserializer)?;
     let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
     Ok(value)
-}
-
-pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: B) -> String {
-    hex::encode(bytes.as_ref())
-}
-
-pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
-    let s = s.strip_prefix("0x").unwrap_or(s);
-    let value = hex::decode(s)?;
-    T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
 impl fmt::Display for SuiAddress {
@@ -573,7 +561,7 @@ impl fmt::LowerHex for SuiAddress {
         if f.alternate() {
             write!(f, "0x")?;
         }
-        write!(f, "{}", encode_bytes_hex(self))
+        write!(f, "{}", Hex::encode(self))
     }
 }
 
@@ -582,7 +570,7 @@ impl fmt::UpperHex for SuiAddress {
         if f.alternate() {
             write!(f, "0x")?;
         }
-        write!(f, "{}", encode_bytes_hex(self).to_uppercase())
+        write!(f, "{}", Hex::encode(self).to_uppercase())
     }
 }
 
@@ -597,7 +585,7 @@ pub fn dbg_object_id(name: u8) -> ObjectID {
 
 impl std::fmt::Debug for ObjectDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(self.0);
+        let s = Hex::encode(self.0);
         write!(f, "o#{}", s)?;
         Ok(())
     }
@@ -747,16 +735,10 @@ impl ObjectID {
                 hex_str.push('0');
             }
             hex_str.push_str(&literal[2..]);
-            Self::from_hex(hex_str)
+            Self::from_str(&hex_str)
         } else {
-            Self::from_hex(&literal[2..])
+            Self::from_str(&literal[2..])
         }
-    }
-
-    pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, ObjectIDParseError> {
-        <[u8; Self::LENGTH]>::from_hex(hex)
-            .map_err(ObjectIDParseError::from)
-            .map(ObjectID::from)
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
@@ -826,43 +808,22 @@ impl ObjectID {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, thiserror::Error)]
+#[derive(PartialEq, Eq, Clone, Debug, thiserror::Error)]
 pub enum ObjectIDParseError {
     #[error("ObjectID hex literal must start with 0x")]
     HexLiteralPrefixMissing,
 
-    #[error("{err} (ObjectID hex string should only contain 0-9, A-F, a-f)")]
-    InvalidHexCharacter { err: hex::FromHexError },
+    #[error("ObjectID hex string should only contain 0-9, A-F, a-f")]
+    InvalidHexCharacter,
 
-    #[error("{err} (hex string must be even-numbered. Two chars maps to one byte).")]
-    OddLength { err: hex::FromHexError },
+    #[error("hex string must be even-numbered. Two chars maps to one byte.")]
+    OddLength,
 
-    #[error("{err} (ObjectID must be {} bytes long).", ObjectID::LENGTH)]
-    InvalidLength { err: hex::FromHexError },
+    #[error("ObjectID must be {} bytes long.", ObjectID::LENGTH)]
+    InvalidLength,
 
     #[error("Could not convert from bytes slice")]
     TryFromSliceError,
-    // #[error("Internal hex parser error: {err}")]
-    // HexParserError { err: hex::FromHexError },
-}
-
-/// Wraps the underlying parsing errors
-impl From<hex::FromHexError> for ObjectIDParseError {
-    fn from(err: hex::FromHexError) -> Self {
-        match err {
-            hex::FromHexError::InvalidHexCharacter { c, index } => {
-                ObjectIDParseError::InvalidHexCharacter {
-                    err: hex::FromHexError::InvalidHexCharacter { c, index },
-                }
-            }
-            hex::FromHexError::OddLength => ObjectIDParseError::OddLength {
-                err: hex::FromHexError::OddLength,
-            },
-            hex::FromHexError::InvalidStringLength => ObjectIDParseError::InvalidLength {
-                err: hex::FromHexError::InvalidStringLength,
-            },
-        }
-    }
 }
 
 impl From<[u8; ObjectID::LENGTH]> for ObjectID {
@@ -921,7 +882,7 @@ impl fmt::LowerHex for ObjectID {
         if f.alternate() {
             write!(f, "0x")?;
         }
-        write!(f, "{}", encode_bytes_hex(self))
+        write!(f, "{}", Hex::encode(self))
     }
 }
 
@@ -930,7 +891,7 @@ impl fmt::UpperHex for ObjectID {
         if f.alternate() {
             write!(f, "0x")?;
         }
-        write!(f, "{}", encode_bytes_hex(self).to_uppercase())
+        write!(f, "{}", Hex::encode(self).to_uppercase())
     }
 }
 
@@ -962,14 +923,14 @@ impl TryFrom<String> for ObjectID {
     type Error = ObjectIDParseError;
 
     fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
-        Self::from_hex(s.clone()).or_else(|_| Self::from_hex_literal(&s))
+        Self::from_str(&s).or_else(|_| Self::from_hex_literal(&s))
     }
 }
 
 impl FromStr for SuiAddress {
     type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
-        decode_bytes_hex(s)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        decode_bytes_hex(s).map_err(|e| anyhow!(e))
     }
 }
 
@@ -977,8 +938,7 @@ impl FromStr for ObjectID {
     type Err = ObjectIDParseError;
 
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
-        // Try to match both the literal (0xABC..) and the normal (ABC)
-        Self::from_hex(s).or_else(|_| Self::from_hex_literal(s))
+        decode_bytes_hex(s).map_err(|_| ObjectIDParseError::TryFromSliceError)
     }
 }
 

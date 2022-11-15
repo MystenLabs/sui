@@ -4,6 +4,7 @@
 use crate::authority::StableSyncAuthoritySigner;
 use crate::consensus_adapter::SubmitToConsensus;
 use async_trait::async_trait;
+use fastcrypto::encoding::{Encoding, Hex};
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
 use sui_types::messages::ConsensusTransaction;
@@ -80,11 +81,11 @@ impl CheckpointOutput for LogCheckpointOutput {
         );
         info!(
             "Creating checkpoint {:?} at sequence {}, previous digest {:?}, transactions count {}, content digest {:?}",
-            hex::encode(summary.digest()),
+            Hex::encode(summary.digest()),
             summary.sequence_number,
             summary.previous_digest,
             contents.size(),
-            hex::encode(summary.content_digest),
+            Hex::encode(summary.content_digest),
         );
 
         Ok(())
@@ -100,7 +101,7 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
             summary.summary.sequence_number,
-            hex::encode(summary.summary.digest())
+            Hex::encode(summary.summary.digest())
         );
         Ok(())
     }
