@@ -92,7 +92,7 @@ module games_with_chance::satoshi_flip {
         id: UID,
         epoch: u64,
         hashed_secret: Sha3256Digest,
-        house: address ,
+        house: address,
         player: Option<address>,
         house_data: Option<HouseData>,
         bet_data: Option<BetData>,
@@ -266,7 +266,7 @@ module games_with_chance::satoshi_flip {
         assert!(option::is_none<Outcome>(&game.outcome), EGameAlreadyEnded);
         // a bet has to have been placed
         assert!(option::is_some<BetData>(&game.bet_data), ECannotCancelBeforeBetting);
-        // this can only be called  `CancelEpochsAfter` epochs after the bet has been placed
+        // this can only be called `CancelEpochsAfter` epochs after the bet has been placed
         assert!(game.epoch + EpochsCancelAfter <= tx_context::epoch(ctx), ENotEnoughEpochsPassedToCancel);
 
         let HouseData {house_balance, min_bet: _, max_bet: _} = option::extract(&mut game.house_data);

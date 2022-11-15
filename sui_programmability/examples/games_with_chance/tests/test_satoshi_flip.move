@@ -64,9 +64,9 @@ module games_with_chance::test_satoshi_flip {
 
             // check is house address the correct one
             assert!(satoshi_flip::house(&game_val) == @0xBAE, EWronghouse);
-            //check the minimum bet
+            // check the minimum bet
             assert!(satoshi_flip::min_bet(&game_val) == 100, EWrongMinBet);
-            //check maximun bet
+            // check maximun bet
             assert!(satoshi_flip::max_bet(&game_val) == 5000, EWrongMaxBet);
 
             let guess = 0;
