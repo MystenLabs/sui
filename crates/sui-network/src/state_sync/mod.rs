@@ -877,7 +877,12 @@ async fn get_transaction_and_effects<S: WriteStore>(
                 && effects.digest() == digests.effects
                 && effects.transaction_digest == digests.transaction
             {
-                store.insert_transaction(transaction);
+                // TODO this should just be a bare Transaction type and not a TransactionCertificate
+                // since Certificates are indended to be ephemeral and thrown away at the end of an
+                // epoch
+                store.insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(
+                    transaction,
+                ));
                 store.insert_transaction_effects(effects);
                 return Ok(());
             }

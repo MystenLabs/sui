@@ -15,6 +15,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -28,8 +29,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSignatureMessage, CheckpointSummary,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
+    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tracing::{debug, error, info, warn};
@@ -41,7 +42,7 @@ use typed_store_derive::DBMapUtils;
 type CheckpointCommitHeight = u64;
 
 #[derive(DBMapUtils)]
-struct CheckpointStoreTables {
+pub struct CheckpointStoreTables {
     /// This table has information for the checkpoints for which we constructed all the data
     /// from consensus, but not yet constructed actual checkpoint.
     ///
@@ -54,8 +55,8 @@ struct CheckpointStoreTables {
     /// The boolean value indicates whether this is the last checkpoint of the epoch.
     pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
 
-    /// Maps sequence number to checkpoint contents
-    checkpoint_content: DBMap<CheckpointSequenceNumber, CheckpointContents>,
+    /// Maps checkpoint contents digest to checkpoint contents
+    checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Maps sequence number to checkpoint summary
     checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
@@ -71,6 +72,104 @@ struct CheckpointStoreTables {
 
     /// Stores certified checkpoints
     certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
+    /// Map from checkpoint digest to certified checkpoint
+    checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
+
+    /// Watermarks used to determine the highest verified and fully synced checkpoints
+    watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
+}
+
+impl CheckpointStoreTables {
+    pub fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Option<VerifiedCheckpoint> {
+        self.checkpoint_by_digest
+            .get(digest)
+            .ok()
+            .flatten()
+            .map(VerifiedCheckpoint::new_unchecked)
+    }
+
+    pub fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<VerifiedCheckpoint> {
+        self.certified_checkpoints
+            .get(&sequence_number)
+            .ok()
+            .flatten()
+            .map(VerifiedCheckpoint::new_unchecked)
+    }
+
+    pub fn get_highest_verified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
+        let highest_verified = self
+            .watermarks
+            .get(&CheckpointWatermark::HighestVerified)
+            .ok()
+            .flatten()?;
+        self.get_checkpoint_by_digest(&highest_verified.1)
+    }
+
+    pub fn get_highest_synced_checkpoint(&self) -> Option<VerifiedCheckpoint> {
+        let highest_synced = self
+            .watermarks
+            .get(&CheckpointWatermark::HighestSynced)
+            .ok()
+            .flatten()?;
+        self.get_checkpoint_by_digest(&highest_synced.1)
+    }
+
+    pub fn get_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<CheckpointContents> {
+        self.checkpoint_content.get(digest).ok().flatten()
+    }
+
+    pub fn insert_verified_checkpoint(&self, checkpoint: VerifiedCheckpoint) {
+        self.certified_checkpoints
+            .insert(&checkpoint.sequence_number(), checkpoint.inner())
+            .expect("writing to rocksdb should not fail");
+        self.checkpoint_by_digest
+            .insert(&checkpoint.digest(), checkpoint.inner())
+            .expect("writing to rocksdb should not fail");
+
+        // Update latest
+        if Some(checkpoint.sequence_number())
+            > self
+                .get_highest_verified_checkpoint()
+                .map(|x| x.sequence_number())
+        {
+            self.watermarks
+                .insert(
+                    &CheckpointWatermark::HighestVerified,
+                    &(checkpoint.sequence_number(), checkpoint.digest()),
+                )
+                .expect("writing to rocksdb should not fail");
+        }
+    }
+
+    pub fn update_highest_synced_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+        self.watermarks
+            .insert(
+                &CheckpointWatermark::HighestSynced,
+                &(checkpoint.sequence_number(), checkpoint.digest()),
+            )
+            .expect("writing to rocksdb should not fail");
+    }
+
+    pub fn insert_checkpoint_contents(&self, contents: CheckpointContents) {
+        self.checkpoint_content
+            .insert(&contents.digest(), &contents)
+            .expect("writing to rocksdb should not fail");
+    }
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointWatermark {
+    HighestVerified,
+    HighestSynced,
 }
 
 pub struct CheckpointBuilder {
@@ -239,7 +338,7 @@ impl CheckpointBuilder {
 
         batch = batch.insert_batch(
             &self.tables.checkpoint_content,
-            [(sequence_number, contents)],
+            [(contents.digest(), contents)],
         )?;
         batch = batch.insert_batch(
             &self.tables.checkpoint_summary,
@@ -391,6 +490,9 @@ impl CheckpointAggregator {
                     self.tables
                         .certified_checkpoints
                         .insert(&current.summary.sequence_number, &summary)?;
+                    self.tables
+                        .checkpoint_by_digest
+                        .insert(&summary.digest(), &summary)?;
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);
@@ -646,7 +748,10 @@ impl CheckpointTailer {
         loop {
             let summary = self.tables.checkpoint_summary.get(&self.sequence)?;
             let Some(summary) = summary else { return Ok(true); };
-            let content = self.tables.checkpoint_content.get(&self.sequence)?;
+            let content = self
+                .tables
+                .checkpoint_content
+                .get(&summary.content_digest)?;
             let Some(content) = content else {
                 return Err(SuiError::from("Checkpoint summary for sequence {} exists, but content does not. This should not happen"));
             };

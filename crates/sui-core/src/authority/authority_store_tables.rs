@@ -132,6 +132,8 @@ pub struct AuthorityPerpetualTables<S> {
     #[default_options_override_fn = "effects_table_default_config"]
     pub(crate) effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
+    pub(crate) effects2: DBMap<TransactionEffectsDigest, TransactionEffects>,
+
     // Tables used for authority batch structure
     // TODO: executed_sequence and batches both conceptually belong in AuthorityEpochTables,
     // but we currently require that effects and executed_sequence are written atomically.
