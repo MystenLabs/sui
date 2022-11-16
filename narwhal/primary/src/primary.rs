@@ -585,6 +585,7 @@ impl PrimaryReceiverHandler {
         Ok(None)
     }
 
+    #[allow(clippy::mutable_key_type)]
     async fn process_request_vote(
         &self,
         request: anemo::Request<RequestVoteRequest>,
