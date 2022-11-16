@@ -1932,6 +1932,12 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum ConsensusTransactionKey {
+    Certificate(TransactionDigest),
+    CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
@@ -1977,6 +1983,24 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
         }
+    }
+
+    pub fn key(&self) -> ConsensusTransactionKey {
+        match &self.kind {
+            ConsensusTransactionKind::UserTransaction(cert) => {
+                ConsensusTransactionKey::Certificate(*cert.digest())
+            }
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                ConsensusTransactionKey::CheckpointSignature(
+                    data.summary.auth_signature.authority,
+                    data.summary.summary.sequence_number,
+                )
+            }
+        }
+    }
+
+    pub fn is_user_certificate(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
     }
 }
 

@@ -49,7 +49,10 @@ pub struct AuthorityEpochTables<S> {
     /// Entries in this table can be garbage collected whenever we can prove that we won't receive
     /// another handle_consensus_transaction call for the given digest. This probably means at
     /// epoch change.
-    pub(crate) consensus_message_processed: DBMap<TransactionDigest, bool>,
+    pub(crate) consensus_message_processed: DBMap<ConsensusTransactionKey, bool>,
+
+    /// Map stores pending transactions that this authority submitted to consensus
+    pub(crate) pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
     /// This is an inverse index for consensus_message_processed - it allows to select
     /// all transactions at the specific consensus range

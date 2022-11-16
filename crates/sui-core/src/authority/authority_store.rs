@@ -72,7 +72,7 @@ pub struct SuiDataStore<S> {
     db_options: Option<Options>,
 
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
-    pub(crate) consensus_notify_read: NotifyRead<TransactionDigest, ()>,
+    pub(crate) consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
@@ -1183,23 +1183,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     pub fn consensus_message_processed(
         &self,
-        digest: &TransactionDigest,
+        key: &ConsensusTransactionKey,
     ) -> Result<bool, SuiError> {
         Ok(self
             .epoch_tables()
             .consensus_message_processed
-            .contains_key(digest)?)
+            .contains_key(key)?)
     }
 
     pub async fn consensus_message_processed_notify(
         &self,
-        digest: &TransactionDigest,
+        key: ConsensusTransactionKey,
     ) -> Result<(), SuiError> {
-        let registration = self.consensus_notify_read.register_one(digest);
+        let registration = self.consensus_notify_read.register_one(&key);
         if self
             .epoch_tables()
             .consensus_message_processed
-            .contains_key(digest)?
+            .contains_key(&key)?
         {
             return Ok(());
         }
@@ -1207,14 +1207,31 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    pub async fn record_consensus_transaction_processed(
+        &self,
+        transaction: &ConsensusTransaction,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> Result<(), SuiError> {
+        // user certificates need to use record_(shared|owned)_object_cert_from_consensus
+        assert!(!transaction.is_user_certificate());
+        let write_batch = self.epoch_tables().last_consensus_index.batch();
+        self.finish_consensus_transaction_process(write_batch, transaction, consensus_index)
+    }
+
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
+        transaction: &ConsensusTransaction,
         certificate: &VerifiedCertificate,
         consensus_index: ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         let write_batch = self.epoch_tables().last_consensus_index.batch();
-        self.finish_consensus_message_process(write_batch, certificate, consensus_index)
+        self.finish_consensus_certificate_process(
+            write_batch,
+            transaction,
+            certificate,
+            consensus_index,
+        )
     }
 
     /// Locks a sequence number for the shared objects of the input transaction. Also updates the
@@ -1224,6 +1241,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_shared_object_cert_from_consensus(
         &self,
+        transaction: &ConsensusTransaction,
         certificate: &VerifiedCertificate,
         consensus_index: ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
@@ -1293,18 +1311,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         write_batch = write_batch
             .insert_batch(&self.epoch_tables().next_object_versions, schedule_to_write)?;
 
-        self.finish_consensus_message_process(write_batch, certificate, consensus_index)
+        self.finish_consensus_certificate_process(
+            write_batch,
+            transaction,
+            certificate,
+            consensus_index,
+        )
     }
 
-    /// When we finish processing certificate from consensus we record this information.
-    /// Tables updated:
-    ///  * consensus_message_processed - indicate that this certificate was processed by consensus
-    ///  * last_consensus_index - records last processed position in consensus stream
-    ///  * consensus_message_order - records at what position this transaction was first seen in consensus
-    /// Self::consensus_message_processed returns true after this call for given certificate
-    fn finish_consensus_message_process(
+    fn finish_consensus_certificate_process(
         &self,
         batch: DBBatch,
+        transaction: &ConsensusTransaction,
         certificate: &VerifiedCertificate,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
@@ -1314,19 +1332,35 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             [(consensus_index.index.clone(), transaction_digest)],
         )?;
         let batch = batch.insert_batch(
+            &self.epoch_tables().pending_certificates,
+            [(*certificate.digest(), certificate.clone().serializable())],
+        )?;
+        self.finish_consensus_transaction_process(batch, transaction, consensus_index)
+    }
+
+    /// When we finish processing certificate from consensus we record this information.
+    /// Tables updated:
+    ///  * consensus_message_processed - indicate that this certificate was processed by consensus
+    ///  * last_consensus_index - records last processed position in consensus stream
+    ///  * consensus_message_order - records at what position this transaction was first seen in consensus
+    /// Self::consensus_message_processed returns true after this call for given certificate
+    fn finish_consensus_transaction_process(
+        &self,
+        batch: DBBatch,
+        transaction: &ConsensusTransaction,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> SuiResult {
+        let key = transaction.key();
+        let batch = batch.insert_batch(
             &self.epoch_tables().last_consensus_index,
             [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
         )?;
         let batch = batch.insert_batch(
             &self.epoch_tables().consensus_message_processed,
-            [(transaction_digest, true)],
-        )?;
-        let batch = batch.insert_batch(
-            &self.epoch_tables().pending_certificates,
-            [(*certificate.digest(), certificate.clone().serializable())],
+            [(key, true)],
         )?;
         batch.write()?;
-        self.consensus_notify_read.notify(certificate.digest(), &());
+        self.consensus_notify_read.notify(&key, &());
         Ok(())
     }
 

@@ -2060,7 +2060,9 @@ impl AuthorityState {
             Ok(false)
         } else {
             self.database
-                .consensus_message_processed(certificate.digest())
+                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+                    *certificate.digest(),
+                ))
                 .map(|r| !r)
         }
     }
@@ -2072,7 +2074,9 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
         self.database
-            .consensus_message_processed(certificate.digest())
+            .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+                *certificate.digest(),
+            ))
     }
 
     /// Check whether certificate was processed by consensus.
@@ -2080,11 +2084,9 @@ impl AuthorityState {
     /// Otherwise returns future that waits for message to be processed by consensus.
     pub async fn consensus_message_processed_notify(
         &self,
-        digest: &TransactionDigest,
+        key: ConsensusTransactionKey,
     ) -> Result<(), SuiError> {
-        self.database
-            .consensus_message_processed_notify(digest)
-            .await
+        self.database.consensus_message_processed_notify(key).await
     }
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
@@ -2156,22 +2158,21 @@ impl AuthorityState {
             .metrics
             .verify_narwhal_transaction_duration_mcs
             .utilization_timer();
+        if self
+            .database
+            .consensus_message_processed(&transaction.transaction.key())
+            .expect("Storage error")
+        {
+            debug!(
+                consensus_index=?transaction.consensus_index,
+                tracking_id=?transaction.transaction.tracking_id,
+                "handle_consensus_transaction UserTransaction [skip]",
+            );
+            self.metrics.skipped_consensus_txns.inc();
+            return Err(());
+        }
         match &transaction.transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
-                if self
-                    .database
-                    .consensus_message_processed(certificate.digest())
-                    .expect("Storage error")
-                {
-                    debug!(
-                        consensus_index=?transaction.consensus_index,
-                        tracking_id=?transaction.transaction.tracking_id,
-                        tx_digest = ?certificate.digest(),
-                        "handle_consensus_transaction UserTransaction [skip]",
-                    );
-                    self.metrics.skipped_consensus_txns.inc();
-                    return Err(());
-                }
                 self.verify_narwhal_transaction(certificate)
                     .map_err(|err| {
                         warn!(
@@ -2213,11 +2214,11 @@ impl AuthorityState {
         // TODO: Somewhere here we check if we have seen 2f+1 EndOfPublish message, and if so,
         // we call self.get_reconfig_state_write_lock_guard to get a guard, and then call
         // self.close_all_certs() to close it.
-        match transaction.kind {
+        match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
-                let certificate = VerifiedCertificate::new_unchecked(*certificate);
+                let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
 
                 debug!(
                     ?consensus_index,
@@ -2235,11 +2236,19 @@ impl AuthorityState {
 
                 if certificate.contains_shared_object() {
                     self.database
-                        .record_shared_object_cert_from_consensus(&certificate, consensus_index)
+                        .record_shared_object_cert_from_consensus(
+                            &transaction,
+                            &certificate,
+                            consensus_index,
+                        )
                         .await?;
                 } else {
                     self.database
-                        .record_owned_object_cert_from_consensus(&certificate, consensus_index)
+                        .record_owned_object_cert_from_consensus(
+                            &transaction,
+                            &certificate,
+                            consensus_index,
+                        )
                         .await?;
                 }
 
@@ -2249,7 +2258,10 @@ impl AuthorityState {
                 transaction_manager.enqueue(vec![certificate]).await
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
-                self.checkpoint_service.notify_checkpoint_signature(info)
+                self.checkpoint_service.notify_checkpoint_signature(info)?;
+                self.database
+                    .record_consensus_transaction_processed(&transaction, consensus_index)
+                    .await
             }
         }
     }
