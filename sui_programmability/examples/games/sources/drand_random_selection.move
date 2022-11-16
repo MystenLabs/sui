@@ -62,8 +62,6 @@ module games::drand_random_selection {
     const COMPLETED: u8 = 2;
 
     /// Game represents a set of parameters of a single game.
-    /// Can be deconstructed only by the winner.
-    ///
     /// This game can be extended to require ticket purchase, reward winners, etc.
     ///
     struct Game has key, store {
@@ -136,13 +134,10 @@ module games::drand_random_selection {
         transfer::transfer(ticket, tx_context::sender(ctx));
     }
 
-    /// The winner can redeem its ticket and delete the game.
-    public entry fun redeem(ticket: &Ticket, game: Game, ctx: &mut TxContext) {
-        assert!(object::id(&game) == ticket.game_id, EInvalidTicket);
+    /// The winner can redeem its ticket.
+    public entry fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
+        assert!(object::id(game) == ticket.game_id, EInvalidTicket);
         assert!(option::contains(&game.winner, &ticket.participant_index), EInvalidTicket);
-
-        let Game { id, status: _, round: _, participants: _, winner: _ } = game;
-        object::delete(id);
 
         let winner = GameWinner {
             id: object::new(ctx),

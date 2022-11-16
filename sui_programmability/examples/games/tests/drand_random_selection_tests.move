@@ -59,7 +59,7 @@ module games::drand_random_selection_tests {
         assert!(!test_scenario::has_most_recent_for_address<GameWinner>(user3), 1);
         let ticket = test_scenario::take_from_address<Ticket>(scenario, user3);
         let ticket_game_id = *drand_random_selection::get_ticket_game_id(&ticket);
-        drand_random_selection::redeem(&ticket, game_val, test_scenario::ctx(scenario));
+        drand_random_selection::redeem(&ticket, &game_val, test_scenario::ctx(scenario));
         drand_random_selection::delete_ticket(ticket);
 
         // Make sure User3 now has a winner ticket for the right game id.
@@ -68,6 +68,7 @@ module games::drand_random_selection_tests {
         assert!(drand_random_selection::get_game_winner_game_id(&ticket) == &ticket_game_id, 1);
         test_scenario::return_to_address(user3, ticket);
 
+        test_scenario::return_shared(game_val);
         test_scenario::end(scenario_val);
     }
 }
