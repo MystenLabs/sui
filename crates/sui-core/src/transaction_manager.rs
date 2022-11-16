@@ -57,8 +57,19 @@ impl TransactionManager {
             .pending_execution
             .iter()
         {
-            let cert = node_sync_store.get_cert(epoch, &digest).unwrap().unwrap();
-            pending_certs.push(cert);
+            if let Ok(Some(cert)) = node_sync_store.get_cert(epoch, &digest) {
+                pending_certs.push(cert);
+            } else {
+                match transaction_manager.authority_store.effects_exists(&digest) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        warn!(tx_digest=?digest, "Pending certificate is not found in node_sync_store!")
+                    }
+                    Err(e) => {
+                        warn!(tx_digest=?digest, "Pending certificate cannot be recovered from node_sync_store! {e}")
+                    }
+                }
+            }
         }
         transaction_manager
             .authority_store
