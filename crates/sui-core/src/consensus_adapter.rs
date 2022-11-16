@@ -12,7 +12,6 @@ use prometheus::{register_histogram_with_registry, register_int_counter_with_reg
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
-use std::future::Future;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -25,6 +24,7 @@ use sui_types::{
 
 use tap::prelude::*;
 
+use crate::authority::AuthorityState;
 use sui_types::base_types::AuthorityName;
 use tokio::time::{timeout, Duration};
 use tracing::debug;
@@ -133,8 +133,8 @@ impl ConsensusAdapterMetrics {
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Box<dyn SubmitToConsensus>,
-    /// The Sui committee information.
-    committee: Committee,
+    /// Authority state.
+    authority: Arc<AuthorityState>,
     /// Retries sending a transaction to consensus after this timeout.
     timeout: Duration,
     /// Number of submitted transactions still inflight at this node.
@@ -169,14 +169,14 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
-        committee: Committee,
+        authority: Arc<AuthorityState>,
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Self {
         let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
-            committee,
+            authority,
             timeout,
             num_inflight_transactions,
             opt_metrics,
@@ -228,16 +228,16 @@ impl ConsensusAdapter {
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
     // Use .inspect when its stable.
     #[allow(clippy::option_map_unit_fn)]
-    pub async fn submit(
-        &self,
-        authority: &AuthorityName,
-        certificate: &VerifiedCertificate,
-        processed_waiter: impl Future<Output = SuiResult<()>>,
-    ) -> SuiResult {
+    pub async fn submit(&self, certificate: &VerifiedCertificate) -> SuiResult {
+        let processed_waiter = self
+            .authority
+            .consensus_message_processed_notify(certificate.digest());
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
-        let transaction =
-            ConsensusTransaction::new_certificate_message(authority, certificate.clone().into());
+        let transaction = ConsensusTransaction::new_certificate_message(
+            &self.authority.name,
+            certificate.clone().into(),
+        );
         let tracking_id = transaction.get_tracking_id();
         let tx_digest = certificate.digest();
         debug!(
@@ -247,7 +247,11 @@ impl ConsensusAdapter {
         );
 
         // Check if this authority submits the transaction to consensus.
-        let should_submit = Self::should_submit(&self.committee, authority, tx_digest);
+        let should_submit = Self::should_submit(
+            &self.authority.committee.load(),
+            &self.authority.name,
+            tx_digest,
+        );
         let _inflight_guard = if should_submit {
             // Timer to record latency of acknowledgements from consensus
             let _timer = self

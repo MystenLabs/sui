@@ -100,7 +100,7 @@ impl AuthorityServer {
         ));
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
-            state.clone_committee(),
+            state.clone(),
             Duration::from_secs(20),
             ConsensusAdapterMetrics::new_test(),
         );
@@ -297,12 +297,8 @@ impl ValidatorService {
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
         // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter = ConsensusAdapter::new(
-            consensus_client,
-            state.clone_committee(),
-            timeout,
-            ca_metrics,
-        );
+        let consensus_adapter =
+            ConsensusAdapter::new(consensus_client, state.clone(), timeout, ca_metrics);
 
         Ok(Self {
             state,
@@ -398,11 +394,7 @@ impl ValidatorService {
             } else {
                 None
             };
-            // Acquire more expensive registration
-            let processed_waiter = state.consensus_message_processed_notify(certificate.digest());
-            consensus_adapter
-                .submit(&state.name, &certificate, processed_waiter)
-                .await?;
+            consensus_adapter.submit(&certificate).await?;
         }
 
         // 5) Execute the certificate.
