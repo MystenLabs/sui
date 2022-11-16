@@ -34,13 +34,13 @@ function ModuleViewWrapper({
         ([name]) => name === selectedModuleName
     );
 
-    if (selectedModuleData) {
-        const [name, code] = selectedModuleData;
-
-        return <ModuleView id={id} name={name} code={code} />;
+    if (!selectedModuleData) {
+        return null;
     }
 
-    return null;
+    const [name, code] = selectedModuleData;
+
+    return <ModuleView id={id} name={name} code={code} />;
 }
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
