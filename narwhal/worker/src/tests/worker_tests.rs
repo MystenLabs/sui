@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::metrics::initialise_metrics;
+use crate::{metrics::initialise_metrics, TrivialTxValidator};
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -50,6 +50,7 @@ async fn handle_clients_transactions() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters,
+        TrivialTxValidator::default(),
         store,
         metrics,
     );
@@ -199,6 +200,7 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_1_parameters.clone(),
+        TrivialTxValidator::default(),
         store.batch_store.clone(),
         metrics_1.clone(),
     );
@@ -310,6 +312,7 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_2_parameters.clone(),
+        TrivialTxValidator::default(),
         store.batch_store,
         metrics_2.clone(),
     );

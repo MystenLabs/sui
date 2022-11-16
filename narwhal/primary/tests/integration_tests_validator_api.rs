@@ -29,7 +29,7 @@ use types::{
     ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
-use worker::{metrics::initialise_metrics, Worker};
+use worker::{metrics::initialise_metrics, TrivialTxValidator, Worker};
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_get_collections() {
@@ -143,6 +143,7 @@ async fn test_get_collections() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
+        TrivialTxValidator::default(),
         store.batch_store.clone(),
         metrics,
     );
@@ -361,6 +362,7 @@ async fn test_remove_collections() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
+        TrivialTxValidator::default(),
         store.batch_store.clone(),
         metrics,
     );
@@ -958,6 +960,7 @@ async fn test_get_collections_with_missing_certificates() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters_1.clone(),
+        TrivialTxValidator::default(),
         store_primary_1.batch_store,
         metrics_1,
     );
@@ -1016,6 +1019,7 @@ async fn test_get_collections_with_missing_certificates() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters_2.clone(),
+        TrivialTxValidator::default(),
         store_primary_2.batch_store,
         metrics_2,
     );

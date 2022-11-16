@@ -4,7 +4,7 @@
 
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, SuiTxValidator},
     metrics::start_timer,
 };
 use anyhow::anyhow;
@@ -276,6 +276,7 @@ impl ValidatorService {
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = ConsensusHandler::new(state.clone());
         let consensus_execution_state = Arc::new(consensus_execution_state);
+
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
@@ -289,6 +290,8 @@ impl ValidatorService {
             consensus_storage_base_path,
             consensus_execution_state,
             consensus_parameters,
+            // TODO: provide something more clever here to specify TX validity
+            SuiTxValidator::default(),
             rx_reconfigure_consensus,
             &registry,
         ));
