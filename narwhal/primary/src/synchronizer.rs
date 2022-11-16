@@ -11,7 +11,7 @@ use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::sync::watch;
-use tracing::{debug, error};
+use tracing::debug;
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -176,8 +176,6 @@ impl Synchronizer {
                 .worker(&self.name, &worker_id)
                 .expect("Author of valid header is not in the worker cache")
                 .name;
-            error!("syncing from worker {worker_name:?} digests: {digests:?}");
-
             let network = network.clone();
             let retry_config = RetryConfig {
                 retrying_max_elapsed_time: None, // Retry forever.

@@ -602,7 +602,6 @@ impl PrimaryReceiverHandler {
         header.verify(&committee, self.worker_cache.clone())?;
 
         // Vote request must come from the Header's author.
-        // DO NOT MERGE: Will enforcing RPC requester is same as Header author cause any issues?
         let peer_id = request
             .peer_id()
             .ok_or_else(|| DagError::NetworkError("Unable to access remote peer ID".to_owned()))?;

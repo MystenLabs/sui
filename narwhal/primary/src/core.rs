@@ -190,6 +190,7 @@ impl Core {
         network: anemo::Network,
         committee: Committee,
         certificate_store: CertificateStore,
+        authority: PublicKey,
         target: NetworkPublicKey,
         header: Header,
     ) -> DagResult<Vote> {
@@ -274,7 +275,7 @@ impl Core {
         ensure!(
             vote.digest == header.digest()
                 && vote.origin == header.author
-                && vote.round == header.round,
+                && vote.author == authority,
             DagError::UnexpectedVote(vote.digest)
         );
         vote.verify(&committee)?;
@@ -293,9 +294,9 @@ impl Core {
         header: Header,
         mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
-        if header.epoch < committee.epoch() {
+        if header.epoch != committee.epoch() {
             debug!(
-                "Core received outdated header proposal for epoch {}, already at epoch {}",
+                "Core received mismatched header proposal for epoch {}, currently at epoch {}",
                 header.epoch,
                 committee.epoch()
             );
@@ -306,13 +307,13 @@ impl Core {
         }
 
         // Process the header.
+        header_store
+            .async_write(header.digest(), header.clone())
+            .await;
         metrics
             .headers_proposed
             .with_label_values(&[&header.epoch.to_string()])
             .inc();
-        header_store
-            .async_write(header.digest(), header.clone())
-            .await;
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new();
@@ -323,15 +324,16 @@ impl Core {
         let peers = committee
             .others_primaries(&name)
             .into_iter()
-            .map(|(_, _, network_key)| network_key);
+            .map(|(name, _, network_key)| (name, network_key));
         let mut requests: FuturesUnordered<_> = peers
-            .map(|peer| {
+            .map(|(name, target)| {
                 let header = header.clone();
                 Self::request_vote(
                     network.clone(),
                     committee.clone(),
                     certificate_store.clone(),
-                    peer,
+                    name,
+                    target,
                     header,
                 )
             })
