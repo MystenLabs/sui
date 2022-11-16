@@ -134,6 +134,7 @@ impl Worker {
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
             tx_reconfigure,
+            validator: validator.clone(),
         });
 
         // Receive incoming messages from other workers.
@@ -467,11 +468,11 @@ impl<V: TxValidator> Transactions for TxReceiverHandler<V> {
         let mut responses = Vec::new();
 
         while let Some(Ok(txn)) = transactions.next().await {
-            if self.validator.validate(txn.transaction.as_ref()).is_err() {
+            if let Err(err) = self.validator.validate(txn.transaction.as_ref()) {
                 // If the transaction is invalid (often cryptographically), better to drop the client
-                return Err(Status::invalid_argument(
-                    "Stream contains an invalid transaction",
-                ));
+                return Err(Status::invalid_argument(format!(
+                    "Stream contains an invalid transaction {err}"
+                )));
             }
             // Send the transaction to the batch maker.
             let (notifier, when_done) = tokio::sync::oneshot::channel();
