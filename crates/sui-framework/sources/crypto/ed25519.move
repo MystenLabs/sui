@@ -9,7 +9,7 @@ module sui::ed25519 {
     ///
     /// If the signature is a valid Ed25519 signature of the message and public key, return true.
     /// Otherwise, return false.
-    public(friend) native fun ed25519_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>): bool;
+    public native fun ed25519_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>): bool;
 
     /// @param signature: 32-byte signature that is a point on the Ed25519 elliptic curve.
     /// @param public_key: 32-byte signature that is a point on the Ed25519 elliptic curve.
