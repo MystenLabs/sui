@@ -192,6 +192,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-bls12-381"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65be532f9dd1e98ad0150b037276cde464c6f371059e6dd02c0222395761f6aa"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-crypto-primitives"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -284,6 +295,36 @@ dependencies = [
  "num-traits 0.2.15",
  "quote 1.0.21",
  "syn 1.0.103",
+]
+
+[[package]]
+name = "ark-groth16"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38f8fff7468e947130b5caf9bdd27de8b913cf30e15104b4f0cd301726b3d897"
+dependencies = [
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "rayon",
+]
+
+[[package]]
+name = "ark-poly"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b0f78f47537c2f15706db7e98fe64cc1711dbf9def81218194e17239e53e5aa"
+dependencies = [
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "hashbrown 0.11.2",
+ "rayon",
 ]
 
 [[package]]
@@ -1893,7 +1934,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
 dependencies = [
  "cfg-if",
- "hashbrown",
+ "hashbrown 0.12.3",
  "lock_api",
  "once_cell",
  "parking_lot_core 0.9.3",
@@ -2447,7 +2488,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7a248d1ed4c30dfd49f0fb0cb346c058c5e96983#7a248d1ed4c30dfd49f0fb0cb346c058c5e96983"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbd69732ac8410a324c6b175229522590264202c#bbd69732ac8410a324c6b175229522590264202c"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2493,11 +2534,28 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7a248d1ed4c30dfd49f0fb0cb346c058c5e96983#7a248d1ed4c30dfd49f0fb0cb346c058c5e96983"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbd69732ac8410a324c6b175229522590264202c#bbd69732ac8410a324c6b175229522590264202c"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
+]
+
+[[package]]
+name = "fastcrypto-zkp"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbd69732ac8410a324c6b175229522590264202c#bbd69732ac8410a324c6b175229522590264202c"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-groth16",
+ "ark-relations",
+ "ark-serialize",
+ "blst",
+ "byte-slice-cast",
+ "fastcrypto",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -3038,6 +3096,15 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
@@ -3051,7 +3118,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69fe1fcf8b4278d860ad0548329f892a3631fb63f82574df68275f34cdbe0ffa"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -3397,7 +3464,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
- "hashbrown",
+ "hashbrown 0.12.3",
  "serde 1.0.147",
 ]
 
@@ -3479,7 +3546,7 @@ checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
 dependencies = [
  "ahash",
  "dashmap",
- "hashbrown",
+ "hashbrown 0.12.3",
  "once_cell",
  "parking_lot 0.12.1",
 ]
@@ -3919,7 +3986,7 @@ version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -4928,7 +4995,7 @@ dependencies = [
  "cfg-if",
  "ed25519-consensus",
  "fastcrypto",
- "hashbrown",
+ "hashbrown 0.12.3",
  "impl-trait-for-tuples",
  "indexmap",
  "mysten-util-mem-derive",
@@ -7140,7 +7207,7 @@ dependencies = [
  "libc",
  "once_cell",
  "spin 0.5.2",
- "untrusted",
+ "untrusted 0.7.1",
  "web-sys",
  "winapi",
 ]
@@ -7405,7 +7472,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d53dcdb7c9f8158937a7981b48accfd39a43af418591a5d008c7b22b5e1b7ca4"
 dependencies = [
  "ring",
- "untrusted",
+ "untrusted 0.7.1",
 ]
 
 [[package]]
@@ -7423,9 +7490,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7649a0b3ffb32636e60c7ce0d70511eda9c52c658cd0634e194d5a19943aeff"
+checksum = "ff55dc09d460954e9ef2fa8a7ced735a964be9981fd50e870b2b3b0705e14964"
 dependencies = [
  "bitcoin_hashes",
  "rand 0.8.5",
@@ -8519,6 +8586,7 @@ dependencies = [
  "curve25519-dalek-ng",
  "digest 0.10.5",
  "fastcrypto",
+ "fastcrypto-zkp",
  "linked-hash-map",
  "move-binary-format",
  "move-bytecode-verifier",
@@ -9669,7 +9737,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown",
+ "hashbrown 0.12.3",
  "pin-project-lite",
  "real_tokio",
  "slab",
@@ -10250,7 +10318,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5faade31a542b8b35855fff6e8def199853b2da8da256da52f52f1316ee3137"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.12.3",
  "regex",
 ]
 
@@ -10314,6 +10382,12 @@ name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "untrusted"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "unzip-n"
@@ -10541,7 +10615,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
 dependencies = [
  "ring",
- "untrusted",
+ "untrusted 0.7.1",
 ]
 
 [[package]]
@@ -10742,6 +10816,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "ark-bls12-377",
+ "ark-bls12-381",
  "ark-crypto-primitives",
  "ark-ec",
  "ark-ed-on-bw6-761",
@@ -10749,6 +10824,8 @@ dependencies = [
  "ark-ff",
  "ark-ff-asm",
  "ark-ff-macros",
+ "ark-groth16",
+ "ark-poly",
  "ark-relations",
  "ark-serialize",
  "ark-serialize-derive",
@@ -10945,6 +11022,7 @@ dependencies = [
  "fail",
  "fastcrypto",
  "fastcrypto-derive",
+ "fastcrypto-zkp",
  "fastrand",
  "fd-lock",
  "fdlimit",
@@ -10996,7 +11074,8 @@ dependencies = [
  "h2",
  "hakari",
  "half",
- "hashbrown",
+ "hashbrown 0.11.2",
+ "hashbrown 0.12.3",
  "hashlink",
  "hdrhistogram",
  "heck 0.3.3",
@@ -11481,7 +11560,8 @@ dependencies = [
  "unicode_categories",
  "universal-hash",
  "unsigned-varint",
- "untrusted",
+ "untrusted 0.7.1",
+ "untrusted 0.9.0",
  "unzip-n",
  "url",
  "utf8parse",
