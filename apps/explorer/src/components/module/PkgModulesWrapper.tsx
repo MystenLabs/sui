@@ -96,45 +96,40 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             <SearchIcon className="fill-sui-steel cursor-pointer h-4.5 w-4.5 align-middle" />
                         </button>
                     </div>
-                    <Combobox.Options
-                        as="div"
-                        className="overflow-auto absolute left-0 w-full box-border md:w-1/6 md:left-auto h-fit max-h-verticalListLong overflow-auto shadow-moduleOption rounded-md bg-white z-10 px-2 pb-5 pt-3"
-                    >
-                        <VerticalList>
-                            {filteredModules.length > 0 ? (
-                                <div className="text-caption font-semibold ml-1.5 pb-2 uppercase text-sui-grey-75">
-                                    {filteredModules.length}
-                                    {filteredModules.length === 1
-                                        ? ' Result'
-                                        : ' Results'}
-                                </div>
-                            ) : (
-                                <div className="text-sui-grey-70 text-body italic pt-2 px-3.5 text-center">
-                                    No results
-                                </div>
-                            )}
-                            {filteredModules.map((name) => (
-                                <Combobox.Option
-                                    key={name}
-                                    value={name}
-                                    className="list-none md:min-w-fit"
-                                >
-                                    {({ active }) => (
-                                        <button
-                                            type="button"
-                                            className={clsx(
-                                                'cursor-pointer py-2 rounded-md text-body block w-full text-left mt-0.5 px-1.5 border',
-                                                active
-                                                    ? 'bg-sui/10 text-sui-grey-80 border-transparent'
-                                                    : 'bg-white text-sui-grey-80 font-medium border-transparent'
-                                            )}
-                                        >
-                                            {name}
-                                        </button>
-                                    )}
-                                </Combobox.Option>
-                            ))}
-                        </VerticalList>
+                    <Combobox.Options className="overflow-auto absolute left-0 w-full box-border md:w-1/6 md:left-auto h-fit max-h-verticalListLong overflow-auto shadow-moduleOption rounded-md bg-white z-10 px-2 pb-5 pt-3 flex flex-col gap-1">
+                        {filteredModules.length > 0 ? (
+                            <div className="text-caption font-semibold ml-1.5 pb-2 uppercase text-sui-grey-75">
+                                {filteredModules.length}
+                                {filteredModules.length === 1
+                                    ? ' Result'
+                                    : ' Results'}
+                            </div>
+                        ) : (
+                            <div className="text-sui-grey-70 text-body italic pt-2 px-3.5 text-center">
+                                No results
+                            </div>
+                        )}
+                        {filteredModules.map((name) => (
+                            <Combobox.Option
+                                key={name}
+                                value={name}
+                                className="list-none md:min-w-fit"
+                            >
+                                {({ active }) => (
+                                    <button
+                                        type="button"
+                                        className={clsx(
+                                            'cursor-pointer py-2 rounded-md text-body block w-full text-left mt-0.5 px-1.5 border',
+                                            active
+                                                ? 'bg-sui/10 text-sui-grey-80 border-transparent'
+                                                : 'bg-white text-sui-grey-80 font-medium border-transparent'
+                                        )}
+                                    >
+                                        {name}
+                                    </button>
+                                )}
+                            </Combobox.Option>
+                        ))}
                     </Combobox.Options>
                 </Combobox>
                 <div className="h-verticalListShort md:h-verticalListLong overflow-auto pt-3">
