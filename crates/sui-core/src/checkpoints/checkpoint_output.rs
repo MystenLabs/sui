@@ -10,9 +10,10 @@ use sui_types::error::SuiResult;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
-    SignedCheckpointSummary,
+    SignedCheckpointSummary, VerifiedCheckpoint,
 };
-use tracing::{debug, info};
+use tokio::sync::mpsc;
+use tracing::{debug, error, info};
 
 #[async_trait]
 pub trait CheckpointOutput: Sync + Send + 'static {
@@ -110,6 +111,52 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
             summary.summary.sequence_number,
             Hex::encode(summary.summary.digest())
         );
+        Ok(())
+    }
+}
+
+pub struct SendCheckpointToStateSync {
+    sender: mpsc::Sender<CertifiedCheckpointSummary>,
+}
+
+pub struct ForwardToStateSyncTask {
+    receiver: mpsc::Receiver<CertifiedCheckpointSummary>,
+}
+
+impl ForwardToStateSyncTask {
+    pub fn start(mut self, handle: sui_network::state_sync::Handle) {
+        tokio::spawn(async move {
+            while let Some(checkpoint) = self.receiver.recv().await {
+                handle
+                    .send_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint))
+                    .await;
+            }
+        });
+    }
+}
+
+impl SendCheckpointToStateSync {
+    pub fn new() -> (Self, ForwardToStateSyncTask) {
+        let (sender, receiver) = mpsc::channel(128);
+        (Self { sender }, ForwardToStateSyncTask { receiver })
+    }
+}
+
+#[async_trait]
+impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
+    async fn certified_checkpoint_created(
+        &self,
+        summary: &CertifiedCheckpointSummary,
+    ) -> SuiResult {
+        info!(
+            "Certified checkpoint with sequence {} and digest {}",
+            summary.summary.sequence_number,
+            Hex::encode(summary.summary.digest())
+        );
+        if let Err(e) = self.sender.send(summary.to_owned()).await {
+            error!("unable to send checkpoint to state-sync: {e}");
+        }
+
         Ok(())
     }
 }
