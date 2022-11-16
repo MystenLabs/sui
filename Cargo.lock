@@ -5396,6 +5396,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "bytes",
+ "eyre",
  "fastcrypto",
  "futures",
  "multiaddr 0.16.0",
@@ -11592,7 +11593,7 @@ dependencies = [
 [[package]]
 name = "ying-profiler"
 version = "0.1.0"
-source = "git+https://github.com/velvia/ying-profiler#d1763c711c4bcf1a98fa7d80c79f31fdafe88ad1"
+source = "git+https://github.com/velvia/ying-profiler#1a3e476299bfc1ff4a3168edd9fcf1ccda521aea"
 dependencies = [
  "backtrace",
  "chrono",

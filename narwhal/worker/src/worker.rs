@@ -441,6 +441,9 @@ impl<V: TxValidator> Transactions for TxReceiverHandler<V> {
                 MAX_ALLOWED_TRANSACTION_SIZE
             )));
         }
+        if self.validator.validate(message.as_ref()).is_err() {
+            return Err(Status::invalid_argument("Invalid transaction"));
+        }
         // Send the transaction to the batch maker.
         let (notifier, when_done) = tokio::sync::oneshot::channel();
         self.tx_batch_maker
@@ -464,6 +467,12 @@ impl<V: TxValidator> Transactions for TxReceiverHandler<V> {
         let mut responses = Vec::new();
 
         while let Some(Ok(txn)) = transactions.next().await {
+            if self.validator.validate(txn.transaction.as_ref()).is_err() {
+                // If the transaction is invalid (often cryptographically), better to drop the client
+                return Err(Status::invalid_argument(
+                    "Stream contains an invalid transaction",
+                ));
+            }
             // Send the transaction to the batch maker.
             let (notifier, when_done) = tokio::sync::oneshot::channel();
             self.tx_batch_maker
