@@ -27,20 +27,23 @@ use types::{
 
 use sui_metrics::monitored_future;
 
+use crate::TxValidator;
+
 #[cfg(test)]
 #[path = "tests/handlers_tests.rs"]
 pub mod handlers_tests;
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
-pub struct WorkerReceiverHandler {
+pub struct WorkerReceiverHandler<V> {
     pub id: WorkerId,
     pub tx_others_batch: Sender<WorkerOthersBatchMessage>,
     pub store: Store<BatchDigest, Batch>,
+    pub validator: V,
 }
 
 #[async_trait]
-impl WorkerToWorker for WorkerReceiverHandler {
+impl<V: TxValidator> WorkerToWorker for WorkerReceiverHandler<V> {
     async fn report_batch(
         &self,
         request: anemo::Request<WorkerBatchMessage>,

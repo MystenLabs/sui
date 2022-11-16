@@ -345,6 +345,9 @@ impl<'a> Drop for InflightDropGuard<'a> {
     }
 }
 
+/// An implementation of the Narwhal TxValidator trait that validates transactions coming from Sui, and those coming from the network.
+pub use narwhal_worker::TrivialTxValidator as SuiTxValidator;
+
 #[cfg(test)]
 mod adapter_tests {
     use super::ConsensusAdapter;

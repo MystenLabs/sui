@@ -20,7 +20,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{metered_channel, Certificate, ReconfigureNotification, Round};
-use worker::{metrics::initialise_metrics, Worker};
+use worker::{metrics::initialise_metrics, TxValidator, Worker};
 
 pub mod execution_state;
 pub mod metrics;
@@ -270,6 +270,8 @@ impl Node {
         store: &NodeStorage,
         // The configuration parameters.
         parameters: Parameters,
+        // The transaction validator defining Tx acceptance,
+        tx_validator: impl TxValidator,
         // The prometheus metrics Registry
         registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
@@ -285,6 +287,7 @@ impl Node {
                 committee.clone(),
                 worker_cache.clone(),
                 parameters.clone(),
+                tx_validator.clone(),
                 store.batch_store.clone(),
                 metrics.clone(),
             );

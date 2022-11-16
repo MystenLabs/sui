@@ -40,7 +40,7 @@ use types::{
     MockPrimaryToWorker, PayloadAvailabilityRequest, PrimaryToPrimary, PrimaryToWorkerServer,
     ReconfigureNotification, RequestVoteRequest, Round,
 };
-use worker::{metrics::initialise_metrics, Worker};
+use worker::{metrics::initialise_metrics, TrivialTxValidator, Worker};
 
 #[tokio::test]
 async fn get_network_peers_from_admin_server() {
@@ -127,6 +127,7 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_1_parameters.clone(),
+        TrivialTxValidator::default(),
         store.batch_store,
         metrics_1,
     );

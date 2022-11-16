@@ -54,6 +54,7 @@ narwhal-consensus = { path = "../../narwhal/consensus" }
 narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
+narwhal-worker = { path = "../../narwhal/worker" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true

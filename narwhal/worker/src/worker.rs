@@ -7,6 +7,7 @@ use crate::{
     metrics::WorkerChannelMetrics,
     primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
+    TxValidator,
 };
 use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
@@ -74,6 +75,7 @@ impl Worker {
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
+        validator: impl TxValidator,
         store: Store<BatchDigest, Batch>,
         metrics: Metrics,
     ) -> Vec<JoinHandle<()>> {
@@ -121,6 +123,7 @@ impl Worker {
             id: worker.id,
             tx_others_batch,
             store: worker.store.clone(),
+            validator: validator.clone(),
         });
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             name: worker.primary_name.clone(),
@@ -265,6 +268,7 @@ impl Worker {
             node_metrics,
             channel_metrics,
             endpoint_metrics,
+            validator,
             network,
         );
 
@@ -314,6 +318,7 @@ impl Worker {
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
+        validator: impl TxValidator,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel_with_total(
@@ -337,11 +342,11 @@ impl Worker {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let tx_receiver_handle = TxReceiverHandler { tx_batch_maker }.spawn(
-            address.clone(),
-            rx_reconfigure.clone(),
-            endpoint_metrics,
-        );
+        let tx_receiver_handle = TxReceiverHandler {
+            tx_batch_maker,
+            validator,
+        }
+        .spawn(address.clone(), rx_reconfigure.clone(), endpoint_metrics);
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -382,11 +387,12 @@ impl Worker {
 
 /// Defines how the network receiver handles incoming transactions.
 #[derive(Clone)]
-struct TxReceiverHandler {
+struct TxReceiverHandler<V> {
     tx_batch_maker: Sender<(Transaction, TxResponse)>,
+    validator: V,
 }
 
-impl TxReceiverHandler {
+impl<V: TxValidator> TxReceiverHandler<V> {
     async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
@@ -422,7 +428,7 @@ impl TxReceiverHandler {
 }
 
 #[async_trait]
-impl Transactions for TxReceiverHandler {
+impl<V: TxValidator> Transactions for TxReceiverHandler<V> {
     async fn submit_transaction(
         &self,
         request: Request<TransactionProto>,
