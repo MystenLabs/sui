@@ -25,6 +25,7 @@ pub mod test_utils;
 
 pub mod checkpoints;
 mod consensus_handler;
+pub mod consensus_validator;
 mod histogram;
 mod node_sync;
 mod query_helpers;
