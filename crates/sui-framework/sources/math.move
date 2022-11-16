@@ -3,7 +3,8 @@
 
 /// Basic math for nicer programmability
 module sui::math {
-
+    const EDIVISOR_MUST_BE_NON_ZERO: u64 = 0;
+    
     /// Return the larger of `x` and `y`
     public fun max(x: u64, y: u64): u64 {
         if (x > y) {
@@ -122,5 +123,12 @@ module sui::math {
         };
 
         (res as u128)
+    }
+
+    public fun mod(x: u64, divisor: u64): u64 {
+        assert!(divisor > 0, EDIVISOR_MUST_BE_NON_ZERO);
+
+        let quotient = x / divisor;
+        x - (quotient * divisor)
     }
 }
