@@ -25,16 +25,6 @@ interface ModuleViewWrapperProps {
     modules: ModuleType[];
 }
 
-const initialSelectModule = (searchParams: any, modulenames: string[]) => {
-    const paramModule = searchParams.get('module') || modulenames?.[0] || null;
-
-    if (!!paramModule && modulenames.includes(paramModule)) {
-        return paramModule;
-    } else {
-        return modulenames[0];
-    }
-};
-
 function ModuleViewWrapper({
     id,
     selectedModuleName,
@@ -57,8 +47,13 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     const modulenames = modules.map(([name]) => name);
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
+
+    const paramModule = searchParams.get('module') || modulenames?.[0] || null;
+
     const [selectedModule, setSelectedModule] = useState(
-        initialSelectModule(searchParams, modulenames)
+        !!paramModule && modulenames.includes(paramModule)
+            ? paramModule
+            : modulenames[0]
     );
 
     const filteredModules =
