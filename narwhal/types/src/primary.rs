@@ -68,10 +68,6 @@ fn now() -> TimestampMs {
 // for NON CRITICAL purposes only. For example should not be used
 // for any processes that are part of our protocol that can affect
 // safety or liveness.
-//
-// However selected fields, such as
-// - Header::metadata::created_at
-// are signed to support commit timestamps.
 #[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
     // timestamp of when the entity created. This is generated
@@ -155,13 +151,13 @@ pub struct Header {
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
+    pub created_at: TimestampMs,
     #[serde(with = "indexmap::serde_seq")]
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
     pub signature: Signature,
-    pub metadata: Metadata,
 }
 
 impl HeaderBuilder {
@@ -173,11 +169,11 @@ impl HeaderBuilder {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
             epoch: self.epoch.unwrap(),
+            created_at: 0,
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
 
@@ -215,11 +211,11 @@ impl Header {
             author,
             round,
             epoch,
+            created_at: now(),
             payload,
             parents,
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata { created_at: now() },
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
@@ -319,7 +315,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
         hasher.update(&self.author);
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
-        hasher.update(self.metadata.created_at.to_le_bytes());
+        hasher.update(self.created_at.to_le_bytes());
         for (x, y) in self.payload.iter() {
             hasher.update(Digest::from(*x));
             hasher.update(y.to_le_bytes());
