@@ -40,7 +40,7 @@ function ModuleViewWrapper({
         return <ModuleView id={id} name={name} code={code} />;
     }
 
-    return <div />;
+    return null;
 }
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
