@@ -22,10 +22,8 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
-  ObjectOwner,
   SuiAddress,
   ObjectId,
-  SuiEvents,
   TransactionQuery,
   PaginatedTransactionDigests,
   EventQuery,
@@ -168,66 +166,7 @@ export class VoidProvider extends Provider {
     throw this.newError('syncAccountState');
   }
 
-  async getEventsByTransaction(
-    _digest: TransactionDigest,
-    _count: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByTransaction');
-  }
 
-  async getEventsByModule(
-    _package: string,
-    _module: string,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByTransactionModule');
-  }
-
-  async getEventsByMoveEventStructName(
-    _moveEventStructName: string,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByMoveEventStructName');
-  }
-
-  async getEventsBySender(
-    _sender: SuiAddress,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsBySender');
-  }
-
-  async getEventsByRecipient(
-    _recipient: ObjectOwner,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByRecipient');
-  }
-
-  async getEventsByObject(
-    _object: ObjectId,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByObject');
-  }
-
-  async getEventsByTimeRange(
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByTimeRange');
-  }
 
   async subscribeEvent(
     _filter: SuiEventFilter,

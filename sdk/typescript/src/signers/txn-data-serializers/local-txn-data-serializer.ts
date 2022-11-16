@@ -15,7 +15,6 @@ import {
   Transaction,
   TransactionData,
   TypeTag,
-  RpcApiVersion,
   SuiObjectRef,
 } from '../../types';
 import {
@@ -412,10 +411,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     // TODO: derive the buffer size automatically
     size: number = 8192
   ): Promise<Base64DataBuffer> {
-    const version = await this.provider.getRpcApiVersion();
-    const format = shouldUseOldSharedObjectAPI(version)
-      ? 'TransactionData_Deprecated'
-      : 'TransactionData';
+    const format = 'TransactionData';
 
     const dataBytes = bcs.ser(format, tx, size).toBytes();
     const serialized = new Uint8Array(TYPE_TAG.length + dataBytes.length);
@@ -443,11 +439,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   public async deserializeTransactionBytesToTransactionData(
     bytes: Base64DataBuffer
   ): Promise<TransactionData> {
-    const version = await this.provider.getRpcApiVersion();
-    const format = shouldUseOldSharedObjectAPI(version)
-      ? 'TransactionData_Deprecated'
-      : 'TransactionData';
-    return bcs.de(format, bytes.getData().slice(TYPE_TAG.length));
+    return bcs.de('TransactionData', bytes.getData().slice(TYPE_TAG.length));
   }
 
   /**
@@ -540,8 +532,4 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     }
     throw new Error(`Unsupported transaction type ${tx}`);
   }
-}
-
-export function shouldUseOldSharedObjectAPI(version?: RpcApiVersion): boolean {
-  return version?.major === 0 && version?.minor <= 12;
 }

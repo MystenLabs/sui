@@ -246,7 +246,7 @@ export function getSharedObjectInitialVersion(
 
 export function isSharedObject(resp: GetObjectDataResponse): boolean {
   const owner = getObjectOwner(resp);
-  return owner === 'Shared' || (typeof owner === 'object' && 'Shared' in owner);
+  return (typeof owner === 'object' && 'Shared' in owner);
 }
 
 export function isImmutableObject(resp: GetObjectDataResponse): boolean {
