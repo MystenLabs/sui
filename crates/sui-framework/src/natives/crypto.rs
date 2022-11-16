@@ -255,17 +255,9 @@ pub fn verify_range_proof(
     let commitment_bytes_ref = commitment_bytes.as_bytes_ref();
     let proof_bytes_ref = proof_bytes.as_bytes_ref();
 
-    let proof = if let Ok(val) = BulletproofsRangeProof::from_bytes(&proof_bytes_ref) {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_BULLETPROOF));
-    };
+    let Ok(proof) = BulletproofsRangeProof::from_bytes(&proof_bytes_ref) else { return Ok(NativeResult::err(cost, INVALID_BULLETPROOF)); };
 
-    let commitment = if let Ok(val) = PedersenCommitment::from_bytes(&commitment_bytes_ref) {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT));
-    };
+    let Ok(commitment) = PedersenCommitment::from_bytes(&commitment_bytes_ref) else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT)); };
 
     match proof.verify_bit_length(&commitment, bit_length as usize, BP_DOMAIN) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![])),
@@ -285,16 +277,8 @@ pub fn add_ristretto_point(
     let point_b = pop_arg!(args, Vec<u8>);
     let cost = legacy_empty_cost();
 
-    let rist_point_a = if let Ok(val) = PedersenCommitment::from_bytes(&point_a[..]) {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT));
-    };
-    let rist_point_b = if let Ok(val) = PedersenCommitment::from_bytes(&point_b[..]) {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT));
-    };
+    let Ok(rist_point_a) = PedersenCommitment::from_bytes(&point_a[..]) else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT)); };
+    let Ok(rist_point_b) = PedersenCommitment::from_bytes(&point_b[..]) else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT)); };
 
     let sum = rist_point_a + rist_point_b;
 
@@ -316,16 +300,8 @@ pub fn subtract_ristretto_point(
     let point_a = pop_arg!(args, Vec<u8>);
     let cost = legacy_empty_cost();
 
-    let rist_point_a = if let Ok(val) = PedersenCommitment::from_bytes(&point_a[..]) {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT));
-    };
-    let rist_point_b = if let Ok(val) = PedersenCommitment::from_bytes(&point_b[..]) {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT));
-    };
+    let Ok(rist_point_a) = PedersenCommitment::from_bytes(&point_a[..]) else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT)); };
+    let Ok(rist_point_b) = PedersenCommitment::from_bytes(&point_b[..]) else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT)); };
 
     let sum = rist_point_a - rist_point_b;
 
@@ -347,17 +323,9 @@ pub fn pedersen_commit(
     let value_vec = pop_arg!(args, Vec<u8>);
     let cost = legacy_empty_cost();
 
-    let blinding_factor: [u8; 32] = if let Ok(val) = blinding_factor_vec.try_into() {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR));
-    };
+    let Ok(blinding_factor) = blinding_factor_vec.try_into() else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR)); };
 
-    let value: [u8; 32] = if let Ok(val) = value_vec.try_into() {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR));
-    };
+    let Ok(value) = value_vec.try_into() else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR)); };
 
     let commitment = PedersenCommitment::new(value, blinding_factor);
 
@@ -396,17 +364,9 @@ pub fn scalar_from_bytes(
     let value = pop_arg!(args, Vec<u8>);
     let cost = legacy_empty_cost();
 
-    let value: [u8; 32] = if let Ok(val) = value.try_into() {
-        val
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR));
-    };
+    let Ok(value) = value.try_into() else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR)); };
 
-    let scalar = if let Some(value) = Scalar::from_canonical_bytes(value) {
-        value
-    } else {
-        return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR));
-    };
+    let Some(scalar) = Scalar::from_canonical_bytes(value) else { return Ok(NativeResult::err(cost, INVALID_RISTRETTO_SCALAR)); };
 
     Ok(NativeResult::ok(
         cost,
