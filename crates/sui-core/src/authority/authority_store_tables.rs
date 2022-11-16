@@ -151,6 +151,8 @@ pub struct AuthorityPerpetualTables<S> {
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+
+    pub reconfig_state: DBMap<u64, ReconfigState>,
 }
 
 impl<S> AuthorityPerpetualTables<S>

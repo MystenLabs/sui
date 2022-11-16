@@ -45,6 +45,8 @@ const SHARD_SIZE: usize = 128;
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 
+const RECONFIG_STATE_INDEX: u64 = 0;
+
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
@@ -1028,6 +1030,29 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         };
 
         Ok(assigned_seq)
+    }
+
+    pub fn load_reconfig_state(&self) -> SuiResult<ReconfigState> {
+        let state = match self
+            .perpetual_tables
+            .reconfig_state
+            .get(&RECONFIG_STATE_INDEX)?
+        {
+            Some(state) => state,
+            None => {
+                let init_state = ReconfigState::default();
+                self.store_reconfig_state(&init_state)?;
+                init_state
+            }
+        };
+        Ok(state)
+    }
+
+    pub fn store_reconfig_state(&self, new_state: &ReconfigState) -> SuiResult {
+        self.perpetual_tables
+            .reconfig_state
+            .insert(&RECONFIG_STATE_INDEX, new_state)?;
+        Ok(())
     }
 
     /// This function is called at the end of epoch for each transaction that's

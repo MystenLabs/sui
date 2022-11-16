@@ -50,7 +50,9 @@ struct CheckpointStoreTables {
     /// Non-empty list of transactions here might result in empty list when we are forming checkpoint.
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
     /// the sequence number of checkpoint does not match height here.
-    pending_checkpoints: DBMap<CheckpointCommitHeight, Vec<TransactionDigest>>,
+    ///
+    /// The boolean value indicates whether this is the last checkpoint of the epoch.
+    pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
 
     /// Maps sequence number to checkpoint contents
     checkpoint_content: DBMap<CheckpointSequenceNumber, CheckpointContents>,
@@ -126,8 +128,13 @@ impl CheckpointBuilder {
 
     async fn run(mut self) {
         loop {
-            for (height, roots) in self.tables.pending_checkpoints.iter() {
-                if let Err(e) = self.make_checkpoint(height, roots).await {
+            for (height, (roots, last_checkpoint_of_epoch)) in
+                self.tables.pending_checkpoints.iter()
+            {
+                if let Err(e) = self
+                    .make_checkpoint(height, roots, last_checkpoint_of_epoch)
+                    .await
+                {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
@@ -148,6 +155,7 @@ impl CheckpointBuilder {
         &self,
         height: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
+        last_checkpoint_of_epoch: bool,
     ) -> SuiResult {
         let _timer = self.metrics.builder_utilization.utilization_timer();
         self.metrics
@@ -156,7 +164,8 @@ impl CheckpointBuilder {
         let roots = self.effects_store.notify_read(roots).await?;
         let unsorted = self.complete_checkpoint(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
-        self.write_checkpoint(height, sorted).await?;
+        self.write_checkpoint(height, sorted, last_checkpoint_of_epoch)
+            .await?;
         Ok(())
     }
 
@@ -164,11 +173,14 @@ impl CheckpointBuilder {
         &self,
         height: CheckpointCommitHeight,
         l: Vec<TransactionEffects>,
+        last_checkpoint_of_epoch: bool,
     ) -> SuiResult {
         let mut batch = self.tables.pending_checkpoints.batch();
         if !l.is_empty() {
             // Only create checkpoint if content is not empty
-            batch = self.create_checkpoint(batch, l).await?;
+            batch = self
+                .create_checkpoint(batch, l, last_checkpoint_of_epoch)
+                .await?;
             self.notify_aggregator.notify_waiters();
         }
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [height])?;
@@ -180,6 +192,7 @@ impl CheckpointBuilder {
         &self,
         mut batch: DBBatch,
         l: Vec<TransactionEffects>,
+        last_checkpoint_of_epoch: bool,
     ) -> SuiResult<DBBatch> {
         let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
         let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
@@ -199,7 +212,9 @@ impl CheckpointBuilder {
             None, //todo
         );
 
-        self.output.checkpoint_created(&summary, &contents).await?;
+        self.output
+            .checkpoint_created(&summary, &contents, last_checkpoint_of_epoch)
+            .await?;
 
         self.metrics
             .transactions_included_in_checkpoint
@@ -512,9 +527,10 @@ impl CheckpointService {
         &self,
         index: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
+        last_checkpoint_of_epoch: bool,
     ) -> SuiResult {
         if let Some(pending) = self.tables.pending_checkpoints.get(&index)? {
-            if pending != roots {
+            if pending.0 != roots {
                 panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", index, pending, roots);
             }
             debug!(
@@ -527,7 +543,9 @@ impl CheckpointService {
             "Transaction roots for pending checkpoint {}: {:?}",
             index, roots
         );
-        self.tables.pending_checkpoints.insert(&index, &roots)?;
+        self.tables
+            .pending_checkpoints
+            .insert(&index, &(roots, last_checkpoint_of_epoch))?;
         self.notify_builder.notify_one();
         Ok(())
     }
@@ -646,7 +664,8 @@ mod tests {
         store.insert(d(2), e(d(2), vec![d(3), d(4)]));
         store.insert(d(3), e(d(3), vec![]));
         store.insert(d(4), e(d(4), vec![]));
-        let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
+        let (output, mut result) =
+            mpsc::channel::<(CheckpointContents, CheckpointSummary, bool)>(10);
         let (certified_output, mut certified_result) =
             mpsc::channel::<CertifiedCheckpointSummary>(10);
         let store = Box::new(store);
@@ -662,15 +681,19 @@ mod tests {
             CheckpointMetrics::new_for_tests(),
         );
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
-        checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
-        // Verify that sending same digests at same height is noop
-        checkpoint_service.notify_checkpoint(0, vec![d(4)]).unwrap();
         checkpoint_service
-            .notify_checkpoint(1, vec![d(1), d(3)])
+            .notify_checkpoint(0, vec![d(4)], false)
+            .unwrap();
+        // Verify that sending same digests at same height is noop
+        checkpoint_service
+            .notify_checkpoint(0, vec![d(4)], false)
+            .unwrap();
+        checkpoint_service
+            .notify_checkpoint(1, vec![d(1), d(3)], false)
             .unwrap();
 
-        let (c1c, c1s) = result.recv().await.unwrap();
-        let (c2c, c2s) = result.recv().await.unwrap();
+        let (c1c, c1s, _) = result.recv().await.unwrap();
+        let (c2c, c2s, _) = result.recv().await.unwrap();
 
         let c1t = c1c.iter().map(|d| d.transaction).collect::<Vec<_>>();
         let c2t = c2c.iter().map(|d| d.transaction).collect::<Vec<_>>();
@@ -729,13 +752,15 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl CheckpointOutput for mpsc::Sender<(CheckpointContents, CheckpointSummary)> {
+    impl CheckpointOutput for mpsc::Sender<(CheckpointContents, CheckpointSummary, bool)> {
         async fn checkpoint_created(
             &self,
             summary: &CheckpointSummary,
             contents: &CheckpointContents,
+            last_checkpoint_of_epoch: bool,
         ) -> SuiResult {
-            self.try_send((contents.clone(), summary.clone())).unwrap();
+            self.try_send((contents.clone(), summary.clone(), last_checkpoint_of_epoch))
+                .unwrap();
             Ok(())
         }
     }

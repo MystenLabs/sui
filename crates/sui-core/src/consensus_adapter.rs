@@ -259,8 +259,16 @@ impl ConsensusAdapter {
                 .as_ref()
                 .map(|m| m.sequencing_acknowledge_latency.start_timer());
 
-            // todo - we need stronger guarantees for checkpoints here (issue #5763)
-            // todo - for owned objects this can also be done async
+            // TODO - we need stronger guarantees for checkpoints here (issue #5763)
+            // TODO - for owned objects this can also be done async
+            //
+            // TODO: Somewhere here we check whether we should have stopped sending transactions
+            // to consensus due to epoch boundary.
+            // For normal transactions, we call state.get_reconfig_state_read_lock_guard first
+            // to hold the guard before sending the transaction;
+            // For the last EndOfPublish message, we call state.get_reconfig_state_write_lock_guard
+            // to hold the guard before sending the last message, and then call
+            // state.close_user_certs with the guard.
             self.consensus_client
                 .submit_to_consensus(&transaction)
                 .await?;

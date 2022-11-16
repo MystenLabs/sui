@@ -572,19 +572,14 @@ where
         epoch_id: EpochId,
         permit: OwnedSemaphorePermit,
         digest: &TransactionDigest,
-        bypass_validator_halt: bool,
+        // TODO: This call path will all be deleted.
+        _bypass_validator_halt: bool,
     ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
 
         let cert = self.get_cert(epoch_id, digest).await?;
 
-        let result = if bypass_validator_halt {
-            self.state()
-                .handle_certificate_bypass_validator_halt(&cert)
-                .await
-        } else {
-            self.state().handle_certificate(&cert).await
-        };
+        let result = self.state().handle_certificate(&cert).await;
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
@@ -604,13 +599,7 @@ where
 
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
-                if bypass_validator_halt {
-                    self.state()
-                        .handle_certificate_bypass_validator_halt(&cert)
-                        .await
-                } else {
-                    self.state().handle_certificate(&cert).await
-                }?;
+                self.state().handle_certificate(&cert).await?;
                 Ok(SyncStatus::CertExecuted)
             }
             Err(e) => Err(e),

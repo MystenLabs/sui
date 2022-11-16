@@ -86,6 +86,7 @@ use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::committee_store::CommitteeStore;
+use crate::epoch::reconfiguration::ReconfigState;
 use crate::metrics::TaskUtilizationExt;
 use crate::scoped_counter;
 use crate::{
@@ -555,6 +556,9 @@ pub struct AuthorityState {
 
     pub metrics: Arc<AuthorityMetrics>,
 
+    /// In-memory cache of the content from the reconfig_state db table.
+    reconfig_state_mem: tokio::sync::RwLock<ReconfigState>,
+
     /// A channel to tell consensus to reconfigure.
     _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
@@ -604,11 +608,6 @@ impl AuthorityState {
             !transaction.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
-
-        if self.is_halted() {
-            // TODO: Do we want to include the new validator set?
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
@@ -700,7 +699,7 @@ impl AuthorityState {
         }
 
         let resp = self
-            .process_certificate(tx_guard, certificate, true)
+            .process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?digest, "process_certificate failed: {e}"))?;
 
@@ -722,23 +721,6 @@ impl AuthorityState {
     pub async fn handle_certificate(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        self.handle_certificate_impl(certificate, false).await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn handle_certificate_bypass_validator_halt(
-        &self,
-        certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        self.handle_certificate_impl(certificate, true).await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_certificate_impl(
-        &self,
-        certificate: &VerifiedCertificate,
-        bypass_validator_halt: bool,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
         self.metrics.total_cert_attempts.inc();
@@ -777,7 +759,7 @@ impl AuthorityState {
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, certificate, bypass_validator_halt)
+        self.process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
@@ -844,7 +826,6 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
-        mut bypass_validator_halt: bool,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
@@ -863,15 +844,6 @@ impl AuthorityState {
         if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
             tx_guard.release();
             return Ok(info);
-        }
-
-        // We also bypass validator halt if this is the system transaction.
-        // TODO: Shared object transactions should also bypass validator halt.
-        bypass_validator_halt |= certificate.is_system_tx();
-
-        if self.is_halted() && !bypass_validator_halt {
-            tx_guard.release();
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
@@ -893,7 +865,7 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
+        let notifier_ticket = self.batch_notifier.ticket()?;
         let ticket_seq = notifier_ticket.seq();
         let output_keys: Vec<_> = inner_temporary_store
             .written
@@ -910,19 +882,7 @@ impl AuthorityState {
             .await;
         let seq = match res {
             Err(err) => {
-                if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
-                    debug!(
-                        ?digest,
-                        "validator halted and this cert will never be committed"
-                    );
-                    tx_guard.release();
-                } else {
-                    error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
-                }
-                debug!(
-                     seq=?ticket_seq,
-                    "Ticket not notified due to commit failure",
-                );
+                error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
                 // Check if we were able to sequence the tx at all
                 match self.db().get_tx_sequence(*certificate.digest()).await {
                     Err(db_err) => {
@@ -1477,6 +1437,11 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics,
+            reconfig_state_mem: tokio::sync::RwLock::new(
+                store
+                    .load_reconfig_state()
+                    .expect("Load reconfig state at initialization cannot fail"),
+            ),
             _tx_reconfigure_consensus,
             checkpoint_service,
         };
@@ -1596,10 +1561,7 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self
-                    .process_certificate(tx_guard, &cert.into(), false)
-                    .await
-                {
+                if let Err(e) = self.process_certificate(tx_guard, &cert.into()).await {
                     warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
@@ -1625,26 +1587,54 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub(crate) fn is_halted(&self) -> bool {
-        self.batch_notifier.is_paused()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn halt_validator(&self) {
-        self.batch_notifier.pause();
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn unhalt_validator(&self) {
-        self.batch_notifier.unpause();
-    }
-
     pub fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
 
     pub fn clone_committee(&self) -> Committee {
         self.committee.load().clone().deref().clone()
+    }
+
+    pub async fn get_reconfig_state_read_lock_guard(
+        &self,
+    ) -> tokio::sync::RwLockReadGuard<ReconfigState> {
+        self.reconfig_state_mem.read().await
+    }
+
+    pub async fn get_reconfig_state_write_lock_guard(
+        &self,
+    ) -> tokio::sync::RwLockWriteGuard<ReconfigState> {
+        self.reconfig_state_mem.write().await
+    }
+
+    pub async fn close_user_certs<'a>(
+        &self,
+        mut lock_guard: tokio::sync::RwLockWriteGuard<'a, ReconfigState>,
+    ) {
+        lock_guard.close_user_certs();
+        self.database
+            .store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+    }
+
+    pub async fn close_all_certs<'a>(
+        &self,
+        mut lock_guard: tokio::sync::RwLockWriteGuard<'a, ReconfigState>,
+    ) {
+        lock_guard.close_all_certs();
+        self.database
+            .store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+    }
+
+    pub async fn open_all_certs<'a>(
+        &self,
+        mut lock_guard: tokio::sync::RwLockWriteGuard<'a, ReconfigState>,
+    ) {
+        lock_guard.open_all_certs();
+        self.database
+            .store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
     }
 
     pub(crate) async fn get_object(
@@ -2220,18 +2210,27 @@ impl AuthorityState {
             .handle_consensus_duration_mcs
             .utilization_timer();
         let tracking_id = transaction.get_tracking_id();
+        // TODO: Somewhere here we check if we have seen 2f+1 EndOfPublish message, and if so,
+        // we call self.get_reconfig_state_write_lock_guard to get a guard, and then call
+        // self.close_all_certs() to close it.
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate);
 
-                // TODO: Decide whether to accept the certificate at epoch boundaries.
                 debug!(
                     ?consensus_index,
                     ?tracking_id,
                     tx_digest = ?certificate.digest(),
                     "handle_consensus_transaction UserTransaction",
+                );
+
+                fp_ensure!(
+                    self.get_reconfig_state_read_lock_guard()
+                        .await
+                        .should_accept_consensus_certs(),
+                    SuiError::ValidatorHaltedAtEpochEnd
                 );
 
                 if certificate.contains_shared_object() {
@@ -2265,7 +2264,8 @@ impl AuthorityState {
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
         if let Some((index, roots)) = self.database.last_checkpoint(round)? {
-            self.checkpoint_service.notify_checkpoint(index, roots)?;
+            self.checkpoint_service
+                .notify_checkpoint(index, roots, false)?;
         }
         self.database.record_checkpoint_boundary(round)
     }

@@ -3,6 +3,7 @@
 
 use crate::authority_client::NetworkAuthorityClientMetrics;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use sui_network::tonic;
 
@@ -15,6 +16,51 @@ pub trait Reconfigurable {
         metrics: Arc<NetworkAuthorityClientMetrics>,
     ) -> Self;
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ReconfigCertStatus {
+    AcceptAllCerts,
+    RejectUserCerts,
+    RejectAllCerts,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReconfigState {
+    status: ReconfigCertStatus,
+}
+
+impl Default for ReconfigState {
+    fn default() -> Self {
+        Self {
+            status: ReconfigCertStatus::AcceptAllCerts,
+        }
+    }
+}
+
+impl ReconfigState {
+    pub fn close_user_certs(&mut self) {
+        if matches!(self.status, ReconfigCertStatus::AcceptAllCerts) {
+            self.status = ReconfigCertStatus::RejectUserCerts;
+        }
+    }
+
+    pub fn close_all_certs(&mut self) {
+        self.status = ReconfigCertStatus::RejectAllCerts;
+    }
+
+    pub fn open_all_certs(&mut self) {
+        self.status = ReconfigCertStatus::AcceptAllCerts;
+    }
+
+    pub fn should_accept_user_certs(&self) -> bool {
+        matches!(self.status, ReconfigCertStatus::AcceptAllCerts)
+    }
+
+    pub fn should_accept_consensus_certs(&self) -> bool {
+        !matches!(self.status, ReconfigCertStatus::RejectAllCerts)
+    }
+}
+
 /*
 
 use crate::authority_active::ActiveAuthority;

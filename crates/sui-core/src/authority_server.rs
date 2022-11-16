@@ -372,13 +372,7 @@ impl ValidatorService {
         let certificate = certificate.verify(&state.committee.load())?;
         drop(cert_verif_metrics_guard);
 
-        // 3) If the validator is already halted, we stop here, to avoid
-        // sending the transaction to consensus.
-        if state.is_halted() && !certificate.data().data.kind.is_system_tx() {
-            return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
-        }
-
-        // 4) All certificates are sent to consensus (at least by some authorities)
+        // 3) All certificates are sent to consensus (at least by some authorities)
         // For shared objects this will wait until either timeout or we have heard back from consensus.
         // For owned objects this will return without waiting for certificate to be sequenced
         // First do quick dirty non-async check
@@ -397,7 +391,7 @@ impl ValidatorService {
             consensus_adapter.submit(&certificate).await?;
         }
 
-        // 5) Execute the certificate.
+        // 4) Execute the certificate.
         // Often we cannot execute a cert due to dependenties haven't been executed, and we will
         // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
         // succeed.
