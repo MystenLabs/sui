@@ -13,8 +13,8 @@ mod handlers;
 pub mod metrics;
 mod primary_connector;
 mod quorum_waiter;
-mod validator;
+mod tx_validator;
 mod worker;
 
-pub use crate::validator::{TrivialTxValidator, TxValidator};
+pub use crate::tx_validator::{TrivialTxValidator, TxValidator};
 pub use crate::worker::Worker;
