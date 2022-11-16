@@ -163,8 +163,7 @@ export type SharedObjectRef = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef }
-  | { Shared_Deprecated: string };
+  | { Shared: SharedObjectRef };
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -336,50 +335,5 @@ bcs.registerStructType('TransactionData', {
   gasPrice: 'u64',
   gasBudget: 'u64',
 });
-
-// ========== Deprecated ===========
-
-/**
- * Temporary support for older protocol types that don't require an initial
- * shared version to be provided when referring to a shared object.  Remove
- * after the devnet launch that adds support for the new protocol.
- */
-bcs
-  .registerEnumType('ObjectArg_Deprecated', {
-    ImmOrOwned: 'SuiObjectRef',
-    Shared_Deprecated: 'address',
-  })
-  .registerEnumType('CallArg_Deprecated', {
-    Pure: 'vector<u8>',
-    Object: 'ObjectArg_Deprecated',
-    ObjVec: 'vector<ObjectArg_Deprecated>',
-  })
-  .registerStructType('MoveCallTx_Deprecated', {
-    package: 'SuiObjectRef',
-    module: 'string',
-    function: 'string',
-    typeArguments: 'vector<TypeTag>',
-    arguments: 'vector<CallArg_Deprecated>',
-  })
-  .registerEnumType('Transaction_Deprecated', {
-    TransferObject: 'TransferObjectTx',
-    Publish: 'PublishTx',
-    Call: 'MoveCallTx_Deprecated',
-    TransferSui: 'TransferSuiTx',
-    Pay: 'PayTx',
-    PaySui: 'PaySuiTx',
-    PayAllSui: 'PayAllSuiTx',
-  })
-  .registerEnumType('TransactionKind_Deprecated', {
-    Single: 'Transaction_Deprecated',
-    Batch: 'vector<Transaction_Deprecated>',
-  })
-  .registerStructType('TransactionData_Deprecated', {
-    kind: 'TransactionKind_Deprecated',
-    sender: 'address',
-    gasPayment: 'SuiObjectRef',
-    gasPrice: 'u64',
-    gasBudget: 'u64',
-  });
 
 export { bcs };

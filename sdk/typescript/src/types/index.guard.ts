@@ -38,7 +38,6 @@ export function isObjectOwner(obj: any, _argumentName?: string): obj is ObjectOw
                 typeof obj.Shared === "object" ||
                 typeof obj.Shared === "function") &&
             isSuiMoveTypeParameterIndex(obj.Shared.initial_shared_version) as boolean ||
-            obj === "Shared" ||
             obj === "Immutable")
     )
 }
@@ -1484,11 +1483,7 @@ export function isObjectArg(obj: any, _argumentName?: string): obj is ObjectArg 
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isSharedObjectRef(obj.Shared) as boolean ||
-            (obj !== null &&
-                typeof obj === "object" ||
-                typeof obj === "function") &&
-            isTransactionDigest(obj.Shared_Deprecated) as boolean)
+            isSharedObjectRef(obj.Shared) as boolean)
     )
 }
 
