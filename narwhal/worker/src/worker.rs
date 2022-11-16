@@ -7,7 +7,7 @@ use crate::{
     metrics::WorkerChannelMetrics,
     primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
-    TxValidator,
+    TransactionValidator,
 };
 use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
@@ -75,7 +75,7 @@ impl Worker {
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
-        validator: impl TxValidator,
+        validator: impl TransactionValidator,
         store: Store<BatchDigest, Batch>,
         metrics: Metrics,
     ) -> Vec<JoinHandle<()>> {
@@ -319,7 +319,7 @@ impl Worker {
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
-        validator: impl TxValidator,
+        validator: impl TransactionValidator,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel_with_total(
@@ -393,7 +393,7 @@ struct TxReceiverHandler<V> {
     validator: V,
 }
 
-impl<V: TxValidator> TxReceiverHandler<V> {
+impl<V: TransactionValidator> TxReceiverHandler<V> {
     async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
@@ -429,7 +429,7 @@ impl<V: TxValidator> TxReceiverHandler<V> {
 }
 
 #[async_trait]
-impl<V: TxValidator> Transactions for TxReceiverHandler<V> {
+impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
     async fn submit_transaction(
         &self,
         request: Request<TransactionProto>,

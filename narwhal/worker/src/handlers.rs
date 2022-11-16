@@ -28,7 +28,7 @@ use types::{
 
 use sui_metrics::monitored_future;
 
-use crate::TxValidator;
+use crate::TransactionValidator;
 
 #[cfg(test)]
 #[path = "tests/handlers_tests.rs"]
@@ -44,7 +44,7 @@ pub struct WorkerReceiverHandler<V> {
 }
 
 #[async_trait]
-impl<V: TxValidator> WorkerToWorker for WorkerReceiverHandler<V> {
+impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
     async fn report_batch(
         &self,
         request: anemo::Request<WorkerBatchMessage>,
@@ -108,7 +108,7 @@ pub struct PrimaryReceiverHandler<V> {
 }
 
 #[async_trait]
-impl<V: TxValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
+impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
     async fn reconfigure(
         &self,
         request: anemo::Request<WorkerReconfigureMessage>,
@@ -302,7 +302,7 @@ impl<V: TxValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
     }
 }
 
-impl<V: TxValidator> PrimaryReceiverHandler<V> {
+impl<V: TransactionValidator> PrimaryReceiverHandler<V> {
     fn update_worker_cache(&self, new_committee: &Committee) {
         self.worker_cache.swap(Arc::new(WorkerCache {
             epoch: new_committee.epoch,

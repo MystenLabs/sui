@@ -25,7 +25,7 @@ use tokio::{
 };
 use types::ConsensusOutput;
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
-use worker::TrivialTxValidator;
+use worker::TrivialTransactionValidator;
 
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
@@ -210,7 +210,7 @@ async fn restart() {
                 /* base_store_path */ test_utils::temp_dir(),
                 execution_state,
                 parameters,
-                TrivialTxValidator::default(),
+                TrivialTransactionValidator::default(),
                 rx_node_reconfigure,
                 &Registry::new(),
             )
@@ -336,7 +336,7 @@ async fn epoch_change() {
             worker_cache.clone(),
             &store,
             p,
-            TrivialTxValidator::default(),
+            TrivialTransactionValidator::default(),
             &Registry::new(),
         );
 

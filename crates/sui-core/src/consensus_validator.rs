@@ -5,7 +5,7 @@ use eyre::WrapErr;
 use std::sync::Arc;
 use tap::TapFallible;
 
-use narwhal_worker::TxValidator;
+use narwhal_worker::TransactionValidator;
 use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     message_envelope::Message,
@@ -34,22 +34,21 @@ fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
         .wrap_err("Malformed transaction (failed to deserialize)")
 }
 
-impl TxValidator for ConsensusTxValidator {
+impl TransactionValidator for ConsensusTxValidator {
     type Error = eyre::Report;
 
     fn validate(&self, tx: &[u8]) -> Result<(), Self::Error> {
         let transaction = tx_from_bytes(tx)?;
+        let committee = self.state.committee.load();
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
-                certificate
-                    .verify_signature(&self.state.committee.load())
-                    .tap_err(|err| {
-                        warn!("Malformed transaction (failed to verify): {err}");
-                    })?;
+                certificate.verify_signature(&committee).tap_err(|err| {
+                    warn!("Malformed transaction (failed to verify): {err}");
+                })?;
             }
-            ConsensusTransactionKind::Checkpoint(fragment) => {
-                fragment.verify().tap_err(|err| {
-                    warn!("Ignoring malformed fragment (failed to verify): {err}");
+            ConsensusTransactionKind::CheckpointSignature(signature) => {
+                signature.verify(&committee).tap_err(|err| {
+                    warn!("Ignoring malformed signature (failed to verify): {err}");
                 })?;
             }
         }
@@ -65,17 +64,27 @@ impl TxValidator for ConsensusTxValidator {
         let committee = self.state.committee.load();
 
         let mut obligation = VerificationObligation::default();
-        for utx in user_transactions {
-            if let ConsensusTransactionKind::UserTransaction(certificate) = utx.kind {
-                // verify the inner user signature
-                certificate.data().verify()?;
+        for tx in txs.into_iter() {
+            match tx.kind {
+                ConsensusTransactionKind::UserTransaction(certificate) => {
+                    // verify the inner user signature
+                    certificate.data().verify()?;
 
-                let idx = obligation.add_message(certificate.data());
-                certificate.auth_sig().add_to_verification_obligation(
-                    &committee,
-                    &mut obligation,
-                    idx,
-                )?;
+                    let idx = obligation.add_message(certificate.data(), certificate.epoch());
+                    certificate.auth_sig().add_to_verification_obligation(
+                        &committee,
+                        &mut obligation,
+                        idx,
+                    )?;
+                }
+                ConsensusTransactionKind::CheckpointSignature(signature) => {
+                    let summary = signature.summary.summary;
+                    let idx = obligation.add_message(&summary, summary.epoch);
+                    signature
+                        .summary
+                        .auth_signature
+                        .add_to_verification_obligation(&committee, &mut obligation, idx)?;
+                }
             }
         }
         // verify the user transaction signatures as a batch
@@ -91,7 +100,7 @@ mod tests {
 
     use fastcrypto::traits::KeyPair;
     use narwhal_types::Batch;
-    use narwhal_worker::TxValidator;
+    use narwhal_worker::TransactionValidator;
     use sui_types::{
         base_types::AuthorityName,
         committee::Committee,

@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::{metrics::initialise_metrics, TrivialTxValidator};
+use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -25,7 +25,7 @@ use types::{
 // A test validator that rejects every transaction / batch
 #[derive(Clone)]
 struct NilTxValidator;
-impl TxValidator for NilTxValidator {
+impl TransactionValidator for NilTxValidator {
     type Error = eyre::Report;
 
     fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
@@ -151,7 +151,7 @@ async fn handle_clients_transactions() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters,
-        TrivialTxValidator::default(),
+        TrivialTransactionValidator::default(),
         store,
         metrics,
     );
@@ -301,7 +301,7 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_1_parameters.clone(),
-        TrivialTxValidator::default(),
+        TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics_1.clone(),
     );
@@ -413,7 +413,7 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_2_parameters.clone(),
-        TrivialTxValidator::default(),
+        TrivialTransactionValidator::default(),
         store.batch_store,
         metrics_2.clone(),
     );

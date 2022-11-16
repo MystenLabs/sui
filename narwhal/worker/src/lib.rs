@@ -16,5 +16,5 @@ mod quorum_waiter;
 mod tx_validator;
 mod worker;
 
-pub use crate::tx_validator::{TrivialTxValidator, TxValidator};
+pub use crate::tx_validator::{TransactionValidator, TrivialTransactionValidator};
 pub use crate::worker::Worker;

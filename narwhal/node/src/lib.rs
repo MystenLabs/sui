@@ -20,7 +20,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{metered_channel, Certificate, ReconfigureNotification, Round};
-use worker::{metrics::initialise_metrics, TxValidator, Worker};
+use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
 pub mod execution_state;
 pub mod metrics;
@@ -271,7 +271,7 @@ impl Node {
         // The configuration parameters.
         parameters: Parameters,
         // The transaction validator defining Tx acceptance,
-        tx_validator: impl TxValidator,
+        tx_validator: impl TransactionValidator,
         // The prometheus metrics Registry
         registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
