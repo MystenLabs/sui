@@ -57,6 +57,7 @@ module games_with_chance::satoshi_flip {
     const EPlayerCoinNotEnoughBalance: u64 = 10; // Player provided a coin with insufficient balance to cover his stake
     const EGameNotEnded: u64 = 11;
     const EAlreadyAcceptedBet: u64 = 12;
+    const ESecretIsEmpty: u64 = 13; // secret can't be an empty string
 
     // structs
 
@@ -149,21 +150,21 @@ module games_with_chance::satoshi_flip {
     }
     
     /// On an ended game (that has a non null outcome value) get if player won
-    public fun is_player_winner(game: &mut Game): bool {
+    public fun is_player_winner(game: &Game): bool {
         assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.player_won
     }
 
     /// On an ended game (that has a non null outcome value) get what secret did the house pick
-    public fun secret(game: &mut Game): vector<u8> {
+    public fun secret(game: &Game): vector<u8> {
         assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.secret
     }
 
     /// On an ended game (that has a non null outcome value) get what did the player guess
-    public fun guess(game: &mut Game): u8 {
+    public fun guess(game: &Game): u8 {
         assert!(option::is_some<Outcome>(&game.outcome), EGameNotEnded);
         let game_outcome = option::borrow(&game.outcome);
         game_outcome.guess
@@ -218,16 +219,9 @@ module games_with_chance::satoshi_flip {
             let house_coins = coin::from_balance(house_balance, ctx);
             transfer::transfer(house_coins, game.house);
         } else {
+            assert!(!vector::is_empty(&secret), ESecretIsEmpty);
             let hash = sha3_256(secret);
-            if (hash != digest::sha3_256_digest_to_bytes(&game.hashed_secret)) {
-                let BetData {stake, guess:_} = option::extract(&mut game.bet_data);
-                let HouseData {house_balance, min_bet: _, max_bet:_} = option::extract(&mut game.house_data);
-                let player = option::extract(&mut game.player);
-                // TODO: Maybe add some punishment for the house
-                transfer::transfer(coin::from_balance(stake, ctx), player);
-                transfer::transfer(coin::from_balance(house_balance, ctx), game.house);
-                abort EHashAndSecretDontMatch
-            };
+            assert!(hash == digest::sha3_256_digest_to_bytes(&game.hashed_secret), EHashAndSecretDontMatch);
             // extract balances and guess
             let HouseData {house_balance, min_bet: _, max_bet: _} = option::extract(&mut game.house_data);
             let BetData {stake, guess} = option::extract(&mut game.bet_data);
