@@ -217,7 +217,7 @@ async fn test_batch_manager_happy_path() {
 
     // Send a transaction.
     {
-        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t0 = authority_state.batch_notifier.ticket().expect("ok");
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
         t0.notify();
     }
@@ -233,7 +233,7 @@ async fn test_batch_manager_happy_path() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     {
-        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t0 = authority_state.batch_notifier.ticket().expect("ok");
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
         t0.notify();
     }
@@ -290,10 +290,10 @@ async fn test_batch_manager_out_of_order() {
     let mut rx = authority_state.subscribe_batch();
 
     {
-        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
-        let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
-        let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
-        let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t0 = authority_state.batch_notifier.ticket().expect("ok");
+        let t1 = authority_state.batch_notifier.ticket().expect("ok");
+        let t2 = authority_state.batch_notifier.ticket().expect("ok");
+        let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
         store.side_sequence(t1.seq(), &ExecutionDigests::random());
         store.side_sequence(t3.seq(), &ExecutionDigests::random());
@@ -361,10 +361,10 @@ async fn test_batch_manager_drop_out_of_order() {
     // Send transactions out of order
     let mut rx = authority_state.subscribe_batch();
 
-    let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
-    let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
-    let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
-    let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
+    let t0 = authority_state.batch_notifier.ticket().expect("ok");
+    let t1 = authority_state.batch_notifier.ticket().expect("ok");
+    let t2 = authority_state.batch_notifier.ticket().expect("ok");
+    let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
     store.side_sequence(t1.seq(), &ExecutionDigests::random());
     t1.notify();

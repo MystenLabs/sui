@@ -43,10 +43,6 @@ pub struct TransactionNotifier {
     notify: Notify,
     has_stream: AtomicBool,
     is_closed: AtomicBool,
-    /// Indicate that we would temporarily stop giving out new tickets, due to epoch change.
-    /// In special cases (i.e. executing known-to-be-finalized transactions) we will bypass
-    /// this.
-    is_paused: AtomicBool,
     inner: Mutex<LockedNotifier>,
     notifier_metrics: TransactionNotifierMetrics,
 }
@@ -69,7 +65,6 @@ impl TransactionNotifier {
             notify: Notify::new(),
             has_stream: AtomicBool::new(false),
             is_closed: AtomicBool::new(false),
-            is_paused: AtomicBool::new(false),
 
             // Keep a set of the tickets that are still being processed
             // This is the size of the number of concurrent processes.
@@ -102,42 +97,10 @@ impl TransactionNotifier {
         self.notify.notify_one();
     }
 
-    pub fn pause(&self) {
-        self.is_paused.store(true, Ordering::SeqCst);
-    }
-
-    pub fn unpause(&self) {
-        self.is_paused.store(false, Ordering::SeqCst);
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.is_paused.load(Ordering::SeqCst)
-    }
-
-    /// Check that we have drained all tickets (i.e. low watermark reached high watermark).
-    /// Return the watermark if we have drained.
-    pub fn ticket_drained(&self) -> Option<u64> {
-        // Hold the lock till the end of the function to ensure there is no data race.
-        // This is just to be safe, high_watermark is not expected to be changing when this function
-        // is being called.
-        let lock = self.inner.lock();
-        let high_watermark = lock.high_watermark;
-        let low_watermark = self.low_watermark.load(Ordering::SeqCst);
-        if high_watermark == low_watermark {
-            Some(high_watermark)
-        } else {
-            debug!(?high_watermark, ?low_watermark, "Ticket not drained yet.");
-            None
-        }
-    }
-
     /// Get a ticket with a sequence number
-    pub fn ticket(self: &Arc<Self>, bypass_pause: bool) -> SuiResult<TransactionNotifierTicket> {
+    pub fn ticket(self: &Arc<Self>) -> SuiResult<TransactionNotifierTicket> {
         if self.is_closed.load(Ordering::SeqCst) {
             return Err(SuiError::ClosedNotifierError);
-        }
-        if !bypass_pause && self.is_paused() {
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
         let mut inner = self.inner.lock();
@@ -308,19 +271,19 @@ mod tests {
         // TEST 1: Happy sequence
 
         {
-            let t0 = notifier.ticket(false).expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
             t0.notify();
         }
 
         {
-            let t0 = notifier.ticket(false).expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
             t0.notify();
         }
 
         {
-            let t0 = notifier.ticket(false).expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
             t0.notify();
         }
@@ -344,13 +307,13 @@ mod tests {
         // TEST 2: Drop a ticket
 
         {
-            let t0 = notifier.ticket(false).expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             assert_eq!(t0.seq(), 3);
             t0.notify();
         }
 
         {
-            let t0 = notifier.ticket(false).expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
             t0.notify();
         }
@@ -364,10 +327,10 @@ mod tests {
 
         // TEST 3: Drop & out of order
 
-        let t5 = notifier.ticket(false).expect("ok");
-        let t6 = notifier.ticket(false).expect("ok");
-        let t7 = notifier.ticket(false).expect("ok");
-        let t8 = notifier.ticket(false).expect("ok");
+        let t5 = notifier.ticket().expect("ok");
+        let t6 = notifier.ticket().expect("ok");
+        let t7 = notifier.ticket().expect("ok");
+        let t8 = notifier.ticket().expect("ok");
 
         store.side_sequence(t6.seq(), &ExecutionDigests::random());
         t6.notify();
