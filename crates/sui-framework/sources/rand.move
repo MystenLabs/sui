@@ -1,4 +1,4 @@
-// A psuedo-random number generator. We use ctx (the Transaction Context) to generate
+// A pseudo-random number generator. We use ctx (the Transaction Context) to generate
 // a UID (used to create new objects), then convert that into bytes.
 //
 // Unlike an externally-supplied random seed, I don't believe this is suspectible to user
