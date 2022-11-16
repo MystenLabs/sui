@@ -8,7 +8,9 @@ mod metrics;
 use crate::authority::EffectsNotifyRead;
 use crate::checkpoints::casual_order::CasualOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
-pub use crate::checkpoints::checkpoint_output::{LogCheckpointOutput, SubmitCheckpointToConsensus};
+pub use crate::checkpoints::checkpoint_output::{
+    LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+};
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::metrics::TaskUtilizationExt;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -637,6 +639,10 @@ impl CheckpointService {
             last_signature_index,
             _exit: exit_snd,
         })
+    }
+
+    pub fn tables(&self) -> Arc<CheckpointStoreTables> {
+        self.tables.clone()
     }
 
     pub fn notify_checkpoint(

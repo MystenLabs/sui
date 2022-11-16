@@ -500,6 +500,9 @@ pub enum SuiError {
 
     #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object.")]
     UnexpectedGasPaymentObject,
+
+    #[error("unknown error: {0}")]
+    Unknown(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

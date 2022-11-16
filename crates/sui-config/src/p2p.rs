@@ -22,6 +22,8 @@ pub struct P2pConfig {
     pub seed_peers: Vec<SeedPeer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anemo_config: Option<anemo::Config>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_sync: Option<StateSyncConfig>,
 }
 
 fn default_listen_address() -> SocketAddr {
@@ -35,6 +37,7 @@ impl Default for P2pConfig {
             external_address: Default::default(),
             seed_peers: Default::default(),
             anemo_config: Default::default(),
+            state_sync: None,
         }
     }
 }
