@@ -31,6 +31,7 @@ async fn synchronize() {
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
+        validator: TrivialTxValidator,
     };
 
     // Set up mock behavior for child RequestBatches RPC.
@@ -103,6 +104,7 @@ async fn synchronize_when_batch_exists() {
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
+        validator: TrivialTxValidator,
     };
 
     // Store the batch.
@@ -154,6 +156,7 @@ async fn delete_batches() {
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
+        validator: TrivialTxValidator,
     };
     let message = WorkerDeleteBatchesMessage {
         digests: vec![digest],

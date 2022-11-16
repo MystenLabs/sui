@@ -1,7 +1,7 @@
-use anemo::types::response::StatusCode;
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use anemo::types::response::StatusCode;
 use anyhow::Result;
 use async_trait::async_trait;
 use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
@@ -50,11 +50,11 @@ impl<V: TxValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        if self.validator.validate_batch(&message.batch).is_err() {
+        if let Err(err) = self.validator.validate_batch(&message.batch) {
             // The batch is invalid, we don't want to process it.
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
-                "Invalid batch",
+                format!("Invalid batch: {err}"),
             ));
         }
         let digest = message.batch.digest();
@@ -86,7 +86,7 @@ impl<V: TxValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 }
 
 /// Defines how the network receiver handles incoming primary messages.
-pub struct PrimaryReceiverHandler {
+pub struct PrimaryReceiverHandler<V> {
     // The public key of this authority.
     pub name: PublicKey,
     // The id of this worker.
@@ -103,10 +103,12 @@ pub struct PrimaryReceiverHandler {
     pub request_batch_retry_nodes: usize,
     /// Send reconfiguration update to other tasks.
     pub tx_reconfigure: watch::Sender<ReconfigureNotification>,
+    // Validate incoming batches
+    pub validator: V,
 }
 
 #[async_trait]
-impl PrimaryToWorker for PrimaryReceiverHandler {
+impl<V: TxValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
     async fn reconfigure(
         &self,
         request: anemo::Request<WorkerReconfigureMessage>,
@@ -251,6 +253,13 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 match result {
                     Ok(response) => {
                         if let Some(batch) = response.into_body().batch {
+                            if let Err(err) = self.validator.validate_batch(&batch) {
+                                // The batch is invalid, we don't want to process it.
+                                return Err(anemo::rpc::Status::new_with_message(
+                                    StatusCode::BadRequest,
+                                    format!("Invalid batch: {err}"),
+                                ));
+                            }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
                                 self.store.sync_write(digest, batch).await.map_err(|e| {
@@ -293,7 +302,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
     }
 }
 
-impl PrimaryReceiverHandler {
+impl<V: TxValidator> PrimaryReceiverHandler<V> {
     fn update_worker_cache(&self, new_committee: &Committee) {
         self.worker_cache.swap(Arc::new(WorkerCache {
             epoch: new_committee.epoch,
