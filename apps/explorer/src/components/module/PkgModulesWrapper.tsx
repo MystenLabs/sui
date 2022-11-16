@@ -60,7 +60,9 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         query === ''
             ? modulenames
             : modules
-                  .filter(([name]) => name.startsWith(query))
+                  .filter(([name]) =>
+                      name.toLowerCase().includes(query.toLowerCase())
+                  )
                   .map(([name]) => name);
 
     useEffect(() => {
@@ -103,8 +105,8 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                 <div className="text-caption font-semibold ml-1.5 pb-2 uppercase text-sui-grey-75">
                                     {filteredModules.length}
                                     {filteredModules.length === 1
-                                        ? 'Result'
-                                        : 'Results'}
+                                        ? ' Result'
+                                        : ' Results'}
                                 </div>
                             ) : (
                                 <div className="text-sui-grey-70 text-body italic pt-2 px-3.5 text-center">
