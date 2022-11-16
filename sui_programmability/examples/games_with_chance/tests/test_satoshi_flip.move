@@ -552,14 +552,13 @@ module games_with_chance::test_satoshi_flip {
         test_scenario::end(scenario_val);
     }
 
-    // test wrong address calling end_game
+    // test wrong secret
     #[test]
-    #[expected_failure(abort_code = 7)]
+    #[expected_failure(abort_code = 3)]
     fun end_game_wrong_secret() {
         let world = @0x1EE7; // needed only for beginning the test_scenario
         let house = @0xBAE;
         let player = @0xFAB;
-        let random_player = @0xCAFE;
         let secret = b"supersecret";
         let wrong_secret = b"simplesecret";
         let secret_hash = sha3_256(secret);
@@ -594,7 +593,7 @@ module games_with_chance::test_satoshi_flip {
             test_scenario::return_shared(game_val);
         };
 
-        test_scenario::next_tx(scenario, random_player);
+        test_scenario::next_tx(scenario, house);
         {
             let game_val = test_scenario::take_shared<Game>(scenario);
             let ctx = test_scenario::ctx(scenario);
@@ -605,24 +604,10 @@ module games_with_chance::test_satoshi_flip {
             test_scenario::return_shared(game_val);
         };
 
-        // check balances, is this working??
-        test_scenario::next_tx(scenario, house);
-        {
-            let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            assert!(coin::value(&coin) == 50000, EWronghouseTotal);
-            test_scenario::return_to_sender(scenario, coin);
-        };
-
-        test_scenario::next_tx(scenario, player);
-        {
-            let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            assert!(coin::value(&coin) == 5000, EWrongPlayerTotal);
-            test_scenario::return_to_sender(scenario, coin);
-        };
         test_scenario::end(scenario_val);
     }
 
-    // cancel_game throws
+    // cancel_game failures
 
     // cancel_game before bet
     #[test]
