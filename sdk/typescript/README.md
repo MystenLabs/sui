@@ -306,7 +306,7 @@ const compiledModules = JSON.parse(
 const modulesInBytes = compiledModules.map((m) =>
   Array.from(new Base64DataBuffer(m).getData())
 );
-const publishTxn = await signer.publish({
+const publishTxn = await signer.publishWithRequestType({
   compiledModules: modulesInBytes,
   gasBudget: 10000,
 });
