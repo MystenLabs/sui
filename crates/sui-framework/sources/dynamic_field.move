@@ -135,7 +135,7 @@ public(friend) fun field_ids<Name: copy + drop + store>(
     (object::uid_to_address(&field.id), object::id_to_address(&option::destroy_some(field.value)))
 }
 
-public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
+public native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
 public(friend) native fun add_child_object<Child: key>(parent: address, child: Child);
 
