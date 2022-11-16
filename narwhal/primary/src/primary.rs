@@ -24,7 +24,7 @@ use anemo_tower::{
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
-use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, NetworkPublicKey, PublicKey, Signature};
+use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use dashmap::DashSet;
 use fastcrypto::{
     hash::Hash,
