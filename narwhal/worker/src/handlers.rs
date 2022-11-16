@@ -1,3 +1,4 @@
+use anemo::types::response::StatusCode;
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -49,6 +50,13 @@ impl<V: TxValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
+        if self.validator.validate_batch(&message.batch).is_err() {
+            // The batch is invalid, we don't want to process it.
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "Invalid batch",
+            ));
+        }
         let digest = message.batch.digest();
         self.store.async_write(digest, message.batch).await;
         self.tx_others_batch
