@@ -337,9 +337,7 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
     let mut level_type = ValidJsonType::Any;
 
     // Process all in this queue/level
-    while !curr_q.is_empty() {
-        // Okay to unwrap since we know values exist
-        let v = curr_q.pop_front().unwrap();
+    while let Some(v) = curr_q.pop_front() {
         let curr = match v {
             JsonValue::Bool(_) => ValidJsonType::Bool,
             JsonValue::Number(x) if x.is_u64() => ValidJsonType::Number,
