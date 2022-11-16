@@ -32,7 +32,7 @@ use tracing::info;
 use tracing::subscriber::set_global_default;
 #[cfg(feature = "benchmark")]
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
-use worker::TrivialTxValidator;
+use worker::TrivialTransactionValidator;
 
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]
@@ -274,7 +274,7 @@ async fn run(
                 &store,
                 parameters.clone(),
                 /* tx_validator */
-                TrivialTxValidator::default(),
+                TrivialTransactionValidator::default(),
                 &registry,
             )
         }
