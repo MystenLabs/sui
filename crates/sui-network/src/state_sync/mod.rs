@@ -67,6 +67,7 @@ use sui_types::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
         CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
     },
+    storage::ReadStore,
     storage::WriteStore,
 };
 use tap::{Pipe, TapFallible, TapOptional};
@@ -230,6 +231,7 @@ struct StateSyncEventLoop<S> {
 impl<S> StateSyncEventLoop<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
+    <S as ReadStore>::Error: std::error::Error,
 {
     // Note: A great deal of care is taken to ensure that all event handlers are non-asynchronous
     // and that the only "await" points are from the select macro picking which event to handle.
@@ -300,7 +302,10 @@ where
     // Handle a checkpoint that we received from consensus
     fn handle_checkpoint_from_consensus(&mut self, checkpoint: Box<VerifiedCheckpoint>) {
         let (next_sequence_number, previous_digest) = {
-            let latest_checkpoint = self.store.get_highest_verified_checkpoint();
+            let latest_checkpoint = self
+                .store
+                .get_highest_verified_checkpoint()
+                .expect("store operation should not fail");
 
             // If this is an older checkpoint, just ignore it
             if latest_checkpoint.as_ref().map(|x| x.sequence_number())
@@ -329,18 +334,28 @@ where
                 let contents = self
                     .store
                     .get_checkpoint_contents(&checkpoint.content_digest())
+                    .expect("store operation should not fail")
                     .unwrap();
                 for digests in contents.into_inner() {
-                    debug_assert!(self.store.get_transaction(&digests.transaction).is_some());
+                    debug_assert!(self
+                        .store
+                        .get_transaction(&digests.transaction)
+                        .expect("store operation should not fail")
+                        .is_some());
                     debug_assert!(self
                         .store
                         .get_transaction_effects(&digests.effects)
+                        .expect("store operation should not fail")
                         .is_some());
                 }
             }
 
-            self.store.insert_checkpoint(checkpoint.clone());
-            self.store.update_highest_synced_checkpoint(&checkpoint);
+            self.store
+                .insert_checkpoint(checkpoint.clone())
+                .expect("store operation should not fail");
+            self.store
+                .update_highest_synced_checkpoint(&checkpoint)
+                .expect("store operation should not fail");
 
             // We don't care if no one is listening as this is a broadcast channel
             let _ = self.checkpoint_event_sender.send(checkpoint.clone());
@@ -403,7 +418,10 @@ where
             return;
         }
 
-        let highest_processed_checkpoint = self.store.get_highest_verified_checkpoint();
+        let highest_processed_checkpoint = self
+            .store
+            .get_highest_verified_checkpoint()
+            .expect("store operation should not fail");
 
         let highest_known_checkpoint = self
             .peer_heights
@@ -443,8 +461,14 @@ where
             return;
         }
 
-        let highest_verified_checkpoint = self.store.get_highest_verified_checkpoint();
-        let highest_synced_checkpoint = self.store.get_highest_synced_checkpoint();
+        let highest_verified_checkpoint = self
+            .store
+            .get_highest_verified_checkpoint()
+            .expect("store operation should not fail");
+        let highest_synced_checkpoint = self
+            .store
+            .get_highest_synced_checkpoint()
+            .expect("store operation should not fail");
 
         if highest_verified_checkpoint
             .as_ref()
@@ -584,14 +608,20 @@ async fn query_peers_for_their_latest_checkpoint(
     }
 }
 
-async fn sync_to_checkpoint<S: WriteStore>(
+async fn sync_to_checkpoint<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     checkpoint_header_download_concurrency: usize,
     checkpoint: Checkpoint,
-) -> Result<()> {
-    let mut current = store.get_highest_verified_checkpoint();
+) -> Result<()>
+where
+    S: WriteStore,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    let mut current = store
+        .get_highest_verified_checkpoint()
+        .expect("store operation should not fail");
     if current.as_ref().map(|x| x.sequence_number()) >= Some(checkpoint.sequence_number()) {
         return Err(anyhow::anyhow!(
             "target checkpoint {} is older than highest verified checkpoint {}",
@@ -707,6 +737,7 @@ async fn sync_to_checkpoint<S: WriteStore>(
 
             let committee = store
                 .get_committee(checkpoint.epoch())
+            .expect("store operation should not fail")
                 .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
             VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
@@ -714,7 +745,9 @@ async fn sync_to_checkpoint<S: WriteStore>(
         current = Some(checkpoint.clone());
         // Insert the newly verified checkpoint into our store, which will bump our highest
         // verified checkpoint watermark as well.
-        store.insert_checkpoint(checkpoint.clone());
+        store
+            .insert_checkpoint(checkpoint.clone())
+            .expect("store operation should not fail");
     }
 
     peer_heights
@@ -725,7 +758,7 @@ async fn sync_to_checkpoint<S: WriteStore>(
     Ok(())
 }
 
-async fn sync_checkpoint_contents<S: WriteStore + Clone>(
+async fn sync_checkpoint_contents<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
@@ -733,19 +766,23 @@ async fn sync_checkpoint_contents<S: WriteStore + Clone>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     transaction_download_concurrency: usize,
     target_checkpoint: VerifiedCheckpoint,
-) {
+) where
+    S: WriteStore + Clone,
+    <S as ReadStore>::Error: std::error::Error,
+{
     let mut highest_synced = None;
 
-    for checkpoint in (store
+    let start = store
         .get_highest_synced_checkpoint()
+        .expect("store operation should not fail")
         .map(|x| x.sequence_number().saturating_add(1))
-        .unwrap_or(0)..=target_checkpoint.sequence_number())
-        .map(|next| {
-            store.get_checkpoint_by_sequence_number(next).expect(
-                "BUG: store should have all checkpoints older than highest_verified_checkpoint",
-            )
-        })
-    {
+        .unwrap_or(0);
+    for checkpoint in (start..=target_checkpoint.sequence_number()).map(|next| {
+        store
+            .get_checkpoint_by_sequence_number(next)
+            .expect("store operation should not fail")
+            .expect("BUG: store should have all checkpoints older than highest_verified_checkpoint")
+    }) {
         match sync_one_checkpoint_contents(
             network.clone(),
             &store,
@@ -756,7 +793,9 @@ async fn sync_checkpoint_contents<S: WriteStore + Clone>(
         .await
         {
             Ok(checkpoint) => {
-                store.update_highest_synced_checkpoint(&checkpoint);
+                store
+                    .update_highest_synced_checkpoint(&checkpoint)
+                    .expect("store operation should not fail");
                 // We don't care if no one is listening as this is a broadcast channel
                 let _ = checkpoint_event_sender.send(checkpoint.clone());
                 highest_synced = Some(checkpoint);
@@ -777,13 +816,17 @@ async fn sync_checkpoint_contents<S: WriteStore + Clone>(
     }
 }
 
-async fn sync_one_checkpoint_contents<S: WriteStore + Clone>(
+async fn sync_one_checkpoint_contents<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     transaction_download_concurrency: usize,
     checkpoint: VerifiedCheckpoint,
-) -> Result<VerifiedCheckpoint> {
+) -> Result<VerifiedCheckpoint>
+where
+    S: WriteStore + Clone,
+    <S as ReadStore>::Error: std::error::Error,
+{
     let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_entropy();
     // get a list of peers that can help
     let mut peers = peer_heights
@@ -818,12 +861,19 @@ async fn sync_one_checkpoint_contents<S: WriteStore + Clone>(
     Ok(checkpoint)
 }
 
-async fn get_checkpoint_contents<S: WriteStore>(
+async fn get_checkpoint_contents<S>(
     peers: &mut [StateSyncClient<anemo::Peer>],
     store: S,
     digest: CheckpointContentsDigest,
-) -> Option<CheckpointContents> {
-    if let Some(contents) = store.get_checkpoint_contents(&digest) {
+) -> Option<CheckpointContents>
+where
+    S: WriteStore,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    if let Some(contents) = store
+        .get_checkpoint_contents(&digest)
+        .expect("store operation should not fail")
+    {
         return Some(contents);
     }
 
@@ -840,7 +890,9 @@ async fn get_checkpoint_contents<S: WriteStore>(
             .tap_none(|| trace!("peer unable to help sync"))
         {
             if digest == contents.digest() {
-                store.insert_checkpoint_contents(contents.clone());
+                store
+                    .insert_checkpoint_contents(contents.clone())
+                    .expect("store operation should not fail");
                 return Some(contents);
             }
         }
@@ -849,14 +901,22 @@ async fn get_checkpoint_contents<S: WriteStore>(
     None
 }
 
-async fn get_transaction_and_effects<S: WriteStore>(
+async fn get_transaction_and_effects<S>(
     peers: Vec<StateSyncClient<anemo::Peer>>,
     store: S,
     digests: ExecutionDigests,
-) -> Result<()> {
+) -> Result<()>
+where
+    S: WriteStore,
+    <S as ReadStore>::Error: std::error::Error,
+{
     if let (Some(_transaction), Some(_effects)) = (
-        store.get_transaction(&digests.transaction),
-        store.get_transaction_effects(&digests.effects),
+        store
+            .get_transaction(&digests.transaction)
+            .expect("store operation should not fail"),
+        store
+            .get_transaction_effects(&digests.effects)
+            .expect("store operation should not fail"),
     ) {
         return Ok(());
     }
@@ -880,10 +940,14 @@ async fn get_transaction_and_effects<S: WriteStore>(
                 // TODO this should just be a bare Transaction type and not a TransactionCertificate
                 // since Certificates are indended to be ephemeral and thrown away at the end of an
                 // epoch
-                store.insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(
-                    transaction,
-                ));
-                store.insert_transaction_effects(effects);
+                store
+                    .insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(
+                        transaction,
+                    ))
+                    .expect("store operation should not fail");
+                store
+                    .insert_transaction_effects(effects)
+                    .expect("store operation should not fail");
                 return Ok(());
             }
         }

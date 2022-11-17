@@ -12,6 +12,7 @@ use sui_types::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
         CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
     },
+    storage::ReadStore,
     storage::WriteStore,
 };
 use tokio::sync::mpsc;
@@ -33,6 +34,7 @@ pub(super) struct Server<S> {
 impl<S> StateSync for Server<S>
 where
     S: WriteStore + Send + Sync + 'static,
+    <S as ReadStore>::Error: std::error::Error,
 {
     async fn push_checkpoint_summary(
         &self,
@@ -53,6 +55,7 @@ where
         let highest_verified_checkpoint = self
             .store
             .get_highest_verified_checkpoint()
+            .map_err(|e| Status::internal(e.to_string()))?
             .map(|x| x.sequence_number());
 
         // If this checkpoint is higher than our highest verified checkpoint notify the
@@ -79,6 +82,7 @@ where
                 .store
                 .get_checkpoint_by_sequence_number(*sequence_number),
         }
+        .map_err(|e| Status::internal(e.to_string()))?
         .map(VerifiedCheckpoint::into_inner);
 
         Ok(Response::new(checkpoint))
@@ -88,7 +92,10 @@ where
         &self,
         request: Request<CheckpointContentsDigest>,
     ) -> Result<Response<Option<CheckpointContents>>, Status> {
-        let contents = self.store.get_checkpoint_contents(request.inner());
+        let contents = self
+            .store
+            .get_checkpoint_contents(request.inner())
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(contents))
     }
@@ -102,11 +109,23 @@ where
             effects,
         } = request.into_inner();
 
-        let Some(transaction) = self.store.get_transaction(&transaction) else {
+        let transaction = if let Some(transaction) = self
+            .store
+            .get_transaction(&transaction)
+            .map_err(|e| Status::internal(e.to_string()))?
+        {
+            transaction
+        } else {
             return Ok(Response::new(None));
         };
 
-        let Some(effects) = self.store.get_transaction_effects(&effects) else {
+        let effects = if let Some(effects) = self
+            .store
+            .get_transaction_effects(&effects)
+            .map_err(|e| Status::internal(e.to_string()))?
+        {
+            effects
+        } else {
             return Ok(Response::new(None));
         };
 
