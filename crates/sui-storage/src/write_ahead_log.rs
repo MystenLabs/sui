@@ -8,11 +8,13 @@
 use async_trait::async_trait;
 
 use crate::mutex_table::{LockGuard, MutexTable};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use sui_types::base_types::TransactionDigest;
+use sui_types::messages::SignedTransactionEffects;
+use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
 
@@ -41,6 +43,22 @@ pub trait TxGuard<'a>: Drop {
 
     /// Mark the TX as abandoned/aborted but not requiring any recovery or rollback.
     fn release(self);
+}
+
+/// Denotes a transaction commit phase.
+///
+/// `Uncommitted`: The initial state where the tx digest and certificate
+/// exist in the WAL, but the transaction has not yet been both executed
+/// and perssited to permanent storage.
+///
+/// `CommittedToWal(...)`: The state that the transaction enters when it has been
+/// executed and its resultant objects and effects written to the WAL. This is
+/// a recoverable state, and the arguments of this variant can be used to retry
+/// writing to permanent storage.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub enum TransactionCommitPhase {
+    Uncommitted,
+    CommittedToWal(InnerTemporaryStore, SignedTransactionEffects),
 }
 
 // WriteAheadLog is parameterized on the value type (C) because:
@@ -85,7 +103,9 @@ pub trait WriteAheadLog<'a, C> {
     /// The caller is responsible for running the tx to completion.
     ///
     /// Recoverable TXes will remain in the on-disk log until they are explicitly committed.
-    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, Self::Guard)>>;
+    async fn read_one_recoverable_tx(
+        &'a self,
+    ) -> SuiResult<Option<(C, TransactionCommitPhase, Self::Guard)>>;
 }
 
 pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned + Debug> {
@@ -163,7 +183,7 @@ where
 
 #[derive(DBMapUtils)]
 pub struct DBWriteAheadLogTables<C> {
-    log: DBMap<TransactionDigest, C>,
+    log: DBMap<TransactionDigest, (C, TransactionCommitPhase)>,
     // We use two tables, because if we instead have one table mapping digest -> (C, u32), we have
     // to clone C to make a tuple ref to pass to insert.
     retry_count: DBMap<TransactionDigest, u32>,
@@ -204,6 +224,48 @@ where
             tables,
             recoverable_txes: Mutex::new(recoverable_txes),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE, MUTEX_TABLE_SHARD_SIZE),
+        }
+    }
+
+    pub fn get_tx(&self, tx: &TransactionDigest) -> SuiResult<Option<(C, TransactionCommitPhase)>> {
+        self.tables.log.get(tx).map_err(SuiError::from)
+    }
+
+    pub fn get_intermediate_objs(
+        &self,
+        tx: &TransactionDigest,
+    ) -> SuiResult<Option<(InnerTemporaryStore, SignedTransactionEffects)>> {
+        match self.get_tx(tx)? {
+            Some((_cert, TransactionCommitPhase::CommittedToWal(store, fx))) => {
+                Ok(Some((store, fx)))
+            }
+            Some((_cert, TransactionCommitPhase::Uncommitted)) => Ok(None),
+            None => Ok(None),
+        }
+    }
+
+    pub fn write_intermediate_objs(
+        &self,
+        tx: &TransactionDigest,
+        store: InnerTemporaryStore,
+        fx: SignedTransactionEffects,
+    ) -> SuiResult {
+        match self.get_tx(tx)? {
+            Some((cert, TransactionCommitPhase::Uncommitted)) => {
+                self.tables
+                    .log
+                    .insert(
+                        tx,
+                        &(cert, TransactionCommitPhase::CommittedToWal(store, fx)),
+                    )
+                    .map_err(SuiError::from)?;
+                Ok(())
+            }
+            // We skip rather than overwriting, with the assumption that the
+            // same tx cert digest must produce the same output
+            // should return error here instead
+            Some((_cert, TransactionCommitPhase::CommittedToWal(_, _))) => Ok(()),
+            None => Err(SuiError::TransactionNotFound { digest: *tx }),
         }
     }
 
@@ -249,7 +311,7 @@ where
 #[async_trait]
 impl<'a, C: 'a> WriteAheadLog<'a, C> for DBWriteAheadLog<C>
 where
-    C: Serialize + DeserializeOwned + Send + Sync + Debug,
+    C: Serialize + DeserializeOwned + Send + Sync + Debug + Clone,
 {
     type Guard = DBTxGuard<'a, C>;
     type LockGuard = LockGuard;
@@ -271,7 +333,9 @@ where
                        crash loop. Error: {}", e)
             })?
         } else {
-            self.tables.log.insert(tx, cert)?;
+            self.tables
+                .log
+                .insert(tx, &(cert.clone(), TransactionCommitPhase::Uncommitted))?;
             0
         };
 
@@ -285,20 +349,22 @@ where
         res
     }
 
-    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, DBTxGuard<'a, C>)>> {
+    async fn read_one_recoverable_tx(
+        &'a self,
+    ) -> SuiResult<Option<(C, TransactionCommitPhase, DBTxGuard<'a, C>)>> {
         let candidate = self.pop_one_tx();
 
         match candidate {
             None => Ok(None),
             Some(digest) => {
-                let cert = self
+                let (cert, commit_phase) = self
                     .tables
                     .log
                     .get(&digest)?
                     .ok_or(SuiError::TransactionNotFound { digest })?;
 
                 let guard = self.begin_tx(&digest, &cert).await?;
-                Ok(Some((cert, guard)))
+                Ok(Some((cert, commit_phase, guard)))
             }
         }
     }
@@ -309,7 +375,7 @@ mod tests {
 
     use std::time::Duration;
 
-    use crate::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
+    use crate::write_ahead_log::{DBWriteAheadLog, TransactionCommitPhase, TxGuard, WriteAheadLog};
     use anyhow;
     use sui_types::base_types::TransactionDigest;
 
@@ -340,9 +406,11 @@ mod tests {
                 // implicit drop
             }
 
-            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
+            let (_, commit_phase, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
             // tx3 in recoverable txes because we dropped the guard.
             assert_eq!(r.tx_id(), tx3_id);
+
+            assert!(matches!(commit_phase, TransactionCommitPhase::Uncommitted));
 
             // verify previous call emptied the recoverable list
             assert!(recover_queue_empty(&log).await);
@@ -357,10 +425,11 @@ mod tests {
             let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
 
             // recoverable txes still there
-            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
+            let (_, commit_phase, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
             assert_eq!(r.tx_id(), tx3_id);
             assert_eq!(r.retry_num(), 2);
             assert!(recover_queue_empty(&log).await);
+            assert!(matches!(commit_phase, TransactionCommitPhase::Uncommitted));
 
             // commit the recoverable tx
             r.commit_tx();
@@ -376,6 +445,8 @@ mod tests {
             // empty, because we committed the tx before.
             assert!(recover_queue_empty(&log).await);
         }
+
+        // TODO(william): Add another recovery case where we commit to WAL but not permanent storage.
 
         Ok(())
     }

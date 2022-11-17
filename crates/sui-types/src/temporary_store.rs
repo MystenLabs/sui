@@ -8,6 +8,8 @@ use std::ops::Neg;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use tracing::trace;
 
 use crate::coin::Coin;
@@ -30,6 +32,8 @@ use crate::{
     },
 };
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InnerTemporaryStore {
     pub objects: BTreeMap<ObjectID, Object>,
     pub mutable_inputs: Vec<ObjectRef>,
