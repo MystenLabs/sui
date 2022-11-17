@@ -197,18 +197,32 @@ impl CheckpointBuilder {
         let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
         let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
         let sequence_number = last_checkpoint
+            .as_ref()
             .map(|(_, c)| c.sequence_number + 1)
             .unwrap_or_default();
         let contents = CheckpointContents::new_with_causally_ordered_transactions(
             l.iter().map(TransactionEffects::execution_digests),
         );
-        let gas_cost_summary = GasCostSummary::new_from_txn_effects(l.iter());
+        let (previous_epoch, previous_gas_costs) = last_checkpoint
+            .map(|(_, c)| (c.epoch, c.epoch_rolling_gas_cost_summary))
+            .unwrap_or_default();
+        let current_gas_costs = GasCostSummary::new_from_txn_effects(l.iter());
+        let epoch_rolling_gas_cost_summary = if previous_epoch == self.epoch {
+            // sum only when we are within the same epoch
+            GasCostSummary::new(
+                previous_gas_costs.computation_cost + current_gas_costs.computation_cost,
+                previous_gas_costs.storage_cost + current_gas_costs.storage_cost,
+                previous_gas_costs.storage_rebate + current_gas_costs.storage_rebate,
+            )
+        } else {
+            current_gas_costs
+        };
         let summary = CheckpointSummary::new(
             self.epoch, // todo - need to figure out how this is updated
             sequence_number,
             &contents,
             previous_digest,
-            gas_cost_summary,
+            epoch_rolling_gas_cost_summary,
             None, //todo
         );
 
@@ -660,10 +674,16 @@ mod tests {
         let _guard = setup_tracing();
         let tempdir = tempdir().unwrap();
         let mut store: HashMap<TransactionDigest, TransactionEffects> = HashMap::new();
-        store.insert(d(1), e(d(1), vec![d(2), d(3)]));
-        store.insert(d(2), e(d(2), vec![d(3), d(4)]));
-        store.insert(d(3), e(d(3), vec![]));
-        store.insert(d(4), e(d(4), vec![]));
+        store.insert(
+            d(1),
+            e(d(1), vec![d(2), d(3)], GasCostSummary::new(11, 12, 13)),
+        );
+        store.insert(
+            d(2),
+            e(d(2), vec![d(3), d(4)], GasCostSummary::new(21, 22, 23)),
+        );
+        store.insert(d(3), e(d(3), vec![], GasCostSummary::new(31, 32, 33)));
+        store.insert(d(4), e(d(4), vec![], GasCostSummary::new(41, 42, 43)));
         let (output, mut result) =
             mpsc::channel::<(CheckpointContents, CheckpointSummary, bool)>(10);
         let (certified_output, mut certified_result) =
@@ -700,10 +720,18 @@ mod tests {
         assert_eq!(c1t, vec![d(4)]);
         assert_eq!(c1s.previous_digest, None);
         assert_eq!(c1s.sequence_number, 0);
+        assert_eq!(
+            c1s.epoch_rolling_gas_cost_summary,
+            GasCostSummary::new(41, 42, 43)
+        );
 
         assert_eq!(c2t, vec![d(3), d(2), d(1)]);
         assert_eq!(c2s.previous_digest, Some(c1s.digest()));
         assert_eq!(c2s.sequence_number, 1);
+        assert_eq!(
+            c2s.epoch_rolling_gas_cost_summary,
+            GasCostSummary::new(104, 108, 112)
+        );
 
         let c1ss =
             SignedCheckpointSummary::new_from_summary(c1s, keypair.public().into(), &keypair);
@@ -785,10 +813,12 @@ mod tests {
     fn e(
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
+        gas_used: GasCostSummary,
     ) -> TransactionEffects {
         TransactionEffects {
             transaction_digest,
             dependencies,
+            gas_used,
             ..Default::default()
         }
     }

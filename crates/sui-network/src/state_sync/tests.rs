@@ -393,7 +393,7 @@ impl CommitteeFixture {
             sequence_number: 0,
             content_digest: empty_contents().digest(),
             previous_digest: None,
-            gas_cost_summary: Default::default(),
+            epoch_rolling_gas_cost_summary: Default::default(),
             next_epoch_committee: None,
         };
 
@@ -447,7 +447,7 @@ impl CommitteeFixture {
                 sequence_number: prev.summary.sequence_number + 1,
                 content_digest: empty_contents().digest(),
                 previous_digest: Some(prev.summary.digest()),
-                gas_cost_summary: Default::default(),
+                epoch_rolling_gas_cost_summary: Default::default(),
                 next_epoch_committee: None,
             };
 
