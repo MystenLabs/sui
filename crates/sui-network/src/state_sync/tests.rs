@@ -197,6 +197,7 @@ async fn isolated_sync_job() {
         event_loop_1
             .store
             .get_highest_verified_checkpoint()
+            .unwrap()
             .as_ref()
             .map(|x| &x.summary)
     );
@@ -267,7 +268,9 @@ async fn sync_with_checkpoints_being_inserted() {
 
     // Inject one checkpoint and verify that it was shared with the other node
     let mut checkpoint_iter = ordered_checkpoints.clone().into_iter();
-    store_1.insert_checkpoint_contents(empty_contents());
+    store_1
+        .insert_checkpoint_contents(empty_contents())
+        .unwrap();
     handle_1
         .send_checkpoint(checkpoint_iter.next().unwrap())
         .await;

@@ -36,7 +36,7 @@ use sui_types::messages_checkpoint::{
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tracing::{debug, error, info, warn};
-use typed_store::rocks::{DBBatch, DBMap};
+use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -85,86 +85,94 @@ impl CheckpointStoreTables {
     pub fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
-    ) -> Option<VerifiedCheckpoint> {
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
         self.checkpoint_by_digest
             .get(digest)
-            .ok()
-            .flatten()
-            .map(VerifiedCheckpoint::new_unchecked)
+            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
     }
 
     pub fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<VerifiedCheckpoint> {
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
         self.certified_checkpoints
             .get(&sequence_number)
-            .ok()
-            .flatten()
-            .map(VerifiedCheckpoint::new_unchecked)
+            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
     }
 
-    pub fn get_highest_verified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
-        let highest_verified = self
-            .watermarks
-            .get(&CheckpointWatermark::HighestVerified)
-            .ok()
-            .flatten()?;
+    pub fn get_highest_verified_checkpoint(
+        &self,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        let highest_verified = if let Some(highest_verified) =
+            self.watermarks.get(&CheckpointWatermark::HighestVerified)?
+        {
+            highest_verified
+        } else {
+            return Ok(None);
+        };
         self.get_checkpoint_by_digest(&highest_verified.1)
     }
 
-    pub fn get_highest_synced_checkpoint(&self) -> Option<VerifiedCheckpoint> {
-        let highest_synced = self
-            .watermarks
-            .get(&CheckpointWatermark::HighestSynced)
-            .ok()
-            .flatten()?;
+    pub fn get_highest_synced_checkpoint(
+        &self,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        let highest_synced = if let Some(highest_synced) =
+            self.watermarks.get(&CheckpointWatermark::HighestSynced)?
+        {
+            highest_synced
+        } else {
+            return Ok(None);
+        };
         self.get_checkpoint_by_digest(&highest_synced.1)
     }
 
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<CheckpointContents> {
-        self.checkpoint_content.get(digest).ok().flatten()
+    ) -> Result<Option<CheckpointContents>, TypedStoreError> {
+        self.checkpoint_content.get(digest)
     }
 
-    pub fn insert_verified_checkpoint(&self, checkpoint: VerifiedCheckpoint) {
+    pub fn insert_verified_checkpoint(
+        &self,
+        checkpoint: VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
         self.certified_checkpoints
-            .insert(&checkpoint.sequence_number(), checkpoint.inner())
-            .expect("writing to rocksdb should not fail");
+            .insert(&checkpoint.sequence_number(), checkpoint.inner())?;
         self.checkpoint_by_digest
-            .insert(&checkpoint.digest(), checkpoint.inner())
-            .expect("writing to rocksdb should not fail");
+            .insert(&checkpoint.digest(), checkpoint.inner())?;
 
         // Update latest
         if Some(checkpoint.sequence_number())
             > self
-                .get_highest_verified_checkpoint()
+                .get_highest_verified_checkpoint()?
                 .map(|x| x.sequence_number())
         {
-            self.watermarks
-                .insert(
-                    &CheckpointWatermark::HighestVerified,
-                    &(checkpoint.sequence_number(), checkpoint.digest()),
-                )
-                .expect("writing to rocksdb should not fail");
-        }
-    }
-
-    pub fn update_highest_synced_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
-        self.watermarks
-            .insert(
-                &CheckpointWatermark::HighestSynced,
+            self.watermarks.insert(
+                &CheckpointWatermark::HighestVerified,
                 &(checkpoint.sequence_number(), checkpoint.digest()),
-            )
-            .expect("writing to rocksdb should not fail");
+            )?;
+        }
+
+        Ok(())
     }
 
-    pub fn insert_checkpoint_contents(&self, contents: CheckpointContents) {
+    pub fn update_highest_synced_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestSynced,
+            &(checkpoint.sequence_number(), checkpoint.digest()),
+        )
+    }
+
+    pub fn insert_checkpoint_contents(
+        &self,
+        contents: CheckpointContents,
+    ) -> Result<(), TypedStoreError> {
         self.checkpoint_content
             .insert(&contents.digest(), &contents)
-            .expect("writing to rocksdb should not fail");
     }
 }
 

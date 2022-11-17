@@ -9089,6 +9089,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
+ "tap",
  "test-utils",
  "thiserror",
  "tonic 0.8.2",
