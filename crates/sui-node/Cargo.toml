@@ -31,6 +31,7 @@ sui-types = { path = "../sui-types" }
 sui-metrics = { path = "../sui-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
+prometheus-closure-metric = { path = "../prometheus-closure-metric" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

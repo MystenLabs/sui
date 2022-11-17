@@ -17,6 +17,7 @@ const METRICS_ROUTE: &str = "/metrics";
 
 pub fn start_prometheus_server(addr: SocketAddr) -> Registry {
     let registry = Registry::new();
+    registry.register(uptime_metric()).unwrap();
 
     if cfg!(msim) {
         // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
@@ -96,4 +97,25 @@ impl MetricsCallbackProvider for GrpcMetrics {
     fn on_drop(&self, path: &str) {
         self.inflight_grpc.with_label_values(&[path]).dec();
     }
+}
+
+/// Create a metric that measures the uptime from when this metric was constructed.
+/// The metric is labeled with the node version: semver-gitrevision
+fn uptime_metric() -> Box<dyn prometheus::core::Collector> {
+    const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-", env!("GIT_REVISION"));
+
+    let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("version");
+
+    let start_time = std::time::Instant::now();
+    let uptime = move || start_time.elapsed().as_secs();
+    let metric = prometheus_closure_metric::ClosureMetric::new(
+        opts,
+        prometheus_closure_metric::ValueType::Counter,
+        uptime,
+        &[VERSION],
+    )
+    .unwrap();
+
+    Box::new(metric)
 }

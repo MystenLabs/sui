@@ -8745,6 +8745,7 @@ dependencies = [
  "narwhal-types",
  "parking_lot 0.12.1",
  "prometheus",
+ "prometheus-closure-metric",
  "sui-config",
  "sui-core",
  "sui-json-rpc",
