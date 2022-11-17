@@ -64,7 +64,7 @@ enum LockServiceCommands {
     },
 }
 
-type SuiLockResult = SuiResult<ObjectLockInfo>;
+type SuiLockResult = SuiResult<ObjectLockStatus>;
 
 /// Queries to the LockService state
 #[derive(Debug)]
@@ -83,41 +83,60 @@ enum LockServiceQueries {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ObjectLockInfo {
-    requested_object_ref_lock_details: Option<Option<LockDetails>>,
-    latest_object_ref: ObjectRef,
+#[derive(Debug, PartialEq, Eq)]
+pub enum ObjectLockStatus {
+    RequestedObjectRefLocked {
+        requested_ref: ObjectRef,
+        locked_by_tx: Option<LockDetails>,
+    },
+    ObjectLockedAtDifferentRef {
+        locked_ref: ObjectRef,
+    },
 }
 
-impl ObjectLockInfo {
-    /// If the given ObjectRef record is initailized or locked.
+impl ObjectLockStatus {
+    /// Returns if the requested ObjectRef record is initailized or locked.
     /// If true, the object version is ready for being used in transactions
     /// If false, the object is currently locked at another version
-    pub fn is_initialized_or_locked_at_given_version(&self) -> bool {
-        self.requested_object_ref_lock_details.is_some()
+    pub fn is_locked_at_requested_obj_ref(&self) -> bool {
+        matches!(self, ObjectLockStatus::RequestedObjectRefLocked { .. })
     }
 
-    /// If the given ObjectRef is locked by a certain transaction.
-    /// Returns false if the object is currently locked at another version,
-    ///     or the record is initialized but not locked by any transaction.
-    pub fn is_locked_at_given_version(&self) -> bool {
-        matches!(self.requested_object_ref_lock_details, Some(Some(_)))
-    }
-
-    /// Get the transaction that locks the given ObjectRef.
-    /// Returns None if the object is currently locked at another version
-    /// (namely `is_initialized_or_locked_at_given_version` returns false)
-    pub fn tx_locks_given_version(&self) -> Option<&LockDetails> {
-        if let Some(Some(details)) = &self.requested_object_ref_lock_details {
-            Some(details)
-        } else {
-            None
+    /// Returns currently locked ObjectRef for the requested object
+    pub fn locked_obj_ref(&self) -> &ObjectRef {
+        match self {
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref,
+                locked_by_tx: _,
+            } => requested_ref,
+            ObjectLockStatus::ObjectLockedAtDifferentRef { locked_ref } => locked_ref,
         }
     }
 
-    /// Returns the ObjectRef record currently initialized/locked for this object
-    pub fn current_object_record(&self) -> ObjectRef {
-        self.latest_object_ref
+    /// Returns if the requested ObjectRef is locked by a certain transaction.
+    /// Returns false if the object is currently locked at another version,
+    ///     or the record is initialized but not locked by any transaction.
+    pub fn is_requested_obj_ref_locked_by_tx(&self) -> bool {
+        match self {
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: _,
+                locked_by_tx,
+            } => locked_by_tx.is_some(),
+            ObjectLockStatus::ObjectLockedAtDifferentRef { .. } => false,
+        }
+    }
+
+    /// Returns the transaction that locks the requested ObjectRef.
+    /// Returns None if the object is not locked by any transaction or locked at
+    /// another version (namely `is_locked_at_requested_obj_ref` returns false)
+    pub fn tx_locks_requested_obj_ref(&self) -> Option<&LockDetails> {
+        match self {
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: _,
+                locked_by_tx,
+            } => locked_by_tx.as_ref(),
+            ObjectLockStatus::ObjectLockedAtDifferentRef { .. } => None,
+        }
     }
 }
 
@@ -172,14 +191,13 @@ impl LockServiceImpl {
                 .get(&obj_ref)
                 .map_err(SuiError::StorageError)?
             {
-                ObjectLockInfo {
-                    requested_object_ref_lock_details: Some(lock_info),
-                    latest_object_ref: obj_ref,
+                ObjectLockStatus::RequestedObjectRefLocked {
+                    requested_ref: obj_ref,
+                    locked_by_tx: lock_info,
                 }
             } else {
-                ObjectLockInfo {
-                    requested_object_ref_lock_details: None,
-                    latest_object_ref: self.get_latest_lock_for_object_id(obj_ref.0)?,
+                ObjectLockStatus::ObjectLockedAtDifferentRef {
+                    locked_ref: self.get_latest_lock_for_object_id(obj_ref.0)?,
                 }
             },
         )
@@ -838,10 +856,17 @@ mod tests {
         ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
             .unwrap();
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref2);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(!lock_info.is_locked_at_given_version());
-        assert!(lock_info.tx_locks_given_version().is_none());
+        assert_eq!(
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref2,
+                locked_by_tx: None
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref2);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
         assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
 
@@ -857,15 +882,24 @@ mod tests {
         // Should be able to acquire lock if all objects initialized
         ls.acquire_locks(0, &[ref1, ref2], tx1).unwrap();
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref2);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(lock_info.is_locked_at_given_version());
+        let expected_lock_details = LockDetails {
+            epoch: 0,
+            tx_digest: tx1,
+        };
+
         assert_eq!(
-            lock_info.tx_locks_given_version(),
-            Some(&LockDetails {
-                epoch: 0,
-                tx_digest: tx1
-            })
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref2,
+                locked_by_tx: Some(expected_lock_details.clone())
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref2);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(
+            lock_info.tx_locks_requested_obj_ref(),
+            Some(&expected_lock_details)
         );
 
         // Should be able to check locks exist for ref1 and ref2, but not others
@@ -910,10 +944,18 @@ mod tests {
 
         // Now we get ObjectVersionUnavailableForConsumption
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(lock_info.current_object_record(), new_ref2);
-        assert!(!lock_info.is_initialized_or_locked_at_given_version());
-        assert!(!lock_info.is_locked_at_given_version());
-        assert_eq!(lock_info.tx_locks_given_version(), None);
+
+        assert_eq!(
+            lock_info,
+            ObjectLockStatus::ObjectLockedAtDifferentRef {
+                locked_ref: new_ref2
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &new_ref2);
+        assert!(!lock_info.is_locked_at_requested_obj_ref());
+        assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
+
         assert!(matches!(
             ls.acquire_locks(0, &[ref2, ref3], tx2),
             Err(SuiError::ObjectVersionUnavailableForConsumption {
@@ -947,15 +989,25 @@ mod tests {
         // Should be able to acquire lock if all objects initialized
         ls.acquire_locks(0, &[ref1, ref2], tx1).unwrap();
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref2);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(lock_info.is_locked_at_given_version());
+
+        let expected_lock_details = LockDetails {
+            epoch: 0,
+            tx_digest: tx1,
+        };
+
         assert_eq!(
-            lock_info.tx_locks_given_version(),
-            Some(&LockDetails {
-                epoch: 0,
-                tx_digest: tx1
-            })
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref2,
+                locked_by_tx: Some(expected_lock_details.clone())
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref2);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(
+            lock_info.tx_locks_requested_obj_ref(),
+            Some(&expected_lock_details)
         );
 
         // Cannot initialize them again since they are locked already
@@ -1001,10 +1053,18 @@ mod tests {
         assert!(results.iter().all(|res| res.is_ok()));
 
         let lock_info = ls.get_lock(ref1).await.unwrap();
-        assert_eq!(lock_info.current_object_record(), ref1);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(!lock_info.is_locked_at_given_version());
-        assert!(lock_info.tx_locks_given_version().is_none());
+
+        assert_eq!(
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref1,
+                locked_by_tx: None
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref1);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
         assert_eq!(ls.locks_exist(vec![ref1, ref2]).await, Ok(()));
 
@@ -1043,10 +1103,18 @@ mod tests {
             .unwrap();
 
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref2);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(!lock_info.is_locked_at_given_version());
-        assert!(lock_info.tx_locks_given_version().is_none());
+
+        assert_eq!(
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref2,
+                locked_by_tx: None
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref2);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
         assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
 
@@ -1057,24 +1125,48 @@ mod tests {
         assert!(ls.acquire_locks(0, &[ref1], tx2).is_err());
         // The object is still locked at the same transaction.
         let lock_info = ls.get_lock(ref1).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref1);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(lock_info.is_locked_at_given_version());
-        assert_eq!(lock_info.tx_locks_given_version().unwrap().tx_digest, tx1);
+
+        let expected_lock_details = LockDetails {
+            epoch: 0,
+            tx_digest: tx1,
+        };
+        assert_eq!(
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref1,
+                locked_by_tx: Some(expected_lock_details.clone())
+            }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref1);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(
+            lock_info.tx_locks_requested_obj_ref(),
+            Some(&expected_lock_details)
+        );
 
         // We should be able to relock the same object with a different transaction from a new epoch.
         ls.acquire_locks(1, &[ref1], tx2).unwrap();
         // The object is now locked at transaction tx2.
         let lock_info = ls.get_lock(ref1).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref1);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(lock_info.is_locked_at_given_version());
+
+        let expected_lock_details = LockDetails {
+            epoch: 1,
+            tx_digest: tx2,
+        };
         assert_eq!(
-            lock_info.tx_locks_given_version().unwrap(),
-            &LockDetails {
-                epoch: 1,
-                tx_digest: tx2
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref1,
+                locked_by_tx: Some(expected_lock_details.clone())
             }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref1);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(
+            lock_info.tx_locks_requested_obj_ref(),
+            Some(&expected_lock_details)
         );
 
         // Since ref1 is now locked by tx2, we cannot relock it at the same epoch.
@@ -1085,27 +1177,45 @@ mod tests {
         ls.acquire_locks(1, &[ref1, ref2], tx2).unwrap();
 
         let lock_info = ls.get_lock(ref1).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref1);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(lock_info.is_locked_at_given_version());
+
+        let expected_lock_details = LockDetails {
+            epoch: 1,
+            tx_digest: tx2,
+        };
         assert_eq!(
-            lock_info.tx_locks_given_version().unwrap(),
-            &LockDetails {
-                epoch: 1,
-                tx_digest: tx2
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref1,
+                locked_by_tx: Some(expected_lock_details.clone())
             }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref1);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(
+            lock_info.tx_locks_requested_obj_ref(),
+            Some(&expected_lock_details)
         );
 
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(lock_info.current_object_record(), ref2);
-        assert!(lock_info.is_initialized_or_locked_at_given_version());
-        assert!(lock_info.is_locked_at_given_version());
+
+        let expected_lock_details = LockDetails {
+            epoch: 1,
+            tx_digest: tx2,
+        };
         assert_eq!(
-            lock_info.tx_locks_given_version().unwrap(),
-            &LockDetails {
-                epoch: 1,
-                tx_digest: tx2
+            lock_info,
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: ref2,
+                locked_by_tx: Some(expected_lock_details.clone())
             }
+        );
+        assert_eq!(lock_info.locked_obj_ref(), &ref2);
+        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert!(lock_info.is_requested_obj_ref_locked_by_tx());
+        assert_eq!(
+            lock_info.tx_locks_requested_obj_ref(),
+            Some(&expected_lock_details)
         );
     }
 }

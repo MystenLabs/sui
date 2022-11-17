@@ -18,6 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
+    lock_service::ObjectLockStatus,
     mutex_table::{LockGuard, MutexTable},
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
@@ -476,17 +477,24 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         object_ref: &ObjectRef,
     ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let lock_info = self.lock_service.get_lock(*object_ref).await?;
-        if !lock_info.is_initialized_or_locked_at_given_version() {
-            return Err(SuiError::ObjectVersionUnavailableForConsumption {
-                provided_obj_ref: *object_ref,
-                current_version: lock_info.current_object_record().1,
-            });
-        }
-        if !lock_info.is_locked_at_given_version() {
-            return Ok(None);
-        }
-        // safe to unwrap because is_locked_at_given_version == true
-        let lock_info = lock_info.tx_locks_given_version().unwrap();
+        let lock_info = match lock_info {
+            ObjectLockStatus::ObjectLockedAtDifferentRef { locked_ref } => {
+                return Err(SuiError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: *object_ref,
+                    current_version: locked_ref.1,
+                })
+            }
+            ObjectLockStatus::RequestedObjectRefLocked {
+                requested_ref: _,
+                locked_by_tx,
+            } => {
+                if locked_by_tx.is_none() {
+                    return Ok(None);
+                }
+                // safe to unwrap, as we check it is not none
+                locked_by_tx.unwrap()
+            }
+        };
 
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
