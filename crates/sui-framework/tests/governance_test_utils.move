@@ -73,7 +73,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, ctx);
         test_scenario::return_shared(system_state);
     }
 

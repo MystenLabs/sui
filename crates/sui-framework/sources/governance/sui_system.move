@@ -68,6 +68,8 @@ module sui::sui_system {
     const ECANNOT_REPORT_ONESELF: u64 = 3;
     const EREPORT_RECORD_NOT_FOUND: u64 = 4;
 
+    const BASIS_POINT_DENOMINATOR: u128 = 10000;
+
     // ==== functions that can only be called by genesis ====
 
     /// Create a new SuiSystemState object and make it shared.
@@ -339,14 +341,15 @@ module sui::sui_system {
     /// 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
     ///    gas coins. 
     /// 3. Distribute computation charge to validator stake and delegation stake.
-    /// 4. Create reward information records for each validator in this epoch.
-    /// 5. Update all validators.
+    /// 4. Update all validators.
     public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested 
+                                         // into storage fund, in basis point.
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -364,6 +367,16 @@ module sui::sui_system {
         let delegator_reward = balance::split(&mut computation_reward, delegator_reward_amount);
         balance::join(&mut self.storage_fund, storage_reward);
 
+        let storage_fund_reward_amount = storage_fund * computation_charge / total_stake;
+        let storage_fund_reward = balance::split(&mut computation_reward, storage_fund_reward_amount);
+        let storage_fund_reinvestment_amount = 
+            (storage_fund_reward_amount as u128) * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
+        let storage_fund_reinvestment = balance::split(
+            &mut storage_fund_reward,
+            (storage_fund_reinvestment_amount as u64),
+        );
+        balance::join(&mut self.storage_fund, storage_fund_reinvestment);
+
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
@@ -371,15 +384,17 @@ module sui::sui_system {
             &mut self.validators,
             &mut computation_reward,
             &mut delegator_reward,
+            &mut storage_fund_reward,
             &self.validator_report_records,
             ctx,
         );
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `delegator_reward` and `computation_reward`. All of these go to 
-        // the storage fund.
+        // remaining balance in `delegator_reward`, `storage_fund_reward` and `computation_reward`. 
+        // All of these go to the storage fund.
         balance::join(&mut self.storage_fund, delegator_reward);
+        balance::join(&mut self.storage_fund, storage_fund_reward);
         balance::join(&mut self.storage_fund, computation_reward);
 
         // Burn the storage rebate.

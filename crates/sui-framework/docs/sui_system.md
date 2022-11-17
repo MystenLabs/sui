@@ -168,6 +168,15 @@ The top-level object containing all information of the Sui system.
 ## Constants
 
 
+<a name="0x2_sui_system_BASIS_POINT_DENOMINATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+</code></pre>
+
+
+
 <a name="0x2_sui_system_ECANNOT_REPORT_ONESELF"></a>
 
 
@@ -761,11 +770,10 @@ It does the following things:
 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
 gas coins.
 3. Distribute computation charge to validator stake and delegation stake.
-4. Create reward information records for each validator in this epoch.
-5. Update all validators.
+4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -780,6 +788,8 @@ gas coins.
     storage_charge: u64,
     computation_charge: u64,
     storage_rebate: u64,
+    storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
+                                     // into storage fund, in basis point.
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
@@ -797,6 +807,16 @@ gas coins.
     <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, delegator_reward_amount);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_reward);
 
+    <b>let</b> storage_fund_reward_amount = storage_fund * computation_charge / total_stake;
+    <b>let</b> storage_fund_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, storage_fund_reward_amount);
+    <b>let</b> storage_fund_reinvestment_amount =
+        (storage_fund_reward_amount <b>as</b> u128) * (storage_fund_reinvest_rate <b>as</b> u128) / <a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+    <b>let</b> storage_fund_reinvestment = <a href="balance.md#0x2_balance_split">balance::split</a>(
+        &<b>mut</b> storage_fund_reward,
+        (storage_fund_reinvestment_amount <b>as</b> u64),
+    );
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reinvestment);
+
     self.epoch = self.epoch + 1;
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
     <b>assert</b>!(new_epoch == self.epoch, 0);
@@ -804,15 +824,17 @@ gas coins.
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
         &<b>mut</b> delegator_reward,
+        &<b>mut</b> storage_fund_reward,
         &self.validator_report_records,
         ctx,
     );
     // Derive the reference gas price for the new epoch
     self.reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&self.validators);
     // Because of precision issues <b>with</b> integer divisions, we expect that there will be some
-    // remaining <a href="balance.md#0x2_balance">balance</a> in `delegator_reward` and `computation_reward`. All of these go <b>to</b>
-    // the storage fund.
+    // remaining <a href="balance.md#0x2_balance">balance</a> in `delegator_reward`, `storage_fund_reward` and `computation_reward`.
+    // All of these go <b>to</b> the storage fund.
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, delegator_reward);
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
 
     // Burn the storage rebate.
