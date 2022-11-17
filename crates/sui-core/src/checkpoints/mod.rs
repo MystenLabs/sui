@@ -44,7 +44,7 @@ use typed_store_derive::DBMapUtils;
 type CheckpointCommitHeight = u64;
 
 #[derive(DBMapUtils)]
-pub struct CheckpointStoreTables {
+struct CheckpointStoreTables {
     /// This table has information for the checkpoints for which we constructed all the data
     /// from consensus, but not yet constructed actual checkpoint.
     ///
@@ -649,8 +649,59 @@ impl CheckpointService {
         })
     }
 
-    pub fn tables(&self) -> Arc<CheckpointStoreTables> {
-        self.tables.clone()
+    pub fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        self.tables.get_checkpoint_by_digest(digest)
+    }
+
+    pub fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        self.tables
+            .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    pub fn get_highest_verified_checkpoint(
+        &self,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        self.tables.get_highest_verified_checkpoint()
+    }
+
+    pub fn get_highest_synced_checkpoint(
+        &self,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        self.tables.get_highest_synced_checkpoint()
+    }
+
+    pub fn get_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointContents>, TypedStoreError> {
+        self.tables.get_checkpoint_contents(digest)
+    }
+
+    pub fn insert_verified_checkpoint(
+        &self,
+        checkpoint: VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.tables.insert_verified_checkpoint(checkpoint)
+    }
+
+    pub fn update_highest_synced_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.tables.update_highest_synced_checkpoint(checkpoint)
+    }
+
+    pub fn insert_checkpoint_contents(
+        &self,
+        contents: CheckpointContents,
+    ) -> Result<(), TypedStoreError> {
+        self.tables.insert_checkpoint_contents(contents)
     }
 
     pub fn notify_checkpoint(
