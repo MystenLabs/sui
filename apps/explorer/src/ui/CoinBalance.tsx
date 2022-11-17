@@ -1,38 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    useFormatCoin,
-    CoinFormat,
-    formatBalance,
-} from '~/hooks/useFormatCoin';
-import { Amount } from '~/ui/Amount';
+import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
+import { Amount, type AmountProps } from '~/ui/Amount';
 
-export interface CoinBalanceProps {
-    amount: number | string | bigint;
-    symbol?: string | null;
-    size?: 'lg' | 'md';
+export interface CoinBalanceProps extends AmountProps {
     coinFormat?: keyof typeof CoinFormat;
 }
-
-const DECIMALS = 0;
 
 // Passing amount as a string or number for optional number suffix
 export function CoinBalance({
     amount,
     symbol,
-    size = 'md',
-    coinFormat = CoinFormat.FULL,
+    size,
+    coinFormat,
 }: CoinBalanceProps) {
     const [formattedAmount, suffix] = useFormatCoin(
         amount,
         symbol,
-        CoinFormat[coinFormat]
+        CoinFormat[coinFormat || CoinFormat.FULL]
     );
 
-    const formattedBalance = symbol
-        ? formattedAmount
-        : formatBalance(amount, DECIMALS, CoinFormat[coinFormat]);
+    const formattedBalance = symbol ? formattedAmount : amount;
 
-    return <Amount amount={formattedBalance} symbol={suffix} size={size} />;
+    return (
+        <Amount
+            amount={formattedBalance}
+            symbol={suffix}
+            size={size}
+            coinFormat={coinFormat}
+        />
+    );
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinFormat } from '~/hooks/useFormatCoin';
 import { CoinBalance } from '~/ui/CoinBalance';
 import { Heading } from '~/ui/Heading';
 import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
@@ -76,7 +77,7 @@ export function SenderRecipient({
                                             <CoinBalance
                                                 amount={recipient.coin.amount}
                                                 symbol={recipient.coin?.symbol}
-                                                coinFormat="ROUNDED"
+                                                coinFormat={CoinFormat.ROUNDED}
                                             />
                                         </div>
                                     )}
