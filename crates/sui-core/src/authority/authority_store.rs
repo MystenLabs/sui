@@ -302,7 +302,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .get(&ObjectKey(*object_id, version))?)
     }
 
-    pub fn object_exists(
+    pub fn object_version_exists(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
@@ -375,7 +375,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     })?;
                     match shared_locks.get(id) {
                         Some(version) => {
-                            if !self.object_exists(id, *version)? {
+                            if !self.object_version_exists(id, *version)? {
                                 // When this happens, other transactions that use smaller versions of
                                 // this shared object haven't finished execution.
                                 missing.push(ObjectKey(*id, *version));
@@ -388,7 +388,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     };
                 }
                 InputObjectKind::MovePackage(id) => {
-                    if !self.object_exists(id, PACKAGE_VERSION)? {
+                    if !self.object_version_exists(id, version)? {
                         // The cert cannot have been formed if immutable inputs were missing.
                         missing.push(ObjectKey(*id, PACKAGE_VERSION));
                     }
@@ -1209,6 +1209,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.perpetual_tables.get_latest_parent_entry(object_id)
     }
 
+    pub fn object_exists(&self, object_id: ObjectID) -> SuiResult<bool> {
+        match self.get_latest_parent_entry(object_id)? {
+            None => Ok(false),
+            Some(entry) => Ok(entry.is_alive()),
+        }
+    }
+
     /// Remove the shared objects locks.
     pub fn remove_shared_objects_locks(
         &self,
@@ -1219,7 +1226,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut schedule_to_delete = Vec::new();
         for (object_id, _) in transaction.shared_input_objects() {
             sequenced_to_delete.push((*transaction_digest, *object_id));
-            if self.get_object(object_id)?.is_none() {
+
+            if !self.object_exists(object_id)? {
                 schedule_to_delete.push(*object_id);
             }
         }
