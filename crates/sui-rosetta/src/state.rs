@@ -283,12 +283,15 @@ impl PseudoBlockProvider {
                 .map(|HistoricBalance { balance, .. }| *balance)
                 .unwrap_or_default();
             let new_balance = if value.is_negative() {
-                assert!(
-                    current_balance >= value.abs(),
-                    "Account gas value fall below 0 at block {}, address: [{}]",
-                    block_height,
-                    addr
-                );
+                if current_balance < value.abs() {
+                    // This can happen due to missing transactions data due to unstable validators, causing balance to
+                    // fall below zero temporarily. The problem should go away when we start using checkpoints for event and indexing
+                    return Err(anyhow!(
+                        "Account gas value fall below 0 at block {}, address: [{}]",
+                        block_height,
+                        addr
+                    ));
+                }
                 current_balance - value.abs()
             } else {
                 current_balance + value.abs()
