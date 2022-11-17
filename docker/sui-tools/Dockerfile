@@ -45,6 +45,9 @@ RUN cargo build --release \
     --bin stress \
     --bin sui-cluster-test
 
+# build gui-tool in debug mode so it doesn't crash on panic
+RUN cargo build --bin gui-tool
+
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR sui
@@ -54,6 +57,12 @@ COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
+
+
+# GUI tool
+COPY --from=builder /sui/target/debug/gui-tool /usr/local/bin
+COPY --from=builder /sui/sui_programmability/examples/basics /sui/sui_programmability/examples/basics
+COPY --from=builder /sui/crates/sui-tool/src/bin/templates /usr/local/bin/templates
 
 ARG BUILD_DATE
 ARG GIT_REVISION

@@ -57,7 +57,7 @@ pub struct TestContext {
 impl TestContext {
     async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
         let addr = self.get_wallet_address();
-        let faucet_response = self.faucet.request_sui_coins(addr).await;
+        let faucet_response = self.faucet.request_sui_coins(addr).await.unwrap();
 
         let coin_info = faucet_response
             .transferred_gas_objects
@@ -227,11 +227,11 @@ impl TestContext {
 }
 
 pub struct TestCase<'a> {
-    test_case: Box<dyn TestCaseImpl + 'a>,
+    test_case: Box<dyn TestCaseImpl + Send + Sync + 'a>,
 }
 
 impl<'a> TestCase<'a> {
-    pub fn new(test_case: impl TestCaseImpl + 'a) -> Self {
+    pub fn new(test_case: impl TestCaseImpl + Send + Sync + 'a) -> Self {
         TestCase {
             test_case: (Box::new(test_case)),
         }

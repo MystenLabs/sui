@@ -1,0 +1,7 @@
+{% extends "base" %}
+
+{% block content %}
+    <h1>Error!</h1>
+    <h3>{{title}}</h3>
+    <p>{{error}}</p>
+{% endblock content %}

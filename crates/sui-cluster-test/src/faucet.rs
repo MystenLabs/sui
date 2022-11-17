@@ -42,7 +42,10 @@ impl FaucetClientFactory {
 /// Faucet Client abstraction
 #[async_trait]
 pub trait FaucetClient {
-    async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse;
+    async fn request_sui_coins(
+        &self,
+        request_address: SuiAddress,
+    ) -> anyhow::Result<FaucetResponse>;
 }
 
 /// Client for a remote faucet that is accessible by POST requests
@@ -51,7 +54,7 @@ pub struct RemoteFaucetClient {
 }
 
 impl RemoteFaucetClient {
-    fn new(url: String) -> Self {
+    pub fn new(url: String) -> Self {
         info!("Use remote faucet: {}", url);
         Self { remote_url: url }
     }
@@ -61,7 +64,10 @@ impl RemoteFaucetClient {
 impl FaucetClient for RemoteFaucetClient {
     /// Request test SUI coins from faucet.
     /// It also verifies the effects are observed by gateway/fullnode.
-    async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
+    async fn request_sui_coins(
+        &self,
+        request_address: SuiAddress,
+    ) -> anyhow::Result<FaucetResponse> {
         let gas_url = format!("{}/gas", self.remote_url);
         debug!("Getting coin from remote faucet {}", gas_url);
         let data = HashMap::from([("recipient", encode_bytes_hex(request_address))]);
@@ -81,14 +87,13 @@ impl FaucetClient for RemoteFaucetClient {
             .unwrap_or_else(|e| panic!("Failed to talk to remote faucet {:?}: {:?}", gas_url, e));
         let full_bytes = response.bytes().await.unwrap();
         let faucet_response: FaucetResponse = serde_json::from_slice(&full_bytes)
-            .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
-            .unwrap();
+            .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))?;
 
         if let Some(error) = faucet_response.error {
-            panic!("Failed to get gas tokens with error: {}", error)
+            anyhow::bail!("Failed to get gas tokens with error: {}", error);
         };
 
-        faucet_response
+        Ok(faucet_response)
     }
 }
 
@@ -105,13 +110,16 @@ impl LocalFaucetClient {
 }
 #[async_trait]
 impl FaucetClient for LocalFaucetClient {
-    async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
+    async fn request_sui_coins(
+        &self,
+        request_address: SuiAddress,
+    ) -> anyhow::Result<FaucetResponse> {
         let receipt = self
             .simple_faucet
             .send(Uuid::new_v4(), request_address, &[200000; 5])
             .await
             .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
 
-        receipt.into()
+        Ok(receipt.into())
     }
 }
