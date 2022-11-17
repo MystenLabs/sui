@@ -314,9 +314,13 @@ impl Core {
             .headers_proposed
             .with_label_values(&[&header.epoch.to_string()])
             .inc();
+        metrics
+            .proposed_header_round
+            .with_label_values(&[&header.epoch.to_string()])
+            .set(header.round as i64);
 
         // Reset the votes aggregator and sign our own header.
-        let mut votes_aggregator = VotesAggregator::new();
+        let mut votes_aggregator = VotesAggregator::new(metrics.clone());
         let vote = Vote::new(&header, &name, &signature_service).await;
         let mut certificate = votes_aggregator.append(vote, &committee, &header)?;
 
@@ -367,6 +371,12 @@ impl Core {
         let certificate =
             certificate.ok_or_else(|| DagError::CouldNotFormCertificate(header.digest()))?;
         debug!("Assembled {certificate:?}");
+
+        metrics
+            .certificate_created_round
+            .with_label_values(&[&header.epoch.to_string()])
+            .set(header.round as i64);
+
         Ok(certificate)
     }
 
