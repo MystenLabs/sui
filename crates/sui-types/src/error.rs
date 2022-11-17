@@ -77,6 +77,10 @@ pub enum SuiError {
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
     SharedObjectLockNotSetError,
+
+    #[error("The transaction effects did not specify all shared input object references")]
+    SharedObjectVersionMissingFromEffects,
+
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
     #[error(

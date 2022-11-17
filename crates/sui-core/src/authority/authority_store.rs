@@ -253,6 +253,58 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map(|c| c.into()))
     }
 
+    pub fn store_pending_certs_and_effects(
+        &self,
+        certs: &[VerifiedCertificate],
+        effects: &[ValidTransactionEffects],
+        execution_digests: &[ValidExecutionDigests],
+    ) -> SuiResult {
+        let existing_effects = self
+            .epoch_tables()
+            .valid_effects
+            .multi_get(execution_digests.iter().map(|digests| digests.transaction))?;
+
+        // Only insert digests if there isn't a pre-existing key, so that we don't downgrade
+        // an entry from TransactionEffects to TransactionEffectsDigest
+        let digests_to_insert = existing_effects
+            .iter()
+            .zip(execution_digests.iter())
+            .filter_map(|(existing, new)| if existing.is_none() { Some(new) } else { None })
+            .map(|digests: &ValidExecutionDigests| {
+                (
+                    digests.transaction,
+                    ValidEffectsInfo::Digest(ValidTransactionEffectsDigest::from(digests.clone())),
+                )
+            });
+
+        let valid_effects = &self.epoch_tables().valid_effects;
+        let mut batch = valid_effects
+            .batch()
+            .insert_batch(valid_effects, digests_to_insert)?;
+
+        // Insert all TransactionEffects, its okay if they overwrite previous effects or digests.
+        batch = batch.insert_batch(
+            valid_effects,
+            effects
+                .iter()
+                .map(|fx| (fx.transaction_digest, ValidEffectsInfo::from(fx.clone()))),
+        )?;
+
+        batch = batch.insert_batch(
+            &self.epoch_tables().pending_certificates,
+            certs
+                .iter()
+                .map(|cert| (*cert.digest(), cert.clone().serializable())),
+        )?;
+
+        batch.write()?;
+        Ok(())
+    }
+
+    pub fn get_valid_effects(&self, tx: &TransactionDigest) -> SuiResult<Option<ValidEffectsInfo>> {
+        Ok(self.epoch_tables().valid_effects.get(tx)?)
+    }
+
     /// Checks if a certificate is in the pending queue.
     pub fn pending_certificate_exists(&self, tx: &TransactionDigest) -> Result<bool, SuiError> {
         Ok(self.epoch_tables().pending_certificates.contains_key(tx)?)
@@ -359,15 +411,33 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn get_missing_input_objects(
         &self,
         digest: &TransactionDigest,
+        valid_effects: Option<ValidTransactionEffects>,
         objects: &[InputObjectKind],
     ) -> Result<Vec<ObjectKey>, SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
+        let shared_input_versions: Option<HashMap<ObjectID, SequenceNumber>> =
+            valid_effects.map(|e| {
+                e.shared_objects
+                    .iter()
+                    .map(|objref| (objref.0, objref.1))
+                    .collect()
+            });
+
         let mut missing = Vec::new();
         let mut probe_lock_exists = Vec::new();
         for kind in objects {
-            match kind {
-                InputObjectKind::SharedMoveObject { id, .. } => {
+            match (kind, &shared_input_versions) {
+                (InputObjectKind::SharedMoveObject { id, .. }, Some(shared_input_versions)) => {
+                    let version = shared_input_versions
+                        .get(id)
+                        .ok_or(SuiError::SharedObjectVersionMissingFromEffects)
+                        .tap_err(|e| error!("get_missing_input_objects failed: {}", e))?;
+                    if !self.object_exists(id, *version)? {
+                        missing.push(ObjectKey(*id, *version));
+                    }
+                }
+                (InputObjectKind::SharedMoveObject { id, .. }, None) => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             self.all_shared_locks(digest)?.into_iter().collect(),
@@ -387,13 +457,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                         }
                     };
                 }
-                InputObjectKind::MovePackage(id) => {
+                (InputObjectKind::MovePackage(id), _) => {
                     if !self.object_version_exists(id, PACKAGE_VERSION)? {
                         // The cert cannot have been formed if immutable inputs were missing.
                         missing.push(ObjectKey(*id, PACKAGE_VERSION));
                     }
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                (InputObjectKind::ImmOrOwnedMoveObject(objref), _) => {
                     if let Some(obj) = self.get_object_by_key(&objref.0, objref.1)? {
                         if !obj.is_immutable() {
                             probe_lock_exists.push(*objref);
@@ -1793,5 +1863,27 @@ impl EffectsStore for Arc<AuthorityStore> {
             .into_iter()
             .map(|item| item.map(|x| x.into_data()))
             .collect())
+    }
+}
+
+/// ValidEffectsInfo contains either a TransactionEffectsDigest or a complete TransactionEffects,
+/// which in either case is known to be the correct execution output of a given cert. This
+/// correctness guarantee derives from either a certified checkpoint, or from having been given the
+/// same effects by f+1 validators.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ValidEffectsInfo {
+    Digest(ValidTransactionEffectsDigest),
+    Effects(ValidTransactionEffects),
+}
+
+impl From<ValidExecutionDigests> for ValidEffectsInfo {
+    fn from(ved: ValidExecutionDigests) -> Self {
+        Self::Digest(ved.into())
+    }
+}
+
+impl From<ValidTransactionEffects> for ValidEffectsInfo {
+    fn from(vte: ValidTransactionEffects) -> Self {
+        Self::Effects(vte)
     }
 }

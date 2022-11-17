@@ -10,7 +10,16 @@ use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::Verif
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
-use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
+use crate::authority::{
+    authority_store::{ObjectKey, ValidEffectsInfo},
+    AuthorityMetrics, AuthorityStore,
+};
+
+#[derive(Default)]
+struct PendingCertInfo {
+    missing_inputs: BTreeSet<ObjectKey>,
+    valid_effects: Option<ValidEffectsInfo>,
+}
 
 /// TransactionManager is responsible for managing pending certificates and publishes a stream
 /// of certificates ready to be executed. It works together with AuthorityState for receiving
@@ -21,7 +30,7 @@ use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthoritySt
 pub(crate) struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
     missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
-    pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
+    pending_certificates: BTreeMap<TransactionDigest, PendingCertInfo>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
 }
@@ -38,7 +47,7 @@ impl TransactionManager {
             authority_store,
             metrics,
             missing_inputs: BTreeMap::new(),
-            pending_certificates: BTreeMap::new(),
+            pending_certificates: Default::default(),
             tx_ready_certificates,
         };
         transaction_manager
@@ -77,9 +86,17 @@ impl TransactionManager {
             if self.authority_store.effects_exists(&digest)? {
                 continue;
             }
+
+            let valid_effects = self.authority_store.get_valid_effects(&digest)?;
+
+            let effects = match &valid_effects {
+                Some(ValidEffectsInfo::Effects(tx_effects)) => Some(tx_effects.clone()),
+                _ => None,
+            };
+
             let missing = self
                 .authority_store
-                .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
+                .get_missing_input_objects(&digest, effects, &cert.data().data.input_objects()?)
                 .await
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
@@ -91,6 +108,8 @@ impl TransactionManager {
                 debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
             }
 
+            let mut entry = self.pending_certificates.entry(digest).or_default();
+            entry.valid_effects = valid_effects;
             for obj_key in missing {
                 // A missing input object in TransactionManager will definitely be notified via
                 // objects_committed(), when the object actually gets committed, because:
@@ -102,10 +121,7 @@ impl TransactionManager {
                 // objects_committed() can only arrive after the current enqueue() call finishes.
                 // TODO: verify the key does not already exist.
                 self.missing_inputs.insert(obj_key, digest);
-                self.pending_certificates
-                    .entry(digest)
-                    .or_default()
-                    .insert(obj_key);
+                entry.missing_inputs.insert(obj_key);
             }
         }
         self.metrics
@@ -123,7 +139,11 @@ impl TransactionManager {
             let Some(digest) =  self.missing_inputs.remove(&object_key) else {
                 continue;
             };
-            let set = self.pending_certificates.entry(digest).or_default();
+            let set = &mut self
+                .pending_certificates
+                .entry(digest)
+                .or_default()
+                .missing_inputs;
             set.remove(&object_key);
             // This certificate has no missing input. It is ready to execute.
             if set.is_empty() {

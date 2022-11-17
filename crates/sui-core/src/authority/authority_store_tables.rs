@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store::ObjectKey, *};
+use super::{
+    authority_store::{ObjectKey, ValidEffectsInfo},
+    *,
+};
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -40,6 +43,12 @@ pub struct AuthorityEpochTables<S> {
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
     pub(crate) pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
+
+    /// If we have obtained trusted effects (or their digests) from checkpoints (or perhaps by
+    /// querying f+1) validators, we store the effects here so that they can be used by
+    /// TransactionManager. For shared object transactions, the effects are used to set shared
+    /// locks. For all transactions, the digest is used to verify correct execution.
+    pub(crate) valid_effects: DBMap<TransactionDigest, ValidEffectsInfo>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_object_versions exactly once for each transaction we receive from

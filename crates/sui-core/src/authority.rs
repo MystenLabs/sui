@@ -1567,14 +1567,23 @@ impl AuthorityState {
         .await
     }
 
+    pub async fn add_pending_certs_and_effects(
+        &self,
+        certs: Vec<VerifiedCertificate>,
+        effects: Vec<ValidTransactionEffects>,
+        digests: Vec<ValidExecutionDigests>,
+    ) -> SuiResult {
+        self.database
+            .store_pending_certs_and_effects(&certs, &effects, &digests)?;
+        let mut transaction_manager = self.transaction_manager.lock().await;
+        transaction_manager.enqueue(certs).await
+    }
+
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
     /// Currently, only used in tests and deprecated callsites.
     pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
-        self.node_sync_store
-            .batch_store_certs(certs.iter().cloned())?;
-        self.database.store_pending_certificates(&certs)?;
-        let mut transaction_manager = self.transaction_manager.lock().await;
-        transaction_manager.enqueue(certs).await
+        self.add_pending_certs_and_effects(certs, Vec::new(), Vec::new())
+            .await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
