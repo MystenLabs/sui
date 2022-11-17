@@ -15,9 +15,12 @@ use mockall::*;
 use std::time::Duration;
 use storage::CertificateStore;
 use thiserror::Error;
-use tokio::{sync::mpsc::channel, time::timeout};
+use tokio::{
+    sync::{mpsc::channel, oneshot},
+    time::timeout,
+};
 use tracing::{debug, error, instrument, trace};
-use types::{metered_channel, Certificate, CertificateDigest, PrimaryMessage};
+use types::{error::DagResult, metered_channel, Certificate, CertificateDigest};
 
 #[cfg(test)]
 #[path = "tests/handler_tests.rs"]
@@ -103,7 +106,7 @@ pub struct BlockSynchronizerHandler {
     /// Channel to send the fetched certificates to Core for
     /// further processing, validation and possibly causal
     /// completion.
-    tx_primary_messages: metered_channel::Sender<PrimaryMessage>,
+    tx_certificates: metered_channel::Sender<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
 
     /// The store that holds the certificates.
     certificate_store: CertificateStore,
@@ -116,13 +119,16 @@ pub struct BlockSynchronizerHandler {
 impl BlockSynchronizerHandler {
     pub fn new(
         tx_block_synchronizer: metered_channel::Sender<Command>,
-        tx_primary_messages: metered_channel::Sender<PrimaryMessage>,
+        tx_certificates: metered_channel::Sender<(
+            Certificate,
+            Option<oneshot::Sender<DagResult<()>>>,
+        )>,
         certificate_store: CertificateStore,
         certificate_deliver_timeout: Duration,
     ) -> Self {
         Self {
             tx_block_synchronizer,
-            tx_primary_messages,
+            tx_certificates,
             certificate_store,
             certificate_deliver_timeout,
         }
@@ -185,10 +191,8 @@ impl Handler for BlockSynchronizerHandler {
                     if !block_header.fetched_from_storage {
                         // we need to perform causal completion since this
                         // entity has not been fetched from storage.
-                        self.tx_primary_messages
-                            .send(PrimaryMessage::Certificate(
-                                block_header.certificate.clone(),
-                            ))
+                        self.tx_certificates
+                            .send((block_header.certificate.clone(), None))
                             .await
                             .expect("Couldn't send certificate to core");
                         wait_for.push(block_header.certificate.clone());

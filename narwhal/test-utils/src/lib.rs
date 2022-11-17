@@ -30,12 +30,12 @@ use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, Header, HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse,
+    RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, Transaction, Vote,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -212,6 +212,12 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         Ok(anemo::Response::new(()))
     }
 
+    async fn request_vote(
+        &self,
+        _request: anemo::Request<RequestVoteRequest>,
+    ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
     async fn get_certificates(
         &self,
         _request: anemo::Request<GetCertificatesRequest>,
@@ -229,13 +235,6 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         &self,
         _request: anemo::Request<PayloadAvailabilityRequest>,
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn get_latest_header(
-        &self,
-        _request: anemo::Request<LatestHeaderRequest>,
-    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }

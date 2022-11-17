@@ -205,7 +205,7 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let header = Self {
             author,
@@ -365,7 +365,7 @@ impl Vote {
     pub async fn new(
         header: &Header,
         author: &PublicKey,
-        signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let vote = Self {
             digest: header.digest(),
@@ -767,9 +767,26 @@ impl Affiliated for Certificate {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PrimaryMessage {
-    Header(Header),
-    Vote(Vote),
     Certificate(Certificate),
+}
+
+/// Used by the primary to request a vote from other primaries on newly produced headers.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestVoteRequest {
+    pub header: Header,
+
+    // Optional parent certificates provided by the requester, in case this primary doesn't yet
+    // have them and requires them in order to offer a vote.
+    pub parents: Vec<Certificate>,
+}
+
+/// Used by the primary to reply to RequestVoteRequest.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestVoteResponse {
+    pub vote: Option<Vote>,
+
+    // Indicates digests of missing certificates without which a vote cannot be provided.
+    pub missing: Vec<CertificateDigest>,
 }
 
 /// Used by the primary to get specific certificates from other primaries.
@@ -879,14 +896,6 @@ impl PayloadAvailabilityResponse {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LatestHeaderRequest {}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct LatestHeaderResponse {
-    pub header: Option<Header>,
-}
-
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ReconfigureNotification {
@@ -983,7 +992,9 @@ pub struct WorkerInfoResponse {
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct RoundVoteDigestPair {
+pub struct VoteInfo {
+    /// The latest Epoch for which a vote was sent to given authority
+    pub epoch: Epoch,
     /// The latest round for which a vote was sent to given authority
     pub round: Round,
     /// The hash of the vote used to ensure equality

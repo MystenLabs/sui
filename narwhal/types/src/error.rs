@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{HeaderDigest, Round};
+use crate::{HeaderDigest, Round, VoteDigest};
 use config::Epoch;
 use fastcrypto::hash::Digest;
 use store::StoreError;
@@ -61,8 +61,17 @@ pub enum DagError {
     #[error("Received unexpected vote for header {0}")]
     UnexpectedVote(HeaderDigest),
 
+    #[error("Already sent a vote with digest {0} for round {1}")]
+    AlreadyVoted(VoteDigest, Round),
+
+    #[error("Could not form a certificate for header {0}")]
+    CouldNotFormCertificate(HeaderDigest),
+
     #[error("Received certificate without a quorum")]
     CertificateRequiresQuorum,
+
+    #[error("Cannot load certificates from our own proposed header")]
+    ProposedHeaderMissingCertificates,
 
     #[error("Parents of header {0} are not a quorum")]
     HeaderRequiresQuorum(HeaderDigest),
@@ -79,17 +88,26 @@ pub enum DagError {
     #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },
 
+    #[error("Invalid round (expected {expected}, received {received})")]
+    InvalidRound { expected: Round, received: Round },
+
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),
 
     #[error("Network error: {0}")]
     NetworkError(String),
 
+    #[error("Processing was suspended to retrieve dependencies")]
+    Suspended,
+
     #[error("System shutting down")]
     ShuttingDown,
 
-    #[error("Channel Full")]
+    #[error("Channel full")]
     ChannelFull,
+
+    #[error("Operation was canceled")]
+    Canceled,
 }
 
 impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
