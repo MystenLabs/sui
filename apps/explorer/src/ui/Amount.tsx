@@ -15,7 +15,7 @@ export type AmountProps = {
     coinFormat?: keyof typeof CoinFormat;
 };
 
-const DECIMALS = 0;
+const DECIMALS = 1;
 
 export function Amount({
     amount,
@@ -25,11 +25,15 @@ export function Amount({
 }: AmountProps) {
     const isLarge = size === 'lg';
 
-    const formattedAmount = formatBalance(
-        amount,
-        DECIMALS,
-        CoinFormat[coinFormat ?? CoinFormat.FULL]
-    );
+    // in stance where getCoinDenominationInfo is not available or amount component is used directly without useFormatCoin hook
+    const formattedAmount =
+        !symbol || typeof amount === 'bigint'
+            ? formatBalance(
+                  amount,
+                  DECIMALS,
+                  CoinFormat[coinFormat ?? CoinFormat.FULL]
+              )
+            : amount;
 
     return (
         <div className="flex items-end gap-1 text-sui-grey-100 break-words">
@@ -41,7 +45,11 @@ export function Amount({
             </Heading>
             {symbol && (
                 <div className="text-sui-grey-80 text-bodySmall font-medium leading-4">
-                    {isLarge ? <sup className='text-bodySmall'>{symbol}</sup> : symbol}
+                    {isLarge ? (
+                        <sup className="text-bodySmall">{symbol}</sup>
+                    ) : (
+                        symbol
+                    )}
                 </div>
             )}
         </div>

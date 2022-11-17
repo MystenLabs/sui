@@ -4,9 +4,7 @@
 import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
 import { Amount, type AmountProps } from '~/ui/Amount';
 
-export interface CoinBalanceProps extends AmountProps {
-    coinFormat?: keyof typeof CoinFormat;
-}
+export interface CoinBalanceProps extends AmountProps {}
 
 // Passing amount as a string or number for optional number suffix
 export function CoinBalance({
@@ -21,14 +19,9 @@ export function CoinBalance({
         CoinFormat[coinFormat || CoinFormat.FULL]
     );
 
+    // format balance if no symbol is provided
+    // this handles instances where getCoinDenominationInfo is not available
     const formattedBalance = symbol ? formattedAmount : amount;
 
-    return (
-        <Amount
-            amount={formattedBalance}
-            symbol={suffix}
-            size={size}
-            coinFormat={coinFormat}
-        />
-    );
+    return <Amount amount={formattedBalance} symbol={suffix} size={size} />;
 }
