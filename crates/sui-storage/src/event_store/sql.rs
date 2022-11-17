@@ -115,6 +115,9 @@ impl SqlEventStore {
             .journal_mode(SqliteJournalMode::Wal)
             // Normal vs Full sync mode also speeds up writes
             .synchronous(SqliteSynchronous::Normal)
+            // Minimal journal size and frequent autocheckpoints help prevent giant WALs
+            .pragma("journal_size_limit", "0")
+            .pragma("wal_autocheckpoint", "400") // In pages of 4KB each
             .create_if_missing(true);
         options.log_statements(log::LevelFilter::Off);
         let pool = SqlitePool::connect_with(options)
@@ -122,6 +125,16 @@ impl SqlEventStore {
             .map_err(convert_sqlx_err)?;
         info!(?db_path, "Created/opened SQLite EventStore on disk");
         Ok(Self { pool })
+    }
+
+    /// Force the SQLite WAL to be truncated.  This mighyt be occasionally necessary if somehow the WAL
+    /// grows too big.
+    pub async fn force_wal_truncation(&self) -> Result<(), SuiError> {
+        self.pool
+            .execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            .await
+            .map_err(convert_sqlx_err)?;
+        Ok(())
     }
 
     /// Initializes the database, creating tables and indexes as needed
