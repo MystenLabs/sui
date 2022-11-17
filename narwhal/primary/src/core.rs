@@ -405,23 +405,17 @@ impl Core {
 
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_own_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
-        self.metrics
-            .certificates_created
-            .with_label_values(&[&certificate.epoch().to_string()])
-            .inc();
-        self.metrics
-            .header_to_certificate_latency
-            .with_label_values(&[&certificate.epoch().to_string()])
-            .observe(
-                certificate
-                    .header
-                    .metadata
-                    .created_at
-                    .elapsed()
-                    .as_secs_f64(),
-            );
+        // Process the new certificate.
+        match self.process_certificate_internal(certificate.clone()).await {
+            Ok(()) => Ok(()),
+            result @ Err(DagError::ShuttingDown) => result,
+            _ => panic!("Failed to process locally-created certificate"),
+        }?;
 
         // Broadcast the certificate.
+        let epoch = certificate.epoch();
+        let round = certificate.header.round;
+        let created_at = certificate.header.metadata.created_at;
         let network_keys = self
             .committee
             .others_primaries(&self.name)
@@ -430,24 +424,25 @@ impl Core {
             .collect();
         let tasks = self
             .network
-            .broadcast(
-                network_keys,
-                &PrimaryMessage::Certificate(certificate.clone()),
-            )
+            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate))
             .await;
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
-                certificate.header.round,
+                round,
                 tasks,
                 self.rx_narwhal_round_updates.clone(),
             ));
 
-        // Process the new certificate.
-        match self.process_certificate_internal(certificate).await {
-            Ok(()) => Ok(()),
-            result @ Err(DagError::ShuttingDown) => result,
-            _ => panic!("Failed to process locally-created certificate"),
-        }
+        // Update metrics.
+        self.metrics
+            .certificates_created
+            .with_label_values(&[&epoch.to_string()])
+            .inc();
+        self.metrics
+            .header_to_certificate_latency
+            .with_label_values(&[&epoch.to_string()])
+            .observe(created_at.elapsed().as_secs_f64());
+        Ok(())
     }
 
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
