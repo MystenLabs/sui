@@ -41,7 +41,7 @@ COPY sui_programmability/examples/basics /usr/local/bin/sui_programmability/exam
 
 RUN pwd
 RUN ls
-RUN ls sui_programmability/examples/basics
+RUN ls /usr/local/bin/sui_programmability/examples/basics
 
 RUN cargo build --release \
     --bin sui-node \
