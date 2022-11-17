@@ -1405,8 +1405,11 @@ impl AuthorityState {
         }
         let committee = committee_store.get_latest_committee();
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
-        let event_handler =
-            event_store.map(|es| Arc::new(EventHandler::new(es, module_cache.clone())));
+        let event_handler = event_store.map(|es| {
+            let handler = EventHandler::new(es, module_cache.clone());
+            handler.regular_cleanup_task();
+            Arc::new(handler)
+        });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(tokio::sync::Mutex::new(
