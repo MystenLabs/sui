@@ -55,8 +55,13 @@ function ModuleViewWrapper({ id, data }: Props) {
                                 (modulesPageNumber - 1) * numOfMudulesToShow &&
                             index < modulesPageNumber * numOfMudulesToShow
                     )
-                    .map(([name, code], idx) => (
-                        <ModuleView key={idx} id={id} name={name} code={code} />
+                    .map(([name, code]) => (
+                        <div key={name}>
+                            <div className={styles.moduletitle}>{name}</div>
+                            <div className={styles.pagmodule}>
+                                <ModuleView id={id} name={name} code={code} />
+                            </div>
+                        </div>
                     ))}
             </div>
             {totalModulesCount > numOfMudulesToShow && (

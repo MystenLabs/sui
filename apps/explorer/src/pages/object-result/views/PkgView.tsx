@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import Longtext from '../../../components/longtext/Longtext';
-import ModulesWrapper from '../../../components/module/ModulesWrapper';
+import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
 import TxForID from '../../../components/transaction-card/TxForID';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
@@ -9,6 +9,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
+import { Heading } from '~/ui/Heading';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 function PkgView({ data }: { data: DataType }) {
@@ -83,13 +84,13 @@ function PkgView({ data }: { data: DataType }) {
                     </TabPanels>
                 </TabGroup>
 
-                <ModulesWrapper
-                    id={data.id}
-                    data={{
-                        title: 'Modules',
-                        content: properties,
-                    }}
-                />
+                <div className="mb-3">
+                    <Heading as="h2" variant="heading4" weight="semibold">
+                        Modules
+                    </Heading>
+                </div>
+
+                <PkgModulesWrapper id={data.id} modules={properties} />
                 <div className={styles.txsection}>
                     <h2 className={styles.header}>Transactions </h2>
                     <TxForID id={viewedData.id} category="object" />
