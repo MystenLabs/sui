@@ -3,7 +3,7 @@
 
 use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{Location, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, effects::Op, language_storage::StructTag,
     value::MoveTypeLayout,
@@ -215,8 +215,18 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state)
     }
 
-    pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
+    pub fn finish(
+        mut self,
+        sender: SuiAddress,
+        returned_objects: Vec<(Type, StructTag, Value)>,
+    ) -> Result<RuntimeResults, ExecutionError> {
         let child_effects = self.object_store.take_effects();
+        for (ty, tag, obj) in returned_objects {
+            // we do not need to check the transfer result currently as shared objects cannot
+            // be passed as owned inputs
+            self.transfer(Owner::AddressOwner(sender), ty, tag, obj)
+                .map_err(|e| e.finish(Location::Undefined))?;
+        }
         self.state.finish(child_effects)
     }
 

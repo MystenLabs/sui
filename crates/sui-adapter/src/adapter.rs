@@ -14,7 +14,7 @@ use linked_hash_map::LinkedHashMap;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    errors::VMResult,
+    errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use move_bytecode_verifier::VerifierConfig;
@@ -24,6 +24,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
     value::{MoveStruct, MoveTypeLayout, MoveValue},
+    vm_status::StatusCode,
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
@@ -32,6 +33,10 @@ use move_vm_runtime::{
     session::{SerializedReturnValues, Session},
 };
 
+use move_vm_types::{
+    loaded_data::runtime_types::{CachedStructIndex, Type},
+    values::Value,
+};
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
@@ -206,17 +211,27 @@ fn execute_internal<
         .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
         .collect();
     let mut session = new_session(vm, state_view, input_objects);
+    let loaded_function = session.load_function(module_id, function, &type_args)?;
+
     // script visibility checked manually for entry points
-    let (
-        SerializedReturnValues {
-            mut mutable_reference_outputs,
-            return_values,
-        },
-        (change_set, events, mut native_context_extensions),
-    ) = session
-        .execute_function_bypass_visibility(module_id, function, type_args, args, gas_status)
-        .and_then(|ret| Ok((ret, session.finish_with_extensions()?)))?;
-    assert_invariant!(return_values.is_empty(), "Return values must be empty");
+    let SerializedReturnValues {
+        mut mutable_reference_outputs,
+        return_values,
+    } = session
+        .execute_function_bypass_visibility(module_id, function, type_args, args, gas_status)?;
+    assert_invariant!(
+        return_values.len() == loaded_function.return_.len(),
+        "Return values mismatch"
+    );
+    let returned_objects = loaded_function
+        .return_
+        .iter()
+        .zip(return_values)
+        .filter_map(|(ty, (bytes, layout))| {
+            filter_map_return_value_object(&mut session, ty, bytes, layout)
+        })
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
+    let (change_set, events, mut native_context_extensions) = session.finish_with_extensions()?;
     let object_runtime: ObjectRuntime = native_context_extensions.remove();
     std::mem::drop(native_context_extensions);
 
@@ -269,7 +284,7 @@ fn execute_internal<
         deletions,
         user_events,
         loaded_child_objects,
-    } = object_runtime.finish()?;
+    } = object_runtime.finish(ctx.sender(), returned_objects)?;
     let session = new_session(vm, &*state_view, BTreeMap::new());
     let writes = writes
         .into_iter()
@@ -304,6 +319,50 @@ fn execute_internal<
     )?;
 
     Ok(())
+}
+
+fn filter_map_return_value_object<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
+>(
+    session: &mut Session<S>,
+    ty: &Type,
+    bytes: Vec<u8>,
+    layout: MoveTypeLayout,
+) -> Option<Result<(Type, StructTag, Value), ExecutionError>> {
+    if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+        return None;
+    }
+    let abilities = match session.get_type_abilities(&ty) {
+        Ok(abilities) => abilities,
+        Err(e) => return Some(Err(e.into())),
+    };
+    if !abilities.has_key() {
+        return None;
+    }
+    if !abilities.has_store() {
+        return Some(Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::InvariantViolation,
+            "Returned object has key but not store",
+        )));
+    }
+    let st = match type_to_type_tag(session, ty) {
+        Ok(TypeTag::Struct(st)) => st,
+        Ok(_) => {
+            return Some(Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InvariantViolation,
+                "Returned non-struct with key",
+            )))
+        }
+        Err(e) => return Some(Err(e.finish(Location::Undefined).into())),
+    };
+    let Some(value) = Value::simple_deserialize(&bytes, &layout) else {
+        return Some(Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::InvariantViolation,
+            "Unable to deserialize serialized value"
+        )));
+    };
+    Some(Ok((ty.clone(), st, value)))
 }
 
 #[instrument(name = "adapter_publish", level = "trace", skip_all)]
@@ -1367,4 +1426,57 @@ fn missing_unwrapped_msg(id: &ObjectID) -> String {
         "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
         id
     )
+}
+
+// TODO move this into session
+
+fn struct_gidx_to_type_tag<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E>>(
+    session: &mut Session<S>,
+    gidx: CachedStructIndex,
+    ty_args: &[Type],
+) -> PartialVMResult<StructTag> {
+    let Some(st) = session.get_struct_type(gidx) else {
+        return Err(PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+        .with_message(format!("no struct ttype for {:?}", gidx)))
+    };
+    let ty_arg_tags = ty_args
+        .iter()
+        .map(|ty| type_to_type_tag(session, ty))
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    let struct_tag = StructTag {
+        address: *st.module.address(),
+        module: st.module.name().to_owned(),
+        name: st.name.clone(),
+        type_params: ty_arg_tags,
+    };
+
+    Ok(struct_tag)
+}
+
+fn type_to_type_tag<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E>>(
+    session: &mut Session<S>,
+    ty: &Type,
+) -> PartialVMResult<TypeTag> {
+    Ok(match ty {
+        Type::Bool => TypeTag::Bool,
+        Type::U8 => TypeTag::U8,
+        Type::U16 => TypeTag::U16,
+        Type::U32 => TypeTag::U32,
+        Type::U64 => TypeTag::U64,
+        Type::U128 => TypeTag::U128,
+        Type::U256 => TypeTag::U256,
+        Type::Address => TypeTag::Address,
+        Type::Signer => TypeTag::Signer,
+        Type::Vector(ty) => TypeTag::Vector(Box::new(type_to_type_tag(session, ty)?)),
+        Type::Struct(gidx) => TypeTag::Struct(struct_gidx_to_type_tag(session, *gidx, &[])?),
+        Type::StructInstantiation(gidx, ty_args) => {
+            TypeTag::Struct(struct_gidx_to_type_tag(session, *gidx, ty_args)?)
+        }
+        Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("no type tag for {:?}", ty)),
+            )
+        }
+    })
 }

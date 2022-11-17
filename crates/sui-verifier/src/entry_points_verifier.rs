@@ -29,8 +29,8 @@ use crate::{format_signature_token, resolve_struct, verification_failure, INIT_F
 /// - The function must have `Visibility::Private`
 /// - The function can have at most two parameters:
 ///   - mandatory &mut TxContext (see `is_tx_context`) in the last position
-///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the first
-///   position
+///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the
+///     first position
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true
@@ -82,7 +82,8 @@ fn verify_init_not_called(
             let name = module.identifier_at(fhandle.name);
             if name == INIT_FN_NAME {
                 Err(format!(
-                    "{}::{} at offset {}. Cannot call a module's '{}' function from another Move function",
+                    "{}::{} at offset {}. Cannot call a module's '{}' function from another Move \
+                    function",
                     module.self_id(),
                     name,
                     idx,
@@ -140,7 +141,8 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         Ok(())
     } else {
         Err(format!(
-            "Expected last (and at most second) parameter for {}::{} to be &mut {}::{}::{}, but found {}",
+            "Expected last (and at most second) parameter for {}::{} to be &mut or & `{}::{}::{}`, \
+             but found {}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,
@@ -168,11 +170,8 @@ fn verify_entry_function_impl(
     }
 
     let return_ = view.signature_at(handle.return_);
-    if !return_.is_empty() {
-        return Err(format!(
-            "Entry function {} cannot have return values",
-            view.identifier_at(handle.name)
-        ));
+    for ret in &return_.0 {
+        verify_return_type(view, &handle.type_parameters, ret)?;
     }
 
     Ok(())
@@ -247,14 +246,15 @@ fn is_primitive(
                 && is_primitive(view, function_type_args, &targs[0])
         }
 
-        SignatureToken::Vector(inner) => is_primitive(view, function_type_args, inner),
-        SignatureToken::Reference(_) | SignatureToken::MutableReference(_) => false,
+        SignatureToken::Vector(inner)
+        | SignatureToken::Reference(inner)
+        | SignatureToken::MutableReference(inner) => is_primitive(view, function_type_args, inner),
     }
 }
 
 pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
     match p {
-        SignatureToken::MutableReference(m) => match &**m {
+        SignatureToken::Reference(m) | SignatureToken::MutableReference(m) => match &**m {
             SignatureToken::Struct(idx) => {
                 let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
                 module_name == TX_CONTEXT_MODULE_NAME
@@ -322,5 +322,24 @@ fn is_object_struct(
                 .map_err(|vm_err| vm_err.to_string())?;
             Ok(abilities.has_key())
         }
+    }
+}
+
+fn verify_return_type(
+    view: &BinaryIndexedView,
+    function_type_args: &[AbilitySet],
+    s: &SignatureToken,
+) -> Result<(), String> {
+    let abilities = view
+        .abilities(s, function_type_args)
+        .map_err(|vm_err| vm_err.to_string())?;
+    if abilities.has_drop() || (abilities.has_key() && abilities.has_store()) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Invalid entry point return type. Expected a type with `drop` or an object type (a \
+             type with `key`) with `store`. Got: {}",
+            format_signature_token(view, s)
+        ))
     }
 }
