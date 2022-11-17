@@ -8587,6 +8587,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "jsonrpsee",
+ "serde 1.0.147",
+ "sui",
+ "sui-config",
+ "sui-core",
+ "sui-framework-build",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "telemetry-subscribers",
+ "test-utils",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-json"
 version = "0.0.0"
 dependencies = [
