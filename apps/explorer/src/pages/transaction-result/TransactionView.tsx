@@ -10,8 +10,6 @@ import {
     getTransferObjectTransaction,
     getMovePackageContent,
     getObjectId,
-    getTransferSuiTransaction,
-    getTransferSuiAmount,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
@@ -26,8 +24,7 @@ import {
     type LinkObj,
     TxAddresses,
 } from '../../components/transaction-card/TxCardUtils';
-import { convertNumberToDate } from '../../utils/timeUtils';
-import SendReceiveView from './SendReceiveView';
+import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
 import type { DataType, Category } from './TransactionResultType';
@@ -35,7 +32,6 @@ import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
-    Pay,
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
@@ -46,7 +42,10 @@ import styles from './TransactionResult.module.css';
 
 import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
+import { DateCard } from '~/ui/DateCard';
 import { PageHeader } from '~/ui/PageHeader';
+import { SenderRecipient } from '~/ui/SenderRecipient';
+import { StatAmount } from '~/ui/StatAmount';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
@@ -243,12 +242,6 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
-const isPayType = (
-    txdetails: SuiTransactionKind
-): txdetails is { Pay: Pay } => {
-    return 'Pay' in txdetails;
-};
-
 function GasAmount({ amount }: { amount: bigint | number }) {
     const [formattedAmount, symbol] = useFormatCoin(
         amount,
@@ -276,30 +269,23 @@ function GasAmount({ amount }: { amount: bigint | number }) {
     );
 }
 
-const convertAmounts = (
-    amounts: (number | bigint | null)[]
-): bigint[] | undefined =>
-    amounts.every((amount) => amount)
-        ? amounts.map((amount) => BigInt(amount!))
-        : undefined;
-
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
-    const amounts = isPayType(txdetails)
-        ? convertAmounts(txdetails.Pay.amounts)
-        : convertAmounts([getTransferSuiAmount(txdetails)]);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
 
-    const recipient =
-        getTransferObjectTransaction(txdetails)?.recipient ||
-        getTransferSuiTransaction(txdetails)?.recipient;
-
-    const recipients = isPayType(txdetails)
-        ? txdetails.Pay.recipients
-        : recipient
-        ? [recipient]
-        : undefined;
+    const txnTransfer = getAmount(txdetails, txdata.transaction?.effects);
+    const sendReceiveRecipients = txnTransfer?.map((item) => ({
+        address: item.recipientAddress,
+        ...(item?.amount
+            ? {
+                  coin: {
+                      amount: item.amount,
+                      symbol: item?.coinType || null,
+                  },
+              }
+            : {}),
+    }));
 
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
@@ -363,12 +349,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const createdMutateData = generateMutatedCreated(txdata);
 
-    const sendreceive = {
-        sender: sender,
-        recipient: recipients,
-        amount: amounts,
-        objects: txdata.created,
-    };
     const GasStorageFees = {
         title: 'Gas & Storage Fees',
         content: [
@@ -479,25 +459,32 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 className={cl([
                                     styles.txcomponent,
                                     styles.txsender,
+                                    'md:ml-4',
                                 ])}
+                                data-testid="transaction-timestamp"
                             >
-                                {txdata.timestamp_ms && (
-                                    <h3
-                                        data-testid="transaction-timestamp"
-                                        className={styles.datetime}
-                                    >
-                                        {convertNumberToDate(
-                                            txdata.timestamp_ms
-                                        )}
-                                    </h3>
+                                {txnTransfer?.[0].amount ? (
+                                    <section className="mb-10">
+                                        <StatAmount
+                                            amount={txnTransfer[0].amount}
+                                            date={txdata.timestamp_ms}
+                                            currency={txnTransfer[0].coinType}
+                                        />
+                                    </section>
+                                ) : (
+                                    txdata.timestamp_ms && (
+                                        <div className="mb-3">
+                                            <DateCard
+                                                date={txdata.timestamp_ms}
+                                            />
+                                        </div>
+                                    )
                                 )}
-                                <SendReceiveView
-                                    sender={sendreceive.sender}
-                                    recipient={sendreceive.recipient}
-                                    amount={sendreceive.amount}
-                                    objects={sendreceive.objects.map(
-                                        (obj) => obj.objectId
-                                    )}
+                                <SenderRecipient
+                                    sender={sender}
+                                    transferCoin={txnTransfer?.[0].isCoin}
+                                    recipients={sendReceiveRecipients}
+                                    data-testid="transaction-sender"
                                 />
                             </section>
 

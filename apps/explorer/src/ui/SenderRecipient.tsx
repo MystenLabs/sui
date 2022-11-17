@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinFormat } from '~/hooks/useFormatCoin';
 import { CoinBalance } from '~/ui/CoinBalance';
 import { Heading } from '~/ui/Heading';
 import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
@@ -8,8 +9,8 @@ import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
 type Recipient = {
     address: string;
     coin?: {
-        amount: number | string;
-        symbol?: string;
+        amount: number | string | bigint;
+        symbol?: string | null;
     };
 };
 
@@ -42,7 +43,7 @@ export function SenderRecipient({
             </Heading>
             <div className="flex flex-col gap-[15px] justify-center relative">
                 {singleTransferCoin && (
-                    <div className="absolute border-2 border-sui-steel overflow-y-hidden h-[calc(55%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l border-dotted" />
+                    <div className="absolute border-dashed border border-sui-steel overflow-y-hidden h-[calc(57%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l" />
                 )}
                 <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (
@@ -76,6 +77,7 @@ export function SenderRecipient({
                                             <CoinBalance
                                                 amount={recipient.coin.amount}
                                                 symbol={recipient.coin?.symbol}
+                                                coinFormat={CoinFormat.ROUNDED}
                                             />
                                         </div>
                                     )}

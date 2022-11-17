@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinBalance } from '~/ui/CoinBalance';
+import { DateCard } from '~/ui/DateCard';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
-import { formatDate } from '~/utils/timeUtils';
 
 export interface StatAmountProps {
-    amount: number | string;
-    currency?: string;
+    amount: number | string | bigint;
+    currency?: string | null;
     dollarAmount?: number;
-    date?: Date | number;
+    date?: Date | number | null;
 }
 
 export function StatAmount({
@@ -21,32 +22,13 @@ export function StatAmount({
     return (
         <div className="flex flex-col justify-start text-sui-grey-75 gap-2">
             <div className="text-sui-grey-100 flex flex-col items-baseline gap-2.5">
-                {date && (
-                    <div className="text-sui-grey-75">
-                        <Text variant="bodySmall" weight="semibold">
-                            {formatDate(date, [
-                                'month',
-                                'day',
-                                'year',
-                                'hour',
-                                'minute',
-                            ])}
-                        </Text>
-                    </div>
-                )}
-                <Heading as="h4" variant="heading4" weight="semibold">
-                    Amount
-                </Heading>
-
-                <div className="flex flex-row items-start gap-1">
-                    <Heading as="h2" variant="heading2" weight="bold">
-                        {amount}
+                {date && <DateCard date={date} />}
+                <div className="flex flex-col items-baseline gap-2.5">
+                    <Heading as="h4" variant="heading4" weight="semibold">
+                        Amount
                     </Heading>
-                    {currency && (
-                        <div className="text-sui-grey-80 ">
-                            <Text variant="bodySmall">{currency}</Text>
-                        </div>
-                    )}
+
+                    <CoinBalance amount={amount} symbol={currency} size="lg" />
                 </div>
             </div>
             {dollarAmount && (
