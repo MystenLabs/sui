@@ -145,6 +145,7 @@ impl SqlEventStore {
 
     /// Force the SQLite WAL to be truncated.  This mighyt be occasionally necessary if somehow the WAL
     /// grows too big.
+    #[instrument(level = "debug", skip_all, err)]
     pub async fn force_wal_truncation(&self) -> Result<(), SuiError> {
         self.pool
             .execute("PRAGMA wal_checkpoint(TRUNCATE)")
