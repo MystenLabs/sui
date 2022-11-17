@@ -5,6 +5,7 @@ import { forwardRef, useCallback } from 'react';
 import {
     // eslint-disable-next-line no-restricted-imports
     Link,
+    useSearchParams,
     useLocation,
     // eslint-disable-next-line no-restricted-imports
     useNavigate,
@@ -29,9 +30,13 @@ export function useNavigateWithQuery() {
 }
 
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
-    ({ to, ...props }, ref) => {
-        const { search } = useLocation();
+    ({ to, ...props }) => {
+        const [searchParams] = useSearchParams();
 
-        return <Link ref={ref} to={`${to}${search}`} {...props} />;
+        const networkParam =
+            (to.toString().includes('?') ? '&network=' : '?network=') +
+            searchParams.get('network');
+
+        return <Link to={`${to}${networkParam}`} {...props} />;
     }
 );
