@@ -71,7 +71,7 @@ COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 COPY --from=builder /sui/target/debug/gui-tool /usr/local/bin
 COPY --from=builder /sui/crates/sui-tool/src/bin/templates /usr/local/bin/templates
 
-RUN ls /usr/local/bin/sui_programmability/examples/basics
+# RUN ls /usr/local/bin/sui_programmability/examples/basics
 
 ARG BUILD_DATE
 ARG GIT_REVISION
