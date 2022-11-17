@@ -41,6 +41,7 @@ use sui_types::{
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
+use narwhal_types::Certificate;
 use tracing::info;
 
 pub enum TestCallArg {
@@ -2153,10 +2154,14 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
     let transaction = SequencedConsensusTransaction::new_test(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
-
-    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+    let certificate = Certificate::new_test_empty(authority.name.try_into().unwrap());
+    let output = ConsensusOutput {
+        certificate,
+        ..Default::default()
+    };
+    if let Ok(transaction) = authority.verify_consensus_transaction(&output, transaction) {
         authority
-            .handle_consensus_transaction(transaction)
+            .handle_consensus_transaction(&output, transaction)
             .await
             .unwrap();
     }

@@ -72,6 +72,9 @@ pub struct AuthorityEpochTables<S> {
     /// The key in this table is incremental index and value is corresponding narwhal
     /// consensus output index
     pub(crate) checkpoint_boundary: DBMap<u64, u64>,
+
+    /// Validators that have sent EndOfPublish message in this epoch
+    pub(crate) end_of_publish: DBMap<AuthorityName, ()>,
 }
 
 impl<S> AuthorityEpochTables<S>

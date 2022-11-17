@@ -51,6 +51,7 @@ impl TransactionValidator for ConsensusTxValidator {
                     warn!("Ignoring malformed signature (failed to verify): {err}");
                 })?;
             }
+            ConsensusTransactionKind::EndOfPublish(_) => {}
         }
         Ok(())
     }
@@ -85,6 +86,7 @@ impl TransactionValidator for ConsensusTxValidator {
                         .auth_signature
                         .add_to_verification_obligation(&committee, &mut obligation, idx)?;
                 }
+                ConsensusTransactionKind::EndOfPublish(_) => {}
             }
         }
         // verify the user transaction signatures as a batch

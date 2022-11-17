@@ -1212,6 +1212,22 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    pub fn sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
+        Ok(self.epoch_tables().end_of_publish.contains_key(authority)?)
+    }
+
+    pub async fn record_end_of_publish(
+        &self,
+        authority: AuthorityName,
+        transaction: &ConsensusTransaction,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> SuiResult {
+        let write_batch = self.epoch_tables().last_consensus_index.batch();
+        let write_batch =
+            write_batch.insert_batch(&self.epoch_tables().end_of_publish, [(authority, ())])?;
+        self.finish_consensus_transaction_process(write_batch, transaction, consensus_index)
+    }
+
     pub async fn record_consensus_transaction_processed(
         &self,
         transaction: &ConsensusTransaction,
