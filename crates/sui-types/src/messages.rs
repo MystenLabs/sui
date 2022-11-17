@@ -9,7 +9,9 @@ use crate::crypto::{
     SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
+use crate::message_envelope::{
+    Envelope, IndirectValidity, Message, TrustedEnvelope, VerifiedEnvelope,
+};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
 };
@@ -1675,6 +1677,30 @@ impl TransactionEffects {
     }
 }
 
+impl Message for TransactionEffectsDigest {
+    type DigestType = TransactionEffectsDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        *self
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+}
+
+impl Message for ExecutionDigests {
+    type DigestType = TransactionDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        self.transaction
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+}
+
 impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
@@ -1755,6 +1781,17 @@ pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
+pub type ValidExecutionDigests = Envelope<ExecutionDigests, IndirectValidity>;
+pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, IndirectValidity>;
+pub type ValidTransactionEffects = TransactionEffectsEnvelope<IndirectValidity>;
+
+impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
+    fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {
+        let (data, validity) = ved.into_data_and_sig();
+        ValidTransactionEffectsDigest::new(data.effects, validity)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {
