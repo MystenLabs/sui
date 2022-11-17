@@ -3,6 +3,7 @@
 
 //! SQL and SQLite-based Event Store
 
+use core::time::Duration;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -124,7 +125,22 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!(?db_path, "Created/opened SQLite EventStore on disk");
+
         Ok(Self { pool })
+    }
+
+    /// Starts a WAL truncation/cleanup periodic task at interval duration
+    pub async fn wal_cleanup_thread(&self, wal_cleanup_interval: Option<Duration>) {
+        if let Some(cleanup_interval) = wal_cleanup_interval {
+            let mut interval = tokio::time::interval(cleanup_interval);
+            loop {
+                interval.tick().await;
+                info!("Running SQLite WAL truncation...");
+                let _ = self.force_wal_truncation().await.map_err(|e| {
+                    warn!("Unable to truncate Event Store SQLite WAL: {}", e);
+                });
+            }
+        }
     }
 
     /// Force the SQLite WAL to be truncated.  This mighyt be occasionally necessary if somehow the WAL
