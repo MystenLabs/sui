@@ -48,13 +48,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
 
-    const paramModule = searchParams.get('module') || modulenames?.[0] || null;
-
-    const [selectedModule, setSelectedModule] = useState(
-        !!paramModule && modulenames.includes(paramModule)
-            ? paramModule
-            : modulenames[0]
-    );
+    const [selectedModule, setSelectedModule] = useState(modulenames[0]);
 
     const filteredModules =
         query === ''
@@ -66,21 +60,37 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                   .map(([name]) => name);
 
     useEffect(() => {
-        const newSearchParams = new URLSearchParams(searchParams);
-        newSearchParams.set('module', selectedModule);
-        setSearchParams(newSearchParams);
-    }, [selectedModule, setSearchParams, searchParams]);
+        const paramModule =
+            searchParams.get('module') || modulenames?.[0] || null;
+        setSelectedModule(
+            !!paramModule && modulenames.includes(paramModule)
+                ? paramModule
+                : modulenames[0]
+        );
+    }, [searchParams, modulenames]);
+
+    const updateSelectedModule = useCallback(
+        (newModule: string) => () => {
+            const newSearchParams = new URLSearchParams(searchParams);
+            newSearchParams.set('module', newModule);
+            setSearchParams(newSearchParams);
+            setSelectedModule(newModule);
+        },
+        [searchParams, setSearchParams]
+    );
 
     const submitSearch = useCallback(() => {
-        setSelectedModule((prev: string) =>
-            filteredModules.length === 1 ? filteredModules[0] : prev
-        );
-    }, [filteredModules]);
+        if (filteredModules.length === 1)
+            updateSelectedModule(filteredModules[0]);
+    }, [filteredModules, updateSelectedModule]);
 
     return (
         <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
             <div className="w-full md:w-1/5">
-                <Combobox value={selectedModule} onChange={setSelectedModule}>
+                <Combobox
+                    value={selectedModule}
+                    onChange={updateSelectedModule}
+                >
                     <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex mt-2.5 justify-between py-1">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
@@ -141,7 +151,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             >
                                 <ListItem
                                     active={selectedModule === name}
-                                    onClick={() => setSelectedModule(name)}
+                                    onClick={updateSelectedModule(name)}
                                 >
                                     {name}
                                 </ListItem>
