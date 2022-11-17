@@ -186,7 +186,7 @@ module sui::delegation_tests {
             test_scenario::return_shared(system_state);
         };
         // The delegator should get another 8 SUI of rewards.
-        governance_test_utils::advance_epoch_with_reward_amounts(0, 56, scenario);
+        governance_test_utils::advance_epoch_with_reward_amounts(0, 57, scenario);
         test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
         {
             let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);

@@ -580,7 +580,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, _validator_report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, _validator_report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -593,11 +593,12 @@ It does the following things:
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     delegator_reward: &<b>mut</b> Balance&lt;SUI&gt;,
+    storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     _validator_report_records: &VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    // `compute_reward_distribution` must be called before `adjust_stake` <b>to</b> make sure we are using the current
-    // epoch's <a href="stake.md#0x2_stake">stake</a> information <b>to</b> compute reward distribution.
+    // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` <b>to</b>
+    // make sure we are using the current epoch's <a href="stake.md#0x2_stake">stake</a> information <b>to</b> compute reward distribution.
     <b>let</b> (validator_reward_amounts, delegator_reward_amounts) = <a href="validator_set.md#0x2_validator_set_compute_reward_distribution">compute_reward_distribution</a>(
         &self.active_validators,
         self.total_validator_stake,
@@ -606,20 +607,21 @@ It does the following things:
         <a href="balance.md#0x2_balance_value">balance::value</a>(delegator_reward),
     );
 
-    // `adjust_stake_and_gas_price` must be called before `distribute_reward`, because reward distribution goes <b>to</b>
-    // each <a href="validator.md#0x2_validator">validator</a>'s pending <a href="stake.md#0x2_stake">stake</a>, and that shouldn't be available in the next epoch.
-    <a href="validator_set.md#0x2_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(&<b>mut</b> self.active_validators);
-
     // TODO: <b>use</b> `validator_report_records` and punish validators whose numbers of reports receives are greater than
     // some threshold.
+    // Distribute the rewards before adjusting <a href="stake.md#0x2_stake">stake</a> so that we immediately start compounding
+    // the rewards for validators and delegators.
     <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(
         &<b>mut</b> self.active_validators,
         &validator_reward_amounts,
         validator_reward,
         &delegator_reward_amounts,
         delegator_reward,
+        storage_fund_reward,
         ctx
     );
+
+    <a href="validator_set.md#0x2_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(&<b>mut</b> self.active_validators);
 
     // Delegation switches must be processed before delgation deposits and withdraws so that the
     // rewards portion of the delegation switch can be added <b>to</b> the new <a href="validator.md#0x2_validator">validator</a>'s pool when we
@@ -1322,7 +1324,7 @@ due to integer division loss.
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;, validator_rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;, delegator_rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;, validator_rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;, delegator_rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1337,9 +1339,12 @@ due to integer division loss.
     validator_rewards: &<b>mut</b> Balance&lt;SUI&gt;,
     delegator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;,
     delegator_rewards: &<b>mut</b> Balance&lt;SUI&gt;,
+    storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> length = <a href="_length">vector::length</a>(validators);
+    <b>assert</b>!(length &gt; 0, 0);
+    <b>let</b> storage_fund_reward_per_validator = <a href="balance.md#0x2_balance_value">balance::value</a>(storage_fund_reward) / length;
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
@@ -1352,8 +1357,9 @@ due to integer division loss.
         // Validator takes a cut of the rewards <b>as</b> commission.
         <b>let</b> commission_amount = (delegator_reward_amount <b>as</b> u128) * (<a href="validator.md#0x2_validator_commission_rate">validator::commission_rate</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128) / <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
         <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> validator_reward, <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> delegator_reward, (commission_amount <b>as</b> u64)));
-
-        // Add rewards <b>to</b> the <a href="validator.md#0x2_validator">validator</a>. Because reward goes <b>to</b> pending <a href="stake.md#0x2_stake">stake</a>, it's the same <b>as</b> calling `request_add_stake`.
+        // Each <a href="validator.md#0x2_validator">validator</a> gets an equal share of the storage fund rewards.
+        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> validator_reward, <a href="balance.md#0x2_balance_split">balance::split</a>(storage_fund_reward, storage_fund_reward_per_validator));
+        // Add rewards <b>to</b> the <a href="validator.md#0x2_validator">validator</a>.
         <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, validator_reward, <a href="_none">option::none</a>(), ctx);
         // Add rewards <b>to</b> delegation staking pool <b>to</b> auto compound for delegators.
         <a href="validator.md#0x2_validator_deposit_delegation_rewards">validator::deposit_delegation_rewards</a>(<a href="validator.md#0x2_validator">validator</a>, delegator_reward);

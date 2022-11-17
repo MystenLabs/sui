@@ -32,6 +32,9 @@ use crate::{
     },
 };
 
+// TODO: placeholder value here
+const STORAGE_REBATE_RATE: f64 = 1.0;
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
@@ -667,9 +670,7 @@ impl<S> TemporaryStore<S> {
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
-        // TODO: Only refund to user a percentage of the storage rebate. This percentage should be read
-        // from a system parameter stored on-chain.
-        let gas_rebate = cost_summary.storage_rebate;
+        let gas_rebate = (cost_summary.storage_rebate as f64 * STORAGE_REBATE_RATE).round() as u64;
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
