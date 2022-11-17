@@ -8,37 +8,11 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable,
 };
 use crate::error::SuiResult;
-use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::indirect_validity::IndirectValidity;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
-
-/// IndirectValidity is a placeholder for signatures, which indicates that the wrapped message has
-/// been proven valid through indirect means, typically inclusion in a certified checkpoint or
-/// via f+1 votes that the message is correct.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IndirectValidity(Validity);
-
-impl IndirectValidity {
-    fn from_certified(epoch_id: EpochId) -> Self {
-        IndirectValidity(Validity::Certified(epoch_id))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum Validity {
-    // Validity was proven by inclusion in the given checkpoint
-    Checkpoint(EpochId, CheckpointSequenceNumber),
-
-    // IndirectValidity was converted directly from a certified structure, and
-    // the signatures were dropped
-    Certified(EpochId),
-
-    // Validity was proven by a vote of f+1 validators during the given epoch.
-    // TODO: This may not be needed anymore
-    ValidityVote(EpochId),
-}
 
 pub trait Message {
     type DigestType: Clone + Debug;
@@ -58,24 +32,6 @@ pub struct Envelope<T: Message, S> {
 
     data: T,
     auth_signature: S,
-}
-
-// Note: There are many cases where its okay to construct an Envelope with IndirectValidity
-// from AuthorityWeakQuorumSignInfo, including effects, checkpoint summaries, etc, which in
-// general only require that one honest validator has attested to it. But, we only offer a blanket
-// implementation for AuthorityStrongQuorumSignInfo to avoid accidentally promoting a case where
-// AuthorityWeakQuorumSignInfo is insufficient, such as a CertifiedTransaction.
-//
-// Cases where AuthorityWeakQuorumSignInfo is sufficient should all be special cased.
-impl<T: Message> From<Envelope<T, AuthorityStrongQuorumSignInfo>>
-    for Envelope<T, IndirectValidity>
-{
-    fn from(env: Envelope<T, AuthorityStrongQuorumSignInfo>) -> Envelope<T, IndirectValidity> {
-        Envelope::<T, IndirectValidity>::new(
-            env.data,
-            IndirectValidity::from_certified(env.auth_signature.epoch),
-        )
-    }
 }
 
 impl<T: Message, S> Envelope<T, S> {
@@ -117,16 +73,6 @@ impl<T: Message, S> Envelope<T, S> {
 impl<T: Message + PartialEq, S: PartialEq> PartialEq for Envelope<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data && self.auth_signature == other.auth_signature
-    }
-}
-
-impl<T: Message> Envelope<T, IndirectValidity> {
-    pub fn new(data: T, validity: IndirectValidity) -> Self {
-        Self {
-            digest: OnceCell::new(),
-            data,
-            auth_signature: validity,
-        }
     }
 }
 
@@ -365,5 +311,33 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0 .0)
+    }
+}
+
+impl<T: Message> Envelope<T, IndirectValidity> {
+    pub fn new(data: T, validity: IndirectValidity) -> Self {
+        Self {
+            digest: OnceCell::new(),
+            data,
+            auth_signature: validity,
+        }
+    }
+}
+
+// Note: There are many cases where its okay to construct an Envelope with IndirectValidity
+// from AuthorityWeakQuorumSignInfo, including effects, checkpoint summaries, etc, which in
+// general only require that one honest validator has attested to it. But, we only offer a blanket
+// implementation for AuthorityStrongQuorumSignInfo to avoid accidentally promoting a case where
+// AuthorityWeakQuorumSignInfo is insufficient, such as a CertifiedTransaction.
+//
+// Cases where AuthorityWeakQuorumSignInfo is sufficient should all be special cased.
+impl<T: Message> From<Envelope<T, AuthorityStrongQuorumSignInfo>>
+    for Envelope<T, IndirectValidity>
+{
+    fn from(env: Envelope<T, AuthorityStrongQuorumSignInfo>) -> Envelope<T, IndirectValidity> {
+        Envelope::<T, IndirectValidity>::new(
+            env.data,
+            IndirectValidity::from_certified(env.auth_signature.epoch),
+        )
     }
 }

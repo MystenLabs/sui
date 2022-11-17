@@ -9,9 +9,8 @@ use crate::crypto::{
     SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{
-    Envelope, IndirectValidity, Message, TrustedEnvelope, VerifiedEnvelope,
-};
+use crate::indirect_validity::IndirectValidity;
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
 };

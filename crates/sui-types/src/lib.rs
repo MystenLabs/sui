@@ -31,6 +31,7 @@ pub mod gas;
 pub mod gas_coin;
 pub mod id;
 pub mod in_memory_storage;
+pub mod indirect_validity;
 pub mod intent;
 pub mod message_envelope;
 pub mod messages;
