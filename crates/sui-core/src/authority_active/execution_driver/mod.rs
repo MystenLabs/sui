@@ -12,6 +12,7 @@ use tokio::{sync::Semaphore, time::sleep};
 use tracing::{debug, error, info, warn};
 
 use super::ActiveAuthority;
+use crate::authority::authority_store::ValidEffectsInfo;
 use crate::authority_client::AuthorityAPI;
 
 #[cfg(test)]
@@ -80,14 +81,16 @@ where
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let certificate = if let Some(cert) = ready_certificates_stream.recv().await {
-            cert
-        } else {
-            // Should not happen. Only possible if the AuthorityState has shut down.
-            warn!("Ready digest stream from authority state is broken. Retrying in 10s ...");
-            sleep(std::time::Duration::from_secs(10)).await;
-            continue;
-        };
+        let (certificate, valid_effects_info) =
+            if let Some(cert_and_fx) = ready_certificates_stream.recv().await {
+                cert_and_fx
+            } else {
+                // Should not happen. Only possible if the AuthorityState has shut down.
+                warn!("Ready digest stream from authority state is broken. Retrying in 10s ...");
+                sleep(std::time::Duration::from_secs(10)).await;
+                continue;
+            };
+
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
 
@@ -115,19 +118,41 @@ where
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.state.handle_certificate(&certificate).await;
-                if let Err(e) = res {
-                    if attempts == EXECUTION_MAX_ATTEMPTS {
-                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.execution_driver_metrics.execution_failures.inc();
-                        return;
-                    }
-                    // Assume only transient failure can happen. Permanent failure is probably
-                    // a bug. There would be nothing that can be done for permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
-                    sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+                let res = if let Some(ValidEffectsInfo::Effects(effects)) = &valid_effects_info {
+                    authority
+                        .state
+                        .handle_certificate_with_effects(&certificate, effects)
+                        .await
                 } else {
-                    break;
+                    authority.state.handle_certificate(&certificate).await
+                };
+                match res {
+                    Err(e) => {
+                        if attempts == EXECUTION_MAX_ATTEMPTS {
+                            error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
+                            authority.execution_driver_metrics.execution_failures.inc();
+                            return;
+                        }
+                        // Assume only transient failure can happen. Permanent failure is probably
+                        // a bug. There would be nothing that can be done for permanent failures.
+                        error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                        sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+                    }
+                    Ok(tx_info) => {
+                        if let Some(ValidEffectsInfo::Digest(fx_digest)) = &valid_effects_info {
+                            let expected_digest = *fx_digest.data();
+                            // unwrap ok because handle_certificate always returns effects on
+                            // success.
+                            let observed_digest = *tx_info.signed_effects.unwrap().digest();
+                            if expected_digest != observed_digest {
+                                error!(
+                                    "Effects digest mismatch: expected {:?} vs observed {:?}",
+                                    expected_digest, observed_digest
+                                );
+                            }
+                        }
+                        break;
+                    }
                 }
             }
 
