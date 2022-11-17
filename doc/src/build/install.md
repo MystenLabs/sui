@@ -145,7 +145,7 @@ $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/
 
 ### cURL
 
-Use the following command to install [cURL](https://curl.se):
+Use the following command to update the default [cURL](https://curl.se) on macOS:
 ```shell
 $ brew install curl
 ```
@@ -171,7 +171,7 @@ Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing 
 
 ## Windows prerequisites
 
-Install the prerequisites listed in the following section if to work with Sui on  Microsoft Windows.
+Install the following prerequisites to work with Sui on Microsoft Windows 11.
 
 ### cURL
 
