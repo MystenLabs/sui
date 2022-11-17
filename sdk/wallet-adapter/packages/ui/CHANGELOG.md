@@ -1,5 +1,11 @@
 # @mysten/wallet-adapter-react-ui
 
+## 0.2.5
+
+### Patch Changes
+
+- @mysten/wallet-adapter-react@8.0.0
+
 ## 0.2.4
 
 ### Patch Changes
