@@ -4,7 +4,11 @@
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
 import { useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import {
+    useSearchParams,
+    type URLSearchParamsInit,
+    type NavigateOptions,
+} from 'react-router-dom';
 
 import ModuleView from './ModuleView';
 
@@ -50,7 +54,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
 
     const getModule = (
         searchParams: URLSearchParams,
-        setSearchParams: (params: URLSearchParams) => void,
+        setSearchParams: (
+            params: URLSearchParamsInit,
+            navigateOpts?: NavigateOptions
+        ) => void,
         modulenames: string[]
     ): string => {
         const paramModule = searchParams.get('module') || null;
@@ -64,7 +71,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         if (!!paramModule) {
             const newSearchParams = new URLSearchParams(searchParams);
             newSearchParams.delete('module');
-            setSearchParams(newSearchParams);
+            setSearchParams(newSearchParams, { replace: true });
         }
 
         // The default is to return the first module in the list
@@ -79,12 +86,15 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
 
     const setModule = (
         searchParams: URLSearchParams,
-        setSearchParams: (params: URLSearchParams) => void,
+        setSearchParams: (
+            params: URLSearchParamsInit,
+            navigateOpts?: NavigateOptions
+        ) => void,
         newModule: string
     ): void => {
         const newSearchParams = new URLSearchParams(searchParams);
         newSearchParams.set('module', newModule);
-        setSearchParams(newSearchParams);
+        setSearchParams(newSearchParams, { replace: true });
     };
 
     const filteredModules =
