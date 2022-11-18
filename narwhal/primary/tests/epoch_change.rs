@@ -20,6 +20,7 @@ use types::ReconfigureNotification;
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_simple_epoch_change() {
     ensure_test_environment();
+    telemetry_subscribers::init_for_testing();
 
     // The configuration of epoch 0.
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();

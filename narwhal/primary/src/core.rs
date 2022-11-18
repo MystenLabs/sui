@@ -322,7 +322,10 @@ impl Core {
         // If we already have a certificate for this round, no need to
         // re-create the certificate, we read and return it.
         if let Some(certificate) = certificate_store.read_by_index(name.clone(), header.round)? {
-            return Ok(certificate);
+            // In case change of epoch we may have different headers for the same round.
+            if certificate.header == header {
+                return Ok(certificate);
+            }
         }
 
         // Reset the votes aggregator and sign our own header.
