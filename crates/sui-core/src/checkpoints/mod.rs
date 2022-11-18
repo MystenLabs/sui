@@ -740,7 +740,7 @@ impl CheckpointService {
         Ok(())
     }
 
-    pub fn notify_checkpoint_signature(&self, info: Box<CheckpointSignatureMessage>) -> SuiResult {
+    pub fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult {
         let sequence = info.summary.summary.sequence_number;
         if let Some((last_certified, _)) = self
             .tables
@@ -768,7 +768,7 @@ impl CheckpointService {
         let mut index = self.last_signature_index.lock();
         *index += 1;
         let key = (sequence, *index);
-        self.tables.pending_signatures.insert(&key, &info)?;
+        self.tables.pending_signatures.insert(&key, info)?;
         self.notify_aggregator.notify_one();
         Ok(())
     }
@@ -918,10 +918,10 @@ mod tests {
             SignedCheckpointSummary::new_from_summary(c2s, keypair.public().into(), &keypair);
 
         checkpoint_service
-            .notify_checkpoint_signature(Box::new(CheckpointSignatureMessage { summary: c2ss }))
+            .notify_checkpoint_signature(&CheckpointSignatureMessage { summary: c2ss })
             .unwrap();
         checkpoint_service
-            .notify_checkpoint_signature(Box::new(CheckpointSignatureMessage { summary: c1ss }))
+            .notify_checkpoint_signature(&CheckpointSignatureMessage { summary: c1ss })
             .unwrap();
 
         let c1sc = certified_result.recv().await.unwrap();

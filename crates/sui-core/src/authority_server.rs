@@ -81,7 +81,7 @@ impl AuthorityServerHandle {
 pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
-    consensus_adapter: ConsensusAdapter,
+    consensus_adapter: Arc<ConsensusAdapter>,
     min_batch_size: u64,
     max_delay: Duration,
     pub metrics: Arc<ValidatorServiceMetrics>,
@@ -101,7 +101,6 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.clone(),
-            Duration::from_secs(20),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -150,7 +149,7 @@ impl AuthorityServer {
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
                 state: self.state,
-                consensus_adapter: Arc::new(self.consensus_adapter),
+                consensus_adapter: self.consensus_adapter,
                 metrics: self.metrics.clone(),
             }))
             .bind(&address)
@@ -296,16 +295,14 @@ impl ValidatorService {
             &registry,
         ));
 
-        let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
         // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter =
-            ConsensusAdapter::new(consensus_client, state.clone(), timeout, ca_metrics);
+        let consensus_adapter = ConsensusAdapter::new(consensus_client, state.clone(), ca_metrics);
 
         Ok(Self {
             state,
-            consensus_adapter: Arc::new(consensus_adapter),
+            consensus_adapter,
             metrics: Arc::new(ValidatorServiceMetrics::new(&prometheus_registry)),
         })
     }
@@ -391,7 +388,17 @@ impl ValidatorService {
             } else {
                 None
             };
-            consensus_adapter.submit(&certificate).await?;
+            let transaction = ConsensusTransaction::new_certificate_message(
+                &state.name,
+                certificate.clone().into(),
+            );
+            let waiter = consensus_adapter.submit(transaction).await?;
+            if certificate.contains_shared_object() {
+                // This is expect on tokio JoinHandle result, not SuiResult
+                waiter
+                    .await
+                    .expect("Tokio runtime failure when waiting for consensus result");
+            }
         }
 
         // 4) Execute the certificate.

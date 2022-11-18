@@ -19,16 +19,20 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages::{ConsensusTransaction, VerifiedCertificate},
+    messages::ConsensusTransaction,
 };
 
 use tap::prelude::*;
+use tokio::task::JoinHandle;
+use tokio::time;
 
 use crate::authority::AuthorityState;
+use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
-use tokio::time::{timeout, Duration};
-use tracing::debug;
+use sui_types::messages::ConsensusTransactionKind;
+use tokio::time::Duration;
 use tracing::error;
+use typed_store::Map;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -43,16 +47,9 @@ pub struct ConsensusAdapterMetrics {
     // Certificate sequencing metrics
     pub sequencing_certificate_attempt: IntCounter,
     pub sequencing_certificate_success: IntCounter,
-    pub sequencing_certificate_timeouts: IntCounter,
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_acknowledge_latency: Histogram,
-
-    // Fragment sequencing metrics
-    pub sequencing_fragment_attempt: IntCounter,
-    pub sequencing_fragment_success: IntCounter,
-    pub sequencing_fragment_timeouts: IntCounter,
-    pub sequencing_fragment_control_delay: IntGauge,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
@@ -69,12 +66,6 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_success: register_int_counter_with_registry!(
                 "sequencing_certificate_success",
                 "Counts the number of successfully sequenced certificates.",
-                registry,
-            )
-            .unwrap(),
-            sequencing_certificate_timeouts: register_int_counter_with_registry!(
-                "sequencing_certificate_timeouts",
-                "Counts the number of sequenced certificates that timed out.",
                 registry,
             )
             .unwrap(),
@@ -97,30 +88,6 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
-            sequencing_fragment_attempt: register_int_counter_with_registry!(
-                "sequencing_fragment_attempt",
-                "Counts the number of sequenced fragments submitted.",
-                registry,
-            )
-            .unwrap(),
-            sequencing_fragment_success: register_int_counter_with_registry!(
-                "sequencing_fragment_success",
-                "Counts the number of successfully sequenced fragments.",
-                registry,
-            )
-            .unwrap(),
-            sequencing_fragment_timeouts: register_int_counter_with_registry!(
-                "sequencing_fragment_timeouts",
-                "Counts the number of sequenced fragments that timed out.",
-                registry,
-            )
-            .unwrap(),
-            sequencing_fragment_control_delay: register_int_gauge_with_registry!(
-                "sequencing_fragment_control_delay",
-                "The estimated latency of sequencing fragments.",
-                registry,
-            )
-            .unwrap(),
         }))
     }
 
@@ -135,8 +102,6 @@ pub struct ConsensusAdapter {
     consensus_client: Box<dyn SubmitToConsensus>,
     /// Authority state.
     authority: Arc<AuthorityState>,
-    /// Retries sending a transaction to consensus after this timeout.
-    timeout: Duration,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
@@ -170,16 +135,26 @@ impl ConsensusAdapter {
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: Arc<AuthorityState>,
-        timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
-    ) -> Self {
+    ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
-        Self {
+        let this = Arc::new(Self {
             consensus_client,
             authority,
-            timeout,
             num_inflight_transactions,
             opt_metrics,
+        });
+        let recover = this.clone();
+        recover.submit_recovered();
+        this
+    }
+
+    fn submit_recovered(self: Arc<Self>) {
+        // Currently narwhal worker might lose transactions on restart, so we need to resend them
+        let epoch_tables = self.authority.database.epoch_tables();
+        let recovered = epoch_tables.pending_consensus_transactions.iter();
+        for (_, transaction) in recovered {
+            self.submit_unchecked(transaction);
         }
     }
 
@@ -187,8 +162,20 @@ impl ConsensusAdapter {
         self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
-    /// Check if this authority should submit the transaction to consensus.
     fn should_submit(
+        committee: &Committee,
+        ourselves: &AuthorityName,
+        transaction: &ConsensusTransaction,
+    ) -> bool {
+        if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+            Self::should_submit_certificate(committee, ourselves, certificate.digest())
+        } else {
+            true
+        }
+    }
+
+    /// Check if this authority should submit the certificate to consensus.
+    fn should_submit_certificate(
         committee: &Committee,
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
@@ -225,92 +212,87 @@ impl ConsensusAdapter {
         // refreshed frequently enough to make sure this is Byzantine-resistant
     }
 
-    /// Submit a transaction to consensus, wait for its processing, and notify the caller.
-    // Use .inspect when its stable.
-    #[allow(clippy::option_map_unit_fn)]
-    pub async fn submit(&self, certificate: &VerifiedCertificate) -> SuiResult {
-        let processed_waiter = self
-            .authority
-            .consensus_message_processed_notify(certificate.digest());
-        // Serialize the certificate in a way that is understandable to consensus (i.e., using
-        // bincode) and it certificate to consensus.
-        let transaction = ConsensusTransaction::new_certificate_message(
-            &self.authority.name,
-            certificate.clone().into(),
-        );
-        let tracking_id = transaction.get_tracking_id();
-        let tx_digest = certificate.digest();
-        debug!(
-            ?tracking_id,
-            ?tx_digest,
-            "Certified transaction consensus message created"
-        );
+    /// This method blocks until transaction is persisted in local database
+    /// It then returns handle to async task, user can join this handle to await while transaction is processed by consensus
+    ///
+    /// This method guarantees that once submit(but not returned async handle) returns,
+    /// transaction is persisted and will eventually be sent to consensus even after restart
+    pub async fn submit(
+        self: &Arc<Self>,
+        transaction: ConsensusTransaction,
+    ) -> SuiResult<JoinHandle<()>> {
+        let _lock = if transaction.is_user_certificate() {
+            let lock = self.authority.get_reconfig_state_read_lock_guard().await;
+            if !lock.should_accept_user_certs() {
+                return Err(SuiError::ValidatorHaltedAtEpochEnd);
+            }
+            Some(lock)
+        } else {
+            None
+        };
+        self.authority
+            .database
+            .epoch_tables()
+            .pending_consensus_transactions
+            .insert(&transaction.key(), &transaction)?;
+        Ok(self.submit_unchecked(transaction))
+    }
 
-        // Check if this authority submits the transaction to consensus.
+    fn submit_unchecked(self: &Arc<Self>, transaction: ConsensusTransaction) -> JoinHandle<()> {
+        // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
+        let async_stage = self.clone().submit_await(transaction);
+        // Number of this tasks is limited by `sequencing_certificate_inflight` limit
+        let join_handle = spawn_monitored_task!(async_stage);
+        join_handle
+    }
+
+    #[allow(clippy::option_map_unit_fn)]
+    async fn submit_await(self: Arc<Self>, transaction: ConsensusTransaction) {
         let should_submit = Self::should_submit(
             &self.authority.committee.load(),
             &self.authority.name,
-            tx_digest,
+            &transaction,
         );
         let _inflight_guard = if should_submit {
-            // Timer to record latency of acknowledgements from consensus
+            Some(InflightDropGuard::acquire(&self))
+        } else {
+            None
+        };
+        let processed_waiter = self
+            .authority
+            .consensus_message_processed_notify(transaction.key());
+        if should_submit {
             let _timer = self
                 .opt_metrics
                 .as_ref()
                 .map(|m| m.sequencing_acknowledge_latency.start_timer());
-
-            // TODO - we need stronger guarantees for checkpoints here (issue #5763)
-            // TODO - for owned objects this can also be done async
-            //
-            // TODO: Somewhere here we check whether we should have stopped sending transactions
-            // to consensus due to epoch boundary.
-            // For normal transactions, we call state.get_reconfig_state_read_lock_guard first
-            // to hold the guard before sending the transaction;
-            // For the last EndOfPublish message, we call state.get_reconfig_state_write_lock_guard
-            // to hold the guard before sending the last message, and then call
-            // state.close_user_certs with the guard.
-            self.consensus_client
+            while let Err(e) = self
+                .consensus_client
                 .submit_to_consensus(&transaction)
-                .await?;
-
-            Some(InflightDropGuard::acquire(self))
-        } else {
-            None
-        };
-
-        // We do not wait unless its a share object transaction being sequenced.
-        if !certificate.contains_shared_object() {
-            // We only record for shared object transactions
-            return Ok(());
-        };
-
-        // Now consensus guarantees delivery after submit_transaction() if primary/workers are live
-        match timeout(self.timeout, processed_waiter).await {
-            Ok(Ok(())) => {
-                // Increment the attempted certificate sequencing success
-                self.opt_metrics.as_ref().map(|metrics| {
-                    metrics.sequencing_certificate_success.inc();
-                });
-                Ok(())
-            }
-            Ok(Err(e)) => {
-                // Increment the attempted certificate sequencing failure
+                .await
+            {
+                error!(
+                    "Error submitting transaction to own narwhal worker: {:?}",
+                    e
+                );
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_failures.inc();
                 });
-                Err(e)
-            }
-            Err(e) => {
-                // Increment the attempted certificate sequencing timeout
-                self.opt_metrics.as_ref().map(|metrics| {
-                    metrics.sequencing_certificate_timeouts.inc();
-                });
-
-                // We drop the waiter which will signal to the conensus listener task to clean up
-                // the channels.
-                Err(SuiError::FailedToHearBackFromConsensus(e.to_string()))
+                time::sleep(Duration::from_secs(10)).await;
             }
         }
+        processed_waiter
+            .await
+            .expect("Storage error when waiting for consensus message processed");
+        self.authority
+            .database
+            .epoch_tables()
+            .pending_consensus_transactions
+            .remove(&transaction.key())
+            .expect("Storage error when removing consensus transaction");
+        self.opt_metrics.as_ref().map(|metrics| {
+            metrics.sequencing_certificate_success.inc();
+        });
     }
 }
 
@@ -391,7 +373,7 @@ mod adapter_tests {
             // collect the stake of authorities which will be selected to submit the transaction
             let mut submitters_total_stake = 0u64;
             for (name, stake) in authorities.iter() {
-                if ConsensusAdapter::should_submit(&committee, name, &tx_digest) {
+                if ConsensusAdapter::should_submit_certificate(&committee, name, &tx_digest) {
                     submitters_total_stake += stake;
                 }
             }
