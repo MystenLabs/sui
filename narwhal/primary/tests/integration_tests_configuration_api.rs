@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::time::Duration;
 use test_utils::cluster::Cluster;
-use types::{
-    Empty,
-};
+use types::Empty;
 
 #[tokio::test]
 async fn test_get_primary_address() {
