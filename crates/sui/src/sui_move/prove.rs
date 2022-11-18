@@ -65,6 +65,17 @@ impl Prove {
                     ],
                 });
         }
+        options
+            .prover
+            .borrow_natives
+            .push(move_stackless_bytecode::options::BorrowNative::new(
+                "0x2".to_string(),
+                "dynamic_field".to_string(),
+                "dynamic_field::borrow_child_object_mut".to_string(),
+                "GetDynField".to_string(),
+                "UpdateDynField".to_string(),
+                0,
+            ));
 
         let prover_result = std::thread::spawn(move || {
             prove::run_move_prover(

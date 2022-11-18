@@ -8198,6 +8198,7 @@ dependencies = [
  "move-package",
  "move-prover",
  "move-prover-boogie-backend",
+ "move-stackless-bytecode",
  "move-unit-test",
  "multiaddr 0.16.0",
  "mysten-network 0.2.0",

@@ -52,6 +52,7 @@ mysten-network.workspace = true
 move-core-types.workspace = true
 move-prover.workspace = true
 move-prover-boogie-backend.workspace = true
+move-stackless-bytecode.workspace = true
 move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
