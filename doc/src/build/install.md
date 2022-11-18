@@ -2,25 +2,23 @@
 title: Install Sui to Build
 ---
 
-Learn how to install and configure Sui.
-
-Before you install Sui, you need to install some prerequisite tools and then configure your environment.
+Before you install Sui, you need to install some prerequisite tools and configure your development environment.
 
 The steps to install Sui include:
 
 1. Install [prerequisites](#prerequisites) for your operating system.
-1. Install [Sui binaries](#install-sui-binaries).
+1. Install the [Sui binaries](#install-sui-binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet.
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and contribute to Sui.
 
-## Branches of the Sui repo
+## Branches of the Sui repository
 
-The Sui repo includes two primary branches, `devnet` and `main`.
+The Sui repository includes two primary branches, `devnet` and `main`.
 
- * The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a Pull Request (PR), you should push commits to your fork of the `main` branch.
- * The `main` (Latest build) branch includes the most recent changes and updates. Use the `main` (Latest build) branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
+ * The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a pull request (PR), you should push commits to your fork of the `main` branch.
+ * The `main` (Latest build) branch includes the most recent changes and updates. Use the `main` branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
 
 ## Choose the documentation branch
 
@@ -28,9 +26,9 @@ This documentation is built from the same branches, `main` and `devnet`. The `ma
 
 To change branches, choose **Latest build** to view the documentation generated from the `main` branch of the repository. You should not use the **Latest build** version to learn how to install, configure, or build on Sui, as the information may change before the content is merged to **Devnet**. 
 
-## Supported Operating Systems
+## Supported operating systems
 
-Sui supports the following operating systems.
+Sui supports the following operating systems beginning with the versions listed.
 
 * Linux - Ubuntu version 18.04 (Bionic Beaver)
 * macOS - macOS Monterey
@@ -55,9 +53,9 @@ Install the prerequisites and tools you need to work with Sui.
 
 ### Rust and Cargo
 
-Sui requires Rust and Cargo on all supported operating systems. 
+Sui requires Rust and Cargo on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
 
-Use the following command to install Rustand Cargo on macOS or Linux:
+Use the following command to install Rust and Cargo on macOS or Linux:
 ```shell
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
@@ -81,7 +79,9 @@ After you install Rust, proceed to the prerequisites for your operating system.
 
 ## Linux prerequisites 
 
-Take Ubuntu as an example, install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update it:
+> **NOTE:** The Linux instructions assume a distribution that uses the APT package manager. Adapt the instructions as needed for other package managers.
+
+Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update it:
 
 ```shell
 $ sudo apt-get update
@@ -111,11 +111,11 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 ### CMake
 
-Install CMake, see [Install CMake](https://cmake.org/install/)
+Install CMake using the instructions at [Installing CMake](https://cmake.org/install/)
 
 ### libssl-dev
 
-use the following command to install `libssl-dev`:
+Use the following command to install `libssl-dev`:
 
 ```shell
 $ sudo apt-get install libssl-dev
@@ -123,7 +123,7 @@ $ sudo apt-get install libssl-dev
 
 ### libclang-dev
 
-use the following command to install `libclang-dev`:
+Use the following command to install `libclang-dev`:
 
 ```shell
 $ sudo apt-get install libclang-dev
@@ -224,38 +224,37 @@ source "$HOME/.cargo/env"
 
 ### macOS and Linux
 
-Confirm the binaries are installed with:
+Confirm the binaries are installed with `.cargo/bin` appearing in your PATH variable:
 ```
 $ echo $PATH
 ```
 ### Windows
 
-Confirm the binaries are installed with:
+Confirm the binaries are installed with `.cargo\bin` appearing in your PATH variable:
 ```
 $ echo %PATH%
 ```
-And ensure the `.cargo/bin` directory appears. Access the help for any of these binaries by passing the `--help` argument to it.
+Use the `--help` flag to access helpful information for any of these binaries.
 
-> **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages above and re-install.
+> **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages and re-install.
 
-## Integrated Development Environment
-For Move development, we recommend the [Visual Studio Code](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
+## Integrated development environment
+
+The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` with the `features` flag:
 
 ```shell
 $ cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
 ```
 
-Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
-
-See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
+See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.
 
 ## SUI tokens
 
-To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet browser extension](../explore/wallet-browser.md), you can add SUI tokens to your account address. 
+To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet browser extension](../explore/wallet-browser.md), add SUI tokens to your account address. 
 
-To request SUI tokens from the browser extension:
+To request SUI test tokens from the browser extension:
 
-1. Use the Sui Wallet browser extension to access your Sui Wallet.
+1. Use the Sui Wallet browser extension to open your wallet.
 2. Click the **Request Sui Devnet SUI Tokens** button.
 
 To request SUI test tokens in Discord:
@@ -301,7 +300,7 @@ See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in 
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
-> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
+> **NOTE:** The above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run a network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
  
 ## Next steps
 
