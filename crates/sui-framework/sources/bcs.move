@@ -117,7 +117,7 @@ module sui::bcs {
             value = value + (byte << i);
             i = i + 8;
         };
-        
+
         value
     }
 
@@ -155,6 +155,10 @@ module sui::bcs {
             shift = shift + 7;
         };
         total
+    }
+
+    spec peel_vec_length {
+        pragma intrinsic = true;
     }
 
     /// Peel a vector of `address` from serialized bytes.

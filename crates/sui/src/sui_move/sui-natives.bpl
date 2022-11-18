@@ -14,7 +14,7 @@
 // Native transfer implementation for object type `{{instance.suffix}}`
 
 
-procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int, to_object: bool);
+procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int);
 
 procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}});
 
@@ -96,11 +96,13 @@ procedure {:inline 1} $2_dynamic_field_hash_type_and_key{{S}}(parent: int, k: {{
 
 procedure {:inline 1} $2_dynamic_field_add_child_object{{S}}(parent: int, child: {{T}});
 
-procedure {:inline 1} $2_dynamic_field_borrow_child_object{{S}}(parent: int, id: int): returns (res: {{T}});
+procedure {:inline 1} $2_dynamic_field_borrow_child_object{{S}}(object: $2_object_UID, id: int) returns (res: {{T}});
 
-procedure {:inline 1} $2_dynamic_field_remove_child_object{{S}}(parent: int, id: int): returns (res: {{T}});
+procedure {:inline 1} $2_dynamic_field_borrow_child_object_mut{{S}}(object: $Mutation $2_object_UID, id: int) returns (res: $Mutation ({{T}}), m: $Mutation ($2_object_UID));
 
-procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty(parent: int, id: int) returns (res: bool);
+procedure {:inline 1} $2_dynamic_field_remove_child_object{{S}}(parent: int, id: int) returns (res: {{T}});
+
+procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int, id: int) returns (res: bool);
 
 {%- endfor %}
 
@@ -140,6 +142,18 @@ procedure {:inline 1} $2_elliptic_curve_native_scalar_from_bytes(bytes: Vec (int
 
 procedure {:inline 1} $2_hmac_native_hmac_sha3_256(key: Vec (int), msg: Vec (int)) returns (res: Vec (int));
 
-procedure {:inline 1} $2_hmac_hmac_sha3_256(key: Vec (int), msg: Vec (int)) returns (res: $2_digest_Sha3256Digest);
+// ==================================================================================
+// Reads and writes to dynamic fields (skeletons)
+
+function GetDynField<T, V>(o: T, addr: int): V;
+
+function UpdateDynField<T, V>(o: T, addr: int, v: V): T;
+
+// ==================================================================================
+// Intrinsics bcs
+
+// placeholder - need to add support for bitwise operators in Boogie to implement this
+procedure {:inline 1} $2_bcs_peel_vec_length(bcs: $Mutation $2_bcs_BCS) returns (res: int, m: $Mutation $2_bcs_BCS);
+
 
 
