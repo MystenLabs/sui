@@ -71,6 +71,7 @@ COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 COPY --from=builder /sui/target/debug/gui-tool /usr/local/bin
 COPY --from=builder /sui/crates/sui-tool/src/bin/templates /usr/local/bin/templates
 COPY --from=builder /sui/sui_programmability/examples/basics /usr/local/bin/sui_programmability/examples/basics
+COPY --from=builder /sui/crates/sui-framework /usr/local/bin/crates/sui-framework
 
 RUN ls /usr/local/bin/sui_programmability/examples/basics
 
