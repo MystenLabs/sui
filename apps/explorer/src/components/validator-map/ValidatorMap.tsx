@@ -43,6 +43,10 @@ export default function ValidatorMap() {
                     method: 'GET',
                 }
             );
+                
+            if (!res.ok) {
+                throw new Error('Failed to fetch validator map data');
+            }
 
             return res.json() as Promise<NodeLocation[]>;
         }
