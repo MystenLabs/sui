@@ -165,63 +165,58 @@ function DisplayBoxWString({
     } else {
         return (
             <>
-                <Transition
-                    appear
-                    show={hasClickedImage}
-                    className={styles.modalcontainer}
-                    as="div"
-                >
-                    <Dialog
-                        as="div"
-                        className={styles.modal}
-                        onClose={handleImageClick}
-                    >
+                <Transition appear show={hasClickedImage} as="div">
+                    <Dialog as="div" onClose={handleImageClick}>
                         <Transition.Child>
                             <div className={styles.detailsbg} />
                         </Transition.Child>
-                        <Dialog.Panel as="div" className={styles.fig}>
-                            <div className={styles.imageandcross}>
-                                {hasFailedToLoad ? (
-                                    <ShowBrokenImage />
-                                ) : (
-                                    <img
-                                        id="loadedImage"
-                                        className={styles.largeimage}
-                                        alt="Object's NFT"
-                                        src={transformURL(display)}
-                                    />
-                                )}
-                                <button
-                                    onClick={handleImageClick}
-                                    className="sr-only"
-                                    type="button"
-                                >
-                                    Close Dialog
-                                </button>
-                                <span
-                                    className={styles.desktopcross}
-                                    onClick={handleImageClick}
-                                    aria-hidden
-                                >
+                        <Transition.Child className={styles.modal}>
+                            <Dialog.Panel as="div" className={styles.fig}>
+                                <div className={styles.imageandcross}>
+                                    {hasFailedToLoad ? (
+                                        <ShowBrokenImage />
+                                    ) : (
+                                        <img
+                                            id="loadedImage"
+                                            className={styles.largeimage}
+                                            alt="Object's NFT"
+                                            src={transformURL(display)}
+                                        />
+                                    )}
+                                    <button
+                                        onClick={handleImageClick}
+                                        className="sr-only"
+                                        type="button"
+                                    >
+                                        Close Dialog
+                                    </button>
+                                    <span
+                                        className={styles.desktopcross}
+                                        onClick={handleImageClick}
+                                        aria-hidden
+                                    >
+                                        <span className={styles.cross}>
+                                            &times;
+                                        </span>
+                                    </span>
+                                </div>
+                                <Dialog.Description as="div">
+                                    {caption && (
+                                        <div className={styles.caption}>
+                                            {caption}{' '}
+                                        </div>
+                                    )}
+                                    <div className={styles.filetype}>
+                                        {fileType}
+                                    </div>
+                                </Dialog.Description>
+                                <div className={styles.mobilecross} aria-hidden>
                                     <span className={styles.cross}>
                                         &times;
                                     </span>
-                                </span>
-                            </div>
-                            <Dialog.Description as="div">
-                                {caption && (
-                                    <div className={styles.caption}>
-                                        {caption}{' '}
-                                    </div>
-                                )}
-                                <div className={styles.filetype}>
-                                    {fileType}
                                 </div>
-                            </Dialog.Description>
-                            <div className={styles.mobilecross} aria-hidden>
-                                <span className={styles.cross}>&times;</span>
-                            </div>
-                        </Dialog.Panel>
+                            </Dialog.Panel>
+                        </Transition.Child>
                     </Dialog>
                 </Transition>
 

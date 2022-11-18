@@ -6,9 +6,8 @@ img.smallimage {
     @apply object-fill cursor-pointer rounded-[6px];
 }
 
-div.modalcontainer,
 div.detailsbg {
-    @apply fixed inset-0;
+    @apply fixed inset-0 bg-sui-grey-100 z-20 opacity-[0.85];
 }
 
 .modal {
@@ -49,10 +48,6 @@ div.caption {
 
 div.filetype {
     @apply text-sm text-sui-grey-60 font-medium mt-0;
-}
-
-div.detailsbg {
-    @apply bg-sui-grey-100 z-20 opacity-[0.85];
 }
 
 .codebox {
