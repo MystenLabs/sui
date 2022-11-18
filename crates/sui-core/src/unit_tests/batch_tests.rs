@@ -3,6 +3,7 @@
 
 use fastcrypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
+use sui_config::genesis::Genesis;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
@@ -95,7 +96,6 @@ pub(crate) async fn init_state(
         None,
         None,
         None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
         tx_reconfigure_consensus,
         checkpoint_service,
@@ -118,7 +118,11 @@ async fn test_open_manager() {
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     {
         // Create an authority
-        let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+        let store = Arc::new(
+            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+                .await
+                .unwrap(),
+        );
         let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
         // TEST 1: init from an empty database should return to a zero block
@@ -149,7 +153,11 @@ async fn test_open_manager() {
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     {
         // Create an authority
-        let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+        let store = Arc::new(
+            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+                .await
+                .unwrap(),
+        );
         let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
         let last_block = authority_state
@@ -176,7 +184,11 @@ async fn test_open_manager() {
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     {
         // Create an authority
-        let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+        let store = Arc::new(
+            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+                .await
+                .unwrap(),
+        );
         let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
         let last_block = authority_state.init_batches_from_database().unwrap();
@@ -198,7 +210,11 @@ async fn test_batch_manager_happy_path() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+    let store = Arc::new(
+        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+            .await
+            .unwrap(),
+    );
 
     // Make a test key pair
     let seed = [1u8; 32];
@@ -272,7 +288,11 @@ async fn test_batch_manager_out_of_order() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+    let store = Arc::new(
+        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+            .await
+            .unwrap(),
+    );
 
     // Make a test key pair
     let seed = [1u8; 32];
@@ -342,7 +362,11 @@ async fn test_batch_manager_drop_out_of_order() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+    let store = Arc::new(
+        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+            .await
+            .unwrap(),
+    );
 
     // Make a test key pair
     let seed = [1u8; 32];
@@ -717,7 +741,11 @@ async fn test_safe_batch_stream() {
     authorities.insert(public_key_bytes, 1);
     let committee = Committee::new(0, authorities).unwrap();
     // Create an authority
-    let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
+    let store = Arc::new(
+        AuthorityStore::open(&path.join("store"), None, &Genesis::get_default_genesis())
+            .await
+            .unwrap(),
+    );
     let state = init_state(committee.clone(), authority_key, store).await;
     let committee_store = state.committee_store().clone();
 

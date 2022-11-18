@@ -1383,7 +1383,6 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
         _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
         checkpoint_service: Arc<CheckpointService>,
@@ -1395,16 +1394,6 @@ impl AuthorityState {
             adapter::new_move_vm(native_functions.clone())
                 .expect("We defined natives to not fail here"),
         );
-        // Only initialize an empty database.
-        if store
-            .database_is_empty()
-            .expect("Database read should not fail.")
-        {
-            store
-                .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
-                .await
-                .expect("Cannot bulk insert genesis objects");
-        }
         let committee = committee_store.get_latest_committee();
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
         let event_handler = event_store.map(|es| {
@@ -1494,7 +1483,11 @@ impl AuthorityState {
         };
 
         // unwrap ok - for testing only.
-        let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
+        let store = Arc::new(
+            AuthorityStore::open(&path.join("store"), None, genesis)
+                .await
+                .unwrap(),
+        );
 
         let epochs = Arc::new(CommitteeStore::new(
             path.join("epochs"),
@@ -1527,7 +1520,6 @@ impl AuthorityState {
             None,
             None,
             None,
-            genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
             checkpoint_service,

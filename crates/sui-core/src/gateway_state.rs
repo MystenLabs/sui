@@ -60,6 +60,7 @@ use sui_json_rpc_types::{
 use sui_types::error::SuiError::ObjectLockConflict;
 
 use crate::epoch::committee_store::CommitteeStore;
+use sui_config::genesis::Genesis;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -185,7 +186,7 @@ pub struct GatewayState<A> {
 
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
-    pub fn new(
+    pub async fn new(
         base_path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
@@ -195,7 +196,14 @@ impl<A> GatewayState<A> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = Arc::new(SafeClientMetrics::new(prometheus_registry));
-        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None)?);
+        let gateway_store = Arc::new(
+            GatewayStore::open(
+                &base_path.join("store"),
+                None,
+                &Genesis::get_default_genesis(),
+            )
+            .await?,
+        );
         let committee_store = Arc::new(CommitteeStore::new(
             base_path.join("epochs"),
             &committee,
@@ -253,7 +261,7 @@ impl<A> GatewayState<A> {
 }
 
 impl GatewayState<NetworkAuthorityClient> {
-    pub fn create_client(
+    pub async fn create_client(
         config: &GatewayConfig,
         prometheus_registry: Option<&Registry>,
     ) -> Result<GatewayClient, anyhow::Error> {
@@ -268,13 +276,16 @@ impl GatewayState<NetworkAuthorityClient> {
             network_metrics.clone(),
         );
 
-        Ok(Arc::new(GatewayState::new(
-            &config.db_folder_path,
-            committee,
-            authority_clients,
-            prometheus_registry,
-            network_metrics,
-        )?))
+        Ok(Arc::new(
+            GatewayState::new(
+                &config.db_folder_path,
+                committee,
+                authority_clients,
+                prometheus_registry,
+                network_metrics,
+            )
+            .await?,
+        ))
     }
 }
 
