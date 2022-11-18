@@ -33,3 +33,6 @@ tsconfig.tsbuildinfo
 wallet.log.*
 sui.log.*
 .vercel
+
+# rocket templates
+/templates

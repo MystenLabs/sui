@@ -1,0 +1,6 @@
+{% extends "base" %}
+
+{% block content %}
+    <h1>Yo!</h1>
+    <h3>Navigate to the right tools in header.</h3>
+{% endblock content %}

@@ -1,0 +1,18 @@
+{% extends "base" %}
+
+{% block content %}
+    <div class="row">
+      <h4>Query Object</h4>
+      <form action="/object" method="post">
+        <div>
+          <input type="text" placeholder="Object Id" style="width: 200px;"
+            name="object_id" id="object_id" value="" autofocus
+          />
+          <input type="text" placeholder="latest" style="width: 200px;"
+            name="object_version" id="object_version" value="" autofocus
+          /> 
+          <input type="submit" value="Query">
+        </div>
+      </form>
+    </div>
+{% endblock content %}

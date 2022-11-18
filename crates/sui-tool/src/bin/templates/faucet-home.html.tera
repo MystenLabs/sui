@@ -1,0 +1,15 @@
+{% extends "base" %}
+
+{% block content %}
+    <div class="row">
+      <h4>Get Coins from Faucet</h4>
+      <form action="/faucet" method="post">
+        <div>
+          <input type="text" placeholder="Hex address starting with '0x'" style="width: 200px;"
+            name="address" id="address" value="" autofocus
+          />
+          <input type="submit" value="Get Gas">
+        </div>
+      </form>
+    </div>
+{% endblock content %}
