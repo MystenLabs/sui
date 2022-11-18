@@ -57,14 +57,14 @@ Install the prerequisites and tools you need to work with Sui.
 
 Sui requires Rust and Cargo on all supported operating systems. 
 
-Use the following command to install Rust:
+Use the following command to install Rustand Cargo on macOS or Linux:
 ```shell
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
+Windows 11 users can use the [Rust installer](https://www.rust-lang.org/tools/install). 
 
-The `rustup` script also installs Cargo.
+For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
 
 Sui uses the latest version of Cargo to build and manage dependencies. See the [Cargo installation](https://doc.rust-lang.org/cargo/getting-started/installation.html) page for more information.
 
@@ -175,7 +175,7 @@ Install the following prerequisites to work with Sui on Microsoft Windows 11.
 
 ### cURL
 
-Download and install [cURL](https://curl.se) from https://curl.se/windows/.
+Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed. If you want to use the curl project version instead, download and install it from https://curl.se/windows/.
 
 ### Git CLI
 
@@ -199,7 +199,7 @@ Sui requires the following additional tools on computers running Windows.
  * The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
 
 >**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
->press the `enter` key in the command prompt fix the issue.
+>press the `enter` key in the command prompt to fix the issue.
 
 >**Known Issue:** The `sui console` command does not work in PowerShell.
 
@@ -215,7 +215,7 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch de
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 
-Trouble shooting:
+Troubleshooting:
 If the previous command fails, make sure you have the latest version of Rust installed:
 
 ```
