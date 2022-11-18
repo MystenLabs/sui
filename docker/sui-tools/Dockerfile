@@ -37,11 +37,11 @@ RUN cargo build --release
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
-COPY sui_programmability/examples/basics /usr/local/bin/sui_programmability/examples/basics
+COPY sui_programmability/examples/basics sui_programmability/examples/basics
 
 RUN pwd
 RUN ls
-RUN ls /usr/local/bin/sui_programmability/examples/basics
+RUN ls sui_programmability/examples/basics
 
 RUN cargo build --release \
     --bin sui-node \
@@ -70,8 +70,9 @@ COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 # GUI tool
 COPY --from=builder /sui/target/debug/gui-tool /usr/local/bin
 COPY --from=builder /sui/crates/sui-tool/src/bin/templates /usr/local/bin/templates
+COPY --from=builder /sui/sui_programmability/examples/basics /usr/local/bin/sui_programmability/examples/basics
 
-# RUN ls /usr/local/bin/sui_programmability/examples/basics
+RUN ls /usr/local/bin/sui_programmability/examples/basics
 
 ARG BUILD_DATE
 ARG GIT_REVISION
