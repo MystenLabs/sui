@@ -1116,7 +1116,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// 2. Latest parent_sync entries for each mutated object are deleted.
     /// 3. All new object states are deleted.
     /// 4. owner_index table change is reverted.
-    pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
+    pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let effects = self.get_effects(tx_digest)?;
         let mut write_batch = self.perpetual_tables.certificates.batch();
         write_batch =
@@ -1173,21 +1173,33 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                         .expect("version revert should never fail"),
                 )
             });
-        let old_objects = self
+        let (old_objects, old_locks): (Vec<_>, Vec<_>) = self
             .perpetual_tables
             .objects
             .multi_get(mutated_objects)?
             .into_iter()
             .map(|obj_opt| {
                 let obj = obj_opt.expect("Older object version not found");
+                let obj_ref = obj.compute_object_reference();
+                let lock = if obj.is_address_owned() {
+                    Some(obj_ref)
+                } else {
+                    None
+                };
                 (
-                    (obj.owner, obj.id()),
-                    ObjectInfo::new(&obj.compute_object_reference(), &obj),
+                    ((obj.owner, obj.id()), ObjectInfo::new(&obj_ref, &obj)),
+                    lock,
                 )
-            });
+            })
+            .unzip();
+
+        let old_locks: Vec<_> = old_locks.into_iter().flatten().collect();
+
         write_batch = write_batch.insert_batch(&self.perpetual_tables.owner_index, old_objects)?;
 
         write_batch.write()?;
+
+        self.lock_service.initialize_locks(&old_locks, true).await?;
         Ok(())
     }
 
