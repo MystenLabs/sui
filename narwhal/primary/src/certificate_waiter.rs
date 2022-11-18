@@ -17,7 +17,7 @@ use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinError, JoinHandle},
-    time::{self, Instant},
+    time::{self, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
@@ -34,7 +34,10 @@ pub mod certificate_waiter_tests;
 // Maximum number of certificates to fetch with one request.
 const MAX_CERTIFICATES_TO_FETCH: usize = 1000;
 // Seconds to wait for a response before issuing another parallel fetch request.
-const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: u64 = 5;
+const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: Duration = Duration::from_secs(5);
+// The timeout for an iteration of parallel fetch requests over all peers would be
+// num peers * PARALLEL_FETCH_REQUEST_INTERVAL_SECS + PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT
+const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Message format from CertificateWaiter to core on the loopback channel.
 pub struct CertificateLoopbackMessage {
@@ -330,8 +333,10 @@ async fn run_fetch_task(
     let request = FetchCertificatesRequest::default()
         .set_bounds(gc_round, written_rounds)
         .set_max_items(MAX_CERTIFICATES_TO_FETCH);
-    let response =
-        fetch_certificates_helper(&state.name, &state.network, &committee, request).await;
+    let Some(response) =
+        fetch_certificates_helper(&state.name, &state.network, &committee, request).await else {
+            return Ok(());
+        };
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
@@ -354,41 +359,70 @@ async fn fetch_certificates_helper(
     network: &P2pNetwork,
     committee: &Committee,
     request: FetchCertificatesRequest,
-) -> FetchCertificatesResponse {
+) -> Option<FetchCertificatesResponse> {
     trace!("Start sending fetch certificates requests");
     // TODO: make this a config parameter.
-    let request_interval = Duration::from_secs(PARALLEL_FETCH_REQUEST_INTERVAL_SECS);
+    let request_interval = PARALLEL_FETCH_REQUEST_INTERVAL_SECS;
     let mut peers: Vec<NetworkPublicKey> = committee
         .others_primaries(name)
         .into_iter()
         .map(|(_, _, network_key)| network_key)
         .collect();
-    loop {
-        // TODO: order by stake weight instead. Possibly shuffle within a few buckets.
-        peers.shuffle(&mut ThreadRng::default());
+    peers.shuffle(&mut ThreadRng::default());
+    let fetch_timeout = PARALLEL_FETCH_REQUEST_INTERVAL_SECS * peers.len().try_into().unwrap()
+        + PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT;
+    let fetch_callback = async move {
+        // TODO: shuffle by stake weight instead.
+        debug!("Starting to fetch certificates");
         let mut fut = FuturesUnordered::new();
-        for peer in peers.iter() {
-            let network = network.network();
-            let request = request.clone();
-            fut.push(monitored_future!(async move {
-                network.fetch_certificates(peer, request).await
-            }));
+        // Loop until one peer returns with certificates, or no peer does.
+        loop {
+            if let Some(peer) = peers.pop() {
+                let network = network.network();
+                let request = request.clone();
+                fut.push(monitored_future!(async move {
+                    debug!("Sending out fetch request in parallel to {peer}");
+                    let result = network.fetch_certificates(&peer, request).await;
+                    if let Ok(resp) = &result {
+                        debug!(
+                            "Fetched {} certificates from peer {peer}",
+                            resp.certificates.len()
+                        );
+                    }
+                    result
+                }));
+            }
             let mut interval = Box::pin(time::sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {
                     Some(Ok(resp)) => {
-                        return resp;
+                        if resp.certificates.is_empty() {
+                            // Issue request to another primary immediately.
+                            continue;
+                        }
+                        return Some(resp);
                     }
                     Some(Err(e)) => {
                         debug!("Failed to fetch certificates: {e}");
                         // Issue request to another primary immediately.
                     }
-                    None => {}
+                    None => {
+                        debug!("No certificate is fetched across all peers!");
+                        return None;
+                    }
                 },
                 _ = &mut interval => {
-                    debug!("fetch_certificates_helper: no response yet. Sending out an additional fetch request in parallel.");
+                    // Not response received in the last interval. Send out another fetch request
+                    // in parallel, if there is a peer that has not been sent to.
                 }
             };
+        }
+    };
+    match timeout(fetch_timeout, fetch_callback).await {
+        Ok(result) => result,
+        Err(e) => {
+            debug!("Timed out fetching certificates: {e}");
+            None
         }
     }
 }
