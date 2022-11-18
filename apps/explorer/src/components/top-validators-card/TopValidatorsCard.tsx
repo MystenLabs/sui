@@ -166,7 +166,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
         <div data-testid="validators-table">
             <TabGroup>
                 <TabList>
-                    <Tab>Top Validators</Tab>
+                    <Tab>Validators</Tab>
                 </TabList>
                 <TabPanels>
                     <TabPanel>
