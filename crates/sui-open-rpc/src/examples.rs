@@ -35,7 +35,7 @@ use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
-use sui_types::object::Owner;
+use sui_types::object::{Owner, PACKAGE_VERSION};
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -113,7 +113,7 @@ impl RpcExampleProvider {
                 SingleTransactionKind::Call(MoveCall {
                     package: (
                         SUI_FRAMEWORK_OBJECT_ID,
-                        SequenceNumber::from_u64(1),
+                        PACKAGE_VERSION,
                         ObjectDigest::new(self.rng.gen()),
                     ),
                     module: Identifier::from_str("devnet_nft").unwrap(),

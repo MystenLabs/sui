@@ -12,8 +12,8 @@ use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
 use crate::filter::{EventFilter, Filter};
 use crate::gas_coin::GasCoin;
-use crate::object::Owner;
-use crate::{ObjectID, SequenceNumber, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
+use crate::object::{Owner, PACKAGE_VERSION};
+use crate::{ObjectID, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
 fn test_move_event_filter() {
@@ -200,7 +200,7 @@ fn test_new_object_filter() {
         recipient,
         object_type: "0x2::example::Object".into(),
         object_id,
-        version: SequenceNumber::from_u64(1),
+        version: PACKAGE_VERSION,
     };
     let envelope = EventEnvelope {
         timestamp: 0,

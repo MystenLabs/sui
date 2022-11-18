@@ -1742,11 +1742,7 @@ impl Default for TransactionEffects {
             deleted: Vec::new(),
             wrapped: Vec::new(),
             gas_object: (
-                (
-                    ObjectID::random(),
-                    SequenceNumber::new(),
-                    ObjectDigest::new([0; 32]),
-                ),
+                random_object_ref(),
                 Owner::AddressOwner(SuiAddress::default()),
             ),
             events: Vec::new(),
