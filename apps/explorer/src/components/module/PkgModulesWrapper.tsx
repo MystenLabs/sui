@@ -45,12 +45,25 @@ function ModuleViewWrapper({
 
 const getModule = (
     searchParams: URLSearchParams,
+    setSearchParams: (params: URLSearchParams) => void,
     modulenames: string[]
 ): string => {
     const paramModule = searchParams.get('module') || null;
-    return !!paramModule && modulenames.includes(paramModule)
-        ? paramModule
-        : modulenames[0];
+
+    // A module has been specified and the package has this module
+    if (!!paramModule && modulenames.includes(paramModule)) {
+        return paramModule;
+    }
+
+    // A module has been specified and the package does not have this module
+    if (!!paramModule) {
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.delete('module');
+        setSearchParams(newSearchParams);
+    }
+
+    // The default is to return the first module in the list
+    return modulenames[0];
 };
 
 const setModule = (
@@ -92,7 +105,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
             <div className="w-full md:w-1/5">
                 <Combobox
-                    value={getModule(searchParams, modulenames)}
+                    value={getModule(
+                        searchParams,
+                        setSearchParams,
+                        modulenames
+                    )}
                     onChange={onChangeModule}
                 >
                     <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex mt-2.5 justify-between py-1">
@@ -155,8 +172,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             >
                                 <ListItem
                                     active={
-                                        getModule(searchParams, modulenames) ===
-                                        name
+                                        getModule(
+                                            searchParams,
+                                            setSearchParams,
+                                            modulenames
+                                        ) === name
                                     }
                                     onClick={onChangeModule(name)}
                                 >
@@ -180,6 +200,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     modules={modules}
                                     selectedModuleName={getModule(
                                         searchParams,
+                                        setSearchParams,
                                         modulenames
                                     )}
                                 />
