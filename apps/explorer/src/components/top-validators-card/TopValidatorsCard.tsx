@@ -78,7 +78,7 @@ export function TopValidatorsCardAPI() {
             <div data-testid="validators-table">
                 <TabGroup>
                     <TabList>
-                        <Tab>Top Validators</Tab>
+                        <Tab>Validators</Tab>
                     </TabList>
                     <TabPanels>
                         <TabPanel>
