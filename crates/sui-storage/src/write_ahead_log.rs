@@ -103,9 +103,7 @@ pub trait WriteAheadLog<'a, C> {
     /// The caller is responsible for running the tx to completion.
     ///
     /// Recoverable TXes will remain in the on-disk log until they are explicitly committed.
-    async fn read_one_recoverable_tx(
-        &'a self,
-    ) -> SuiResult<Option<(C, TransactionCommitPhase, Self::Guard)>>;
+    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, Self::Guard)>>;
 }
 
 pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned + Debug> {
@@ -343,22 +341,20 @@ where
         res
     }
 
-    async fn read_one_recoverable_tx(
-        &'a self,
-    ) -> SuiResult<Option<(C, TransactionCommitPhase, DBTxGuard<'a, C>)>> {
+    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, DBTxGuard<'a, C>)>> {
         let candidate = self.pop_one_tx();
 
         match candidate {
             None => Ok(None),
             Some(digest) => {
-                let (cert, commit_phase) = self
+                let (cert, _commit_phase) = self
                     .tables
                     .log
                     .get(&digest)?
                     .ok_or(SuiError::TransactionNotFound { digest })?;
 
                 let guard = self.begin_tx(&digest, &cert).await?;
-                Ok(Some((cert, commit_phase, guard)))
+                Ok(Some((cert, guard)))
             }
         }
     }
@@ -400,10 +396,11 @@ mod tests {
                 // implicit drop
             }
 
-            let (_, commit_phase, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
+            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
             // tx3 in recoverable txes because we dropped the guard.
             assert_eq!(r.tx_id(), tx3_id);
 
+            let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
             assert!(matches!(commit_phase, TransactionCommitPhase::Uncommitted));
 
             // verify previous call emptied the recoverable list
@@ -419,10 +416,12 @@ mod tests {
             let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
 
             // recoverable txes still there
-            let (_, commit_phase, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
+            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
             assert_eq!(r.tx_id(), tx3_id);
             assert_eq!(r.retry_num(), 2);
             assert!(recover_queue_empty(&log).await);
+
+            let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
             assert!(matches!(commit_phase, TransactionCommitPhase::Uncommitted));
 
             // commit the recoverable tx

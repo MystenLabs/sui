@@ -52,7 +52,7 @@ use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiEventEnvelope, SuiTransactionEffects,
 };
 use sui_simulator::nondeterministic;
-use sui_storage::write_ahead_log::{TransactionCommitPhase, WriteAheadLog};
+use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     node_sync_store::NodeSyncStore,
@@ -895,32 +895,6 @@ impl AuthorityState {
             .await
     }
 
-    async fn commit_and_notify_from_recovery(
-        &self,
-        certificate: &VerifiedCertificate,
-        inner_temporary_store: InnerTemporaryStore,
-        signed_effects: SignedTransactionEffects,
-        tx_guard: CertTxGuard<'_>,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        if certificate.epoch() != self.epoch() {
-            tx_guard.release();
-            return Err(SuiError::WrongEpoch {
-                expected_epoch: self.epoch(),
-                actual_epoch: certificate.epoch(),
-            });
-        }
-
-        let digest = *certificate.digest();
-
-        if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
-            tx_guard.release();
-            return Ok(info);
-        }
-
-        self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)
-            .await
-    }
-
     async fn commit_cert_and_notify(
         &self,
         certificate: &VerifiedCertificate,
@@ -1597,49 +1571,28 @@ impl AuthorityState {
         let mut limit = limit.unwrap_or(usize::MAX);
         while limit > 0 {
             limit -= 1;
-            if let Some((cert, commit_phase, tx_guard)) =
-                self.database.wal.read_one_recoverable_tx().await?
-            {
+            if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
                 let digest = tx_guard.tx_id();
                 debug!(?digest, "replaying failed cert from log");
 
-                // If we have already committed to WAL, then the tx has already been executed
-                // and will not be re-executed, therefore there is no longer a threat of poison pill.
-                // We can safely retry past the limit.
-                match commit_phase {
-                    TransactionCommitPhase::Uncommitted => {
-                        if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
-                            // This tx will be only partially executed, however the store will be in a safe
-                            // state. We will simply never reach eventual consistency for this TX.
-                            // TODO: Should we revert the tx entirely? I'm not sure the effort is
-                            // warranted, since the only way this can happen is if we are repeatedly
-                            // failing to write to the db, in which case a revert probably won't succeed
-                            // either.
-                            error!(
-                                ?digest,
-                                "Abandoning in-progress TX after {} retries.",
-                                MAX_TX_RECOVERY_RETRY
-                            );
-                            // prevent the tx from going back into the recovery list again.
-                            tx_guard.release();
-                            continue;
-                        }
+                if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
+                    // This tx will be only partially executed, however the store will be in a safe
+                    // state. We will simply never reach eventual consistency for this TX.
+                    // TODO: Should we revert the tx entirely? I'm not sure the effort is
+                    // warranted, since the only way this can happen is if we are repeatedly
+                    // failing to write to the db, in which case a revert probably won't succeed
+                    // either.
+                    error!(
+                        ?digest,
+                        "Abandoning in-progress TX after {} retries.", MAX_TX_RECOVERY_RETRY
+                    );
+                    // prevent the tx from going back into the recovery list again.
+                    tx_guard.release();
+                    continue;
+                }
 
-                        if let Err(e) = self.process_certificate(tx_guard, &cert.into()).await {
-                            warn!(?digest, "Failed to process in-progress certificate: {e}");
-                        }
-                    }
-                    TransactionCommitPhase::Executed(store, fx) => {
-                        if let Err(e) = self
-                            .commit_and_notify_from_recovery(&cert.into(), store, fx, tx_guard)
-                            .await
-                        {
-                            warn!(
-                                ?digest,
-                                "Failed to commit transaction results to permanent storage: {e}"
-                            );
-                        }
-                    }
+                if let Err(e) = self.process_certificate(tx_guard, &cert.into()).await {
+                    warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
                 break;
