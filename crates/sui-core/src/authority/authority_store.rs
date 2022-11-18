@@ -151,7 +151,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
         self.perpetual_tables
-            .effects
+            .executed_effects
             .get(transaction_digest)?
             .map(|data| data.into_data())
             .ok_or(SuiError::TransactionNotFound {
@@ -162,7 +162,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.perpetual_tables
-            .effects
+            .executed_effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
@@ -829,14 +829,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // We can't write this until after sequencing succeeds (which happens in
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
-        let batch = self.perpetual_tables.effects.batch();
+        let batch = self.perpetual_tables.executed_effects.batch();
         let batch = batch
             .insert_batch(
-                &self.perpetual_tables.effects,
+                &self.perpetual_tables.executed_effects,
                 [(transaction_digest, effects)],
             )?
             .insert_batch(
-                &self.perpetual_tables.effects2,
+                &self.perpetual_tables.effects,
                 [(effects_digest, effects.data())],
             )?;
 
@@ -1073,8 +1073,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut write_batch = self.perpetual_tables.certificates.batch();
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?;
-        write_batch =
-            write_batch.delete_batch(&self.perpetual_tables.effects, iter::once(tx_digest))?;
+        write_batch = write_batch.delete_batch(
+            &self.perpetual_tables.executed_effects,
+            iter::once(tx_digest),
+        )?;
 
         let all_new_refs = effects
             .mutated
@@ -1505,7 +1507,10 @@ impl SuiDataStore<AuthoritySignInfo> {
                 .certificates
                 .get(transaction_digest)?
                 .map(|c| c.into()),
-            signed_effects: self.perpetual_tables.effects.get(transaction_digest)?,
+            signed_effects: self
+                .perpetual_tables
+                .executed_effects
+                .get(transaction_digest)?,
         })
     }
 }
@@ -1632,7 +1637,7 @@ impl EffectsStore for Arc<AuthorityStore> {
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self
             .perpetual_tables
-            .effects
+            .executed_effects
             .multi_get(transactions)?
             .into_iter()
             .map(|item| item.map(|x| x.into_data()))
