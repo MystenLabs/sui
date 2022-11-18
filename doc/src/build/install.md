@@ -8,10 +8,10 @@ Before you install Sui, you need to install some prerequisite tools and then con
 
 The steps to install Sui include:
 
-1. Install [prerequisites](#prerequisites)
-1. [Install Sui binaries](#install-sui-binaries)
-1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment)
-1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
+1. Install [prerequisites](#prerequisites) for your operating system.
+1. Install [Sui binaries](#install-sui-binaries).
+1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet.
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and contribute to Sui.
 
@@ -215,7 +215,6 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch de
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 
-Troubleshooting:
 If the previous command fails, make sure you have the latest version of Rust installed:
 
 ```
@@ -252,12 +251,17 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you can add SUI tokens to your account address. 
+To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet browser extension](../explore/wallet-browser.md), you can add SUI tokens to your account address. 
 
-To request SUI test tokens:
+To request SUI tokens from the browser extension:
+
+1. Use the Sui Wallet browser extension to access your Sui Wallet.
+2. Click the **Request Sui Devnet SUI Tokens** button.
+
+To request SUI test tokens in Discord:
 
 1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
-1. Identify your address through either the Sui Wallet Browser Extension or by running the following command and electing to connect to a Sui RPC server if prompted:
+1. Identify your address through either the Sui Wallet browser extension or by running the following command and electing to connect to a Sui RPC server if prompted:
    ```shell
    $ sui client active-address
    ```
