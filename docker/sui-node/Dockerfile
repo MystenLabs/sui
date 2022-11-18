@@ -34,6 +34,7 @@ RUN cargo build --profile $PROFILE
 # Copy in the rest of the crates (and an unmodified Cargo.toml and Cargo.lock)
 # and build the application. At this point no dependencies should need to be
 # built as they were built and cached by the previous layer.
+ARG GIT_REVISION
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
