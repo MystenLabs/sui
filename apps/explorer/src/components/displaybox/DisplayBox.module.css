@@ -8,22 +8,7 @@ img.smallimage {
 
 div.modalcontainer,
 div.detailsbg {
-    @apply fixed top-0 left-0 w-full h-full z-20;
-}
-
-@keyframes fadein {
-    0% {
-        opacity: 0;
-    }
-
-    100% {
-        opacity: 1;
-    }
-}
-
-div.fade {
-    opacity: 0;
-    animation: fadein 0.3s linear forwards;
+    @apply fixed inset-0;
 }
 
 .modal {
@@ -45,8 +30,8 @@ img.largeimage {
 }
 
 span.cross {
-    @apply text-offwhite bg-sui-grey-100 z-20 h-[30px] w-[30px] 
-  flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl mx-auto;
+    @apply text-offwhite bg-sui-grey-100 h-[30px] w-[30px] 
+  flex justify-center items-center rounded-[50px] text-2xl mx-auto z-50;
 }
 
 span.desktopcross {

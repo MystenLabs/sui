@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Dialog, Transition } from '@headlessui/react';
 import { useState, useCallback, useEffect } from 'react';
 
 import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
@@ -108,14 +109,8 @@ function DisplayBoxWString({
         setHasFailedToLoad(false);
     }, [setHasDisplayLoaded]);
 
-    const [isFadeEffect, setFadeEffect] = useState(false);
-
     const handleImageClick = useCallback(() => {
         setHasClickedImage((prevHasClicked) => !prevHasClicked);
-        setFadeEffect(true);
-        // If changing the animation duration here do
-        // not forget to change the duration in the CSS class .fade
-        setTimeout(() => setFadeEffect(false), 300);
     }, []);
 
     useEffect(() => {
@@ -170,51 +165,65 @@ function DisplayBoxWString({
     } else {
         return (
             <>
-                {hasClickedImage && (
-                    <div
-                        className={`${styles.modalcontainer}
-                          ${isFadeEffect ? styles.fade : ''}`}
-                        onClick={handleImageClick}
+                <Transition
+                    appear
+                    show={hasClickedImage}
+                    className={styles.modalcontainer}
+                    as="div"
+                >
+                    <Dialog
+                        as="div"
+                        className={styles.modal}
+                        onClose={handleImageClick}
                     >
-                        <div className={styles.modal}>
-                            <figure className={styles.fig}>
-                                <div className={styles.imageandcross}>
-                                    {hasFailedToLoad ? (
-                                        <ShowBrokenImage />
-                                    ) : (
-                                        <img
-                                            id="loadedImage"
-                                            className={styles.largeimage}
-                                            alt="NFT"
-                                            src={transformURL(display)}
-                                        />
-                                    )}
-                                    <span className={styles.desktopcross}>
-                                        <span className={styles.cross}>
-                                            &times;
-                                        </span>
-                                    </span>
-                                </div>
-                                <figcaption>
-                                    {caption && (
-                                        <div className={styles.caption}>
-                                            {caption}{' '}
-                                        </div>
-                                    )}
-                                    <div className={styles.filetype}>
-                                        {fileType}
-                                    </div>
-                                </figcaption>
-                                <div className={styles.mobilecross}>
+                        <Transition.Child>
+                            <div className={styles.detailsbg} />
+                        </Transition.Child>
+                        <Dialog.Panel as="div" className={styles.fig}>
+                            <div className={styles.imageandcross}>
+                                {hasFailedToLoad ? (
+                                    <ShowBrokenImage />
+                                ) : (
+                                    <img
+                                        id="loadedImage"
+                                        className={styles.largeimage}
+                                        alt="Object's NFT"
+                                        src={transformURL(display)}
+                                    />
+                                )}
+                                <button
+                                    onClick={handleImageClick}
+                                    className="sr-only"
+                                    type="button"
+                                >
+                                    Close Dialog
+                                </button>
+                                <span
+                                    className={styles.desktopcross}
+                                    onClick={handleImageClick}
+                                    aria-hidden
+                                >
                                     <span className={styles.cross}>
                                         &times;
                                     </span>
+                                </span>
+                            </div>
+                            <Dialog.Description as="div">
+                                {caption && (
+                                    <div className={styles.caption}>
+                                        {caption}{' '}
+                                    </div>
+                                )}
+                                <div className={styles.filetype}>
+                                    {fileType}
                                 </div>
-                            </figure>
-                        </div>
-                        <div className={styles.detailsbg} />
-                    </div>
-                )}
+                            </Dialog.Description>
+                            <div className={styles.mobilecross} aria-hidden>
+                                <span className={styles.cross}>&times;</span>
+                            </div>
+                        </Dialog.Panel>
+                    </Dialog>
+                </Transition>
 
                 <div
                     className={styles['display-container']}
