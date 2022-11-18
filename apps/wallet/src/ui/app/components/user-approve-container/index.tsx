@@ -5,6 +5,7 @@ import cl from 'classnames';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
+import ExplorerLink from '_components/explorer-link';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -53,24 +54,31 @@ function UserApproveContainer({
         <div className={st.container}>
             <div className={st.scrollBody}>
                 <div className={st.originContainer}>
-                    {originFavIcon ? (
-                        <img
-                            className={st.favIcon}
-                            src={originFavIcon}
-                            alt="Site favicon"
-                        />
-                    ) : null}
-                    <div className={st.host}>
-                        {parsedOrigin.host.split('.')[0]}
+                    <div className={st.originMeta}>
+                        {originFavIcon ? (
+                            <img
+                                className={st.favIcon}
+                                src={originFavIcon}
+                                alt="Site favicon"
+                            />
+                        ) : null}
+                        <div className={st.host}>
+                            {parsedOrigin.host.split('.')[0]}
+                            <ExternalLink
+                                href={origin}
+                                className={cl(
+                                    st.origin,
+                                    !isSecure && st.warning
+                                )}
+                                showIcon={isSecure}
+                            >
+                                {parsedOrigin.host}
+                            </ExternalLink>
+                        </div>
                     </div>
-                    <ExternalLink
-                        href={origin}
-                        className={cl(st.origin, !isSecure && st.warning)}
-                        showIcon={isSecure}
-                    >
-                        {origin}
-                    </ExternalLink>
-                    <AccountAddress showLink={false} />
+                    <div className={st.accountAddress}>
+                        <AccountAddress showLink={false} />
+                    </div>
                 </div>
                 <div className={st.children}>{children}</div>
             </div>

@@ -6,7 +6,6 @@ import {
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
-    type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -15,11 +14,13 @@ import {
 } from '@reduxjs/toolkit';
 
 import type {
+    SuiMoveNormalizedFunction,
     SuiTransactionResponse,
     SignableTransaction,
     SuiExecuteTransactionResponse,
     MoveCallTransaction,
     UnserializedSignableTransaction,
+    TransactionEffects,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { TransactionRequest } from '_payloads/transactions';
@@ -65,6 +66,37 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
     }
 );
 
+type GetAmountResponse = {
+    coinType?: string | null;
+    amount?: number | bigint | null;
+    obectId?: string | null;
+} | null;
+
+const getRequestCost = (
+    txEffects: TransactionEffects,
+    address: string
+): GetAmountResponse[] | null => {
+    const events = txEffects?.events || [];
+    const coin = events
+        ?.map((event): GetAmountResponse => {
+            if (!('coinBalanceChange' in event) && !('transferObject' in event))
+                return null;
+
+            return {
+                ...(event.coinBalanceChange?.changeType === 'Pay' && {
+                    coinType: event.coinBalanceChange?.coinType,
+                    amount: event.coinBalanceChange?.amount,
+                }),
+                ...(event.transferObject?.recipient?.AddressOwner ===
+                    address && {
+                    obectId: event.transferObject?.objectId,
+                }),
+            };
+        })
+        .filter(Boolean);
+    return coin || null;
+};
+
 export const deserializeTxn = createAsyncThunk<
     {
         txRequestID: string;
@@ -80,13 +112,17 @@ export const deserializeTxn = createAsyncThunk<
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
 
+        /// dry run the transaction to get the effects
         //TODO: Error handling - either show the error or use the serialized txn
-        const deserializeTx =
-            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+        const [deserializeTx, dryRunResponse] = (await Promise.all([
+            localSerializer.deserializeTransactionBytesToSignableTransaction(
                 txnBytes
-            )) as UnserializedSignableTransaction;
+            ),
+            signer.dryRunTransaction(serializedTxn),
+        ])) as [UnserializedSignableTransaction, TransactionEffects];
 
         const deserializeData = deserializeTx?.data as MoveCallTransaction;
+
         const normalized = {
             ...deserializeData,
             gasBudget: Number(deserializeData.gasBudget.toString(10)),

@@ -29,10 +29,10 @@ function AccountAddress({
 
     const address = useAppSelector(({ account: { address } }) => address);
     const shortenAddress = useMiddleEllipsis(address, 10, 7);
-    const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
+    // const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
     return address ? (
         <span className={cl(st.addressContainer, className)}>
-            <CopyToClipboard txt={address} mode={cpIconMode}>
+            <CopyToClipboard txt={address} mode="highlighted">
                 <span className={cl(st.address, st[mode])} title={address}>
                     {shorten ? shortenAddress : address}
                 </span>
