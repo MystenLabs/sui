@@ -140,18 +140,19 @@ function ValidatorPageResult() {
 }
 
 export function processValidators(set: Validator[]) {
-    return set.map((av, i) => {
-        const rawName = av.fields.metadata.fields.name;
-        const name = textDecoder.decode(
-            new Base64DataBuffer(rawName).getData()
-        );
-        return {
-            name: name,
-            address: av.fields.metadata.fields.sui_address,
-            pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
-            position: i + 1,
-        };
-    });
+    return set
+        .map((av) => {
+            const rawName = av.fields.metadata.fields.name;
+            const name = textDecoder.decode(
+                new Base64DataBuffer(rawName).getData()
+            );
+            return {
+                name: name,
+                address: av.fields.metadata.fields.sui_address,
+                pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
+            };
+        })
+        .sort((a, b) => (a.name > b.name ? 1 : -1));
 }
 
 export function getTabFooter(count: number) {
@@ -172,7 +173,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }) {
         data: validatorsData.map((validator) => {
             return {
                 name: validator.name,
-                position: validator.position,
                 address: (
                     <Longtext
                         text={validator.address}
@@ -192,10 +192,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }) {
             };
         }),
         columns: [
-            {
-                headerLabel: '#',
-                accessorKey: 'position',
-            },
             {
                 headerLabel: 'Name',
                 accessorKey: 'name',

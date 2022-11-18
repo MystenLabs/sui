@@ -84,20 +84,14 @@ export function TopValidatorsCardAPI() {
                         <TabPanel>
                             <div title="Top Validators">
                                 <PlaceholderTable
-                                    rowCount={4}
+                                    rowCount={3}
                                     rowHeight="13px"
                                     colHeadings={[
-                                        '#',
                                         'Name',
                                         'Address',
                                         'Pubkey Bytes',
                                     ]}
-                                    colWidths={[
-                                        '25px',
-                                        '135px',
-                                        '220px',
-                                        '220px',
-                                    ]}
+                                    colWidths={['135px', '220px', '220px']}
                                 />
                             </div>
                         </TabPanel>
@@ -124,7 +118,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
     const tableData = {
         data: validatorsData.splice(0, 10).map((validator) => ({
             name: validator.name,
-            position: validator.position,
             address: (
                 <Longtext
                     text={validator.address}
@@ -143,10 +136,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
             ),
         })),
         columns: [
-            {
-                headerLabel: '#',
-                accessorKey: 'position',
-            },
             {
                 headerLabel: 'Name',
                 accessorKey: 'name',
