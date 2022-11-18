@@ -4,6 +4,7 @@
 use bytes::Bytes;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use parking_lot::Mutex;
 use prometheus::register_int_gauge_with_registry;
 use prometheus::IntCounter;
 use prometheus::IntGauge;
@@ -12,6 +13,7 @@ use prometheus::{register_histogram_with_registry, register_int_counter_with_reg
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -31,7 +33,7 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::Duration;
-use tracing::error;
+use tracing::{error, warn};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -106,6 +108,10 @@ pub struct ConsensusAdapter {
     num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
+    /// Pending certificates that we are waiting to be sequenced by consensus
+    /// Lock ordering: this is a 'leaf' lock, no other locks should be acquired in the scope of this lock
+    /// In particular, this lock is always acquired after taking read or write lock on reconfig state
+    pending_certificates: Mutex<HashSet<TransactionDigest>>,
 }
 
 #[async_trait::async_trait]
@@ -143,6 +149,7 @@ impl ConsensusAdapter {
             authority,
             num_inflight_transactions,
             opt_metrics,
+            pending_certificates: Default::default(),
         });
         let recover = this.clone();
         recover.submit_recovered();
@@ -153,7 +160,44 @@ impl ConsensusAdapter {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
         let epoch_tables = self.authority.database.epoch_tables();
         let recovered = epoch_tables.pending_consensus_transactions.iter();
-        for (_, transaction) in recovered {
+        let mut recovered: Vec<_> = recovered.map(|(_k, v)| v).collect();
+        let pending_certificates = recovered
+            .iter()
+            .filter_map(|transaction| {
+                if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+                    Some(*certificate.digest())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // try_lock.unwrap() is safe here because instance of ConsensusAdapter was not
+        // yet populated and no-one had a chance to acquire lock
+        *self
+            .pending_certificates
+            .try_lock()
+            .expect("Contention on pending_certificates when initializing ConsensusAdapter") =
+            pending_certificates;
+
+        #[allow(clippy::collapsible_if)] // This if can be collapsed but it will be ugly
+        if self
+            .authority
+            .get_reconfig_state_read_lock_guard()
+            .is_reject_user_certs()
+        {
+            if recovered
+                .iter()
+                .any(ConsensusTransaction::is_end_of_publish)
+            {
+                // This can happen if node crashed inside ConsensusAdapter::close_epoch,
+                // after reconfig lock state was written to DB and before we persisted EndOfPublish message
+                recovered.push(ConsensusTransaction::new_end_of_publish(
+                    self.authority.name,
+                ));
+            }
+        }
+        for transaction in recovered {
             self.submit_unchecked(transaction);
         }
     }
@@ -212,17 +256,38 @@ impl ConsensusAdapter {
         // refreshed frequently enough to make sure this is Byzantine-resistant
     }
 
+    /// This method is called externally to begin reconfiguration
+    /// It transition reconfig state to reject new certificates from user
+    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
+    pub fn close_epoch(self: &Arc<Self>) -> SuiResult {
+        let send_end_of_publish = {
+            let reconfig_guard = self.authority.get_reconfig_state_write_lock_guard();
+            let pending_certificates = self.pending_certificates.lock();
+            let send_end_of_publish = pending_certificates.is_empty();
+            self.authority.close_user_certs(reconfig_guard);
+            send_end_of_publish
+        };
+        if send_end_of_publish {
+            if let Err(err) = self.submit(ConsensusTransaction::new_end_of_publish(
+                self.authority.name,
+            )) {
+                warn!("Error when sending end of publish message: {:?}", err);
+            }
+        }
+        Ok(())
+    }
+
     /// This method blocks until transaction is persisted in local database
     /// It then returns handle to async task, user can join this handle to await while transaction is processed by consensus
     ///
     /// This method guarantees that once submit(but not returned async handle) returns,
     /// transaction is persisted and will eventually be sent to consensus even after restart
-    pub async fn submit(
+    pub fn submit(
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
     ) -> SuiResult<JoinHandle<()>> {
         let _lock = if transaction.is_user_certificate() {
-            let lock = self.authority.get_reconfig_state_read_lock_guard().await;
+            let lock = self.authority.get_reconfig_state_read_lock_guard();
             if !lock.should_accept_user_certs() {
                 return Err(SuiError::ValidatorHaltedAtEpochEnd);
             }
@@ -235,6 +300,11 @@ impl ConsensusAdapter {
             .epoch_tables()
             .pending_consensus_transactions
             .insert(&transaction.key(), &transaction)?;
+        if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+            self.pending_certificates
+                .lock()
+                .insert(*certificate.digest());
+        }
         Ok(self.submit_unchecked(transaction))
     }
 
@@ -284,6 +354,36 @@ impl ConsensusAdapter {
         processed_waiter
             .await
             .expect("Storage error when waiting for consensus message processed");
+        let send_end_of_publish =
+            if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+                let reconfig_guard = self.authority.get_reconfig_state_read_lock_guard();
+                // note that pending_certificates lock is always acquired *after* reconfiguration lock
+                // acquiring locks in different order might lead to deadlocks
+                let mut pending_certificates = self.pending_certificates.lock();
+                pending_certificates.remove(certificate.digest().as_ref());
+                // If we are in RejectUserCerts state and we just drained the list we need to
+                // send EndOfPublish to signal other validators that we are not submitting more certificates to the epoch.
+                // Note that there could be a race condition here where we enter this check in RejectAllCerts state.
+                // In that case we don't need to send EndOfPublish because condition to enter
+                // RejectAllCerts is when 2f+1 other validators already sequenced their EndOfPublish message.
+                if reconfig_guard.is_reject_user_certs() {
+                    pending_certificates.is_empty() // send end of epoch if empty
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+        if send_end_of_publish {
+            // sending message outside of any locks scope
+            if let Err(err) = self.submit(ConsensusTransaction::new_end_of_publish(
+                self.authority.name,
+            )) {
+                warn!("Error when sending end of publish message: {:?}", err);
+            }
+        }
+        // Removing transaction from persistent storage *after* sending end of epoch
+        // Doing it in different order won't be restart safe
         self.authority
             .database
             .epoch_tables()

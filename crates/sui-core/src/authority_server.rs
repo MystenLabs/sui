@@ -392,7 +392,7 @@ impl ValidatorService {
                 &state.name,
                 certificate.clone().into(),
             );
-            let waiter = consensus_adapter.submit(transaction).await?;
+            let waiter = consensus_adapter.submit(transaction)?;
             if certificate.contains_shared_object() {
                 // This is expect on tokio JoinHandle result, not SuiResult
                 waiter

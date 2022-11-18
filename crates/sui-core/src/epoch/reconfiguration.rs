@@ -44,6 +44,10 @@ impl ReconfigState {
         }
     }
 
+    pub fn is_reject_user_certs(&self) -> bool {
+        matches!(self.status, ReconfigCertStatus::RejectUserCerts)
+    }
+
     pub fn close_all_certs(&mut self) {
         self.status = ReconfigCertStatus::RejectAllCerts;
     }

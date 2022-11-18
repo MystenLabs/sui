@@ -25,6 +25,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use parking_lot::RwLock;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
@@ -558,7 +559,7 @@ pub struct AuthorityState {
     pub metrics: Arc<AuthorityMetrics>,
 
     /// In-memory cache of the content from the reconfig_state db table.
-    reconfig_state_mem: tokio::sync::RwLock<ReconfigState>,
+    reconfig_state_mem: RwLock<ReconfigState>,
 
     /// A channel to tell consensus to reconfigure.
     _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
@@ -1441,7 +1442,7 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics,
-            reconfig_state_mem: tokio::sync::RwLock::new(
+            reconfig_state_mem: RwLock::new(
                 store
                     .load_reconfig_state()
                     .expect("Load reconfig state at initialization cannot fail"),
@@ -1599,21 +1600,22 @@ impl AuthorityState {
         self.committee.load().clone().deref().clone()
     }
 
-    pub async fn get_reconfig_state_read_lock_guard(
+    pub fn get_reconfig_state_read_lock_guard(
         &self,
-    ) -> tokio::sync::RwLockReadGuard<ReconfigState> {
-        self.reconfig_state_mem.read().await
+    ) -> parking_lot::RwLockReadGuard<ReconfigState> {
+        self.reconfig_state_mem.read()
     }
 
-    pub async fn get_reconfig_state_write_lock_guard(
+    pub fn get_reconfig_state_write_lock_guard(
         &self,
-    ) -> tokio::sync::RwLockWriteGuard<ReconfigState> {
-        self.reconfig_state_mem.write().await
+    ) -> parking_lot::RwLockWriteGuard<ReconfigState> {
+        self.reconfig_state_mem.write()
     }
 
-    pub async fn close_user_certs<'a>(
+    // This method can only be called from ConsensusAdapter::begin_reconfiguration
+    pub fn close_user_certs(
         &self,
-        mut lock_guard: tokio::sync::RwLockWriteGuard<'a, ReconfigState>,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
     ) {
         lock_guard.close_user_certs();
         self.database
@@ -1621,9 +1623,9 @@ impl AuthorityState {
             .expect("Updating reconfig state cannot fail");
     }
 
-    pub async fn close_all_certs<'a>(
+    pub async fn close_all_certs(
         &self,
-        mut lock_guard: tokio::sync::RwLockWriteGuard<'a, ReconfigState>,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
     ) {
         lock_guard.close_all_certs();
         self.database
@@ -1631,9 +1633,9 @@ impl AuthorityState {
             .expect("Updating reconfig state cannot fail");
     }
 
-    pub async fn open_all_certs<'a>(
+    pub async fn open_all_certs(
         &self,
-        mut lock_guard: tokio::sync::RwLockWriteGuard<'a, ReconfigState>,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
     ) {
         lock_guard.open_all_certs();
         self.database
@@ -2258,12 +2260,14 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
-                fp_ensure!(
-                    self.get_reconfig_state_read_lock_guard()
-                        .await
-                        .should_accept_consensus_certs(),
-                    SuiError::ValidatorHaltedAtEpochEnd
-                );
+                if !self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
+                    certificate.digest());
+                    return Ok(());
+                }
 
                 if certificate.contains_shared_object() {
                     self.database

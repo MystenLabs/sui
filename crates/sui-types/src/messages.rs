@@ -1968,6 +1968,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_end_of_publish(authority: AuthorityName) -> Self {
+        let mut hasher = DefaultHasher::new();
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_be_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::EndOfPublish(authority),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -2003,6 +2013,10 @@ impl ConsensusTransaction {
 
     pub fn is_user_certificate(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::EndOfPublish(_))
     }
 }
 
