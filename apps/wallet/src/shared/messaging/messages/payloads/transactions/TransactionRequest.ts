@@ -19,4 +19,9 @@ export type TransactionRequest = {
     createdDate: string;
     tx: TransactionDataType;
     unSerializedTxn?: UnserializedSignableTransaction | null;
+    txnMeta?: {
+        coinSymbol?: string | null;
+        amount?: number | null;
+        obectId?: string[] | null;
+    } | null;
 };

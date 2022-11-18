@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .container {
     flex: 1;
@@ -49,7 +50,14 @@
 }
 
 .account-address {
-    color: red;
+    width: 100%;
+    border-top: 1px solid colors.$gray-45;
+    display: flex;
+    justify-content: space-between;
+    padding-top: 12px;
+    color: colors.$nav-item-hover;
+
+    @include utils.typography('Primary/BodySmall-M');
 }
 
 .host {
@@ -61,7 +69,7 @@
     text-transform: capitalize;
     display: flex;
     flex-flow: column;
-    gap: 8px;
+    gap: 7px;
     flex-grow: 1;
 }
 

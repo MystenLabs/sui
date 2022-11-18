@@ -77,6 +77,7 @@ function UserApproveContainer({
                         </div>
                     </div>
                     <div className={st.accountAddress}>
+                        <div>Your address</div>
                         <AccountAddress showLink={false} />
                     </div>
                 </div>

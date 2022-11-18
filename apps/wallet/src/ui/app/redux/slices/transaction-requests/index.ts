@@ -6,6 +6,7 @@ import {
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
+    Coin,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -66,51 +67,66 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
     }
 );
 
-type GetAmountResponse = {
-    coinType?: string | null;
-    amount?: number | bigint | null;
-    obectId?: string | null;
+type TxnMetaResponse = {
+    coinSymbol?: string | null;
+    amount?: number | null;
+    objectId?: string[];
 } | null;
 
 const getRequestCost = (
     txEffects: TransactionEffects,
     address: string
-): GetAmountResponse[] | null => {
+): TxnMetaResponse | null => {
     const events = txEffects?.events || [];
-    const coin = events
-        ?.map((event): GetAmountResponse => {
-            if (!('coinBalanceChange' in event) && !('transferObject' in event))
-                return null;
 
-            return {
-                ...(event.coinBalanceChange?.changeType === 'Pay' && {
-                    coinType: event.coinBalanceChange?.coinType,
-                    amount: event.coinBalanceChange?.amount,
-                }),
-                ...(event.transferObject?.recipient?.AddressOwner ===
-                    address && {
-                    obectId: event.transferObject?.objectId,
-                }),
-            };
-        })
-        .filter(Boolean);
-    return coin || null;
+    let sumCoin = 0;
+    const coinMeta: {
+        objectId: string[];
+        amount?: number;
+        coinSymbol?: string;
+    } = {
+        objectId: [],
+    };
+
+    for (const event of events) {
+        if ('coinBalanceChange' in event || 'transferObject' in event) {
+            // aggregate coin balance for pay
+            if (
+                event.coinBalanceChange?.changeType === 'Pay' &&
+                event.coinBalanceChange?.owner.AddressOwner === address
+            ) {
+                sumCoin += event.coinBalanceChange?.amount || 0;
+                coinMeta.amount = sumCoin;
+                coinMeta.coinSymbol = event.coinBalanceChange?.coinType
+                    ? Coin.getCoinSymbol(event.coinBalanceChange.coinType)
+                    : '';
+            }
+
+            if (event.transferObject?.recipient?.AddressOwner === address) {
+                const objectId = event.transferObject.objectId;
+                coinMeta.objectId = [...coinMeta.objectId, objectId];
+            }
+        }
+    }
+    return coinMeta || null;
 };
 
 export const deserializeTxn = createAsyncThunk<
     {
         txRequestID: string;
         unSerializedTxn: UnserializedSignableTransaction | null;
+        txnMeta?: TxnMetaResponse;
     },
     { serializedTxn: string; id: string },
     AppThunkConfig
 >(
     'deserialize-transaction',
-    async (data, { dispatch, extra: { api, keypairVault } }) => {
+    async (data, { getState, dispatch, extra: { api, keypairVault } }) => {
         const { id, serializedTxn } = data;
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
+        const activeAddress = getState().account.address;
 
         /// dry run the transaction to get the effects
         //TODO: Error handling - either show the error or use the serialized txn
@@ -141,8 +157,16 @@ export const deserializeTxn = createAsyncThunk<
             );
         }
 
+        const txnMeta =
+            dryRunResponse && activeAddress
+                ? getRequestCost(dryRunResponse, activeAddress)
+                : null;
+
+        console.log('txnMeta', txnMeta);
+
         return {
             txRequestID: id,
+            ...(txnMeta && { txnMeta }),
             unSerializedTxn:
                 ({
                     ...deserializeTx,
@@ -259,12 +283,20 @@ const slice = createSlice({
         });
 
         build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
-            const { txRequestID, unSerializedTxn } = payload;
+            const { txRequestID, unSerializedTxn, txnMeta } = payload;
             if (unSerializedTxn) {
                 txRequestsAdapter.updateOne(state, {
                     id: txRequestID,
                     changes: {
                         unSerializedTxn: unSerializedTxn || null,
+                    },
+                });
+            }
+            if (txnMeta) {
+                txRequestsAdapter.updateOne(state, {
+                    id: txRequestID,
+                    changes: {
+                        txnMeta,
                     },
                 });
             }
