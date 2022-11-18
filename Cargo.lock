@@ -9068,7 +9068,6 @@ name = "sui-source-validation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.22",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -9076,11 +9075,17 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-symbol-pool",
+ "rand 0.8.5",
+ "sui",
  "sui-framework",
  "sui-framework-build",
  "sui-sdk",
  "sui-types",
+ "tempfile",
+ "test-utils",
+ "thiserror",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

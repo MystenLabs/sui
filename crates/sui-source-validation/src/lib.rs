@@ -1,69 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    fmt::{Debug, Display},
-};
+use std::{collections::HashMap, fmt::Debug};
+use thiserror::Error;
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_symbol_pool::Symbol;
 
-use sui_sdk::{
-    rpc_types::{SuiRawData, SuiRawMoveObject, SuiRawMovePackage},
-    ReadApi,
-};
+use sui_sdk::rpc_types::{SuiRawData, SuiRawMoveObject, SuiRawMovePackage};
 use sui_types::{base_types::ObjectID, error::SuiError};
 
-#[derive(Debug)]
+#[cfg(test)]
+mod tests;
+
+#[cfg(not(msim))]
+type ReadApi = sui_sdk::ReadApi;
+#[cfg(msim)]
+type ReadApi = sui_sdk::embedded_gateway::ReadApi;
+
+#[derive(Debug, Error)]
 pub enum DependencyVerificationError {
-    /// Could not read a dependencies' on-chain object
+    #[error("Could not read a dependencies' on-chain object: {0:?}")]
     DependencyObjectReadFailure(anyhow::Error),
-    /// Dependency object does not exist or was deleted
+
+    #[error("Dependency object does not exist or was deleted: {0:?}")]
     SuiObjectRefFailure(SuiError),
-    /// Dependency address contains a Sui object, not a Move package
+
+    #[error("Dependency ID contains a Sui object, not a Move package: {0}")]
     ObjectFoundWhenPackageExpected(ObjectID, SuiRawMoveObject),
-    /// A local dependency was not found
-    LocalDependencyNotFound {
+
+    #[error("On-chain version of dependency {package}::{module} was not found.")]
+    OnChainDependencyNotFound { package: Symbol, module: Symbol },
+
+    #[error("Local version of dependency {package}::{module} was not found.")]
+    LocalDependencyNotFound { package: Symbol, module: String },
+
+    #[error(
+        "Local dependency did not match its on-chain version at {address}::{package}::{module}"
+    )]
+    ModuleBytecodeMismatch {
+        address: AccountAddress,
         package: Symbol,
-        module: Option<Symbol>,
+        module: Symbol,
     },
-    /// An on-chain version of a local dependency was not found
-    ///
-    /// params:  package, module
-    OnChainDependencyNotFound(Symbol, Option<Symbol>),
-    /// Local dependencies have a different number of modules than on-chain
-    ///
-    /// params:  expected count, on-chain count, missing
-    ModuleCountMismatch(usize, usize, Vec<String>),
-    /// A local dependency module did not match its on-chain version
-    ///
-    /// params:  package, module, address
-    ModuleBytecodeMismatch(String, String, AccountAddress),
 }
 
-impl Display for DependencyVerificationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self, f)
-    }
-}
-
-#[derive(Debug)]
 pub struct BytecodeSourceVerifier<'a> {
     pub verbose: bool,
     rpc_client: &'a ReadApi,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct Dependency {
-    pub symbol: String,
-    pub module_bytes: BTreeMap<String, Vec<u8>>,
-}
-
-/// map the package's direct dependency symbols to their addresses and nested dependencies
-type ModuleBytesMap = HashMap<Symbol, (AccountAddress, HashMap<Symbol, Vec<u8>>)>;
+/// Map the package's direct dependencies (keyed by their address and package name) to their module
+/// bytecode (mapping from module name to byte array).
+type ModuleBytesMap = HashMap<(AccountAddress, Symbol), HashMap<Symbol, Vec<u8>>>;
 
 impl<'a> BytecodeSourceVerifier<'a> {
     pub fn new(rpc_client: &'a ReadApi, verbose: bool) -> Self {
@@ -76,88 +67,65 @@ impl<'a> BytecodeSourceVerifier<'a> {
     /// Verify that all local Move package dependencies' bytecode matches
     /// the bytecode at the address specified on the Sui network we are publishing to.
     pub async fn verify_deployed_dependencies(
-        &mut self,
-        compiled_package: CompiledPackage,
+        &self,
+        compiled_package: &CompiledPackage,
     ) -> Result<(), DependencyVerificationError> {
-        let compiled_dep_map = get_module_bytes_map(&compiled_package);
+        let compiled_dep_map = get_module_bytes_map(compiled_package);
 
-        let mut on_chain_module_count = 0usize;
-        let mut verified_dependencies: HashMap<AccountAddress, Dependency> = HashMap::new();
-
-        for (pkg_symbol, (addr, local_pkg_bytes)) in compiled_dep_map {
-            if pkg_symbol == compiled_package.compiled_package_info.package_name {
+        for ((address, package), local_modules) in compiled_dep_map {
+            // Zero address is the package we're checking dependencies for, it does not need to (and
+            // cannot) be verified.
+            if address == AccountAddress::ZERO {
                 continue;
-            };
+            }
 
-            // fetch the Sui object at the address specified for the package in the local resolution table
-            let on_chain_package = self.pkg_for_address(&addr).await?;
+            // fetch the Sui object at the address specified for the package in the local resolution
+            // table
+            let SuiRawMovePackage {
+                module_map: mut on_chain_modules,
+                ..
+            } = self.pkg_for_address(&address).await?;
 
-            for (module_symbol, local_bytes) in local_pkg_bytes {
-                // package addresses may show up many times, but we only need to verify them once
-                // zero address is the package we're checking dependencies for
-                if verified_dependencies.contains_key(&addr) || addr == AccountAddress::ZERO {
-                    continue;
-                }
-
-                let mod_str = module_symbol.to_string();
-                let on_chain_bytes = match on_chain_package.module_map.get(&mod_str) {
-                    Some(oc_bytes) => oc_bytes,
-                    None => {
-                        return Err(DependencyVerificationError::OnChainDependencyNotFound(
-                            pkg_symbol,
-                            Some(module_symbol),
-                        ))
-                    }
+            for (module, local_bytes) in local_modules {
+                let Some(on_chain_bytes) = on_chain_modules.remove(module.as_ref()) else {
+                    return Err(DependencyVerificationError::OnChainDependencyNotFound {
+                        package, module,
+                    })
                 };
 
-                // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
-                if &local_bytes != on_chain_bytes {
-                    return Err(DependencyVerificationError::ModuleBytecodeMismatch(
-                        pkg_symbol.to_string(),
-                        module_symbol.to_string(),
-                        addr,
-                    ));
+                // compare local bytecode to on-chain bytecode to ensure integrity of our
+                // dependencies
+                if local_bytes != on_chain_bytes {
+                    return Err(DependencyVerificationError::ModuleBytecodeMismatch {
+                        address,
+                        package,
+                        module,
+                    });
                 }
-
-                on_chain_module_count += 1;
 
                 if self.verbose {
                     println!(
                         "{}::{} - {} bytes, code matches",
-                        pkg_symbol,
-                        module_symbol,
+                        package.as_ref(),
+                        module.as_ref(),
                         on_chain_bytes.len()
                     );
                 }
             }
 
-            verified_dependencies.insert(
-                addr,
-                Dependency {
-                    symbol: pkg_symbol.to_string(),
-                    module_bytes: on_chain_package.module_map.clone(),
-                },
-            );
-        }
-
-        // total number of modules in packages must match, in addition to each individual module matching
-        let len = compiled_package.deps_compiled_units.len();
-        // only need to check for less than, because if local modules are missing on-chain we've
-        // already errored out with a OnChainDependencyNotFound error
-        if len < on_chain_module_count {
-            let missing_modules = get_missing_modules(&compiled_package, &verified_dependencies);
-            return Err(DependencyVerificationError::ModuleCountMismatch(
-                len,
-                on_chain_module_count,
-                missing_modules,
-            ));
+            if let Some((module, _)) = on_chain_modules.into_iter().next() {
+                return Err(DependencyVerificationError::LocalDependencyNotFound {
+                    package,
+                    module,
+                });
+            }
         }
 
         Ok(())
     }
 
     async fn pkg_for_address(
-        &mut self,
+        &self,
         addr: &AccountAddress,
     ) -> Result<SuiRawMovePackage, DependencyVerificationError> {
         // Move packages are specified with an AccountAddress, but are
@@ -167,18 +135,15 @@ impl<'a> BytecodeSourceVerifier<'a> {
         // fetch the Sui object at the address specified for the package in the local resolution table
         // if future packages with a large set of dependency packages prove too slow to verify,
         // batched object fetching should be added to the ReadApi & used here
-        let obj_read = match self.rpc_client.get_object(obj_id).await {
-            Ok(raw) => raw,
-            Err(err) => {
-                return Err(DependencyVerificationError::DependencyObjectReadFailure(
-                    err,
-                ))
-            }
-        };
-        let obj = match obj_read.object() {
-            Ok(sui_obj) => sui_obj,
-            Err(err) => return Err(DependencyVerificationError::SuiObjectRefFailure(err)),
-        };
+        let obj_read = self
+            .rpc_client
+            .get_object(obj_id)
+            .await
+            .map_err(DependencyVerificationError::DependencyObjectReadFailure)?;
+
+        let obj = obj_read
+            .object()
+            .map_err(DependencyVerificationError::SuiObjectRefFailure)?;
 
         match obj.data.clone() {
             SuiRawData::Package(pkg) => Ok(pkg),
@@ -189,50 +154,23 @@ impl<'a> BytecodeSourceVerifier<'a> {
     }
 }
 
-fn get_missing_modules(
-    package: &CompiledPackage,
-    verified_dependencies: &HashMap<AccountAddress, Dependency>,
-) -> Vec<String> {
-    let mut missing_modules: Vec<String> = vec![];
-    for (local_pkg_symbol, local_unit) in &package.deps_compiled_units {
-        let local_pkg_symbol_str = local_pkg_symbol.to_string();
-        let local_mod_name = local_unit.unit.name().to_string();
-        let mod_str = local_mod_name.as_str();
-
-        if !verified_dependencies.iter().any(|(_, dep)| {
-            dep.symbol == local_pkg_symbol_str && dep.module_bytes.contains_key(mod_str)
-        }) {
-            missing_modules.push(format!("{}::{}", local_pkg_symbol_str, mod_str))
-        }
-    }
-    missing_modules
-}
-
 fn get_module_bytes_map(compiled_package: &CompiledPackage) -> ModuleBytesMap {
     let mut map: ModuleBytesMap = HashMap::new();
-    compiled_package
-        .deps_compiled_units
-        .iter()
-        .for_each(|(symbol, unit_src)| {
-            let name = unit_src.unit.name();
-            // in the future, this probably needs to specify the compiler version instead of None
-            let bytes = unit_src.unit.serialize(None);
+    for (package, local_unit) in &compiled_package.deps_compiled_units {
+        let CompiledUnitEnum::Module(m) = &local_unit.unit else {
+            continue;
+        };
 
-            if let CompiledUnitEnum::Module(m) = unit_src.unit.clone() {
-                let module_addr: AccountAddress = m.address.into_inner();
+        let module = m.name;
+        let address = m.address.into_inner();
 
-                match map.get_mut(symbol) {
-                    Some((_addr, existing_modules)) => {
-                        existing_modules.insert(name, bytes);
-                    }
-                    None => {
-                        let mut new_map = HashMap::new();
-                        new_map.insert(name, bytes);
-                        map.insert(*symbol, (module_addr, new_map));
-                    }
-                }
-            }
-        });
+        // in the future, this probably needs to use `serialize_for_version`.
+        let mut bytes = vec![];
+        m.module.serialize(&mut bytes).unwrap();
 
+        map.entry((address, *package))
+            .or_default()
+            .insert(module, bytes);
+    }
     map
 }

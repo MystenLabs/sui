@@ -129,6 +129,11 @@ pub enum SuiClientCommands {
         /// Gas budget for running module initializers
         #[clap(long)]
         gas_budget: u64,
+
+        /// Confirms that compiling dependencies from source results in bytecode matching the
+        /// dependency found on-chain.
+        #[clap(long)]
+        verify_dependencies: bool,
     },
 
     /// Call Move function
@@ -413,6 +418,7 @@ impl SuiClientCommands {
                 gas,
                 build_config,
                 gas_budget,
+                verify_dependencies,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -428,19 +434,12 @@ impl SuiClientCommands {
 
                 let compiled_modules = compiled_package.get_package_bytes();
 
-                // verify that all dependency packages have the correct on-chain bytecode
-                #[cfg(not(msim))]
-                let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
-                #[cfg(not(msim))]
-                match verifier
-                    .verify_deployed_dependencies(compiled_package.package)
-                    .await
-                {
-                    Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
-                    Err(err) => {
-                        return Err(anyhow!(err));
-                    }
-                };
+                if verify_dependencies {
+                    BytecodeSourceVerifier::new(context.client.read_api(), false)
+                        .verify_deployed_dependencies(&compiled_package.package)
+                        .await?;
+                    println!("Successfully verified dependencies on-chain against source.");
+                }
 
                 let data = context
                     .client
