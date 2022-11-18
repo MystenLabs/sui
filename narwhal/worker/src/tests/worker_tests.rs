@@ -485,29 +485,27 @@ async fn get_network_peers_from_admin_server() {
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Assert network connectivity metrics are also set as expected
-    let mut m = std::collections::HashMap::new();
-    m.insert("peer_id", resp.get(0).unwrap().as_str());
-    assert_eq!(
-        1,
-        metrics_2
-            .clone()
-            .network_connection_metrics
-            .unwrap()
-            .network_peer_connected
-            .get_metric_with(&m)
-            .unwrap()
-            .get()
-    );
+    let filters = vec![
+        (primary_2_peer_id.as_str(), "our_primary"),
+        (primary_1_peer_id.as_str(), ""),
+        (worker_1_peer_id.as_str(), "other_worker"),
+    ];
 
-    m.insert("peer_id", resp.get(1).unwrap().as_str());
-    assert_eq!(
-        1,
-        metrics_2
-            .network_connection_metrics
-            .unwrap()
-            .network_peer_connected
-            .get_metric_with(&m)
-            .unwrap()
-            .get()
-    );
+    for f in filters {
+        let mut m = HashMap::new();
+        m.insert("peer_id", f.0);
+        m.insert("type", f.1);
+
+        assert_eq!(
+            1,
+            metrics_2
+                .clone()
+                .network_connection_metrics
+                .unwrap()
+                .network_peer_connected
+                .get_metric_with(&m)
+                .unwrap()
+                .get()
+        );
+    }
 }

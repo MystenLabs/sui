@@ -245,6 +245,17 @@ impl Worker {
             peer_id, address
         );
 
+        // update the peer_types with the "other_primary". We do not add them in the Network
+        // struct, otherwise the networking library will try to connect to it
+        let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
+            committee.load().others_primaries(&primary_name);
+        for (_, _, network_key) in other_primaries {
+            peer_types.insert(
+                PeerId(network_key.0.to_bytes()),
+                "other_primary".to_string(),
+            );
+        }
+
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
             network.downgrade(),
             network_connection_metrics,
