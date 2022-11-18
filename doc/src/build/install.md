@@ -79,7 +79,7 @@ After you install Rust, proceed to the prerequisites for your operating system.
 
 ## Linux prerequisites 
 
-> **NOTE:** The Linux instructions assume a distribution that uses the APT package manager. Adapt the instructions as needed for other package managers.
+> **Note:** The Linux instructions assume a distribution that uses the APT package manager. Adapt the instructions as needed for other package managers.
 
 Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update it:
 
@@ -175,7 +175,7 @@ Install the following prerequisites to work with Sui on Microsoft Windows 11.
 
 ### cURL
 
-Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed. If you want to use the curl project version instead, download and install it from https://curl.se/windows/.
+Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/microsoft.html) already installed. If you want to use the curl project version instead, download and install it from [https://curl.se/windows/](https://curl.se/windows/).
 
 ### Git CLI
 
@@ -300,7 +300,7 @@ See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in 
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
-> **NOTE:** The above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run a network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
+> **Note:** The previous `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run a network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
  
 ## Next steps
 
