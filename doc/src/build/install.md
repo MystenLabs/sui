@@ -2,6 +2,8 @@
 title: Install Sui to Build
 ---
 
+Learn how to install and configure Sui.
+
 Before you install Sui, you need to install some prerequisite tools and configure your development environment.
 
 The steps to install Sui include:
@@ -13,22 +15,20 @@ The steps to install Sui include:
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and contribute to Sui.
 
-## Branches of the Sui repository
+## Sui repository
 
 The Sui repository includes two primary branches, `devnet` and `main`.
 
  * The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a pull request (PR), you should push commits to your fork of the `main` branch.
- * The `main` (Latest build) branch includes the most recent changes and updates. Use the `main` branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
+ * The `main` branch includes the most recent changes and updates. Use the `main` branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
 
-## Choose the documentation branch
+## Documentation in the Sui repository
 
-This documentation is built from the same branches, `main` and `devnet`. The `main` branch includes the latest additions and updates to the documentation. You can view the content to learn about upcoming updates to the documentation, but the information may not be accurate or up-to-date for the features and functionality available in the `devnet` branch. In most cases, you should view the `devnet` version of the documentation.
-
-To change branches, choose **Latest build** to view the documentation generated from the `main` branch of the repository. You should not use the **Latest build** version to learn how to install, configure, or build on Sui, as the information may change before the content is merged to **Devnet**. 
+The `main` and `devnet` branches of the Sui repository contain the relevant documentation for each branch. A version toggle on the documentation site enables you to switch between `main` branch content (labeled **Latest build**) and `devnet` branch content (labeled **Devnet**). Make sure the toggle is set to **Devnet** to learn how to install, configure, and build on Sui. The content in **Latest build** is useful to learn about potential updates to Sui, but is not guaranteed to be accurate for the features and functionality available in the `devnet` branch.  
 
 ## Supported operating systems
 
-Sui supports the following operating systems beginning with the versions listed.
+Sui supports the following operating systems, beginning with the versions indicated.
 
 * Linux - Ubuntu version 18.04 (Bionic Beaver)
 * macOS - macOS Monterey
@@ -36,19 +36,19 @@ Sui supports the following operating systems beginning with the versions listed.
 
 ## Prerequisites
 
-Install the prerequisites and tools you need to work with Sui. 
+Install the prerequisites and tools you need to work with Sui. Click the 
 
 | Package/OS | Linux  | macOS | Windows 11 |
 | --- | :---: | :---: | :---: |
-| Curl | X | X | X |
-| Rust | X | X | X |
-| Git CLI | X | X | X |
-| CMake | X | X | X |
-| libssl-dev | X | | |
-| libclang-dev | X | | |
-| Brew | | X | |
-| C++ build tools | | | X |
-| LLVM Compiler | | | X |
+| cURL | [X](#curl) | [X](#curl-1) | [X](#curl-2) |
+| Rust and Cargo | [X](#rust-and-cargo) | [X](#rust-and-cargo) | [X](#rust-and-cargo) |
+| Git CLI | [X](#git-cli) | [X](#git-cli-1) | [X](#git-cli-2) |
+| CMake | [X](#cmake) | [X](#cmake-1) | [X](#cmake-2) |
+| libssl-dev | [X](#libssl-dev) | | |
+| libclang-dev | [X](#libclang-dev) | | |
+| Brew | | [X](#brew) | |
+| C++ build tools | | | [X](#additional-tools-for-windows) |
+| LLVM Compiler | | | [X](#additional-tools-for-windows) |
 
 
 ### Rust and Cargo
@@ -60,11 +60,11 @@ Use the following command to install Rust and Cargo on macOS or Linux:
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Windows 11 users can use the [Rust installer](https://www.rust-lang.org/tools/install). 
+Windows 11 users can use the [Rust installer](https://www.rust-lang.org/tools/install) available on the Rust website. 
 
-For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
+For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install) on the Rust website.
 
-Sui uses the latest version of Cargo to build and manage dependencies. See the [Cargo installation](https://doc.rust-lang.org/cargo/getting-started/installation.html) page for more information.
+Sui uses the latest version of Cargo to build and manage dependencies. See the [Cargo installation](https://doc.rust-lang.org/cargo/getting-started/installation.html) page on the Rust website for more information.
 
 Use the following command to update Rust:
 
@@ -81,7 +81,7 @@ After you install Rust, proceed to the prerequisites for your operating system.
 
 > **Note:** The Linux instructions assume a distribution that uses the APT package manager. Adapt the instructions as needed for other package managers.
 
-Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update it:
+Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update `apt-get`:
 
 ```shell
 $ sudo apt-get update
@@ -101,17 +101,17 @@ $ curl --version
 
 ### Git CLI
 
-Run the following command to install Git, including the Git CLI:
+Run the following command to install Git, including the [Git CLI](https://cli.github.com/):
 
 ```shell
 $ sudo apt-get install git-all
 ```
 
-For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux).
+For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux) on the GitHub website.
 
 ### CMake
 
-Install CMake using the instructions at [Installing CMake](https://cmake.org/install/)
+Install CMake using the instructions at [Installing CMake](https://cmake.org/install/) on the CMake website.
 
 ### libssl-dev
 
@@ -134,7 +134,7 @@ Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
 
 ## macOS prerequisites
 
-macOS includes a version of cURL. Use cURL to install Brew, and then use Brew to install other tools, including a newer version of cURL.
+macOS includes a version of cURL you can use to install Brew. Use Brew to install other tools, including a newer version of cURL.
 
 ### Brew
 
@@ -164,7 +164,7 @@ Use the following command to install Git:
 $ brew install git
 ```
 
-You can also Download and install the [Git command line interface](https://git-scm.com/download/) for your operating system.
+After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
 
 Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
@@ -179,12 +179,11 @@ Windows 11 ships with a Microsoft version of [cURL](https://curl.se/windows/micr
 
 ### Git CLI
 
-Download and install the [Git command line interface](https://git-scm.com/download/)
-for your operating system.
+Download and install the [Git command line interface](https://git-scm.com/download/).
 
 ### CMake
 
-Download and install [CMake](https://cmake.org/) from: https://cmake.org/download/
+Download and install [CMake](https://cmake.org/download/) from the CMake website.
 
 ### Protocol Buffers
 
@@ -201,12 +200,12 @@ Sui requires the following additional tools on computers running Windows.
 >**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
 >press the `enter` key in the command prompt to fix the issue.
 
->**Known Issue:** The `sui console` command does not work in PowerShell.
+>**Known issue:** The `sui console` command does not work in PowerShell.
 
 
 ## Install Sui binaries
 
-After you install Cargo, use the following command to install Sui binaries:
+With Cargo installed, use the following command to install Sui binaries:
 
 ```shell
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
@@ -240,7 +239,7 @@ Use the `--help` flag to access helpful information for any of these binaries.
 
 ## Integrated development environment
 
-The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` with the `features` flag:
+The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` using the `--features` flag:
 
 ```shell
 $ cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
@@ -272,7 +271,7 @@ To request SUI test tokens in Discord:
 
 ## Source code
 
-View the Sui repo on GitHub:
+View the Sui repository on GitHub:
 https://github.com/MystenLabs/sui
 
 Clone the Sui repository:
@@ -281,7 +280,7 @@ Clone the Sui repository:
 $ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
-You can start exploring Sui's source code by looking into the following primary directories:
+The following primary directories offer a good starting point for exploring Sui's source code:
 * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui CLI binary
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
