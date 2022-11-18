@@ -71,6 +71,12 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         return modulenames[0];
     };
 
+    const selectedModule = getModule(
+        searchParams,
+        setSearchParams,
+        modulenames
+    );
+
     const setModule = (
         searchParams: URLSearchParams,
         setSearchParams: (params: URLSearchParams) => void,
@@ -104,14 +110,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     return (
         <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
             <div className="w-full md:w-1/5">
-                <Combobox
-                    value={getModule(
-                        searchParams,
-                        setSearchParams,
-                        modulenames
-                    )}
-                    onChange={onChangeModule}
-                >
+                <Combobox value={selectedModule} onChange={onChangeModule}>
                     <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex mt-2.5 justify-between py-1">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
@@ -171,13 +170,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                 className="md:min-w-fit mx-0.5 mt-0.5"
                             >
                                 <ListItem
-                                    active={
-                                        getModule(
-                                            searchParams,
-                                            setSearchParams,
-                                            modulenames
-                                        ) === name
-                                    }
+                                    active={selectedModule === name}
                                     onClick={onChangeModule(name)}
                                 >
                                     {name}
@@ -198,11 +191,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                 <ModuleViewWrapper
                                     id={id}
                                     modules={modules}
-                                    selectedModuleName={getModule(
-                                        searchParams,
-                                        setSearchParams,
-                                        modulenames
-                                    )}
+                                    selectedModuleName={selectedModule}
                                 />
                             </div>
                         </TabPanel>
