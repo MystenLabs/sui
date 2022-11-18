@@ -173,7 +173,7 @@ curl --location --request POST '127.0.0.1:9000' \
     {"MoveModule":{"package":"0x2", "module":"devnet_nft"}},
     null,
     null,
-    "Descending"
+    true
   ]
 }'
 ```
