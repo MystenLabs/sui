@@ -115,6 +115,13 @@ module sui::balance {
     }
 
     #[test_only]
+    /// Destroy a `Supply` with any value in it for testing purposes.
+    public fun destroy_supply_for_testing<T>(self: Supply<T>): u64 {
+        let Supply { value } = self;
+        value
+    }
+
+    #[test_only]
     /// Create a `Supply` of any coin for testing purposes.
     public fun create_supply_for_testing<T>(value: u64): Supply<T> {
         Supply { value }
