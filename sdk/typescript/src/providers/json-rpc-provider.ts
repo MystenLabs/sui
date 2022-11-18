@@ -617,7 +617,7 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error dry running transaction with request type: ${err}}`);
+      throw new Error(`Error dry running transaction with request type: ${err}`);
     }
   }
 }
