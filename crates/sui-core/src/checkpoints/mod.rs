@@ -133,14 +133,28 @@ impl CheckpointStoreTables {
         self.checkpoint_content.get(digest)
     }
 
+    pub fn insert_certified_checkpoint(
+        &self,
+        checkpoint: &CertifiedCheckpointSummary,
+    ) -> Result<(), TypedStoreError> {
+        self.certified_checkpoints
+            .batch()
+            .insert_batch(
+                &self.certified_checkpoints,
+                [(&checkpoint.sequence_number(), checkpoint)],
+            )?
+            .insert_batch(
+                &self.checkpoint_by_digest,
+                [(&checkpoint.digest(), checkpoint)],
+            )?
+            .write()
+    }
+
     pub fn insert_verified_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        self.certified_checkpoints
-            .insert(&checkpoint.sequence_number(), checkpoint.inner())?;
-        self.checkpoint_by_digest
-            .insert(&checkpoint.digest(), checkpoint.inner())?;
+        self.insert_certified_checkpoint(checkpoint.inner())?;
 
         // Update latest
         if Some(checkpoint.sequence_number())
@@ -497,12 +511,7 @@ impl CheckpointAggregator {
                         summary: current.summary.clone(),
                         auth_signature,
                     };
-                    self.tables
-                        .certified_checkpoints
-                        .insert(&current.summary.sequence_number, &summary)?;
-                    self.tables
-                        .checkpoint_by_digest
-                        .insert(&summary.digest(), &summary)?;
+                    self.tables.insert_certified_checkpoint(&summary)?;
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);
