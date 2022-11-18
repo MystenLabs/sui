@@ -17,8 +17,7 @@ async fn make_batch() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let store = create_batches_store();
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_reconfiguration, rx_reconfiguration) = watch::channel(ShutdownNotification::Run);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
     let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
@@ -78,8 +77,7 @@ async fn batch_timeout() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let store = create_batches_store();
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_reconfiguration, rx_reconfiguration) = watch::channel(ShutdownNotification::Run);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());

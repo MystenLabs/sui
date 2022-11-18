@@ -37,7 +37,7 @@ use tokio::{
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     metered_channel, BatchDigest, Certificate, CertificateDigest, GetCertificatesRequest,
-    PayloadAvailabilityRequest, PrimaryToPrimaryClient, ReconfigureNotification,
+    PayloadAvailabilityRequest, PrimaryToPrimaryClient, ShutdownNotification,
     WorkerSynchronizeMessage,
 };
 
@@ -159,8 +159,8 @@ pub struct BlockSynchronizer {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
 
-    /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Watch channel to shutdown the committee.
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
 
     /// Receive the commands for the synchronizer
     rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
@@ -193,7 +193,7 @@ impl BlockSynchronizer {
         name: PublicKey,
         committee: Committee,
         worker_cache: SharedWorkerCache,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
         network: P2pNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -206,7 +206,7 @@ impl BlockSynchronizer {
                 name,
                 committee,
                 worker_cache,
-                rx_reconfigure,
+                rx_shutdown,
                 rx_block_synchronizer_commands,
                 pending_requests: HashMap::new(),
                 network,
@@ -295,17 +295,12 @@ impl BlockSynchronizer {
                 }
 
                 // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
+                    let message = self.rx_shutdown.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewEpoch(new_committee)=> {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::UpdateCommittee(new_committee)=> {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::Shutdown => return
+                        ShutdownNotification::Run => {},
+                        ShutdownNotification::Shutdown => return
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
                 }
@@ -649,7 +644,6 @@ impl BlockSynchronizer {
         for (worker_id, batch_ids) in batches_by_worker {
             let worker_name = self
                 .worker_cache
-                .load()
                 .worker(&self.name, &worker_id)
                 .expect("Worker id not found")
                 .name;

@@ -560,7 +560,7 @@ pub struct AuthorityState {
     reconfig_state_mem: tokio::sync::RwLock<ReconfigState>,
 
     /// A channel to tell consensus to reconfigure.
-    _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+    _tx_shutdown_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1383,7 +1383,7 @@ impl AuthorityState {
         transaction_streamer: Option<Arc<TransactionStreamer>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
-        _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        _tx_shutdown_consensus: mpsc::Sender<ReconfigConsensusMessage>,
         checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
@@ -1445,7 +1445,7 @@ impl AuthorityState {
                     .load_reconfig_state()
                     .expect("Load reconfig state at initialization cannot fail"),
             ),
-            _tx_reconfigure_consensus,
+            _tx_shutdown_consensus,
             checkpoint_service,
         };
 
@@ -1469,7 +1469,7 @@ impl AuthorityState {
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
-        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        tx_shutdown_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1523,7 +1523,7 @@ impl AuthorityState {
             None,
             genesis,
             &prometheus::Registry::new(),
-            tx_reconfigure_consensus,
+            tx_shutdown_consensus,
             checkpoint_service,
         )
         .await

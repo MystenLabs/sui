@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -26,7 +25,7 @@ use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
     Certificate, CertificateDigest, NodeReadCausalRequest, ProposerClient, PublicKeyProto,
-    ReconfigureNotification, RoundsRequest,
+    RoundsRequest, ShutdownNotification,
 };
 
 #[tokio::test]
@@ -80,8 +79,8 @@ async fn test_rounds_errors() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
@@ -100,7 +99,7 @@ async fn test_rounds_errors() {
         name.clone(),
         keypair.copy(),
         network_keypair,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -115,7 +114,7 @@ async fn test_rounds_errors() {
             Dag::new(&no_name_committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -174,8 +173,8 @@ async fn test_rounds_return_successful_response() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     // AND setup the DAG
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -185,7 +184,7 @@ async fn test_rounds_return_successful_response() {
         name.clone(),
         keypair.copy(),
         author.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -197,7 +196,7 @@ async fn test_rounds_return_successful_response() {
         /* rx_consensus */ rx_feedback,
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -321,8 +320,8 @@ async fn test_node_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -336,7 +335,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_1.clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
@@ -348,7 +347,7 @@ async fn test_node_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -358,8 +357,8 @@ async fn test_node_read_causal_signed_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -374,7 +373,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_2.clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
@@ -389,7 +388,7 @@ async fn test_node_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback_2,
         &Registry::new(),
         None,

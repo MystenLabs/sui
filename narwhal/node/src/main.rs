@@ -8,7 +8,6 @@
     rust_2021_compatibility
 )]
 
-use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
@@ -216,12 +215,12 @@ async fn run(
     let store_path = matches.value_of("store").unwrap();
 
     // Read the committee, workers and node's keypair from file.
-    let committee = Arc::new(ArcSwap::from_pointee(
+    let committee = Arc::new(
         Committee::import(committee_file).context("Failed to load the committee information")?,
-    ));
-    let worker_cache = Arc::new(ArcSwap::from_pointee(
+    );
+    let worker_cache = Arc::new(
         WorkerCache::import(workers_file).context("Failed to load the worker information")?,
-    ));
+    );
 
     // Load default parameters if none are specified.
     let parameters = match parameters_file {

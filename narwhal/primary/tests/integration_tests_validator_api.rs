@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use arc_swap::ArcSwap;
 use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
@@ -26,7 +25,7 @@ use tonic::transport::Channel;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
-    ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
+    ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, ShutdownNotification,
     Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
@@ -103,15 +102,15 @@ async fn test_get_collections() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
         name.clone(),
         signer.copy(),
         author.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters.clone(),
         store.header_store.clone(),
@@ -126,7 +125,7 @@ async fn test_get_collections() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -140,7 +139,7 @@ async fn test_get_collections() {
         name.clone(),
         worker_keypair,
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters.clone(),
         TrivialTransactionValidator::default(),
@@ -299,14 +298,14 @@ async fn test_remove_collections() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     Primary::spawn(
         name.clone(),
         signer.copy(),
         author.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters.clone(),
         store.header_store.clone(),
@@ -318,7 +317,7 @@ async fn test_remove_collections() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -359,7 +358,7 @@ async fn test_remove_collections() {
         name.clone(),
         worker_keypair,
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters.clone(),
         TrivialTransactionValidator::default(),
@@ -503,8 +502,8 @@ async fn test_read_causal_signed_certificates() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -518,7 +517,7 @@ async fn test_read_causal_signed_certificates() {
         name_1.clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
@@ -530,7 +529,7 @@ async fn test_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -541,8 +540,8 @@ async fn test_read_causal_signed_certificates() {
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -557,7 +556,7 @@ async fn test_read_causal_signed_certificates() {
         name_2.clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
@@ -572,7 +571,7 @@ async fn test_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -721,15 +720,15 @@ async fn test_read_causal_unsigned_certificates() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
@@ -741,7 +740,7 @@ async fn test_read_causal_unsigned_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -752,8 +751,8 @@ async fn test_read_causal_unsigned_certificates() {
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -761,7 +760,7 @@ async fn test_read_causal_unsigned_certificates() {
         name_2.clone(),
         keypair_2.copy(),
         network_keypair_2,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
@@ -776,7 +775,7 @@ async fn test_read_causal_unsigned_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -920,15 +919,15 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
         name_1.clone(),
         authority_1.keypair().copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters_1.clone(),
         store_primary_1.header_store,
@@ -943,7 +942,7 @@ async fn test_get_collections_with_missing_certificates() {
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
         None,
@@ -957,7 +956,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_1,
         worker_1_keypair,
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters_1.clone(),
         TrivialTransactionValidator::default(),
@@ -970,8 +969,8 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
     let parameters_2 = Parameters {
         batch_size: 200, // Two transactions.
@@ -989,7 +988,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_2.clone(),
         authority_2.keypair().copy(),
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters_2.clone(),
         store_primary_2.header_store,
@@ -1002,7 +1001,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -1016,7 +1015,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_2,
         worker_2_keypair,
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters_2.clone(),
         TrivialTransactionValidator::default(),

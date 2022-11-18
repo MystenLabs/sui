@@ -6,7 +6,6 @@ use crate::{
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
     synchronizer::Synchronizer,
 };
-use arc_swap::ArcSwap;
 use bincode::Options;
 use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -38,7 +37,7 @@ use tokio::sync::watch;
 use types::{
     error::DagError, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     MockPrimaryToWorker, PayloadAvailabilityRequest, PrimaryToPrimary, PrimaryToWorkerServer,
-    ReconfigureNotification, RequestVoteRequest, Round,
+    RequestVoteRequest, Round, ShutdownNotification,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -78,8 +77,8 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -87,7 +86,7 @@ async fn get_network_peers_from_admin_server() {
         name_1.clone(),
         signer_1,
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         store.header_store.clone(),
@@ -102,7 +101,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -124,7 +123,7 @@ async fn get_network_peers_from_admin_server() {
         name_1,
         worker_1_keypair.copy(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         worker_1_parameters.clone(),
         TrivialTransactionValidator::default(),
@@ -190,8 +189,8 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown_2, _rx_shutdown_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -199,7 +198,7 @@ async fn get_network_peers_from_admin_server() {
         name_2.clone(),
         signer_2,
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         store.header_store.clone(),
@@ -214,7 +213,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure_2,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

@@ -135,7 +135,7 @@ impl SuiNode {
             None
         };
 
-        let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
+        let (tx_shutdown_consensus, rx_shutdown_consensus) = channel(100);
 
         let transaction_streamer = config
             .websocket_address
@@ -195,7 +195,7 @@ impl SuiNode {
                 transaction_streamer,
                 genesis,
                 &prometheus_registry,
-                tx_reconfigure_consensus,
+                tx_shutdown_consensus,
                 checkpoint_service,
             )
             .await,
@@ -287,7 +287,7 @@ impl SuiNode {
                     config,
                     state.clone(),
                     registry,
-                    rx_reconfigure_consensus,
+                    rx_shutdown_consensus,
                 )
                 .await?,
             )

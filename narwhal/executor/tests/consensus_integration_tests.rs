@@ -15,7 +15,7 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
-use types::{Certificate, ReconfigureNotification, TransactionProto};
+use types::{Certificate, ShutdownNotification, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
@@ -51,8 +51,8 @@ async fn test_recovery() {
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (_tx_shutdown, rx_shutdown) = watch::channel(initial_committee);
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -67,7 +67,7 @@ async fn test_recovery() {
         committee,
         consensus_store.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_waiter,
         tx_primary,
         tx_output,

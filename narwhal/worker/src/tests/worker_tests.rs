@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
-use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{
@@ -64,7 +63,7 @@ async fn reject_invalid_clients_transactions() {
         name.clone(),
         myself.keypair(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters,
         NilTxValidator,
@@ -75,11 +74,7 @@ async fn reject_invalid_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .transactions;
+    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
@@ -92,7 +87,7 @@ async fn reject_invalid_clients_transactions() {
     let res = client.submit_transaction(txn).await;
     assert!(res.is_err());
 
-    let worker_pk = worker_cache.load().worker(&name, &worker_id).unwrap().name;
+    let worker_pk = worker_cache.worker(&name, &worker_id).unwrap().name;
 
     let batch = batch();
     let batch_message = WorkerBatchMessage {
@@ -148,7 +143,7 @@ async fn handle_clients_transactions() {
         name.clone(),
         myself.keypair(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         parameters,
         TrivialTransactionValidator::default(),
@@ -194,11 +189,7 @@ async fn handle_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .transactions;
+    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let client = TransactionsClient::new(channel);
@@ -252,8 +243,8 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -261,7 +252,7 @@ async fn get_network_peers_from_admin_server() {
         name_1.clone(),
         signer_1,
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         store.header_store.clone(),
@@ -276,7 +267,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -298,7 +289,7 @@ async fn get_network_peers_from_admin_server() {
         name_1,
         worker_1_keypair.copy(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         worker_1_parameters.clone(),
         TrivialTransactionValidator::default(),
@@ -364,8 +355,8 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (tx_shutdown_2, _rx_shutdown_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -373,7 +364,7 @@ async fn get_network_peers_from_admin_server() {
         name_2.clone(),
         signer_2,
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         store.header_store.clone(),
@@ -388,7 +379,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure_2,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -410,7 +401,7 @@ async fn get_network_peers_from_admin_server() {
         name_2,
         worker_2_keypair.copy(),
         worker_id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        Arc::new(committee.clone()),
         worker_cache.clone(),
         worker_2_parameters.clone(),
         TrivialTransactionValidator::default(),

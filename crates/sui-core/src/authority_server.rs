@@ -262,7 +262,7 @@ impl ValidatorService {
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         prometheus_registry: Registry,
-        rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
+        rx_shutdown_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
         // Spawn the consensus node of this authority.
         let consensus_config = config
@@ -270,7 +270,7 @@ impl ValidatorService {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_worker_keypair = config.worker_key_pair().copy();
-        let consensus_committee = config.genesis()?.narwhal_committee().load();
+        let consensus_committee = config.genesis()?.narwhal_committee();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = ConsensusHandler::new(state.clone());
@@ -291,7 +291,7 @@ impl ValidatorService {
             consensus_parameters,
             // TODO: provide something more clever here to specify TX validity
             SuiTxValidator::default(),
-            rx_reconfigure_consensus,
+            rx_shutdown_consensus,
             &registry,
         ));
 

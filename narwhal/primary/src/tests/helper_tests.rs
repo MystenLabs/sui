@@ -24,8 +24,8 @@ async fn test_process_certificates_stream_mode() {
     let requestor = fixture.authorities().nth(1).unwrap();
     let requestor_name = requestor.public_key();
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) =
+    watch::channel(ReconfigureNotification::Run);
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -49,7 +49,7 @@ async fn test_process_certificates_stream_mode() {
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_primaries,
         P2pNetwork::new(network.clone()),
     );
@@ -132,8 +132,8 @@ async fn test_process_certificates_batch_mode() {
     let name = author.public_key();
     let requestor = fixture.authorities().nth(1).unwrap();
     let requestor_name = requestor.public_key();
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) =
+    watch::channel(ReconfigureNotification::Run);
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -157,7 +157,7 @@ async fn test_process_certificates_batch_mode() {
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_primaries,
         P2pNetwork::new(network.clone()),
     );

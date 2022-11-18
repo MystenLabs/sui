@@ -460,13 +460,13 @@ impl AuthorityAPI for LocalAuthorityClient {
 impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
-        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+        let (tx_shutdown_consensus, _rx_shutdown_consensus) = tokio::sync::mpsc::channel(10);
         let state = AuthorityState::new_for_testing(
             committee,
             &secret,
             None,
             Some(genesis),
-            tx_reconfigure_consensus,
+            tx_shutdown_consensus,
         )
         .await;
         Self {

@@ -20,7 +20,7 @@ use tokio::{
 };
 use types::{
     GetCertificatesResponse, MockPrimaryToPrimary, PayloadAvailabilityResponse,
-    PrimaryToPrimaryServer, ReconfigureNotification,
+    PrimaryToPrimaryServer, ShutdownNotification,
 };
 
 use fastcrypto::traits::KeyPair as _;
@@ -42,8 +42,7 @@ async fn test_successful_headers_synchronization() {
     let name = primary.public_key();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
@@ -83,7 +82,7 @@ async fn test_successful_headers_synchronization() {
         name.clone(),
         committee.clone(),
         worker_cache.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_block_synchronizer_commands,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
@@ -185,8 +184,7 @@ async fn test_successful_payload_synchronization() {
     let name = primary.public_key();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
@@ -225,7 +223,7 @@ async fn test_successful_payload_synchronization() {
         name.clone(),
         committee.clone(),
         worker_cache.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_block_synchronizer_commands,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
@@ -366,8 +364,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     let name = primary.public_key();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     // AND some random block digests
@@ -404,7 +401,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         name.clone(),
         committee.clone(),
         worker_cache.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_block_synchronizer_commands,
         P2pNetwork::new(network),
         payload_store.clone(),
@@ -475,7 +472,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     let name = primary.public_key();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -490,7 +487,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         name,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_block_synchronizer_commands,
         pending_requests: Default::default(),
         network: P2pNetwork::new(network),
@@ -575,7 +572,7 @@ async fn test_reply_with_payload_already_in_storage() {
     let name = primary.public_key();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -589,7 +586,7 @@ async fn test_reply_with_payload_already_in_storage() {
         name,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_block_synchronizer_commands,
         pending_requests: Default::default(),
         network: P2pNetwork::new(network),
@@ -679,7 +676,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     // be used to create the headers.
     let name = primary.public_key();
 
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -693,7 +690,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         name: name.clone(),
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
-        rx_reconfigure,
+        rx_shutdown,
         rx_block_synchronizer_commands,
         pending_requests: Default::default(),
         network: P2pNetwork::new(network),

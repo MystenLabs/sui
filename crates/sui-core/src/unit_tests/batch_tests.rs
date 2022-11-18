@@ -68,7 +68,7 @@ pub(crate) async fn init_state(
     let checkpoint2_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
-    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+    let (tx_shutdown_consensus, _rx_shutdown_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
 
     let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
@@ -97,7 +97,7 @@ pub(crate) async fn init_state(
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
-        tx_reconfigure_consensus,
+        tx_shutdown_consensus,
         checkpoint_service,
     )
     .await
@@ -759,13 +759,13 @@ async fn test_safe_batch_stream() {
 
     // Byzantine cases:
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+    let (tx_shutdown_consensus, _rx_shutdown_consensus) = tokio::sync::mpsc::channel(10);
     let state_b = AuthorityState::new_for_testing(
         committee.clone(),
         &authority_key,
         None,
         None,
-        tx_reconfigure_consensus,
+        tx_shutdown_consensus,
     )
     .await;
     let committee_store = state_b.committee_store().clone();

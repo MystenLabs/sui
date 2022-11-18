@@ -30,8 +30,8 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
-    RequestVoteRequest, RequestVoteResponse, Round,
+    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, ShutdownNotification,
 };
 
 pub struct NetworkProxy {
@@ -147,8 +147,7 @@ async fn fetch_certificates_basic() {
     let fake_primary = fixture.authorities().nth(1).unwrap();
 
     // kept empty
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(fixture.committee()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     // synchronizer to certificate waiter
     let (tx_certificate_waiter, rx_certificate_waiter) = test_utils::test_channel!(1000);
     // certificates
@@ -215,7 +214,7 @@ async fn fetch_certificates_basic() {
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
         gc_depth,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificate_waiter,
         tx_certificates_loopback,
         metrics.clone(),
@@ -233,7 +232,7 @@ async fn fetch_certificates_basic() {
         rx_consensus_round_updates,
         rx_narwhal_round_updates,
         gc_depth,
-        rx_reconfigure,
+        rx_shutdown,
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,

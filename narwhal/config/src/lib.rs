@@ -9,7 +9,6 @@
 )]
 #![allow(clippy::mutable_key_type)]
 
-use arc_swap::ArcSwap;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::traits::EncodeDecodeBase64;
 use multiaddr::Multiaddr;
@@ -409,7 +408,7 @@ pub struct WorkerInfo {
     pub worker_address: Multiaddr,
 }
 
-pub type SharedWorkerCache = Arc<ArcSwap<WorkerCache>>;
+pub type SharedWorkerCache = Arc<WorkerCache>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WorkerIndex(pub BTreeMap<WorkerId, WorkerInfo>);
@@ -420,12 +419,6 @@ pub struct WorkerCache {
     pub workers: BTreeMap<PublicKey, WorkerIndex>,
     /// The epoch number for workers
     pub epoch: Epoch,
-}
-
-impl From<WorkerCache> for SharedWorkerCache {
-    fn from(worker_cache: WorkerCache) -> Self {
-        Arc::new(ArcSwap::from_pointee(worker_cache))
-    }
 }
 
 impl std::fmt::Display for WorkerIndex {
@@ -556,7 +549,7 @@ pub struct Authority {
     pub network_key: NetworkPublicKey,
 }
 
-pub type SharedCommittee = Arc<ArcSwap<Committee>>;
+pub type SharedCommittee = Arc<Committee>;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Committee {
@@ -564,12 +557,6 @@ pub struct Committee {
     pub authorities: BTreeMap<PublicKey, Authority>,
     /// The epoch number of this committee
     pub epoch: Epoch,
-}
-
-impl From<Committee> for SharedCommittee {
-    fn from(committee: Committee) -> Self {
-        Arc::new(ArcSwap::from_pointee(committee))
-    }
 }
 
 impl std::fmt::Display for Committee {

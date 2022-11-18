@@ -53,7 +53,7 @@ impl Cluster {
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let c = fixture.committee();
         let shared_worker_cache = fixture.shared_worker_cache();
-        let shared_committee = Arc::new(ArcSwap::from_pointee(c));
+        let shared_committee = Arc::new(c);
         let params = parameters.unwrap_or_else(Self::parameters);
 
         info!("###### Creating new cluster ######");
@@ -104,7 +104,7 @@ impl Cluster {
         workers_per_authority: Option<usize>,
         boot_wait_time: Option<Duration>,
     ) {
-        let max_authorities = self.committee_shared.load().authorities.len();
+        let max_authorities = self.committee_shared.authorities.len();
         let authorities = authorities_number.unwrap_or(max_authorities);
 
         if authorities > max_authorities {
@@ -533,7 +533,7 @@ impl AuthorityDetails {
         // act as place holder setups. That gives us the power in a clear way manage
         // the nodes independently.
         let mut workers = HashMap::new();
-        for (worker_id, addresses) in worker_cache.load().workers.get(&name).unwrap().0.clone() {
+        for (worker_id, addresses) in worker_cache.workers.get(&name).unwrap().0.clone() {
             let worker = WorkerNodeDetails::new(
                 worker_id,
                 name.clone(),

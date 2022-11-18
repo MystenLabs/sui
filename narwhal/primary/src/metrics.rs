@@ -76,8 +76,8 @@ pub struct PrimaryChannelMetrics {
     pub tx_block_synchronizer_commands: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler: IntGauge,
-    /// occupancy of the channel from the reconfigure notification to most components.
-    pub tx_reconfigure: IntGauge,
+    /// occupancy of the channel from the shutdown notification to most components.
+    pub tx_shutdown: IntGauge,
     /// occupancy of the channel from the `Consensus` to the `primary::Core`
     pub tx_committed_certificates: IntGauge,
     /// occupancy of the channel from the `primary::Core` to the `Consensus`
@@ -104,8 +104,8 @@ pub struct PrimaryChannelMetrics {
     pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler_total: IntCounter,
-    /// total received on channel from the reconfigure notification to most components.
-    pub tx_reconfigure_total: IntCounter,
+    /// total received on channel from the shutdown notification to most components.
+    pub tx_shutdown_total: IntCounter,
     /// total received on channel from the `Consensus` to the `primary::Core`
     pub tx_committed_certificates_total: IntCounter,
     /// total received on channel from the `primary::Core` to the `Consensus`
@@ -184,9 +184,9 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
                 registry
             ).unwrap(),
-            tx_reconfigure: register_int_gauge_with_registry!(
-                "tx_reconfigure",
-                "occupancy of the channel from the reconfigure notification to most components.",
+            tx_shutdown: register_int_gauge_with_registry!(
+                "tx_shutdown",
+                "occupancy of the channel from the shutdown notification to most components.",
                 registry
             ).unwrap(),
             tx_committed_certificates: register_int_gauge_with_registry!(
@@ -251,9 +251,9 @@ impl PrimaryChannelMetrics {
                 "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
                 registry
             ).unwrap(),
-            tx_reconfigure_total: register_int_counter_with_registry!(
-                "tx_reconfigure_total",
-                "total received on channel from the reconfigure notification to most components.",
+            tx_shutdown_total: register_int_counter_with_registry!(
+                "tx_shutdown_total",
+                "total received on channel from the shutdown notification to most components.",
                 registry
             ).unwrap(),
             tx_committed_certificates_total: register_int_counter_with_registry!(

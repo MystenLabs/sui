@@ -19,7 +19,7 @@ use storage::NodeStorage;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
-use types::{metered_channel, Certificate, ReconfigureNotification, Round};
+use types::{metered_channel, Certificate, Round, ShutdownNotification};
 use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
 pub mod execution_state;
@@ -61,8 +61,8 @@ impl Node {
     where
         State: ExecutionState + Send + Sync + 'static,
     {
-        let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
-        let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+        let initial_committee = ShutdownNotification::Run;
+        let (tx_shutdown, _rx_shutdown) = watch::channel(initial_committee);
 
         // These gauge is porcelain: do not modify it without also modifying `primary::metrics::PrimaryChannelMetrics::replace_registered_new_certificates_metric`
         // This hack avoids a cyclic dependency in the initialization of consensus and primary
@@ -89,7 +89,7 @@ impl Node {
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
-            let (handle, dag) = Dag::new(&committee.load(), rx_new_certificates, consensus_metrics);
+            let (handle, dag) = Dag::new(&committee, rx_new_certificates, consensus_metrics);
 
             handles.push(handle);
 
@@ -103,7 +103,7 @@ impl Node {
                 store,
                 parameters.clone(),
                 execution_state,
-                &tx_reconfigure,
+                &tx_shutdown,
                 rx_new_certificates,
                 tx_committed_certificates.clone(),
                 registry,
@@ -146,7 +146,7 @@ impl Node {
             rx_committed_certificates,
             dag,
             network_model,
-            tx_reconfigure,
+            tx_shutdown,
             tx_committed_certificates,
             registry,
             Some(rx_executor_network),
@@ -182,7 +182,7 @@ impl Node {
         store: &NodeStorage,
         parameters: Parameters,
         execution_state: State,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        tx_shutdown: &watch::Sender<ShutdownNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
@@ -218,16 +218,16 @@ impl Node {
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
-            (**committee.load()).clone(),
+            (*committee).clone(),
             store.consensus_store.clone(),
             parameters.gc_depth,
             consensus_metrics.clone(),
         );
         let consensus_handles = Consensus::spawn(
-            (**committee.load()).clone(),
+            (*committee).clone(),
             store.consensus_store.clone(),
             store.certificate_store.clone(),
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_new_certificates,
             tx_committed_certificates,
             tx_sequence,
@@ -242,9 +242,9 @@ impl Node {
             name,
             network,
             worker_cache,
-            (**committee.load()).clone(),
+            (*committee).clone(),
             execution_state,
-            tx_reconfigure,
+            tx_shutdown,
             rx_sequence,
             registry,
             restored_consensus_output,

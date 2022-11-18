@@ -101,7 +101,6 @@ impl BlockRemover {
         for (worker_id, batch_digests) in batches_by_worker.iter() {
             let worker_name = self
                 .worker_cache
-                .load()
                 .worker(&self.name, worker_id)
                 .expect("Worker id not found")
                 .name;

@@ -12,7 +12,7 @@ use std::time::Duration;
 use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use tracing::{error, trace};
-use types::{metered_channel::Receiver, Batch, ReconfigureNotification, WorkerBatchMessage};
+use types::{metered_channel::Receiver, Batch, ShutdownNotification, WorkerBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]
@@ -29,7 +29,7 @@ pub struct QuorumWaiter {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     /// Input Channel to receive commands.
     rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// A network sender to broadcast the batches to the other workers.
@@ -44,7 +44,7 @@ impl QuorumWaiter {
         id: WorkerId,
         committee: Committee,
         worker_cache: SharedWorkerCache,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
@@ -54,7 +54,7 @@ impl QuorumWaiter {
                 id,
                 committee,
                 worker_cache,
-                rx_reconfigure,
+                rx_shutdown,
                 rx_message,
                 network,
             }
@@ -89,7 +89,6 @@ impl QuorumWaiter {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
-                        .load()
                         .others_workers_by_id(&self.name, &self.id)
                         .into_iter()
                         .map(|(name, info)| (name, info.name))
@@ -169,25 +168,12 @@ impl QuorumWaiter {
                 Some(_) = best_effort_with_timeout.next() => {}
 
                 // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
+                    let message = self.rx_shutdown.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-
-                            // Upon reconfiguration we drop all current batches.
-                            // TODO: maybe re-send to new committee?
-                            tracing::error!("Batch dissemination dropped {} batches before quorum.", pipeline.len() );
-
-                            pipeline = FuturesOrdered::new();
-                            best_effort_with_timeout = FuturesUnordered::new()
-
-                        },
-                        ReconfigureNotification::Shutdown => return
+                        ShutdownNotification::Run => {},
+                        ShutdownNotification::Shutdown => return
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
                 }

@@ -183,7 +183,6 @@ impl Tusk {
 mod tests {
     use super::*;
     use crate::metrics::ConsensusMetrics;
-    use arc_swap::ArcSwap;
     use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;
@@ -251,7 +250,7 @@ mod tests {
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
             test_utils::make_certificates(&committee, 1..=rounds, &genesis, &keys, 0.333);
-        let arc_committee = Arc::new(ArcSwap::from_pointee(committee.clone()));
+        let arc_committee = Arc::new(committee.clone());
 
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
@@ -260,7 +259,7 @@ mod tests {
 
         let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
         let consensus_index = 0;
-        let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
+        let mut tusk = Tusk::new((*arc_committee).clone(), store, gc_depth);
 
         for certificate in certificates {
             tusk.process_certificate(&mut state, consensus_index, certificate)

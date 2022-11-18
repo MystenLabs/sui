@@ -16,8 +16,7 @@ async fn propose_empty() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
@@ -37,7 +36,7 @@ async fn propose_empty() {
         /* max_header_delay */ Duration::from_millis(20),
         None,
         NetworkModel::PartiallySynchronous,
-        rx_reconfigure,
+        rx_shutdown,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
@@ -63,8 +62,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let header_resend_delay = Duration::from_secs(3);
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
@@ -87,7 +85,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         Some(header_resend_delay),
         NetworkModel::PartiallySynchronous,
-        rx_reconfigure,
+        rx_shutdown,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
@@ -183,8 +181,7 @@ async fn equivocation_protection() {
     let signature_service = SignatureService::new(primary.keypair().copy());
     let proposer_store = ProposerStore::new_for_tests();
 
-    let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
@@ -204,7 +201,7 @@ async fn equivocation_protection() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         None,
         NetworkModel::PartiallySynchronous,
-        rx_reconfigure,
+        rx_shutdown,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
@@ -248,12 +245,11 @@ async fn equivocation_protection() {
     assert!(header.verify(&committee, shared_worker_cache).is_ok());
 
     // restart the proposer.
-    let shutdown = ReconfigureNotification::Shutdown;
-    tx_reconfigure.send(shutdown).unwrap();
+    let shutdown = ShutdownNotification::Shutdown;
+    tx_shutdown.send(shutdown).unwrap();
     assert!(proposer_handle.await.is_ok());
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
@@ -272,7 +268,7 @@ async fn equivocation_protection() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         None,
         NetworkModel::PartiallySynchronous,
-        rx_reconfigure,
+        rx_shutdown,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,

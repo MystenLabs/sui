@@ -256,7 +256,6 @@ impl Header {
         // Ensure all worker ids are correct.
         for worker_id in self.payload.values() {
             worker_cache
-                .load()
                 .worker(&self.author, worker_id)
                 .map_err(|_| DagError::MalformedHeader(self.digest()))?;
         }
@@ -898,19 +897,17 @@ impl PayloadAvailabilityResponse {
 
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ReconfigureNotification {
-    /// Indicate the committee has changed. This happens at epoch change.
-    NewEpoch(Committee),
-    /// Update some network information of the committee.
-    UpdateCommittee(Committee),
+pub enum ShutdownNotification {
+    /// Indicate the start of this instance
+    Run,
     /// Indicate a shutdown.
     Shutdown,
 }
 
 /// Used by the primary to reconfigure the worker.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WorkerReconfigureMessage {
-    pub message: ReconfigureNotification,
+pub struct WorkerShutdownMessage {
+    pub message: ShutdownNotification,
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.

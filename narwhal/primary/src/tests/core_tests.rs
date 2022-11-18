@@ -21,8 +21,7 @@ async fn propose_header() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -107,7 +106,7 @@ async fn propose_header() {
         rx_consensus_round_updates,
         rx_narwhal_round_updates,
         /* gc_depth */ 50,
-        rx_reconfigure,
+        rx_shutdown,
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -136,8 +135,7 @@ async fn propose_header_failure() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -205,7 +203,7 @@ async fn propose_header_failure() {
         rx_consensus_round_updates,
         rx_narwhal_round_updates,
         /* gc_depth */ 50,
-        rx_reconfigure,
+        rx_shutdown,
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -232,8 +230,7 @@ async fn process_certificates() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -278,7 +275,7 @@ async fn process_certificates() {
         rx_consensus_round_updates,
         rx_narwhal_round_updates,
         /* gc_depth */ 50,
-        rx_reconfigure,
+        rx_shutdown,
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -346,8 +343,7 @@ async fn recover_core() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -392,7 +388,7 @@ async fn recover_core() {
         rx_consensus_round_updates.clone(),
         rx_narwhal_round_updates.clone(),
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -416,8 +412,8 @@ async fn recover_core() {
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Shutdown the core.
-    let shutdown = ReconfigureNotification::Shutdown;
-    tx_reconfigure.send(shutdown).unwrap();
+    let shutdown = ShutdownNotification::Shutdown;
+    tx_shutdown.send(shutdown).unwrap();
 
     // Restart the core.
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
@@ -437,7 +433,7 @@ async fn recover_core() {
         rx_consensus_round_updates,
         rx_narwhal_round_updates,
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -487,8 +483,7 @@ async fn recover_core_partial_certs() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -534,7 +529,7 @@ async fn recover_core_partial_certs() {
         rx_consensus_round_updates.clone(),
         rx_narwhal_round_updates.clone(),
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -559,8 +554,8 @@ async fn recover_core_partial_certs() {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Shutdown the core.
-    let shutdown = ReconfigureNotification::Shutdown;
-    tx_reconfigure.send(shutdown).unwrap();
+    let shutdown = ShutdownNotification::Shutdown;
+    tx_shutdown.send(shutdown).unwrap();
 
     // Restart the core.
     let (tx_certificates_restored, rx_certificates_restored) = test_utils::test_channel!(2);
@@ -568,8 +563,7 @@ async fn recover_core_partial_certs() {
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
     let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
 
     let _core_handle = Core::spawn(
         name.clone(),
@@ -582,7 +576,7 @@ async fn recover_core_partial_certs() {
         rx_consensus_round_updates.clone(),
         rx_narwhal_round_updates.clone(),
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates_restored,
         rx_certificates_loopback,
         rx_headers,
@@ -624,8 +618,7 @@ async fn recover_core_expecting_header_of_previous_round() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -670,7 +663,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         rx_consensus_round_updates.clone(),
         rx_narwhal_round_updates.clone(),
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -706,8 +699,8 @@ async fn recover_core_expecting_header_of_previous_round() {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Shutdown the core.
-    let shutdown = ReconfigureNotification::Shutdown;
-    tx_reconfigure.send(shutdown).unwrap();
+    let shutdown = ShutdownNotification::Shutdown;
+    tx_shutdown.send(shutdown).unwrap();
 
     // Restart the core.
     let (_tx_certificates_restored, rx_certificates_restored) = test_utils::test_channel!(2);
@@ -715,8 +708,7 @@ async fn recover_core_expecting_header_of_previous_round() {
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
     let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
 
     let _core_handle = Core::spawn(
         name.clone(),
@@ -729,7 +721,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         rx_consensus_round_updates.clone(),
         rx_narwhal_round_updates.clone(),
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates_restored,
         rx_certificates_loopback,
         rx_headers,
@@ -761,8 +753,7 @@ async fn shutdown_core() {
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
-    let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -808,7 +799,7 @@ async fn shutdown_core() {
         rx_consensus_round_updates.clone(),
         rx_narwhal_round_updates.clone(),
         /* gc_depth */ 50,
-        rx_reconfigure.clone(),
+        rx_shutdown.clone(),
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
@@ -819,85 +810,7 @@ async fn shutdown_core() {
     );
 
     // Shutdown the core.
-    let shutdown = ReconfigureNotification::Shutdown;
-    tx_reconfigure.send(shutdown).unwrap();
+    let shutdown = ShutdownNotification::Shutdown;
+    tx_shutdown.send(shutdown).unwrap();
     assert!(handle.await.is_ok());
-}
-
-#[tokio::test]
-async fn reconfigure_core() {
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
-    let signature_service = SignatureService::new(primary.keypair().copy());
-
-    // Make the new committee & worker cache
-    let mut new_committee = committee.clone();
-    new_committee.epoch = 1;
-
-    // All the channels to interface with the core.
-    let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
-    let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
-    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
-    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
-    let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
-
-    // Create test stores.
-    let (header_store, certificate_store, payload_store) = create_db_stores();
-
-    // Make a synchronizer for the core.
-    let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
-        fixture.committee().into(),
-        worker_cache.clone(),
-        certificate_store.clone(),
-        payload_store.clone(),
-        tx_certificate_waiter,
-        rx_consensus_round_updates.clone(),
-        None,
-    ));
-
-    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
-    let network = anemo::Network::bind(own_address)
-        .server_name("narwhal")
-        .private_key(network_key)
-        .start(anemo::Router::new())
-        .unwrap();
-
-    // Spawn the core.
-    let _core_handle = Core::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache.clone(),
-        header_store.clone(),
-        certificate_store.clone(),
-        synchronizer.clone(),
-        signature_service.clone(),
-        rx_consensus_round_updates.clone(),
-        rx_narwhal_round_updates.clone(),
-        /* gc_depth */ 50,
-        rx_reconfigure.clone(),
-        rx_certificates,
-        rx_certificates_loopback,
-        rx_headers,
-        tx_consensus,
-        tx_parents,
-        metrics.clone(),
-        P2pNetwork::new(network.clone()),
-    );
-
-    // Change committee
-    let message = ReconfigureNotification::NewEpoch(new_committee.clone());
-    tx_reconfigure.send(message).unwrap();
-    tokio::time::sleep(Duration::from_secs(2)).await;
 }

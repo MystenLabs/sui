@@ -34,7 +34,7 @@ use types::{
     PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
     PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse,
     RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, Transaction, Vote,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerShutdownMessage,
     WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
@@ -241,7 +241,7 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
 
 pub struct PrimaryToWorkerMockServer {
     // TODO: refactor tests to use mockall for this.
-    msg_sender: Sender<WorkerReconfigureMessage>,
+    msg_sender: Sender<WorkerShutdownMessage>,
     synchronize_sender: Sender<WorkerSynchronizeMessage>,
 }
 
@@ -250,7 +250,7 @@ impl PrimaryToWorkerMockServer {
         keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (
-        Receiver<WorkerReconfigureMessage>,
+        Receiver<WorkerShutdownMessage>,
         Receiver<WorkerSynchronizeMessage>,
         anemo::Network,
     ) {
@@ -275,9 +275,9 @@ impl PrimaryToWorkerMockServer {
 
 #[async_trait]
 impl PrimaryToWorker for PrimaryToWorkerMockServer {
-    async fn reconfigure(
+    async fn shutdown(
         &self,
-        request: anemo::Request<WorkerReconfigureMessage>,
+        request: anemo::Request<WorkerShutdownMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.msg_sender.send(message).await.unwrap();

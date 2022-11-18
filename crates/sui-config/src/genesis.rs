@@ -94,10 +94,10 @@ impl Genesis {
                 (name, authority)
             })
             .collect();
-        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
+        std::sync::Arc::new(narwhal_config::Committee {
             authorities: narwhal_committee,
             epoch: self.epoch() as narwhal_config::Epoch,
-        }))
+        })
     }
 
     #[allow(clippy::mutable_key_type)]

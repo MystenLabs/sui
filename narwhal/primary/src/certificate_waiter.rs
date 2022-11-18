@@ -23,8 +23,7 @@ use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, FetchCertificatesRequest, FetchCertificatesResponse, ReconfigureNotification,
-    Round,
+    Certificate, FetchCertificatesRequest, FetchCertificatesResponse, Round, ShutdownNotification,
 };
 
 #[cfg(test)]
@@ -63,7 +62,7 @@ pub(crate) struct CertificateWaiter {
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// Watch channel notifying of epoch changes, it is only used for cleanup.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     /// Receives certificates with missing parents from the `Synchronizer`.
     rx_certificate_waiter: Receiver<Certificate>,
     /// Map of validator to target rounds that local store must catch up to.
@@ -98,7 +97,7 @@ impl CertificateWaiter {
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         rx_certificate_waiter: Receiver<Certificate>,
         tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
         metrics: Arc<PrimaryMetrics>,
@@ -118,7 +117,7 @@ impl CertificateWaiter {
                 certificate_store,
                 rx_consensus_round_updates,
                 gc_depth,
-                rx_reconfigure,
+                rx_shutdown,
                 rx_certificate_waiter,
                 targets: BTreeMap::new(),
                 fetch_certificates_task,
@@ -188,21 +187,12 @@ impl CertificateWaiter {
                         self.kickstart();
                     }
                 },
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow_and_update().clone();
+                    let message = self.rx_shutdown.borrow_and_update().clone();
                     match message {
-                        ReconfigureNotification::NewEpoch(committee) => {
-                            self.committee = committee;
-                            self.targets.clear();
-                            self.fetch_certificates_task = FuturesUnordered::new();
-                        },
-                        ReconfigureNotification::UpdateCommittee(committee) => {
-                            self.committee = committee;
-                            // There should be no committee membership change so self.targets does
-                            // not need to be updated.
-                        },
-                        ReconfigureNotification::Shutdown => return
+                        ShutdownNotification::Run => {},
+                        ShutdownNotification::Shutdown => return
                     }
                     debug!("Committee updated to {}", self.committee);
                 }

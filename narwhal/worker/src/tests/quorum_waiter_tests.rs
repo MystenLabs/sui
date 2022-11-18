@@ -13,8 +13,7 @@ async fn wait_for_quorum() {
     let my_primary = fixture.authorities().next().unwrap().public_key();
     let myself = fixture.authorities().next().unwrap().worker(0);
 
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_reconfiguration, rx_reconfiguration) = watch::channel(ShutdownNotification::Run);
 
     // setup network
     let network = test_network(myself.keypair(), &myself.info().worker_address);
@@ -71,8 +70,7 @@ async fn pipeline_for_quorum() {
     let my_primary = fixture.authorities().next().unwrap().public_key();
     let myself = fixture.authorities().next().unwrap().worker(0);
 
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (_tx_reconfiguration, rx_reconfiguration) = watch::channel(ShutdownNotification::Run);
 
     // setup network
     let network = test_network(myself.keypair(), &myself.info().worker_address);

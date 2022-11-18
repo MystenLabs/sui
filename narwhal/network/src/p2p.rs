@@ -19,7 +19,7 @@ use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, PrimaryMessage, PrimaryToPrimaryClient,
     PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerReconfigureMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerShutdownMessage,
     WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
@@ -242,31 +242,30 @@ impl PrimaryToPrimaryRpc for anemo::Network {
 // Primary-to-Worker
 //
 
-impl UnreliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
+impl UnreliableNetwork<WorkerShutdownMessage> for P2pNetwork {
     type Response = ();
     fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &WorkerReconfigureMessage,
+        message: &WorkerShutdownMessage,
     ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
         let message = message.to_owned();
-        let f =
-            move |peer| async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await };
+        let f = move |peer| async move { PrimaryToWorkerClient::new(peer).shutdown(message).await };
         self.unreliable_send(peer, f)
     }
 }
 #[async_trait]
-impl ReliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
+impl ReliableNetwork<WorkerShutdownMessage> for P2pNetwork {
     type Response = ();
     async fn send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &WorkerReconfigureMessage,
+        message: &WorkerShutdownMessage,
     ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
         let message = message.to_owned();
         let f = move |peer| {
             let message = message.clone();
-            async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await }
+            async move { PrimaryToWorkerClient::new(peer).shutdown(message).await }
         };
 
         self.send(peer, f).await

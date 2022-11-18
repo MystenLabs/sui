@@ -83,7 +83,6 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         let narwhal_proposer = NarwhalProposer::new(self.dag, Arc::clone(&self.committee));
         let narwhal_configuration = NarwhalConfiguration::new(
             self.committee
-                .load()
                 .primary(&self.name)
                 .expect("Our public key is not in the committee"),
             Arc::clone(&self.committee),

@@ -55,8 +55,8 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, RequestVoteRequest, RequestVoteResponse,
-    Round, Vote, VoteInfo, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, ShutdownNotification,
+    Vote, VoteInfo, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
     WorkerToPrimary, WorkerToPrimaryServer,
 };
 
@@ -94,7 +94,7 @@ impl Primary {
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
-        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        tx_shutdown: watch::Sender<ShutdownNotification>,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
@@ -194,7 +194,6 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         let our_workers = worker_cache
-            .load()
             .workers
             .get(&name)
             .expect("Our public key is not in the worker cache")
@@ -203,7 +202,6 @@ impl Primary {
 
         // Spawn the network receiver listening to messages from the other primaries.
         let address = committee
-            .load()
             .primary(&name)
             .expect("Our public key or worker id is not in the committee");
         let address = address
@@ -233,7 +231,6 @@ impl Primary {
         let addr = network::multiaddr_to_address(&address).unwrap();
 
         let our_worker_peer_ids = worker_cache
-            .load()
             .our_workers(&name)
             .unwrap()
             .into_iter()
@@ -294,7 +291,7 @@ impl Primary {
         );
 
         // Add my workers
-        for worker in worker_cache.load().our_workers(&name).unwrap() {
+        for worker in worker_cache.our_workers(&name).unwrap() {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             info!(
@@ -304,7 +301,7 @@ impl Primary {
         }
 
         // Add others workers
-        for (_, worker) in worker_cache.load().others_workers(&name) {
+        for (_, worker) in worker_cache.others_workers(&name) {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             info!(
@@ -315,7 +312,6 @@ impl Primary {
 
         // Add other primaries
         let primaries = committee
-            .load()
             .others_primaries(&name)
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
@@ -341,7 +337,7 @@ impl Primary {
                 .network_admin_server
                 .primary_network_admin_server_port,
             network.clone(),
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             Some(tx_state_handler),
         );
 
@@ -358,7 +354,7 @@ impl Primary {
         let core_primary_network = P2pNetwork::new(network.clone());
         let core_handle = Core::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            (*committee).clone(),
             worker_cache.clone(),
             header_store.clone(),
             certificate_store.clone(),
@@ -367,7 +363,7 @@ impl Primary {
             rx_consensus_round_updates.clone(),
             rx_narwhal_round_updates,
             parameters.gc_depth,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_certificates,
             rx_certificates_loopback,
             rx_headers,
@@ -394,9 +390,9 @@ impl Primary {
         let block_synchronizer_network = P2pNetwork::new(network.clone());
         let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            (*committee).clone(),
             worker_cache.clone(),
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_block_synchronizer_commands,
             block_synchronizer_network,
             payload_store.clone(),
@@ -408,12 +404,12 @@ impl Primary {
         // `Core` for further processing.
         let certificate_waiter_handle = CertificateWaiter::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            (*committee).clone(),
             P2pNetwork::new(network.clone()),
             certificate_store.clone(),
             rx_consensus_round_updates,
             parameters.gc_depth,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_certificate_waiter,
             tx_certificates_loopback,
             node_metrics.clone(),
@@ -423,7 +419,7 @@ impl Primary {
         // digests from our workers and sends it back to the `Core`.
         let proposer_handle = Proposer::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            (*committee).clone(),
             signature_service,
             proposer_store,
             parameters.header_num_of_batches_threshold,
@@ -431,7 +427,7 @@ impl Primary {
             parameters.max_header_delay,
             None,
             network_model,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
             tx_headers,
@@ -448,7 +444,7 @@ impl Primary {
             rx_committed_certificates,
             tx_consensus_round_updates,
             rx_state_handler,
-            tx_reconfigure,
+            tx_shutdown,
             Some(tx_commited_own_headers),
             P2pNetwork::new(network.clone()),
         );
@@ -499,7 +495,6 @@ impl Primary {
             "Primary {} successfully booted on {}",
             name.encode_base64(),
             committee
-                .load()
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
         );
@@ -599,8 +594,8 @@ impl PrimaryReceiverHandler {
             })?;
 
         let header = &request.body().header;
-        let committee = self.committee.load();
-        header.verify(&committee, self.worker_cache.clone())?;
+        let committee = &self.committee;
+        header.verify(committee.as_ref(), self.worker_cache.clone())?;
 
         // Vote request must come from the Header's author.
         let peer_id = request

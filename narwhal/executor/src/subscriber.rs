@@ -31,7 +31,7 @@ use tokio::{
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ReconfigureNotification,
+    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ShutdownNotification,
     Timestamp,
 };
 
@@ -39,8 +39,8 @@ use types::{
 /// downloaded all the transactions references by the certificates; it then
 /// forward the certificates to the Executor Core.
 pub struct Subscriber<Network> {
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receive shutdown updates.
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     /// A channel to receive sequenced consensus messages.
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     /// Ordered batches for the consumer
@@ -61,7 +61,7 @@ pub fn spawn_subscriber(
     network: oneshot::Receiver<P2pNetwork>,
     worker_cache: SharedWorkerCache,
     committee: Committee,
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     tx_notifier: metered_channel::Sender<(BatchIndex, Batch)>,
     metrics: Arc<ExecutorMetrics>,
@@ -85,7 +85,7 @@ pub fn spawn_subscriber(
             metrics: metrics.clone(),
         };
         let subscriber = Subscriber {
-            rx_reconfigure,
+            rx_shutdown,
             rx_sequence,
             metrics,
             tx_notifier,
@@ -148,10 +148,10 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                 },
 
                 // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    if let ReconfigureNotification::Shutdown = message {
+                    let message = self.rx_shutdown.borrow().clone();
+                    if let ShutdownNotification::Shutdown = message {
                         return Ok(());
                     }
                 }
@@ -377,7 +377,6 @@ struct SubscriberNetworkImpl {
 impl SubscriberNetwork for SubscriberNetworkImpl {
     fn my_worker(&self, worker_id: &WorkerId) -> NetworkPublicKey {
         self.worker_cache
-            .load()
             .worker(&self.name, worker_id)
             .expect("Own worker not found in cache")
             .name
@@ -392,7 +391,7 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
         authorities
             .into_iter()
             .filter_map(|authority| {
-                let worker = self.worker_cache.load().worker(&authority, worker_id);
+                let worker = self.worker_cache.worker(&authority, worker_id);
                 match worker {
                     Ok(worker) => Some(worker.name),
                     Err(err) => {

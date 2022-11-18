@@ -1,10 +1,4 @@
 ---
-Authority:
-  STRUCT:
-    - stake: U64
-    - primary_address: BYTES
-    - network_key:
-        TYPENAME: Ed25519PublicKey
 BLS12381AggregateSignature:
   STRUCT:
     - sig:
@@ -38,14 +32,6 @@ CertificateDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Committee:
-  STRUCT:
-    - authorities:
-        MAP:
-          KEY: STR
-          VALUE:
-            TYPENAME: Authority
-    - epoch: U64
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
 Header:
@@ -73,13 +59,11 @@ HeaderDigest:
 Metadata:
   STRUCT:
     - created_at: U64
-ReconfigureNotification:
+ShutdownNotification:
   ENUM:
     0:
-      NewEpoch:
-        NEWTYPE:
-          TYPENAME: Committee
-    2:
+      Run: UNIT
+    1:
       Shutdown: UNIT
 WorkerIndex:
   NEWTYPESTRUCT:
@@ -105,10 +89,10 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
-WorkerReconfigureMessage:
+WorkerShutdownMessage:
   STRUCT:
     - message:
-        TYPENAME: ReconfigureNotification
+        TYPENAME: ShutdownNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:

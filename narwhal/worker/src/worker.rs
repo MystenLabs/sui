@@ -33,7 +33,7 @@ use tracing::info;
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Sender},
-    Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
+    Batch, BatchDigest, Empty, PrimaryToWorkerServer, ShutdownNotification, Transaction,
     TransactionProto, Transactions, TransactionsServer, TxResponse, WorkerOurBatchMessage,
     WorkerToWorkerServer,
 };
@@ -115,9 +115,7 @@ impl Worker {
             &channel_metrics.tx_others_batch_total,
         );
 
-        let initial_committee = (*(*(*committee).load()).clone()).clone();
-        let (tx_reconfigure, rx_reconfigure) =
-            watch::channel(ReconfigureNotification::NewEpoch(initial_committee));
+        let (tx_shutdown, rx_shutdown) = watch::channel(ShutdownNotification::Run);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
@@ -133,14 +131,13 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
-            tx_reconfigure,
+            tx_shutdown,
             validator: validator.clone(),
         });
 
         // Receive incoming messages from other workers.
         let address = worker
             .worker_cache
-            .load()
             .worker(&primary_name, &id)
             .expect("Our public key or worker id is not in the worker cache")
             .worker_address;
@@ -151,7 +148,6 @@ impl Worker {
 
         // Set up anemo Network.
         let our_primary_peer_id = committee
-            .load()
             .network_key(&primary_name)
             .map(|public_key| PeerId(public_key.0.to_bytes()))
             .unwrap();
@@ -207,7 +203,6 @@ impl Worker {
 
         let other_workers = worker
             .worker_cache
-            .load()
             .others_workers_by_id(&primary_name, &id)
             .into_iter()
             .map(|(_, info)| (info.name, info.worker_address));
@@ -223,12 +218,10 @@ impl Worker {
 
         // Connect worker to its corresponding primary.
         let primary_address = committee
-            .load()
             .primary(&primary_name)
             .expect("Our primary is not in the committee");
 
         let primary_network_key = committee
-            .load()
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
 
@@ -252,19 +245,19 @@ impl Worker {
         let admin_handles = network::admin::start_admin_server(
             network_admin_server_base_port,
             network.clone(),
-            rx_reconfigure.clone(),
+            rx_shutdown.clone(),
             None,
         );
 
         let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
-            rx_reconfigure.clone(),
+            rx_shutdown.clone(),
             rx_our_batch,
             rx_others_batch,
             P2pNetwork::new(network.clone()),
         );
         let client_flow_handles = worker.handle_clients_transactions(
-            rx_reconfigure,
+            rx_shutdown,
             tx_our_batch,
             node_metrics,
             channel_metrics,
@@ -279,7 +272,6 @@ impl Worker {
             id,
             worker
                 .worker_cache
-                .load()
                 .worker(&worker.primary_name, &worker.id)
                 .expect("Our public key or worker id is not in the worker cache")
                 .transactions
@@ -311,7 +303,7 @@ impl Worker {
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         tx_our_batch: Sender<(
             WorkerOurBatchMessage,
             Option<tokio::sync::oneshot::Sender<()>>,
@@ -336,7 +328,6 @@ impl Worker {
         // We first receive clients' transactions from the network.
         let address = self
             .worker_cache
-            .load()
             .worker(&self.primary_name, &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
@@ -347,17 +338,17 @@ impl Worker {
             tx_batch_maker,
             validator,
         }
-        .spawn(address.clone(), rx_reconfigure.clone(), endpoint_metrics);
+        .spawn(address.clone(), rx_shutdown.clone(), endpoint_metrics);
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
+            (*self.committee).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
-            rx_reconfigure.clone(),
+            rx_shutdown.clone(),
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
@@ -370,9 +361,9 @@ impl Worker {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
+            (*self.committee).clone(),
             self.worker_cache.clone(),
-            rx_reconfigure,
+            rx_shutdown,
             /* rx_message */ rx_quorum_waiter,
             P2pNetwork::new(network),
         );
@@ -394,12 +385,12 @@ struct TxReceiverHandler<V> {
 }
 
 impl<V: TransactionValidator> TxReceiverHandler<V> {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
+    async fn wait_for_shutdown(mut rx_shutdown: watch::Receiver<ShutdownNotification>) {
         loop {
-            let result = rx_reconfigure.changed().await;
+            let result = rx_shutdown.changed().await;
             result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
+            let message = rx_shutdown.borrow().clone();
+            if let ShutdownNotification::Shutdown = message {
                 break;
             }
         }
@@ -409,7 +400,7 @@ impl<V: TransactionValidator> TxReceiverHandler<V> {
     fn spawn(
         self,
         address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         endpoint_metrics: WorkerEndpointMetrics,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
@@ -422,7 +413,7 @@ impl<V: TransactionValidator> TxReceiverHandler<V> {
                     .unwrap()
                     .serve() => (),
 
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
+                () = Self::wait_for_shutdown(rx_shutdown) => ()
             }
         })
     }

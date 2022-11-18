@@ -57,7 +57,7 @@ impl Synchronizer {
         rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
     ) -> Self {
-        let genesis = Self::make_genesis(&committee.load());
+        let genesis = Self::make_genesis(&committee);
         Self {
             name,
             committee,
@@ -91,7 +91,7 @@ impl Synchronizer {
         match genesis_guard.0.cmp(&epoch) {
             Ordering::Less => {
                 // Attempt to update cached genesis certs.
-                let committee = self.committee.load();
+                let committee = &self.committee;
                 if committee.epoch() != epoch {
                     debug!(
                         "synchronizer unable to load a new enough committee: needed {epoch} but got {}",
@@ -102,7 +102,7 @@ impl Synchronizer {
                         received: epoch,
                     });
                 }
-                self.genesis.store(Arc::new(Self::make_genesis(&committee)));
+                self.genesis.store(Arc::new(Self::make_genesis(committee)));
                 self.genesis_for_epoch(epoch)
             }
             Ordering::Equal => Ok(genesis_guard),
@@ -172,7 +172,6 @@ impl Synchronizer {
         for (worker_id, digests) in missing {
             let worker_name = self
                 .worker_cache
-                .load()
                 .worker(&self.name, &worker_id)
                 .expect("Author of valid header is not in the worker cache")
                 .name;

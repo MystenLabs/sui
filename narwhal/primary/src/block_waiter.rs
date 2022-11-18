@@ -130,7 +130,6 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                 debug!("Sending batch {batch_digest} request to worker id {worker_id}");
                 let worker_name = self
                     .worker_cache
-                    .load()
                     .worker(&self.name, worker_id)
                     .expect("Worker id not found")
                     .name;

@@ -9,13 +9,13 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::info;
 use types::metered_channel::Sender;
-use types::ReconfigureNotification;
+use types::ShutdownNotification;
 
 pub fn start_admin_server(
     port: u16,
     network: anemo::Network,
-    mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    tx_state_handler: Option<Sender<ReconfigureNotification>>,
+    mut rx_shutdown: watch::Receiver<ShutdownNotification>,
+    tx_state_handler: Option<Sender<ShutdownNotification>>,
 ) -> Vec<JoinHandle<()>> {
     let mut router = Router::new()
         .route("/peers", get(get_peers))
@@ -24,7 +24,7 @@ pub fn start_admin_server(
     // Primaries will have this service enabled
     if let Some(tx_state_handler) = tx_state_handler {
         let r = Router::new()
-            .route("/reconfigure", post(reconfigure))
+            .route("/shutdown", post(shutdown))
             .layer(Extension(tx_state_handler));
         router = router.merge(r);
     }
@@ -43,9 +43,9 @@ pub fn start_admin_server(
     let mut handles = Vec::new();
     // Spawn a task to shutdown server.
     handles.push(spawn_monitored_task!(async move {
-        while (rx_reconfigure.changed().await).is_ok() {
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
+        while (rx_shutdown.changed().await).is_ok() {
+            let message = rx_shutdown.borrow().clone();
+            if let ShutdownNotification::Shutdown = message {
                 handle.clone().shutdown();
                 return;
             }
@@ -88,10 +88,10 @@ async fn get_known_peers(
     )
 }
 
-async fn reconfigure(
-    Extension(tx_state_handler): Extension<Sender<ReconfigureNotification>>,
-    Json(reconfigure_notification): Json<ReconfigureNotification>,
+async fn shutdown(
+    Extension(tx_state_handler): Extension<Sender<ShutdownNotification>>,
+    Json(shutdown_notification): Json<ShutdownNotification>,
 ) -> StatusCode {
-    let _ = tx_state_handler.send(reconfigure_notification).await;
+    let _ = tx_state_handler.send(shutdown_notification).await;
     StatusCode::OK
 }

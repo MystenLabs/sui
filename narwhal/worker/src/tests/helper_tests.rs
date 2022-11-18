@@ -18,7 +18,7 @@ async fn worker_batch_reply() {
     let worker_2 = fixture.authorities().nth(1).unwrap().worker(id);
     let worker_2_primary_name = fixture.authorities().nth(1).unwrap().public_key();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+        watch::channel(ReconfigureNotification::Run);
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();

@@ -18,8 +18,8 @@ use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore,
-    ReconfigureNotification, Round, StoreResult, Timestamp,
+    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round,
+    ShutdownNotification, StoreResult, Timestamp,
 };
 
 #[cfg(test)]
@@ -215,8 +215,8 @@ pub struct Consensus<ConsensusProtocol> {
     /// The committee information.
     committee: Committee,
 
-    /// Receive reconfiguration update.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receive shutdown update.
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
     rx_new_certificates: metered_channel::Receiver<Certificate>,
@@ -248,7 +248,7 @@ where
         committee: Committee,
         store: Arc<ConsensusStore>,
         cert_store: CertificateStore,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
@@ -272,7 +272,7 @@ where
 
         let s = Self {
             committee,
-            rx_reconfigure,
+            rx_shutdown,
             rx_new_certificates,
             tx_committed_certificates,
             tx_sequence,
@@ -283,16 +283,6 @@ where
         };
 
         spawn_monitored_task!(s.run())
-    }
-
-    fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
-        self.committee = new_committee.clone();
-        self.protocol.update_committee(new_committee)?;
-
-        self.consensus_index = 0;
-
-        let genesis = Certificate::genesis(&self.committee);
-        Ok(ConsensusState::new(genesis, self.metrics.clone()))
     }
 
     async fn run(self) {
@@ -308,15 +298,10 @@ where
                     // committee as well.
                     match certificate.epoch().cmp(&self.committee.epoch()) {
                         Ordering::Greater => {
-                            let message = self.rx_reconfigure.borrow_and_update().clone();
+                            let message = self.rx_shutdown.borrow_and_update().clone();
                             match message  {
-                                ReconfigureNotification::NewEpoch(new_committee) => {
-                                    self.state = self.change_epoch(new_committee)?;
-                                },
-                                ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                    self.committee = new_committee;
-                                }
-                                ReconfigureNotification::Shutdown => return Ok(()),
+                                ShutdownNotification::Run => {},
+                                ShutdownNotification::Shutdown => return Ok(()),
                             }
                             tracing::debug!("Committee updated to {}", self.committee);
                         }
@@ -395,17 +380,12 @@ where
                 },
 
                 // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
+                    let message = self.rx_shutdown.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.state = self.change_epoch(new_committee)?;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::Shutdown => return Ok(())
+                        ShutdownNotification::Run => {},
+                        ShutdownNotification::Shutdown => return Ok(())
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
                 }

@@ -28,7 +28,7 @@ use mockall::automock;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel, CommittedSubDag, ConsensusOutput, ConsensusStore, ReconfigureNotification,
+    metered_channel, CommittedSubDag, ConsensusOutput, ConsensusStore, ShutdownNotification,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -74,7 +74,7 @@ impl Executor {
         worker_cache: SharedWorkerCache,
         committee: Committee,
         execution_state: State,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        tx_shutdown: &watch::Sender<ShutdownNotification>,
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
         restored_consensus_output: Vec<CommittedSubDag>,
@@ -96,7 +96,7 @@ impl Executor {
             network,
             worker_cache,
             committee,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_sequence,
             tx_notifier,
             arc_metrics.clone(),

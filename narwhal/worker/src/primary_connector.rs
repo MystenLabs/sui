@@ -8,7 +8,7 @@ use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
+    metered_channel::Receiver, PrimaryResponse, ShutdownNotification, WorkerOthersBatchMessage,
     WorkerOurBatchMessage,
 };
 
@@ -20,7 +20,7 @@ pub struct PrimaryConnector {
     /// The public key of this authority.
     primary_name: NetworkPublicKey,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     /// Input channels to receive the messages to send to the primary.
     rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
     rx_others_batch: Receiver<WorkerOthersBatchMessage>,
@@ -32,7 +32,7 @@ impl PrimaryConnector {
     #[must_use]
     pub fn spawn(
         primary_name: NetworkPublicKey,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
         rx_others_batch: Receiver<WorkerOthersBatchMessage>,
         primary_client: P2pNetwork,
@@ -40,7 +40,7 @@ impl PrimaryConnector {
         spawn_monitored_task!(async move {
             Self {
                 primary_name,
-                rx_reconfigure,
+                rx_shutdown,
                 rx_our_batch,
                 rx_others_batch,
                 primary_client,
@@ -80,11 +80,11 @@ impl PrimaryConnector {
                 },
 
                 // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
                     // TODO: Move logic to handle epoch & committee changes to wherever anemo
                     // network is managed after worker-to-worker interface is migrated.
-                    if self.rx_reconfigure.borrow().clone() == ReconfigureNotification::Shutdown {
+                    if self.rx_shutdown.borrow().clone() == ShutdownNotification::Shutdown {
                         return
                     }
                 }

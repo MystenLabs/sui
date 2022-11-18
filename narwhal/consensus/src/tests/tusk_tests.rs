@@ -14,7 +14,7 @@ use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
-use types::ReconfigureNotification;
+use types::ShutdownNotification;
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2.
@@ -41,8 +41,8 @@ async fn commit_one() {
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (_tx_shutdown, rx_shutdown) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
@@ -54,7 +54,7 @@ async fn commit_one() {
         committee,
         store,
         cert_store,
-        rx_reconfigure,
+        rx_shutdown,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -106,8 +106,8 @@ async fn dead_node() {
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (_tx_shutdown, rx_shutdown) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
@@ -119,7 +119,7 @@ async fn dead_node() {
         committee,
         store,
         cert_store,
-        rx_reconfigure,
+        rx_shutdown,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -225,8 +225,8 @@ async fn not_enough_support() {
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (_tx_shutdown, rx_shutdown) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
@@ -238,7 +238,7 @@ async fn not_enough_support() {
         committee,
         store,
         cert_store,
-        rx_reconfigure,
+        rx_shutdown,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -313,8 +313,8 @@ async fn missing_leader() {
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let initial_committee = ShutdownNotification::Run;
+    let (_tx_shutdown, rx_shutdown) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
@@ -326,7 +326,7 @@ async fn missing_leader() {
         committee,
         store,
         cert_store,
-        rx_reconfigure,
+        rx_shutdown,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -362,89 +362,6 @@ async fn missing_leader() {
 }
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
-// the leader of round 2.
-#[tokio::test]
-async fn epoch_change() {
-    let fixture = CommitteeFixture::builder().build();
-    let mut committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-
-    // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
-    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
-    let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
-
-    let store = make_consensus_store(&test_utils::temp_dir());
-    let cert_store = make_certificate_store(&test_utils::temp_dir());
-    let gc_depth = 50;
-    let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
-    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-
-    let _consensus_handle = Consensus::spawn(
-        committee.clone(),
-        store,
-        cert_store,
-        rx_reconfigure,
-        rx_waiter,
-        tx_primary,
-        tx_output,
-        tusk,
-        metrics,
-        gc_depth,
-    );
-    tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
-
-    // Run for a few epochs.
-    for epoch in 0..5 {
-        // Make certificates for rounds 1 to 4.
-        let genesis = Certificate::genesis(&committee)
-            .iter()
-            .map(|x| x.digest())
-            .collect::<BTreeSet<_>>();
-
-        let (mut certificates, next_parents) =
-            test_utils::make_certificates_with_epoch(&committee, 1..=4, epoch, &genesis, &keys);
-
-        // Make one certificate with round 5 to trigger the commits.
-        let (_, certificate) = test_utils::mock_certificate_with_epoch(
-            &committee,
-            keys[0].clone(),
-            5,
-            epoch,
-            next_parents,
-        );
-        certificates.push_back(certificate);
-
-        // Feed all certificates to the consensus. Only the last certificate should trigger
-        // commits, so the task should not block.
-        while let Some(certificate) = certificates.pop_front() {
-            tx_waiter.send(certificate).await.unwrap();
-        }
-
-        // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
-        // leader); then the leader's certificate should be committed.
-        let committed_sub_dag = rx_output.recv().await.unwrap();
-        let mut sequence = committed_sub_dag.certificates.into_iter();
-        for _ in 1..=4 {
-            let output = sequence.next().unwrap();
-            assert_eq!(output.certificate.epoch(), epoch);
-            assert_eq!(output.certificate.round(), 1);
-        }
-        let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.epoch(), epoch);
-        assert_eq!(output.certificate.round(), 2);
-
-        // Move to the next epoch.
-        committee.epoch = epoch + 1;
-        let message = ReconfigureNotification::NewEpoch(committee.clone());
-        tx_reconfigure.send(message).unwrap();
-    }
-}
-
-// Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2. Then shutdown consensus and restart it in a
 #[tokio::test]
 async fn restart_with_new_committee() {
@@ -459,8 +376,8 @@ async fn restart_with_new_committee() {
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = test_utils::test_channel!(1);
 
-        let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-        let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+        let initial_committee = ShutdownNotification::Run;
+        let (tx_shutdown, rx_shutdown) = watch::channel(initial_committee);
         let store = make_consensus_store(&test_utils::temp_dir());
         let cert_store = make_certificate_store(&test_utils::temp_dir());
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -471,7 +388,7 @@ async fn restart_with_new_committee() {
             committee.clone(),
             store,
             cert_store,
-            rx_reconfigure,
+            rx_shutdown,
             rx_waiter,
             tx_primary,
             tx_output,
@@ -520,8 +437,8 @@ async fn restart_with_new_committee() {
 
         // Move to the next epoch.
         committee.epoch = epoch + 1;
-        let message = ReconfigureNotification::Shutdown;
-        tx_reconfigure.send(message).unwrap();
+        let message = ShutdownNotification::Shutdown;
+        tx_shutdown.send(message).unwrap();
 
         // Ensure consensus stopped.
         handle.await.unwrap();

@@ -1,17 +1,15 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
+use config::{SharedCommittee, SharedWorkerCache};
 use crypto::PublicKey;
 use network::{P2pNetwork, UnreliableNetwork};
-use std::{collections::BTreeMap, sync::Arc};
 use sui_metrics::spawn_monitored_task;
-use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use types::{
     metered_channel::{Receiver, Sender},
-    Certificate, ReconfigureNotification, Round, WorkerReconfigureMessage,
+    Certificate, Round, ShutdownNotification, WorkerShutdownMessage,
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
@@ -19,17 +17,17 @@ pub struct StateHandler {
     /// The public key of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: SharedCommittee,
+    _committee: SharedCommittee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
     rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
     /// Signals a new consensus round
     tx_consensus_round_updates: watch::Sender<Round>,
-    /// Receives notifications to reconfigure the system.
-    rx_state_handler: Receiver<ReconfigureNotification>,
+    /// Receives notifications to shutdown the system.
+    rx_state_handler: Receiver<ShutdownNotification>,
     /// Channel to signal committee changes.
-    tx_reconfigure: watch::Sender<ReconfigureNotification>,
+    tx_shutdown: watch::Sender<ShutdownNotification>,
     /// The latest round committed by consensus.
     last_committed_round: Round,
     /// A channel to update the committed rounds
@@ -42,24 +40,24 @@ impl StateHandler {
     #[must_use]
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee,
+        _committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<u64>,
-        rx_state_handler: Receiver<ReconfigureNotification>,
-        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        rx_state_handler: Receiver<ShutdownNotification>,
+        tx_shutdown: watch::Sender<ShutdownNotification>,
         tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
             Self {
                 name,
-                committee,
+                _committee,
                 worker_cache,
                 rx_committed_certificates,
                 tx_consensus_round_updates,
                 rx_state_handler,
-                tx_reconfigure,
+                tx_shutdown,
                 last_committed_round: 0,
                 tx_commited_own_headers,
                 network,
@@ -100,43 +98,10 @@ impl StateHandler {
         }
     }
 
-    fn update_committee(&mut self, committee: Committee) {
-        // Update the worker cache.
-        self.worker_cache.swap(Arc::new(WorkerCache {
-            epoch: committee.epoch,
-            workers: committee
-                .keys()
-                .iter()
-                .map(|key| {
-                    (
-                        (*key).clone(),
-                        self.worker_cache
-                            .load()
-                            .workers
-                            .get(key)
-                            .tap_none(|| {
-                                warn!(
-                                    "Worker cache does not have a key for the new committee member"
-                                )
-                            })
-                            .unwrap_or(&WorkerIndex(BTreeMap::new()))
-                            .clone(),
-                    )
-                })
-                .collect(),
-        }));
-
-        // Update the committee.
-        self.committee.swap(Arc::new(committee));
-
-        tracing::debug!("Committee updated to {}", self.committee);
-    }
-
-    fn notify_our_workers(&mut self, message: ReconfigureNotification) {
-        let message = WorkerReconfigureMessage { message };
+    fn notify_our_workers(&mut self, message: ShutdownNotification) {
+        let message = WorkerShutdownMessage { message };
         let our_workers = self
             .worker_cache
-            .load()
             .our_workers(&self.name)
             .unwrap()
             .into_iter()
@@ -162,31 +127,19 @@ impl StateHandler {
                     self.notify_our_workers(message.to_owned());
 
                     let shutdown = match &message {
-                        ReconfigureNotification::NewEpoch(committee) => {
-                            self.update_committee(committee.to_owned());
-
-                            // Trigger cleanup on the primary.
-                            let _ = self.tx_consensus_round_updates.send(0); // ignore error when receivers dropped.
-
-                            false
-                        },
-                        ReconfigureNotification::UpdateCommittee(committee) => {
-                            self.update_committee(committee.to_owned());
-
-                            false
-                        }
-                        ReconfigureNotification::Shutdown => true,
+                        ShutdownNotification::Run => false ,
+                        ShutdownNotification::Shutdown => true,
                     };
 
                     // Notify all other tasks.
-                    self.tx_reconfigure
+                    self.tx_shutdown
                         .send(message)
-                        .expect("Reconfigure channel dropped");
+                        .expect("Shutdown channel dropped");
 
                     // Exit only when we are sure that all the other tasks received
                     // the shutdown message.
                     if shutdown {
-                        self.tx_reconfigure.closed().await;
+                        self.tx_shutdown.closed().await;
                         return;
                     }
                 }

@@ -27,7 +27,7 @@ use tokio::{
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, PrimaryResponse, ReconfigureNotification, Transaction, TxResponse,
+    Batch, BatchDigest, PrimaryResponse, ShutdownNotification, Transaction, TxResponse,
     WorkerOurBatchMessage,
 };
 
@@ -49,7 +49,7 @@ pub struct BatchMaker {
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: watch::Receiver<ShutdownNotification>,
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
@@ -72,7 +72,7 @@ impl BatchMaker {
         committee: Committee,
         batch_size: usize,
         max_batch_delay: Duration,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: watch::Receiver<ShutdownNotification>,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
         tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
@@ -85,7 +85,7 @@ impl BatchMaker {
                 committee,
                 batch_size,
                 max_batch_delay,
-                rx_reconfigure,
+                rx_shutdown,
                 rx_batch_maker,
                 tx_message,
                 batch_start_timestamp: Instant::now(),
@@ -158,18 +158,12 @@ impl BatchMaker {
 
                 // TODO: duplicated code in quorum_waiter.rs
                 // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
+                result = self.rx_shutdown.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
+                    let message = self.rx_shutdown.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-
-                        },
-                        ReconfigureNotification::Shutdown => return
+                        ShutdownNotification::Run => {},
+                        ShutdownNotification::Shutdown => return
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
                 },

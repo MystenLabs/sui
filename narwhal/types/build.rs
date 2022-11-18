@@ -103,9 +103,9 @@ fn build_anemo_services(out_dir: &Path) {
         .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
-                .name("reconfigure")
-                .route_name("Reconfigure")
-                .request_type("crate::WorkerReconfigureMessage")
+                .name("shutdown")
+                .route_name("Shutdown")
+                .request_type("crate::WorkerShutdownMessage")
                 .response_type("()")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),

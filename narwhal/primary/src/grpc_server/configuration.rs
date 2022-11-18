@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{SharedCommittee, Stake};
+use config::SharedCommittee;
 use crypto::PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use std::collections::BTreeMap;
 use tonic::{Request, Response, Status};
 use types::{
     Configuration, Empty, GetPrimaryAddressResponse, MultiAddrProto, NewEpochRequest,
@@ -37,7 +36,7 @@ impl NarwhalConfiguration {
             .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
 
         // ensure provided key is part of the committee
-        if self.committee.load().primary(&key).is_err() {
+        if self.committee.primary(&key).is_err() {
             return Err(Status::invalid_argument(
                 "Invalid public key: unknown authority",
             ));
@@ -84,43 +83,8 @@ impl Configuration for NarwhalConfiguration {
     #[allow(clippy::mutable_key_type)]
     async fn new_network_info(
         &self,
-        request: Request<NewNetworkInfoRequest>,
+        _request: Request<NewNetworkInfoRequest>,
     ) -> Result<Response<Empty>, Status> {
-        let new_network_info_request = request.into_inner();
-        let epoch_number: u64 = new_network_info_request.epoch_number.into();
-        if epoch_number != self.committee.load().epoch() {
-            return Err(Status::invalid_argument(format!(
-                "Passed in epoch {epoch_number} does not match current epoch {}",
-                self.committee.load().epoch
-            )));
-        }
-        let validators = new_network_info_request.validators;
-        let mut new_network_info = BTreeMap::new();
-        for validator in validators.iter() {
-            let public_key = self.get_public_key(validator.public_key.as_ref())?;
-
-            let stake_weight: Stake = validator
-                .stake_weight
-                .try_into()
-                .map_err(|_| Status::invalid_argument("Invalid stake weight"))?;
-            let primary_address = validator
-                .primary_address
-                .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing primary to primary address"))?
-                .address
-                .parse()
-                .map_err(|err| {
-                    Status::invalid_argument(format!("Could not serialize: {:?}", err))
-                })?;
-            new_network_info.insert(public_key, (stake_weight, primary_address));
-        }
-        let mut new_committee = (**self.committee.load()).clone();
-        let res = new_committee.update_primary_network_info(new_network_info);
-        if res.is_ok() {
-            self.committee.swap(std::sync::Arc::new(new_committee));
-        }
-        res.map_err(|err| Status::internal(format!("Could not update network info: {:?}", err)))?;
-
         Ok(Response::new(Empty {}))
     }
 

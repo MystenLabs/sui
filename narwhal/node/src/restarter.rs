@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{Node, NodeStorage};
-use arc_swap::ArcSwap;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use executor::ExecutionState;
@@ -10,7 +9,7 @@ use futures::future::join_all;
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
-use types::ReconfigureNotification;
+use types::ShutdownNotification;
 use worker::TransactionValidator;
 
 // Module to start a node (primary, workers and default consensus), keep it running, and restarting it
@@ -28,7 +27,7 @@ impl NodeRestarter {
         execution_state: Arc<State>,
         parameters: Parameters,
         tx_validator: impl TransactionValidator,
-        mut rx_reconfigure: Receiver<(
+        mut rx_shutdown: Receiver<(
             KeyPair,
             NetworkKeyPair,
             Committee,
@@ -60,7 +59,7 @@ impl NodeRestarter {
             let primary_handles = Node::spawn_primary(
                 primary_keypair,
                 primary_network_keypair,
-                Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+                Arc::new(committee.clone()),
                 worker_cache.clone(),
                 &store,
                 parameters.clone(),
@@ -74,7 +73,7 @@ impl NodeRestarter {
             let worker_handles = Node::spawn_workers(
                 name.clone(),
                 worker_ids_and_keypairs,
-                Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+                Arc::new(committee.clone()),
                 worker_cache.clone(),
                 &store,
                 parameters.clone(),
@@ -91,29 +90,29 @@ impl NodeRestarter {
                 new_network_keypair,
                 new_committee,
                 new_worker_ids_and_keypairs,
-                new_worker_cache,
-            ) = match rx_reconfigure.recv().await {
+                _new_worker_cache,
+            ) = match rx_shutdown.recv().await {
                 Some(x) => x,
                 None => break,
             };
-            tracing::info!("Starting reconfiguration with committee {committee}");
+            tracing::info!("Starting shutdown with committee {committee}");
 
             // Shutdown all relevant components.
             // Send shutdown message to the primary, who will forward it to its workers
             let client = reqwest::Client::new();
             client
                 .post(format!(
-                    "http://127.0.0.1:{}/reconfigure",
+                    "http://127.0.0.1:{}/shutdown",
                     parameters
                         .network_admin_server
                         .primary_network_admin_server_port
                 ))
-                .json(&ReconfigureNotification::Shutdown)
+                .json(&ShutdownNotification::Shutdown)
                 .send()
                 .await
                 .unwrap();
 
-            tracing::debug!("Committee reconfiguration message successfully sent");
+            tracing::debug!("Committee shutdown message successfully sent");
 
             // Wait for the components to shut down.
             join_all(handles.drain(..)).await;
@@ -130,7 +129,7 @@ impl NodeRestarter {
             name = primary_keypair.public().clone();
             worker_ids_and_keypairs = new_worker_ids_and_keypairs;
             committee = new_committee;
-            worker_cache.swap(Arc::new(new_worker_cache));
+            // worker_cache.swap(Arc::new(new_worker_cache));
         }
     }
 }
