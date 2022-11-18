@@ -11,6 +11,7 @@ use consensus::{
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
+use network::failpoints::initialise_network_failpoints;
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
@@ -250,6 +251,7 @@ impl Node {
         let mut handles = Vec::new();
 
         let metrics = initialise_metrics(registry);
+        initialise_network_failpoints();
 
         for (id, keypair) in ids_and_keypairs {
             let worker_handles = Worker::spawn(
