@@ -28,6 +28,7 @@ pub mod checkpoints;
 mod consensus_handler;
 pub mod consensus_validator;
 mod histogram;
+mod module_cache_gauge;
 mod node_sync;
 mod query_helpers;
 mod transaction_manager;
