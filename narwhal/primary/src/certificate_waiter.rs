@@ -37,7 +37,7 @@ const MAX_CERTIFICATES_TO_FETCH: usize = 1000;
 const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: Duration = Duration::from_secs(5);
 // The timeout for an iteration of parallel fetch requests over all peers would be
 // num peers * PARALLEL_FETCH_REQUEST_INTERVAL_SECS + PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT
-const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(30);
+const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Message format from CertificateWaiter to core on the loopback channel.
 pub struct CertificateLoopbackMessage {
@@ -381,15 +381,21 @@ async fn fetch_certificates_helper(
                 let network = network.network();
                 let request = request.clone();
                 fut.push(monitored_future!(async move {
-                    debug!("Sending out fetch requests in parallel.");
-                    network.fetch_certificates(&peer, request).await
+                    debug!("Sending out fetch request in parallel to {peer}");
+                    let result = network.fetch_certificates(&peer, request).await;
+                    if let Ok(resp) = &result {
+                        debug!(
+                            "Fetched {} certificates from peer {peer}",
+                            resp.certificates.len()
+                        );
+                    }
+                    result
                 }));
             }
             let mut interval = Box::pin(time::sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {
                     Some(Ok(resp)) => {
-                        debug!("Fetched {} certificates from peer", resp.certificates.len());
                         if resp.certificates.is_empty() {
                             // Issue request to another primary immediately.
                             continue;
