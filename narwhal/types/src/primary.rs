@@ -54,7 +54,7 @@ impl Timestamp for TimestampMs {
 }
 // Returns the current time expressed as UNIX
 // timestamp in milliseconds
-fn now() -> TimestampMs {
+pub fn now() -> TimestampMs {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(n) => n.as_millis() as TimestampMs,
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
