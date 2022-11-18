@@ -16,6 +16,7 @@ import {
   SuiExecuteTransactionResponse,
   TransactionEffects,
 } from '../types';
+import * as GasEstimationUtils from '../utils/gas-estimation';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
@@ -135,14 +136,14 @@ export abstract class SignerWithProvider implements Signer {
     const sig = await this.signData(txBytes);
     const data = deserializeTransactionBytesToTransactionData(txBytes);
     let version = await this.provider.getRpcApiVersion();
-    
+
     return generateTransactionDigest(
       data,
       sig.signatureScheme,
       sig.signature,
       sig.pubKey,
-      (version?.major == 0 && version?.minor < 18) ? 'base64' : 'base58',
-      (version?.major == 0 && version?.minor < 18) ? false : true
+      version?.major == 0 && version?.minor < 18 ? 'base64' : 'base58',
+      version?.major == 0 && version?.minor < 18 ? false : true
     );
   }
 
@@ -319,5 +320,70 @@ export abstract class SignerWithProvider implements Signer {
       throw new Error('Failed to estimate the gas cost from transaction');
     }
     return gasEstimation;
+  }
+
+  /**
+   * Calculates the suggested gas budget and gas estimation of a transaction, using {@link SignerWithProvider.dryRunTransaction}.
+   * In case there is an error, or dryRun is not supported by the environment it uses a default gas budget and const estimation based
+   * on the transaction kind.
+   * @param txKind The transaction kind
+   * @param txCreator A function that accepts a guessed gas budget and returns the transaction to dry run
+   * @param maxGasCoinBalance The maximum amount of the balance of an individual SUI coin owned by sender. There is no way to use multiple coins for gas at the moment so the sender has to own one with enough balance.
+   * @param budgetParams Any other parameters required to guess the gasBudget before dry running the transaction
+   * @returns An object the includes
+   * suggestedGasBudget - in case of error or insufficient gas this defaults to the 'guessed' budget but without taking into account the maxGasCoinBalance and available balance
+   * gasCostEstimation - in case of error or insufficient gas this defaults to the 'guessed' budget
+   * insufficientGas
+   * isSuccess
+   */
+  async getGasCostEstimationAndSuggestedBudget<
+    T extends GasEstimationUtils.TxKind
+  >(
+    txKind: T,
+    txCreator: (
+      gasBudgetGuess: number
+    ) => Promise<Parameters<SignerWithProvider['dryRunTransaction']>>,
+    maxGasCoinBalance: bigint,
+    ...budgetParams: GasEstimationUtils.GasBudgetGuessParams<T>
+  ) {
+    let gasCostEstimation: number;
+    let suggestedGasBudget: number;
+    let insufficientGas: boolean;
+    let isSuccess: boolean;
+    const gasBudget = GasEstimationUtils.getGasBudgetGuess(
+      txKind,
+      maxGasCoinBalance,
+      true,
+      budgetParams
+    );
+    try {
+      const dryRunResult = await this.dryRunTransaction(
+        ...(await txCreator(gasBudget))
+      );
+      isSuccess = dryRunResult.status.status === 'success';
+      gasCostEstimation =
+        (isSuccess ? getTotalGasUsed(dryRunResult) : null) ?? gasBudget;
+      suggestedGasBudget = isSuccess
+        ? dryRunResult.gasUsed.computationCost +
+          dryRunResult.gasUsed.storageCost
+        : GasEstimationUtils.getGasBudgetGuess(
+            txKind,
+            null,
+            false,
+            budgetParams
+          );
+      insufficientGas = dryRunResult.status.error === 'InsufficientGas';
+    } catch (e) {
+      suggestedGasBudget = gasBudget;
+      gasCostEstimation = gasBudget;
+      insufficientGas = false;
+      isSuccess = false;
+    }
+    return {
+      suggestedGasBudget,
+      gasCostEstimation,
+      insufficientGas,
+      isSuccess,
+    };
   }
 }

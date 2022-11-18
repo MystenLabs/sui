@@ -45,7 +45,7 @@ export interface PayTransaction {
 /// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
 /// input coin, then use the first input coin as the gas coin object.
 /// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
-/// 4. all other input coints other than the first one are deleted.
+/// 4. all other input coins other than the first one are deleted.
 export interface PaySuiTransaction {
   /**
    * use `provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual` to

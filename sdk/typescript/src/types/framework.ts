@@ -31,6 +31,7 @@ export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';
 export const PAY_JOIN_COIN_FUNC_NAME = 'join';
 export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
+export const DEFAULT_GAS_BUDGET_FOR_PAY = 150;
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
@@ -219,25 +220,53 @@ export class Coin {
    * @param amountToSend Total amount to send to recipient
    * @param recipient Recipient's address
    * @param gasBudget Gas budget for the tx
+   * @param suiMaxCoinBalance The maximum amount of the balance of an individual SUI coin owned by sender.
    * @throws in case of insufficient funds, network errors etc
    */
   public static async transfer(
+    ...args: Parameters<typeof Coin['newTransferTx']>
+  ) {
+    return args[0].signAndExecuteTransaction(await Coin.newTransferTx(...args));
+  }
+
+  /**
+   * Estimates the gas cost and budget for a pay/paySui transaction.
+   * @param signer User's signer
+   * @param allCoins All the coins that are owned by the user. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.
+   * @param coinTypeArg The coin type argument (Coin<T> the T) of the coin to send
+   * @param amountToSend Total amount to send to recipient
+   * @param recipient Recipient's address
+   * @param suiMaxCoinBalance The maximum amount of the balance of an individual SUI coin owned by sender.
+   * @returns See {@link SignerWithProvider.getGasCostEstimationAndSuggestedBudget}
+   */
+  public static async getGasCostEstimationAndSuggestedBudget(
     signer: SignerWithProvider,
     allCoins: SuiMoveObject[],
     coinTypeArg: string,
     amountToSend: bigint,
     recipient: SuiAddress,
-    gasBudget: number
+    suiMaxCoinBalance: bigint
   ) {
-    const tx = await Coin.newTransferTx(
-      signer,
-      allCoins,
-      coinTypeArg,
-      amountToSend,
-      recipient,
-      gasBudget
+    const isSuiTransfer = coinTypeArg === SUI_TYPE_ARG;
+    const coinsOfTransferType = allCoins.filter(
+      (aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg
     );
-    return signer.signAndExecuteTransaction(tx);
+    return signer.getGasCostEstimationAndSuggestedBudget(
+      isSuiTransfer ? 'paySui' : 'pay',
+      async (gasBudget) => [
+        await Coin.newTransferTx(
+          signer,
+          allCoins,
+          coinTypeArg,
+          amountToSend,
+          recipient,
+          gasBudget
+        ),
+      ],
+      suiMaxCoinBalance,
+      coinsOfTransferType,
+      amountToSend
+    );
   }
 
   /**
@@ -262,14 +291,36 @@ export class Coin {
     const coinsOfTransferType = allCoins.filter(
       (aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg
     );
-    const totalAmountIncludingGas =
-      amountToSend + BigInt(isSuiTransfer ? gasBudget : 0);
-    const inputCoinObjs =
-      await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-        coinsOfTransferType,
-        totalAmountIncludingGas
+    const coinsOfGas = isSuiTransfer
+      ? coinsOfTransferType
+      : allCoins.filter((aCoin) => Coin.isSUI(aCoin));
+    const gasCoin = Coin.selectCoinWithBalanceGreaterThanOrEqual(
+      coinsOfGas,
+      BigInt(gasBudget)
+    );
+    if (!gasCoin) {
+      // TODO: denomination for gasBudget?
+      throw new Error(
+        `Unable to find a coin to cover the gas budget ${gasBudget}`
       );
-    if (!inputCoinObjs.length) {
+    }
+    const totalAmountIncludingGas =
+      amountToSend +
+      BigInt(
+        isSuiTransfer
+          ? // subtract from the total the balance of the gasCoin as it's going be the first element of the inputCoins
+            BigInt(gasBudget) - BigInt(Coin.getBalance(gasCoin) || 0)
+          : 0
+      );
+    const inputCoinObjs =
+      totalAmountIncludingGas > 0
+        ? await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+            coinsOfTransferType,
+            totalAmountIncludingGas,
+            isSuiTransfer ? [Coin.getID(gasCoin)] : []
+          )
+        : [];
+    if (totalAmountIncludingGas > 0 && !inputCoinObjs.length) {
       const totalBalanceOfTransferType = Coin.totalBalance(coinsOfTransferType);
       const suggestedAmountToSend =
         totalBalanceOfTransferType - BigInt(isSuiTransfer ? gasBudget : 0);
@@ -279,18 +330,8 @@ export class Coin {
           `${amountToSend}. Try reducing the transfer amount to ${suggestedAmountToSend}.`
       );
     }
-    if (!isSuiTransfer) {
-      const allGasCoins = allCoins.filter((aCoin) => Coin.isSUI(aCoin));
-      const gasCoin = Coin.selectCoinWithBalanceGreaterThanOrEqual(
-        allGasCoins,
-        BigInt(gasBudget)
-      );
-      if (!gasCoin) {
-        // TODO: denomination for gasBudget?
-        throw new Error(
-          `Unable to find a coin to cover the gas budget ${gasBudget}`
-        );
-      }
+    if (isSuiTransfer) {
+      inputCoinObjs.unshift(gasCoin);
     }
     const signerAddress = await signer.getAddress();
     const inputCoins = inputCoinObjs.map(Coin.getID);
