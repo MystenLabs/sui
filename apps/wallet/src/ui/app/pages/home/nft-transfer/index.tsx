@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
+import { useGasEstimation } from './useGasEstimation';
 import { createValidationSchema } from './validation';
 import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
@@ -43,20 +44,22 @@ function NftTransferPage() {
         [address, objectId]
     );
     const navigate = useNavigate();
+    const [gasBudget, , isLoading] = useGasEstimation(objectId);
     const onHandleSubmit = useCallback(
         async (
             { to }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
-            if (!objectId) {
+            if (!objectId || !gasBudget) {
                 return;
             }
             setSendError(null);
             try {
                 const resp = await dispatch(
                     transferNFT({
-                        recipientAddress: to,
-                        nftId: objectId,
+                        recipient: to,
+                        objectId,
+                        gasBudget,
                     })
                 ).unwrap();
                 resetForm();
@@ -72,7 +75,7 @@ function NftTransferPage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, objectId]
+        [dispatch, navigate, objectId, gasBudget]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
@@ -105,8 +108,9 @@ function NftTransferPage() {
                                 onSubmit={onHandleSubmit}
                             >
                                 <TransferNFTForm
-                                    nftID={objectId}
                                     submitError={sendError}
+                                    gasBudget={gasBudget}
+                                    isGasEstimationLoading={isLoading}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
