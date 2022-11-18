@@ -31,12 +31,17 @@ export function useNavigateWithQuery() {
 
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
     ({ to, ...props }) => {
+        const [toBaseURL, toSearchParamString] = (to as string).split('?');
+
+        const toURLSearchParams = new URLSearchParams(toSearchParamString);
+
         const [searchParams] = useSearchParams();
 
-        const networkParam =
-            (to.toString().includes('?') ? '&network=' : '?network=') +
-            searchParams.get('network');
+        const newParams = new URLSearchParams({
+            ...Object.fromEntries(toURLSearchParams),
+            ...Object.fromEntries(searchParams),
+        });
 
-        return <Link to={`${to}${networkParam}`} {...props} />;
+        return <Link to={`${toBaseURL}?${newParams}`} {...props} />;
     }
 );
