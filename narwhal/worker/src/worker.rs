@@ -14,7 +14,7 @@ use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
-    trace::TraceLayer,
+    trace::{DefaultMakeSpan, TraceLayer},
 };
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
@@ -166,14 +166,20 @@ impl Worker {
             .merge(primary_to_worker_router);
 
         let service = ServiceBuilder::new()
-            .layer(TraceLayer::new_for_server_errors())
+            .layer(
+                TraceLayer::new_for_server_errors()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+            )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
-            .layer(TraceLayer::new_for_client_and_server_errors())
+            .layer(
+                TraceLayer::new_for_client_and_server_errors()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+            )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
