@@ -634,7 +634,7 @@ pub fn resolve_move_function_args(
 
     if !fdef.is_entry {
         bail!(
-            "{}::{} does not have public(script) visibility",
+            "{}::{} is not an entry function",
             module.self_id(),
             function,
         )
