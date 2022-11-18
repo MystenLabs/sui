@@ -207,7 +207,7 @@
         pending_validators: <a href="_empty">vector::empty</a>(),
         pending_removals: <a href="_empty">vector::empty</a>(),
         next_epoch_validators: <a href="_empty">vector::empty</a>(),
-        pending_delegation_switches: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        pending_delegation_switches: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>()
     };
     validators.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(&validators);
     validators

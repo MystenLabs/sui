@@ -4,6 +4,7 @@
 use bcs::to_bytes;
 use sui_types::balance::{Balance, Supply};
 use sui_types::base_types::SuiAddress;
+use sui_types::base_types::TransactionDigest;
 use sui_types::collection_types::VecMap;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -90,5 +91,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         },
         reference_gas_price: 1,
         validator_report_records: VecMap { contents: vec![] },
+        chain_id: TransactionDigest::genesis(),
     }
 }

@@ -11,6 +11,7 @@ module sui::sui_system_tests {
     use sui::governance_test_utils::{advance_epoch, set_up_sui_system_state};
     use sui::sui_system::{Self, SuiSystemState};
     use sui::vec_set;
+    use sui::coin;
 
     #[test]
     fun test_report_validator() {
@@ -70,6 +71,31 @@ module sui::sui_system_tests {
 
         set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
         report_helper(@0x2, @0x1, true, scenario);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 5)]
+    fun test_add_with_wrong_chain_id_fail() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        {
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            sui_system::request_add_validator(
+                &mut system_state, 
+                x"FF", 
+                x"FF", 
+                x"FF", 
+                b"ValidatorName", 
+                x"FF", 
+                coin::mint_for_testing(60, ctx), 
+                1, 
+                1,
+                x"11", // wrong chain ID
+                ctx);
+            test_scenario::return_shared(system_state);
+        };
         test_scenario::end(scenario_val);
     }
 

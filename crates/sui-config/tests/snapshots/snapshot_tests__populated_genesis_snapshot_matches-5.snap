@@ -440,4 +440,5 @@ parameters:
 reference_gas_price: 0
 validator_report_records:
   contents: []
+chain_id: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 

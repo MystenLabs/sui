@@ -73,7 +73,7 @@ module sui::validator_set {
             pending_validators: vector::empty(),
             pending_removals: vector::empty(),
             next_epoch_validators: vector::empty(),
-            pending_delegation_switches: vec_map::empty(),
+            pending_delegation_switches: vec_map::empty()
         };
         validators.next_epoch_validators = derive_next_epoch_validators(&validators);
         validators

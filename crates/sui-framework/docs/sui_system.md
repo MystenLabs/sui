@@ -158,6 +158,12 @@ The top-level object containing all information of the Sui system.
  them. If a validator has never been reported they don't have an entry in this map.
  This map resets every epoch.
 </dd>
+<dt>
+<code>chain_id: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+ Unique genesis digest that identies the network (e.g. mainnet, testnet, devnet, etc.).
+</dd>
 </dl>
 
 
@@ -173,6 +179,15 @@ The top-level object containing all information of the Sui system.
 
 
 <pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ECANNOT_REPORT_ONESELF">ECANNOT_REPORT_ONESELF</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_ECHAIN_ID_MISMATCH"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ECHAIN_ID_MISMATCH">ECHAIN_ID_MISMATCH</a>: u64 = 5;
 </code></pre>
 
 
@@ -221,7 +236,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64, chain_id: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -237,6 +252,7 @@ This function will be called only once in genesis.
     max_validator_candidate_count: u64,
     min_validator_stake: u64,
     storage_gas_price: u64,
+    chain_id: <a href="">vector</a>&lt;u8&gt;
 ) {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
@@ -254,6 +270,7 @@ This function will be called only once in genesis.
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        chain_id
     };
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(state);
 }
@@ -272,7 +289,7 @@ The <code><a href="validator.md#0x2_validator">validator</a></code> object needs
 The amount of stake in the <code><a href="validator.md#0x2_validator">validator</a></code> object must meet the requirements.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, chain_id: <a href="">vector</a>&lt;u8&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -291,6 +308,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
     <a href="stake.md#0x2_stake">stake</a>: Coin&lt;SUI&gt;,
     gas_price: u64,
     commission_rate: u64,
+    chain_id: <a href="">vector</a>&lt;u8&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(
@@ -302,6 +320,7 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         stake_amount &gt;= self.parameters.min_validator_stake,
         <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>,
     );
+    <b>assert</b>!(chain_id == self.chain_id,<a href="sui_system.md#0x2_sui_system_ECHAIN_ID_MISMATCH">ECHAIN_ID_MISMATCH</a>);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator.md#0x2_validator_new">validator::new</a>(
         <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx),
         pubkey_bytes,

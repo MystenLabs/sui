@@ -59,6 +59,8 @@ module sui::sui_system {
         /// them. If a validator has never been reported they don't have an entry in this map.
         /// This map resets every epoch.
         validator_report_records: VecMap<address, VecSet<address>>,
+        /// Unique genesis digest that identies the network (e.g. mainnet, testnet, devnet, etc.).
+        chain_id: vector<u8>
     }
 
     // Errors
@@ -67,6 +69,7 @@ module sui::sui_system {
     const EEPOCH_NUMBER_MISMATCH: u64 = 2;
     const ECANNOT_REPORT_ONESELF: u64 = 3;
     const EREPORT_RECORD_NOT_FOUND: u64 = 4;
+    const ECHAIN_ID_MISMATCH: u64 = 5;
 
     // ==== functions that can only be called by genesis ====
 
@@ -79,6 +82,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         storage_gas_price: u64,
+        chain_id: vector<u8>
     ) {
         let validators = validator_set::new(validators);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
@@ -96,6 +100,7 @@ module sui::sui_system {
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
+            chain_id
         };
         transfer::share_object(state);
     }
@@ -117,6 +122,7 @@ module sui::sui_system {
         stake: Coin<SUI>,
         gas_price: u64,
         commission_rate: u64,
+        chain_id: vector<u8>,
         ctx: &mut TxContext,
     ) {
         assert!(
@@ -128,6 +134,7 @@ module sui::sui_system {
             stake_amount >= self.parameters.min_validator_stake,
             ELIMIT_EXCEEDED,
         );
+        assert!(chain_id == self.chain_id,ECHAIN_ID_MISMATCH);
         let validator = validator::new(
             tx_context::sender(ctx),
             pubkey_bytes,

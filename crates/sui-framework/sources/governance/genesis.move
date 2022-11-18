@@ -23,7 +23,7 @@ module sui::genesis {
 
     /// Initial storage gas price
     const INIT_STORAGE_GAS_PRICE: u64 = 1;
-
+    
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -37,6 +37,7 @@ module sui::genesis {
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
+        chain_id: vector<u8>,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
@@ -85,6 +86,7 @@ module sui::genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STORAGE_GAS_PRICE,
+            chain_id
         );
     }
 }

@@ -43,6 +43,7 @@ module sui::governance_test_utils {
             1024, // max_validator_candidate_count
             0, // min_validator_stake
             1, //storage_gas_price
+            vector[(0 as u8) * 32] // default chain ID.
         )
     }
 
