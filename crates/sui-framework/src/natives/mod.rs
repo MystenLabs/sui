@@ -217,6 +217,16 @@ pub fn all_natives(
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
         ),
+        (
+            "groth16",
+            "verify_groth16_proof_internal",
+            make_native!(crypto::verify_groth16_proof_internal),
+        ),
+        (
+            "groth16",
+            "prepare_verifying_key",
+            make_native!(crypto::prepare_verifying_key),
+        ),
     ];
     sui_natives
         .iter()

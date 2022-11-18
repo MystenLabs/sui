@@ -29,12 +29,15 @@ ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["base_field", "curve", "scalar_field", "std"] }
+ark-bls12-381 = { version = "0.3", features = ["curve", "scalar_field"] }
 ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-ed-on-bw6-761 = { version = "0.3" }
 ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
 ark-ff = { version = "0.3", features = ["asm", "parallel", "rayon", "std"] }
-ark-relations = { version = "0.3", default-features = false, features = ["std", "tracing-subscriber"] }
+ark-groth16 = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-poly = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
+ark-relations = { version = "0.3", features = ["std", "tracing-subscriber"] }
 ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
 ark-snark = { version = "0.3", default-features = false }
 ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
@@ -82,7 +85,7 @@ blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
-byte-slice-cast = { version = "1", default-features = false, features = ["std"] }
+byte-slice-cast = { version = "1", features = ["std"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb", features = ["fiat"] }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128", "std"] }
@@ -183,7 +186,8 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7a248d1ed4c30dfd49f0fb0cb346c058c5e96983", features = ["copy_key", "secure", "threads-bls_12_377"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", features = ["copy_key", "secure", "threads-bls_12_377"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -230,7 +234,8 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.11", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
-hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
+hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -608,7 +613,8 @@ unicode-width = { version = "0.1" }
 unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
-untrusted = { version = "0.7", default-features = false }
+untrusted-ca01ad9e24f5d932 = { package = "untrusted", version = "0.7", default-features = false }
+untrusted-274715c4dabd11b0 = { package = "untrusted", version = "0.9", default-features = false }
 url = { version = "2" }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "private_getrandom", "private_rand", "rng", "std", "v4"] }
@@ -650,6 +656,7 @@ ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["base_field", "curve", "scalar_field", "std"] }
+ark-bls12-381 = { version = "0.3", features = ["curve", "scalar_field"] }
 ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-ed-on-bw6-761 = { version = "0.3" }
@@ -657,7 +664,9 @@ ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
 ark-ff = { version = "0.3", features = ["asm", "parallel", "rayon", "std"] }
 ark-ff-asm = { version = "0.3", default-features = false }
 ark-ff-macros = { version = "0.3", default-features = false }
-ark-relations = { version = "0.3", default-features = false, features = ["std", "tracing-subscriber"] }
+ark-groth16 = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-poly = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
+ark-relations = { version = "0.3", features = ["std", "tracing-subscriber"] }
 ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
 ark-serialize-derive = { version = "0.3", default-features = false }
 ark-snark = { version = "0.3", default-features = false }
@@ -715,7 +724,7 @@ bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
-byte-slice-cast = { version = "1", default-features = false, features = ["std"] }
+byte-slice-cast = { version = "1", features = ["std"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb", features = ["fiat"] }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128", "std"] }
@@ -832,8 +841,9 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7a248d1ed4c30dfd49f0fb0cb346c058c5e96983", features = ["copy_key", "secure", "threads-bls_12_377"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7a248d1ed4c30dfd49f0fb0cb346c058c5e96983", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", features = ["copy_key", "secure", "threads-bls_12_377"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -881,7 +891,8 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.11", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
-hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
+hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -1329,7 +1340,8 @@ unicode-xid-6f8ce4dd05d13bba = { package = "unicode-xid", version = "0.2" }
 unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
-untrusted = { version = "0.7", default-features = false }
+untrusted-ca01ad9e24f5d932 = { package = "untrusted", version = "0.7", default-features = false }
+untrusted-274715c4dabd11b0 = { package = "untrusted", version = "0.9", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
 url = { version = "2" }
 utf8parse = { version = "0.2" }
