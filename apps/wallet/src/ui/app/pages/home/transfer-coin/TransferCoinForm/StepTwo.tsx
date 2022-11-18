@@ -6,9 +6,11 @@ import cl from 'classnames';
 import { Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo, useMemo } from 'react';
 
+import { parseAmount } from './utils';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import AddressInput from '_components/address-input';
+import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useCoinDecimals, useFormatCoin } from '_hooks';
@@ -22,7 +24,9 @@ export type TransferCoinFormProps = {
     submitError: string | null;
     coinSymbol: string;
     coinType: string;
-    gasBudget: number;
+    gasBudgetEstimation: number | null;
+    gasCostEstimation: number | null;
+    gasEstimationLoading: boolean;
     onClearSubmitError: () => void;
 };
 
@@ -30,38 +34,39 @@ function StepTwo({
     submitError,
     coinSymbol,
     coinType,
-    gasBudget,
+    gasBudgetEstimation,
+    gasCostEstimation,
+    gasEstimationLoading,
     onClearSubmitError,
 }: TransferCoinFormProps) {
     const {
         isSubmitting,
         isValid,
+        isValidating,
         values: { amount, to },
     } = useFormikContext<FormValues>();
-
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-
     useEffect(() => {
         onClearRef.current();
     }, [amount, to]);
-
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = useMemo(
-        () =>
-            new BigNumber(amount).shiftedBy(decimals).integerValue().toString(),
+        () => parseAmount(amount, decimals),
         [amount, decimals]
     );
-
-    const totalAmount = new BigNumber(gasBudget)
-        .plus(GAS_SYMBOL === coinSymbol ? amountWithoutDecimals : 0)
+    const totalSuiAmount = new BigNumber(gasCostEstimation || 0)
+        .plus(GAS_SYMBOL === coinSymbol ? amountWithoutDecimals.toString() : 0)
         .toString();
-
-    const validAddressBtn = !isValid || to === '' || isSubmitting;
-
+    const submitBtnDisabled =
+        !isValid ||
+        to === '' ||
+        isSubmitting ||
+        isValidating ||
+        !gasBudgetEstimation;
     const [formattedBalance] = useFormatCoin(amountWithoutDecimals, coinType);
-    const [formattedTotal] = useFormatCoin(totalAmount, GAS_TYPE_ARG);
-    const [formattedGas] = useFormatCoin(gasBudget, GAS_TYPE_ARG);
+    const [formattedTotalSui] = useFormatCoin(totalSuiAmount, GAS_TYPE_ARG);
+    const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
 
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
@@ -79,7 +84,9 @@ function StepTwo({
                 </div>
 
                 {submitError ? (
-                    <div className={st.error}>{submitError}</div>
+                    <div className="mt-[10px]">
+                        <Alert>{submitError}</Alert>
+                    </div>
                 ) : null}
 
                 <div className={st.responseCard}>
@@ -88,19 +95,26 @@ function StepTwo({
                     </div>
 
                     <div className={st.details}>
-                        <div className={st.txFees}>
-                            <div className={st.txInfoLabel}>Gas Fee</div>
-                            <div className={st.walletInfoValue}>
-                                {formattedGas} {GAS_SYMBOL}
+                        {[
+                            ['Estimated Gas Fee', formattedGas, GAS_SYMBOL],
+                            ['Total Amount', formattedTotalSui, GAS_SYMBOL],
+                        ].map(([label, frmt, symbol]) => (
+                            <div className={st.txFees} key={label}>
+                                <div className={st.txInfoLabel}>{label}</div>
+                                <div className={st.walletInfoValue}>
+                                    {gasEstimationLoading &&
+                                    !(
+                                        gasBudgetEstimation || gasCostEstimation
+                                    ) ? (
+                                        <LoadingIndicator />
+                                    ) : frmt ? (
+                                        `${frmt} ${symbol}`
+                                    ) : (
+                                        '-'
+                                    )}
+                                </div>
                             </div>
-                        </div>
-
-                        <div className={st.txFees}>
-                            <div className={st.txInfoLabel}>Total Amount</div>
-                            <div className={st.walletInfoValue}>
-                                {formattedTotal} {GAS_SYMBOL}
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
             </Content>
@@ -108,11 +122,16 @@ function StepTwo({
                 <div className={cl(st.group, st.cta)}>
                     <Button
                         type="submit"
-                        disabled={validAddressBtn}
+                        disabled={submitBtnDisabled}
                         mode="primary"
                         className={st.btn}
                     >
-                        {isSubmitting ? <LoadingIndicator /> : 'Send Coins Now'}
+                        {isSubmitting ||
+                        (gasEstimationLoading && !gasBudgetEstimation) ? (
+                            <LoadingIndicator />
+                        ) : (
+                            'Send Coins Now'
+                        )}
                         <Icon
                             icon={SuiIcons.ArrowLeft}
                             className={cl(st.arrowLeft)}

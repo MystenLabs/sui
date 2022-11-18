@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
+import { Coin, SUI_TYPE_ARG, getTransactionDigest } from '@mysten/sui.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import StepOne from './TransferCoinForm/StepOne';
 import StepTwo from './TransferCoinForm/StepTwo';
+import { parseAmount } from './TransferCoinForm/utils';
+import { useGasBudgetEstimation } from './useGasBudgetEstimation';
 import {
     createValidationSchemaStepOne,
     createValidationSchemaStepTwo,
@@ -18,11 +19,7 @@ import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
-import {
-    accountAggregateBalancesSelector,
-    accountCoinsSelector,
-} from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
 
@@ -52,7 +49,7 @@ function TransferCoinPage() {
     );
 
     const gasAggregateBalance = useMemo(
-        () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
+        () => aggregateBalances[SUI_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
 
@@ -66,24 +63,15 @@ function TransferCoinPage() {
     const [formData] = useState<FormValues>(initialValues);
 
     const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfSelectedTypeArg = useMemo(
-        () =>
-            allCoins.filter(
-                (aCoin) => coinType && Coin.getCoinTypeArg(aCoin) === coinType
-            ),
-        [coinType, allCoins]
-    );
+    const [gasDecimals] = useCoinDecimals(SUI_TYPE_ARG);
     const [amountToSend, setAmountToSend] = useState(BigInt(0));
-    const gasBudget = useMemo(
-        () =>
-            Coin.computeGasBudgetForPay(
-                allCoinsOfSelectedTypeArg,
-                amountToSend
-            ),
-        [allCoinsOfSelectedTypeArg, amountToSend]
-    );
+    const [
+        gasBudgetEstimation,
+        gasCostEstimation,
+        gasEstimationLoading,
+        maxSuiSingleCoinBalance,
+        insufficientGas,
+    ] = useGasBudgetEstimation(coinType, amountToSend);
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
@@ -93,7 +81,9 @@ function TransferCoinPage() {
                 gasAggregateBalance,
                 coinDecimals,
                 gasDecimals,
-                gasBudget
+                gasBudgetEstimation || 0,
+                maxSuiSingleCoinBalance,
+                insufficientGas
             ),
         [
             coinType,
@@ -102,7 +92,9 @@ function TransferCoinPage() {
             coinDecimals,
             gasDecimals,
             gasAggregateBalance,
-            gasBudget,
+            gasBudgetEstimation,
+            maxSuiSingleCoinBalance,
+            insufficientGas,
         ]
     );
     const validationSchemaStepTwo = useMemo(
@@ -117,7 +109,7 @@ function TransferCoinPage() {
             { to, amount }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
-            if (coinType === null) {
+            if (coinType === null || !gasBudgetEstimation) {
                 return;
             }
             setSendError(null);
@@ -125,17 +117,13 @@ function TransferCoinPage() {
                 props: { coinType },
             });
             try {
-                const bigIntAmount = BigInt(
-                    new BigNumber(amount)
-                        .shiftedBy(coinDecimals)
-                        .integerValue()
-                        .toString()
-                );
+                const bigIntAmount = parseAmount(amount, coinDecimals);
                 const response = await dispatch(
                     sendTokens({
                         amount: bigIntAmount,
                         recipientAddress: to,
                         tokenTypeArg: coinType,
+                        gasBudget: gasBudgetEstimation,
                     })
                 ).unwrap();
 
@@ -150,7 +138,7 @@ function TransferCoinPage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
+        [dispatch, navigate, coinType, coinDecimals, gasBudgetEstimation]
     );
 
     const handleNextStep = useCallback(
@@ -201,9 +189,11 @@ function TransferCoinPage() {
         >
             <StepTwo
                 submitError={sendError}
-                gasBudget={gasBudget}
                 coinSymbol={coinSymbol}
                 coinType={coinType}
+                gasBudgetEstimation={gasBudgetEstimation}
+                gasCostEstimation={gasCostEstimation}
+                gasEstimationLoading={gasEstimationLoading}
                 onClearSubmitError={handleOnClearSubmitError}
             />
         </Formik>

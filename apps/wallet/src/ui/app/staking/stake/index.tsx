@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest } from '@mysten/sui.js';
+import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
@@ -10,7 +10,12 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import StakeForm from './StakeForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
-import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
+import {
+    useAppSelector,
+    useAppDispatch,
+    useCoinDecimals,
+    useIndividualCoinMaxBalance,
+} from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,
@@ -50,6 +55,7 @@ function StakePage() {
     const [sendError, setSendError] = useState<string | null>(null);
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
+    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
@@ -59,7 +65,8 @@ function StakePage() {
                 gasAggregateBalance,
                 totalGasCoins,
                 coinDecimals,
-                gasDecimals
+                gasDecimals,
+                maxSuiSingleCoinBalance
             ),
         [
             coinType,
@@ -69,11 +76,13 @@ function StakePage() {
             totalGasCoins,
             coinDecimals,
             gasDecimals,
+            maxSuiSingleCoinBalance,
         ]
     );
 
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
+    const suiMaxCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
     const onHandleSubmit = useCallback(
         async (
             { amount }: FormValues,
@@ -95,6 +104,7 @@ function StakePage() {
                     StakeTokens({
                         amount: bigIntAmount,
                         tokenTypeArg: coinType,
+                        suiMaxCoinBalance,
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
@@ -104,7 +114,7 @@ function StakePage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
+        [dispatch, navigate, coinType, coinDecimals, suiMaxCoinBalance]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);

@@ -16,11 +16,9 @@ import type {
 const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
-export const DEFAULT_GAS_BUDGET_FOR_PAY = 150;
 export const DEFAULT_GAS_BUDGET_FOR_STAKE = 10000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
-export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
 export const SUI_SYSTEM_STATE_OBJECT_ID =
     '0x0000000000000000000000000000000000000005';
 
@@ -56,22 +54,6 @@ export class Coin {
         return `${COIN_TYPE}<${coinTypeArg}>`;
     }
 
-    public static computeGasBudgetForPay(
-        coins: SuiMoveObject[],
-        amountToSend: bigint
-    ): number {
-        // TODO: improve the gas budget estimation
-        const numInputCoins =
-            CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-                coins,
-                amountToSend
-            ).length;
-        return (
-            DEFAULT_GAS_BUDGET_FOR_PAY *
-            Math.max(2, Math.min(100, numInputCoins / 2))
-        );
-    }
-
     /**
      * Stake `amount` of Coin<T> to `validator`. Technically it means user delegates `amount` of Coin<T> to `validator`,
      * such that `validator` will stake the `amount` of Coin<T> for the user.
@@ -80,17 +62,20 @@ export class Coin {
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
+     * @param suiMaxCoinBalance The maximum amount of the balance of an individual SUI coin owned by sender.
      */
     public static async stakeCoin(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
-        validator: SuiAddress
+        validator: SuiAddress,
+        suiMaxCoinBalance: bigint
     ): Promise<SuiExecuteTransactionResponse> {
         const coin = await Coin.requestSuiCoinWithExactAmount(
             signer,
             coins,
-            amount
+            amount,
+            suiMaxCoinBalance
         );
         const txn = {
             packageObjectId: '0x2',
@@ -106,7 +91,8 @@ export class Coin {
     private static async requestSuiCoinWithExactAmount(
         signer: RawSigner,
         coins: SuiMoveObject[],
-        amount: bigint
+        amount: bigint,
+        suiMaxCoinBalance: bigint
     ): Promise<ObjectId> {
         const coinWithExactAmount = await Coin.selectSuiCoinWithExactAmount(
             signer,
@@ -116,14 +102,24 @@ export class Coin {
         if (coinWithExactAmount) {
             return coinWithExactAmount;
         }
+        const address = await signer.getAddress();
+        const { suggestedGasBudget } =
+            await CoinAPI.getGasCostEstimationAndSuggestedBudget(
+                signer,
+                coins,
+                SUI_TYPE_ARG,
+                amount,
+                address,
+                suiMaxCoinBalance
+            );
         // use transferSui API to get a coin with the exact amount
         await CoinAPI.transfer(
             signer,
             coins,
             SUI_TYPE_ARG,
             amount,
-            await signer.getAddress(),
-            Coin.computeGasBudgetForPay(coins, amount)
+            address,
+            suggestedGasBudget
         );
 
         const coinWithExactAmount2 = await Coin.selectSuiCoinWithExactAmount(

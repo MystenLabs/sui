@@ -13,23 +13,9 @@ export function createValidationSchemaStepTwo() {
 }
 
 export function createValidationSchemaStepOne(
-    coinType: string,
-    coinBalance: bigint,
-    coinSymbol: string,
-    gasBalance: bigint,
-    decimals: number,
-    gasDecimals: number,
-    gasBudget: number
+    ...args: Parameters<typeof createTokenValidation>
 ) {
     return Yup.object({
-        amount: createTokenValidation(
-            coinType,
-            coinBalance,
-            coinSymbol,
-            gasBalance,
-            decimals,
-            gasDecimals,
-            gasBudget
-        ),
+        amount: createTokenValidation(...args),
     });
 }

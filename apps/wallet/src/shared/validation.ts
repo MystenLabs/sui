@@ -15,7 +15,9 @@ export function createTokenValidation(
     decimals: number,
     // TODO: We can move this to a constant when MIST is fully rolled out.
     gasDecimals: number,
-    gasBudget: number
+    gasBudget: number,
+    maxSuiSingleCoinBalance: bigint,
+    insufficientFunds: boolean
 ) {
     return Yup.mixed()
         .transform((_, original) => {
@@ -52,9 +54,19 @@ export function createTokenValidation(
         )
         .test(
             'max-decimals',
-            `The value exeeds the maximum decimals (${decimals}).`,
+            `The value exceeds the maximum decimals (${decimals}).`,
             (amount?: BigNumber) => {
                 return amount ? amount.shiftedBy(decimals).isInteger() : false;
+            }
+        )
+        .test(
+            'gas-balance-check-enough-single-coin',
+            `Insufficient ${GAS_SYMBOL}, there is no individual coin with enough balance to cover for the gas fee (${formatBalance(
+                gasBudget,
+                gasDecimals
+            )} ${GAS_SYMBOL})`,
+            () => {
+                return maxSuiSingleCoinBalance >= gasBudget;
             }
         )
         .test(
@@ -64,7 +76,7 @@ export function createTokenValidation(
                 gasDecimals
             )} ${GAS_SYMBOL})`,
             (amount?: BigNumber) => {
-                if (!amount) {
+                if (!amount || insufficientFunds) {
                     return false;
                 }
                 try {
