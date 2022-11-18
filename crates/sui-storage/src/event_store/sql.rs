@@ -519,6 +519,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    /// Possible to give part of the name in the query
     #[instrument(level = "debug", skip_all, err)]
     async fn events_by_move_event_struct_name(
         &self,
@@ -527,13 +528,14 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
-        let query = get_event_query(vec![("move_event_name", Comparator::Equal)], descending);
+        let query = get_event_query(vec![("move_event_name", Comparator::Like)], descending);
+        let comparand = format!("{}%", move_event_struct_name);
         // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(&query)
             .persistent(true)
             .bind(cursor.tx_seq)
             .bind(cursor.event_seq)
-            .bind(move_event_struct_name)
+            .bind(comparand)
             .bind(limit as i64)
             .map(StoredEvent::from)
             .fetch_all(&self.pool)
@@ -647,6 +649,7 @@ enum Comparator {
     LessThanOrEq,
     MoreThanOrEq,
     LessThan,
+    Like,
 }
 
 impl Display for Comparator {
@@ -656,6 +659,7 @@ impl Display for Comparator {
             Comparator::LessThanOrEq => "<=",
             Comparator::MoreThanOrEq => ">=",
             Comparator::LessThan => "<",
+            Comparator::Like => "LIKE",
         };
         write!(f, "{s}")
     }
@@ -1174,6 +1178,12 @@ mod tests {
         test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
         assert_eq!(events[0].fields.len(), 2);
         assert_eq!(events[1].fields.len(), 2);
+
+        // Test querying by only part of the name, or just package and module (prefix search)
+        let events = db
+            .events_by_move_event_struct_name("0x2::SUI::", (0, 0).into(), 10, false)
+            .await?;
+        assert_eq!(events.len(), 3);
 
         Ok(())
     }
