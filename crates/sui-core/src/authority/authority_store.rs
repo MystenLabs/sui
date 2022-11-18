@@ -388,7 +388,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     };
                 }
                 InputObjectKind::MovePackage(id) => {
-                    if !self.object_version_exists(id, version)? {
+                    if !self.object_version_exists(id, PACKAGE_VERSION)? {
                         // The cert cannot have been formed if immutable inputs were missing.
                         missing.push(ObjectKey(*id, PACKAGE_VERSION));
                     }
@@ -1212,7 +1212,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn object_exists(&self, object_id: ObjectID) -> SuiResult<bool> {
         match self.get_latest_parent_entry(object_id)? {
             None => Ok(false),
-            Some(entry) => Ok(entry.is_alive()),
+            Some(entry) => Ok(entry.0 .2.is_alive()),
         }
     }
 
@@ -1227,7 +1227,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         for (object_id, _) in transaction.shared_input_objects() {
             sequenced_to_delete.push((*transaction_digest, *object_id));
 
-            if !self.object_exists(object_id)? {
+            if !self.object_exists(*object_id)? {
                 schedule_to_delete.push(*object_id);
             }
         }
