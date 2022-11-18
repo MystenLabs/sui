@@ -99,6 +99,7 @@ use crate::{
     transaction_manager::TransactionManager,
     transaction_streamer::TransactionStreamer,
 };
+use narwhal_types::ConsensusOutput;
 
 use self::authority_store::ObjectKey;
 
@@ -2155,6 +2156,7 @@ impl AuthorityState {
     /// This function returns unit error and is responsible for emitting log messages for internal errors
     pub(crate) fn verify_consensus_transaction(
         &self,
+        consensus_output: &ConsensusOutput,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _timer = self
@@ -2185,12 +2187,28 @@ impl AuthorityState {
                     })?;
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
+                if AuthorityName::from(&consensus_output.certificate.origin())
+                    != data.summary.auth_signature.authority
+                {
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, consensus_output.certificate.origin() );
+                    return Err(());
+                }
                 data.verify(&self.committee.load()).map_err(|err|{
                     warn!(
                         "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
                         transaction.consensus_output.certificate.header.author, data.summary.summary.sequence_number, err
                     );
                 })?;
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                if &AuthorityName::from(&consensus_output.certificate.origin()) != authority {
+                    warn!(
+                        "EndOfPublish authority {} does not match narwhal certificate source {}",
+                        authority,
+                        consensus_output.certificate.origin()
+                    );
+                    return Err(());
+                }
             }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
@@ -2201,6 +2219,7 @@ impl AuthorityState {
     /// Errors returned by this call are treated as critical errors and cause node to panic.
     pub(crate) async fn handle_consensus_transaction(
         &self,
+        consensus_output: &ConsensusOutput,
         transaction: VerifiedSequencedConsensusTransaction,
     ) -> SuiResult {
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -2219,6 +2238,15 @@ impl AuthorityState {
         // self.close_all_certs() to close it.
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                let authority = (&consensus_output.certificate.header.author).into();
+                if self.database.sent_end_of_publish(&authority)? {
+                    // This can not happen with valid authority
+                    // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
+                    // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
+                    // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
+                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
+                    return Ok(());
+                }
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
@@ -2264,6 +2292,13 @@ impl AuthorityState {
                 self.checkpoint_service.notify_checkpoint_signature(info)?;
                 self.database
                     .record_consensus_transaction_processed(&transaction, consensus_index)
+                    .await
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                // todo - track authority stake and generate last checkpoint when 2f+1 EndOfPublish received
+                debug!("Received EndOfPublish from {:?}", authority.concise());
+                self.database
+                    .record_end_of_publish(*authority, &transaction, consensus_index)
                     .await
             }
         }

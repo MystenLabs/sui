@@ -850,7 +850,6 @@ mod tests {
 
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
-        let _guard = setup_tracing();
         let tempdir = tempdir().unwrap();
         let mut store: HashMap<TransactionDigest, TransactionEffects> = HashMap::new();
         store.insert(
@@ -1014,21 +1013,5 @@ mod tests {
             /* voting right */ 1,
         );
         (authority_key, Committee::new(0, authorities).unwrap())
-    }
-
-    fn setup_tracing() -> telemetry_subscribers::TelemetryGuards {
-        // Setup tracing
-        let tracing_level = "debug";
-        let network_tracing_level = "info";
-
-        let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
-
-        telemetry_subscribers::TelemetryConfig::new("narwhal")
-            // load env variables
-            .with_env()
-            // load special log filter
-            .with_log_level(&log_filter)
-            .init()
-            .0
     }
 }

@@ -521,6 +521,17 @@ impl Certificate {
         Self::new_unsafe(committee, header, votes, false)
     }
 
+    pub fn new_test_empty(author: PublicKey) -> Self {
+        let header = Header {
+            author,
+            ..Default::default()
+        };
+        Self {
+            header,
+            ..Default::default()
+        }
+    }
+
     fn new_unsafe(
         committee: &Committee,
         header: Header,

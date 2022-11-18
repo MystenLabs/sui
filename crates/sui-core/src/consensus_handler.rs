@@ -96,13 +96,13 @@ impl ExecutionState for ConsensusHandler {
         };
         let verified_transaction = match self
             .state
-            .verify_consensus_transaction(sequenced_transaction)
+            .verify_consensus_transaction(consensus_output.as_ref(), sequenced_transaction)
         {
             Ok(verified_transaction) => verified_transaction,
             Err(()) => return,
         };
         self.state
-            .handle_consensus_transaction(verified_transaction)
+            .handle_consensus_transaction(consensus_output.as_ref(), verified_transaction)
             .await
             .expect("Unrecoverable error in consensus handler");
     }
