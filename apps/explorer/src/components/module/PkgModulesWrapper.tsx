@@ -43,43 +43,43 @@ function ModuleViewWrapper({
     return <ModuleView id={id} name={name} code={code} />;
 }
 
-const getModule = (
-    searchParams: URLSearchParams,
-    setSearchParams: (params: URLSearchParams) => void,
-    modulenames: string[]
-): string => {
-    const paramModule = searchParams.get('module') || null;
-
-    // A module has been specified and the package has this module
-    if (!!paramModule && modulenames.includes(paramModule)) {
-        return paramModule;
-    }
-
-    // A module has been specified and the package does not have this module
-    if (!!paramModule) {
-        const newSearchParams = new URLSearchParams(searchParams);
-        newSearchParams.delete('module');
-        setSearchParams(newSearchParams);
-    }
-
-    // The default is to return the first module in the list
-    return modulenames[0];
-};
-
-const setModule = (
-    searchParams: URLSearchParams,
-    setSearchParams: (params: URLSearchParams) => void,
-    newModule: string
-): void => {
-    const newSearchParams = new URLSearchParams(searchParams);
-    newSearchParams.set('module', newModule);
-    setSearchParams(newSearchParams);
-};
-
 function PkgModuleViewWrapper({ id, modules }: Props) {
     const modulenames = modules.map(([name]) => name);
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
+
+    const getModule = (
+        searchParams: URLSearchParams,
+        setSearchParams: (params: URLSearchParams) => void,
+        modulenames: string[]
+    ): string => {
+        const paramModule = searchParams.get('module') || null;
+
+        // A module has been specified and the package has this module
+        if (!!paramModule && modulenames.includes(paramModule)) {
+            return paramModule;
+        }
+
+        // A module has been specified and the package does not have this module
+        if (!!paramModule) {
+            const newSearchParams = new URLSearchParams(searchParams);
+            newSearchParams.delete('module');
+            setSearchParams(newSearchParams);
+        }
+
+        // The default is to return the first module in the list
+        return modulenames[0];
+    };
+
+    const setModule = (
+        searchParams: URLSearchParams,
+        setSearchParams: (params: URLSearchParams) => void,
+        newModule: string
+    ): void => {
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.set('module', newModule);
+        setSearchParams(newSearchParams);
+    };
 
     const filteredModules =
         query === ''
