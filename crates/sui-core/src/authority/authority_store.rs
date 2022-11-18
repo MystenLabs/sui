@@ -15,7 +15,7 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::iter;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     lock_service::ObjectLockStatus,
@@ -73,6 +73,8 @@ pub struct SuiDataStore<S> {
     path: PathBuf,
     db_options: Option<Options>,
 
+    cur_epoch: RwLock<EpochId>,
+
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
     pub(crate) consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
 }
@@ -112,6 +114,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             epoch_tables: epoch_tables.into(),
             path: path.into(),
             db_options,
+            cur_epoch: RwLock::new(epoch),
             effects_notify_read: NotifyRead::new(),
             consensus_notify_read: NotifyRead::new(),
         };
@@ -132,6 +135,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     #[allow(dead_code)]
     pub(crate) fn reopen_epoch_db(&self, new_epoch: EpochId) {
         info!(?new_epoch, "re-opening AuthorityEpochTables for new epoch");
+        let mut cur_epoch = self.cur_epoch.write().unwrap();
+        *cur_epoch = new_epoch;
         let epoch_tables = Arc::new(AuthorityEpochTables::open(
             new_epoch,
             &self.path,
@@ -929,6 +934,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    fn epoch(&self) -> EpochId {
+        *self.cur_epoch.read().unwrap()
+    }
+
     async fn sequence_tx(
         &self,
         write_batch: DBBatch,
@@ -954,6 +963,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
         let batch = self.perpetual_tables.executed_effects.batch();
+        let valid_effects: ValidEffectsInfo =
+            ValidTransactionEffects::from_local_execution(effects.data().clone(), self.epoch())
+                .into();
         let batch = batch
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
@@ -961,7 +973,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             )?
             .insert_batch(
                 &self.perpetual_tables.effects,
-                [(effects_digest, effects.data())],
+                [(effects_digest, valid_effects)],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.effects_by_tx,
+                [(transaction_digest, effects_digest)],
             )?;
 
         // Writing to executed_sequence must be done *after* writing to effects, so that we never

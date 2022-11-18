@@ -13,6 +13,7 @@ use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
+    VerifiedCheckpoint,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
@@ -1870,6 +1871,16 @@ pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStron
 pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
 pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
 pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
+
+impl ValidTransactionEffects {
+    pub fn from_local_execution(fx: TransactionEffects, epoch_id: EpochId) -> Self {
+        Self::new(fx, IndirectValidity::from_local_computation(epoch_id))
+    }
+
+    pub fn from_checkpoint(fx: TransactionEffects, checkpoint: &VerifiedCheckpoint) -> Self {
+        Self::new(fx, IndirectValidity::from_checkpoint(checkpoint))
+    }
+}
 
 impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
     fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {

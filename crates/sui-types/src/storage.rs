@@ -3,8 +3,7 @@
 
 use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest};
 use crate::committee::{Committee, EpochId};
-use crate::message_envelope::Message;
-use crate::messages::{TransactionEffects, VerifiedCertificate};
+use crate::messages::{ValidTransactionEffects, VerifiedCertificate};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     VerifiedCheckpoint,
@@ -199,7 +198,7 @@ pub trait ReadStore {
     fn get_transaction_effects(
         &self,
         digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error>;
+    ) -> Result<Option<ValidTransactionEffects>, Self::Error>;
 }
 
 impl<T: ReadStore> ReadStore for &T {
@@ -248,7 +247,7 @@ impl<T: ReadStore> ReadStore for &T {
     fn get_transaction_effects(
         &self,
         digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
+    ) -> Result<Option<ValidTransactionEffects>, Self::Error> {
         ReadStore::get_transaction_effects(*self, digest)
     }
 }
@@ -266,7 +265,7 @@ pub trait WriteStore: ReadStore {
     fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error>;
     fn insert_transaction_effects(
         &self,
-        transaction_effects: TransactionEffects,
+        transaction_effects: ValidTransactionEffects,
     ) -> Result<(), Self::Error>;
 }
 
@@ -296,7 +295,7 @@ impl<T: WriteStore> WriteStore for &T {
 
     fn insert_transaction_effects(
         &self,
-        transaction_effects: TransactionEffects,
+        transaction_effects: ValidTransactionEffects,
     ) -> Result<(), Self::Error> {
         WriteStore::insert_transaction_effects(*self, transaction_effects)
     }
@@ -310,7 +309,7 @@ pub struct InMemoryStore {
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
     transactions: HashMap<TransactionDigest, VerifiedCertificate>,
-    effects: HashMap<TransactionEffectsDigest, TransactionEffects>,
+    effects: HashMap<TransactionEffectsDigest, ValidTransactionEffects>,
 
     epoch_to_committee: Vec<Committee>,
 }
@@ -419,7 +418,7 @@ impl InMemoryStore {
     pub fn get_transaction_effects(
         &self,
         digest: &TransactionEffectsDigest,
-    ) -> Option<&TransactionEffects> {
+    ) -> Option<&ValidTransactionEffects> {
         self.effects.get(digest)
     }
 
@@ -427,8 +426,8 @@ impl InMemoryStore {
         self.transactions.insert(*transaction.digest(), transaction);
     }
 
-    pub fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
-        self.effects.insert(effects.digest(), effects);
+    pub fn insert_transaction_effects(&mut self, effects: ValidTransactionEffects) {
+        self.effects.insert(*effects.digest(), effects);
     }
 }
 
@@ -506,7 +505,7 @@ impl ReadStore for SharedInMemoryStore {
     fn get_transaction_effects(
         &self,
         digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
+    ) -> Result<Option<ValidTransactionEffects>, Self::Error> {
         self.inner()
             .get_transaction_effects(digest)
             .cloned()
@@ -546,7 +545,7 @@ impl WriteStore for SharedInMemoryStore {
 
     fn insert_transaction_effects(
         &self,
-        transaction_effects: TransactionEffects,
+        transaction_effects: ValidTransactionEffects,
     ) -> Result<(), Self::Error> {
         self.inner_mut()
             .insert_transaction_effects(transaction_effects);

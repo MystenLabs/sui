@@ -7,8 +7,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::base_types::TransactionEffectsDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::message_envelope::Message;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::ValidTransactionEffects;
 use sui_types::messages::VerifiedCertificate;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
@@ -19,6 +18,7 @@ use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
 use typed_store::Map;
 
+use crate::authority::authority_store::ValidEffectsInfo;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -109,8 +109,14 @@ impl ReadStore for RocksDbStore {
     fn get_transaction_effects(
         &self,
         digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.authority_store.perpetual_tables.effects.get(digest)
+    ) -> Result<Option<ValidTransactionEffects>, Self::Error> {
+        Ok(
+            match self.authority_store.perpetual_tables.effects.get(digest)? {
+                Some(ValidEffectsInfo::Effects(effects)) => Some(effects),
+                Some(ValidEffectsInfo::Digest(_)) => None,
+                None => None,
+            },
+        )
     }
 }
 
@@ -154,11 +160,12 @@ impl WriteStore for RocksDbStore {
 
     fn insert_transaction_effects(
         &self,
-        transaction_effects: TransactionEffects,
+        transaction_effects: ValidTransactionEffects,
     ) -> Result<(), Self::Error> {
+        let digest = *transaction_effects.digest();
         self.authority_store
             .perpetual_tables
             .effects
-            .insert(&transaction_effects.digest(), &transaction_effects)
+            .insert(&digest, &transaction_effects.into())
     }
 }

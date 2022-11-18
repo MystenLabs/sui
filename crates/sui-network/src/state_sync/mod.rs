@@ -63,6 +63,7 @@ use sui_config::p2p::StateSyncConfig;
 use sui_types::{
     base_types::ExecutionDigests,
     message_envelope::Message,
+    messages::ValidTransactionEffects,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
         CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
@@ -847,10 +848,13 @@ where
     };
 
     // Sync transactions and effects
+    let ckpt_clone = checkpoint.clone();
     let mut stream = contents
         .into_inner()
         .into_iter()
-        .map(|digests| get_transaction_and_effects(peers.clone(), store.clone(), digests))
+        .map(|digests| {
+            get_transaction_and_effects(peers.clone(), store.clone(), ckpt_clone.clone(), digests)
+        })
         .pipe(futures::stream::iter)
         .buffer_unordered(transaction_download_concurrency);
 
@@ -904,6 +908,7 @@ where
 async fn get_transaction_and_effects<S>(
     peers: Vec<StateSyncClient<anemo::Peer>>,
     store: S,
+    checkpoint: VerifiedCheckpoint,
     digests: ExecutionDigests,
 ) -> Result<()>
 where
@@ -945,6 +950,7 @@ where
                         transaction,
                     ))
                     .expect("store operation should not fail");
+                let effects = ValidTransactionEffects::from_checkpoint(effects, &checkpoint);
                 store
                     .insert_transaction_effects(effects)
                     .expect("store operation should not fail");

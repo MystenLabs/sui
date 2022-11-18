@@ -129,6 +129,9 @@ where
             return Ok(Response::new(None));
         };
 
-        Ok(Response::new(Some((transaction.into_inner(), effects))))
+        Ok(Response::new(Some((
+            transaction.into_inner(),
+            effects.into_data(),
+        ))))
     }
 }
