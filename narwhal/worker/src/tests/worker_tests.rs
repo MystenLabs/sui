@@ -487,7 +487,7 @@ async fn get_network_peers_from_admin_server() {
     // Assert network connectivity metrics are also set as expected
     let filters = vec![
         (primary_2_peer_id.as_str(), "our_primary"),
-        (primary_1_peer_id.as_str(), ""),
+        (primary_1_peer_id.as_str(), "other_primary"),
         (worker_1_peer_id.as_str(), "other_worker"),
     ];
 
