@@ -443,6 +443,8 @@ pub trait EventStore {
     /// Returns at most `limit` events with the move event struct name
     /// (e.g. `0x2::devnet_nft::MintNFTEvent`) emitted
     /// sorted in time order defined by the [descending] parameter.
+    /// For ease of use, move_event_struct_name may be a prefix, so that for example only
+    /// `0x2::devnet_nft` is needed to find all move events in the devnet_nft module.
     async fn events_by_move_event_struct_name(
         &self,
         move_event_struct_name: &str,
