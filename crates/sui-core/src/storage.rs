@@ -110,7 +110,7 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionEffectsDigest,
     ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.authority_store.perpetual_tables.effects2.get(digest)
+        self.authority_store.perpetual_tables.effects.get(digest)
     }
 }
 
@@ -158,7 +158,7 @@ impl WriteStore for RocksDbStore {
     ) -> Result<(), Self::Error> {
         self.authority_store
             .perpetual_tables
-            .effects2
+            .effects
             .insert(&transaction_effects.digest(), &transaction_effects)
     }
 }

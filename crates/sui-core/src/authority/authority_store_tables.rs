@@ -130,9 +130,9 @@ pub struct AuthorityPerpetualTables<S> {
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
+    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
-    pub(crate) effects2: DBMap<TransactionEffectsDigest, TransactionEffects>,
+    pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
 
     // Tables used for authority batch structure
     // TODO: executed_sequence and batches both conceptually belong in AuthorityEpochTables,

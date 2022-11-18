@@ -2462,7 +2462,7 @@ async fn test_consensus_message_processed() {
             authority2
                 .database
                 .perpetual_tables
-                .effects
+                .executed_effects
                 .get(transaction_digest)
                 .unwrap()
                 .unwrap()
