@@ -33,7 +33,7 @@ use crate::{
 };
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
     pub objects: BTreeMap<ObjectID, Object>,
     pub mutable_inputs: Vec<ObjectRef>,

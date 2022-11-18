@@ -51,14 +51,14 @@ pub trait TxGuard<'a>: Drop {
 /// exist in the WAL, but the transaction has not yet been both executed
 /// and perssited to permanent storage.
 ///
-/// `CommittedToWal(...)`: The state that the transaction enters when it has been
+/// `Executed(...)`: The state that the transaction enters when it has been
 /// executed and its resultant objects and effects written to the WAL. This is
 /// a recoverable state, and the arguments of this variant can be used to retry
 /// writing to permanent storage.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionCommitPhase {
     Uncommitted,
-    CommittedToWal(InnerTemporaryStore, SignedTransactionEffects),
+    Executed(InnerTemporaryStore, SignedTransactionEffects),
 }
 
 // WriteAheadLog is parameterized on the value type (C) because:
@@ -231,20 +231,18 @@ where
         self.tables.log.get(tx).map_err(SuiError::from)
     }
 
-    pub fn get_intermediate_objs(
+    pub fn get_execution_output(
         &self,
         tx: &TransactionDigest,
     ) -> SuiResult<Option<(InnerTemporaryStore, SignedTransactionEffects)>> {
         match self.get_tx(tx)? {
-            Some((_cert, TransactionCommitPhase::CommittedToWal(store, fx))) => {
-                Ok(Some((store, fx)))
-            }
+            Some((_cert, TransactionCommitPhase::Executed(store, fx))) => Ok(Some((store, fx))),
             Some((_cert, TransactionCommitPhase::Uncommitted)) => Ok(None),
             None => Ok(None),
         }
     }
 
-    pub fn write_intermediate_objs(
+    pub fn write_execution_output(
         &self,
         tx: &TransactionDigest,
         store: InnerTemporaryStore,
@@ -254,17 +252,13 @@ where
             Some((cert, TransactionCommitPhase::Uncommitted)) => {
                 self.tables
                     .log
-                    .insert(
-                        tx,
-                        &(cert, TransactionCommitPhase::CommittedToWal(store, fx)),
-                    )
+                    .insert(tx, &(cert, TransactionCommitPhase::Executed(store, fx)))
                     .map_err(SuiError::from)?;
                 Ok(())
             }
-            // We skip rather than overwriting, with the assumption that the
-            // same tx cert digest must produce the same output
-            // should return error here instead
-            Some((_cert, TransactionCommitPhase::CommittedToWal(_, _))) => Ok(()),
+            Some((_cert, TransactionCommitPhase::Executed(_, _))) => {
+                Err(SuiError::TransactionAlreadyExecuted { digest: *tx })
+            }
             None => Err(SuiError::TransactionNotFound { digest: *tx }),
         }
     }

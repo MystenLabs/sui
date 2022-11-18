@@ -845,7 +845,7 @@ impl AuthorityState {
         if let Some((inner_temporary_storage, signed_effects)) = self
             .database
             .wal
-            .get_intermediate_objs(certificate.digest())?
+            .get_execution_output(certificate.digest())?
         {
             return self
                 .commit_cert_and_notify(
@@ -885,7 +885,7 @@ impl AuthorityState {
         // fail mid-write. We prefer this over making the write to permanent
         // storage atomic as this allows for sharding storage across nodes, which
         // would be more difficult in the alternative.
-        self.database.wal.write_intermediate_objs(
+        self.database.wal.write_execution_output(
             &digest,
             inner_temporary_store.clone(),
             signed_effects.clone(),
@@ -1629,7 +1629,7 @@ impl AuthorityState {
                             warn!(?digest, "Failed to process in-progress certificate: {e}");
                         }
                     }
-                    TransactionCommitPhase::CommittedToWal(store, fx) => {
+                    TransactionCommitPhase::Executed(store, fx) => {
                         if let Err(e) = self
                             .commit_and_notify_from_recovery(&cert.into(), store, fx, tx_guard)
                             .await
