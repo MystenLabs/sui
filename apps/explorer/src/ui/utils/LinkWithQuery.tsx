@@ -38,10 +38,15 @@ export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
         const [searchParams] = useSearchParams();
 
         const newParams = new URLSearchParams({
-            ...Object.fromEntries(toURLSearchParams),
             ...Object.fromEntries(searchParams),
+            ...Object.fromEntries(toURLSearchParams),
         });
 
-        return <Link to={`${toBaseURL}?${newParams}`} {...props} />;
+        return (
+            <Link
+                to={{ pathname: toBaseURL, search: newParams.toString() }}
+                {...props}
+            />
+        );
     }
 );
