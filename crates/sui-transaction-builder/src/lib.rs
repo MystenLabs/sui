@@ -63,7 +63,12 @@ impl TransactionBuilder {
             for obj in gas_objs {
                 let response = self.0.get_object(obj.object_id).await?;
                 let obj = response.object()?;
-                let gas: GasCoin = bcs::from_bytes(&obj.data.try_as_move().unwrap().bcs_bytes)?;
+                let gas: GasCoin = bcs::from_bytes(
+                    &obj.data
+                        .try_as_move()
+                        .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
+                        .bcs_bytes,
+                )?;
                 if !input_objects.contains(&obj.id()) && gas.value() >= budget {
                     return Ok(obj.reference.to_object_ref());
                 }
