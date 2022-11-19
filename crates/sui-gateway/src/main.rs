@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
     let prometheus_registry = sui_node::metrics::start_prometheus_server(prom_binding);
 
     let gateway_config = PersistedConfig::read(&config_path)?;
-    let client = GatewayState::create_client(&gateway_config, Some(&prometheus_registry))?;
+    let client = GatewayState::create_client(&gateway_config, Some(&prometheus_registry)).await?;
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
     let mut server =

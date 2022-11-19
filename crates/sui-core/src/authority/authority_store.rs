@@ -76,8 +76,13 @@ pub struct SuiDataStore<S> {
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
-    /// Open an authority store by directory path
-    pub fn open(path: &Path, db_options: Option<Options>) -> SuiResult<Self> {
+    /// Open an authority store by directory path.
+    /// If the store is empty, initialize it using genesis objects.
+    pub async fn open(
+        path: &Path,
+        db_options: Option<Options>,
+        genesis: &Genesis,
+    ) -> SuiResult<Self> {
         let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
 
         let epoch = if perpetual_tables.database_is_empty()? {
@@ -97,7 +102,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let wal_path = path.join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
 
-        Ok(Self {
+        let store = Self {
             wal,
             lock_service,
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
@@ -107,7 +112,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             db_options,
             effects_notify_read: NotifyRead::new(),
             consensus_notify_read: NotifyRead::new(),
-        })
+        };
+        // Only initialize an empty database.
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail at init.")
+        {
+            store
+                .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
+                .await
+                .expect("Cannot bulk insert genesis objects");
+        }
+
+        Ok(store)
     }
 
     #[allow(dead_code)]

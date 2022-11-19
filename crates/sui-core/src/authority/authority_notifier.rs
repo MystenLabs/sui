@@ -262,7 +262,11 @@ mod tests {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
+        let store = Arc::new(
+            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
+                .await
+                .unwrap(),
+        );
 
         let notifier = Arc::new(
             TransactionNotifier::new(store.clone(), &prometheus::Registry::default()).unwrap(),

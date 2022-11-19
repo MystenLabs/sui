@@ -32,7 +32,11 @@ async fn create_gateway_state_with_object_basics_ref(
         .collect();
     let (authorities, _, pkg_ref) = init_local_authorities(4, genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway_store = Arc::new(GatewayStore::open(&path, None).unwrap());
+    let gateway_store = Arc::new(
+        GatewayStore::open(&path, None, &Genesis::get_default_genesis())
+            .await
+            .unwrap(),
+    );
     let gateway = GatewayState::new_with_authorities(
         gateway_store,
         authorities,
@@ -653,7 +657,11 @@ async fn test_multiple_gateways() {
     let path = tempfile::tempdir().unwrap().into_path();
     // gateway2 shares the same set of authorities as gateway1.
     let gateway2 = GatewayState::new_with_authorities(
-        Arc::new(GatewayStore::open(&path, None).unwrap()),
+        Arc::new(
+            GatewayStore::open(&path, None, &Genesis::get_default_genesis())
+                .await
+                .unwrap(),
+        ),
         gateway1.authorities.clone(),
         GatewayMetrics::new_for_tests(),
     )
