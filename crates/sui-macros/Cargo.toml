@@ -16,4 +16,4 @@ syn = "1.0.104"
 workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "0667864838a8c1b5b9d19972102086ccf4a525ff", package = "msim-macros" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "66b439978d076a2044769b02cd26ec259dc3aade", package = "msim-macros" }
