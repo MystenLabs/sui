@@ -5,7 +5,6 @@ import cl from 'classnames';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
-import ExplorerLink from '_components/explorer-link';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -76,7 +75,7 @@ function UserApproveContainer({
                             </ExternalLink>
                         </div>
                     </div>
-                    <div className={st.accountAddress}>
+                    <div className={st.cardFooter}>
                         <div>Your address</div>
                         <AccountAddress showLink={false} />
                     </div>

@@ -6,8 +6,12 @@ import cl from 'classnames';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { MiniNFT } from './MiniNFT';
+import { SummeryCard } from './SummeryCard';
+import AccountAddress from '_components/account-address';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import ExternalLink from '_components/external-link';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import UserApproveContainer from '_components/user-approve-container';
@@ -24,7 +28,6 @@ import {
     respondToTransactionRequest,
     txRequestsSelectors,
     deserializeTxn,
-    type TxnMetaResponse,
 } from '_redux/slices/transaction-requests';
 import { thunkExtras } from '_redux/store/thunk-extras';
 
@@ -39,6 +42,7 @@ import st from './DappTxApprovalPage.module.scss';
 interface MetadataGroup {
     name: string;
     children: { id: string; module: string }[];
+    nftImage?: string;
 }
 
 interface TypeReference {
@@ -76,23 +80,36 @@ type TabType = 'transfer' | 'modify' | 'read';
 const TRUNCATE_MAX_LENGTH = 10;
 const TRUNCATE_PREFIX_LENGTH = 6;
 
-function PassedObject({ id, module }: { id: string; module: string }) {
+function PassedObject({
+    id,
+    module,
+    nftLink,
+}: {
+    id: string;
+    module: string;
+    nftLink?: string;
+}) {
     const objectId = useMiddleEllipsis(
         id,
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
+
     return (
-        <div>
-            <ExplorerLink
-                type={ExplorerLinkType.object}
-                objectID={id}
-                className={st.objectId}
-                showIcon={false}
-            >
-                {objectId}
-            </ExplorerLink>
-            <div className={st.objectName}>{module}</div>
+        <div className={st.permissionsContent}>
+            <div className={st.permissionsContentLabel}>
+                <ExplorerLink
+                    type={ExplorerLinkType.object}
+                    objectID={id}
+                    className={st.objectId}
+                    showIcon={false}
+                >
+                    {objectId}
+                </ExplorerLink>
+                <div className={st.objectName}>{module}</div>
+            </div>
+
+            {nftLink && nftLink && <MiniNFT url={nftLink} size="small" />}
         </div>
     );
 }
@@ -123,8 +140,7 @@ function Permissions({ metadata }: PermissionsProps) {
     return (
         metadata &&
         tab && (
-            <div className={st.card}>
-                <div className={st.header}>Permissions requested</div>
+            <SummeryCard header="Permissions requested">
                 <div className={st.content}>
                     <div className={st.tabs}>
                         {Object.entries(metadata).map(
@@ -149,11 +165,16 @@ function Permissions({ metadata }: PermissionsProps) {
                     </div>
                     <div className={st.objects}>
                         {metadata[tab].children.map(({ id, module }, index) => (
-                            <PassedObject key={index} id={id} module={module} />
+                            <PassedObject
+                                key={index}
+                                id={id}
+                                nftLink={metadata[tab].nftImage}
+                                module={module}
+                            />
                         ))}
                     </div>
                 </div>
-            </div>
+            </SummeryCard>
         )
     );
 }
@@ -162,32 +183,16 @@ type TransferSummaryProps = {
     label: string;
     content: string | number | null;
     loading: boolean;
-    txnMeta?: TxnMetaResponse;
 };
 
 const GAS_ESTIMATE_LABEL = 'Estimated Gas Fees';
 
-function TransactionSummery({
-    label,
-    content,
-    loading,
-    txnMeta,
-}: TransferSummaryProps) {
+function TransactionSummery({ label, content, loading }: TransferSummaryProps) {
     const isGasEstimate = label === GAS_ESTIMATE_LABEL;
     const [gasEstimate, symbol] = useFormatCoin(
         (isGasEstimate && content) || 0,
         GAS_TYPE_ARG
     );
-
-    const [formatedAmount, coinSymbol] = useFormatCoin(
-        txnMeta?.amount ? Math.abs(txnMeta.amount) : 0,
-        txnMeta?.coinSymbol
-    );
-
-    const nftMeta = useGetNFTMetaData(txnMeta?.objectId || []);
-    console.log('txnMeta', txnMeta);
-    console.log('formatedAmount', formatedAmount, coinSymbol);
-    console.log('nftMeta', nftMeta);
 
     const valueContent =
         content === null
@@ -205,27 +210,109 @@ function TransactionSummery({
     );
 }
 
-/*function TransactionType({ label, content, loading }: TransferSummaryProps) {
-    const isGasEstimate = label === GAS_ESTIMATE_LABEL;
-    const [gasEstimate, symbol] = useFormatCoin(
-        (isGasEstimate && content) || 0,
-        GAS_TYPE_ARG
+type TransferSummerCardProps = {
+    coinSymbol: string | null;
+    amount: number | null;
+    origin: string;
+    objectId: string | null;
+    nftImage?: string | null;
+    gasEstimate: number | null;
+};
+
+function MiniNFTLink({
+    id,
+    url,
+    name,
+}: {
+    id: string;
+    url: string;
+    name?: string | null;
+}) {
+    const objectId = useMiddleEllipsis(
+        id,
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
     );
-    const valueContent =
-        content === null
-            ? '-'
-            : isGasEstimate
-            ? `${gasEstimate} ${symbol}`
-            : content;
+
     return (
         <>
-            <div className={st.label}>{label}</div>
-            <div className={st.value}>
-                {loading ? <LoadingIndicator /> : valueContent}
-            </div>
+            <MiniNFT url={url} name={name} />
+            <ExplorerLink
+                type={ExplorerLinkType.object}
+                objectID={id}
+                className={st.objectId}
+                showIcon={false}
+            >
+                {objectId}
+            </ExplorerLink>
         </>
     );
-}*/
+}
+
+function TransactionSummeryCard({
+    coinSymbol,
+    amount,
+    objectId,
+    origin,
+    nftImage,
+    gasEstimate,
+}: TransferSummerCardProps) {
+    const [gasEst, gasSymbol] = useFormatCoin(gasEstimate || 0, GAS_TYPE_ARG);
+
+    const [formatedAmount, symbol] = useFormatCoin(
+        amount ? Math.abs(amount) : 0,
+        coinSymbol
+    );
+
+    return (
+        <SummeryCard header="Transaction summary">
+            <div className={st.content}>
+                {formatedAmount && symbol && (
+                    <>
+                        <div className={st.row}>
+                            <div className={st.label}>Send</div>
+                            <div className={st.value}>
+                                {formatedAmount} {symbol}
+                            </div>
+                        </div>
+
+                        <div className={st.row}>
+                            <div className={st.label}>To</div>
+                            <div className={st.value}>
+                                <ExternalLink
+                                    href={origin}
+                                    className={st.origin}
+                                >
+                                    {new URL(origin || '').host}
+                                </ExternalLink>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+            {nftImage && objectId && (
+                <div className={st.content}>
+                    <div className={st.row}>
+                        <div className={st.label}>Send</div>
+                        <div className={st.value}>
+                            <MiniNFTLink id={objectId} url={nftImage} />
+                        </div>
+                    </div>
+                    <div className={st.row}>
+                        <div className={st.label}>To</div>
+                        <div className={st.value}>
+                            <AccountAddress showLink={false} />
+                        </div>
+                    </div>
+                </div>
+            )}
+            <div className={st.cardFooter}>
+                <div>Estimated Gas Fees</div>
+                {gasEst} {gasSymbol}
+            </div>
+        </SummeryCard>
+    );
+}
 
 export function DappTxApprovalPage() {
     const { txID } = useParams();
@@ -287,6 +374,8 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest, dispatch]);
 
+    const nftMeta = useGetNFTMetaData(txRequest?.txnMeta?.objectId || null);
+
     const metadata = useMemo(() => {
         if (
             (txRequest?.tx?.type !== 'move-call' &&
@@ -300,7 +389,11 @@ export function DappTxApprovalPage() {
             (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
             txRequest.tx.data;
 
-        const transfer: MetadataGroup = { name: 'Transfer', children: [] };
+        const transfer: MetadataGroup = {
+            name: 'Transfer',
+            children: [],
+            nftImage: nftMeta?.url,
+        };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
         const read: MetadataGroup = { name: 'Read', children: [] };
 
@@ -339,7 +432,13 @@ export function DappTxApprovalPage() {
             modify,
             read,
         };
-    }, [txRequest]);
+    }, [
+        nftMeta?.url,
+        txRequest?.metadata,
+        txRequest?.tx.data,
+        txRequest?.tx?.type,
+        txRequest?.unSerializedTxn,
+    ]);
 
     useEffect(() => {
         if (
@@ -388,17 +487,16 @@ export function DappTxApprovalPage() {
         },
         enabled: !!(txRequest && address),
     });
+
+    const transactionSummery = txRequest?.txnMeta;
+
     const gasEstimation = txGasEstimationResult.data ?? null;
+
     const valuesContent: {
         label: string;
         content: string | number | null;
         loading?: boolean;
     }[] = useMemo(() => {
-        const gasEstimationContent = {
-            label: GAS_ESTIMATE_LABEL,
-            content: gasEstimation,
-            loading: txGasEstimationResult.isLoading,
-        };
         switch (txRequest?.tx.type) {
             case 'v2': {
                 return [
@@ -406,7 +504,6 @@ export function DappTxApprovalPage() {
                         label: 'Transaction Type',
                         content: txRequest.tx.data.kind,
                     },
-                    gasEstimationContent,
                 ];
             }
             case 'move-call':
@@ -416,16 +513,9 @@ export function DappTxApprovalPage() {
                         label: 'Function',
                         content: txRequest.tx.data.function,
                     },
-                    gasEstimationContent,
                 ];
             case 'serialized-move-call':
                 return [
-                    {
-                        label: 'Transaction Type',
-                        content:
-                            txRequest?.unSerializedTxn?.kind ??
-                            'SerializedMoveCall',
-                    },
                     ...(txRequest?.unSerializedTxn
                         ? [
                               {
@@ -437,28 +527,34 @@ export function DappTxApprovalPage() {
                                       ).function ?? '',
                               },
                               {
-                                  label: 'Send',
-                                  content: txRequest?.txnMeta?.amount
-                                      ? txRequest.txnMeta.amount +
-                                        ' ' +
-                                        txRequest?.txnMeta?.coinSymbol
-                                      : '',
+                                  label: 'Module',
+                                  content:
+                                      (
+                                          txRequest?.unSerializedTxn
+                                              ?.data as MoveCallTransaction
+                                      ).module ?? '',
                               },
-
-                              gasEstimationContent,
                           ]
                         : [
                               {
                                   label: 'Content',
                                   content: txRequest?.tx.data,
                               },
-                              gasEstimationContent,
                           ]),
                 ];
             default:
                 return [];
         }
-    }, [txRequest, gasEstimation, txGasEstimationResult.isLoading]);
+    }, [txRequest?.tx, txRequest?.unSerializedTxn]);
+
+    const TransactionTypeHeader = (
+        <>
+            <div className={st.txTypeHeaderTitle}>Transaction Type</div>
+            <div className={st.txTypeHeaderStatus}>
+                {txRequest?.unSerializedTxn?.kind ?? txRequest?.tx?.type}
+            </div>
+        </>
+    );
 
     return (
         <Loading loading={loadingState}>
@@ -471,8 +567,23 @@ export function DappTxApprovalPage() {
                     onSubmit={handleOnSubmit}
                 >
                     <section className={st.txInfo}>
-                        <div className={st.card}>
-                            <div className={st.header}>Transaction summary</div>
+                        {transactionSummery && (
+                            <TransactionSummeryCard
+                                objectId={transactionSummery?.objectId || null}
+                                amount={transactionSummery?.amount || null}
+                                coinSymbol={
+                                    transactionSummery?.coinSymbol || null
+                                }
+                                nftImage={nftMeta?.url}
+                                gasEstimate={gasEstimation}
+                                origin={txRequest.origin}
+                            />
+                        )}
+                        <Permissions metadata={metadata} />
+                        <SummeryCard
+                            header={TransactionTypeHeader}
+                            transparentHeader
+                        >
                             <div className={st.content}>
                                 {valuesContent.map(
                                     ({ label, content, loading = false }) => (
@@ -481,16 +592,12 @@ export function DappTxApprovalPage() {
                                                 label={label}
                                                 content={content}
                                                 loading={loading}
-                                                txnMeta={
-                                                    txRequest?.txnMeta || null
-                                                }
                                             />
                                         </div>
                                     )
                                 )}
                             </div>
-                        </div>
-                        <Permissions metadata={metadata} />
+                        </SummeryCard>
                     </section>
                 </UserApproveContainer>
             ) : null}

@@ -22,6 +22,6 @@ export type TransactionRequest = {
     txnMeta?: {
         coinSymbol?: string | null;
         amount?: number | null;
-        obectId?: string[] | null;
+        objectId?: string | null;
     } | null;
 };

@@ -6,7 +6,6 @@ import {
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
-    Coin,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -70,7 +69,7 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
 export type TxnMetaResponse = {
     coinSymbol?: string | null;
     amount?: number | null;
-    objectId?: string[];
+    objectId?: string;
 } | null;
 
 const getRequestCost = (
@@ -81,12 +80,10 @@ const getRequestCost = (
 
     let sumCoin = 0;
     const coinMeta: {
-        objectId: string[];
+        objectId?: string;
         amount?: number;
         coinSymbol?: string;
-    } = {
-        objectId: [],
-    };
+    } = {};
 
     for (const event of events) {
         if ('coinBalanceChange' in event || 'transferObject' in event) {
@@ -102,9 +99,9 @@ const getRequestCost = (
                     : '';
             }
 
+            // TODO - support multiple objectIds
             if (event.transferObject?.recipient?.AddressOwner === address) {
-                const objectId = event.transferObject.objectId;
-                coinMeta.objectId = [...coinMeta.objectId, objectId];
+                coinMeta.objectId = event.transferObject.objectId;
             }
         }
     }
@@ -161,7 +158,7 @@ export const deserializeTxn = createAsyncThunk<
             dryRunResponse && activeAddress
                 ? getRequestCost(dryRunResponse, activeAddress)
                 : null;
-        console.log('txnMeta', txnMeta);
+
         return {
             txRequestID: id,
             ...(txnMeta && { txnMeta }),

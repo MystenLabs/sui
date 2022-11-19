@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .card {
     background: colors.$white;
@@ -18,13 +19,49 @@
         text-transform: uppercase;
         border-radius: 15px 15px 0 0;
     }
+
+    .transparent-header {
+        background: none;
+        display: flex;
+        border-bottom: 1px solid colors.$gray-45;
+        margin: 0 15px;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .card-footer {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        padding-top: 8px;
+        color: colors.$sui-blue-steel-dark;
+
+        @include utils.typography('Primary/BodySmall-M');
+    }
 }
 
-.content {
+.content-wrapper {
     padding: 15px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    align-content: center;
+    gap: 8px;
+    border-bottom: 1px solid colors.$gray-45;
+    padding: 12px 0;
+
+    &:last-of-type {
+        border-bottom: none;
+    }
+
+    &:first-of-type {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
 }
 
 .row {
@@ -36,7 +73,7 @@
     line-height: 100%;
 
     .label {
-        color: colors.$gray-80;
+        color: colors.$sui-blue-steel-dark;
         width: 42%;
         display: flex;
         justify-content: flex-start;
@@ -99,7 +136,7 @@
 
 .object-id {
     font-weight: 500;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 17px;
     font-family: 'Red Hat MonoVariable', ui-monospace, monospace;
     color: colors.$sui-dark-blue;
@@ -114,4 +151,31 @@
 
 .deserializing {
     min-height: 450px;
+}
+
+.nft-image-tiny {
+    width: 12px;
+    display: block;
+}
+
+.nft-image-small {
+    width: 36px;
+    display: block;
+}
+
+.origin {
+    margin-bottom: 10px;
+    font-size: 13px;
+    line-height: 100%;
+    font-weight: 500;
+    text-decoration: none;
+    text-transform: lowercase;
+    color: colors.$sui-dark-blue;
+}
+
+.permissions-content {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    justify-content: space-between;
 }
