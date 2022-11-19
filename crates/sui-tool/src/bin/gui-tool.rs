@@ -177,7 +177,6 @@ async fn object_home() -> Template {
 #[derive(FromForm, Debug)]
 struct ObjectQueryForm {
     object_id: String,
-    #[allow(clippy::all)]
     object_version: Option<u64>,
 }
 
@@ -233,19 +232,11 @@ async fn object(object_id: String, object_version: String, config: &State<Config
 #[get("/")]
 async fn tx_home() -> Template {
     info!("tx_home");
-    Template::render("transaction-home", context![title: "Faucet"])
+    Template::render("transaction-home", context![title: "Transaction"])
 }
 
-#[post("/", data = "<tx_digest>")]
-async fn tx_query(tx_digest: Form<String>) -> Redirect {
-    info!(?tx_digest, "tx_digest");
-    let tx_digest = tx_digest.into_inner();
-    Redirect::to(format!("/transaction/{}", tx_digest))
-}
-
-#[get("/<tx_digest>")]
-async fn tx(tx_digest: String, config: &State<Config>) -> Template {
-    info!(tx_digest, "tx");
+#[get("/query?<tx_digest>")]
+async fn tx_query(tx_digest: String, config: &State<Config>) ->Template {
     let tx_digest = TransactionDigest::from_str(&tx_digest)
         .map_err(|_e| Custom(Status::BadRequest, "Invalid transaction digest."));
 
@@ -311,7 +302,7 @@ fn rocket() -> _ {
         .mount("/validators", routes![validators])
         .mount("/faucet", routes![faucet, faucet_submit, faucet_home])
         .mount("/object", routes![object, object_query, object_home])
-        .mount("/transaction", routes![tx, tx_query, tx_home])
+        .mount("/transaction", routes![tx_query, tx_home])
         .mount(
             format!("/{}", CLUSTER_TEST_STR),
             routes![cluster_test_home, cluster_test_submit],
