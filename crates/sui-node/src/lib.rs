@@ -25,7 +25,6 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_active::ActiveAuthority,
     authority_client::{
-        make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
     },
 };
@@ -137,6 +136,8 @@ impl SuiNode {
             None
         };
 
+        let net = Self::crate_authority_aggregator(&store, &committee_store, &prometheus_registry)?;
+
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
         let transaction_streamer = config
@@ -201,39 +202,11 @@ impl SuiNode {
             )
             .await,
         );
-        let net_config = default_mysten_network_config();
-
-        let sui_system_state = state.get_sui_system_state_object().await?;
-
-        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&prometheus_registry));
-
-        let authority_clients = if config.enable_reconfig && sui_system_state.epoch > 0 {
-            make_network_authority_client_sets_from_system_state(
-                &sui_system_state,
-                &net_config,
-                network_metrics.clone(),
-            )
-        } else {
-            make_network_authority_client_sets_from_genesis(
-                genesis,
-                &net_config,
-                network_metrics.clone(),
-            )
-        }?;
-        let net = AuthorityAggregator::new(
-            state.clone_committee(),
-            committee_store,
-            authority_clients,
-            AuthAggMetrics::new(&prometheus_registry),
-            Arc::new(SafeClientMetrics::new(&prometheus_registry)),
-            network_metrics.clone(),
-        );
 
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
             net.clone(),
             &prometheus_registry,
-            network_metrics.clone(),
         )?);
 
         let arc_net = active_authority.agg_aggregator();
@@ -411,6 +384,30 @@ impl SuiNode {
         info!("SuiNode started!");
 
         Ok(node)
+    }
+
+    fn crate_authority_aggregator(
+        store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
+        prometheus_registry: &Registry,
+    ) -> Result<AuthorityAggregator<NetworkAuthorityClient>> {
+        let net_config = default_mysten_network_config();
+        let sui_system_state = store.get_sui_system_state_object()?;
+
+        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(prometheus_registry));
+        let authority_clients = make_network_authority_client_sets_from_system_state(
+            &sui_system_state,
+            &net_config,
+            network_metrics.clone(),
+        )?;
+        Ok(AuthorityAggregator::new(
+            sui_system_state.get_current_epoch_committee().committee,
+            committee_store.clone(),
+            authority_clients,
+            AuthAggMetrics::new(prometheus_registry),
+            Arc::new(SafeClientMetrics::new(prometheus_registry)),
+            network_metrics,
+        ))
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
