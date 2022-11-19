@@ -24,7 +24,6 @@ use futures::FutureExt;
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::response::status::Custom;
-use rocket::response::Redirect;
 use rocket::Request;
 use rocket::State;
 use rocket_dyn_templates::{context, Template};
@@ -61,8 +60,8 @@ async fn cluster_test_home(config: &State<Config>) -> Template {
 }
 
 #[post("/")]
-async fn cluster_test_submit(config: &State<Config>) -> Template {
-    info!("cluster_test_submit");
+async fn cluster_test_run(config: &State<Config>) -> Template {
+    info!("cluster_test_run");
     let opt = config.cluster_test_opt.clone();
 
     let future = ClusterTest::run(opt);
@@ -109,15 +108,10 @@ async fn faucet_home() -> Template {
 }
 
 #[post("/", data = "<address>")]
-async fn faucet_submit(address: Form<String>) -> Redirect {
+async fn faucet_request(address: Form<String>, config: &State<Config>) -> Template {
     info!(?address, "faucet_submit");
     let address = address.into_inner();
-    Redirect::to(format!("/faucet/{}", address))
-}
 
-#[get("/<address>")]
-async fn faucet(address: String, config: &State<Config>) -> Template {
-    info!(address, "faucet");
     let address = ObjectID::from_hex_literal(&address)
         .map_err(|_e| Custom(Status::BadRequest, "Invalid hex address."));
     let address = return_if_error!(address);
@@ -171,39 +165,21 @@ fn validators(config: &State<Config>) -> Template {
 #[get("/")]
 async fn object_home() -> Template {
     info!("object_home");
-    Template::render("object-home", context![title: "Faucet"])
+    Template::render("object-home", context![title: "Object"])
 }
 
-#[derive(FromForm, Debug)]
-struct ObjectQueryForm {
+#[get("/query?<object_id>&<object_version>")]
+async fn object_query(
     object_id: String,
-    object_version: Option<u64>,
-}
+    object_version: String,
+    config: &State<Config>,
+) -> Template {
+    info!(object_id, object_version, "object_query");
 
-const LATEST_VERSION_STR: &str = "latest";
-
-#[post("/", data = "<object_query>")]
-async fn object_query(object_query: Form<ObjectQueryForm>) -> Redirect {
-    info!(?object_query, "object_query");
-    let object_query = object_query.into_inner();
-    let object_version = if let Some(v) = object_query.object_version {
-        v.to_string()
-    } else {
-        LATEST_VERSION_STR.to_owned()
-    };
-    Redirect::to(format!(
-        "/object/{}/{}",
-        object_query.object_id, object_version
-    ))
-}
-
-#[get("/<object_id>/<object_version>")]
-async fn object(object_id: String, object_version: String, config: &State<Config>) -> Template {
-    info!(object_id, object_version, "object");
     let object_id = ObjectID::from_hex_literal(&object_id)
         .map_err(|_e| Custom(Status::BadRequest, "Invalid hex address."));
     let object_id = return_if_error!(object_id);
-    let object_version = if object_version == LATEST_VERSION_STR {
+    let object_version = if object_version.is_empty() {
         None
     } else {
         Some(return_if_error!(object_version.parse::<u64>()))
@@ -236,7 +212,7 @@ async fn tx_home() -> Template {
 }
 
 #[get("/query?<tx_digest>")]
-async fn tx_query(tx_digest: String, config: &State<Config>) ->Template {
+async fn tx_query(tx_digest: String, config: &State<Config>) -> Template {
     let tx_digest = TransactionDigest::from_str(&tx_digest)
         .map_err(|_e| Custom(Status::BadRequest, "Invalid transaction digest."));
 
@@ -300,12 +276,12 @@ fn rocket() -> _ {
         .manage(config)
         .mount("/", routes![index])
         .mount("/validators", routes![validators])
-        .mount("/faucet", routes![faucet, faucet_submit, faucet_home])
-        .mount("/object", routes![object, object_query, object_home])
+        .mount("/faucet", routes![faucet_request, faucet_home])
+        .mount("/object", routes![object_query, object_home])
         .mount("/transaction", routes![tx_query, tx_home])
         .mount(
             format!("/{}", CLUSTER_TEST_STR),
-            routes![cluster_test_home, cluster_test_submit],
+            routes![cluster_test_home, cluster_test_run],
         )
         .register("/", catchers![internal_server_error])
         .attach(Template::fairing())
