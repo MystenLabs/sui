@@ -16,4 +16,4 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 telemetry-subscribers.workspace = true
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "89fb343539fd4f160eaa535560b295cec2c41a1a", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "7d2bb66f4310f23b14ea6f1df2dab0a1d84af1f2", package = "msim" }
