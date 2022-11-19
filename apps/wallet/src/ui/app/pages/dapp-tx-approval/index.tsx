@@ -16,6 +16,7 @@ import {
     useAppSelector,
     useMiddleEllipsis,
     useFormatCoin,
+    useGetNFTMetaData,
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import {
@@ -23,6 +24,7 @@ import {
     respondToTransactionRequest,
     txRequestsSelectors,
     deserializeTxn,
+    type TxnMetaResponse,
 } from '_redux/slices/transaction-requests';
 import { thunkExtras } from '_redux/store/thunk-extras';
 
@@ -160,11 +162,50 @@ type TransferSummaryProps = {
     label: string;
     content: string | number | null;
     loading: boolean;
+    txnMeta?: TxnMetaResponse;
 };
 
 const GAS_ESTIMATE_LABEL = 'Estimated Gas Fees';
 
-function TransactionSummery({ label, content, loading }: TransferSummaryProps) {
+function TransactionSummery({
+    label,
+    content,
+    loading,
+    txnMeta,
+}: TransferSummaryProps) {
+    const isGasEstimate = label === GAS_ESTIMATE_LABEL;
+    const [gasEstimate, symbol] = useFormatCoin(
+        (isGasEstimate && content) || 0,
+        GAS_TYPE_ARG
+    );
+
+    const [formatedAmount, coinSymbol] = useFormatCoin(
+        txnMeta?.amount ? Math.abs(txnMeta.amount) : 0,
+        txnMeta?.coinSymbol
+    );
+
+    const nftMeta = useGetNFTMetaData(txnMeta?.objectId || []);
+    console.log('txnMeta', txnMeta);
+    console.log('formatedAmount', formatedAmount, coinSymbol);
+    console.log('nftMeta', nftMeta);
+
+    const valueContent =
+        content === null
+            ? '-'
+            : isGasEstimate
+            ? `${gasEstimate} ${symbol}`
+            : content;
+    return (
+        <>
+            <div className={st.label}>{label}</div>
+            <div className={st.value}>
+                {loading ? <LoadingIndicator /> : valueContent}
+            </div>
+        </>
+    );
+}
+
+/*function TransactionType({ label, content, loading }: TransferSummaryProps) {
     const isGasEstimate = label === GAS_ESTIMATE_LABEL;
     const [gasEstimate, symbol] = useFormatCoin(
         (isGasEstimate && content) || 0,
@@ -184,7 +225,7 @@ function TransactionSummery({ label, content, loading }: TransferSummaryProps) {
             </div>
         </>
     );
-}
+}*/
 
 export function DappTxApprovalPage() {
     const { txID } = useParams();
@@ -205,6 +246,7 @@ export function DappTxApprovalPage() {
     const txRequest = useAppSelector(txRequestSelector);
     const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
+    const address = useAppSelector(({ account }) => account.address);
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
             if (txRequest) {
@@ -257,6 +299,7 @@ export function DappTxApprovalPage() {
         const txData =
             (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
             txRequest.tx.data;
+
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
         const read: MetadataGroup = { name: 'Read', children: [] };
@@ -320,7 +363,6 @@ export function DappTxApprovalPage() {
         }
     }, [deserializeTxnFailed, loading, txRequest]);
 
-    const address = useAppSelector(({ account }) => account.address);
     const txGasEstimationResult = useQuery({
         queryKey: ['tx-request', 'gas-estimate', txRequest?.id, address],
         queryFn: () => {
@@ -394,6 +436,15 @@ export function DappTxApprovalPage() {
                                               ?.data as MoveCallTransaction
                                       ).function ?? '',
                               },
+                              {
+                                  label: 'Send',
+                                  content: txRequest?.txnMeta?.amount
+                                      ? txRequest.txnMeta.amount +
+                                        ' ' +
+                                        txRequest?.txnMeta?.coinSymbol
+                                      : '',
+                              },
+
                               gasEstimationContent,
                           ]
                         : [
@@ -430,6 +481,9 @@ export function DappTxApprovalPage() {
                                                 label={label}
                                                 content={content}
                                                 loading={loading}
+                                                txnMeta={
+                                                    txRequest?.txnMeta || null
+                                                }
                                             />
                                         </div>
                                     )

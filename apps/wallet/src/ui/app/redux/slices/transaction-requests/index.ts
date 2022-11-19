@@ -67,7 +67,7 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
     }
 );
 
-type TxnMetaResponse = {
+export type TxnMetaResponse = {
     coinSymbol?: string | null;
     amount?: number | null;
     objectId?: string[];
@@ -98,7 +98,7 @@ const getRequestCost = (
                 sumCoin += event.coinBalanceChange?.amount || 0;
                 coinMeta.amount = sumCoin;
                 coinMeta.coinSymbol = event.coinBalanceChange?.coinType
-                    ? Coin.getCoinSymbol(event.coinBalanceChange.coinType)
+                    ? event.coinBalanceChange.coinType
                     : '';
             }
 
@@ -161,9 +161,7 @@ export const deserializeTxn = createAsyncThunk<
             dryRunResponse && activeAddress
                 ? getRequestCost(dryRunResponse, activeAddress)
                 : null;
-
         console.log('txnMeta', txnMeta);
-
         return {
             txRequestID: id,
             ...(txnMeta && { txnMeta }),
