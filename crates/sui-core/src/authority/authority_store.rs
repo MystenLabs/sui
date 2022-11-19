@@ -478,22 +478,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
         let lock_info = self.lock_service.get_lock(*object_ref).await?;
         let lock_info = match lock_info {
-            ObjectLockStatus::ObjectLockedAtDifferentRef { locked_ref } => {
+            ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
                 return Err(SuiError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: *object_ref,
                     current_version: locked_ref.1,
                 })
             }
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: _,
-                locked_by_tx,
-            } => {
-                if locked_by_tx.is_none() {
-                    return Ok(None);
-                }
-                // safe to unwrap, as we check it is not none
-                locked_by_tx.unwrap()
+            ObjectLockStatus::Initialized => {
+                return Ok(None);
             }
+            ObjectLockStatus::LockedToTx { locked_by_tx } => locked_by_tx,
         };
 
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.

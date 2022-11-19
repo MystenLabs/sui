@@ -85,32 +85,18 @@ enum LockServiceQueries {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ObjectLockStatus {
-    RequestedObjectRefLocked {
-        requested_ref: ObjectRef,
-        locked_by_tx: Option<LockDetails>,
-    },
-    ObjectLockedAtDifferentRef {
-        locked_ref: ObjectRef,
-    },
+    Initialized,
+    LockedToTx { locked_by_tx: LockDetails },
+    LockedAtDifferentVersion { locked_ref: ObjectRef },
 }
 
 impl ObjectLockStatus {
     /// Returns if the requested ObjectRef record is initailized or locked.
     /// If true, the object version is ready for being used in transactions
     /// If false, the object is currently locked at another version
-    pub fn is_locked_at_requested_obj_ref(&self) -> bool {
-        matches!(self, ObjectLockStatus::RequestedObjectRefLocked { .. })
-    }
-
-    /// Returns currently locked ObjectRef for the requested object
-    pub fn locked_obj_ref(&self) -> &ObjectRef {
-        match self {
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref,
-                locked_by_tx: _,
-            } => requested_ref,
-            ObjectLockStatus::ObjectLockedAtDifferentRef { locked_ref } => locked_ref,
-        }
+    pub fn is_inited_or_locked_at_requested_obj_ref(&self) -> bool {
+        matches!(self, ObjectLockStatus::LockedToTx { .. })
+            || matches!(self, ObjectLockStatus::Initialized)
     }
 
     /// Returns if the requested ObjectRef is locked by a certain transaction.
@@ -118,24 +104,31 @@ impl ObjectLockStatus {
     ///     or the record is initialized but not locked by any transaction.
     pub fn is_requested_obj_ref_locked_by_tx(&self) -> bool {
         match self {
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: _,
-                locked_by_tx,
-            } => locked_by_tx.is_some(),
-            ObjectLockStatus::ObjectLockedAtDifferentRef { .. } => false,
+            ObjectLockStatus::Initialized => false,
+            ObjectLockStatus::LockedToTx { .. } => true,
+            ObjectLockStatus::LockedAtDifferentVersion { .. } => false,
         }
     }
 
     /// Returns the transaction that locks the requested ObjectRef.
     /// Returns None if the object is not locked by any transaction or locked at
-    /// another version (namely `is_locked_at_requested_obj_ref` returns false)
+    /// another version (namely `is_inited_or_locked_at_requested_obj_ref` returns false)
     pub fn tx_locks_requested_obj_ref(&self) -> Option<&LockDetails> {
         match self {
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: _,
-                locked_by_tx,
-            } => locked_by_tx.as_ref(),
-            ObjectLockStatus::ObjectLockedAtDifferentRef { .. } => None,
+            ObjectLockStatus::Initialized => None,
+            ObjectLockStatus::LockedToTx { locked_by_tx } => Some(locked_by_tx),
+            ObjectLockStatus::LockedAtDifferentVersion { .. } => None,
+        }
+    }
+
+    /// Returns currently inited or locked ObjectRef for the requested object
+    /// if it's different from the requested one.
+    #[cfg(test)]
+    fn current_obj_ref_if_different(&self) -> Option<&ObjectRef> {
+        match self {
+            ObjectLockStatus::Initialized => None,
+            ObjectLockStatus::LockedToTx { .. } => None,
+            ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => Some(locked_ref),
         }
     }
 }
@@ -191,12 +184,14 @@ impl LockServiceImpl {
                 .get(&obj_ref)
                 .map_err(SuiError::StorageError)?
             {
-                ObjectLockStatus::RequestedObjectRefLocked {
-                    requested_ref: obj_ref,
-                    locked_by_tx: lock_info,
+                match lock_info {
+                    Some(lock_info) => ObjectLockStatus::LockedToTx {
+                        locked_by_tx: lock_info,
+                    },
+                    None => ObjectLockStatus::Initialized,
                 }
             } else {
-                ObjectLockStatus::ObjectLockedAtDifferentRef {
+                ObjectLockStatus::LockedAtDifferentVersion {
                     locked_ref: self.get_latest_lock_for_object_id(obj_ref.0)?,
                 }
             },
@@ -856,15 +851,9 @@ mod tests {
         ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
             .unwrap();
         let lock_info = ls.get_lock(ref2).unwrap();
-        assert_eq!(
-            lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref2,
-                locked_by_tx: None
-            }
-        );
-        assert_eq!(lock_info.locked_obj_ref(), &ref2);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info, ObjectLockStatus::Initialized);
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
@@ -889,13 +878,12 @@ mod tests {
 
         assert_eq!(
             lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref2,
-                locked_by_tx: Some(expected_lock_details.clone())
+            ObjectLockStatus::LockedToTx {
+                locked_by_tx: expected_lock_details.clone()
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &ref2);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(
             lock_info.tx_locks_requested_obj_ref(),
@@ -947,12 +935,12 @@ mod tests {
 
         assert_eq!(
             lock_info,
-            ObjectLockStatus::ObjectLockedAtDifferentRef {
+            ObjectLockStatus::LockedAtDifferentVersion {
                 locked_ref: new_ref2
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &new_ref2);
-        assert!(!lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), Some(&new_ref2));
+        assert!(!lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
@@ -997,13 +985,12 @@ mod tests {
 
         assert_eq!(
             lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref2,
-                locked_by_tx: Some(expected_lock_details.clone())
+            ObjectLockStatus::LockedToTx {
+                locked_by_tx: expected_lock_details.clone()
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &ref2);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(
             lock_info.tx_locks_requested_obj_ref(),
@@ -1054,15 +1041,9 @@ mod tests {
 
         let lock_info = ls.get_lock(ref1).await.unwrap();
 
-        assert_eq!(
-            lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref1,
-                locked_by_tx: None
-            }
-        );
-        assert_eq!(lock_info.locked_obj_ref(), &ref1);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info, ObjectLockStatus::Initialized);
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
@@ -1104,15 +1085,9 @@ mod tests {
 
         let lock_info = ls.get_lock(ref2).unwrap();
 
-        assert_eq!(
-            lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref2,
-                locked_by_tx: None
-            }
-        );
-        assert_eq!(lock_info.locked_obj_ref(), &ref2);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info, ObjectLockStatus::Initialized);
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(!lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(lock_info.tx_locks_requested_obj_ref(), None);
 
@@ -1132,13 +1107,12 @@ mod tests {
         };
         assert_eq!(
             lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref1,
-                locked_by_tx: Some(expected_lock_details.clone())
+            ObjectLockStatus::LockedToTx {
+                locked_by_tx: expected_lock_details.clone()
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &ref1);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(
             lock_info.tx_locks_requested_obj_ref(),
@@ -1156,13 +1130,12 @@ mod tests {
         };
         assert_eq!(
             lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref1,
-                locked_by_tx: Some(expected_lock_details.clone())
+            ObjectLockStatus::LockedToTx {
+                locked_by_tx: expected_lock_details.clone()
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &ref1);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(
             lock_info.tx_locks_requested_obj_ref(),
@@ -1184,13 +1157,12 @@ mod tests {
         };
         assert_eq!(
             lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref1,
-                locked_by_tx: Some(expected_lock_details.clone())
+            ObjectLockStatus::LockedToTx {
+                locked_by_tx: expected_lock_details.clone()
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &ref1);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(
             lock_info.tx_locks_requested_obj_ref(),
@@ -1205,13 +1177,12 @@ mod tests {
         };
         assert_eq!(
             lock_info,
-            ObjectLockStatus::RequestedObjectRefLocked {
-                requested_ref: ref2,
-                locked_by_tx: Some(expected_lock_details.clone())
+            ObjectLockStatus::LockedToTx {
+                locked_by_tx: expected_lock_details.clone()
             }
         );
-        assert_eq!(lock_info.locked_obj_ref(), &ref2);
-        assert!(lock_info.is_locked_at_requested_obj_ref());
+        assert_eq!(lock_info.current_obj_ref_if_different(), None);
+        assert!(lock_info.is_inited_or_locked_at_requested_obj_ref());
         assert!(lock_info.is_requested_obj_ref_locked_by_tx());
         assert_eq!(
             lock_info.tx_locks_requested_obj_ref(),
