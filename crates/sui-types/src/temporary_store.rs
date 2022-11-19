@@ -8,6 +8,7 @@ use std::ops::Neg;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::trace::CallTrace;
 use tracing::trace;
 
 use crate::coin::Coin;
@@ -458,6 +459,7 @@ impl<S> TemporaryStore<S> {
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
+        call_traces: Vec<CallTrace>,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let written: BTreeMap<ObjectID, (ObjectRef, Owner, WriteKind)> = self
             .written
@@ -514,6 +516,7 @@ impl<S> TemporaryStore<S> {
             gas_object: updated_gas_object_info,
             events,
             dependencies: transaction_dependencies,
+            call_traces,
         };
         (inner, effects)
     }

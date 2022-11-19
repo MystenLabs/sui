@@ -2176,6 +2176,9 @@ impl AuthorityState {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
             })?;
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
+
+        dbg!("CALL TRACES", &signed_effects.effects.call_traces);
+
         self.metrics
             .pending_notify_read
             .set(self.database.effects_notify_read.num_pending() as i64);

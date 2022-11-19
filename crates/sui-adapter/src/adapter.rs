@@ -17,7 +17,6 @@ use move_binary_format::{
     errors::VMResult,
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
-use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -65,17 +64,7 @@ macro_rules! assert_invariant {
 }
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
-    MoveVM::new_with_verifier_config(
-        natives,
-        VerifierConfig {
-            max_loop_depth: Some(5),
-            treat_friend_as_private: true,
-            max_generic_instantiation_length: Some(32),
-            max_function_parameters: Some(128),
-            max_basic_blocks: Some(1024),
-        },
-    )
-    .map_err(|_| SuiError::ExecutionInvariantViolation)
+    MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
 pub fn new_session<
@@ -211,6 +200,7 @@ fn execute_internal<
         SerializedReturnValues {
             mut mutable_reference_outputs,
             return_values,
+            call_traces,
         },
         (change_set, events, mut native_context_extensions),
     ) = session
@@ -291,6 +281,7 @@ fn execute_internal<
     let (empty_changes, empty_events) = session.finish()?;
     debug_assert!(empty_changes.into_inner().is_empty());
     debug_assert!(empty_events.is_empty());
+
     process_successful_execution(
         state_view,
         module_id,
@@ -302,6 +293,8 @@ fn execute_internal<
         user_events,
         ctx,
     )?;
+
+    ctx.set_call_traces(call_traces);
 
     Ok(())
 }

@@ -99,6 +99,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync + Chil
         gas_cost_summary,
         status,
         gas_object_ref,
+        tx_ctx.call_traces(),
     );
     (inner, effects, execution_error)
 }

@@ -51,6 +51,7 @@ static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
 pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
+    gas_left_total: InternalGas,
     charge: bool,
 }
 
@@ -60,8 +61,11 @@ impl<'a> GasStatus<'a> {
     /// Charge for every operation and fail when there is no more gas to pay for operations.
     /// This is the instantiation that must be used when executing a user script.
     pub fn new(cost_table: &'a CostTable, gas_left: Gas) -> Self {
+        let gas_left = gas_left.to_unit();
+
         Self {
-            gas_left: gas_left.to_unit(),
+            gas_left,
+            gas_left_total: gas_left,
             cost_table,
             charge: true,
         }
@@ -74,6 +78,7 @@ impl<'a> GasStatus<'a> {
     pub fn new_unmetered() -> Self {
         Self {
             gas_left: InternalGas::new(0),
+            gas_left_total: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
             charge: false,
         }
@@ -467,6 +472,12 @@ impl<'b> GasMeter for GasStatus<'b> {
     ) -> PartialVMResult<()> {
         // TODO (Gas Maintainance)
         Ok(())
+    }
+
+    fn charged_already_total(&self) -> PartialVMResult<InternalGas> {
+        let charged = self.gas_left_total.checked_sub(self.gas_left).unwrap();
+
+        Ok(charged)
     }
 }
 

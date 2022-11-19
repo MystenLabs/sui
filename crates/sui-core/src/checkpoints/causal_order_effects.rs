@@ -315,6 +315,7 @@ mod tests {
                 Owner::Immutable,
             ),
             events: vec![],
+            call_traces: vec![],
         }
     }
 

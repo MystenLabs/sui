@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ main, extensions, devnet ]
+    branches: [ main ]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,43 +29,9 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  diff:
-    runs-on: [ubuntu-latest]
-    outputs:
-      isRust: ${{ steps.diff.outputs.isRust }}
-    steps:
-    - uses: actions/checkout@v3
-    - name: Detect Changes
-      uses: './.github/actions/diffs'
-      id: diff
-
-  license-check:
-    name: license-check
-    runs-on: [ubuntu-latest]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-hakari
-          locked: true
-      - run: cargo xlint
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
-
   test:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - [ubuntu-ghcloud]
-      fail-fast: false
+    runs-on: [furuensu]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -73,69 +39,12 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci
-      - name: Doctests
-        run: |
-          cargo test --doc
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
 
-  windows-build:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - [windows-ghcloud]
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: taiki-e/install-action@nextest
-      - uses: arduino/setup-protoc@v1
-      - name: cargo build
-        run: |
-          cargo build --all-features
-        shell: bash
-
-
-  simtest:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: taiki-e/install-action@nextest
-      - name: cargo simtest
-        run: |
-          scripts/simtest/cargo-simtest simtest
-
-  # This is a no-op job that allows the resulting action names to line up when
-  # there are no rust changes in a given PR/commit. This ensures that we can
-  # continue to block on the rust tests passing in the case of rust changes and
-  # otherwise not block pushes to main.
-  test-notrust:
-    name: test
-    needs: diff
-    if: needs.diff.outputs.isRust == 'false'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - [ubuntu-ghcloud]
-          - [windows-ghcloud]
-      fail-fast: false
-    steps:
-      - run: 'echo "No build required" '
-
   clippy:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [furuensu]
     steps:
       - uses: arduino/setup-protoc@v1
       - uses: actions/checkout@v3
@@ -155,8 +64,6 @@ jobs:
         run: cargo xclippy -D warnings
 
   rustfmt:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
@@ -171,8 +78,6 @@ jobs:
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
