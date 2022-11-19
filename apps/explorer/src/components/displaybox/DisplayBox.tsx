@@ -126,10 +126,11 @@ function DisplayBoxWString({
         new ImageModClient()
             .checkImage(transformURL(display))
             .then(({ ok }) => {
-                setImgAllowState(ok);
+                setImgAllowState(false);
             })
             .catch((error) => {
                 console.warn(error);
+                console.log('Image moderation failed, allowing image', error);
                 // default to allow, so a broken img check service doesn't break NFT display
                 setImgAllowState(true);
             })
