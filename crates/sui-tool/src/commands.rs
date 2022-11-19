@@ -63,10 +63,11 @@ pub enum ToolCommand {
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
         /// instance, to quickly check that all validators agree on the history of an object:
-        ///
-        ///     $ sui-tool fetch-object --id 0x260efde76ebccf57f4c5e951157f5c361cde822c \
+        ///     ```
+        ///     cli-tool fetch-object --id 0x260efde76ebccf57f4c5e951157f5c361cde822c \
         ///         --genesis $HOME/.sui/sui_config/genesis.blob \
         ///         --history --verbosity concise --concise-no-header
+        ///     ```
         ///
         #[clap(
             arg_enum,
