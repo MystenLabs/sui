@@ -67,7 +67,8 @@ mod handle;
 pub use handle::SuiNodeHandle;
 use narwhal_types::TransactionsClient;
 use sui_core::checkpoints::{
-    CheckpointMetrics, CheckpointService, LogCheckpointOutput, SubmitCheckpointToConsensus,
+    CheckpointMetrics, CheckpointService, CheckpointStore, LogCheckpointOutput,
+    SubmitCheckpointToConsensus,
 };
 
 pub struct SuiNode {
@@ -171,8 +172,9 @@ impl SuiNode {
 
         let (certified_checkpoint_output, forward_to_state_sync_task) =
             sui_core::checkpoints::SendCheckpointToStateSync::new();
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let checkpoint_service = CheckpointService::spawn(
-            &config.db_path().join("checkpoints"),
+            checkpoint_store.clone(),
             Box::new(store.clone()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -180,11 +182,8 @@ impl SuiNode {
             CheckpointMetrics::new(&prometheus_registry),
         );
 
-        let state_sync_store = RocksDbStore::new(
-            store.clone(),
-            committee_store.clone(),
-            checkpoint_service.clone(),
-        );
+        let state_sync_store =
+            RocksDbStore::new(store.clone(), committee_store.clone(), checkpoint_store);
 
         let state = Arc::new(
             AuthorityState::new(
