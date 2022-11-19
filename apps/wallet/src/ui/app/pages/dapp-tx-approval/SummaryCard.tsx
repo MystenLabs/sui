@@ -6,13 +6,13 @@ import type { ReactNode } from 'react';
 
 import st from './DappTxApprovalPage.module.scss';
 
-type SummeryCardProps = {
+type SummaryCardProps = {
     header?: string | React.ReactElement;
     transparentHeader?: true;
     children: ReactNode | ReactNode[];
 };
 
-export function SummeryCardHeader({
+export function SummaryCardHeader({
     header,
     transparentHeader,
 }: {
@@ -28,15 +28,15 @@ export function SummeryCardHeader({
     );
 }
 
-export function SummeryCard({
+export function SummaryCard({
     header,
     transparentHeader,
     children,
-}: SummeryCardProps) {
+}: SummaryCardProps) {
     return (
         <div className={st.card}>
             {header ? (
-                <SummeryCardHeader
+                <SummaryCardHeader
                     header={header}
                     transparentHeader={transparentHeader}
                 />

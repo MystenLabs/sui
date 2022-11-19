@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { MiniNFT } from './MiniNFT';
-import { SummeryCard } from './SummeryCard';
+import { SummaryCard } from './SummaryCard';
 import AccountAddress from '_components/account-address';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -140,7 +140,7 @@ function Permissions({ metadata }: PermissionsProps) {
     return (
         metadata &&
         tab && (
-            <SummeryCard header="Permissions requested">
+            <SummaryCard header="Permissions requested">
                 <div className={st.content}>
                     <div className={st.tabs}>
                         {Object.entries(metadata).map(
@@ -169,7 +169,7 @@ function Permissions({ metadata }: PermissionsProps) {
                         ))}
                     </div>
                 </div>
-            </SummeryCard>
+            </SummaryCard>
         )
     );
 }
@@ -248,7 +248,7 @@ function MiniNFTLink({
     );
 }
 
-function TransactionSummeryCard({
+function TransactionSummaryCard({
     coinSymbol,
     amount,
     objectId,
@@ -264,7 +264,7 @@ function TransactionSummeryCard({
     );
 
     return (
-        <SummeryCard header="Transaction summary">
+        <SummaryCard header="Transaction summary">
             <div className={st.content}>
                 {formatedAmount && symbol && (
                     <>
@@ -309,7 +309,7 @@ function TransactionSummeryCard({
                 <div>Estimated Gas Fees</div>
                 {gasEst} {gasSymbol}
             </div>
-        </SummeryCard>
+        </SummaryCard>
     );
 }
 
@@ -482,7 +482,7 @@ export function DappTxApprovalPage() {
         enabled: !!(txRequest && address),
     });
 
-    const transactionSummery = txRequest?.txnMeta;
+    const transactionSummary = txRequest?.txnMeta;
 
     const gasEstimation = txGasEstimationResult.data ?? null;
 
@@ -561,12 +561,12 @@ export function DappTxApprovalPage() {
                     onSubmit={handleOnSubmit}
                 >
                     <section className={st.txInfo}>
-                        {transactionSummery && (
-                            <TransactionSummeryCard
-                                objectId={transactionSummery?.objectId || null}
-                                amount={transactionSummery?.amount || null}
+                        {transactionSummary && (
+                            <TransactionSummaryCard
+                                objectId={transactionSummary?.objectId || null}
+                                amount={transactionSummary?.amount || null}
                                 coinSymbol={
-                                    transactionSummery?.coinSymbol || null
+                                    transactionSummary?.coinSymbol || null
                                 }
                                 nftImage={nftMeta?.url}
                                 gasEstimate={gasEstimation}
@@ -574,7 +574,7 @@ export function DappTxApprovalPage() {
                             />
                         )}
                         <Permissions metadata={metadata} />
-                        <SummeryCard
+                        <SummaryCard
                             header={TransactionTypeHeader}
                             transparentHeader
                         >
@@ -591,7 +591,7 @@ export function DappTxApprovalPage() {
                                     )
                                 )}
                             </div>
-                        </SummeryCard>
+                        </SummaryCard>
                     </section>
                 </UserApproveContainer>
             ) : null}
