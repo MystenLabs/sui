@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::TraceLayer;
@@ -117,6 +118,13 @@ impl SuiNode {
             &committee,
             None,
         ));
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
+        let state_sync_store = RocksDbStore::new(
+            store.clone(),
+            committee_store.clone(),
+            checkpoint_store.clone(),
+        );
 
         let index_store = if is_validator {
             None
@@ -137,7 +145,11 @@ impl SuiNode {
             None
         };
 
-        let net = Self::crate_authority_aggregator(&store, &committee_store, &prometheus_registry)?;
+        let (p2p_network, discovery_handle, state_sync_handle) =
+            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+
+        let net =
+            Self::create_authority_aggregator(&store, &committee_store, &prometheus_registry)?;
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
@@ -172,18 +184,18 @@ impl SuiNode {
 
         let (certified_checkpoint_output, forward_to_state_sync_task) =
             sui_core::checkpoints::SendCheckpointToStateSync::new();
-        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
+        // init the task that forwards checkpoints to state_sync
+        forward_to_state_sync_task.start(state_sync_handle.clone());
+
         let checkpoint_service = CheckpointService::spawn(
-            checkpoint_store.clone(),
+            checkpoint_store,
             Box::new(store.clone()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
             committee.clone(),
             CheckpointMetrics::new(&prometheus_registry),
         );
-
-        let state_sync_store =
-            RocksDbStore::new(store.clone(), committee_store.clone(), checkpoint_store);
 
         let state = Arc::new(
             AuthorityState::new(
@@ -289,69 +301,6 @@ impl SuiNode {
             spawn_monitored_task!(server.serve().map_err(Into::into))
         };
 
-        let (state_sync, state_sync_server) = state_sync::Builder::new()
-            .config(config.p2p_config.state_sync.clone().unwrap_or_default())
-            .store(state_sync_store)
-            .build();
-
-        let (discovery, discovery_server) = discovery::Builder::new()
-            .config(config.p2p_config.clone())
-            .build();
-
-        let p2p_network = {
-            let routes = anemo::Router::new()
-                .add_rpc_service(discovery_server)
-                .add_rpc_service(state_sync_server);
-
-            let inbound_network_metrics =
-                NetworkMetrics::new("sui", "inbound", &prometheus_registry);
-            let outbound_network_metrics =
-                NetworkMetrics::new("sui", "outbound", &prometheus_registry);
-            let network_connection_metrics =
-                NetworkConnectionMetrics::new("sui", &prometheus_registry);
-
-            let service = ServiceBuilder::new()
-                .layer(
-                    TraceLayer::new_for_server_errors()
-                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
-                )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(inbound_network_metrics),
-                )))
-                .service(routes);
-
-            let outbound_layer = ServiceBuilder::new()
-                .layer(
-                    TraceLayer::new_for_client_and_server_errors()
-                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
-                )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(outbound_network_metrics),
-                )))
-                .into_inner();
-
-            let network = anemo::Network::bind(config.p2p_config.listen_address)
-                .server_name("sui")
-                .private_key(config.network_key_pair.copy().private().0.to_bytes())
-                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
-                .outbound_request_layer(outbound_layer)
-                .start(service)?;
-            info!("P2p network started on {}", network.local_addr());
-
-            let _connection_monitor_handle =
-                narwhal_network::connectivity::ConnectionMonitor::spawn(
-                    network.downgrade(),
-                    network_connection_metrics,
-                );
-
-            network
-        };
-
-        let discovery_handle = discovery.start(p2p_network.clone());
-        let state_sync_handle = state_sync.start(p2p_network.clone());
-        // init the task that forwards checkpoitns to state_sync
-        forward_to_state_sync_task.start(state_sync_handle.clone());
-
         let (json_rpc_service, ws_subscription_service) = build_http_servers(
             state.clone(),
             &transaction_orchestrator.clone(),
@@ -385,7 +334,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    fn crate_authority_aggregator(
+    fn create_authority_aggregator(
         store: &Arc<AuthorityStore>,
         committee_store: &Arc<CommitteeStore>,
         prometheus_registry: &Registry,
@@ -407,6 +356,74 @@ impl SuiNode {
             Arc::new(SafeClientMetrics::new(prometheus_registry)),
             network_metrics,
         ))
+    }
+
+    fn create_p2p_network(
+        config: &NodeConfig,
+        state_sync_store: RocksDbStore,
+        prometheus_registry: &Registry,
+    ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
+        let (state_sync, state_sync_server) = state_sync::Builder::new()
+            .config(config.p2p_config.state_sync.clone().unwrap_or_default())
+            .store(state_sync_store)
+            .build();
+
+        let (discovery, discovery_server) = discovery::Builder::new()
+            .config(config.p2p_config.clone())
+            .build();
+
+        let p2p_network = {
+            let routes = anemo::Router::new()
+                .add_rpc_service(discovery_server)
+                .add_rpc_service(state_sync_server);
+
+            let inbound_network_metrics =
+                NetworkMetrics::new("sui", "inbound", prometheus_registry);
+            let outbound_network_metrics =
+                NetworkMetrics::new("sui", "outbound", prometheus_registry);
+            let network_connection_metrics =
+                NetworkConnectionMetrics::new("sui", prometheus_registry);
+
+            let service = ServiceBuilder::new()
+                .layer(
+                    TraceLayer::new_for_server_errors()
+                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+                )
+                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                    Arc::new(inbound_network_metrics),
+                )))
+                .service(routes);
+
+            let outbound_layer = ServiceBuilder::new()
+                .layer(
+                    TraceLayer::new_for_client_and_server_errors()
+                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+                )
+                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                    Arc::new(outbound_network_metrics),
+                )))
+                .into_inner();
+
+            let network = Network::bind(config.p2p_config.listen_address)
+                .server_name("sui")
+                .private_key(config.network_key_pair.copy().private().0.to_bytes())
+                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
+                .outbound_request_layer(outbound_layer)
+                .start(service)?;
+            info!("P2p network started on {}", network.local_addr());
+
+            let _connection_monitor_handle =
+                narwhal_network::connectivity::ConnectionMonitor::spawn(
+                    network.downgrade(),
+                    network_connection_metrics,
+                );
+
+            network
+        };
+
+        let discovery_handle = discovery.start(p2p_network.clone());
+        let state_sync_handle = state_sync.start(p2p_network.clone());
+        Ok((p2p_network, discovery_handle, state_sync_handle))
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
