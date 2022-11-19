@@ -11,7 +11,7 @@
         height: 31px;
         display: flex;
         justify-content: center;
-        color: colors.$nav-item-hover;
+        color: colors.$sui-blue-steel-dark;
         padding: 10px 0;
         font-weight: 600;
         font-size: 11px;
@@ -27,6 +27,14 @@
         margin: 0 15px;
         flex-direction: row;
         justify-content: space-between;
+        font-size: 13px;
+        line-height: 100%;
+        text-transform: capitalize;
+
+        .tx-type-header-status {
+            font-weight: 600;
+            color: colors.$sui-blue-steel-dark;
+        }
     }
 
     .card-footer {
@@ -74,7 +82,6 @@
 
     .label {
         color: colors.$sui-blue-steel-dark;
-        width: 42%;
         display: flex;
         justify-content: flex-start;
     }
@@ -83,7 +90,6 @@
         color: colors.$gray-90;
         font-weight: 600;
         word-break: break-all;
-        width: 58%;
         padding: 0;
         display: flex;
         justify-content: flex-end;
@@ -178,4 +184,18 @@
     flex-direction: row;
     gap: 8px;
     justify-content: space-between;
+}
+
+.package-info {
+    .label,
+    .value {
+        @include utils.typography('Primary/BodySmall-M');
+
+        color: colors.$sui-blue-steel-dark;
+        display: block;
+
+        &::first-letter {
+            text-transform: uppercase;
+        }
+    }
 }

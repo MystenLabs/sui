@@ -42,7 +42,6 @@ import st from './DappTxApprovalPage.module.scss';
 interface MetadataGroup {
     name: string;
     children: { id: string; module: string }[];
-    nftImage?: string;
 }
 
 interface TypeReference {
@@ -80,20 +79,15 @@ type TabType = 'transfer' | 'modify' | 'read';
 const TRUNCATE_MAX_LENGTH = 10;
 const TRUNCATE_PREFIX_LENGTH = 6;
 
-function PassedObject({
-    id,
-    module,
-    nftLink,
-}: {
-    id: string;
-    module: string;
-    nftLink?: string;
-}) {
+function PassedObject({ id, module }: { id: string; module: string }) {
     const objectId = useMiddleEllipsis(
         id,
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
+
+    // Render the NFT if ID is a NFT
+    const nftMeta = useGetNFTMetaData(id);
 
     return (
         <div className={st.permissionsContent}>
@@ -109,7 +103,13 @@ function PassedObject({
                 <div className={st.objectName}>{module}</div>
             </div>
 
-            {nftLink && nftLink && <MiniNFT url={nftLink} size="small" />}
+            {nftMeta && nftMeta.url && (
+                <MiniNFT
+                    url={nftMeta.url}
+                    name={nftMeta?.name || 'NFT Image'}
+                    size="small"
+                />
+            )}
         </div>
     );
 }
@@ -165,12 +165,7 @@ function Permissions({ metadata }: PermissionsProps) {
                     </div>
                     <div className={st.objects}>
                         {metadata[tab].children.map(({ id, module }, index) => (
-                            <PassedObject
-                                key={index}
-                                id={id}
-                                nftLink={metadata[tab].nftImage}
-                                module={module}
-                            />
+                            <PassedObject key={index} id={id} module={module} />
                         ))}
                     </div>
                 </div>
@@ -179,7 +174,7 @@ function Permissions({ metadata }: PermissionsProps) {
     );
 }
 
-type TransferSummaryProps = {
+type TransactionTypeCardProps = {
     label: string;
     content: string | number | null;
     loading: boolean;
@@ -187,7 +182,11 @@ type TransferSummaryProps = {
 
 const GAS_ESTIMATE_LABEL = 'Estimated Gas Fees';
 
-function TransactionSummery({ label, content, loading }: TransferSummaryProps) {
+function TransactionTypeCard({
+    label,
+    content,
+    loading,
+}: TransactionTypeCardProps) {
     const isGasEstimate = label === GAS_ESTIMATE_LABEL;
     const [gasEstimate, symbol] = useFormatCoin(
         (isGasEstimate && content) || 0,
@@ -389,11 +388,7 @@ export function DappTxApprovalPage() {
             (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
             txRequest.tx.data;
 
-        const transfer: MetadataGroup = {
-            name: 'Transfer',
-            children: [],
-            nftImage: nftMeta?.url,
-        };
+        const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
         const read: MetadataGroup = { name: 'Read', children: [] };
 
@@ -433,7 +428,6 @@ export function DappTxApprovalPage() {
             read,
         };
     }, [
-        nftMeta?.url,
         txRequest?.metadata,
         txRequest?.tx.data,
         txRequest?.tx?.type,
@@ -524,7 +518,7 @@ export function DappTxApprovalPage() {
                                       (
                                           txRequest?.unSerializedTxn
                                               ?.data as MoveCallTransaction
-                                      ).function ?? '',
+                                      )?.function.replace(/_/g, ' ') ?? '',
                               },
                               {
                                   label: 'Module',
@@ -532,7 +526,7 @@ export function DappTxApprovalPage() {
                                       (
                                           txRequest?.unSerializedTxn
                                               ?.data as MoveCallTransaction
-                                      ).module ?? '',
+                                      )?.module.replace(/_/g, ' ') ?? '',
                               },
                           ]
                         : [
@@ -588,7 +582,7 @@ export function DappTxApprovalPage() {
                                 {valuesContent.map(
                                     ({ label, content, loading = false }) => (
                                         <div key={label} className={st.row}>
-                                            <TransactionSummery
+                                            <TransactionTypeCard
                                                 label={label}
                                                 content={content}
                                                 loading={loading}

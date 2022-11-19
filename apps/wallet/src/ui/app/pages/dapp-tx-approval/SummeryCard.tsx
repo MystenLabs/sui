@@ -41,7 +41,14 @@ export function SummeryCard({
                     transparentHeader={transparentHeader}
                 />
             ) : null}
-            <div className={st.contentWrapper}>{children}</div>
+            <div
+                className={cl(
+                    st.contentWrapper,
+                    transparentHeader && st.packageInfo
+                )}
+            >
+                {children}
+            </div>
         </div>
     );
 }
