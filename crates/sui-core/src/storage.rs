@@ -20,21 +20,21 @@ use sui_types::storage::WriteStore;
 use typed_store::Map;
 
 use crate::authority::AuthorityStore;
-use crate::checkpoints::CheckpointService;
+use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
-    checkpoint_store: Arc<CheckpointService>,
+    checkpoint_store: Arc<CheckpointStore>,
 }
 
 impl RocksDbStore {
     pub fn new(
         authority_store: Arc<AuthorityStore>,
         committee_store: Arc<CommitteeStore>,
-        checkpoint_store: Arc<CheckpointService>,
+        checkpoint_store: Arc<CheckpointStore>,
     ) -> Self {
         Self {
             authority_store,

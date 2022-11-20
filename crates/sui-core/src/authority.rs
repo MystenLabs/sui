@@ -82,7 +82,9 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::checkpoints::{CheckpointMetrics, CheckpointService, LogCheckpointOutput};
+use crate::checkpoints::{
+    CheckpointMetrics, CheckpointService, CheckpointStore, LogCheckpointOutput,
+};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -1502,8 +1504,10 @@ impl AuthorityState {
             None,
         ));
 
+        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+
         let checkpoint_service = CheckpointService::spawn(
-            &path.join("checkpoint2"),
+            checkpoint_store,
             Box::new(store.clone()),
             LogCheckpointOutput::boxed(),
             LogCheckpointOutput::boxed_certified(),

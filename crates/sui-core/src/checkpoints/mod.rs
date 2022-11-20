@@ -44,7 +44,7 @@ use typed_store_derive::DBMapUtils;
 type CheckpointCommitHeight = u64;
 
 #[derive(DBMapUtils)]
-struct CheckpointStoreTables {
+pub struct CheckpointStore {
     /// This table has information for the checkpoints for which we constructed all the data
     /// from consensus, but not yet constructed actual checkpoint.
     ///
@@ -81,7 +81,11 @@ struct CheckpointStoreTables {
     watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
 }
 
-impl CheckpointStoreTables {
+impl CheckpointStore {
+    pub fn new(path: &Path) -> Arc<Self> {
+        Arc::new(Self::open_tables_read_write(path.to_path_buf(), None, None))
+    }
+
     pub fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -197,7 +201,7 @@ pub enum CheckpointWatermark {
 }
 
 pub struct CheckpointBuilder {
-    tables: Arc<CheckpointStoreTables>,
+    tables: Arc<CheckpointStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     effects_store: Box<dyn EffectsNotifyRead>,
@@ -208,7 +212,7 @@ pub struct CheckpointBuilder {
 }
 
 pub struct CheckpointAggregator {
-    tables: Arc<CheckpointStoreTables>,
+    tables: Arc<CheckpointStore>,
     notify: Arc<Notify>,
     exit: watch::Receiver<()>,
     current: Option<SignatureAggregator>,
@@ -228,7 +232,7 @@ pub struct SignatureAggregator {
 
 impl CheckpointBuilder {
     fn new(
-        tables: Arc<CheckpointStoreTables>,
+        tables: Arc<CheckpointStore>,
         notify: Arc<Notify>,
         effects_store: Box<dyn EffectsNotifyRead>,
         output: Box<dyn CheckpointOutput>,
@@ -424,7 +428,7 @@ impl CheckpointBuilder {
 
 impl CheckpointAggregator {
     fn new(
-        tables: Arc<CheckpointStoreTables>,
+        tables: Arc<CheckpointStore>,
         notify: Arc<Notify>,
         exit: watch::Receiver<()>,
         committee: Committee,
@@ -591,7 +595,7 @@ impl SignatureAggregator {
 
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
 pub struct CheckpointService {
-    tables: Arc<CheckpointStoreTables>,
+    tables: Arc<CheckpointStore>,
     notify_builder: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     last_signature_index: Mutex<u64>,
@@ -600,7 +604,7 @@ pub struct CheckpointService {
 
 impl CheckpointService {
     pub fn spawn(
-        path: &Path,
+        checkpoint_store: Arc<CheckpointStore>,
         effects_store: Box<dyn EffectsNotifyRead>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
@@ -610,13 +614,10 @@ impl CheckpointService {
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
 
-        let tables = CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), None, None);
-        let tables = Arc::new(tables);
-
         let (exit_snd, exit_rcv) = watch::channel(());
 
         let builder = CheckpointBuilder::new(
-            tables.clone(),
+            checkpoint_store.clone(),
             notify_builder.clone(),
             effects_store,
             checkpoint_output,
@@ -629,7 +630,7 @@ impl CheckpointService {
         spawn_monitored_task!(builder.run());
 
         let aggregator = CheckpointAggregator::new(
-            tables.clone(),
+            checkpoint_store.clone(),
             notify_aggregator.clone(),
             exit_rcv,
             committee,
@@ -639,7 +640,7 @@ impl CheckpointService {
 
         spawn_monitored_task!(aggregator.run());
 
-        let last_signature_index = tables
+        let last_signature_index = checkpoint_store
             .pending_signatures
             .iter()
             .skip_to_last()
@@ -650,67 +651,12 @@ impl CheckpointService {
         let last_signature_index = Mutex::new(last_signature_index);
 
         Arc::new(Self {
-            tables,
+            tables: checkpoint_store,
             notify_builder,
             notify_aggregator,
             last_signature_index,
             _exit: exit_snd,
         })
-    }
-
-    pub fn get_checkpoint_by_digest(
-        &self,
-        digest: &CheckpointDigest,
-    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
-        self.tables.get_checkpoint_by_digest(digest)
-    }
-
-    pub fn get_checkpoint_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
-        self.tables
-            .get_checkpoint_by_sequence_number(sequence_number)
-    }
-
-    pub fn get_highest_verified_checkpoint(
-        &self,
-    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
-        self.tables.get_highest_verified_checkpoint()
-    }
-
-    pub fn get_highest_synced_checkpoint(
-        &self,
-    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
-        self.tables.get_highest_synced_checkpoint()
-    }
-
-    pub fn get_checkpoint_contents(
-        &self,
-        digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>, TypedStoreError> {
-        self.tables.get_checkpoint_contents(digest)
-    }
-
-    pub fn insert_verified_checkpoint(
-        &self,
-        checkpoint: VerifiedCheckpoint,
-    ) -> Result<(), TypedStoreError> {
-        self.tables.insert_verified_checkpoint(checkpoint)
-    }
-
-    pub fn update_highest_synced_checkpoint(
-        &self,
-        checkpoint: &VerifiedCheckpoint,
-    ) -> Result<(), TypedStoreError> {
-        self.tables.update_highest_synced_checkpoint(checkpoint)
-    }
-
-    pub fn insert_checkpoint_contents(
-        &self,
-        contents: CheckpointContents,
-    ) -> Result<(), TypedStoreError> {
-        self.tables.insert_checkpoint_contents(contents)
     }
 
     pub fn notify_checkpoint(
@@ -795,7 +741,7 @@ impl CheckpointService {
 struct CheckpointTailer {
     sequence: CheckpointSequenceNumber,
     sender: mpsc::Sender<(CheckpointSummary, CheckpointContents)>,
-    tables: Arc<CheckpointStoreTables>,
+    tables: Arc<CheckpointStore>,
     notify: Arc<Notify>,
 }
 
@@ -870,8 +816,9 @@ mod tests {
 
         let (keypair, committee) = committee();
 
+        let checkpoint_store = CheckpointStore::new(tempdir.path());
         let checkpoint_service = CheckpointService::spawn(
-            tempdir.path(),
+            checkpoint_store,
             store,
             Box::new(output),
             Box::new(certified_output),
