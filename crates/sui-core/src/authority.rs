@@ -16,7 +16,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -561,6 +561,7 @@ pub struct AuthorityState {
     reconfig_state_mem: RwLock<ReconfigState>,
 
     /// A channel to tell consensus to reconfigure.
+    /// TODO: This does not really belong to AuthorityState. We should move it out.
     _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
@@ -1579,8 +1580,12 @@ impl AuthorityState {
         self.database.clone()
     }
 
+    pub fn committee(&self) -> Guard<Arc<Committee>> {
+        self.committee.load()
+    }
+
     pub fn clone_committee(&self) -> Committee {
-        self.committee.load().clone().deref().clone()
+        self.committee().clone().deref().clone()
     }
 
     pub fn get_reconfig_state_read_lock_guard(

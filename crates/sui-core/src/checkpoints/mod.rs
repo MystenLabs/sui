@@ -5,7 +5,7 @@ mod casual_order;
 mod checkpoint_output;
 mod metrics;
 
-use crate::authority::EffectsNotifyRead;
+use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::checkpoints::casual_order::CasualOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
@@ -24,7 +24,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_metrics::spawn_monitored_task;
-use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::base_types::{AuthorityName, TransactionDigest};
 use sui_types::committee::{Committee, StakeUnit};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
@@ -201,13 +201,13 @@ pub enum CheckpointWatermark {
 }
 
 pub struct CheckpointBuilder {
+    state: Arc<AuthorityState>,
     tables: Arc<CheckpointStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     effects_store: Box<dyn EffectsNotifyRead>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
-    epoch: EpochId,
     metrics: Arc<CheckpointMetrics>,
 }
 
@@ -216,7 +216,7 @@ pub struct CheckpointAggregator {
     notify: Arc<Notify>,
     exit: watch::Receiver<()>,
     current: Option<SignatureAggregator>,
-    committee: Committee,
+    state: Arc<AuthorityState>,
     output: Box<dyn CertifiedCheckpointOutput>,
     metrics: Arc<CheckpointMetrics>,
 }
@@ -232,22 +232,22 @@ pub struct SignatureAggregator {
 
 impl CheckpointBuilder {
     fn new(
+        state: Arc<AuthorityState>,
         tables: Arc<CheckpointStore>,
         notify: Arc<Notify>,
         effects_store: Box<dyn EffectsNotifyRead>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
-        epoch: EpochId,
         notify_aggregator: Arc<Notify>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
         Self {
+            state,
             tables,
             notify,
             effects_store,
             output,
             exit,
-            epoch,
             notify_aggregator,
             metrics,
         }
@@ -334,7 +334,7 @@ impl CheckpointBuilder {
             .map(|(_, c)| (c.epoch, c.epoch_rolling_gas_cost_summary))
             .unwrap_or_default();
         let current_gas_costs = GasCostSummary::new_from_txn_effects(l.iter());
-        let epoch_rolling_gas_cost_summary = if previous_epoch == self.epoch {
+        let epoch_rolling_gas_cost_summary = if previous_epoch == self.state.epoch() {
             // sum only when we are within the same epoch
             GasCostSummary::new(
                 previous_gas_costs.computation_cost + current_gas_costs.computation_cost,
@@ -345,7 +345,7 @@ impl CheckpointBuilder {
             current_gas_costs
         };
         let summary = CheckpointSummary::new(
-            self.epoch, // todo - need to figure out how this is updated
+            self.state.epoch(),
             sequence_number,
             &contents,
             previous_digest,
@@ -431,7 +431,7 @@ impl CheckpointAggregator {
         tables: Arc<CheckpointStore>,
         notify: Arc<Notify>,
         exit: watch::Receiver<()>,
-        committee: Committee,
+        state: Arc<AuthorityState>,
         output: Box<dyn CertifiedCheckpointOutput>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
@@ -441,7 +441,7 @@ impl CheckpointAggregator {
             notify,
             exit,
             current,
-            committee,
+            state,
             output,
             metrics,
         }
@@ -510,7 +510,7 @@ impl CheckpointAggregator {
                         data.summary.auth_signature.authority.concise()
                     )])
                     .inc();
-                if let Ok(auth_signature) = current.try_aggregate(&self.committee, data) {
+                if let Ok(auth_signature) = current.try_aggregate(&self.state.committee(), data) {
                     let summary = CertifiedCheckpointSummary {
                         summary: current.summary.clone(),
                         auth_signature,
@@ -615,11 +615,11 @@ pub struct CheckpointService {
 
 impl CheckpointService {
     pub fn spawn(
+        state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         effects_store: Box<dyn EffectsNotifyRead>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
-        committee: Committee, // todo - figure out how this is updated
         metrics: Arc<CheckpointMetrics>,
     ) -> Arc<Self> {
         let notify_builder = Arc::new(Notify::new());
@@ -628,12 +628,12 @@ impl CheckpointService {
         let (exit_snd, exit_rcv) = watch::channel(());
 
         let builder = CheckpointBuilder::new(
+            state.clone(),
             checkpoint_store.clone(),
             notify_builder.clone(),
             effects_store,
             checkpoint_output,
             exit_rcv.clone(),
-            committee.epoch,
             notify_aggregator.clone(),
             metrics.clone(),
         );
@@ -644,7 +644,7 @@ impl CheckpointService {
             checkpoint_store.clone(),
             notify_aggregator.clone(),
             exit_rcv,
-            committee,
+            state,
             certified_checkpoint_output,
             metrics,
         );
@@ -846,14 +846,25 @@ mod tests {
         let store = Box::new(store);
 
         let (keypair, committee) = committee();
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = mpsc::channel(10);
+        let state = Arc::new(
+            AuthorityState::new_for_testing(
+                committee.clone(),
+                &keypair,
+                None,
+                None,
+                tx_reconfigure_consensus,
+            )
+            .await,
+        );
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
         let checkpoint_service = CheckpointService::spawn(
+            state,
             checkpoint_store,
             store,
             Box::new(output),
             Box::new(certified_output),
-            committee,
             CheckpointMetrics::new_for_tests(),
         );
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
