@@ -156,7 +156,10 @@ export class CallArgSerializer {
     }
 
     const structVal = extractStructTag(expectedType);
-    if (structVal != null) {
+    if (
+      structVal != null ||
+      (typeof expectedType === 'object' && 'TypeParameter' in expectedType)
+    ) {
       if (typeof argVal !== 'string') {
         throw new Error(
           `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${JSON.stringify(
