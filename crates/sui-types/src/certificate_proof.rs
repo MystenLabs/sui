@@ -6,24 +6,24 @@ use crate::messages_checkpoint::CheckpointSequenceNumber;
 
 use serde::{Deserialize, Serialize};
 
-/// IndirectValidity is a placeholder for signatures, which indicates that the wrapped message has
+/// CertificateProof is a placeholder for signatures, which indicates that the wrapped message has
 /// been proven valid through indirect means, typically inclusion in a certified checkpoint or
 /// via f+1 votes that the message is correct.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IndirectValidity(Validity);
+pub struct CertificateProof(CertificateProofKind);
 
-impl IndirectValidity {
+impl CertificateProof {
     pub(crate) fn from_certified(epoch_id: EpochId) -> Self {
-        IndirectValidity(Validity::Certified(epoch_id))
+        CertificateProof(CertificateProofKind::Certified(epoch_id))
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum Validity {
+enum CertificateProofKind {
     // Validity was proven by inclusion in the given checkpoint
     Checkpoint(EpochId, CheckpointSequenceNumber),
 
-    // IndirectValidity was converted directly from a certified structure, and
+    // CertificateProof was converted directly from a certified structure, and
     // the signatures were dropped
     Certified(EpochId),
 

@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::AuthorityName;
+use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable,
 };
 use crate::error::SuiResult;
-use crate::indirect_validity::IndirectValidity;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
@@ -314,8 +314,8 @@ where
     }
 }
 
-impl<T: Message> Envelope<T, IndirectValidity> {
-    pub fn new(data: T, validity: IndirectValidity) -> Self {
+impl<T: Message> Envelope<T, CertificateProof> {
+    pub fn new(data: T, validity: CertificateProof) -> Self {
         Self {
             digest: OnceCell::new(),
             data,
@@ -324,7 +324,7 @@ impl<T: Message> Envelope<T, IndirectValidity> {
     }
 }
 
-// Note: There are many cases where its okay to construct an Envelope with IndirectValidity
+// Note: There are many cases where its okay to construct an Envelope with CertificateProof
 // from AuthorityWeakQuorumSignInfo, including effects, checkpoint summaries, etc, which in
 // general only require that one honest validator has attested to it. But, we only offer a blanket
 // implementation for AuthorityStrongQuorumSignInfo to avoid accidentally promoting a case where
@@ -332,12 +332,12 @@ impl<T: Message> Envelope<T, IndirectValidity> {
 //
 // Cases where AuthorityWeakQuorumSignInfo is sufficient should all be special cased.
 impl<T: Message> From<Envelope<T, AuthorityStrongQuorumSignInfo>>
-    for Envelope<T, IndirectValidity>
+    for Envelope<T, CertificateProof>
 {
-    fn from(env: Envelope<T, AuthorityStrongQuorumSignInfo>) -> Envelope<T, IndirectValidity> {
-        Envelope::<T, IndirectValidity>::new(
+    fn from(env: Envelope<T, AuthorityStrongQuorumSignInfo>) -> Envelope<T, CertificateProof> {
+        Envelope::<T, CertificateProof>::new(
             env.data,
-            IndirectValidity::from_certified(env.auth_signature.epoch),
+            CertificateProof::from_certified(env.auth_signature.epoch),
         )
     }
 }
