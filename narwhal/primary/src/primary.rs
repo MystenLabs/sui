@@ -45,7 +45,7 @@ use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::{error, info};
+use tracing::{debug, error, info, instrument};
 pub use types::PrimaryMessage;
 use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
@@ -620,6 +620,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         }))
     }
 
+    #[instrument(level = "debug", skip_all, peer = ?request.peer_id())]
     async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
@@ -637,6 +638,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
         // and avoids the pathological case of iterating through many missing rounds of a downed authority.
         let (lower_bound, skip_rounds) = request.get_bounds();
+        debug!("Fetching certificates after round {lower_bound}");
+
         let mut fetch_queue = BinaryHeap::new();
         for (origin, rounds) in &skip_rounds {
             let next_round = self.find_next_round(origin, lower_bound, rounds)?;
