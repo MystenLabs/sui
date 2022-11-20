@@ -20,6 +20,8 @@ export type NFTsProps = {
     size?: 'small' | 'medium' | 'large';
     expandable?: boolean;
     wideview?: boolean;
+    animateHover?: boolean;
+    borderRadius?: 'md' | 'lg';
 };
 
 function NFTDisplayCard({
@@ -28,6 +30,8 @@ function NFTDisplayCard({
     size = 'medium',
     expandable,
     wideview,
+    animateHover,
+    borderRadius = 'md',
 }: NFTsProps) {
     const { filePath, nftObjectID, nftFields, fileExtensionType, objType } =
         useNFTBasicData(nftobj);
@@ -68,31 +72,65 @@ function NFTDisplayCard({
                 </div>
             ) : null}
             {showlabel && displayTitle ? (
-                <div className={st.nftfields}>{displayTitle}</div>
+                <div
+                    className={cl(
+                        'items-center mt-2 text-sui-steel-dark',
+                        animateHover &&
+                            'group-hover:text-black duration-200 ease-ease-in-out-cubic'
+                    )}
+                >
+                    {displayTitle}
+                </div>
             ) : null}
         </>
     );
 
+    const borderRadiusCl = borderRadius === 'md' ? 'rounded' : 'rounded-[10px]';
+    const borderRadiusHoverCl =
+        borderRadius === 'md' ? 'rounded-sm' : 'rounded-[5px]';
+    const mediaContainerCls = animateHover
+        ? `ease-ease-out-cubic duration-[400ms] group-hover:shadow-sui-steel/50 group-hover:shadow-[0_0_20px_0] ${borderRadiusCl} hover:${borderRadiusHoverCl}`
+        : '';
+    const mediaCls = animateHover
+        ? 'group-hover:scale-[115%] duration-500 ease-ease-out-cubic'
+        : '';
     return (
-        <div className={cl(st.nftimage, wideview && st.wideview, st[size])}>
-            {filePath ? (
-                <img
-                    className={cl(st.img)}
-                    src={filePath}
-                    alt={fileExtensionType?.name || 'NFT'}
-                    title={nftTypeShort}
-                />
-            ) : (
-                <div className={st.noMedia} title={nftTypeShort}>
-                    <Icon
-                        className={st.noMediaIcon}
-                        icon={SuiIcons.NftTypeImage}
-                    />
-                    {wideview ? null : (
-                        <span className={st.noMediaText}>No media</span>
-                    )}
-                </div>
+        <div
+            className={cl(
+                st.nftimage,
+                wideview && st.wideview,
+                st[size],
+                'group'
             )}
+        >
+            <div
+                className={cl(
+                    'flex flex-shrink-0 items-stretch flex-1 self-stretch overflow-hidden',
+                    mediaContainerCls
+                )}
+            >
+                {filePath ? (
+                    <img
+                        className={cl(st.img, 'rounded-none', mediaCls)}
+                        src={filePath}
+                        alt={fileExtensionType?.name || 'NFT'}
+                        title={nftTypeShort}
+                    />
+                ) : (
+                    <div
+                        className={cl(st.noMedia, 'rounded-none', mediaCls)}
+                        title={nftTypeShort}
+                    >
+                        <Icon
+                            className={st.noMediaIcon}
+                            icon={SuiIcons.NftTypeImage}
+                        />
+                        {wideview ? null : (
+                            <span className={st.noMediaText}>No media</span>
+                        )}
+                    </div>
+                )}
+            </div>
             {wideview ? wideviewSection : defaultSection}
         </div>
     );

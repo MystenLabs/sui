@@ -132,7 +132,8 @@ module.exports = {
         header: "68px",
       },
       transitionTimingFunction: {
-        'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)'
+        'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)',
+        'ease-out-cubic': 'cubic-bezier(0.33, 1, 0.68, 1)',
       }
     },
   },
