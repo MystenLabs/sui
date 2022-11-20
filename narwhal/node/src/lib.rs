@@ -193,6 +193,7 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
+        let mut last_committed_round = 0;
         let (rx_executor_network, tx_executor_network) = oneshot::channel();
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
@@ -219,6 +220,14 @@ impl Node {
             .await?;
 
             handles.extend(consensus_handles);
+            last_committed_round = store
+                .consensus_store
+                .read_last_committed()
+                .values()
+                .max()
+                .cloned()
+                .unwrap_or_default();
+
             (None, NetworkModel::PartiallySynchronous)
         };
 
@@ -256,6 +265,7 @@ impl Node {
             network_model,
             tx_reconfigure,
             tx_committed_certificates,
+            last_committed_round,
             registry,
             Some(rx_executor_network),
         );

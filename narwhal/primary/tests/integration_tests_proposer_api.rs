@@ -117,6 +117,7 @@ async fn test_rounds_errors() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -199,6 +200,7 @@ async fn test_rounds_return_successful_response() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -350,6 +352,7 @@ async fn test_node_read_causal_signed_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -391,6 +394,7 @@ async fn test_node_read_causal_signed_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );

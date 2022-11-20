@@ -76,6 +76,7 @@ async fn test_simple_epoch_change() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
+            /* last_committed_round */ 0,
             &Registry::new(),
             None,
         );
@@ -196,6 +197,7 @@ async fn test_partial_committee_change() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
+            /* last_committed_round */ 0,
             &Registry::new(),
             None,
         );
@@ -284,6 +286,7 @@ async fn test_partial_committee_change() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
+            /* last_committed_round */ 0,
             &Registry::new(),
             None,
         );
@@ -363,6 +366,7 @@ async fn test_restart_with_new_committee_change() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
+            /* last_committed_round */ 0,
             &Registry::new(),
             None,
         );
@@ -451,6 +455,7 @@ async fn test_restart_with_new_committee_change() {
                 NetworkModel::Asynchronous,
                 tx_reconfigure,
                 /* tx_committed_certificates */ tx_feedback,
+                /* last_committed_round */ 0,
                 &Registry::new(),
                 None,
             );
@@ -553,6 +558,7 @@ async fn test_simple_committee_update() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
+            /* last_committed_round */ 0,
             &Registry::new(),
             None,
         );

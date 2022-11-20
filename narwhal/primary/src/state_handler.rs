@@ -15,6 +15,7 @@ use types::{
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
+/// TODO: merge this with Consensus?
 pub struct StateHandler {
     /// The public key of this authority.
     name: PublicKey,
