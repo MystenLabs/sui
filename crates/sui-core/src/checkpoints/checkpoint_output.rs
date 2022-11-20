@@ -12,8 +12,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
     SignedCheckpointSummary, VerifiedCheckpoint,
 };
-use tokio::sync::mpsc;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 #[async_trait]
 pub trait CheckpointOutput: Sync + Send + 'static {
@@ -116,29 +115,12 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
 }
 
 pub struct SendCheckpointToStateSync {
-    sender: mpsc::Sender<CertifiedCheckpointSummary>,
-}
-
-pub struct ForwardToStateSyncTask {
-    receiver: mpsc::Receiver<CertifiedCheckpointSummary>,
-}
-
-impl ForwardToStateSyncTask {
-    pub fn start(mut self, handle: sui_network::state_sync::Handle) {
-        tokio::spawn(async move {
-            while let Some(checkpoint) = self.receiver.recv().await {
-                handle
-                    .send_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint))
-                    .await;
-            }
-        });
-    }
+    handle: sui_network::state_sync::Handle,
 }
 
 impl SendCheckpointToStateSync {
-    pub fn new() -> (Self, ForwardToStateSyncTask) {
-        let (sender, receiver) = mpsc::channel(128);
-        (Self { sender }, ForwardToStateSyncTask { receiver })
+    pub fn new(handle: sui_network::state_sync::Handle) -> Self {
+        Self { handle }
     }
 }
 
@@ -153,9 +135,9 @@ impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
             summary.summary.sequence_number,
             Hex::encode(summary.summary.digest())
         );
-        if let Err(e) = self.sender.send(summary.to_owned()).await {
-            error!("unable to send checkpoint to state-sync: {e}");
-        }
+        self.handle
+            .send_checkpoint(VerifiedCheckpoint::new_unchecked(summary.to_owned()))
+            .await;
 
         Ok(())
     }

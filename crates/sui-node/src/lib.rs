@@ -182,11 +182,8 @@ impl SuiNode {
             LogCheckpointOutput::boxed()
         };
 
-        let (certified_checkpoint_output, forward_to_state_sync_task) =
-            sui_core::checkpoints::SendCheckpointToStateSync::new();
-
-        // init the task that forwards checkpoints to state_sync
-        forward_to_state_sync_task.start(state_sync_handle.clone());
+        let certified_checkpoint_output =
+            sui_core::checkpoints::SendCheckpointToStateSync::new(state_sync_handle.clone());
 
         let checkpoint_service = CheckpointService::spawn(
             checkpoint_store,
