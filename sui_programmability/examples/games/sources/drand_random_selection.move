@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A basic game that depends on randomness from drand.
+/// A basic game that depends on randomness from drand (chained mode).
 ///
 /// The main chain of drand creates random 32 bytes every 30 seconds. This randomness is verifiable in the sense
 /// that anyone can check if a given 32 bytes bytes are indeed the i-th output of drand. For more details see
