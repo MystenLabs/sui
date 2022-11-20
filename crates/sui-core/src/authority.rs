@@ -82,9 +82,7 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::checkpoints::{
-    CheckpointMetrics, CheckpointService, CheckpointStore, LogCheckpointOutput,
-};
+use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -532,8 +530,6 @@ pub struct AuthorityState {
 
     pub event_handler: Option<Arc<EventHandler>>,
     pub transaction_streamer: Option<Arc<TransactionStreamer>>,
-
-    checkpoint_service: Arc<CheckpointService>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -1388,7 +1384,6 @@ impl AuthorityState {
         transaction_streamer: Option<Arc<TransactionStreamer>>,
         prometheus_registry: &prometheus::Registry,
         _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
-        checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1440,7 +1435,6 @@ impl AuthorityState {
                     .expect("Load reconfig state at initialization cannot fail"),
             ),
             _tx_reconfigure_consensus,
-            checkpoint_service,
         };
 
         prometheus_registry
@@ -1504,17 +1498,6 @@ impl AuthorityState {
             None,
         ));
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-
-        let checkpoint_service = CheckpointService::spawn(
-            checkpoint_store,
-            Box::new(store.clone()),
-            LogCheckpointOutput::boxed(),
-            LogCheckpointOutput::boxed_certified(),
-            epochs.get_latest_committee(),
-            CheckpointMetrics::new_for_tests(),
-        );
-
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
@@ -1527,7 +1510,6 @@ impl AuthorityState {
             None,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
-            checkpoint_service,
         )
         .await
     }
@@ -2220,10 +2202,11 @@ impl AuthorityState {
     /// The transaction passed here went through verification in verify_consensus_transaction.
     /// This method is called in the exact sequence message are ordered in consensus.
     /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction(
+    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         consensus_output: &ConsensusOutput,
         transaction: VerifiedSequencedConsensusTransaction,
+        checkpoint_service: &Arc<C>,
     ) -> SuiResult {
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             consensus_output: _consensus_output,
@@ -2294,7 +2277,7 @@ impl AuthorityState {
                 transaction_manager.enqueue(vec![certificate]).await
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
-                self.checkpoint_service.notify_checkpoint_signature(info)?;
+                checkpoint_service.notify_checkpoint_signature(info)?;
                 self.database
                     .record_consensus_transaction_processed(&transaction, consensus_index)
                     .await
@@ -2309,7 +2292,11 @@ impl AuthorityState {
         }
     }
 
-    pub(crate) fn handle_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) -> SuiResult {
+    pub(crate) fn handle_commit_boundary<C: CheckpointServiceNotify>(
+        &self,
+        committed_dag: &Arc<CommittedSubDag>,
+        checkpoint_service: &Arc<C>,
+    ) -> SuiResult {
         let round = committed_dag.round();
         debug!("Commit boundary at {}", round);
         // This exchange is restart safe because of following:
@@ -2319,8 +2306,7 @@ impl AuthorityState {
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
         if let Some((index, roots)) = self.database.last_checkpoint(round)? {
-            self.checkpoint_service
-                .notify_checkpoint(index, roots, false)?;
+            checkpoint_service.notify_checkpoint(index, roots, false)?;
         }
         self.database.record_checkpoint_boundary(round)
     }
