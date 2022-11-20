@@ -3,6 +3,7 @@
 
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
+use crate::checkpoints::CheckpointService;
 use async_trait::async_trait;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::{CommittedSubDag, ConsensusOutput};
@@ -15,12 +16,17 @@ use tracing::{debug, instrument, warn};
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
+    checkpoint_service: Arc<CheckpointService>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
+    pub fn new(state: Arc<AuthorityState>, checkpoint_service: Arc<CheckpointService>) -> Self {
         let last_seen = Mutex::new(Default::default());
-        Self { state, last_seen }
+        Self {
+            state,
+            last_seen,
+            checkpoint_service,
+        }
     }
 
     fn update_hash(
@@ -102,7 +108,11 @@ impl ExecutionState for ConsensusHandler {
             Err(()) => return,
         };
         self.state
-            .handle_consensus_transaction(consensus_output.as_ref(), verified_transaction)
+            .handle_consensus_transaction(
+                consensus_output.as_ref(),
+                verified_transaction,
+                &self.checkpoint_service,
+            )
             .await
             .expect("Unrecoverable error in consensus handler");
     }
@@ -125,7 +135,7 @@ impl ExecutionState for ConsensusHandler {
     #[instrument(level = "trace", skip_all)]
     async fn notify_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) {
         self.state
-            .handle_commit_boundary(committed_dag)
+            .handle_commit_boundary(committed_dag, &self.checkpoint_service)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 }

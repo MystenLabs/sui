@@ -20,8 +20,6 @@ use crate::authority::*;
 use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
-use crate::checkpoints::{CheckpointMetrics, CheckpointStore};
-use crate::checkpoints::{CheckpointService, LogCheckpointOutput};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
 use async_trait::async_trait;
@@ -66,7 +64,6 @@ pub(crate) async fn init_state(
     let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
-    let checkpoint_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
@@ -77,16 +74,6 @@ pub(crate) async fn init_state(
         None,
         None,
     ));
-
-    let checkpoint_store = CheckpointStore::new(&checkpoint_path);
-    let checkpoint_service = CheckpointService::spawn(
-        checkpoint_store,
-        Box::new(store.clone()),
-        LogCheckpointOutput::boxed(),
-        LogCheckpointOutput::boxed_certified(),
-        committee,
-        CheckpointMetrics::new_for_tests(),
-    );
 
     AuthorityState::new(
         name,
@@ -99,7 +86,6 @@ pub(crate) async fn init_state(
         None,
         &prometheus::Registry::new(),
         tx_reconfigure_consensus,
-        checkpoint_service,
     )
     .await
 }

@@ -33,8 +33,12 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
-use crate::consensus_adapter::SubmitToConsensus;
+use crate::checkpoints::{
+    CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
+    SubmitCheckpointToConsensus,
+};
 use crate::consensus_handler::ConsensusHandler;
+use narwhal_types::TransactionsClient;
 use tracing::{debug, info, Instrument};
 
 #[cfg(test)]
@@ -93,7 +97,6 @@ impl AuthorityServer {
         state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
     ) -> Self {
-        use narwhal_types::TransactionsClient;
         let consensus_client = Box::new(TransactionsClient::new(
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
@@ -258,22 +261,46 @@ impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
     pub async fn new(
-        consensus_client: Box<dyn SubmitToConsensus>,
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        checkpoint_store: Arc<CheckpointStore>,
+        state_sync_handle: sui_network::state_sync::Handle,
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
-        // Spawn the consensus node of this authority.
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+
+        let consensus_address = consensus_config.address().to_owned();
+        let consensus_client = TransactionsClient::new(
+            mysten_network::client::connect_lazy(&consensus_address)
+                .expect("Failed to connect to consensus"),
+        );
+
+        let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
+
+        let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
+            sender: consensus_client.clone(),
+            signer: state.secret.clone(),
+            authority: config.protocol_public_key(),
+        });
+
+        let checkpoint_service = CheckpointService::spawn(
+            checkpoint_store,
+            Box::new(state.database.clone()),
+            checkpoint_output,
+            Box::new(certified_checkpoint_output),
+            state.clone_committee(),
+            CheckpointMetrics::new(&prometheus_registry),
+        );
+
         let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_worker_keypair = config.worker_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = ConsensusHandler::new(state.clone());
+        let consensus_execution_state = ConsensusHandler::new(state.clone(), checkpoint_service);
         let consensus_execution_state = Arc::new(consensus_execution_state);
 
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
@@ -298,7 +325,8 @@ impl ValidatorService {
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
         // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter = ConsensusAdapter::new(consensus_client, state.clone(), ca_metrics);
+        let consensus_adapter =
+            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
 
         Ok(Self {
             state,

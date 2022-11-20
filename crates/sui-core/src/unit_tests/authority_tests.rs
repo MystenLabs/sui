@@ -5,6 +5,7 @@
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics},
     authority_server::AuthorityServer,
+    checkpoints::CheckpointServiceNoop,
     test_utils::to_sender_signed_transaction,
 };
 
@@ -2511,7 +2512,7 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
     };
     if let Ok(transaction) = authority.verify_consensus_transaction(&output, transaction) {
         authority
-            .handle_consensus_transaction(&output, transaction)
+            .handle_consensus_transaction(&output, transaction, &Arc::new(CheckpointServiceNoop {}))
             .await
             .unwrap();
     }

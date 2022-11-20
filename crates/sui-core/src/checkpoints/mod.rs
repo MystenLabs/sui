@@ -593,6 +593,17 @@ impl SignatureAggregator {
     }
 }
 
+pub trait CheckpointServiceNotify {
+    fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult;
+
+    fn notify_checkpoint(
+        &self,
+        index: CheckpointCommitHeight,
+        roots: Vec<TransactionDigest>,
+        last_checkpoint_of_epoch: bool,
+    ) -> SuiResult;
+}
+
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
 pub struct CheckpointService {
     tables: Arc<CheckpointStore>,
@@ -659,34 +670,27 @@ impl CheckpointService {
         })
     }
 
-    pub fn notify_checkpoint(
+    /// Used by internal systems that want to subscribe to checkpoints.
+    /// Returned sender will contain all checkpoints starting from(inclusive) given sequence number
+    /// CheckpointSequenceNumber::default() can be used to start from the beginning
+    pub fn subscribe_checkpoints(
         &self,
-        index: CheckpointCommitHeight,
-        roots: Vec<TransactionDigest>,
-        last_checkpoint_of_epoch: bool,
-    ) -> SuiResult {
-        if let Some(pending) = self.tables.pending_checkpoints.get(&index)? {
-            if pending.0 != roots {
-                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", index, pending, roots);
-            }
-            debug!(
-                "Ignoring duplicate checkpoint notification at height {}",
-                index
-            );
-            return Ok(());
-        }
-        debug!(
-            "Transaction roots for pending checkpoint {}: {:?}",
-            index, roots
-        );
-        self.tables
-            .pending_checkpoints
-            .insert(&index, &(roots, last_checkpoint_of_epoch))?;
-        self.notify_builder.notify_one();
-        Ok(())
+        from_sequence: CheckpointSequenceNumber,
+    ) -> mpsc::Receiver<(CheckpointSummary, CheckpointContents)> {
+        let (sender, receiver) = mpsc::channel(8);
+        let tailer = CheckpointTailer {
+            sender,
+            sequence: from_sequence,
+            tables: self.tables.clone(),
+            notify: self.notify_aggregator.clone(),
+        };
+        spawn_monitored_task!(tailer.run());
+        receiver
     }
+}
 
-    pub fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult {
+impl CheckpointServiceNotify for CheckpointService {
+    fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult {
         let sequence = info.summary.summary.sequence_number;
         if let Some((last_certified, _)) = self
             .tables
@@ -719,22 +723,49 @@ impl CheckpointService {
         Ok(())
     }
 
-    /// Used by internal systems that want to subscribe to checkpoints.
-    /// Returned sender will contain all checkpoints starting from(inclusive) given sequence number
-    /// CheckpointSequenceNumber::default() can be used to start from the beginning
-    pub fn subscribe_checkpoints(
+    fn notify_checkpoint(
         &self,
-        from_sequence: CheckpointSequenceNumber,
-    ) -> mpsc::Receiver<(CheckpointSummary, CheckpointContents)> {
-        let (sender, receiver) = mpsc::channel(8);
-        let tailer = CheckpointTailer {
-            sender,
-            sequence: from_sequence,
-            tables: self.tables.clone(),
-            notify: self.notify_aggregator.clone(),
-        };
-        spawn_monitored_task!(tailer.run());
-        receiver
+        index: CheckpointCommitHeight,
+        roots: Vec<TransactionDigest>,
+        last_checkpoint_of_epoch: bool,
+    ) -> SuiResult {
+        if let Some(pending) = self.tables.pending_checkpoints.get(&index)? {
+            if pending.0 != roots {
+                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", index, pending, roots);
+            }
+            debug!(
+                "Ignoring duplicate checkpoint notification at height {}",
+                index
+            );
+            return Ok(());
+        }
+        debug!(
+            "Transaction roots for pending checkpoint {}: {:?}",
+            index, roots
+        );
+        self.tables
+            .pending_checkpoints
+            .insert(&index, &(roots, last_checkpoint_of_epoch))?;
+        self.notify_builder.notify_one();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+pub struct CheckpointServiceNoop {}
+#[cfg(test)]
+impl CheckpointServiceNotify for CheckpointServiceNoop {
+    fn notify_checkpoint_signature(&self, _: &CheckpointSignatureMessage) -> SuiResult {
+        Ok(())
+    }
+
+    fn notify_checkpoint(
+        &self,
+        _: CheckpointCommitHeight,
+        _: Vec<TransactionDigest>,
+        _: bool,
+    ) -> SuiResult {
+        Ok(())
     }
 }
 
