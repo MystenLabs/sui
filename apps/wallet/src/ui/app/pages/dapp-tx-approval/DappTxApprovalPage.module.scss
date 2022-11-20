@@ -28,6 +28,8 @@
         flex-direction: row;
         justify-content: space-between;
         font-size: 13px;
+        padding: 12px 0;
+        height: auto;
         line-height: 100%;
         text-transform: capitalize;
 
@@ -187,6 +189,8 @@
 }
 
 .package-info {
+    border: 1px solid colors.$gray-50;
+
     .label,
     .value {
         @include utils.typography('Primary/BodySmall-M');

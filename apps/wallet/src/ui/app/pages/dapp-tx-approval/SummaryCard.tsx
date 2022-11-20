@@ -34,21 +34,14 @@ export function SummaryCard({
     children,
 }: SummaryCardProps) {
     return (
-        <div className={st.card}>
+        <div className={cl(st.card, transparentHeader && st.packageInfo)}>
             {header ? (
                 <SummaryCardHeader
                     header={header}
                     transparentHeader={transparentHeader}
                 />
             ) : null}
-            <div
-                className={cl(
-                    st.contentWrapper,
-                    transparentHeader && st.packageInfo
-                )}
-            >
-                {children}
-            </div>
+            <div className={st.contentWrapper}>{children}</div>
         </div>
     );
 }
