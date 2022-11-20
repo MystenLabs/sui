@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
 import cl from 'classnames';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -27,9 +26,9 @@ import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
     txRequestsSelectors,
+    executeDryRunTransactionRequest,
     deserializeTxn,
 } from '_redux/slices/transaction-requests';
-import { thunkExtras } from '_redux/store/thunk-extras';
 
 import type {
     SuiMoveNormalizedType,
@@ -332,7 +331,6 @@ export function DappTxApprovalPage() {
     const txRequest = useAppSelector(txRequestSelector);
     const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
-    const address = useAppSelector(({ account }) => account.address);
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
             if (txRequest) {
@@ -357,6 +355,15 @@ export function DappTxApprovalPage() {
                     functionName: txRequest.tx.data.function,
                 })
             );
+            dispatch(
+                executeDryRunTransactionRequest({
+                    txData: {
+                        kind: 'moveCall',
+                        data: txRequest.tx.data,
+                    },
+                    id: txRequest.id,
+                })
+            );
         }
 
         if (
@@ -367,6 +374,21 @@ export function DappTxApprovalPage() {
             dispatch(
                 deserializeTxn({
                     serializedTxn: txRequest?.tx.data,
+                    id: txRequest.id,
+                })
+            );
+            dispatch(
+                executeDryRunTransactionRequest({
+                    txData: txRequest?.tx.data,
+                    id: txRequest.id,
+                })
+            );
+        }
+
+        if (txRequest?.tx?.type === 'v2' && txRequest?.tx?.data) {
+            dispatch(
+                executeDryRunTransactionRequest({
+                    txData: txRequest.tx.data,
                     id: txRequest.id,
                 })
             );
@@ -456,35 +478,9 @@ export function DappTxApprovalPage() {
         }
     }, [deserializeTxnFailed, loading, txRequest]);
 
-    const txGasEstimationResult = useQuery({
-        queryKey: ['tx-request', 'gas-estimate', txRequest?.id, address],
-        queryFn: () => {
-            if (txRequest) {
-                const signer = thunkExtras.api.getSignerInstance(
-                    thunkExtras.keypairVault.getKeyPair()
-                );
-                let txToEstimate: Parameters<
-                    typeof signer.dryRunTransaction
-                >['0'];
-                const txType = txRequest.tx.type;
-                if (txType === 'v2' || txType === 'serialized-move-call') {
-                    txToEstimate = txRequest.tx.data;
-                } else {
-                    txToEstimate = {
-                        kind: 'moveCall',
-                        data: txRequest.tx.data,
-                    };
-                }
-                return signer.getGasCostEstimation(txToEstimate);
-            }
-            return Promise.resolve(null);
-        },
-        enabled: !!(txRequest && address),
-    });
-
     const transactionSummary = txRequest?.txnMeta;
 
-    const gasEstimation = txGasEstimationResult.data ?? null;
+    const gasEstimation = txRequest?.txGasEstimation ?? null;
 
     const valuesContent: {
         label: string;

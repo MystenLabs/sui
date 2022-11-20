@@ -108,6 +108,40 @@ const getRequestCost = (
     return coinMeta || null;
 };
 
+export const executeDryRunTransactionRequest = createAsyncThunk<
+    {
+        txRequestID: string;
+        txnMeta?: TxnMetaResponse;
+        txGasEstimation?: number;
+    },
+    {
+        txData: string | SignableTransaction | Base64DataBuffer;
+        id: string;
+    },
+    AppThunkConfig
+>(
+    'dryrun-transaction-request',
+    async (data, { getState, extra: { api, keypairVault } }) => {
+        const { txData, id } = data;
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const activeAddress = getState().account.address;
+        /// dry run the transaction to get the effects
+        const [dryRunResponse, txGasEstimation] = await Promise.all([
+            signer.dryRunTransaction(txData),
+            signer.getGasCostEstimation(txData),
+        ]);
+        const txnMeta =
+            dryRunResponse && activeAddress
+                ? getRequestCost(dryRunResponse, activeAddress)
+                : null;
+        return {
+            txRequestID: id,
+            ...(txnMeta && { txnMeta }),
+            ...(txGasEstimation && { txGasEstimation }),
+        };
+    }
+);
+
 export const deserializeTxn = createAsyncThunk<
     {
         txRequestID: string;
@@ -118,21 +152,17 @@ export const deserializeTxn = createAsyncThunk<
     AppThunkConfig
 >(
     'deserialize-transaction',
-    async (data, { getState, dispatch, extra: { api, keypairVault } }) => {
+    async (data, { dispatch, extra: { api, keypairVault } }) => {
         const { id, serializedTxn } = data;
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
-        const activeAddress = getState().account.address;
 
-        /// dry run the transaction to get the effects
         //TODO: Error handling - either show the error or use the serialized txn
-        const [deserializeTx, dryRunResponse] = (await Promise.all([
-            localSerializer.deserializeTransactionBytesToSignableTransaction(
+        const deserializeTx =
+            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
                 txnBytes
-            ),
-            signer.dryRunTransaction(serializedTxn),
-        ])) as [UnserializedSignableTransaction, TransactionEffects];
+            )) as UnserializedSignableTransaction;
 
         const deserializeData = deserializeTx?.data as MoveCallTransaction;
 
@@ -154,14 +184,8 @@ export const deserializeTxn = createAsyncThunk<
             );
         }
 
-        const txnMeta =
-            dryRunResponse && activeAddress
-                ? getRequestCost(dryRunResponse, activeAddress)
-                : null;
-
         return {
             txRequestID: id,
-            ...(txnMeta && { txnMeta }),
             unSerializedTxn:
                 ({
                     ...deserializeTx,
@@ -276,22 +300,37 @@ const slice = createSlice({
         build.addCase(deserializeTxn.rejected, (state, { payload }) => {
             state.deserializeTxnFailed = true;
         });
+        build.addCase(
+            executeDryRunTransactionRequest.fulfilled,
+            (state, { payload }) => {
+                const { txRequestID, txnMeta, txGasEstimation } = payload;
 
+                if (txnMeta) {
+                    txRequestsAdapter.updateOne(state, {
+                        id: txRequestID,
+                        changes: {
+                            txnMeta,
+                        },
+                    });
+                }
+
+                if (txGasEstimation) {
+                    txRequestsAdapter.updateOne(state, {
+                        id: txRequestID,
+                        changes: {
+                            txGasEstimation,
+                        },
+                    });
+                }
+            }
+        );
         build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
-            const { txRequestID, unSerializedTxn, txnMeta } = payload;
+            const { txRequestID, unSerializedTxn } = payload;
             if (unSerializedTxn) {
                 txRequestsAdapter.updateOne(state, {
                     id: txRequestID,
                     changes: {
                         unSerializedTxn: unSerializedTxn || null,
-                    },
-                });
-            }
-            if (txnMeta) {
-                txRequestsAdapter.updateOne(state, {
-                    id: txRequestID,
-                    changes: {
-                        txnMeta,
                     },
                 });
             }

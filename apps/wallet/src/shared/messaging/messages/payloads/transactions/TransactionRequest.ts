@@ -24,4 +24,5 @@ export type TransactionRequest = {
         amount?: number | null;
         objectId?: string | null;
     } | null;
+    txGasEstimation?: number | null;
 };
