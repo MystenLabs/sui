@@ -6,7 +6,6 @@
     flex-direction: column;
     align-items: center;
     width: 100%;
-    margin: auto;
 
     .img {
         object-fit: cover;
@@ -85,28 +84,6 @@
         overflow: hidden;
         width: 100%;
         white-space: nowrap;
-    }
-
-    .expandable {
-        @include utils.typography('table/title-sm');
-
-        margin-top: 10px;
-
-        a {
-            text-decoration: none;
-            color: colors.$gray-80;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        i {
-            color: colors.$gray-65;
-            font-size: 14px;
-            margin-left: 5px;
-            font-weight: 300;
-            line-height: 100%;
-        }
     }
 
     &.wideview {

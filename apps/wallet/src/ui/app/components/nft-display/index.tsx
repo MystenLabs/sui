@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import cl from 'classnames';
 
-import ExplorerLink from '_components/explorer-link';
-import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import { useMiddleEllipsis, useNFTBasicData } from '_hooks';
 
@@ -18,7 +17,6 @@ export type NFTsProps = {
     nftobj: SuiObjectType;
     showlabel?: boolean;
     size?: 'small' | 'medium' | 'large';
-    expandable?: boolean;
     wideview?: boolean;
     animateHover?: boolean;
     borderRadius?: 'md' | 'lg';
@@ -28,7 +26,6 @@ function NFTDisplayCard({
     nftobj,
     showlabel,
     size = 'medium',
-    expandable,
     wideview,
     animateHover,
     borderRadius = 'md',
@@ -57,33 +54,18 @@ function NFTDisplayCard({
         </div>
     );
 
-    const defaultSection = (
-        <>
-            {expandable ? (
-                <div className={st.expandable}>
-                    <ExplorerLink
-                        type={ExplorerLinkType.object}
-                        objectID={nftObjectID}
-                        showIcon={false}
-                        className={st['explorer-link']}
-                    >
-                        View Image <Icon icon={SuiIcons.Preview} />
-                    </ExplorerLink>
-                </div>
-            ) : null}
-            {showlabel && displayTitle ? (
-                <div
-                    className={cl(
-                        'items-center mt-2 text-sui-steel-dark',
-                        animateHover &&
-                            'group-hover:text-black duration-200 ease-ease-in-out-cubic'
-                    )}
-                >
-                    {displayTitle}
-                </div>
-            ) : null}
-        </>
-    );
+    const defaultSection =
+        showlabel && displayTitle ? (
+            <div
+                className={cl(
+                    'items-center mt-2 text-sui-steel-dark',
+                    animateHover &&
+                        'group-hover:text-black duration-200 ease-ease-in-out-cubic'
+                )}
+            >
+                {displayTitle}
+            </div>
+        ) : null;
 
     const borderRadiusCl = borderRadius === 'md' ? 'rounded' : 'rounded-[10px]';
     const borderRadiusHoverCl =
@@ -105,7 +87,7 @@ function NFTDisplayCard({
         >
             <div
                 className={cl(
-                    'flex flex-shrink-0 items-stretch flex-1 self-stretch overflow-hidden',
+                    'flex flex-shrink-0 items-stretch flex-grow self-stretch overflow-hidden',
                     mediaContainerCls
                 )}
             >

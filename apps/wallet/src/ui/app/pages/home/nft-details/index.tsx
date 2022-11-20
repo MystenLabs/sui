@@ -1,179 +1,178 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectId, hasPublicTransfer } from '@mysten/sui.js';
+import { hasPublicTransfer } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useMemo, useState, useCallback } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import TransferNFTCard from './transfer-nft';
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
+import Button from '_app/shared/button';
+import { Collapse } from '_app/shared/collapse';
 import PageTitle from '_app/shared/page-title';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
-import { useAppSelector, useMiddleEllipsis, useNFTBasicData } from '_hooks';
-import { accountNftsSelector } from '_redux/slices/account';
+import {
+    useAppSelector,
+    useMiddleEllipsis,
+    useNFTBasicData,
+    useObjectsState,
+} from '_hooks';
+import { createAccountNftByIdSelector } from '_redux/slices/account';
 
-import type { SuiObject } from '@mysten/sui.js';
-import type { ButtonHTMLAttributes } from 'react';
+import type { ReactNode } from 'react';
 
-import st from './NFTDetails.module.scss';
-
-function NFTdetailsContent({
-    nft,
-    onClick,
+function LabelValueItems({
+    items,
 }: {
-    nft: SuiObject;
-    onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
+    items: { label: string; value: ReactNode; key?: string }[];
 }) {
-    const { nftObjectID, nftFields, fileExtensionType } = useNFTBasicData(nft);
-    const isTransferable = hasPublicTransfer(nft);
-    const shortAddress = useMiddleEllipsis(nftObjectID);
-    const NFTDetails = (
-        <div className={st.nftDetails}>
-            <div className={st.nftDetailsInner}>
-                <div className={st.nftItemDetail}>
-                    <div className={st.label}>Object ID</div>
-                    <div className={st.value}>
-                        <ExplorerLink
-                            type={ExplorerLinkType.object}
-                            objectID={nftObjectID}
-                            title="View on Sui Explorer"
-                            className={st.explorerLink}
-                            showIcon={false}
-                        >
-                            {shortAddress}
-                        </ExplorerLink>
+    return (
+        <div className="flex flex-col flex-nowrap gap-3 text-body font-medium">
+            {items.map(({ label, value, key }) => (
+                <div
+                    className="flex flex-row flex-nowrap gap-1"
+                    key={key || label}
+                >
+                    <div className="flex-1 text-sui-grey-80 truncate">
+                        {label}
+                    </div>
+                    <div className="max-w-[60%] text-sui-grey-90 truncate">
+                        {value}
                     </div>
                 </div>
-
-                {fileExtensionType.name !== '' && (
-                    <div className={st.nftItemDetail}>
-                        <div className={st.label}>Media Type</div>
-                        <div className={st.value}>
-                            {fileExtensionType?.name} {fileExtensionType.type}
-                        </div>
-                    </div>
-                )}
-                {!!nftFields?.metadata?.fields?.attributes && (
-                    <>
-                        {nftFields.metadata.fields.attributes.fields.keys.map(
-                            (key: string, idx: number) => (
-                                <div
-                                    key={`nft_attribute_${key}`}
-                                    className={st.nftItemDetail}
-                                >
-                                    <div className={st.label}>{key}</div>
-                                    <div className={st.value}>
-                                        {
-                                            nftFields.metadata.fields.attributes
-                                                .fields.values[idx]
-                                        }
-                                    </div>
-                                </div>
-                            )
-                        )}
-                    </>
-                )}
-            </div>
-        </div>
-    );
-
-    return (
-        <div className={st.container}>
-            <PageTitle
-                title={nftFields?.name || shortAddress}
-                backLink="/nfts"
-                className={st.pageTitle}
-                hideBackLabel={true}
-            />
-            <BottomMenuLayout>
-                <Content>
-                    <section className={st.nftDetail}>
-                        <NFTDisplayCard
-                            nftobj={nft}
-                            size="large"
-                            expandable={true}
-                        />
-                        {NFTDetails}
-                    </section>
-                </Content>
-                <Menu stuckClass={st.shadow} className={st.shadow}>
-                    <button
-                        onClick={onClick}
-                        className={cl(
-                            'btn',
-                            st.action,
-                            st.sendNftBtn,
-                            'primary'
-                        )}
-                        disabled={!isTransferable}
-                        title={
-                            isTransferable
-                                ? undefined
-                                : "Unable to send. NFT doesn't have public transfer method"
-                        }
-                    >
-                        <Icon
-                            icon={SuiIcons.ArrowLeft}
-                            className={cl(st.arrowActionIcon, st.angledArrow)}
-                        />
-                        Send NFT
-                    </button>
-                </Menu>
-            </BottomMenuLayout>
+            ))}
         </div>
     );
 }
 
 function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
-    const [startNFTTransfer, setStartNFTTransfer] = useState<boolean>(false);
-    const [selectedNFT, setSelectedNFT] = useState<SuiObject | null>(null);
-    const objectId = useMemo(
-        () => searchParams.get('objectId'),
-        [searchParams]
+    const navigate = useNavigate();
+    const nftId = searchParams.get('objectId');
+    const nftSelector = useMemo(
+        () => createAccountNftByIdSelector(nftId || ''),
+        [nftId]
     );
-
-    const nftCollections = useAppSelector(accountNftsSelector);
-
-    const activeNFT = useMemo(() => {
-        const selectedNFT = nftCollections.filter(
-            (nftItem) => getObjectId(nftItem.reference) === objectId
-        )[0];
-        setSelectedNFT(selectedNFT);
-        return selectedNFT;
-    }, [nftCollections, objectId]);
-
-    const loadingBalance = useAppSelector(
-        ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
-    );
-
-    const startNFTTransferHandler = useCallback(() => {
-        setStartNFTTransfer(true);
-    }, []);
-
-    if (!objectId || (!loadingBalance && !selectedNFT && !startNFTTransfer)) {
-        return <Navigate to="/nfts" replace={true} />;
-    }
-
+    const selectedNft = useAppSelector(nftSelector);
+    const isTransferable = !!selectedNft && hasPublicTransfer(selectedNft);
+    const shortAddress = useMiddleEllipsis(nftId);
+    const { nftFields, fileExtensionType, filePath } =
+        useNFTBasicData(selectedNft);
+    const { loading } = useObjectsState();
+    const detailAttrs = [
+        {
+            label: 'Object Id',
+            value: nftId ? (
+                <ExplorerLink
+                    type={ExplorerLinkType.object}
+                    objectID={nftId}
+                    title="View on Sui Explorer"
+                    className="text-sui-dark no-underline font-mono"
+                    showIcon={false}
+                >
+                    {shortAddress}
+                </ExplorerLink>
+            ) : null,
+        },
+        {
+            label: 'Media Type',
+            value:
+                filePath && fileExtensionType.name && fileExtensionType.type
+                    ? `${fileExtensionType.name} ${fileExtensionType.type}`
+                    : '-',
+        },
+    ];
+    const metaFields = nftFields?.metadata?.fields?.attributes?.fields || null;
+    const metaKeys: string[] = metaFields ? metaFields.keys : [];
+    const metaValues = metaFields ? metaFields.values : [];
+    const metaAttrs = metaKeys.map((aKey, idx) => ({
+        label: aKey,
+        value:
+            typeof metaValues[idx] === 'object'
+                ? JSON.stringify(metaValues[idx])
+                : metaValues[idx],
+        key: `nft_attribute_${aKey}`,
+    }));
     return (
-        <Loading loading={loadingBalance}>
-            {objectId && startNFTTransfer ? (
-                <TransferNFTCard objectId={objectId} />
-            ) : (
-                <NFTdetailsContent
-                    nft={activeNFT}
-                    onClick={startNFTTransferHandler}
-                />
-            )}
-        </Loading>
+        <div
+            className={cl('flex flex-col flex-nowrap flex-1 gap-5', {
+                'items-center': loading,
+            })}
+        >
+            <Loading loading={loading}>
+                {selectedNft ? (
+                    <>
+                        <div className="flex">
+                            <PageTitle backLink="/nfts" hideBackLabel={true} />
+                        </div>
+                        <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-[30px]">
+                            <div className="self-center gap-3 flex flex-col flex-nowrap items-center">
+                                <NFTDisplayCard
+                                    nftobj={selectedNft}
+                                    size="large"
+                                />
+                                {nftId ? (
+                                    <ExplorerLink
+                                        type={ExplorerLinkType.object}
+                                        objectID={nftId}
+                                        className={cl(
+                                            'text-sui-steel-dark no-underline flex flex-nowrap gap-2 items-center',
+                                            'text-captionSmall font-semibold uppercase hover:text-hero duration-100',
+                                            'ease-ease-in-out-cubic'
+                                        )}
+                                        showIcon={false}
+                                    >
+                                        VIEW ON EXPLORER{' '}
+                                        <Icon
+                                            icon={SuiIcons.ArrowLeft}
+                                            className="rotate-[135deg] text-[10px]"
+                                        />
+                                    </ExplorerLink>
+                                ) : null}
+                            </div>
+                            <div className="flex-1">
+                                <Collapse title="Details">
+                                    <LabelValueItems items={detailAttrs} />
+                                </Collapse>
+                            </div>
+                            {metaAttrs.length ? (
+                                <div className="flex-1">
+                                    <Collapse title="Attributes">
+                                        <LabelValueItems items={metaAttrs} />
+                                    </Collapse>
+                                </div>
+                            ) : null}
+                            <div className="flex-1 flex items-end mb-3">
+                                <Button
+                                    mode="primary"
+                                    className="flex-1"
+                                    disabled={!isTransferable}
+                                    title={
+                                        isTransferable
+                                            ? undefined
+                                            : "Unable to send. NFT doesn't have public transfer method"
+                                    }
+                                    onClick={() => {
+                                        navigate(`/nft-transfer/${nftId}`);
+                                    }}
+                                >
+                                    Send NFT
+                                    <Icon
+                                        icon={SuiIcons.ArrowLeft}
+                                        className="rotate-180 text-xs"
+                                    />
+                                </Button>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <Navigate to="/nfts" replace={true} />
+                )}
+            </Loading>
+        </div>
     );
 }
 

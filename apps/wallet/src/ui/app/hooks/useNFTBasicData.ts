@@ -8,12 +8,12 @@ import useMediaUrl from './useMediaUrl';
 
 import type { SuiObject } from '@mysten/sui.js';
 
-export default function useNFTBasicData(nftObj: SuiObject) {
-    const nftObjectID = getObjectId(nftObj.reference);
-    const filePath = useMediaUrl(nftObj.data);
+export default function useNFTBasicData(nftObj: SuiObject | null) {
+    const nftObjectID = (nftObj && getObjectId(nftObj.reference)) || null;
+    const filePath = useMediaUrl(nftObj?.data || null);
     let objType = null;
     let nftFields = null;
-    if (isSuiMoveObject(nftObj.data)) {
+    if (nftObj && isSuiMoveObject(nftObj.data)) {
         objType = nftObj.data.type;
         nftFields = getObjectFields(nftObj.data);
     }
