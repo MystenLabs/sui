@@ -41,10 +41,11 @@ use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap},
     net::Ipv4Addr,
     sync::Arc,
+    time::Duration,
 };
 use storage::{CertificateStore, PayloadToken, ProposerStore};
 use store::Store;
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument};
@@ -67,6 +68,9 @@ pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
+
+/// Maximum duration to fetch certficates from local storage.
+const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
 
 /// The network model in which the primary operates.
 pub enum NetworkModel {
@@ -902,6 +906,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        let time_start = Instant::now();
+        let peer = request.peer_id().cloned();
         let request = request.into_body();
         let mut response = FetchCertificatesResponse {
             certificates: Vec::new(),
@@ -915,7 +921,11 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
         // and avoids the pathological case of iterating through many missing rounds of a downed authority.
         let (lower_bound, skip_rounds) = request.get_bounds();
-        debug!("Fetching certificates after round {lower_bound}");
+        debug!(
+            "Fetching certificates after round {lower_bound} for peer {:?}, elapsed = {}ms",
+            peer,
+            time_start.elapsed().as_millis(),
+        );
 
         let mut fetch_queue = BinaryHeap::new();
         for (origin, rounds) in &skip_rounds {
@@ -924,11 +934,17 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 fetch_queue.push(Reverse((r, origin.clone())));
             }
         }
+        debug!(
+            "Initialized origins and rounds to fetch, elapsed = {}ms",
+            time_start.elapsed().as_millis(),
+        );
 
         // Iteratively pop the next smallest (Round, Authority) pair, and push to min-heap the next
         // higher round of the same authority that should not be skipped.
         // The process ends when there are no more pairs in the min-heap.
         while let Some(Reverse((round, origin))) = fetch_queue.pop() {
+            // Allow the request handler to be stopped after timeout.
+            tokio::task::yield_now().await;
             match self
                 .certificate_store
                 .read_by_index(origin.clone(), round)
@@ -945,6 +961,19 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 None => continue,
             };
             if response.certificates.len() == request.max_items {
+                debug!(
+                    "Collected enough certificates (num={}, elapsed={}ms), returning.",
+                    response.certificates.len(),
+                    time_start.elapsed().as_millis(),
+                );
+                break;
+            }
+            if time_start.elapsed() >= FETCH_CERTIFICATES_MAX_HANDLER_TIME {
+                debug!(
+                    "Spent enough time reading certificates (num={}, elapsed={}ms), returning.",
+                    response.certificates.len(),
+                    time_start.elapsed().as_millis(),
+                );
                 break;
             }
             assert!(response.certificates.len() < request.max_items);
