@@ -48,7 +48,7 @@ use store::Store;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 pub use types::PrimaryMessage;
 use types::{
     ensure,
@@ -101,6 +101,7 @@ impl Primary {
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
+        last_committed_round: Round,
         registry: &Registry,
         // See comments in Subscriber::spawn
         rx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
@@ -183,6 +184,11 @@ impl Primary {
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
         let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+        // Initialize gc round.
+        tx_consensus_round_updates
+            .send(last_committed_round)
+            .expect("Failed to send last_committed_round on initialization!");
+
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
 
         let synchronizer = Arc::new(Synchronizer::new(
@@ -907,7 +913,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
         let time_start = Instant::now();
-        let peer = request.peer_id().cloned();
+        let peer = request
+            .peer_id()
+            .map_or_else(|| "None".to_string(), |peer_id| format!("{}", peer_id));
         let request = request.into_body();
         let mut response = FetchCertificatesResponse {
             certificates: Vec::new(),
@@ -929,6 +937,14 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 
         let mut fetch_queue = BinaryHeap::new();
         for (origin, rounds) in &skip_rounds {
+            if rounds.len() > 50 {
+                warn!(
+                    "{} rounds are available locally for origin {}. elapsed = {}ms",
+                    rounds.len(),
+                    origin,
+                    time_start.elapsed().as_millis(),
+                );
+            }
             let next_round = self.find_next_round(origin, lower_bound, rounds)?;
             if let Some(r) = next_round {
                 fetch_queue.push(Reverse((r, origin.clone())));

@@ -104,6 +104,7 @@ async fn get_network_peers_from_admin_server() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -216,6 +217,7 @@ async fn get_network_peers_from_admin_server() {
         NetworkModel::Asynchronous,
         tx_reconfigure_2,
         tx_feedback_2,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );

@@ -128,6 +128,7 @@ async fn test_get_collections() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -320,6 +321,7 @@ async fn test_remove_collections() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -532,6 +534,7 @@ async fn test_read_causal_signed_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -574,6 +577,7 @@ async fn test_read_causal_signed_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -743,6 +747,7 @@ async fn test_read_causal_unsigned_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -778,6 +783,7 @@ async fn test_read_causal_unsigned_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -945,6 +951,7 @@ async fn test_get_collections_with_missing_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_1,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
@@ -1004,6 +1011,7 @@ async fn test_get_collections_with_missing_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
+        /* last_committed_round */ 0,
         &Registry::new(),
         None,
     );
