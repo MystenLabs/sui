@@ -141,11 +141,11 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
         prometheus_registry: &Registry,
-        network_metrics: Arc<NetworkAuthorityClientMetrics>,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
         let net = Arc::new(net);
+        let network_metrics = net.network_client_metrics.clone();
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
@@ -172,12 +172,7 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
-        Self::new(
-            authority,
-            net,
-            &Registry::new(),
-            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-        )
+        Self::new(authority, net, &Registry::new())
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
