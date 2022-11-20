@@ -302,8 +302,11 @@ pub enum SuiError {
     InvalidTxUpdate,
     #[error("Attempt to re-initialize a transaction lock for objects {:?}.", refs)]
     ObjectLockAlreadyInitialized { refs: Vec<ObjectRef> },
-    #[error("Object {obj_ref:?} lock has not been initialized.")]
-    ObjectLockUninitialized { obj_ref: ObjectRef },
+    #[error("Object {provided_obj_ref:?} is not available for consumption, its current version: {current_version:?}.")]
+    ObjectVersionUnavailableForConsumption {
+        provided_obj_ref: ObjectRef,
+        current_version: SequenceNumber,
+    },
     #[error(
         "Object {obj_ref:?} already locked by a different transaction: {pending_transaction:?}"
     )]

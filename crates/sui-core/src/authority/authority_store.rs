@@ -18,6 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
+    lock_service::ObjectLockStatus,
     mutex_table::{LockGuard, MutexTable},
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
@@ -465,44 +466,51 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.lock_service.get_tx_sequence(tx).await
     }
 
-    /// Get the transaction envelope that currently locks the given object,
-    /// or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
+    /// Get the TransactionEnvelope that currently locks the given object, if any.
+    /// Returns SuiError::ObjectNotFound if no lock records for the given object can be found.
+    /// Returns SuiError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
+    /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
+    /// Returns None if the a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
+    ///     or cannot find the transaction in transaction table, because of data race etc.
     pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
     ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
-        let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
-            SuiError::ObjectLockUninitialized {
-                obj_ref: *object_ref,
-            },
-        )?;
+        let lock_info = self.lock_service.get_lock(*object_ref).await?;
+        let lock_info = match lock_info {
+            ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
+                return Err(SuiError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: *object_ref,
+                    current_version: locked_ref.1,
+                })
+            }
+            ObjectLockStatus::Initialized => {
+                return Ok(None);
+            }
+            ObjectLockStatus::LockedToTx { locked_by_tx } => locked_by_tx,
+        };
 
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
         // just be a race.
-        match tx_lock {
-            Some(lock_info) => {
-                let tx_digest = &lock_info.tx_digest;
-                let mut retry_strategy = ExponentialBackoff::from_millis(2)
-                    .factor(10)
-                    .map(jitter)
-                    .take(3);
-                let mut tx_option = self.epoch_tables().transactions.get(tx_digest)?;
-                while tx_option.is_none() {
-                    if let Some(duration) = retry_strategy.next() {
-                        // Wait to retry
-                        tokio::time::sleep(duration).await;
-                        trace!(?tx_digest, "Retrying getting pending transaction");
-                    } else {
-                        // No more retries, just quit
-                        break;
-                    }
-                    tx_option = self.epoch_tables().transactions.get(tx_digest)?;
-                }
-                Ok(tx_option.map(|t| t.into()))
+        let tx_digest = &lock_info.tx_digest;
+        let mut retry_strategy = ExponentialBackoff::from_millis(2)
+            .factor(10)
+            .map(jitter)
+            .take(3);
+        let mut tx_option = self.epoch_tables().transactions.get(tx_digest)?;
+        while tx_option.is_none() {
+            if let Some(duration) = retry_strategy.next() {
+                // Wait to retry
+                tokio::time::sleep(duration).await;
+                trace!(?tx_digest, "Retrying getting pending transaction");
+            } else {
+                // No more retries, just quit
+                break;
             }
-            None => Ok(None),
+            tx_option = self.epoch_tables().transactions.get(tx_digest)?;
         }
+        Ok(tx_option.map(|t| t.into()))
     }
 
     /// Read a certificate and return an option with None if it does not exist.
