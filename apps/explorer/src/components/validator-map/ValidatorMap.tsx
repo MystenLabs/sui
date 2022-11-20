@@ -144,10 +144,7 @@ export default function ValidatorMap() {
             </div>
 
             <div className="absolute top-5 right-5 z-10">
-                <DateFilter
-                    value={dateFilter}
-                    onChange={setDateFilter}
-                />
+                <DateFilter value={dateFilter} onChange={setDateFilter} />
             </div>
 
             <div className={styles.mapcontainer}>
