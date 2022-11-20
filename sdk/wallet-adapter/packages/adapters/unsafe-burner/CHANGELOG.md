@@ -1,5 +1,13 @@
 # @mysten/wallet-adapter-unsafe-burner
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [623505886]
+  - @mysten/sui.js@0.17.1
+  - @mysten/wallet-adapter-base@0.3.4
+
 ## 0.2.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.17.1
+
+### Patch Changes
+
+- 623505886: Fix callArg serialization bug in LocalTxnSerializer
+
 ## 0.17.0
 
 ### Minor Changes
