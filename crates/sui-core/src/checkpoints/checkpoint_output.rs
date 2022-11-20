@@ -20,7 +20,6 @@ pub trait CheckpointOutput: Sync + Send + 'static {
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
-        last_checkpoint_of_epoch: bool,
     ) -> SuiResult;
 }
 
@@ -54,14 +53,10 @@ impl<T: SubmitToConsensus> CheckpointOutput for SubmitCheckpointToConsensus<T> {
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
-        last_checkpoint_of_epoch: bool,
     ) -> SuiResult {
         LogCheckpointOutput
-            .checkpoint_created(summary, contents, last_checkpoint_of_epoch)
+            .checkpoint_created(summary, contents)
             .await?;
-        if last_checkpoint_of_epoch {
-            // Augment the checkpoint with the change epoch transaction.
-        }
         let summary = SignedCheckpointSummary::new_from_summary(
             summary.clone(),
             self.authority,
@@ -79,20 +74,18 @@ impl CheckpointOutput for LogCheckpointOutput {
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
-        last_checkpoint_of_epoch: bool,
     ) -> SuiResult {
         debug!(
             "Including following transactions in checkpoint {}: {:?}",
             summary.sequence_number, contents
         );
         info!(
-            "Creating checkpoint {:?} at sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, last_checkpoint_of_epoch {}",
+            "Creating checkpoint {:?} at sequence {}, previous digest {:?}, transactions count {}, content digest {:?}",
             Hex::encode(summary.digest()),
             summary.sequence_number,
             summary.previous_digest,
             contents.size(),
             Hex::encode(summary.content_digest),
-            last_checkpoint_of_epoch,
         );
 
         Ok(())
