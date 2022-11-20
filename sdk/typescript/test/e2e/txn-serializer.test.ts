@@ -5,12 +5,14 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   LocalTxnDataSerializer,
   MoveCallTransaction,
+  RawSigner,
   RpcTxnDataSerializer,
   SuiMoveObject,
   UnserializedSignableTransaction,
 } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
+  publishPackage,
   setup,
   SUI_SYSTEM_STATE_OBJECT_ID,
   TestToolbox,
@@ -20,6 +22,7 @@ describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
   let localSerializer: LocalTxnDataSerializer;
   let rpcSerializer: RpcTxnDataSerializer;
+  let packageId: string;
 
   beforeAll(async () => {
     toolbox = await setup();
@@ -27,6 +30,9 @@ describe('Transaction Serialization and deserialization', () => {
     rpcSerializer = new RpcTxnDataSerializer(
       toolbox.provider.endpoints.fullNode
     );
+    const signer = new RawSigner(toolbox.keypair, toolbox.provider);
+    const packagePath = __dirname + '/./data/serializer';
+    packageId = await publishPackage(signer, false, packagePath);
   });
 
   async function serializeAndDeserialize(
@@ -40,6 +46,7 @@ describe('Transaction Serialization and deserialization', () => {
       toolbox.address(),
       moveCall
     );
+
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const deserialized =
@@ -79,6 +86,22 @@ describe('Transaction Serialization and deserialization', () => {
 
     const deserialized = await serializeAndDeserialize(moveCall);
     expect(deserialized).toEqual(moveCall);
+  });
+
+  it('Move Call With Type Tags', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    const moveCall = {
+      packageObjectId: packageId,
+      module: 'serializer_tests',
+      function: 'list',
+      typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>', '0x2::sui::SUI'],
+      arguments: [coins[0].objectId],
+      gasBudget: DEFAULT_GAS_BUDGET,
+    };
+
+    await serializeAndDeserialize(moveCall);
   });
 
   it('Move Shared Object Call', async () => {
