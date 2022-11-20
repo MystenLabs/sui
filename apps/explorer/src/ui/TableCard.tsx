@@ -72,11 +72,11 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
     return (
         <div
             className={clsx(
-                'w-full overflow-x-auto',
+                'w-full overflow-x-auto border-solid border-0 border-sui-grey-45 border-b pb-4',
                 refetching && 'opacity-50'
             )}
         >
-            <table className="text-left min-w-max border-collapse w-full border-solid border-sui-grey-45 border-0 border-b">
+            <table className="text-left min-w-max border-collapse w-full border-0">
                 <thead>
                     {table.getHeaderGroups().map((headerGroup: any) => (
                         <tr key={headerGroup.id}>
