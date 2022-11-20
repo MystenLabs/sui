@@ -909,33 +909,12 @@ impl Transaction {
     }
 }
 
-/// A transaction that is signed by a sender and also by an authority.
-pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
-pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
-
-impl VerifiedSignedTransaction {
-    /// Use signing key to create a signed object.
-    pub fn new(
-        epoch: EpochId,
-        transaction: VerifiedTransaction,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-    ) -> Self {
-        Self::new_from_verified(SignedTransaction::new(
-            epoch,
-            transaction.into_inner().into_data(),
-            secret,
-            authority,
-        ))
-    }
-
+impl VerifiedTransaction {
     pub fn new_change_epoch(
         next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
             epoch: next_epoch,
@@ -957,9 +936,25 @@ impl VerifiedSignedTransaction {
                 .unwrap()
                 .into(),
         };
+        Self::new_from_verified(Transaction::new(signed_data))
+    }
+}
+
+/// A transaction that is signed by a sender and also by an authority.
+pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
+pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
+
+impl VerifiedSignedTransaction {
+    /// Use signing key to create a signed object.
+    pub fn new(
+        epoch: EpochId,
+        transaction: VerifiedTransaction,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Self {
         Self::new_from_verified(SignedTransaction::new(
-            next_epoch,
-            signed_data,
+            epoch,
+            transaction.into_inner().into_data(),
             secret,
             authority,
         ))

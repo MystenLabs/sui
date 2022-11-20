@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
-    NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+    make_authority_clients, make_network_authority_client_sets_from_committee,
+    make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
+    NetworkAuthorityClientMetrics,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics};
 use crate::validator_info::make_committee;
@@ -48,6 +49,7 @@ use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
+use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
@@ -374,6 +376,34 @@ impl<A> AuthorityAggregator<A> {
             clients.insert(*name, client.authority_client().clone());
         }
         clients
+    }
+}
+
+impl AuthorityAggregator<NetworkAuthorityClient> {
+    /// Create a new network authority aggregator by reading the committee and network address
+    /// information from the system state object on-chain.
+    pub fn new_from_system_state(
+        store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
+        prometheus_registry: &Registry,
+    ) -> anyhow::Result<Self> {
+        let net_config = default_mysten_network_config();
+        let sui_system_state = store.get_sui_system_state_object()?;
+
+        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(prometheus_registry));
+        let authority_clients = make_network_authority_client_sets_from_system_state(
+            &sui_system_state,
+            &net_config,
+            network_metrics.clone(),
+        )?;
+        Ok(Self::new(
+            sui_system_state.get_current_epoch_committee().committee,
+            committee_store.clone(),
+            authority_clients,
+            AuthAggMetrics::new(prometheus_registry),
+            Arc::new(SafeClientMetrics::new(prometheus_registry)),
+            network_metrics,
+        ))
     }
 }
 

@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
@@ -28,11 +29,13 @@ use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use parking_lot::RwLock;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use tap::TapFallible;
+use tokio::select;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::{broadcast::error::RecvError, mpsc};
+use tokio::time::interval;
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -82,6 +85,7 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
+use crate::authority_aggregator::AuthorityAggregator;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
@@ -102,6 +106,7 @@ use crate::{
     transaction_streamer::TransactionStreamer,
 };
 use narwhal_types::ConsensusOutput;
+use sui_types::gas::GasCostSummary;
 
 use self::authority_store::ObjectKey;
 
@@ -594,22 +599,6 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        // Ensure an idempotent answer.
-        // If a transaction was signed in a previous epoch, we should no longer reuse it.
-        if self
-            .database
-            .transaction_exists(self.epoch(), &transaction_digest)?
-        {
-            self.metrics.tx_already_processed.inc();
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-            return Ok(transaction_info);
-        }
-
-        // Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
@@ -1952,7 +1941,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    async fn make_transaction_info(
+    pub async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
@@ -2314,5 +2303,61 @@ impl AuthorityState {
             checkpoint_service.notify_checkpoint(index, roots, false)?;
         }
         self.database.record_checkpoint_boundary(round)
+    }
+
+    pub async fn create_advance_epoch_tx_cert(
+        &self,
+        next_epoch: EpochId,
+        gas_cost_summary: &GasCostSummary,
+        timeout: Duration,
+        mut cancel: tokio::sync::oneshot::Receiver<()>,
+    ) -> anyhow::Result<VerifiedCertificate> {
+        let mut interval = interval(Duration::from_millis(100));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        let result = tokio::time::timeout(timeout, async {
+            loop {
+                select! {
+                    _ = interval.tick() => {
+                        match self.create_advance_epoch_tx_cert_impl(next_epoch, gas_cost_summary)
+                            .await
+                        {
+                            Ok(cert) => {
+                                return Ok(cert);
+                            }
+                            Err(err) => {
+                                error!("Failed to create advance epoch transaction cert: {:?}", err);
+                            }
+                        }
+                    },
+                    _ = &mut cancel => {
+                        return Err(SuiError::from("create_advance_epoch_tx_cert task canceled"));
+                    }
+                }
+
+            }
+        })
+        .await;
+        Ok(result??)
+    }
+
+    async fn create_advance_epoch_tx_cert_impl(
+        &self,
+        next_epoch: EpochId,
+        gas_cost_summary: &GasCostSummary,
+    ) -> anyhow::Result<VerifiedCertificate> {
+        let tx = VerifiedTransaction::new_change_epoch(
+            next_epoch,
+            gas_cost_summary.storage_cost,
+            gas_cost_summary.computation_cost,
+            gas_cost_summary.storage_rebate,
+        );
+        self.handle_transaction(tx.clone()).await?;
+        let net = AuthorityAggregator::new_from_system_state(
+            &self.database,
+            &self.committee_store,
+            &Registry::new(),
+        )?;
+        Ok(net.process_transaction(tx).await?)
     }
 }
