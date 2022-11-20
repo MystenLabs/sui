@@ -27,11 +27,11 @@ import styles from './RecentTxCard.module.css';
 
 import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
+import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { PlayPause } from '~/ui/PlayPause';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { Link } from '~/ui/Link';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
