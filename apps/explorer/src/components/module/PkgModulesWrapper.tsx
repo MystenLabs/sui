@@ -3,7 +3,7 @@
 
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
     useSearchParams,
     type URLSearchParamsInit,
@@ -52,37 +52,24 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
 
-    const getModule = (
-        searchParams: URLSearchParams,
-        setSearchParams: (
-            params: URLSearchParamsInit,
-            navigateOpts?: NavigateOptions
-        ) => void,
-        modulenames: string[]
-    ): string => {
-        const paramModule = searchParams.get('module') || null;
+    // Extract module in URL or default to first module in list
+    const selectedModule =
+        searchParams.get('module') &&
+        modulenames.includes(searchParams.get('module')!)
+            ? searchParams.get('module')!
+            : modulenames[0];
 
-        // A module has been specified and the package has this module
-        if (!!paramModule && modulenames.includes(paramModule)) {
-            return paramModule;
-        }
-
-        // A module has been specified and the package does not have this module
-        if (!!paramModule) {
+    // If module in URL exists but is not in module list, then delete module from URL
+    useEffect(() => {
+        if (
+            searchParams.get('module') &&
+            !modulenames.includes(searchParams.get('module')!)
+        ) {
             const newSearchParams = new URLSearchParams(searchParams);
             newSearchParams.delete('module');
             setSearchParams(newSearchParams, { replace: true });
         }
-
-        // The default is to return the first module in the list
-        return modulenames[0];
-    };
-
-    const selectedModule = getModule(
-        searchParams,
-        setSearchParams,
-        modulenames
-    );
+    }, [searchParams, setSearchParams, modulenames]);
 
     const setModule = (
         searchParams: URLSearchParams,
