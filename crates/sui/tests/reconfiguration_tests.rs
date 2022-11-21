@@ -8,14 +8,13 @@ use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
 use test_utils::authority::{get_client, spawn_test_authorities, test_authority_configs};
-use tokio::time::Instant;
 
 #[tokio::test]
 async fn advance_epoch_tx_test() {
     // This test checks the following functionalities related to advance epoch transaction:
     // 1. The create_advance_epoch_tx_cert API in AuthorityState can properly sign an advance
     //    epoch transaction locally and exchange with other validators to obtain a cert.
-    // 2. The timeout and cancellation channel in the API works as expected.
+    // 2. The timeout in the API works as expected.
     // 3. The certificate can be executed by each validator.
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(iter::empty(), &configs).await;
@@ -28,28 +27,22 @@ async fn advance_epoch_tx_test() {
         Err(SuiError::InvalidSystemTransaction)
     ));
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let long_task = handles.first().unwrap().with_async(|node| async move {
-        node.state()
-            .create_advance_epoch_tx_cert(
-                1,
-                &GasCostSummary::new(0, 0, 0),
-                Duration::from_secs(1000), // A very very long time
-                rx,
-            )
-            .await
-    });
-    let start = Instant::now();
-    let cancel_task = tokio::spawn(async {
-        tokio::time::sleep(Duration::from_secs(10)).await;
-        tx.send(()).unwrap();
-    });
-    let result = long_task.await;
+    let failing_task = handles
+        .first()
+        .unwrap()
+        .with_async(|node| async move {
+            node.state()
+                .create_advance_epoch_tx_cert(
+                    1,
+                    &GasCostSummary::new(0, 0, 0),
+                    Duration::from_secs(15),
+                )
+                .await
+        })
+        .await;
     // Since we are only running the task on one validator, it will never get a quorum and hence
-    // never succeed. This tests that the cancelation works.
-    assert!(result.unwrap_err().to_string().contains("task canceled"));
-    assert!(start.elapsed() < Duration::from_secs(100));
-    assert!(cancel_task.is_finished());
+    // never succeed.
+    assert!(failing_task.is_err());
 
     let tasks: Vec<_> = handles
         .iter()
@@ -60,7 +53,6 @@ async fn advance_epoch_tx_test() {
                         1,
                         &GasCostSummary::new(0, 0, 0),
                         Duration::from_secs(1000), // A very very long time
-                        tokio::sync::oneshot::channel().1,
                     )
                     .await
             })

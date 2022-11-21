@@ -340,7 +340,7 @@ impl CheckpointBuilder {
 
     async fn create_checkpoint(
         &self,
-        effects: Vec<TransactionEffects>,
+        mut effects: Vec<TransactionEffects>,
         last_checkpoint_of_epoch: bool,
     ) -> Option<(CheckpointSummary, CheckpointContents)> {
         let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
@@ -350,7 +350,17 @@ impl CheckpointBuilder {
             self.state.epoch(),
         );
         if last_checkpoint_of_epoch {
-            // Augment the checkpoint with advance epoch transaction.
+            if let Err(err) = self
+                .augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
+                .await
+            {
+                error!(
+                    "Failed to augment the last checkpoint of the epoch: {:?}",
+                    err
+                );
+                // TODO: Is returning None the best we can do here?
+                return None;
+            }
         }
         if effects.is_empty() {
             return None;
@@ -404,6 +414,29 @@ impl CheckpointBuilder {
         } else {
             current_gas_costs
         }
+    }
+
+    async fn augment_epoch_last_checkpoint(
+        &self,
+        epoch_total_gas_cost: &GasCostSummary,
+        effects: &mut Vec<TransactionEffects>,
+    ) -> anyhow::Result<()> {
+        let cert = self
+            .state
+            .create_advance_epoch_tx_cert(
+                self.state.epoch() + 1,
+                epoch_total_gas_cost,
+                Duration::from_secs(60), // TODO: Is 60s enough?
+            )
+            .await?;
+        let signed_effect = self
+            .state
+            .handle_certificate(&cert)
+            .await?
+            .signed_effects
+            .unwrap();
+        effects.push(signed_effect.into_data());
+        Ok(())
     }
 
     /// For the given roots return complete list of effects to include in checkpoint
