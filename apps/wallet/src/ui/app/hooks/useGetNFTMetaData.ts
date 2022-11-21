@@ -17,7 +17,7 @@ type NFTMetadata = {
     url?: string;
 } | null;
 
-function useGetObjectData(
+export function useGetObjectData(
     objectId: string | null
 ): GetObjectDataResponse | null {
     const data = useQuery(
@@ -32,7 +32,7 @@ function useGetObjectData(
     return data?.data || null;
 }
 
-export function useGetNFTMetaData(objectID: string | null): NFTMetadata {
+export function useGetNFTMetadata(objectID: string | null): NFTMetadata {
     const data = useGetObjectData(objectID);
 
     const nfTMeta = useMemo(() => {

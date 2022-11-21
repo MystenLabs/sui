@@ -22,6 +22,7 @@ export type TransactionRequest = {
     txnMeta?: {
         coinSymbol?: string | null;
         amount?: number | null;
+        isListing?: boolean;
         objectId?: string | null;
     } | null;
     txGasEstimation?: number | null;

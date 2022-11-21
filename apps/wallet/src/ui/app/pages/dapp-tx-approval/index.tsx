@@ -19,7 +19,7 @@ import {
     useAppSelector,
     useMiddleEllipsis,
     useFormatCoin,
-    useGetNFTMetaData,
+    useGetNFTMetadata,
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import {
@@ -86,7 +86,7 @@ function PassedObject({ id, module }: { id: string; module: string }) {
     );
 
     // Render the NFT if ID is a NFT
-    const nftMeta = useGetNFTMetaData(id);
+    const nftMeta = useGetNFTMetadata(id);
 
     return (
         <div className={st.permissionsContent}>
@@ -215,6 +215,7 @@ type TransferSummerCardProps = {
     objectId: string | null;
     nftImage?: string | null;
     gasEstimate: number | null;
+    isListing?: boolean;
 };
 
 function MiniNFTLink({
@@ -254,6 +255,7 @@ function TransactionSummaryCard({
     origin,
     nftImage,
     gasEstimate,
+    isListing,
 }: TransferSummerCardProps) {
     const [gasEst, gasSymbol] = useFormatCoin(gasEstimate || 0, GAS_TYPE_ARG);
 
@@ -267,14 +269,18 @@ function TransactionSummaryCard({
             {formatedAmount && symbol && (
                 <div className={st.content}>
                     <div className={st.row}>
-                        <div className={st.label}>Send</div>
+                        <div className={st.label}>
+                            {isListing ? 'List for' : 'Send'}
+                        </div>
                         <div className={st.value}>
                             {formatedAmount} {symbol}
                         </div>
                     </div>
 
                     <div className={st.row}>
-                        <div className={st.label}>To</div>
+                        <div className={st.label}>
+                            {isListing ? 'At' : 'To'}
+                        </div>
                         <div className={st.value}>
                             <ExternalLink
                                 href={origin}
@@ -400,7 +406,7 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest, dispatch]);
 
-    const nftMeta = useGetNFTMetaData(txRequest?.txnMeta?.objectId || null);
+    const nftMeta = useGetNFTMetadata(txRequest?.txnMeta?.objectId || null);
 
     const metadata = useMemo(() => {
         if (
@@ -574,6 +580,7 @@ export function DappTxApprovalPage() {
                                 nftImage={nftMeta?.url}
                                 gasEstimate={gasEstimation}
                                 origin={txRequest.origin}
+                                isListing={transactionSummary?.isListing}
                             />
                         )}
                         <Permissions metadata={metadata} />

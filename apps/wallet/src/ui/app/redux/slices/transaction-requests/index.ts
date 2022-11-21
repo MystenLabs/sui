@@ -70,6 +70,7 @@ export type TxnMetaResponse = {
     coinSymbol?: string | null;
     amount?: number | null;
     objectId?: string;
+    isListing?: boolean;
 } | null;
 
 const getRequestCost = (
@@ -83,6 +84,7 @@ const getRequestCost = (
         objectId?: string;
         amount?: number;
         coinSymbol?: string;
+        isListing?: boolean;
     } = {};
 
     for (const event of events) {
@@ -99,6 +101,7 @@ const getRequestCost = (
                 sumCoin += event.moveEvent.fields.price;
                 coinMeta.amount = sumCoin;
                 coinMeta.coinSymbol = '0x2::sui::SUI';
+                coinMeta.isListing = true;
             }
 
             // aggregate coin balance for pay

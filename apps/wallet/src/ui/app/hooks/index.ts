@@ -16,5 +16,5 @@ export { default as useNFTBasicData } from './useNFTBasicData';
 export { useObjectsState } from './useObjectsState';
 export { useWaitForElement } from './useWaitForElement';
 export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
-export { useGetNFTMetaData } from './useGetNFTMetaData';
+export { useGetNFTMetadata } from './useGetNFTMetadata';
 export * from './useSigner';
