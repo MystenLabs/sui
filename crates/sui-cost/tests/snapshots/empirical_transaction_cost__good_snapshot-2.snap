@@ -14,18 +14,18 @@ expression: common_costs_estimate
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
-    "computation_cost": 683,
-    "storage_cost": 833,
+    "computation_cost": 670,
+    "storage_cost": 813,
     "storage_rebate": 0
   },
   "SharedCounterCreate": {
-    "computation_cost": 562,
-    "storage_cost": 802,
+    "computation_cost": 548,
+    "storage_cost": 782,
     "storage_rebate": 0
   },
   "SharedCounterIncrement": {
-    "computation_cost": 683,
-    "storage_cost": 833,
+    "computation_cost": 670,
+    "storage_cost": 813,
     "storage_rebate": 0
   },
   "SplitCoin": {
