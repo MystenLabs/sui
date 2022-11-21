@@ -3,9 +3,13 @@
 
 import { Coin, SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { useAppSelector, useIndividualCoinMaxBalance, useSigner } from '_hooks';
-import { accountCoinsSelector } from '_redux/slices/account';
+import {
+    accountAggregateBalancesSelector,
+    accountCoinsSelector,
+} from '_redux/slices/account';
 
 export function useGasBudgetEstimation(
     coinTypeArg: string | null,
@@ -14,6 +18,11 @@ export function useGasBudgetEstimation(
     const signer = useSigner();
     const suiCoinMaxBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
     const allCoins = useAppSelector(accountCoinsSelector);
+    const balancePerType = useAppSelector(accountAggregateBalancesSelector);
+    const balance = useMemo(
+        () => (coinTypeArg && balancePerType[coinTypeArg]) || BigInt(0),
+        [coinTypeArg, balancePerType]
+    );
     const enabled = amountToSend > 0 && !!coinTypeArg;
     const estimationResult = useQuery({
         queryKey: [
@@ -22,6 +31,7 @@ export function useGasBudgetEstimation(
             coinTypeArg,
             suiCoinMaxBalance.toString(),
             amountToSend.toString(),
+            balance.toString(),
         ],
         queryFn: async () => {
             return await Coin.getGasCostEstimationAndSuggestedBudget(
