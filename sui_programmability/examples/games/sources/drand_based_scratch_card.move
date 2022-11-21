@@ -120,10 +120,7 @@ module games::drand_based_scratch_card {
         ctx: &mut TxContext
     ) {
         assert!(ticket.game_id == object::id(game), EInvalidTicket);
-        assert!(
-            drand_lib::verify_drand_signature(drand_sig, drand_prev_sig, end_of_game_round(game.base_drand_round)) == true,
-            EInvalidRandomness
-        );
+        drand_lib::verify_drand_signature(drand_sig, drand_prev_sig, end_of_game_round(game.base_drand_round));
         // The randomness for the current ticket is derived by HMAC(drand randomness, ticket id).
         // A solution like checking if (drand randomness % reward_factor) == (ticket id % RewardFactor) is not secure
         // as the adversary can control the values of ticket id and generate RewardFactor. (For this particular game

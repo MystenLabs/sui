@@ -100,20 +100,14 @@ module games::drand_based_lottery {
     /// Anyone can close the game by providing the randomness of round-2.
     public entry fun close(game: &mut Game, drand_sig: vector<u8>, drand_prev_sig: vector<u8>) {
         assert!(game.status == IN_PROGRESS, EGameNotInProgress);
-        assert!(
-            verify_drand_signature(drand_sig, drand_prev_sig, closing_round(game.round)) == true,
-            EInvalidRandomness
-        );
+        verify_drand_signature(drand_sig, drand_prev_sig, closing_round(game.round));
         game.status = CLOSED;
     }
 
     /// Anyone can complete the game by providing the randomness of round.
     public entry fun complete(game: &mut Game, drand_sig: vector<u8>, drand_prev_sig: vector<u8>) {
         assert!(game.status != COMPLETED, EGameAlreadyCompleted);
-        assert!(
-            verify_drand_signature(drand_sig, drand_prev_sig, game.round) == true,
-            EInvalidRandomness
-        );
+        verify_drand_signature(drand_sig, drand_prev_sig, game.round);
         game.status = COMPLETED;
         // The randomness is derived from drand_sig by passing it through sha2_256 to make it uniform.
         let digest = derive_randomness(drand_sig);

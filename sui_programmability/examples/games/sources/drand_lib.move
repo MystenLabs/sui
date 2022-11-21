@@ -4,16 +4,24 @@ module games::drand_lib {
     use sui::bls12381;
     use std::hash::sha2_256;
 
-    friend games::drand_based_lottery;
-    friend games::drand_based_scratch_card;
-
     /// Error codes
     const EInvalidRndLength: u64 = 0;
+    const EInvalidProof: u64 = 1;
 
-    public(friend) fun verify_drand_signature(sig: vector<u8>, prev_sig: vector<u8>, round: u64): bool {
-        // The public key of chain 8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce.
-        let drand_public_key: vector<u8> =
-            x"868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31";
+    /// The genesis time of chain 8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce.
+    const GENESIS: u64 = 1595431050;
+    /// The public key of chain 8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce.
+    const DRAND_PK: vector<u8> =
+        x"868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31";
+
+    /// Check that a given epoch time has passed by verifying a drand signature from a later time.
+    public fun verify_time_has_passed(epoch_time: u64, sig: vector<u8>, prev_sig: vector<u8>, round: u64) {
+        assert!(epoch_time <= GENESIS + 30 * (round - 1), EInvalidProof);
+        verify_drand_signature(sig, prev_sig, round);
+    }
+
+    /// Check a drand signature.
+    public fun verify_drand_signature(sig: vector<u8>, prev_sig: vector<u8>, round: u64) {
         // Convert round to a byte array in big-endian order.
         let round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
         let i = 7;
@@ -28,18 +36,18 @@ module games::drand_lib {
         // Compute sha256(prev_sig, round_bytes).
         vector::append(&mut prev_sig, round_bytes);
         let digest = sha2_256(prev_sig);
-
         // Verify the signature on the hash.
-        bls12381::bls12381_min_pk_verify(&sig, &drand_public_key, &digest)
+        assert!(bls12381::bls12381_min_pk_verify(&sig, &DRAND_PK, &digest), EInvalidProof);
     }
 
-    public(friend) fun derive_randomness(drand_sig: vector<u8>): vector<u8> {
+    /// Derive a uniform vector from a drand signature.
+    public fun derive_randomness(drand_sig: vector<u8>): vector<u8> {
         sha2_256(drand_sig)
     }
 
     // Converts the first 16 bytes of rnd to a u128 number and outputs its modulo with input n.
     // Since n is u64, the output is at most 2^{-64} biased assuming rnd is uniformly random.
-    public(friend) fun safe_selection(n: u64, rnd: vector<u8>): u64 {
+    public fun safe_selection(n: u64, rnd: vector<u8>): u64 {
         assert!(vector::length(&rnd) >= 16, EInvalidRndLength);
         let m: u128 = 0;
         let i = 0;
