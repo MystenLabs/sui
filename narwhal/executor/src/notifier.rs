@@ -6,13 +6,12 @@ use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tracing::debug;
-use types::{metered_channel, Batch, CommittedSubDag, ConsensusOutput, Timestamp};
+use types::{metered_channel, Batch, Certificate, CommittedSubDag, Timestamp};
 
 #[derive(Clone, Debug)]
 pub struct BatchIndex {
     pub sub_dag: Arc<CommittedSubDag>,
-    pub output: Arc<ConsensusOutput>,
-    pub next_certificate_index: u64,
+    pub output: Arc<Certificate>,
     pub batch_index: u64,
 }
 
@@ -49,7 +48,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             for (transaction_index, transaction) in batch.transactions.into_iter().enumerate() {
                 let execution_indices = ExecutionIndices {
                     last_committed_round: index.sub_dag.round(),
-                    next_certificate_index: index.next_certificate_index,
+                    next_certificate_index: 0,
                     next_batch_index: index.batch_index + 1,
                     next_transaction_index: transaction_index as u64 + 1,
                 };
@@ -63,7 +62,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     .await;
             }
 
-            if index.batch_index + 1 == index.output.certificate.header.payload.len() as u64
+            if index.batch_index + 1 == index.output.header.payload.len() as u64
                 && index.sub_dag.is_last(&index.output)
             {
                 self.callback.notify_commit_boundary(&index.sub_dag).await;

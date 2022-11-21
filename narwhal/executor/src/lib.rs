@@ -28,7 +28,8 @@ use mockall::automock;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel, CommittedSubDag, ConsensusOutput, ConsensusStore, ReconfigureNotification,
+    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore,
+    ReconfigureNotification,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -44,7 +45,7 @@ pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &Arc<ConsensusOutput>,
+        consensus_output: &Arc<Certificate>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     );
@@ -131,28 +132,21 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 
     let mut sub_dags = Vec::new();
     for compressed_sub_dag in compressed_sub_dags {
-        let (certificate_digests, consensus_indices): (Vec<_>, Vec<_>) =
-            compressed_sub_dag.certificates.into_iter().unzip();
+        let consensus_index = compressed_sub_dag.consensus_index;
+        let certificate_digests: Vec<CertificateDigest> = compressed_sub_dag.certificates;
 
         let certificates = certificate_store
             .read_all(certificate_digests)?
             .into_iter()
-            .flatten();
-
-        let outputs = certificates
-            .into_iter()
-            .zip(consensus_indices.into_iter())
-            .map(|(certificate, consensus_index)| ConsensusOutput {
-                certificate,
-                consensus_index,
-            })
+            .flatten()
             .collect();
 
         let leader = certificate_store.read(compressed_sub_dag.leader)?.unwrap();
 
         sub_dags.push(CommittedSubDag {
-            certificates: outputs,
+            certificates,
             leader,
+            consensus_index,
         });
     }
 
@@ -163,7 +157,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &Arc<ConsensusOutput>,
+        consensus_output: &Arc<Certificate>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

@@ -90,7 +90,7 @@ async fn test_recovery() {
 
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
-    let mut consensus_index_counter = 0;
+    let consensus_index_counter = 4;
     let num_of_committed_certificates = 5;
 
     let committed_sub_dag = rx_output.recv().await.unwrap();
@@ -98,15 +98,12 @@ async fn test_recovery() {
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for i in 1..=num_of_committed_certificates {
         let output = sequence.next().unwrap();
-        assert_eq!(output.consensus_index, consensus_index_counter);
 
         if i < 5 {
-            assert_eq!(output.certificate.round(), 1);
+            assert_eq!(output.round(), 1);
         } else {
-            assert_eq!(output.certificate.round(), 2);
+            assert_eq!(output.round(), 2);
         }
-
-        consensus_index_counter += 1;
     }
 
     // Now assume that we want to recover from a crash. We are testing all the recovery cases

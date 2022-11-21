@@ -5,7 +5,7 @@ use executor::{ExecutionIndices, ExecutionState};
 use std::sync::Arc;
 
 use tokio::sync::mpsc::Sender;
-use types::ConsensusOutput;
+use types::Certificate;
 
 /// A simple/dumb execution engine.
 pub struct SimpleExecutionState {
@@ -24,7 +24,7 @@ impl SimpleExecutionState {
 impl ExecutionState for SimpleExecutionState {
     async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &Arc<ConsensusOutput>,
+        _consensus_output: &Arc<Certificate>,
         _execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

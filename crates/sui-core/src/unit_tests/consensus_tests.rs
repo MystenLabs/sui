@@ -9,7 +9,7 @@ use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
 use narwhal_types::TransactionsServer;
-use narwhal_types::{Certificate, ConsensusOutput, Transactions};
+use narwhal_types::{Certificate, Transactions};
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::{
@@ -120,13 +120,10 @@ async fn submit_transaction_to_consensus_adapter() {
         async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
             let authority = self.0.name;
             let certificate = Certificate::new_test_empty(authority.try_into().unwrap());
-            let output = ConsensusOutput {
-                certificate,
-                ..Default::default()
-            };
+
             self.0
                 .handle_consensus_transaction(
-                    &output,
+                    &certificate,
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
                 )

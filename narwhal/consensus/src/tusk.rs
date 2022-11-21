@@ -9,10 +9,7 @@ use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore, Round,
-    StoreResult,
-};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(any(test))]
 #[path = "tests/tusk_tests.rs"]
@@ -96,33 +93,27 @@ impl ConsensusProtocol for Tusk {
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
-                let digest = x.digest();
-
                 // Update and clean up internal state.
                 state.update(&x, self.gc_depth);
 
                 // Add the certificate to the sequence.
-                sequence.push(ConsensusOutput {
-                    certificate: x,
-                    consensus_index,
-                });
-
-                // Increase the global consensus index.
-                consensus_index += 1;
-
-                // Persist the update.
-                // TODO [issue #116]: Ensure this is not a performance bottleneck.
-                self.store.write_consensus_state(
-                    &state.last_committed,
-                    &consensus_index,
-                    &digest,
-                )?;
+                sequence.push(x);
             }
-
-            committed_sub_dags.push(CommittedSubDag {
+            let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-            });
+                consensus_index,
+            };
+
+            // Increase the global consensus index.
+            consensus_index += 1;
+
+            // Persist the update.
+            // TODO [issue #116]: Ensure this is not a performance bottleneck.
+            self.store
+                .write_consensus_state(&state.last_committed, &consensus_index, &sub_dag)?;
+
+            committed_sub_dags.push(sub_dag);
         }
 
         // Log the latest committed round of every authority (for debug).

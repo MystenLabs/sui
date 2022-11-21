@@ -23,7 +23,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::ConsensusOutput;
+use types::Certificate;
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
 
@@ -76,7 +76,7 @@ impl SimpleExecutionState {
 impl ExecutionState for SimpleExecutionState {
     async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &Arc<ConsensusOutput>,
+        _consensus_output: &Arc<Certificate>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

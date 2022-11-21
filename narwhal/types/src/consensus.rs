@@ -13,24 +13,17 @@ use store::{
 };
 use tokio::sync::mpsc;
 
-/// A global sequence number assigned to every certificate.
+/// A global sequence number assigned to every CommittedSubDag.
 pub type SequenceNumber = u64;
-
-/// The output format of the consensus.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct ConsensusOutput {
-    /// The sequenced certificate.
-    pub certificate: Certificate,
-    /// The (global) index associated with this certificate.
-    pub consensus_index: SequenceNumber,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct CommittedSubDag {
     /// The sequence of committed certificates.
-    pub certificates: Vec<ConsensusOutput>,
+    pub certificates: Vec<Certificate>,
     /// The leader certificate responsible of committing this sub-dag.
     pub leader: Certificate,
+    /// The index associated with this CommittedSubDag
+    pub consensus_index: SequenceNumber,
 }
 
 impl CommittedSubDag {
@@ -45,11 +38,11 @@ impl CommittedSubDag {
     pub fn num_of_batches(&self) -> usize {
         self.certificates
             .iter()
-            .map(|x| x.certificate.header.payload.len())
+            .map(|x| x.header.payload.len())
             .sum()
     }
 
-    pub fn is_last(&self, output: &ConsensusOutput) -> bool {
+    pub fn is_last(&self, output: &Certificate) -> bool {
         self.certificates
             .iter()
             .last()
@@ -64,20 +57,19 @@ impl CommittedSubDag {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommittedSubDagShell {
     /// The sequence of committed certificates' digests.
-    pub certificates: Vec<(CertificateDigest, SequenceNumber)>,
+    pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
+    /// Sequence number of the CommittedSubDag
+    pub consensus_index: SequenceNumber,
 }
 
 impl CommittedSubDagShell {
     pub fn from_sub_dag(sub_dag: &CommittedSubDag) -> Self {
         Self {
-            certificates: sub_dag
-                .certificates
-                .iter()
-                .map(|x| (x.certificate.digest(), x.consensus_index))
-                .collect(),
+            certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
+            consensus_index: sub_dag.consensus_index,
         }
     }
 }
@@ -93,7 +85,8 @@ pub struct ConsensusStore {
     /// The latest committed round of each validator.
     last_committed: DBMap<PublicKey, Round>,
     /// The global consensus sequence.
-    sequence: DBMap<SequenceNumber, CertificateDigest>,
+    sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
+    // todo: (Laura) the below field might no longer be needed
     /// All committed sub-dags, indexed by the round number of the leader committing it.
     committed_sub_dags: DBMap<Round, CommittedSubDagShell>,
 }
@@ -102,7 +95,7 @@ impl ConsensusStore {
     /// Create a new consensus store structure by using already loaded maps.
     pub fn new(
         last_committed: DBMap<PublicKey, Round>,
-        sequence: DBMap<SequenceNumber, CertificateDigest>,
+        sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
         committed_sub_dags: DBMap<Round, CommittedSubDagShell>,
     ) -> Self {
         Self {
@@ -124,18 +117,19 @@ impl ConsensusStore {
         &self,
         last_committed: &HashMap<PublicKey, Round>,
         consensus_index: &SequenceNumber,
-        certificate_id: &CertificateDigest,
+        sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
+        let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
+
         let mut write_batch = self.last_committed.batch();
         write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
-        write_batch = write_batch.insert_batch(
-            &self.sequence,
-            std::iter::once((consensus_index, certificate_id)),
-        )?;
+        write_batch =
+            write_batch.insert_batch(&self.sequence, std::iter::once((consensus_index, shell)))?;
         write_batch.write()
     }
 
     /// Persist a committed sub dag.
+    /// todo (Laura) is this needed?
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn write_committed_sub_dag(
         &self,
@@ -166,19 +160,6 @@ impl ConsensusStore {
         validator: &PublicKey,
     ) -> Result<Option<Round>, TypedStoreError> {
         self.last_committed.get(validator)
-    }
-
-    /// Load the certificate digests sequenced starting from the specified
-    /// sequence number (inclusive). If the specified sequence number is not
-    /// found then the method will skip to the next higher one and consume
-    /// until the end.
-    /// Method returns a vector of a tuple of the certificate digest
-    /// with the next certificate index.
-    pub fn read_sequenced_certificates_from(
-        &self,
-        from: &SequenceNumber,
-    ) -> StoreResult<Vec<(SequenceNumber, CertificateDigest)>> {
-        Ok(self.sequence.iter().skip_to(from)?.collect())
     }
 
     /// Load the last (ie. the highest) consensus index associated to a certificate.
