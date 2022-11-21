@@ -30,7 +30,7 @@ The `main` and `devnet` branches of the Sui repository contain the relevant docu
 
 Sui supports the following operating systems, beginning with the versions indicated.
 
-* Linux - Ubuntu version 18.04 (Bionic Beaver)
+* Linux - Ubuntu version 20.04 (Bionic Beaver)
 * macOS - macOS Monterey
 * Microsoft Windows - Windows 11
 
