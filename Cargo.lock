@@ -5076,7 +5076,7 @@ dependencies = [
  "bincode",
  "bytes",
  "cfg-if",
- "criterion 0.3.6",
+ "criterion 0.4.0",
  "fastcrypto",
  "futures",
  "indexmap",
