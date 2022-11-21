@@ -132,7 +132,8 @@ pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
-type CertTxGuard<'a> = DBTxGuard<'a, TrustedCertificate>;
+type CertTxGuard<'a> =
+    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -887,8 +888,7 @@ impl AuthorityState {
         // would be more difficult in the alternative.
         self.database.wal.write_execution_output(
             &digest,
-            inner_temporary_store.clone(),
-            signed_effects.clone(),
+            (inner_temporary_store.clone(), signed_effects.clone()),
         )?;
 
         self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)

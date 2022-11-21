@@ -13,8 +13,6 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use sui_types::base_types::TransactionDigest;
-use sui_types::messages::SignedTransactionEffects;
-use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
 
@@ -56,7 +54,7 @@ pub trait TxGuard<'a>: Drop {
 /// a recoverable state, and the arguments of this variant can be used to retry
 /// writing to permanent storage.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum TransactionCommitPhase<ExecutionOutput: Serialize + DeserializeOwned> {
+pub enum TransactionCommitPhase<ExecutionOutput> {
     Uncommitted,
     Executed(ExecutionOutput),
 }
@@ -109,7 +107,7 @@ pub trait WriteAheadLog<'a, C> {
 pub struct DBTxGuard<
     'a,
     C: Serialize + DeserializeOwned + Debug,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug,
 > {
     tx: TransactionDigest,
     retry_num: u32,
@@ -121,7 +119,7 @@ pub struct DBTxGuard<
 impl<'a, C, ExecutionOutput> DBTxGuard<'a, C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     fn new(
         tx: &TransactionDigest,
@@ -152,7 +150,7 @@ where
 impl<'a, C, ExecutionOutput> TxGuard<'a> for DBTxGuard<'a, C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     fn tx_id(&self) -> TransactionDigest {
         self.tx
@@ -175,7 +173,7 @@ where
 impl<C, ExecutionOutput> Drop for DBTxGuard<'_, C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     fn drop(&mut self) {
         if !self.dead {
@@ -202,7 +200,7 @@ where
 pub struct DBWriteAheadLog<C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     tables: DBWriteAheadLogTables<C, ExecutionOutput>,
 
@@ -220,7 +218,7 @@ const MUTEX_TABLE_SHARD_SIZE: usize = 128;
 impl<C, ExecutionOutput> DBWriteAheadLog<C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     pub fn new(path: PathBuf) -> Self {
         let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
@@ -253,7 +251,7 @@ where
         tx: &TransactionDigest,
     ) -> SuiResult<Option<ExecutionOutput>> {
         match self.get_tx(tx)? {
-            Some((_cert, TransactionCommitPhase::Executed(store, fx))) => Ok(Some((store, fx))),
+            Some((_cert, TransactionCommitPhase::Executed(output))) => Ok(Some(output)),
             Some((_cert, TransactionCommitPhase::Uncommitted)) => Ok(None),
             None => Ok(None),
         }
@@ -275,7 +273,7 @@ where
                     .map_err(SuiError::from)?;
                 Ok(())
             }
-            Some((_cert, TransactionCommitPhase::Executed(_, _))) => {
+            Some((_cert, TransactionCommitPhase::Executed(_))) => {
                 Err(SuiError::TransactionAlreadyExecuted { digest: *tx })
             }
             None => Err(SuiError::TransactionNotFound { digest: *tx }),
@@ -325,7 +323,7 @@ where
 impl<'a, C: 'a, ExecutionOutput: 'a> WriteAheadLog<'a, C> for DBWriteAheadLog<C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Send + Sync + Debug + Clone,
-    ExecutionOutput: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned + Debug + Send + Sync,
 {
     type Guard = DBTxGuard<'a, C, ExecutionOutput>;
     type LockGuard = LockGuard;
@@ -465,9 +463,9 @@ mod tests {
             assert!(recover_queue_empty(&log).await);
 
             {
-                let tx4 = log.begin_tx(&tx4_id, &1).await.unwrap();
-                let result = log.write_execution_output(&tx4_id, execution_output);
-                assert!(matches!(Ok(()), result));
+                let _tx4 = log.begin_tx(&tx4_id, &1).await.unwrap();
+                log.write_execution_output(&tx4_id, execution_output)
+                    .unwrap();
                 // implicit drop
             }
 
@@ -478,7 +476,7 @@ mod tests {
             let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
             assert!(matches!(
                 commit_phase,
-                TransactionCommitPhase::Executed(execution_output)
+                TransactionCommitPhase::Executed(output) if output == execution_output
             ));
 
             // verify previous call emptied the recoverable list
@@ -503,7 +501,7 @@ mod tests {
             let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
             assert!(matches!(
                 commit_phase,
-                TransactionCommitPhase::Executed(execution_output)
+                TransactionCommitPhase::Executed(output) if output == execution_output
             ));
 
             // commit the recoverable tx
@@ -516,7 +514,8 @@ mod tests {
 
         {
             // recover the log again
-            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
+            let log: DBWriteAheadLog<u32, u32> =
+                DBWriteAheadLog::new(working_dir.path().to_path_buf());
             // empty, because we committed the tx before.
             assert!(recover_queue_empty(&log).await);
         }
