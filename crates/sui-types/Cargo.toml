@@ -55,6 +55,7 @@ name-variant = { path = "../../crates/name-variant" }
 
 workspace-hack.workspace = true
 proptest = "1.0.0"
+derive_more = "0.99.17"
 
 [dev-dependencies]
 bincode = "1.3.3"
