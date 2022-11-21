@@ -85,7 +85,9 @@ function NftTransferPage() {
                     <>
                         <PageTitle
                             title="Send NFT"
-                            backLink="/nfts"
+                            backLink={`/nft-details?${new URLSearchParams({
+                                objectId,
+                            }).toString()}`}
                             className={st.pageTitle}
                             hideBackLabel={true}
                         />
