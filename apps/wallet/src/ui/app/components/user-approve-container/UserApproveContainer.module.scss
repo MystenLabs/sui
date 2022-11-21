@@ -55,14 +55,20 @@
     display: flex;
     justify-content: space-between;
     padding-top: 12px;
-    color: colors.$nav-item-hover;
+    color: colors.$sui-blue-steel-darker;
 
     @include utils.typography('Primary/BodySmall-M');
+
+    .address {
+        font-family: 'Space Mono', ui-monospace, monospace;
+    }
+
+    .label {
+        color: colors.$sui-blue-steel-darker;
+    }
 }
 
 .host {
-    margin-top: 20px;
-    margin-bottom: 10px;
     font-size: 18px;
     line-height: 18px;
     font-weight: 600;
@@ -105,7 +111,7 @@
 }
 
 .actions {
-    padding: 15px 25px 25px;
+    padding: 20px;
     background: colors.$white;
     border-radius: 20px 20px 0 0;
     display: flex;

@@ -94,7 +94,7 @@ function PassedObject({ id, module }: { id: string; module: string }) {
                 <ExplorerLink
                     type={ExplorerLinkType.object}
                     objectID={id}
-                    className={st.objectId}
+                    className={cl(st.objectId, 'text-sui-dark')}
                     showIcon={false}
                 >
                     {objectId}
@@ -264,30 +264,30 @@ function TransactionSummaryCard({
 
     return (
         <SummaryCard header="Transaction summary">
-            <div className={st.content}>
-                {formatedAmount && symbol && (
-                    <>
-                        <div className={st.row}>
-                            <div className={st.label}>Send</div>
-                            <div className={st.value}>
-                                {formatedAmount} {symbol}
-                            </div>
+            {formatedAmount && symbol && (
+                <div className={st.content}>
+                    <div className={st.row}>
+                        <div className={st.label}>Send</div>
+                        <div className={st.value}>
+                            {formatedAmount} {symbol}
                         </div>
+                    </div>
 
-                        <div className={st.row}>
-                            <div className={st.label}>To</div>
-                            <div className={st.value}>
-                                <ExternalLink
-                                    href={origin}
-                                    className={st.origin}
-                                >
-                                    {new URL(origin || '').host}
-                                </ExternalLink>
-                            </div>
+                    <div className={st.row}>
+                        <div className={st.label}>To</div>
+                        <div className={st.value}>
+                            <ExternalLink
+                                href={origin}
+                                className={st.origin}
+                                showIcon={false}
+                            >
+                                {new URL(origin || '').host}
+                            </ExternalLink>
                         </div>
-                    </>
-                )}
-            </div>
+                    </div>
+                </div>
+            )}
+
             {nftImage && objectId && (
                 <div className={st.content}>
                     <div className={st.row}>
@@ -299,7 +299,12 @@ function TransactionSummaryCard({
                     <div className={st.row}>
                         <div className={st.label}>To</div>
                         <div className={st.value}>
-                            <AccountAddress showLink={false} />
+                            <AccountAddress
+                                showLink={false}
+                                copyable={false}
+                                className={st.ownerAddress}
+                                mode="normal"
+                            />
                         </div>
                     </div>
                 </div>
@@ -539,8 +544,10 @@ export function DappTxApprovalPage() {
 
     const TransactionTypeHeader = (
         <>
-            <div className={st.txTypeHeaderTitle}>Transaction Type</div>
-            <div className={st.txTypeHeaderStatus}>
+            <div className="font-medium text-sui-steel-darker">
+                Transaction Type
+            </div>
+            <div className="font-semibold text-sui-steel-darker">
                 {txRequest?.unSerializedTxn?.kind ?? txRequest?.tx?.type}
             </div>
         </>

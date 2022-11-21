@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
 import ExternalLink from '_components/external-link';
-import Icon, { SuiIcons } from '_components/icon';
+import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 import type { MouseEventHandler, ReactNode } from 'react';
@@ -47,8 +47,6 @@ function UserApproveContainer({
 
     const parsedOrigin = useMemo(() => new URL(origin), [origin]);
 
-    const isSecure = parsedOrigin.protocol === 'https:';
-
     return (
         <div className={st.container}>
             <div className={st.scrollBody}>
@@ -65,19 +63,20 @@ function UserApproveContainer({
                             {parsedOrigin.host.split('.')[0]}
                             <ExternalLink
                                 href={origin}
-                                className={cl(
-                                    st.origin,
-                                    !isSecure && st.warning
-                                )}
-                                showIcon={isSecure}
+                                className={st.origin}
+                                showIcon={false}
                             >
                                 {parsedOrigin.host}
                             </ExternalLink>
                         </div>
                     </div>
                     <div className={st.cardFooter}>
-                        <div>Your address</div>
-                        <AccountAddress showLink={false} />
+                        <div className={st.label}>Your address</div>
+                        <AccountAddress
+                            showLink={false}
+                            mode="normal"
+                            className={st.address}
+                        />
                     </div>
                 </div>
                 <div className={st.children}>{children}</div>
@@ -98,7 +97,6 @@ function UserApproveContainer({
                         )}
                         disabled={submitting}
                     >
-                        <Icon icon={SuiIcons.CloseFill} />
                         {rejectTitle}
                     </button>
                     <button
@@ -112,14 +110,6 @@ function UserApproveContainer({
                         onClick={handleOnResponse}
                         disabled={submitting}
                     >
-                        {!submitting &&
-                            !isWarning &&
-                            (isConnect ? (
-                                <Icon icon="plus" />
-                            ) : (
-                                <Icon icon={SuiIcons.CheckFill} />
-                            ))}
-
                         <span>
                             {submitting ? (
                                 <LoadingIndicator className={st.loader} />
