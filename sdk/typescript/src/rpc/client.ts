@@ -69,7 +69,8 @@ export class JsonRpcClient {
                 }
 
                 try {
-                  if (value.isLosslessNumber) return value.valueOf();
+                  if (LosslessJSON.isLosslessNumber(value))
+                    return value.valueOf();
                 } catch {
                   return value.toString();
                 }
