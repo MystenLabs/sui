@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
+import { useMemo } from 'react';
 
 import codestyle from '../../styles/bytecode.module.css';
 import { normalizeSuiAddress } from '../../utils/stringUtils';
@@ -13,7 +13,7 @@ import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
 
-import { useRpc } from '~/hooks/useRpc';
+import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 // Include Rust language support.
@@ -58,42 +58,30 @@ function unwrapTypeReference(
 }
 
 function ModuleView({ id, name, code }: Props) {
-    const rpc = useRpc();
-
-    const { data: normalizedModuleReferences } = useQuery(
-        ['normalized-module', id, name],
-        async () => {
-            const normalizedModule = await rpc.getNormalizedMoveModule(
-                id!,
-                name
-            );
-
-            const typeReferences: Record<string, TypeReference> = {};
-
-            Object.values(normalizedModule.exposed_functions).forEach(
-                (exposedFunction) => {
-                    exposedFunction.parameters.forEach((param) => {
-                        const unwrappedType = unwrapTypeReference(param);
-                        if (!unwrappedType) return;
-                        typeReferences[unwrappedType.name] = unwrappedType;
-
-                        unwrappedType.type_arguments.forEach((typeArg) => {
-                            const unwrappedTypeArg =
-                                unwrapTypeReference(typeArg);
-                            if (!unwrappedTypeArg) return;
-                            typeReferences[unwrappedTypeArg.name] =
-                                unwrappedTypeArg;
-                        });
-                    });
-                }
-            );
-
+    const { data: normalizedModule } = useNormalizedMoveModule(id, name);
+    const normalizedModuleReferences = useMemo(() => {
+        const typeReferences: Record<string, TypeReference> = {};
+        if (!normalizedModule) {
             return typeReferences;
-        },
-        {
-            enabled: !!id,
         }
-    );
+        Object.values(normalizedModule.exposed_functions).forEach(
+            (exposedFunction) => {
+                exposedFunction.parameters.forEach((param) => {
+                    const unwrappedType = unwrapTypeReference(param);
+                    if (!unwrappedType) return;
+                    typeReferences[unwrappedType.name] = unwrappedType;
+
+                    unwrappedType.type_arguments.forEach((typeArg) => {
+                        const unwrappedTypeArg = unwrapTypeReference(typeArg);
+                        if (!unwrappedTypeArg) return;
+                        typeReferences[unwrappedTypeArg.name] =
+                            unwrappedTypeArg;
+                    });
+                });
+            }
+        );
+        return typeReferences;
+    }, [normalizedModule]);
 
     return (
         <section className={styles.modulewrapper}>

@@ -121,6 +121,7 @@ module.exports = {
         shimmer: "shimmer 2s infinite linear",
       },
       spacing: {
+        3.75: "0.9375rem",
         4.5: "1.125rem",
         verticalListShort: "13.0625rem",
         verticalListLong: "35.6875rem",
