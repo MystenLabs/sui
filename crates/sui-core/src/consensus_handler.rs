@@ -6,7 +6,7 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
 use async_trait::async_trait;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{CommittedSubDag, ConsensusOutput};
+use narwhal_types::{Certificate, CommittedSubDag};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -66,7 +66,7 @@ impl ExecutionState for ConsensusHandler {
     async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: &Arc<ConsensusOutput>,
+        consensus_output: &Arc<Certificate>,
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
@@ -90,7 +90,7 @@ impl ExecutionState for ConsensusHandler {
                 Err(err) => {
                     warn!(
                         "Ignoring malformed transaction (failed to deserialize) from {}: {}",
-                        consensus_output.certificate.header.author, err
+                        consensus_output.header.author, err
                     );
                     return;
                 }
@@ -141,7 +141,7 @@ impl ExecutionState for ConsensusHandler {
 }
 
 pub struct SequencedConsensusTransaction {
-    pub consensus_output: Arc<narwhal_types::ConsensusOutput>,
+    pub consensus_output: Arc<narwhal_types::Certificate>,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: ConsensusTransaction,
 }

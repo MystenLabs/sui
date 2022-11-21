@@ -2070,13 +2070,6 @@ impl Display for CertifiedTransaction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ConsensusOutput {
-    #[serde(with = "serde_bytes")]
-    pub message: Vec<u8>,
-    pub sequence_number: SequenceNumber,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ConsensusSync {
     pub sequence_number: SequenceNumber,

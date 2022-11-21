@@ -23,6 +23,7 @@ use fastcrypto::hash::Hash;
 use mysten_metrics::{monitored_future, spawn_monitored_task};
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
+use sui_metrics::spawn_monitored_task;
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},
@@ -184,36 +185,26 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         let deliver = Arc::new(deliver);
         for output in &deliver.certificates {
             let output_arc = Arc::new(output.clone());
-            for (batch_index, (digest, worker_id)) in
-                output.certificate.header.payload.iter().enumerate()
-            {
+            for (batch_index, (digest, worker_id)) in output.header.payload.iter().enumerate() {
                 self.metrics
                     .subscriber_current_round
-                    .set(output.certificate.round() as i64);
+                    .set(output.round() as i64);
                 self.metrics.subscriber_processed_certificates.inc();
-                self.metrics.subscriber_certificate_latency.observe(
-                    output
-                        .certificate
-                        .metadata
-                        .created_at
-                        .elapsed()
-                        .as_secs_f64(),
-                );
+                self.metrics
+                    .subscriber_certificate_latency
+                    .observe(output.metadata.created_at.elapsed().as_secs_f64());
 
-                let mut workers = self
-                    .network
-                    .workers_for_certificate(&output.certificate, worker_id);
+                let mut workers = self.network.workers_for_certificate(output, worker_id);
                 let batch_index = BatchIndex {
                     sub_dag: deliver.clone(),
                     output: output_arc.clone(),
-                    next_certificate_index: output.consensus_index,
                     batch_index: batch_index as u64,
                 };
                 workers.shuffle(&mut ThreadRng::default());
 
                 debug!(
                     "Scheduling fetching batch {digest} (from certificate {})",
-                    output.certificate.digest()
+                    output.digest()
                 );
                 let fut = self
                     .fetch_payload(*digest, *worker_id, workers)

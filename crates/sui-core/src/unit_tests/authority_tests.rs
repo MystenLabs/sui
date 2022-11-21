@@ -2491,13 +2491,14 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
     let certificate = Certificate::new_test_empty(authority.name.try_into().unwrap());
-    let output = ConsensusOutput {
-        certificate,
-        ..Default::default()
-    };
-    if let Ok(transaction) = authority.verify_consensus_transaction(&output, transaction) {
+
+    if let Ok(transaction) = authority.verify_consensus_transaction(&certificate, transaction) {
         authority
-            .handle_consensus_transaction(&output, transaction, &Arc::new(CheckpointServiceNoop {}))
+            .handle_consensus_transaction(
+                &certificate,
+                transaction,
+                &Arc::new(CheckpointServiceNoop {}),
+            )
             .await
             .unwrap();
     }
