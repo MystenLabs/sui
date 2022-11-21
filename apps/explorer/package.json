@@ -26,6 +26,8 @@
     },
     "dependencies": {
         "@floating-ui/react-dom-interactions": "^0.10.1",
+        "@fontsource/inter": "^4.5.14",
+        "@fontsource/red-hat-mono": "^4.5.11",
         "@growthbook/growthbook": "^0.18.1",
         "@growthbook/growthbook-react": "^0.9.1",
         "@headlessui/react": "^1.7.2",
