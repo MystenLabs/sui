@@ -287,11 +287,11 @@ impl ValidatorService {
         });
 
         let checkpoint_service = CheckpointService::spawn(
+            state.clone(),
             checkpoint_store,
             Box::new(state.database.clone()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
-            state.clone_committee(),
             CheckpointMetrics::new(&prometheus_registry),
         );
 
