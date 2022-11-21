@@ -3,7 +3,7 @@
 
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
@@ -48,11 +48,6 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
 
-    const convertedSearchParams = useMemo(
-        () => new URLSearchParams(searchParams),
-        [searchParams]
-    );
-
     // Extract module in URL or default to first module in list
     const selectedModule =
         searchParams.get('module') &&
@@ -83,17 +78,19 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
 
     const submitSearch = useCallback(() => {
         if (filteredModules.length === 1) {
+            const convertedSearchParams = new URLSearchParams(searchParams);
             convertedSearchParams.set('module', filteredModules[0]);
             setSearchParams(convertedSearchParams);
         }
-    }, [filteredModules, convertedSearchParams, setSearchParams]);
+    }, [filteredModules, setSearchParams, searchParams]);
 
     const onChangeModule = useCallback(
         (newModule: string) => () => {
+            const convertedSearchParams = new URLSearchParams(searchParams);
             convertedSearchParams.set('module', newModule);
             setSearchParams(convertedSearchParams);
         },
-        [convertedSearchParams, setSearchParams]
+        [setSearchParams, searchParams]
     );
 
     return (
