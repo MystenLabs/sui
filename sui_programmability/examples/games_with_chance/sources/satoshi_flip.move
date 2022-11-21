@@ -175,7 +175,7 @@ module games_with_chance::satoshi_flip {
         assert!(option::is_none(&game.bet_data), EAlreadyAcceptedBet);
         let house_data = option::borrow(&game.house_data);
         assert!(stake_amount <= house_data.max_bet, EStakeTooHigh);
-        assert!(stake_amount > house_data.min_bet, EStakeTooLow);
+        assert!(stake_amount >= house_data.min_bet, EStakeTooLow);
         assert!(guess == 0 || guess == 1, EGuessNot1Or0);
         assert!(coin::value(&stake_coin) >= stake_amount, EPlayerCoinNotEnoughBalance);
         game.epoch = tx_context::epoch(ctx);
