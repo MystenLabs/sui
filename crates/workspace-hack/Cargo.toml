@@ -1485,7 +1485,7 @@ debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 findshlibs = { version = "0.10", default-features = false }
 foreign-types = { version = "0.3", default-features = false }
-foreign-types-shared = { version = "0.1", default-features = false }
+foreign-types-shared = { version = "0.3", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
 io-lifetimes = { version = "0.7", default-features = false }
@@ -1534,7 +1534,7 @@ debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 findshlibs = { version = "0.10", default-features = false }
 foreign-types = { version = "0.3", default-features = false }
-foreign-types-shared = { version = "0.1", default-features = false }
+foreign-types-shared = { version = "0.3", default-features = false }
 fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
