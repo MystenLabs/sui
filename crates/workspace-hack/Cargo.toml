@@ -1410,7 +1410,7 @@ pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "infer
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 security-framework = { version = "2", features = ["OSX_10_9"] }
 security-framework-sys = { version = "2", features = ["OSX_10_9"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
@@ -1459,7 +1459,7 @@ protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 security-framework = { version = "2", features = ["OSX_10_9"] }
 security-framework-sys = { version = "2", features = ["OSX_10_9"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
@@ -1508,7 +1508,7 @@ pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "infer
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
@@ -1560,7 +1560,7 @@ protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }

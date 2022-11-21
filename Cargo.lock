@@ -2574,7 +2574,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e11dcc7e4d79a8c89b9ab4c6f5c30b1fc4a83c420792da3542fd31179ed5f517"
 dependencies = [
  "cfg-if",
- "rustix 0.35.13",
+ "rustix",
  "windows-sys 0.36.1",
 ]
 
@@ -3558,16 +3558,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
-name = "io-lifetimes"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7d367024b3f3414d8e01f437f704f41a9f64ab36f9067fa73e526ad4c763c87"
-dependencies = [
- "libc",
- "windows-sys 0.42.0",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3969,12 +3959,6 @@ name = "linux-raw-sys"
 version = "0.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4d2456c373231a208ad294c33dc5bff30051eafd954cd4caae83a712b12854d"
-
-[[package]]
-name = "linux-raw-sys"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb68f22743a3fb35785f1e7f844ca5a3de2dde5bd0c0ef5b372065814699b121"
 
 [[package]]
 name = "lock_api"
@@ -7318,23 +7302,9 @@ checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes 0.7.5",
+ "io-lifetimes",
  "libc",
- "linux-raw-sys 0.0.46",
- "windows-sys 0.42.0",
-]
-
-[[package]]
-name = "rustix"
-version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "203974af07ea769452490ee8de3e5947971efc3a090dca8a779dd432d3fa46a7"
-dependencies = [
- "bitflags",
- "errno",
- "io-lifetimes 1.0.1",
- "libc",
- "linux-raw-sys 0.1.2",
+ "linux-raw-sys",
  "windows-sys 0.42.0",
 ]
 
@@ -11147,7 +11117,7 @@ dependencies = [
  "instant",
  "integer-encoding",
  "internment",
- "io-lifetimes 0.7.5",
+ "io-lifetimes",
  "ipnet",
  "itertools",
  "itoa 0.4.8",
@@ -11182,7 +11152,7 @@ dependencies = [
  "libtest-mimic",
  "libz-sys",
  "linked-hash-map",
- "linux-raw-sys 0.0.46",
+ "linux-raw-sys",
  "lock_api",
  "log",
  "lru",
@@ -11404,7 +11374,7 @@ dependencies = [
  "rustc-hex",
  "rustc_version",
  "rusticata-macros",
- "rustix 0.36.2",
+ "rustix",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile 0.2.1",
