@@ -99,6 +99,7 @@ module.exports = {
         },
         offwhite: "#fefefe",
         offblack: "#111111",
+        modnotice: "#d8e5ea"
       },
       keyframes: {
         shimmer: {
@@ -110,9 +111,15 @@ module.exports = {
         shimmer: "shimmer 2s infinite linear",
       },
       spacing: {
-        4.5: "1.125rem",
-        verticalListShort: "13.0625rem",
-        verticalListLong: "35.6875rem",
+        4.5: '1.125rem',
+        7.5: '1.875rem',
+        13: '3.125rem',
+        15: '3.75rem',
+        verticalListShort: '13.0625rem',
+        verticalListLong: '35.6875rem',
+      },
+      opacity: {
+        85: '0.85'
       },
       height: {
         header: "68px",
