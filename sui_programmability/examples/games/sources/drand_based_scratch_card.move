@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// A basic game that depends on randomness from drand (chained mode).
 ///
 /// Anyone can create a new game by depositing X*100 SUIs as a reward, and setting the current drand round as the base
