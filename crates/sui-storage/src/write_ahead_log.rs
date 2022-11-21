@@ -56,9 +56,9 @@ pub trait TxGuard<'a>: Drop {
 /// a recoverable state, and the arguments of this variant can be used to retry
 /// writing to permanent storage.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum TransactionCommitPhase {
+pub enum TransactionCommitPhase<ExecutionOutput: Serialize + DeserializeOwned> {
     Uncommitted,
-    Executed(InnerTemporaryStore, SignedTransactionEffects),
+    Executed(ExecutionOutput),
 }
 
 // WriteAheadLog is parameterized on the value type (C) because:
@@ -106,23 +106,28 @@ pub trait WriteAheadLog<'a, C> {
     async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, Self::Guard)>>;
 }
 
-pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned + Debug> {
+pub struct DBTxGuard<
+    'a,
+    C: Serialize + DeserializeOwned + Debug,
+    ExecutionOutput: Serialize + DeserializeOwned,
+> {
     tx: TransactionDigest,
     retry_num: u32,
     _mutex_guard: LockGuard,
-    wal: &'a DBWriteAheadLog<C>,
+    wal: &'a DBWriteAheadLog<C, ExecutionOutput>,
     dead: bool,
 }
 
-impl<'a, C> DBTxGuard<'a, C>
+impl<'a, C, ExecutionOutput> DBTxGuard<'a, C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
+    ExecutionOutput: Serialize + DeserializeOwned,
 {
     fn new(
         tx: &TransactionDigest,
         retry_num: u32,
         _mutex_guard: LockGuard,
-        wal: &'a DBWriteAheadLog<C>,
+        wal: &'a DBWriteAheadLog<C, ExecutionOutput>,
     ) -> Self {
         Self {
             tx: *tx,
@@ -144,9 +149,10 @@ where
     }
 }
 
-impl<'a, C> TxGuard<'a> for DBTxGuard<'a, C>
+impl<'a, C, ExecutionOutput> TxGuard<'a> for DBTxGuard<'a, C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
+    ExecutionOutput: Serialize + DeserializeOwned,
 {
     fn tx_id(&self) -> TransactionDigest {
         self.tx
@@ -166,9 +172,10 @@ where
     }
 }
 
-impl<C> Drop for DBTxGuard<'_, C>
+impl<C, ExecutionOutput> Drop for DBTxGuard<'_, C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
+    ExecutionOutput: Serialize + DeserializeOwned,
 {
     fn drop(&mut self) {
         if !self.dead {
@@ -180,16 +187,24 @@ where
 }
 
 #[derive(DBMapUtils)]
-pub struct DBWriteAheadLogTables<C> {
-    log: DBMap<TransactionDigest, (C, TransactionCommitPhase)>,
+pub struct DBWriteAheadLogTables<C, ExecutionOutput>
+where
+    C: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned,
+{
+    log: DBMap<TransactionDigest, (C, TransactionCommitPhase<ExecutionOutput>)>,
     // We use two tables, because if we instead have one table mapping digest -> (C, u32), we have
     // to clone C to make a tuple ref to pass to insert.
     retry_count: DBMap<TransactionDigest, u32>,
 }
 
 // A WriteAheadLog implementation built on rocksdb.
-pub struct DBWriteAheadLog<C> {
-    tables: DBWriteAheadLogTables<C>,
+pub struct DBWriteAheadLog<C, ExecutionOutput>
+where
+    C: Serialize + DeserializeOwned,
+    ExecutionOutput: Serialize + DeserializeOwned,
+{
+    tables: DBWriteAheadLogTables<C, ExecutionOutput>,
 
     // Can't use tokio Mutex - must be accessible synchronously from drop trait.
     // Only acquire this lock in sync functions to make sure we don't hold it across an await.
@@ -202,9 +217,10 @@ pub struct DBWriteAheadLog<C> {
 const MUTEX_TABLE_SIZE: usize = 1024;
 const MUTEX_TABLE_SHARD_SIZE: usize = 128;
 
-impl<C> DBWriteAheadLog<C>
+impl<C, ExecutionOutput> DBWriteAheadLog<C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Debug,
+    ExecutionOutput: Serialize + DeserializeOwned,
 {
     pub fn new(path: PathBuf) -> Self {
         let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
@@ -225,14 +241,17 @@ where
         }
     }
 
-    pub fn get_tx(&self, tx: &TransactionDigest) -> SuiResult<Option<(C, TransactionCommitPhase)>> {
+    pub fn get_tx(
+        &self,
+        tx: &TransactionDigest,
+    ) -> SuiResult<Option<(C, TransactionCommitPhase<ExecutionOutput>)>> {
         self.tables.log.get(tx).map_err(SuiError::from)
     }
 
     pub fn get_execution_output(
         &self,
         tx: &TransactionDigest,
-    ) -> SuiResult<Option<(InnerTemporaryStore, SignedTransactionEffects)>> {
+    ) -> SuiResult<Option<ExecutionOutput>> {
         match self.get_tx(tx)? {
             Some((_cert, TransactionCommitPhase::Executed(store, fx))) => Ok(Some((store, fx))),
             Some((_cert, TransactionCommitPhase::Uncommitted)) => Ok(None),
@@ -243,14 +262,16 @@ where
     pub fn write_execution_output(
         &self,
         tx: &TransactionDigest,
-        store: InnerTemporaryStore,
-        fx: SignedTransactionEffects,
+        execution_output: ExecutionOutput,
     ) -> SuiResult {
         match self.get_tx(tx)? {
             Some((cert, TransactionCommitPhase::Uncommitted)) => {
                 self.tables
                     .log
-                    .insert(tx, &(cert, TransactionCommitPhase::Executed(store, fx)))
+                    .insert(
+                        tx,
+                        &(cert, TransactionCommitPhase::Executed(execution_output)),
+                    )
                     .map_err(SuiError::from)?;
                 Ok(())
             }
@@ -301,11 +322,12 @@ where
 }
 
 #[async_trait]
-impl<'a, C: 'a> WriteAheadLog<'a, C> for DBWriteAheadLog<C>
+impl<'a, C: 'a, ExecutionOutput: 'a> WriteAheadLog<'a, C> for DBWriteAheadLog<C, ExecutionOutput>
 where
     C: Serialize + DeserializeOwned + Send + Sync + Debug + Clone,
+    ExecutionOutput: Serialize + DeserializeOwned,
 {
-    type Guard = DBTxGuard<'a, C>;
+    type Guard = DBTxGuard<'a, C, ExecutionOutput>;
     type LockGuard = LockGuard;
 
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
@@ -313,7 +335,7 @@ where
         &'a self,
         tx: &'b TransactionDigest,
         cert: &'b C,
-    ) -> SuiResult<DBTxGuard<'a, C>> {
+    ) -> SuiResult<DBTxGuard<'a, C, ExecutionOutput>> {
         let mutex_guard = self.mutex_table.acquire_lock(*tx).await;
         trace!(digest = ?tx, "acquired tx lock");
 
@@ -341,7 +363,9 @@ where
         res
     }
 
-    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, DBTxGuard<'a, C>)>> {
+    async fn read_one_recoverable_tx(
+        &'a self,
+    ) -> SuiResult<Option<(C, DBTxGuard<'a, C, ExecutionOutput>)>> {
         let candidate = self.pop_one_tx();
 
         match candidate {
@@ -369,7 +393,7 @@ mod tests {
     use anyhow;
     use sui_types::base_types::TransactionDigest;
 
-    async fn recover_queue_empty(log: &DBWriteAheadLog<u32>) -> bool {
+    async fn recover_queue_empty(log: &DBWriteAheadLog<u32, u32>) -> bool {
         log.read_one_recoverable_tx().await.unwrap().is_none()
     }
 
@@ -382,7 +406,8 @@ mod tests {
         let tx3_id = TransactionDigest::random();
 
         {
-            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
+            let log: DBWriteAheadLog<u32, u32> =
+                DBWriteAheadLog::new(working_dir.path().to_path_buf());
             assert!(recover_queue_empty(&log).await);
 
             let tx1 = log.begin_tx(&tx1_id, &1).await.unwrap();
@@ -413,7 +438,8 @@ mod tests {
 
         {
             // recover the log
-            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
+            let log: DBWriteAheadLog<u32, u32> =
+                DBWriteAheadLog::new(working_dir.path().to_path_buf());
 
             // recoverable txes still there
             let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
@@ -423,6 +449,62 @@ mod tests {
 
             let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
             assert!(matches!(commit_phase, TransactionCommitPhase::Uncommitted));
+
+            // commit the recoverable tx
+            r.commit_tx();
+        }
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        let tx4_id = TransactionDigest::random();
+        let execution_output = 0;
+
+        {
+            let log: DBWriteAheadLog<u32, u32> =
+                DBWriteAheadLog::new(working_dir.path().to_path_buf());
+            assert!(recover_queue_empty(&log).await);
+
+            {
+                let tx4 = log.begin_tx(&tx4_id, &1).await.unwrap();
+                let result = log.write_execution_output(&tx4_id, execution_output);
+                assert!(matches!(Ok(()), result));
+                // implicit drop
+            }
+
+            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
+            // tx4 in recoverable txes because we dropped the guard.
+            assert_eq!(r.tx_id(), tx4_id);
+
+            let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
+            assert!(matches!(
+                commit_phase,
+                TransactionCommitPhase::Executed(execution_output)
+            ));
+
+            // verify previous call emptied the recoverable list
+            assert!(recover_queue_empty(&log).await);
+        }
+
+        // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+        // being held in the background thread but this will suffice for now
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        {
+            // recover the log
+            let log: DBWriteAheadLog<u32, u32> =
+                DBWriteAheadLog::new(working_dir.path().to_path_buf());
+
+            // recoverable txes still there
+            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
+            assert_eq!(r.tx_id(), tx4_id);
+            assert_eq!(r.retry_num(), 2);
+            assert!(recover_queue_empty(&log).await);
+
+            let (_, commit_phase) = log.get_tx(&r.tx).unwrap().unwrap();
+            assert!(matches!(
+                commit_phase,
+                TransactionCommitPhase::Executed(execution_output)
+            ));
 
             // commit the recoverable tx
             r.commit_tx();
@@ -438,8 +520,6 @@ mod tests {
             // empty, because we committed the tx before.
             assert!(recover_queue_empty(&log).await);
         }
-
-        // TODO(william): Add another recovery case where we commit to WAL but not permanent storage.
 
         Ok(())
     }
