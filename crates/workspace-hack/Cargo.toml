@@ -548,7 +548,8 @@ test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
-textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", features = ["smawk", "unicode-linebreak", "unicode-width"] }
+textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", default-features = false }
+textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 thiserror = { version = "1", default-features = false }
 thousands = { version = "0.2", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -1265,7 +1266,8 @@ test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
-textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", features = ["smawk", "unicode-linebreak", "unicode-width"] }
+textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", default-features = false }
+textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
 thousands = { version = "0.2", default-features = false }
