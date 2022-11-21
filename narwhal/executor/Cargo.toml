@@ -42,7 +42,7 @@ telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 workspace-hack.workspace = true
 
 [dev-dependencies]
-indexmap = { version = "1.9.1", features = ["serde"] }
+indexmap = { version = "1.9.2", features = ["serde"] }
 tempfile = "3.3.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 node = { path = "../node", package = "narwhal-node" }
