@@ -86,7 +86,21 @@ const getRequestCost = (
     } = {};
 
     for (const event of events) {
-        if ('coinBalanceChange' in event || 'transferObject' in event) {
+        if (
+            'coinBalanceChange' in event ||
+            'transferObject' in event ||
+            'moveEvent' in event
+        ) {
+            // Get the amount in move events
+            if (
+                event.moveEvent?.sender === address &&
+                event.moveEvent?.fields?.price
+            ) {
+                sumCoin += event.moveEvent.fields.price;
+                coinMeta.amount = sumCoin;
+                coinMeta.coinSymbol = '0x2::sui::SUI';
+            }
+
             // aggregate coin balance for pay
             if (
                 event.coinBalanceChange?.changeType === 'Pay' &&
@@ -130,6 +144,7 @@ export const executeDryRunTransactionRequest = createAsyncThunk<
             signer.dryRunTransaction(txData),
             signer.getGasCostEstimation(txData),
         ]);
+
         const txnMeta =
             dryRunResponse && activeAddress
                 ? getRequestCost(dryRunResponse, activeAddress)
