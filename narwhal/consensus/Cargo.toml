@@ -35,7 +35,7 @@ telemetry-subscribers.workspace = true
 bincode = "1.3.3"
 criterion = "0.4.0"
 futures = "0.3.24"
-indexmap = { version = "1.9.1", features = ["serde"] }
+indexmap = { version = "1.9.2", features = ["serde"] }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 node = { path = "../node", package = "narwhal-node" }
 
