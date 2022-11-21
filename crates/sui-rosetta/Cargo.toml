@@ -12,7 +12,7 @@ axum-core = "0.2.7"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 tracing = "0.1.36"
 serde = "1.0.143"
-serde_json = { version = "1.0.83", features = ["preserve_order"] }
+serde_json = { version = "1.0.88", features = ["preserve_order"] }
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 tokio = "1.20.1"
