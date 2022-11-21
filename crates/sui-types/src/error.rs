@@ -323,6 +323,11 @@ pub enum SuiError {
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error(
+        "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
+        digest
+    )]
+    TransactionAlreadyExecuted { digest: TransactionDigest },
+    #[error(
         "Could not find the referenced object {:?} at version {:?}.",
         object_id,
         version

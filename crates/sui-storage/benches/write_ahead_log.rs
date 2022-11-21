@@ -21,7 +21,7 @@ fn main() {
     // TODO: this is not a very good benchmark but perhaps it can at least find regressions
     let duration = runtime.block_on(async move {
         let working_dir = tempfile::tempdir().unwrap();
-        let wal = Arc::new(DBWriteAheadLog::<usize>::new(
+        let wal = Arc::new(DBWriteAheadLog::<usize, u32>::new(
             working_dir.path().to_path_buf(),
         ));
 

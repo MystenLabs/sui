@@ -52,10 +52,11 @@ use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiEventEnvelope, SuiTransactionEffects,
 };
 use sui_simulator::nondeterministic;
+use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     node_sync_store::NodeSyncStore,
-    write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
+    write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
 use sui_types::committee::EpochId;
@@ -131,7 +132,8 @@ pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
-type CertTxGuard<'a> = DBTxGuard<'a, TrustedCertificate>;
+type CertTxGuard<'a> =
+    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -839,6 +841,23 @@ impl AuthorityState {
             });
         }
 
+        // first check to see if we have already executed and committed the tx
+        // to the WAL
+        if let Some((inner_temporary_storage, signed_effects)) = self
+            .database
+            .wal
+            .get_execution_output(certificate.digest())?
+        {
+            return self
+                .commit_cert_and_notify(
+                    certificate,
+                    inner_temporary_storage,
+                    signed_effects,
+                    tx_guard,
+                )
+                .await;
+        }
+
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -861,6 +880,29 @@ impl AuthorityState {
                 Ok(res) => res,
             };
 
+        // Write tx output to WAL as first commit phase. In second phase
+        // we write from WAL to permanent storage. The purpose of this scheme
+        // is to allow for retrying phase 2 from phase 1 in the case where we
+        // fail mid-write. We prefer this over making the write to permanent
+        // storage atomic as this allows for sharding storage across nodes, which
+        // would be more difficult in the alternative.
+        self.database.wal.write_execution_output(
+            &digest,
+            (inner_temporary_store.clone(), signed_effects.clone()),
+        )?;
+
+        self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)
+            .await
+    }
+
+    async fn commit_cert_and_notify(
+        &self,
+        certificate: &VerifiedCertificate,
+        inner_temporary_store: InnerTemporaryStore,
+        signed_effects: SignedTransactionEffects,
+        tx_guard: CertTxGuard<'_>,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.data().shared_objects.len();
 

@@ -57,7 +57,8 @@ const RECONFIG_STATE_INDEX: u64 = 0;
 pub struct SuiDataStore<S> {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
-    pub wal: Arc<DBWriteAheadLog<TrustedCertificate>>,
+    pub wal:
+        Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
 
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
