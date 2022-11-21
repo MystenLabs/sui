@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+pub use crate::state::TransactionExecutionPair;
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
@@ -45,23 +46,29 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             );
             self.metrics.notifier_processed_batches.inc();
 
+            let mut transactions = Vec::new();
             let mut bytes = 0usize;
             for (transaction_index, transaction) in batch.transactions.into_iter().enumerate() {
+                bytes += transaction.len();
+
                 let execution_indices = ExecutionIndices {
                     last_committed_round: index.sub_dag.round(),
                     next_certificate_index: index.next_certificate_index,
                     next_batch_index: index.batch_index + 1,
                     next_transaction_index: transaction_index as u64 + 1,
                 };
-                bytes += transaction.len();
-
-                // NOTE: We now have access to the entire commit through `index.sub_dag`. We may
-                // thus choose to make it available to Sui through `handle_consensus_transaction`.
-
-                self.callback
-                    .handle_consensus_transaction(&index.output, execution_indices, transaction)
-                    .await;
+                transactions.push(TransactionExecutionPair {
+                    transaction,
+                    execution_indices,
+                });
             }
+
+            // NOTE: We now have access to the entire commit through `index.sub_dag`. We may
+            // thus choose to make it available to Sui through `handle_consensus_transaction`.
+
+            self.callback
+                .handle_consensus_transactions(&index.sub_dag, transactions)
+                .await;
 
             if index.batch_index + 1 == index.output.certificate.header.payload.len() as u64
                 && index.sub_dag.is_last(&index.output)

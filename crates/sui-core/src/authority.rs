@@ -2158,7 +2158,7 @@ impl AuthorityState {
     /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
     /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
     /// This function returns unit error and is responsible for emitting log messages for internal errors
-    pub(crate) fn verify_consensus_transaction(
+    pub(crate) fn verify_consensus_transactions(
         &self,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {

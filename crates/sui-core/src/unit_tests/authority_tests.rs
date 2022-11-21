@@ -2154,7 +2154,7 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+    if let Ok(transaction) = authority.verify_consensus_transactions(transaction) {
         authority
             .handle_consensus_transaction(transaction)
             .await

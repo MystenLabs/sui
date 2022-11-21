@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use serde::{Deserialize, Serialize};
-use types::{Round, SequenceNumber};
+use types::{Round, SequenceNumber, Transaction};
 
 /// The state of the subscriber keeping track of the transactions that have already been
 /// executed. It ensures we do not process twice the same transaction despite crash-recovery.
@@ -49,4 +49,10 @@ impl PartialOrd for ExecutionIndices {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct TransactionExecutionPair {
+    pub transaction: Transaction,
+    pub execution_indices: ExecutionIndices,
 }

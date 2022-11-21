@@ -7,7 +7,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{ExecutionIndices, ExecutionState};
+use executor::{ExecutionIndices, ExecutionState, TransactionExecutionPair};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use narwhal_node as node;
@@ -18,12 +18,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 use storage::NodeStorage;
-use test_utils::CommitteeFixture;
+use test_utils::{transaction, CommitteeFixture};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::ConsensusOutput;
+use types::CommittedSubDag;
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 
 /// A simple/dumb execution engine.
@@ -70,45 +70,45 @@ impl SimpleExecutionState {
         }
     }
 }
-
+// todo (Laura) put back
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_transactions(
         &self,
-        _consensus_output: &Arc<ConsensusOutput>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
+        _consensus_output: &Arc<CommittedSubDag>,
+        _transaction_execution_pair: std::vec::Vec<TransactionExecutionPair>,
     ) {
-        let transaction: u64 = bincode::deserialize(&transaction).unwrap();
-        // Change epoch every few certificates. Note that empty certificates are not provided to
-        // this function (they are immediately skipped).
-        let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
-            epoch += 1;
-            {
-                let mut guard = self.committee.lock().unwrap();
-                guard.epoch = epoch;
-            };
-
-            let worker_keypairs = self.worker_keypairs.iter().map(|kp| kp.copy());
-            let worker_ids = 0..self.worker_keypairs.len() as u32;
-            let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs).collect();
-
-            let new_committee = self.committee.lock().unwrap().clone();
-
-            self.tx_reconfigure
-                .send((
-                    self.keypair.copy(),
-                    self.network_keypair.copy(),
-                    new_committee,
-                    worker_ids_and_keypairs,
-                    self.worker_cache.clone(),
-                ))
-                .await
-                .unwrap();
-        }
-
-        let _ = self.tx_output.send(epoch).await;
+        todo!();
+        // let transaction: u64 = bincode::deserialize(&transaction).unwrap();
+        // // Change epoch every few certificates. Note that empty certificates are not provided to
+        // // this function (they are immediately skipped).
+        // let mut epoch = self.committee.lock().unwrap().epoch();
+        // if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
+        //     epoch += 1;
+        //     {
+        //         let mut guard = self.committee.lock().unwrap();
+        //         guard.epoch = epoch;
+        //     };
+        //
+        //     let worker_keypairs = self.worker_keypairs.iter().map(|kp| kp.copy());
+        //     let worker_ids = 0..self.worker_keypairs.len() as u32;
+        //     let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs).collect();
+        //
+        //     let new_committee = self.committee.lock().unwrap().clone();
+        //
+        //     self.tx_reconfigure
+        //         .send((
+        //             self.keypair.copy(),
+        //             self.network_keypair.copy(),
+        //             new_committee,
+        //             worker_ids_and_keypairs,
+        //             self.worker_cache.clone(),
+        //         ))
+        //         .await
+        //         .unwrap();
+        // }
+        //
+        // let _ = self.tx_output.send(epoch).await;
     }
 
     async fn load_execution_indices(&self) -> ExecutionIndices {

@@ -4,7 +4,7 @@
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
-use narwhal_executor::{ExecutionIndices, ExecutionState};
+use narwhal_executor::{ExecutionIndices, ExecutionState, TransactionExecutionPair};
 use narwhal_types::{CommittedSubDag, ConsensusOutput};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -57,54 +57,62 @@ impl ConsensusHandler {
 impl ExecutionState for ConsensusHandler {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_transactions(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: &Arc<ConsensusOutput>,
-        consensus_index: ExecutionIndices,
-        serialized_transaction: Vec<u8>,
+        consensus_output: &Arc<CommittedSubDag>,
+        transaction_execution_pairs: Vec<TransactionExecutionPair>,
     ) {
-        let index = Self::update_hash(
-            &self.last_seen,
-            consensus_index.clone(),
-            &serialized_transaction,
-        );
-        let index = if let Some(index) = index {
-            index
-        } else {
-            debug!(
+        for pair in transaction_execution_pairs.iter() {
+            let serialized_transaction = pair.transaction.clone();
+            let consensus_index = pair.execution_indices.clone();
+
+            let index = Self::update_hash(
+                &self.last_seen,
+                consensus_index.clone(),
+                &serialized_transaction,
+            );
+            let index = if let Some(index) = index {
+                index
+            } else {
+                debug!(
                 "Ignore consensus transaction at index {:?} as it appear to be already processed",
                 consensus_index
             );
-            return;
-        };
-        let transaction =
-            match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
-                Ok(transaction) => transaction,
-                Err(err) => {
-                    warn!(
-                        "Ignoring malformed transaction (failed to deserialize) from {}: {}",
-                        consensus_output.certificate.header.author, err
-                    );
-                    return;
-                }
+                return;
             };
-        let sequenced_transaction = SequencedConsensusTransaction {
-            consensus_output: consensus_output.clone(),
-            consensus_index: index,
-            transaction,
-        };
-        let verified_transaction = match self
-            .state
-            .verify_consensus_transaction(sequenced_transaction)
-        {
-            Ok(verified_transaction) => verified_transaction,
-            Err(()) => return,
-        };
-        self.state
-            .handle_consensus_transaction(verified_transaction)
-            .await
-            .expect("Unrecoverable error in consensus handler");
+
+            let transaction =
+                match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
+                    Ok(transaction) => transaction,
+                    Err(err) => {
+                        warn!(
+                            "Ignoring malformed transaction (failed to deserialize) from {}: {}",
+                            consensus_output.certificate.header.author, err
+                        );
+                        return;
+                    }
+                };
+
+            let sequenced_transaction = SequencedConsensusTransaction {
+                consensus_output: consensus_output.clone(),
+                consensus_index: index,
+                transaction,
+            };
+
+            let verified_transaction = match self
+                .state
+                .verify_consensus_transactions(sequenced_transaction)
+            {
+                Ok(verified_transaction) => verified_transaction,
+                Err(()) => return,
+            };
+
+            self.state
+                .handle_consensus_transaction(verified_transaction)
+                .await
+                .expect("Unrecoverable error in consensus handler");
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(result))]
@@ -131,7 +139,7 @@ impl ExecutionState for ConsensusHandler {
 }
 
 pub struct SequencedConsensusTransaction {
-    pub consensus_output: Arc<narwhal_types::ConsensusOutput>,
+    pub consensus_output: Arc<narwhal_types::CommittedSubDag>,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: ConsensusTransaction,
 }

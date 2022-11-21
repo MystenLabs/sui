@@ -23,6 +23,7 @@ use prometheus::Registry;
 use std::sync::Arc;
 use storage::CertificateStore;
 
+pub use crate::state::TransactionExecutionPair;
 use crate::subscriber::spawn_subscriber;
 use mockall::automock;
 use tokio::sync::oneshot;
@@ -42,11 +43,10 @@ pub type SerializedTransactionDigest = u64;
 // Important - if you add method with the default implementation here make sure to update impl ExecutionState for Arc<T>
 pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_transactions(
         &self,
-        consensus_output: &Arc<ConsensusOutput>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
+        consensus_output: &Arc<CommittedSubDag>,
+        transaction_execution_pairs: Vec<TransactionExecutionPair>,
     );
 
     /// Notifies executor that narwhal commit boundary was reached
@@ -161,14 +161,13 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 
 #[async_trait]
 impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_transactions(
         &self,
-        consensus_output: &Arc<ConsensusOutput>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
+        consensus_output: &Arc<CommittedSubDag>,
+        transaction_execution_pairs: Vec<TransactionExecutionPair>,
     ) {
         self.as_ref()
-            .handle_consensus_transaction(consensus_output, execution_indices, transaction)
+            .handle_consensus_transactions(consensus_output, transaction_execution_pairs)
             .await
     }
 
