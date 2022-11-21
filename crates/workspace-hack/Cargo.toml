@@ -23,8 +23,8 @@ aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 aliasable = { version = "0.1", features = ["alloc"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
@@ -221,8 +221,7 @@ futures-io = { version = "0.3", features = ["std", "unstable"] }
 futures-sink = { version = "0.3", features = ["alloc", "std"] }
 futures-task = { version = "0.3", default-features = false, features = ["alloc", "std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["gloo-timers", "send_wrapper", "wasm-bindgen"] }
-futures-util = { version = "0.3", features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
-fxhash = { version = "0.2", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde"] }
 gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
@@ -438,9 +437,9 @@ protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
-quinn = { version = "0.8", default-features = false, features = ["rustls", "tls-rustls", "webpki"] }
-quinn-proto = { version = "0.8", default-features = false, features = ["ring", "rustls", "rustls-pemfile", "tls-rustls", "webpki"] }
-quinn-udp = { version = "0.1", default-features = false }
+quinn = { version = "0.9", default-features = false, features = ["futures-io", "ring", "runtime-tokio", "rustls", "tls-rustls", "webpki"] }
+quinn-proto = { version = "0.9", default-features = false, features = ["ring", "rustls", "tls-rustls", "webpki"] }
+quinn-udp = { version = "0.3", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
 radium-d8f496e17d97b5cb = { package = "radium", version = "0.5", default-features = false }
 radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
@@ -479,8 +478,7 @@ rustc-hex = { version = "2", default-features = false, features = ["std"] }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "quic", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
-rustls-pemfile-6f8ce4dd05d13bba = { package = "rustls-pemfile", version = "0.2", default-features = false }
-rustls-pemfile-dff4ba8e3ae991db = { package = "rustls-pemfile", version = "1", default-features = false }
+rustls-pemfile = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout", "wait-timeout"] }
 rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 ryu = { version = "1", default-features = false }
@@ -660,9 +658,9 @@ aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 aliasable = { version = "0.1", features = ["alloc"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
@@ -892,8 +890,7 @@ futures-macro = { version = "0.3", default-features = false }
 futures-sink = { version = "0.3", features = ["alloc", "std"] }
 futures-task = { version = "0.3", default-features = false, features = ["alloc", "std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["gloo-timers", "send_wrapper", "wasm-bindgen"] }
-futures-util = { version = "0.3", features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
-fxhash = { version = "0.2", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde"] }
 gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
@@ -1148,9 +1145,9 @@ protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
-quinn = { version = "0.8", default-features = false, features = ["rustls", "tls-rustls", "webpki"] }
-quinn-proto = { version = "0.8", default-features = false, features = ["ring", "rustls", "rustls-pemfile", "tls-rustls", "webpki"] }
-quinn-udp = { version = "0.1", default-features = false }
+quinn = { version = "0.9", default-features = false, features = ["futures-io", "ring", "runtime-tokio", "rustls", "tls-rustls", "webpki"] }
+quinn-proto = { version = "0.9", default-features = false, features = ["ring", "rustls", "tls-rustls", "webpki"] }
+quinn-udp = { version = "0.3", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6", features = ["proc-macro"] }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
 radium-d8f496e17d97b5cb = { package = "radium", version = "0.5", default-features = false }
@@ -1193,8 +1190,7 @@ rustc_version = { version = "0.3", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "quic", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
-rustls-pemfile-6f8ce4dd05d13bba = { package = "rustls-pemfile", version = "0.2", default-features = false }
-rustls-pemfile-dff4ba8e3ae991db = { package = "rustls-pemfile", version = "1", default-features = false }
+rustls-pemfile = { version = "1", default-features = false }
 rustversion = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout", "wait-timeout"] }
 rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
@@ -1596,8 +1592,10 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5", features = ["alloc", "std"] }
 winapi = { version = "0.3", default-features = false, features = ["accctrl", "aclapi", "activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
-windows_x86_64_msvc = { version = "0.36", default-features = false }
+windows-sys-4e55305914c60c55 = { package = "windows-sys", version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32", "Win32_Networking", "Win32_Networking_WinSock"] }
+windows_x86_64_msvc-4e55305914c60c55 = { package = "windows_x86_64_msvc", version = "0.36", default-features = false }
+windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
@@ -1624,8 +1622,10 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5", features = ["alloc", "std"] }
 winapi = { version = "0.3", default-features = false, features = ["accctrl", "aclapi", "activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
-windows_x86_64_msvc = { version = "0.36", default-features = false }
+windows-sys-4e55305914c60c55 = { package = "windows-sys", version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32", "Win32_Networking", "Win32_Networking_WinSock"] }
+windows_x86_64_msvc-4e55305914c60c55 = { package = "windows_x86_64_msvc", version = "0.36", default-features = false }
+windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
 ### END HAKARI SECTION
