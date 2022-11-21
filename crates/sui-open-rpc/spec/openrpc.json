@@ -442,7 +442,10 @@
             },
             {
               "name": "cursor",
-              "value": "10:0"
+              "value": {
+                "txSeq": 500,
+                "eventSeq": 10
+              }
             },
             {
               "name": "limit",
@@ -2911,18 +2914,18 @@
               "TimeRange": {
                 "type": "object",
                 "required": [
-                  "end_time",
-                  "start_time"
+                  "endTime",
+                  "startTime"
                 ],
                 "properties": {
-                  "end_time": {
-                    "description": "right endpoint of time interval, exclusive",
+                  "endTime": {
+                    "description": "right endpoint of time interval, milliseconds since epoch, exclusive",
                     "type": "integer",
                     "format": "uint64",
                     "minimum": 0.0
                   },
-                  "start_time": {
-                    "description": "left endpoint of time interval, inclusive",
+                  "startTime": {
+                    "description": "left endpoint of time interval, milliseconds since epoch, inclusive",
                     "type": "integer",
                     "format": "uint64",
                     "minimum": 0.0

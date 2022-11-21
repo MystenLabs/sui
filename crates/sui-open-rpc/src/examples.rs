@@ -497,7 +497,13 @@ impl RpcExampleProvider {
                             result.certificate.transaction_digest
                         )),
                     ),
-                    ("cursor", json!("10:0")),
+                    (
+                        "cursor",
+                        json!(EventID {
+                            event_seq: 10,
+                            tx_seq: 500
+                        }),
+                    ),
                     ("limit", json!(events.len())),
                     ("descending_order", json!(false)),
                 ],
