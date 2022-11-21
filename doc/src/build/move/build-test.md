@@ -223,7 +223,7 @@ point of view of a Sui developer. First, let us create
 sword creation and transfer and put them into the `my_module.move` file:
 
 ``` rust
-    public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         use sui::transfer;
 
         // create a sword
@@ -232,6 +232,7 @@ sword creation and transfer and put them into the `my_module.move` file:
             magic: magic,
             strength: strength,
         };
+        forge.swords_created = forge.swords_created + 1;
         // transfer the sword
         transfer::transfer(sword, recipient);
     }
