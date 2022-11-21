@@ -22,7 +22,7 @@ workspace-hack.workspace = true
 rand = "0.8.5"
 
 [dev-dependencies]
-insta = { version = "1.20.0", features = ["json"] }
+insta = { version = "1.21.1", features = ["json"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
 tracing-test = "0.2.3"
