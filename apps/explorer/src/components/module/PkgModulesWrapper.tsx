@@ -3,12 +3,8 @@
 
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
-import { useState, useCallback, useEffect } from 'react';
-import {
-    useSearchParams,
-    type URLSearchParamsInit,
-    type NavigateOptions,
-} from 'react-router-dom';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
 
@@ -52,6 +48,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
 
+    const convertedSearchParams = useMemo(
+        () => new URLSearchParams(searchParams),
+        [searchParams]
+    );
+
     // Extract module in URL or default to first module in list
     const selectedModule =
         searchParams.get('module') &&
@@ -71,19 +72,6 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         }
     }, [searchParams, setSearchParams, modulenames]);
 
-    const setModule = (
-        searchParams: URLSearchParams,
-        setSearchParams: (
-            params: URLSearchParamsInit,
-            navigateOpts?: NavigateOptions
-        ) => void,
-        newModule: string
-    ): void => {
-        const newSearchParams = new URLSearchParams(searchParams);
-        newSearchParams.set('module', newModule);
-        setSearchParams(newSearchParams);
-    };
-
     const filteredModules =
         query === ''
             ? modulenames
@@ -94,14 +82,18 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                   .map(([name]) => name);
 
     const submitSearch = useCallback(() => {
-        if (filteredModules.length === 1)
-            setModule(searchParams, setSearchParams, filteredModules[0]);
-    }, [filteredModules, searchParams, setSearchParams]);
+        if (filteredModules.length === 1) {
+            convertedSearchParams.set('module', filteredModules[0]);
+            setSearchParams(convertedSearchParams);
+        }
+    }, [filteredModules, convertedSearchParams, setSearchParams]);
 
     const onChangeModule = useCallback(
-        (newModule: string) => () =>
-            setModule(searchParams, setSearchParams, newModule),
-        [searchParams, setSearchParams]
+        (newModule: string) => () => {
+            convertedSearchParams.set('module', newModule);
+            setSearchParams(convertedSearchParams);
+        },
+        [convertedSearchParams, setSearchParams]
     );
 
     return (
