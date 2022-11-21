@@ -14,7 +14,7 @@ async-trait = "0.1.57"
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 base64 = "0.13.0"
 bincode = "1.3.3"
-bytes = "1.2.1"
+bytes = "1.3.0"
 config = { path = "../config", package = "narwhal-config" }
 dashmap = "5.4.0"
 derive_builder = "0.11.2"

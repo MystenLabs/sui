@@ -10,7 +10,7 @@ publish = false
 async-trait = "0.1.57"
 bincode = "1.3.3"
 byteorder = "1.4.3"
-bytes = "1.2.1"
+bytes = "1.3.0"
 futures = "0.3.24"
 multiaddr = "0.16.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
