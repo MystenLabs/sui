@@ -16,7 +16,7 @@ runs:
     - id: changes
       name: Detect changes
       shell: bash
-      run: echo "::set-output name=packages::$(pnpm list --filter "...[origin/main]" --depth -1 --json | jq -c "[.[] | .name]")"
+      run: echo "packages=$(pnpm list --filter "...[origin/main]" --depth -1 --json | jq -c "[.[] | .name]")" >> $GITHUB_OUTPUT
     - name: Print changes for easy debugging
       shell: bash
       run: echo ${{ steps.changes.outputs.packages }}
