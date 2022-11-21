@@ -1,24 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinBalance } from '~/ui/CoinBalance';
+import { Amount, type AmountProps } from '~/ui/Amount';
 import { DateCard } from '~/ui/DateCard';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 
-export interface StatAmountProps {
-    amount: number | string | bigint;
-    currency?: string | null;
+export interface StatAmountProps extends Omit<AmountProps, 'size'> {
     dollarAmount?: number;
     date?: Date | number | null;
 }
 
-export function StatAmount({
-    amount,
-    currency,
-    dollarAmount,
-    date,
-}: StatAmountProps) {
+export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
     return (
         <div className="flex flex-col justify-start text-sui-grey-75 gap-2">
             <div className="text-sui-grey-100 flex flex-col items-baseline gap-2.5">
@@ -28,7 +21,7 @@ export function StatAmount({
                         Amount
                     </Heading>
 
-                    <CoinBalance amount={amount} symbol={currency} size="lg" />
+                    <Amount size="lg" {...props} />
                 </div>
             </div>
             {dollarAmount && (

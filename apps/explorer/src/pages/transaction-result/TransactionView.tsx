@@ -281,11 +281,16 @@ function TransactionView({ txdata }: { txdata: DataType }) {
             ? {
                   coin: {
                       amount: item.amount,
-                      symbol: item?.coinType || null,
+                      coinType: item?.coinType || null,
                   },
               }
             : {}),
     }));
+
+    const [formattedAmount, symbol] = useFormatCoin(
+        txnTransfer?.[0].amount,
+        txnTransfer?.[0].coinType
+    );
 
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
@@ -466,9 +471,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 {txnTransfer?.[0].amount ? (
                                     <section className="mb-10">
                                         <StatAmount
-                                            amount={txnTransfer[0].amount}
+                                            amount={formattedAmount}
+                                            symbol={symbol}
                                             date={txdata.timestamp_ms}
-                                            currency={txnTransfer[0].coinType}
                                         />
                                     </section>
                                 ) : (
@@ -484,7 +489,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     sender={sender}
                                     transferCoin={txnTransfer?.[0].isCoin}
                                     recipients={sendReceiveRecipients}
-                                    data-testid="transaction-sender"
                                 />
                             </section>
 

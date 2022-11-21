@@ -10,7 +10,7 @@ type Recipient = {
     address: string;
     coin?: {
         amount: number | string | bigint;
-        symbol?: string | null;
+        coinType?: string | null;
     };
 };
 
@@ -76,8 +76,10 @@ export function SenderRecipient({
                                         <div className="ml-6">
                                             <CoinBalance
                                                 amount={recipient.coin.amount}
-                                                symbol={recipient.coin?.symbol}
-                                                coinFormat={CoinFormat.ROUNDED}
+                                                coinType={
+                                                    recipient.coin?.coinType
+                                                }
+                                                format={CoinFormat.FULL}
                                             />
                                         </div>
                                     )}
