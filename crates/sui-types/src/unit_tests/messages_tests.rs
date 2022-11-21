@@ -505,9 +505,9 @@ fn test_user_signature_committed_in_transactions() {
     );
     let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
     let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
-    let tx_digest_a = transaction_a.digest();
-    let tx_digest_b = transaction_b.digest();
-    assert_ne!(tx_digest_a, tx_digest_b);
+    // test equality
+    assert_ne!(transaction_a, transaction_b);
+    assert_eq!(transaction_a.digest(), transaction_b.digest());
 
     // Test hash non-equality
     let mut hasher = DefaultHasher::new();
@@ -517,9 +517,6 @@ fn test_user_signature_committed_in_transactions() {
     transaction_b.hash(&mut hasher);
     let hash_b = hasher.finish();
     assert_ne!(hash_a, hash_b);
-
-    // test equality
-    assert_ne!(transaction_a, transaction_b)
 }
 
 #[test]
@@ -558,9 +555,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
-    let tx_digest_a = signed_tx_a.digest();
-    let tx_digest_b = signed_tx_b.digest();
-    assert_ne!(tx_digest_a, tx_digest_b);
+    assert_eq!(signed_tx_a.digest(), signed_tx_b.digest());
 
     // Ensure that signed tx verifies against the transaction with a correct user signature.
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
@@ -641,11 +636,12 @@ fn test_user_signature_committed_in_checkpoints() {
         effects_b.gas_used,
         None,
     );
+    // FIXME, we will need to commit to user sig, so the digest would be different.
+    assert_eq!(checkpoint_summary_a.digest(), checkpoint_summary_b.digest());
 
-    assert_ne!(checkpoint_summary_a.digest(), checkpoint_summary_b.digest());
-
+    // FIXME, we will need to commit to user sig, so the digest would be different.
     // test non equality
-    assert_ne!(checkpoint_summary_a, checkpoint_summary_b);
+    assert_eq!(checkpoint_summary_a, checkpoint_summary_b);
 }
 
 #[test]
