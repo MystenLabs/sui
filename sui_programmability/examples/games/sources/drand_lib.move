@@ -5,6 +5,7 @@ module games::drand_lib {
     use std::hash::sha2_256;
 
     friend games::drand_based_lottery;
+    friend games::drand_based_scratch_card;
 
     /// Error codes
     const EInvalidRndLength: u64 = 0;
