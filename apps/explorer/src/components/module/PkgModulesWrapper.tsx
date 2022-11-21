@@ -81,7 +81,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     ): void => {
         const newSearchParams = new URLSearchParams(searchParams);
         newSearchParams.set('module', newModule);
-        setSearchParams(newSearchParams, { replace: true });
+        setSearchParams(newSearchParams);
     };
 
     const filteredModules =
