@@ -11,42 +11,43 @@ import { useMemo } from 'react';
 
 import { api } from '../redux/store/thunk-extras';
 
-type NFTMetaData = {
+type NFTMetadata = {
     name: string | false;
     description: string | false;
     url?: string;
-    objectID?: string;
 } | null;
 
-const transformNFTMetaData = (
-    objectDetails: GetObjectDataResponse
-): NFTMetaData => {
-    const { details } = objectDetails || {};
-    if (!isSuiObject(details)) return null;
-    const fields = getObjectFields(objectDetails);
-
-    if (!fields?.url) return null;
-    return {
-        description:
-            typeof fields.description === 'string' && fields.description,
-        name: typeof fields.name === 'string' && fields.name,
-        url: fields.url,
-        objectID: fields.id.id,
-    };
-};
-
-export function useGetNFTMetaData(objectID?: string | null): NFTMetaData {
-    const data = useQuery(['nFTMetaData', objectID], async () => {
-        if (!objectID) {
-            return null;
-        }
-        return api.instance.fullNode.getObject(objectID);
-    });
-
-    const nfTMeta = useMemo(
-        () => (data.data ? transformNFTMetaData(data.data) : null),
-        [data]
+function useGetObjectData(
+    objectId: string | null
+): GetObjectDataResponse | null {
+    const data = useQuery(
+        ['object', objectId],
+        async () => {
+            if (!objectId) return null;
+            return api.instance.fullNode.getObject(objectId);
+        },
+        { enabled: !!objectId, staleTime: Infinity }
     );
 
+    return data?.data || null;
+}
+
+export function useGetNFTMetaData(objectID: string | null): NFTMetadata {
+    const data = useGetObjectData(objectID);
+
+    const nfTMeta = useMemo(() => {
+        if (!data) return null;
+        const { details } = data || {};
+        if (!isSuiObject(details)) return null;
+        const fields = getObjectFields(data);
+
+        if (!fields?.url) return null;
+        return {
+            description:
+                typeof fields.description === 'string' && fields.description,
+            name: typeof fields.name === 'string' && fields.name,
+            url: fields.url,
+        };
+    }, [data]);
     return nfTMeta;
 }
