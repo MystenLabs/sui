@@ -28,7 +28,6 @@ export function useGetObjectData(
         },
         { enabled: !!objectId, staleTime: Infinity }
     );
-
     return data?.data || null;
 }
 
