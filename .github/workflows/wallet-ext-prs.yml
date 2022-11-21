@@ -4,8 +4,8 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     outputs:
-      isWalletExt: ${{ contains(fromJson(steps.pnpm.outputs.packages), 'sui-wallet') || steps.diff.outputs.isRust }}
-      isSrcChange: ${{ contains(fromJson(steps.pnpm.outputs.packages), 'sui-wallet') }}
+      isWalletExt: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-wallet')) || steps.diff.outputs.isRust }}
+      isSrcChange: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-wallet')) }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes (pnpm)
