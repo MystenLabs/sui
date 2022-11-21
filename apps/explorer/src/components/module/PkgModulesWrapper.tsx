@@ -84,14 +84,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         }
     }, [filteredModules, setSearchParams, searchParams]);
 
-    const onChangeModule = useCallback(
-        (newModule: string) => () => {
-            const convertedSearchParams = new URLSearchParams(searchParams);
-            convertedSearchParams.set('module', newModule);
-            setSearchParams(convertedSearchParams);
-        },
-        [setSearchParams, searchParams]
-    );
+    const onChangeModule = (newModule: string) => {
+        const convertedSearchParams = new URLSearchParams(searchParams);
+        convertedSearchParams.set('module', newModule);
+        setSearchParams(convertedSearchParams);
+    };
 
     return (
         <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
@@ -157,7 +154,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             >
                                 <ListItem
                                     active={selectedModule === name}
-                                    onClick={onChangeModule(name)}
+                                    onClick={() => onChangeModule(name)}
                                 >
                                     {name}
                                 </ListItem>
