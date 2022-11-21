@@ -166,14 +166,14 @@ module sui::validator_set {
     }
     
     /// Called by `sui_system`, to withdraw some share of a delegation from the validator. The share to withdraw 
-    /// is denoted by `withdraw_pool_token_amount`. 
+    /// is denoted by `principal_withdraw_amount`. 
     /// This request is added to the validator's staking pool's pending delegation withdraw entries, processed at the end
     /// of the epoch.
     public(friend) fun request_withdraw_delegation(
         self: &mut ValidatorSet,
         delegation: &mut Delegation,
         staked_sui: &mut StakedSui,
-        withdraw_pool_token_amount: u64,
+        principal_withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
         let validator_address = staking_pool::validator_address(delegation);
@@ -183,7 +183,7 @@ module sui::validator_set {
         
         let validator_index = option::extract(&mut validator_index_opt);
         let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-        validator::request_withdraw_delegation(validator, delegation, staked_sui, withdraw_pool_token_amount, ctx);
+        validator::request_withdraw_delegation(validator, delegation, staked_sui, principal_withdraw_amount, ctx);
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
