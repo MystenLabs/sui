@@ -23,10 +23,8 @@ export function DateCard({ date }: DateCardProps) {
     }
 
     return (
-        <div className="text-sui-grey-75">
-            <Text variant="bodySmall" weight="semibold">
-                <time dateTime={new Date(date).toISOString()}>{dateStr}</time>
-            </Text>
-        </div>
+        <Text variant="bodySmall" weight="semibold" color="grey-75">
+            <time dateTime={new Date(date).toISOString()}>{dateStr}</time>
+        </Text>
     );
 }

@@ -20,6 +20,21 @@ const textStyles = cva([], {
             caption: 'uppercase text-caption',
             captionSmall: 'uppercase text-captionSmall ',
         },
+
+        // TODO - add more variants import from tailwind.config.js or create a shared color palette
+        color: {
+            'grey-100': 'text-sui-grey-100',
+            'grey-90': 'text-sui-grey-90',
+            'grey-75': 'text-sui-grey-75',
+            'grey-70': 'text-sui-grey-70',
+            'grey-65': 'text-sui-grey-65',
+            'sui-dark': 'text-sui-dark',
+            sui: 'text-sui',
+            'sui-light': 'text-sui-light',
+            'sui-Steel': 'text-sui-steel',
+            'sui-Steel-dark': 'text-sui-steel-dark',
+            'sui-Steel-darker': 'text-sui-steel-darker',
+        },
         italic: {
             true: 'italic',
             false: '',
