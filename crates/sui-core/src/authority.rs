@@ -594,6 +594,8 @@ impl AuthorityState {
         &self.committee_store
     }
 
+    /// This is a private method and should be kept that way. It doesn't check whether
+    /// the provided transaction is a system transaction, and hence can only be called internally.
     async fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
@@ -629,6 +631,23 @@ impl AuthorityState {
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.data().data);
+
+        // Ensure an idempotent answer. This is checked before the system_tx check so that
+        // a validator is able to return the signed system tx if it was already signed locally.
+        if self
+            .database
+            .transaction_exists(self.epoch(), &transaction_digest)?
+        {
+            self.metrics.tx_already_processed.inc();
+            return self.make_transaction_info(&transaction_digest).await;
+        }
+
+        // CRITICAL! Validators should never sign an external system transaction.
+        fp_ensure!(
+            !transaction.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
         self.metrics.tx_orders.inc();
@@ -638,14 +657,10 @@ impl AuthorityState {
             Ok(r) => Ok(r),
             // If we see an error, it is possible that a certificate has already been processed.
             // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(err) => {
-                if self.database.effects_exists(&transaction_digest)? {
-                    self.metrics.tx_already_processed.inc();
-                    Ok(self.make_transaction_info(&transaction_digest).await?)
-                } else {
-                    Err(err)
-                }
-            }
+            Err(err) => self
+                .get_tx_info_already_executed(&transaction_digest)
+                .await?
+                .ok_or(err),
         }
     }
 
@@ -2352,7 +2367,7 @@ impl AuthorityState {
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
         );
-        self.handle_transaction(tx.clone()).await?;
+        self.handle_transaction_impl(tx.clone()).await?;
         let net = AuthorityAggregator::new_from_system_state(
             &self.database,
             &self.committee_store,
