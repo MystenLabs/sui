@@ -35,7 +35,7 @@ export function useGetObjectData(
 export function useGetNFTMetadata(objectID: string | null): NFTMetadata {
     const data = useGetObjectData(objectID);
 
-    const nfTMeta = useMemo(() => {
+    const nftMeta = useMemo(() => {
         if (!data) return null;
         const { details } = data || {};
         if (!isSuiObject(details)) return null;
@@ -49,5 +49,5 @@ export function useGetNFTMetadata(objectID: string | null): NFTMetadata {
             url: fields.url,
         };
     }, [data]);
-    return nfTMeta;
+    return nftMeta;
 }
