@@ -15,7 +15,7 @@ clap = { version = "3.2.17", features = ["derive"] }
 mysten-network = "0.1.0"
 itertools = { version = "0.10.3", features = ["use_alloc"] }
 multiaddr = "0.16.0"
-textwrap = "0.15"
+textwrap = "0.16"
 futures = "0.3.23"
 rocksdb = "0.19.0"
 tempfile = "3.3.0"
