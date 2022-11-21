@@ -76,7 +76,9 @@ export function SenderRecipient({
                                         <div className="ml-6">
                                             <CoinBalance
                                                 amount={recipient.coin.amount}
-                                                coinType={recipient.coin?.coinType}
+                                                coinType={
+                                                    recipient.coin?.coinType
+                                                }
                                                 format={CoinFormat.FULL}
                                             />
                                         </div>

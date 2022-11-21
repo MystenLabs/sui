@@ -17,12 +17,7 @@ export type AmountProps = {
 
 const DECIMALS = 0;
 
-export function Amount({
-    amount,
-    symbol,
-    size = 'md',
-    format,
-}: AmountProps) {
+export function Amount({ amount, symbol, size = 'md', format }: AmountProps) {
     const isLarge = size === 'lg';
 
     // TODO: Remove this use-case, we should just enforce usage of this component in a specific way.
