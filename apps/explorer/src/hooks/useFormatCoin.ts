@@ -66,7 +66,7 @@ export function useCoinDecimals(coinType?: string | null) {
                 );
             }
 
-            return rpc.getCoinDenominationInfo(coinType);
+            return rpc.getCoinMetadata(coinType);
         },
         {
             // This is currently expected to fail for non-SUI tokens, so disable retries:
@@ -80,7 +80,7 @@ export function useCoinDecimals(coinType?: string | null) {
         }
     );
 
-    return [queryResult.data?.decimalNumber || 0, queryResult] as const;
+    return [queryResult.data?.decimals || 0, queryResult] as const;
 }
 
 const numberFormatter = new Intl.NumberFormat('en', {
