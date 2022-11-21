@@ -29,7 +29,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             ctx.get_wallet_address(),
             all_module_bytes,
             None::<ObjectID>,
-            50000
+            10000
         ];
 
         let data = ctx
