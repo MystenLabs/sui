@@ -15,7 +15,8 @@ module.exports = {
         130: "1.3",
       },
       boxShadow: {
-        moduleOption: '0px 0px 29px rgba(0, 0, 0, 0.13), 0px 0px 44px rgba(0, 0, 0, 0.15), 0px 0px 0px rgba(0, 0, 0, 0.2)',
+        moduleOption:
+          "0px 0px 29px rgba(0, 0, 0, 0.13), 0px 0px 44px rgba(0, 0, 0, 0.15), 0px 0px 0px rgba(0, 0, 0, 0.2)",
       },
       fontSize: {
         // Text sizes:
@@ -109,13 +110,13 @@ module.exports = {
         shimmer: "shimmer 2s infinite linear",
       },
       spacing: {
-        '4.5': '1.125rem',
-        'verticalListShort': '13.0625rem',
-        'verticalListLong': '35.6875rem',
-      }
+        4.5: "1.125rem",
+        verticalListShort: "13.0625rem",
+        verticalListLong: "35.6875rem",
+      },
       height: {
-        header: '68px'
-      }
+        header: "68px",
+      },
     },
   },
   corePlugins: {
