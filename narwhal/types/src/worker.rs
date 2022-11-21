@@ -45,7 +45,8 @@ pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, Di
     let sbm = sbm.as_ref();
     let mut offset = 0;
     let num_transactions = u64::from_le_bytes(
-        sbm[offset..offset + 8]
+        sbm.get(offset..offset + 8)
+            .ok_or(DigestError::InvalidLengthError)?
             .try_into()
             .map_err(|_| DigestError::InvalidArgumentError(offset))?,
     );
@@ -66,11 +67,14 @@ pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, Di
 pub enum DigestError {
     #[error("Invalid argument: invalid byte at {0}")]
     InvalidArgumentError(usize),
+    #[error("Invalid length")]
+    InvalidLengthError,
 }
 
 fn read_one_transaction(sbm: &[u8], offset: usize) -> Result<(&[u8], usize), DigestError> {
     let length = u64::from_le_bytes(
-        sbm[offset..offset + 8]
+        sbm.get(offset..offset + 8)
+            .ok_or(DigestError::InvalidLengthError)?
             .try_into()
             .map_err(|_| DigestError::InvalidArgumentError(offset))?,
     );

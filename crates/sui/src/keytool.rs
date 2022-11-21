@@ -231,7 +231,10 @@ pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
     let bytes = Base64::decode(value.as_str()).map_err(|e| anyhow::anyhow!(e))?;
     if let Some(flag) = bytes.first() {
         if flag == &Ed25519SuiSignature::SCHEME.flag() {
-            let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
+            let priv_key_bytes = bytes
+                .get(1 + Ed25519PublicKey::LENGTH..)
+                .ok_or_else(|| anyhow!("Invalid length"))?;
+            let sk = Ed25519PrivateKey::from_bytes(priv_key_bytes)?;
             return Ok(<Ed25519KeyPair as From<Ed25519PrivateKey>>::from(sk));
         }
     }

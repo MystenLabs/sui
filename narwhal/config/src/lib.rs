@@ -449,7 +449,13 @@ impl std::fmt::Display for WorkerCache {
             self.epoch(),
             self.workers
                 .iter()
-                .map(|(k, v)| { format!("{}: {}", k.encode_base64().get(0..16).unwrap(), v) })
+                .map(|(k, v)| {
+                    if let Some(x) = k.encode_base64().get(0..16) {
+                        format!("{}: {}", x, v)
+                    } else {
+                        format!("Invalid key: {}", k)
+                    }
+                })
                 .collect::<Vec<_>>()
         )
     }
@@ -580,7 +586,13 @@ impl std::fmt::Display for Committee {
             self.epoch(),
             self.authorities
                 .keys()
-                .map(|x| { x.encode_base64().get(0..16).unwrap().to_string() })
+                .map(|x| {
+                    if let Some(k) = x.encode_base64().get(0..16) {
+                        k.to_owned()
+                    } else {
+                        format!("Invalid key: {}", x)
+                    }
+                })
                 .collect::<Vec<_>>()
         )
     }

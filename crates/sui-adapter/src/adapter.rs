@@ -4,7 +4,6 @@
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
     fmt::Debug,
 };
 
@@ -568,8 +567,13 @@ fn process_successful_execution<S: Storage + ParentSync>(
         let has_public_transfer = abilities.has_store();
         debug_assert_eq!(
             id,
-            ObjectID::try_from(&contents[0..ID_END_INDEX])
-                .expect("object contents should start with an id")
+            ObjectID::from_bytes(contents.get(0..ID_END_INDEX).ok_or_else(|| {
+                ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    "Cannot parse Object ID",
+                )
+            })?)
+            .expect("object contents should start with an id")
         );
         let old_object_opt = by_value_objects.get(&id);
         let loaded_child_version_opt = loaded_child_objects.get(&id);

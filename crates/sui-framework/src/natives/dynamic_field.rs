@@ -94,7 +94,9 @@ pub fn hash_type_and_key(
     let hash = hasher.finalize();
 
     // truncate into an ObjectID and return
+    // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
     let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::address(id.into())],

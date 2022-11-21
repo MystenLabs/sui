@@ -98,8 +98,8 @@ impl MoveObject {
     pub fn has_public_transfer(&self) -> bool {
         self.has_public_transfer
     }
-
     pub fn id(&self) -> ObjectID {
+        // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
         ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
     }
 
@@ -110,12 +110,9 @@ impl MoveObject {
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
+    #[cfg(test)]
     pub fn type_specific_contents(&self) -> &[u8] {
         &self.contents[ID_END_INDEX..]
-    }
-
-    pub fn id_contents(&self) -> &[u8] {
-        &self.contents[..ID_END_INDEX]
     }
 
     /// Update the contents of this object and increment its version
