@@ -123,7 +123,8 @@ console = { version = "0.15", default-features = false, features = ["ansi-parsin
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
-constant_time_eq = { version = "0.1", default-features = false }
+constant_time_eq-c65f7effa3be6d31 = { package = "constant_time_eq", version = "0.1", default-features = false }
+constant_time_eq-6f8ce4dd05d13bba = { package = "constant_time_eq", version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
@@ -776,7 +777,8 @@ console = { version = "0.15", default-features = false, features = ["ansi-parsin
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
-constant_time_eq = { version = "0.1", default-features = false }
+constant_time_eq-c65f7effa3be6d31 = { package = "constant_time_eq", version = "0.1", default-features = false }
+constant_time_eq-6f8ce4dd05d13bba = { package = "constant_time_eq", version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
