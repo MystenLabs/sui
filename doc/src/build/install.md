@@ -2,7 +2,7 @@
 title: Install Sui to Build
 ---
 
-Learn how to install and configure Sui.
+Learn how to install and configure Sui to develop on-chain.
 
 Before you install Sui, you need to install some prerequisite tools and configure your development environment.
 
@@ -24,7 +24,7 @@ The Sui repository includes two primary branches, `devnet` and `main`.
 
 ## Documentation in the Sui repository
 
-The `main` and `devnet` branches of the Sui repository contain the relevant documentation for each branch. A version toggle on the documentation site enables you to switch between `main` branch content (labeled **Latest build**) and `devnet` branch content (labeled **Devnet**). Make sure the toggle is set to **Devnet** to learn how to install, configure, and build on Sui. The content in **Latest build** is useful to learn about potential updates to Sui, but is not guaranteed to be accurate for the features and functionality available in the `devnet` branch.  
+The `main` and `devnet` branches of the Sui repository contain the relevant documentation for each branch. A version toggle on the documentation site enables you to switch between `main` branch content (labeled **Latest build**) and `devnet` branch content (labeled **Devnet**). Make sure the toggle is set to **Devnet** for to learn how to install, configure, and build on Sui. The content in **Latest build** is useful to learn about potential updates to Sui, but the features and functionality described might not ever become available in the `devnet` branch.  
 
 ## Supported operating systems
 
@@ -36,7 +36,7 @@ Sui supports the following operating systems, beginning with the versions indica
 
 ## Prerequisites
 
-Install the prerequisites and tools you need to work with Sui. Click the 
+Install the prerequisites and tools you need to work with Sui. Click a marker in the table to jump to the relevant section.
 
 | Package/OS | Linux  | macOS | Windows 11 |
 | --- | :---: | :---: | :---: |
