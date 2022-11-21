@@ -501,7 +501,8 @@ serde_json = { version = "1", features = ["alloc", "indexmap", "preserve_order",
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["alloc", "hex", "macros", "std"] }
-serde_yaml = { version = "0.9", default-features = false }
+serde_yaml-c38e5c1d305a1b54 = { package = "serde_yaml", version = "0.8", default-features = false }
+serde_yaml-274715c4dabd11b0 = { package = "serde_yaml", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10", features = ["std"] }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10", features = ["std"] }
@@ -619,6 +620,7 @@ unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
 unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
+unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted-ca01ad9e24f5d932 = { package = "untrusted", version = "0.7", default-features = false }
 untrusted-274715c4dabd11b0 = { package = "untrusted", version = "0.9", default-features = false }
@@ -1217,7 +1219,8 @@ serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["alloc", "hex", "macros", "std"] }
 serde_with_macros = { version = "2", default-features = false }
-serde_yaml = { version = "0.9", default-features = false }
+serde_yaml-c38e5c1d305a1b54 = { package = "serde_yaml", version = "0.8", default-features = false }
+serde_yaml-274715c4dabd11b0 = { package = "serde_yaml", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10", features = ["std"] }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10", features = ["std"] }
@@ -1353,6 +1356,7 @@ unicode-xid-c65f7effa3be6d31 = { package = "unicode-xid", version = "0.1" }
 unicode-xid-6f8ce4dd05d13bba = { package = "unicode-xid", version = "0.2" }
 unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
+unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted-ca01ad9e24f5d932 = { package = "untrusted", version = "0.7", default-features = false }
 untrusted-274715c4dabd11b0 = { package = "untrusted", version = "0.9", default-features = false }
