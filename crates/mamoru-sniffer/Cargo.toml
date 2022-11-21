@@ -1,0 +1,12 @@
+[package]
+name = "mamoru-sniffer"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fastcrypto = { workspace = true }
+mamoru-core = { workspace = true }
+move-core-types = { workspace = true }
+sui-types = { path = "../sui-types" }

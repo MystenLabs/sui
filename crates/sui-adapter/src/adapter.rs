@@ -11,12 +11,14 @@ use std::{
 use anyhow::Result;
 use leb128;
 use linked_hash_map::LinkedHashMap;
+use move_binary_format::file_format_common::VERSION_MAX;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::VMResult,
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
+use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -24,6 +26,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
     value::{MoveStruct, MoveTypeLayout, MoveValue},
 };
+use move_vm_runtime::config::VMConfig;
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
     native_extensions::NativeContextExtensions,
@@ -64,7 +67,20 @@ macro_rules! assert_invariant {
 }
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
-    MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
+    MoveVM::new_with_config(
+        natives,
+        VMConfig {
+            verifier: VerifierConfig {
+                max_loop_depth: Some(5),
+                treat_friend_as_private: true,
+                max_generic_instantiation_length: Some(32),
+                max_function_parameters: Some(128),
+                max_basic_blocks: Some(1024),
+            },
+            max_binary_format_version: VERSION_MAX,
+        },
+    )
+    .map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
 pub fn new_session<

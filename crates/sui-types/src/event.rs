@@ -142,7 +142,7 @@ pub enum TransferType {
     EnumDiscriminants,
     EnumVariantNames,
 )]
-#[strum_discriminants(derive(strum_macros::EnumString))]
+#[strum_discriminants(derive(strum_macros::EnumString, strum_macros::Display))]
 #[strum_discriminants(name(EventType), derive(Serialize, Deserialize, JsonSchema))]
 // Developer note: PLEASE only append new entries, do not modify existing entries (binary compact)
 pub enum Event {
