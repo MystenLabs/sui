@@ -23,7 +23,7 @@ module games_with_chance::test_satoshi_flip {
     const EWrongPlayerTotal: u64 = 5;
 
 
-    fun init(ctx: &mut TxContext, house: address, player: address) {
+    fun start(ctx: &mut TxContext, house: address, player: address) {
         // send coins to players
         let coinA = coin::mint_for_testing<SUI>(50000, ctx);
         let coinB = coin::mint_for_testing<SUI>(20000, ctx);
@@ -44,7 +44,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -131,7 +131,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -229,7 +229,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -283,7 +283,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -311,7 +311,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -341,7 +341,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -384,7 +384,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -427,7 +427,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -469,7 +469,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -514,7 +514,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -568,7 +568,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -624,7 +624,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -663,7 +663,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            init(test_scenario::ctx(scenario), house, player);
+            start(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game
@@ -714,10 +714,6 @@ module games_with_chance::test_satoshi_flip {
         test_scenario::end(scenario_val);
     }
     
-    /*
-        tests missing:
-        - Invoke cancel_game before a bet has been placed
-    */
     /*
         stuff unable to be checked:
         - When a player places a bet the game.epoch must correspond to current epoch

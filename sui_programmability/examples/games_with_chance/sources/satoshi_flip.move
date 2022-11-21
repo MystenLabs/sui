@@ -58,6 +58,7 @@ module games_with_chance::satoshi_flip {
     const EGameNotEnded: u64 = 11;
     const EAlreadyAcceptedBet: u64 = 12;
     const ESecretIsEmpty: u64 = 13; // secret can't be an empty string
+    const EZeroMinBet: u64 = 14;
 
     // structs
 
@@ -91,7 +92,7 @@ module games_with_chance::satoshi_flip {
 
     struct Game has key {
         id: UID,
-        epoch: u64,
+        bet_placed_epoch: u64,
         hashed_secret: Sha3256Digest,
         house: address,
         player: Option<address>,
@@ -105,6 +106,7 @@ module games_with_chance::satoshi_flip {
     /// creates a new game and makes it a transfered object
     /// a user who wants to become house should call this function
     public entry fun start_game(hash: vector<u8>, house_coin: Coin<SUI>, max_bet: u64, min_bet: u64, ctx: &mut TxContext) {
+        assert!(min_bet > 0, EZeroMinBet);
         assert!(max_bet >= min_bet, EMinBetTooHigh);
         assert!(coin::value(&house_coin) >= max_bet, EHouseCoinNotEnough);
         let house_data = HouseData {
@@ -115,7 +117,7 @@ module games_with_chance::satoshi_flip {
 
         let new_game = Game {
             id: object::new(ctx),
-            epoch: tx_context::epoch(ctx),
+            bet_placed_epoch: tx_context::epoch(ctx),
             hashed_secret: digest::sha3_256_digest_from_bytes(hash),
             house: tx_context::sender(ctx),
             player: option::none(),
@@ -178,7 +180,7 @@ module games_with_chance::satoshi_flip {
         assert!(stake_amount >= house_data.min_bet, EStakeTooLow);
         assert!(guess == 0 || guess == 1, EGuessNot1Or0);
         assert!(coin::value(&stake_coin) >= stake_amount, EPlayerCoinNotEnoughBalance);
-        game.epoch = tx_context::epoch(ctx);
+        game.bet_placed_epoch = tx_context::epoch(ctx);
         // Get a balance with the stake_amount value
         let stake = coin::into_balance(stake_coin);
         if (balance::value(&stake) > stake_amount) {
@@ -261,7 +263,7 @@ module games_with_chance::satoshi_flip {
         // a bet has to have been placed
         assert!(option::is_some<BetData>(&game.bet_data), ECannotCancelBeforeBetting);
         // this can only be called `CancelEpochsAfter` epochs after the bet has been placed
-        assert!(game.epoch + EpochsCancelAfter <= tx_context::epoch(ctx), ENotEnoughEpochsPassedToCancel);
+        assert!(game.bet_placed_epoch + EpochsCancelAfter <= tx_context::epoch(ctx), ENotEnoughEpochsPassedToCancel);
 
         let HouseData {house_balance, min_bet: _, max_bet: _} = option::extract(&mut game.house_data);
         let BetData {stake, guess: _} = option::extract(&mut game.bet_data);
@@ -280,7 +282,7 @@ module games_with_chance::satoshi_flip {
 
     /// helper function to calculate and send SUI Coins with proper balances to each party
     fun pay_player(player: address, house: address, stake: Balance<SUI>, house_balance: Balance<SUI>, ctx: &mut TxContext) {
-        // if bet is less than max_bet, return the difference to player A after paying the wins
+        // if bet is less than max_bet, return the difference to house after paying the wins
          if (balance::value(&stake) < balance::value(&house_balance)) {
             let profit = balance::split(&mut house_balance, balance::value(&stake));
             // calculate the wins = profit + stake
