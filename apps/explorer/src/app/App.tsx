@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import '@fontsource/inter/variable.css';
+import '@fontsource/red-hat-mono/variable.css';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';

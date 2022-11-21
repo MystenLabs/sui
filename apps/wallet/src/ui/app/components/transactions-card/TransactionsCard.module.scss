@@ -122,7 +122,7 @@
     .tx-address {
         @include utils.typography('page-description');
 
-        font-family: 'Space Mono', ui-monospace, monospace;
+        font-family: 'Red Hat MonoVariable', ui-monospace, monospace;
         color: colors.$gray-90;
         line-height: 100%;
     }

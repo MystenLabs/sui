@@ -1,22 +1,9 @@
 @use './themes';
 @use '_variables' as v;
 
-/*
- * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
- * We currently disable the CSS reset and expect components to adapt accordingly.
- * When we fix this, we should use the following as a CSS reset: @tailwind base;
- */
-
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@font-face {
-    font-family: Inter;
-    font-style: normal;
-    font-display: block;
-    src: url('_assets/fonts/inter.ttf');
-    font-weight: 100 900;
-}
 
 html,
 body {
@@ -32,7 +19,7 @@ body {
     background-color: v.use(v.$colors-background-color);
     color: black;
     scroll-behavior: smooth;
-    font-family: Inter, sans-serif;
+    font-family: InterVariable, sans-serif;
 }
 
 #root {
@@ -78,5 +65,5 @@ textarea {
 }
 
 textarea {
-    font-family: Inter, sans-serif;
+    font-family: InterVariable, sans-serif;
 }

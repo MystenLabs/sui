@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const defaultTheme = require("tailwindcss/defaultTheme");
+const { fontFamily } = require("tailwindcss/defaultTheme");
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -43,8 +43,8 @@ module.exports = {
         p4: ["11px", "1.3"],
       },
       fontFamily: {
-        sans: ["Inter", ...defaultTheme.fontFamily.sans],
-        mono: ["Space Mono", ...defaultTheme.fontFamily.mono],
+        sans: ["InterVariable", "Inter", ...fontFamily.sans],
+        mono: ["Red Hat MonoVariable", "Red Hat Mono", ...fontFamily.mono],
       },
       colors: {
         sui: {
