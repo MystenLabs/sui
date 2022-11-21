@@ -11,12 +11,10 @@ import {
 } from '../../utils/imageModeratorClient';
 import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
-import styles from './DisplayBox.module.css';
-
 function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     return (
         <div
-            className={`${styles.imagebox} ${styles.brokenimage}`}
+            className="h-full w-full flex items-center justify-center stroke-sui-grey-65 bg-sui-grey-45 rounded-md"
             id="noImage"
             onClick={onClick}
         >
@@ -154,12 +152,11 @@ function DisplayBoxWString({
 
     if (showAutoModNotice) {
         return (
-            <div className={styles['display-container']}>
-                {showAutoModNotice && (
-                    <div className={styles.automod} id="modnotice">
-                        NFT image hidden
-                    </div>
-                )}
+            <div
+                className="border-0 border-b-2 border-solid border-gray-300 w-1/2 ibg-modnotice relative text-center content-center align-middle m-auto p-4 mt-8"
+                id="modnotice"
+            >
+                NFT image hidden
             </div>
         );
     } else {
@@ -168,17 +165,20 @@ function DisplayBoxWString({
                 <Transition appear show={hasClickedImage} as="div">
                     <Dialog as="div" onClose={handleImageClick}>
                         <Transition.Child>
-                            <div className={styles.detailsbg} />
+                            <div className="fixed inset-0 bg-sui-grey-100 z-20 opacity-85" />
                         </Transition.Child>
-                        <Transition.Child className={styles.modal}>
-                            <Dialog.Panel as="div" className={styles.fig}>
-                                <div className={styles.imageandcross}>
+                        <Transition.Child className="w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex">
+                            <Dialog.Panel
+                                as="div"
+                                className="mt-auto mb-15 sm:my-auto sm:relative sm:left-5"
+                            >
+                                <div className="flex">
                                     {hasFailedToLoad ? (
                                         <ShowBrokenImage />
                                     ) : (
                                         <img
                                             id="loadedImage"
-                                            className={styles.largeimage}
+                                            className="max-w-[80vw] max-h-[80vh] z-50 self-start border-0 rounded-md"
                                             alt="Object's NFT"
                                             src={transformURL(display)}
                                         />
@@ -191,27 +191,30 @@ function DisplayBoxWString({
                                         Close Dialog
                                     </button>
                                     <span
-                                        className={styles.desktopcross}
+                                        className="hidden sm:block sm:ml-2 sm:mr-0"
                                         onClick={handleImageClick}
                                         aria-hidden
                                     >
-                                        <span className={styles.cross}>
+                                        <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-13 text-2xl mx-auto z-50">
                                             &times;
                                         </span>
                                     </span>
                                 </div>
                                 <Dialog.Description as="div">
                                     {caption && (
-                                        <div className={styles.caption}>
+                                        <div className="break-words max-w-[90vw] relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5">
                                             {caption}{' '}
                                         </div>
                                     )}
-                                    <div className={styles.filetype}>
+                                    <div className="break-words max-w-[90vw] relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5 text-sm text-sui-grey-60 font-medium mt-0">
                                         {fileType}
                                     </div>
                                 </Dialog.Description>
-                                <div className={styles.mobilecross} aria-hidden>
-                                    <span className={styles.cross}>
+                                <div
+                                    className="block mx-auto mt-[10vh] sm:hidden"
+                                    aria-hidden
+                                >
+                                    <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-13 text-2xl mx-auto z-50">
                                         &times;
                                     </span>
                                 </div>
@@ -220,12 +223,12 @@ function DisplayBoxWString({
                     </Dialog>
                 </Transition>
 
-                <div
-                    className={styles['display-container']}
-                    id="displayContainer"
-                >
+                <div id="displayContainer">
                     {!hasDisplayLoaded && (
-                        <div className={styles.imagebox} id="pleaseWaitImage">
+                        <div
+                            className="h-full w-full flex items-center justify-center"
+                            id="pleaseWaitImage"
+                        >
                             Image Loading...
                         </div>
                     )}
@@ -235,7 +238,7 @@ function DisplayBoxWString({
                     {!hasFailedToLoad && (
                         <img
                             id="loadedImage"
-                            className={styles.smallimage}
+                            className="object-fill cursor-pointer rounded-md"
                             style={imageStyle}
                             alt="NFT"
                             src={transformURL(display)}
