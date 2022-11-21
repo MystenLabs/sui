@@ -306,7 +306,7 @@ log = { version = "0.4", default-features = false, features = ["serde", "std"] }
 lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
-matchit = { version = "0.7" }
+matchit = { version = "0.5" }
 memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "3", features = ["std"] }
@@ -981,7 +981,7 @@ log = { version = "0.4", default-features = false, features = ["serde", "std"] }
 lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
-matchit = { version = "0.7" }
+matchit = { version = "0.5" }
 memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "3", features = ["std"] }
