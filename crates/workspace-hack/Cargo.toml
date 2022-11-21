@@ -750,7 +750,7 @@ cfg-expr = { version = "0.12", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
-chrono-tz-build = { version = "0.1.0", default-features = false }
+chrono-tz-build = { version = "0.0.3", default-features = false }
 ciborium = { version = "0.2", features = ["std"] }
 ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
 ciborium-ll = { version = "0.2", default-features = false }
