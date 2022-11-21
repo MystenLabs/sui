@@ -55,7 +55,7 @@ once_cell = "1.16.0"
 [dev-dependencies]
 pretty_assertions = "1.3.0"
 serde-reflection = "0.3.6"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.14"
 structopt = "0.3.26"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 

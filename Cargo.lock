@@ -4269,7 +4269,7 @@ dependencies = [
  "reqwest",
  "serde 1.0.147",
  "serde_json",
- "serde_yaml",
+ "serde_yaml 0.8.26",
  "tempfile",
  "toml_edit",
  "walkdir",
@@ -4529,7 +4529,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde 1.0.147",
- "serde_yaml",
+ "serde_yaml 0.8.26",
  "sha2 0.9.9",
  "tempfile",
  "toml",
@@ -5269,7 +5269,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "serde-reflection",
- "serde_yaml",
+ "serde_yaml 0.9.14",
  "structopt",
  "sui-metrics",
  "telemetry-subscribers",
@@ -7748,6 +7748,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d232d893b10de3eb7258ff01974d6ee20663d8e833263c99409d4b13a0209da"
+dependencies = [
+ "indexmap",
+ "itoa 1.0.4",
+ "ryu",
+ "serde 1.0.147",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "sha-1"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8260,7 +8273,7 @@ dependencies = [
  "serde 1.0.147",
  "serde_json",
  "serde_with",
- "serde_yaml",
+ "serde_yaml 0.9.14",
  "shell-words",
  "signature",
  "sui-config",
@@ -8426,7 +8439,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "serde_with",
- "serde_yaml",
+ "serde_yaml 0.9.14",
  "sui-adapter",
  "sui-framework",
  "sui-simulator",
@@ -8477,7 +8490,7 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "serde_with",
- "serde_yaml",
+ "serde_yaml 0.9.14",
  "signature",
  "sui-adapter",
  "sui-config",
@@ -10378,6 +10391,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unsafe-libyaml"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1e5fa573d8ac5f1a856f8d7be41d390ee973daf97c806b2c1a465e4e1406e68"
+
+[[package]]
 name = "unsigned-varint"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11421,7 +11440,7 @@ dependencies = [
  "serde_urlencoded",
  "serde_with",
  "serde_with_macros",
- "serde_yaml",
+ "serde_yaml 0.9.14",
  "sha-1 0.10.0",
  "sha-1 0.9.8",
  "sha2 0.10.6",

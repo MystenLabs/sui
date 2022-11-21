@@ -73,7 +73,7 @@ sui-macros = { path = "../sui-macros" }
 clap = { version = "3.2.17", features = ["derive"] }
 
 serde-reflection = "0.3.6"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.14"
 pretty_assertions = "1.2.1"
 
 sui-framework-build = { path = "../sui-framework-build" }
