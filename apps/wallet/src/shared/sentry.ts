@@ -18,7 +18,7 @@ export default function initSentry() {
         dsn: SENTRY_DSN,
         integrations: [new BrowserTracing()],
         release: WALLET_VERSION,
-        tracesSampleRate: 1.0,
+        tracesSampleRate: 0.2,
     });
 }
 
