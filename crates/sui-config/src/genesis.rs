@@ -404,7 +404,7 @@ impl Builder {
         fs::create_dir_all(&object_dir)?;
 
         for (_id, object) in self.objects {
-            let object_bytes = serde_yaml::to_vec(&object)?;
+            let object_bytes = serde_yaml::to_string(&object)?.into_bytes();
             let hex_digest = Hex::encode(object.digest());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
@@ -414,7 +414,7 @@ impl Builder {
         fs::create_dir_all(&committee_dir)?;
 
         for (_pubkey, validator) in self.validators {
-            let validator_info_bytes = serde_yaml::to_vec(&validator)?;
+            let validator_info_bytes = serde_yaml::to_string(&validator)?.into_bytes();
             let hex_name = Hex::encode(validator.info.protocol_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
         }
