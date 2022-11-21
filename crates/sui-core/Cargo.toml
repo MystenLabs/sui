@@ -10,7 +10,7 @@ edition = "2021"
 rocksdb = "0.19.0"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
-chrono = "0.4.0"
+chrono = "0.4.23"
 futures = "0.3.23"
 bytes = "1.2.1"
 serde = { version = "1.0.144", features = ["derive"] }

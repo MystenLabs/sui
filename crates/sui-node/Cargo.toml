@@ -18,7 +18,7 @@ tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 parking_lot = "0.12.1"
 futures = "0.3.23"
-chrono = "0.4.0"
+chrono = "0.4.23"
 tower = "0.4.13"
 
 sui-config = { path = "../sui-config" }
