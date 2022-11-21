@@ -1,0 +1,6 @@
+{% extends "base" %}
+
+{% block content %}
+    <h3>Faucet Response</h3>
+    <pre> {{response}} </pre>
+{% endblock content %}

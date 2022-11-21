@@ -1,0 +1,15 @@
+{% extends "base" %}
+
+{% block content %}
+    <div class="row">
+      <h4>Query Transaction</h4>
+      <form action="/transaction/query" method="get">
+        <div>
+          <input type="text" placeholder="Transaction Digest" style="width: 200px;"
+            name="tx_digest" id="tx_digest" value="" autofocus
+          />
+          <input type="submit" value="Query">
+        </div>
+      </form>
+    </div>
+{% endblock content %}

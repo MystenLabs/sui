@@ -24,14 +24,21 @@ strum_macros = "^0.24"
 strum = "0.24.1"
 serde = { version = "1.0.144", features = ["derive"] }
 eyre = "0.6.8"
+hex = "0.4.3"
+rocket = "0.5.0-rc.2"
 
 sui-storage = { path = "../sui-storage" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-network = { path = "../sui-network" }
+sui-cluster-test = { path = "../sui-cluster-test" }
 
 telemetry-subscribers.workspace = true
 
 colored = "2.0.0"
 workspace-hack.workspace = true
+
+[dependencies.rocket_dyn_templates]
+version = "0.1.0-rc.2"
+features = ["tera"]
