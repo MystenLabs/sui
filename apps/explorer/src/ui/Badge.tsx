@@ -4,7 +4,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import { ReactComponent as CheckIcon } from './icons/check.svg';
+import { ReactComponent as CheckIcon } from './icons/check_12x12.svg';
 import { ReactComponent as XIcon } from './icons/x.svg';
 
 const badgeStyles = cva(
