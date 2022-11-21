@@ -1493,7 +1493,7 @@ ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support"] }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
-linux-raw-sys = { version = "0.1.2", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys = { version = "0.0.46", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2 = { version = "0.5", default-features = false }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
@@ -1543,7 +1543,7 @@ ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support"] }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
-linux-raw-sys = { version = "0.1.2", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys = { version = "0.0.46", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2 = { version = "0.5", default-features = false }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }

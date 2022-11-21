@@ -3961,12 +3961,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4d2456c373231a208ad294c33dc5bff30051eafd954cd4caae83a712b12854d"
 
 [[package]]
-name = "linux-raw-sys"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb68f22743a3fb35785f1e7f844ca5a3de2dde5bd0c0ef5b372065814699b121"
-
-[[package]]
 name = "lock_api"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7310,7 +7304,7 @@ dependencies = [
  "errno",
  "io-lifetimes",
  "libc",
- "linux-raw-sys 0.0.46",
+ "linux-raw-sys",
  "windows-sys 0.42.0",
 ]
 
@@ -11158,7 +11152,7 @@ dependencies = [
  "libtest-mimic",
  "libz-sys",
  "linked-hash-map",
- "linux-raw-sys 0.1.2",
+ "linux-raw-sys",
  "lock_api",
  "log",
  "lru",
