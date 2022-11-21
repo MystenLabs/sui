@@ -38,5 +38,5 @@ workspace-hack.workspace = true
 sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
-insta = { version = "1.19.1", features = ["redactions", "yaml"] }
+insta = { version = "1.21.1", features = ["redactions", "yaml"] }
 tempfile = "3.3.0"
