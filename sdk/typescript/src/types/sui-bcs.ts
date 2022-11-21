@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
+import { Base64DataBuffer } from '../serialization/base64';
 import { SuiObjectRef } from './objects';
 
 const bcs = new BCS(getSuiMoveConfig());
@@ -89,12 +90,11 @@ export type PayAllSuiTx = {
   };
 };
 
-bcs
-  .registerStructType('PayTx', {
-    coins: 'vector<SuiObjectRef>',
-    recipients: 'vector<address>',
-    amounts: 'vector<u64>',
-  });
+bcs.registerStructType('PayTx', {
+  coins: 'vector<SuiObjectRef>',
+  recipients: 'vector<address>',
+  amounts: 'vector<u64>',
+});
 
 bcs.registerStructType('PaySuiTx', {
   coins: 'vector<SuiObjectRef>',
@@ -231,7 +231,7 @@ export type TypeTag =
   | { struct: StructTag }
   | { u16: null }
   | { u32: null }
-  | { u256: null }  ;
+  | { u256: null };
 
 bcs
   .registerEnumType('TypeTag', {
@@ -269,14 +269,13 @@ export type MoveCallTx = {
   };
 };
 
-bcs
-  .registerStructType('MoveCallTx', {
-    package: 'SuiObjectRef',
-    module: 'string',
-    function: 'string',
-    typeArguments: 'vector<TypeTag>',
-    arguments: 'vector<CallArg>',
-  });
+bcs.registerStructType('MoveCallTx', {
+  package: 'SuiObjectRef',
+  module: 'string',
+  function: 'string',
+  typeArguments: 'vector<TypeTag>',
+  arguments: 'vector<CallArg>',
+});
 
 // ========== TransactionData ===========
 
@@ -308,11 +307,10 @@ export type TransactionKind =
   | { Single: Transaction }
   | { Batch: Transaction[] };
 
-bcs
-  .registerEnumType('TransactionKind', {
-    Single: 'Transaction',
-    Batch: 'vector<Transaction>',
-  });
+bcs.registerEnumType('TransactionKind', {
+  Single: 'Transaction',
+  Batch: 'vector<Transaction>',
+});
 
 /**
  * The TransactionData to be signed and sent to the RPC service.
@@ -335,6 +333,19 @@ bcs.registerStructType('TransactionData', {
   gasPrice: 'u64',
   gasBudget: 'u64',
 });
+
+export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
+  (e) => e.charCodeAt(0)
+);
+
+export function deserializeTransactionBytesToTransactionData(
+  bytes: Base64DataBuffer
+): TransactionData {
+  return bcs.de(
+    'TransactionData',
+    bytes.getData().slice(TRANSACTION_DATA_TYPE_TAG.length)
+  );
+}
 
 /**
  * Signed transaction data needed to generate transaction digest.

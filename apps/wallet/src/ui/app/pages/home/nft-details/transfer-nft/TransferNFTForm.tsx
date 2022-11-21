@@ -55,12 +55,15 @@ function TransferNFTForm({
     const gasEstimationResult = useQuery({
         queryKey: ['nft-transfer', nftID, 'gas-estimation', to],
         queryFn: async () => {
-            const tx = await signer.serializer.newTransferObject(
+            const tx = await signer.serializer.serializeToBytes(
                 await signer.getAddress(),
                 {
-                    objectId: nftID,
-                    recipient: to,
-                    gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
+                    kind: 'transferObject',
+                    data: {
+                        objectId: nftID,
+                        recipient: to,
+                        gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
+                    },
                 }
             );
             return signer.getGasCostEstimation(tx);
