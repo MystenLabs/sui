@@ -105,7 +105,7 @@ dependencies = [
  "ed25519",
  "futures",
  "http",
- "matchit",
+ "matchit 0.5.0",
  "pin-project-lite",
  "pkcs8",
  "quinn",
@@ -557,7 +557,7 @@ dependencies = [
  "http-body",
  "hyper",
  "itoa 1.0.4",
- "matchit",
+ "matchit 0.5.0",
  "memchr",
  "mime",
  "percent-encoding",
@@ -4009,6 +4009,12 @@ name = "matchit"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
+
+[[package]]
+name = "matchit"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b87248edafb776e59e6ee64a79086f65890d3510f2c656c000bf2a7e8a0aea40"
 
 [[package]]
 name = "memchr"
@@ -11164,7 +11170,7 @@ dependencies = [
  "lru",
  "match_opt",
  "matchers",
- "matchit",
+ "matchit 0.7.0",
  "memchr",
  "memmap2",
  "memoffset",
