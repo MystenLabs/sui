@@ -19,7 +19,7 @@ import {
     useAppSelector,
     useMiddleEllipsis,
     useFormatCoin,
-    useGetNFTMetadata,
+    useGetNFTMeta,
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import {
@@ -86,7 +86,7 @@ function PassedObject({ id, module }: { id: string; module: string }) {
     );
 
     // Render the NFT if ID is a NFT
-    const nftMeta = useGetNFTMetadata(id);
+    const nftMeta = useGetNFTMeta(id);
 
     return (
         <div className={st.permissionsContent}>
@@ -270,7 +270,7 @@ function TransactionSummaryCard({
                 <div className={st.content}>
                     <div className={st.row}>
                         <div className={st.label}>
-                            {isListing ? 'List for' : 'Send'}
+                            {isListing ? 'Your Listing Price' : 'Send'}
                         </div>
                         <div className={st.value}>
                             {formatedAmount} {symbol}
@@ -279,7 +279,7 @@ function TransactionSummaryCard({
 
                     <div className={st.row}>
                         <div className={st.label}>
-                            {isListing ? 'At' : 'To'}
+                            {isListing ? 'Listing On' : 'To'}
                         </div>
                         <div className={st.value}>
                             <ExternalLink
@@ -406,7 +406,7 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest, dispatch]);
 
-    const nftMeta = useGetNFTMetadata(txRequest?.txnMeta?.objectId || null);
+    const nftMeta = useGetNFTMeta(txRequest?.txnMeta?.objectId || null);
 
     const metadata = useMemo(() => {
         if (

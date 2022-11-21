@@ -31,7 +31,7 @@ export function useGetObjectData(
     return data?.data || null;
 }
 
-export function useGetNFTMetadata(objectID: string | null): NFTMetadata {
+export function useGetNFTMeta(objectID: string | null): NFTMetadata {
     const data = useGetObjectData(objectID);
 
     const nftMeta = useMemo(() => {

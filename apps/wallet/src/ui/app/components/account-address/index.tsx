@@ -30,8 +30,8 @@ function AccountAddress({
     const showExplorerLink = API_ENV.customRPC !== network;
 
     const address = useAppSelector(({ account: { address } }) => address);
-    const shortenAddress = useMiddleEllipsis(address, 10, 7);
-    // const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
+    const shortenAddress = useMiddleEllipsis(address, 10, 6);
+
     const addressLink = address && (
         <span className={cl(st.address, st[mode])} title={address}>
             {shorten ? shortenAddress : address}

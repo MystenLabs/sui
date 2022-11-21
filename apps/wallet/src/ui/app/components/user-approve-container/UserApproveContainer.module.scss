@@ -75,12 +75,12 @@
     text-transform: capitalize;
     display: flex;
     flex-flow: column;
+    align-content: center;
     gap: 7px;
     flex-grow: 1;
 }
 
 .origin {
-    margin-bottom: 10px;
     font-size: 14px;
     line-height: 100%;
     font-weight: 500;
