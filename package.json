@@ -17,6 +17,6 @@
     }
   },
   "devDependencies": {
-    "@changesets/cli": "^2.24.3"
+    "@changesets/cli": "^2.25.2"
   }
 }
