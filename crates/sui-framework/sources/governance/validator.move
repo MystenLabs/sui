@@ -212,12 +212,12 @@ module sui::validator {
         self: &mut Validator,
         delegation: &mut Delegation,
         staked_sui: &mut StakedSui,
-        withdraw_pool_token_amount: u64,
+        principal_withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let withdraw_sui_amount = staking_pool::request_withdraw_delegation(
-                &mut self.delegation_staking_pool, delegation, staked_sui, withdraw_pool_token_amount, ctx);
-        decrease_next_epoch_delegation(self, withdraw_sui_amount);
+        staking_pool::request_withdraw_delegation(
+                &mut self.delegation_staking_pool, delegation, staked_sui, principal_withdraw_amount, ctx);
+        decrease_next_epoch_delegation(self, principal_withdraw_amount);
     }
 
     /// Decrement the delegation amount for next epoch. Also called by `validator_set` when handling delegation switches.

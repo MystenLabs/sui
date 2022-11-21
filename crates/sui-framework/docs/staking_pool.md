@@ -498,14 +498,14 @@ when the delegation object containing the pool tokens is distributed to the dele
 
 ## Function `request_withdraw_delegation`
 
-Request to withdraw <code>withdraw_pool_token_amount</code> worth of delegated stake from a staking pool.
-A proportional amount of principal in SUI is withdrawn and transferred to the delegator.
+Request to withdraw <code>principal_withdraw_amount</code> of stake plus rewards from a staking pool.
+This amount of principal in SUI is withdrawn and transferred to the delegator. A proportional amount
+of pool tokens will be later burnt.
 The rewards portion will be withdrawn at the end of the epoch, after the rewards have come in so we
 can use the new exchange rate to calculate the rewards.
-Returns the amount of SUI withdrawn.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation">request_withdraw_delegation</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, withdraw_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation">request_withdraw_delegation</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, principal_withdraw_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -518,13 +518,11 @@ Returns the amount of SUI withdrawn.
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>,
     staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-    withdraw_pool_token_amount: u64,
+    principal_withdraw_amount: u64,
     ctx: &<b>mut</b> TxContext
-) : u64 {
+) {
     <b>let</b> (withdrawn_pool_tokens, principal_withdraw, time_lock) =
-        <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, delegation, staked_sui, withdraw_pool_token_amount);
-
-    <b>let</b> principal_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
+        <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, delegation, staked_sui, principal_withdraw_amount);
 
     <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <a href="_push_back">vector::push_back</a>(&<b>mut</b> pool.pending_withdraws, <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> {
@@ -537,7 +535,6 @@ Returns the amount of SUI withdrawn.
         <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), delegator);
         <a href="_destroy_none">option::destroy_none</a>(time_lock);
     };
-    principal_withdraw_amount
 }
 </code></pre>
 
@@ -549,16 +546,16 @@ Returns the amount of SUI withdrawn.
 
 ## Function `withdraw_from_principal`
 
-Withdraw a proportional amount of the principal SUI stored in the StakedSui object, as
-well as the requested amount of pool tokens from the delegation object.
+Withdraw the requested amount of the principal SUI stored in the StakedSui object, as
+well as a proportional amount of pool tokens from the delegation object.
 For example, suppose the delegation object contains 15 pool tokens and the principal SUI
-amount is 21. Then if <code>withdraw_pool_token_amount</code> is 5, 5 pool tokens and 7 SUI tokens will
+amount is 21. Then if <code>principal_withdraw_amount</code> is 7, 5 pool tokens and 7 SUI tokens will
 be withdrawn.
 Returns values are withdrawn pool tokens, withdrawn principal portion of SUI, and its
 time lock if applicable.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, withdraw_pool_token_amount: u64): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;, <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, principal_withdraw_amount: u64): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;, <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;)
 </code></pre>
 
 
@@ -571,7 +568,7 @@ time lock if applicable.
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>,
     staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-    withdraw_pool_token_amount: u64,
+    principal_withdraw_amount: u64,
 ) : (Balance&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a>&gt;, Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
     // Check that the delegation information matches the pool.
     <b>assert</b>!(
@@ -580,20 +577,20 @@ time lock if applicable.
         <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>
     );
 
-    <b>assert</b>!(withdraw_pool_token_amount &gt; 0, <a href="staking_pool.md#0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO">EWITHDRAW_AMOUNT_CANNOT_BE_ZERO</a>);
+    <b>assert</b>!(principal_withdraw_amount &gt; 0, <a href="staking_pool.md#0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO">EWITHDRAW_AMOUNT_CANNOT_BE_ZERO</a>);
+    <b>assert</b>!(delegation.principal_sui_amount &gt;= principal_withdraw_amount, <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE">EINSUFFICIENT_SUI_TOKEN_BALANCE</a>);
 
     <b>let</b> pool_token_balance = <a href="balance.md#0x2_balance_value">balance::value</a>(&delegation.pool_tokens);
-    <b>assert</b>!(pool_token_balance &gt;= withdraw_pool_token_amount, <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_POOL_TOKEN_BALANCE">EINSUFFICIENT_POOL_TOKEN_BALANCE</a>);
 
-    // Calculate the amounts of SUI <b>to</b> be withdrawn from the principal component.
-    // We already checked that pool_token_balance is greater than zero.
-    <b>let</b> sui_withdraw_from_principal =
-        (delegation.principal_sui_amount <b>as</b> u128) * (withdraw_pool_token_amount <b>as</b> u128) / (pool_token_balance <b>as</b> u128);
+    // Calculate the amount of pool tokens <b>to</b> be withdrawn.
+    // We already checked that `delegation.principal_sui_amount` is greater than zero.
+    <b>let</b> withdraw_pool_token_amount =
+        (pool_token_balance <b>as</b> u128) * (principal_withdraw_amount <b>as</b> u128) / (delegation.principal_sui_amount <b>as</b> u128);
 
-    <b>let</b> (principal_withdraw, time_lock) = <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal_impl">withdraw_from_principal_impl</a>(delegation, staked_sui, (sui_withdraw_from_principal <b>as</b> u64));
+    <b>let</b> (principal_withdraw, time_lock) = <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal_impl">withdraw_from_principal_impl</a>(delegation, staked_sui, principal_withdraw_amount);
 
     (
-        <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> delegation.pool_tokens, withdraw_pool_token_amount),
+        <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> delegation.pool_tokens, (withdraw_pool_token_amount <b>as</b> u64)),
         principal_withdraw,
         time_lock
     )
