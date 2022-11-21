@@ -10942,6 +10942,7 @@ dependencies = [
  "console-subscriber",
  "const-oid",
  "constant_time_eq 0.1.5",
+ "constant_time_eq 0.2.4",
  "core-foundation",
  "core-foundation-sys",
  "core2",
