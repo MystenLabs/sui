@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -1675,6 +1676,30 @@ impl TransactionEffects {
     }
 }
 
+impl Message for TransactionEffectsDigest {
+    type DigestType = TransactionEffectsDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        *self
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+}
+
+impl Message for ExecutionDigests {
+    type DigestType = TransactionDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        self.transaction
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+}
+
 impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
@@ -1755,6 +1780,17 @@ pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
+pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
+pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
+pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
+
+impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
+    fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {
+        let (data, validity) = ved.into_data_and_sig();
+        ValidTransactionEffectsDigest::new(data.effects, validity)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {
