@@ -92,23 +92,11 @@ pub enum SuiKeyPair {
     Secp256k1SuiKeyPair(Secp256k1KeyPair),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublicKey {
     Ed25519KeyPair(Ed25519PublicKey),
     Secp256k1KeyPair(Secp256k1PublicKey),
 }
-
-impl PartialEq for PublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (PublicKey::Ed25519KeyPair(a), PublicKey::Ed25519KeyPair(b)) => a == b,
-            (PublicKey::Secp256k1KeyPair(a), PublicKey::Secp256k1KeyPair(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for PublicKey {}
 
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
