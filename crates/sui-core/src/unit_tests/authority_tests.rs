@@ -1774,47 +1774,6 @@ async fn test_genesis_sui_sysmtem_state_object() {
 }
 
 #[tokio::test]
-async fn test_change_epoch_transaction() {
-    let authority_state = init_state().await;
-    let mut committee = (**authority_state.committee.load()).clone();
-    committee.epoch += 1;
-    authority_state.committee.store(Arc::new(committee));
-
-    let signed_tx = VerifiedSignedTransaction::new_change_epoch(
-        1,
-        100,
-        100,
-        0,
-        authority_state.name,
-        &*authority_state.secret,
-    );
-    // Make sure that the raw transaction will never be accepted by the validator.
-    assert_eq!(
-        authority_state
-            .handle_transaction(signed_tx.clone().into_unsigned())
-            .await
-            .unwrap_err(),
-        SuiError::InvalidSystemTransaction
-    );
-    let committee = authority_state.committee.load();
-    let certificate = CertifiedTransaction::new(
-        signed_tx.clone().into_message(),
-        vec![signed_tx.auth_sig().clone()],
-        &committee,
-    )
-    .unwrap()
-    .verify(&committee)
-    .unwrap();
-    let result = authority_state
-        .handle_certificate(&certificate)
-        .await
-        .unwrap();
-    assert!(result.signed_effects.unwrap().into_data().status.is_ok());
-    let sui_system_object = authority_state.get_sui_system_state_object().await.unwrap();
-    assert_eq!(sui_system_object.epoch, 1);
-}
-
-#[tokio::test]
 async fn test_transfer_sui_no_amount() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);

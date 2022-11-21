@@ -341,6 +341,7 @@ impl ValidatorService {
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let transaction = request.into_inner();
+
         let is_consensus_tx = transaction.contains_shared_object();
 
         let _metrics_guard = start_timer(if is_consensus_tx {
