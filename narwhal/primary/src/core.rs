@@ -372,11 +372,6 @@ impl Core {
             certificate.ok_or_else(|| DagError::CouldNotFormCertificate(header.digest()))?;
         debug!("Assembled {certificate:?}");
 
-        metrics
-            .certificate_created_round
-            .with_label_values(&[&header.epoch.to_string()])
-            .set(header.round as i64);
-
         Ok(certificate)
     }
 
@@ -444,6 +439,10 @@ impl Core {
             ));
 
         // Update metrics.
+        self.metrics
+            .certificate_created_round
+            .with_label_values(&[&epoch.to_string()])
+            .set(round as i64);
         self.metrics
             .certificates_created
             .with_label_values(&[&epoch.to_string()])
