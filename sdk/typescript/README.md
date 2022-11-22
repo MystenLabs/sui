@@ -62,7 +62,7 @@ To run E2E tests against DevNet
 
 ```
 cd sdk/typescript
-VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm test:e2e
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' vitest e2e
 ```
 
 ## Connecting to Sui Network

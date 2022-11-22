@@ -7,7 +7,8 @@ export default defineConfig({
   test: {
     minThreads: 1,
     maxThreads: 8,
-    hookTimeout: 100000,
+    hookTimeout: 1000000,
+    testTimeout: 1000000,
   },
   resolve: {
     alias: {
