@@ -32,10 +32,8 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use tap::TapFallible;
-use tokio::select;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::{broadcast::error::RecvError, mpsc};
-use tokio::time::interval;
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -2375,54 +2373,66 @@ impl AuthorityState {
         next_epoch: EpochId,
         gas_cost_summary: &GasCostSummary,
         timeout: Duration,
-        mut cancel: tokio::sync::oneshot::Receiver<()>,
     ) -> anyhow::Result<VerifiedCertificate> {
-        let mut interval = interval(Duration::from_millis(100));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-        let result = tokio::time::timeout(timeout, async {
-            loop {
-                select! {
-                    _ = interval.tick() => {
-                        match self.create_advance_epoch_tx_cert_impl(next_epoch, gas_cost_summary)
-                            .await
-                        {
-                            Ok(cert) => {
-                                return Ok(cert);
-                            }
-                            Err(err) => {
-                                error!("Failed to create advance epoch transaction cert: {:?}", err);
-                            }
-                        }
-                    },
-                    _ = &mut cancel => {
-                        return Err(SuiError::from("create_advance_epoch_tx_cert task canceled"));
-                    }
-                }
-
-            }
-        })
-        .await;
-        Ok(result??)
-    }
-
-    async fn create_advance_epoch_tx_cert_impl(
-        &self,
-        next_epoch: EpochId,
-        gas_cost_summary: &GasCostSummary,
-    ) -> anyhow::Result<VerifiedCertificate> {
+        debug!(
+            ?next_epoch,
+            computation_cost=?gas_cost_summary.computation_cost,
+            storage_cost=?gas_cost_summary.storage_cost,
+            storage_rebase=?gas_cost_summary.storage_rebate,
+            "Creating advance epoch transaction"
+        );
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
         );
+        // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
         self.handle_transaction_impl(tx.clone()).await?;
+        debug!(?next_epoch, "Successfully signed advance epoch transaction");
+
+        // If constructing network fails, it's not recoverable.
         let net = AuthorityAggregator::new_from_system_state(
             &self.database,
             &self.committee_store,
             &Registry::new(),
         )?;
-        Ok(net.process_transaction(tx).await?)
+
+        let result = tokio::time::timeout(timeout, async {
+            loop {
+                // We may have already executed this transaction somewhere else.
+                // If so, no need to try to get it from the network.
+                if let Ok(Some(VerifiedTransactionInfoResponse {
+                    certified_transaction: Some(cert),
+                    ..
+                })) = self.get_tx_info_already_executed(tx.digest()).await
+                {
+                    return cert;
+                }
+                match net.process_transaction(tx.clone()).await {
+                    Ok(cert) => {
+                        return cert;
+                    }
+                    Err(err) => {
+                        debug!("Did not create advance epoch transaction cert: {:?}", err);
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+        match result {
+            Ok(cert) => {
+                debug!(
+                    "Successfully created advance epoch transaction cert: {:?}",
+                    cert
+                );
+                Ok(cert)
+            }
+            Err(err) => {
+                error!("Failed to create advance epoch transaction cert. Giving up");
+                Err(err.into())
+            }
+        }
     }
 }
