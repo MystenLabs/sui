@@ -15,6 +15,7 @@ use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use move_core_types::value::MoveStructLayout;
 use mysten_network::config::Config;
+use std::convert::AsRef;
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
 use sui_metrics::{monitored_future, spawn_monitored_task};
@@ -38,8 +39,8 @@ use sui_types::{fp_ensure, SUI_SYSTEM_STATE_OBJECT_ID};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
@@ -106,6 +107,8 @@ pub struct AuthAggMetrics {
     pub num_good_stake: Histogram,
     pub num_bad_stake: Histogram,
     pub total_quorum_once_timeout: IntCounter,
+    pub process_tx_errors: IntCounterVec,
+    pub process_cert_errors: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -148,6 +151,20 @@ impl AuthAggMetrics {
             total_quorum_once_timeout: register_int_counter_with_registry!(
                 "total_quorum_once_timeout",
                 "Total number of timeout when calling quorum_once_with_timeout",
+                registry,
+            )
+            .unwrap(),
+            process_tx_errors: register_int_counter_vec_with_registry!(
+                "process_tx_errors",
+                "Number of errors returned from validators when processing transaction, group by validator name and error type",
+                &["name","error"],
+                registry,
+            )
+            .unwrap(),
+            process_cert_errors: register_int_counter_vec_with_registry!(
+                "process_cert_errors",
+                "Number of errors returned from validators when processing certificate, group by validator name and error type",
+                &["name", "error"],
                 registry,
             )
             .unwrap(),
@@ -914,7 +931,7 @@ where
             let start_req = |name: AuthorityName, client: SafeClient<A>| {
                 let map_each_authority = map_each_authority.clone();
                 Box::pin(monitored_future!(async move {
-                    trace!(?name, now = ?tokio::time::Instant::now() - start, "new request");
+                    trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start, "new request");
                     let map = map_each_authority(name, client);
                     Event::Request(name, timeout(timeout_each_authority, map).await)
                 }))
@@ -970,12 +987,12 @@ where
                         match res {
                             // timeout
                             Err(_) => {
-                                debug!(?name, "authority request timed out");
+                                debug!(name=?name.concise(), "authority request timed out");
                                 authority_errors.insert(name, SuiError::TimeoutError);
                             }
                             // request completed
                             Ok(inner_res) => {
-                                trace!(?name, now = ?tokio::time::Instant::now() - start,
+                                trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start,
                                        "request completed successfully");
                                 match inner_res {
                                     Err(e) => authority_errors.insert(name, e),
@@ -1437,7 +1454,7 @@ where
                         // as keys and append the authority that holds them in the values.
                         match result {
                             Ok(AccountInfoResponse { object_ids, .. }) => {
-                                trace!(?object_ids, ?name, "Got response");
+                                trace!(?object_ids, name=?name.concise(), "Got response");
                                 // Also keep a record of all authorities that responded.
                                 state.responded_authorities.push(name);
                                 // Update the map.
@@ -1680,7 +1697,7 @@ where
                                 // A validator could return a certificate from an epoch that's
                                 // different from what the authority aggregator is expecting.
                                 // In that case, we should not accept that certificate.
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
                             }
 
@@ -1711,7 +1728,7 @@ where
                                 ..
                             }) if inner_signed_transaction.epoch() == self.committee.epoch => {
                                 let tx_digest = inner_signed_transaction.digest();
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push(inner_signed_transaction.into_inner().into_data_and_sig().1);
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
@@ -1734,8 +1751,9 @@ where
                             // to make a certificate. If this happens for more than f
                             // authorities we just stop, as there is no hope to finish.
                             Err(err) => {
-                                // We have an error here.
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
+                                let concise_name = name.concise();
+                                debug!(tx_digest = ?tx_digest, name=?concise_name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
+                                self.metrics.process_tx_errors.with_label_values(&[&concise_name.to_string(), err.as_ref()]).inc();
 
                                 if let SuiError::ObjectLockConflict {
                                     obj_ref,
@@ -1914,7 +1932,9 @@ where
                                 }
                             }
                             Err(err) => {
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
+                                let concise_name = name.concise();
+                                debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
+                                self.metrics.process_cert_errors.with_label_values(&[&concise_name.to_string(), err.as_ref()]).inc();
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
@@ -2242,7 +2262,7 @@ where
 
                     // This validator could not give the transaction info, but it is supposed to know about the transaction.
                     // This could also happen on epoch change boundary.
-                    warn!(name=?authority, ?tx_digest, "Validator failed to give info about a transaction, it's either byzantine or just went through an epoch change");
+                    warn!(name=?authority.concise(), ?tx_digest, "Validator failed to give info about a transaction, it's either byzantine or just went through an epoch change");
                     Err(SuiError::ByzantineAuthoritySuspicion {
                         authority,
                         reason: format!(
@@ -2321,7 +2341,7 @@ where
                                 ..
                             }) => {
                                 state.good_weight += weight;
-                                trace!(?name, ?weight, "successfully executed cert on peer");
+                                trace!(name=?name.concise(), ?weight, "successfully executed cert on peer");
                                 let entry = state.digests.entry(*effects.digest()).or_insert(0);
                                 *entry += weight;
 

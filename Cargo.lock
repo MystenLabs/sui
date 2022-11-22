@@ -8495,6 +8495,7 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "signature",
+ "strum_macros",
  "sui-adapter",
  "sui-config",
  "sui-framework",
