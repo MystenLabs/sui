@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use fail::fail_point;
+use std::collections::HashMap;
 use tracing::warn;
 
 /// Initializes network failpoints
 pub fn initialise_network_failpoints() {
     let mut failpoints: HashMap<String, String> = HashMap::new();
-    failpoints.insert(String::from("rpc-delay"), String::from("1%delay(10000)"));
+    failpoints.insert(String::from("rpc-delay"), String::from(".5%sleep(60000)"));
 
     if fail::has_failpoints() {
         warn!("Failpoints are enabled");

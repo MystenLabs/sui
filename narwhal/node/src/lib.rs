@@ -117,6 +117,8 @@ impl Node {
             (None, NetworkModel::PartiallySynchronous)
         };
 
+        initialise_network_failpoints();
+
         // Spawn the primary.
         let primary_handles = Primary::spawn(
             name.clone(),

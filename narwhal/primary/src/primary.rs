@@ -32,7 +32,7 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
-use network::metrics::MetricsMakeCallbackHandler;
+use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::{
@@ -262,6 +262,7 @@ impl Primary {
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
@@ -272,6 +273,7 @@ impl Primary {
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .into_inner();
 
         let anemo_config = {
