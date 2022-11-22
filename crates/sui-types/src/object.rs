@@ -57,7 +57,7 @@ pub struct ObjectFormatOptions {
     /// `{ "fields": { "f": 20, "g": { "fields" { "h": true }, "type": "0x0::MyModule::MyNestedType" }, "type": "0x0::MyModule::MyType" }`
     ///  If false, include field names only; e.g.:
     /// `{ "f": 20, "g": { "h": true } }`
-    include_types: bool,
+    pub include_types: bool,
 }
 
 impl MoveObject {

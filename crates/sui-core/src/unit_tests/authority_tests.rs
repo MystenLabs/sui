@@ -2616,6 +2616,149 @@ async fn test_store_revert_unwrap_move_call() {
     let gas = db.get_object(&gas_object_id).unwrap().unwrap();
     assert_eq!(gas.version(), wrap_effects.gas_object.0 .1);
 }
+#[tokio::test]
+async fn test_store_get_dynamic_object() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+
+    let create_outer_effects = create_move_object(
+        &object_basics,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+
+    assert!(create_outer_effects.status.is_ok());
+    assert_eq!(create_outer_effects.created.len(), 1);
+
+    let create_inner_effects = create_move_object(
+        &object_basics,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+
+    assert!(create_inner_effects.status.is_ok());
+    assert_eq!(create_inner_effects.created.len(), 1);
+
+    let outer_v0 = create_outer_effects.created[0].0;
+    let inner_v0 = create_inner_effects.created[0].0;
+
+    let add_txn = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            object_basics,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("add_ofield").to_owned(),
+            vec![],
+            create_inner_effects.gas_object.0,
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
+            ],
+            MAX_GAS,
+        ),
+        &sender_key,
+    );
+
+    let add_cert = init_certified_transaction(add_txn, &authority_state);
+
+    let add_effects = authority_state
+        .handle_certificate(&add_cert)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .into_data();
+
+    assert!(add_effects.status.is_ok());
+    assert_eq!(add_effects.created.len(), 1);
+
+    let fields = authority_state.get_dynamic_fields(outer_v0.0).unwrap();
+    assert_eq!(fields.len(), 1);
+    assert_eq!(fields[0].type_, DynamicFieldType::DynamicObject);
+}
+
+#[tokio::test]
+async fn test_store_get_dynamic_field() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+
+    let create_outer_effects = create_move_object(
+        &object_basics,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+
+    assert!(create_outer_effects.status.is_ok());
+    assert_eq!(create_outer_effects.created.len(), 1);
+
+    let create_inner_effects = create_move_object(
+        &object_basics,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+
+    assert!(create_inner_effects.status.is_ok());
+    assert_eq!(create_inner_effects.created.len(), 1);
+
+    let outer_v0 = create_outer_effects.created[0].0;
+    let inner_v0 = create_inner_effects.created[0].0;
+
+    let add_txn = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            object_basics,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("add_field").to_owned(),
+            vec![],
+            create_inner_effects.gas_object.0,
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
+            ],
+            MAX_GAS,
+        ),
+        &sender_key,
+    );
+
+    let add_cert = init_certified_transaction(add_txn, &authority_state);
+
+    let add_effects = authority_state
+        .handle_certificate(&add_cert)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .into_data();
+
+    assert!(add_effects.status.is_ok());
+    assert_eq!(add_effects.created.len(), 1);
+
+    let fields = authority_state.get_dynamic_fields(outer_v0.0).unwrap();
+    assert_eq!(fields.len(), 1);
+    assert!(
+        matches!(fields[0].type_, DynamicFieldType::DynamicField {wrapped_object_id} if wrapped_object_id == inner_v0.0)
+    );
+}
 
 #[tokio::test]
 async fn test_store_revert_add_ofield() {
@@ -2869,17 +3012,19 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
+    let state = init_state_with_ids(objects).await;
+    let pkg = build_package("src/unit_tests/data/object_basics");
+    let pkg_ref = pkg.compute_object_reference();
+    state.insert_genesis_object(pkg).await;
+    (state, pkg_ref)
+}
+
+#[cfg(test)]
+pub fn build_package(package_path: &str) -> Object {
     use sui_framework_build::compiled_package::BuildConfig;
 
-    let state = init_state().await;
-    for (address, object_id) in objects {
-        let obj = Object::with_id_owner_for_testing(object_id, address);
-        state.insert_genesis_object(obj).await;
-    }
-
-    // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/object_basics");
+    path.push(package_path);
     let modules = BuildConfig::default()
         .build(path)
         .unwrap()
@@ -2887,10 +3032,7 @@ pub async fn init_state_with_ids_and_object_basics<
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
-    state.insert_genesis_object(pkg).await;
-    (state, pkg_ref)
+    Object::new_package(modules, TransactionDigest::genesis().unwrap())
 }
 
 #[cfg(test)]

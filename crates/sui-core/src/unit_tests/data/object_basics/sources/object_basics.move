@@ -90,4 +90,15 @@ module examples::object_basics {
     fun get_contents(o: &Object): (ID, u64) {
         (object::id(o), o.value)
     }
+
+    public entry fun add_field(o: &mut Object, v: Object) {
+        sui::dynamic_field::add(&mut o.id, true, v);
+    }
+
+    public entry fun remove_field(o: &mut Object, ctx: &mut TxContext) {
+        transfer::transfer(
+            sui::dynamic_field::remove<bool, Object>(&mut o.id, true),
+            tx_context::sender(ctx),
+        );
+    }
 }

@@ -12,9 +12,10 @@ use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ExecutionIndicesWithHash,
 };
 use arc_swap::ArcSwap;
-use fastcrypto::encoding::{Base64, Encoding};
-use itertools::Itertools;
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::value::{MoveStruct, MoveValue};
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -74,6 +75,8 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
+
+    module_cache: RwLock<BTreeMap<ModuleId, Arc<CompiledModule>>>,
 }
 
 impl AuthorityStore {
@@ -137,6 +140,7 @@ impl AuthorityStore {
             path: path.into(),
             db_options,
             effects_notify_read: NotifyRead::new(),
+            module_cache: Default::default(),
         };
         // Only initialize an empty database.
         if store
@@ -627,63 +631,88 @@ impl AuthorityStore {
         o: &Object,
         other_objects: BTreeMap<ObjectID, &Object>,
     ) -> Option<DynamicFieldInfo> {
-        let field = o.data.try_as_move()?;
-        if !is_dynamic_field(&field.type_) {
+        let move_object = o.data.try_as_move()?;
+        if !is_dynamic_field(&move_object.type_) {
             return None;
         }
-        // Assuming dynamic field's bytearray structured as following [field object id][field name][1][object id]
-        // field object id and object id is the same for dynamic field, and different for dynamic object.
-        // index of the 1u8 byte
-        let (index, _) = field
-            .contents()
-            .iter()
-            .find_position(|byte| **byte == 1u8)?;
-        let name = &field.contents()[ObjectID::LENGTH..index];
+        let move_struct = move_object
+            .to_move_struct_with_resolver(
+                ObjectFormatOptions {
+                    include_types: false,
+                },
+                &self,
+            )
+            .ok()?;
 
-        let name = if name.len() == ObjectID::LENGTH {
-            ObjectID::try_from(name).ok()?.to_hex_literal()
-        } else if let Ok(name) = String::from_utf8(name.to_vec()) {
-            name
-        } else {
-            Base64::encode(name)
-        };
+        let name = extract_field_from_move_struct(&move_struct, "name")
+            .expect("Expecting [name] field in sui::dynamic_field::Field");
+        let value = extract_field_from_move_struct(&move_struct, "value")
+            .expect("Expecting [value] field in sui::dynamic_field::Field");
+        // Extract value from value option
+        let value = match value {
+            MoveValue::Struct(MoveStruct::WithFields(fields)) => match fields.first() {
+                Some((_, MoveValue::Vector(v))) => v.first().cloned(),
+                _ => None,
+            },
+            _ => None,
+        }?;
 
-        let object_id =
-            ObjectID::try_from(&field.contents()[index + 1..ObjectID::LENGTH + index + 1]).ok()?;
+        Some(
+            if is_dynamic_object_field(&move_object.type_.type_params[0]) {
+                let name = match name {
+                    MoveValue::Struct(s) => extract_field_from_move_struct(&s, "name"),
+                    _ => None,
+                }
+                .expect("Expecting [name] field in sui::dynamic_object_field::Wrapper.");
 
-        Some(if is_dynamic_object_field(&field.type_.type_params[0]) {
-            let (object_type, version, digest) = if let Some(o) = other_objects.get(&object_id) {
-                o.data
-                    .type_()
-                    .cloned()
-                    .map(|type_| (type_, o.version(), o.digest()))
-            } else if let Ok(Some(o)) = self.get_object(&object_id) {
-                o.data
-                    .type_()
-                    .cloned()
-                    .map(|type_| (type_, o.version(), o.digest()))
+                let object_id = extract_object_id(&value)
+                    .expect("Cannot extract dynamic object's object id from Field::value");
+
+                let (object_type, version, digest) = if let Some(o) = other_objects.get(&object_id)
+                {
+                    o.data
+                        .type_()
+                        .cloned()
+                        .map(|type_| (type_, o.version(), o.digest()))
+                } else if let Ok(Some(o)) = self.get_object(&object_id) {
+                    o.data
+                        .type_()
+                        .cloned()
+                        .map(|type_| (type_, o.version(), o.digest()))
+                } else {
+                    warn!("Cannot get struct type for dynamic object {object_id}");
+                    None
+                }?;
+                DynamicFieldInfo {
+                    name: name.to_string(),
+                    type_: DynamicFieldType::DynamicObject,
+                    object_type: object_type.to_string(),
+                    object_id,
+                    version,
+                    digest,
+                }
             } else {
-                warn!("Cannot get struct type for dynamic object {object_id}");
-                None
-            }?;
-            DynamicFieldInfo {
-                name,
-                type_: DynamicFieldType::Object,
-                object_type: object_type.to_string(),
-                object_id,
-                version,
-                digest,
-            }
-        } else {
-            DynamicFieldInfo {
-                name,
-                type_: DynamicFieldType::Field(object_id),
-                object_type: field.type_.type_params[1].to_string(),
-                object_id: oref.0,
-                version: oref.1,
-                digest: oref.2,
-            }
-        })
+                let wrapped_object_id = match value {
+                    // UID
+                    MoveValue::Struct(s) => match extract_field_from_move_struct(&s, "id") {
+                        // ID
+                        Some(MoveValue::Struct(s)) => extract_field_from_move_struct(&s, "id")
+                            .and_then(|v| extract_object_id(&v)),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+                .expect("Cannot extract dynamic object's object id from Field::value");
+                DynamicFieldInfo {
+                    name: name.to_string(),
+                    type_: DynamicFieldType::DynamicField { wrapped_object_id },
+                    object_type: move_object.type_.type_params[1].to_string(),
+                    object_id: oref.0,
+                    version: oref.1,
+                    digest: oref.2,
+                }
+            },
+        )
     }
 
     /// This function is used by the bench.rs script, and should not be used in other contexts
@@ -1611,6 +1640,53 @@ impl ModuleResolver for AuthorityStore {
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+}
+
+impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> GetModule for &SuiDataStore<S> {
+    type Error = SuiError;
+    type Item = Arc<CompiledModule>;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
+        if let Some(compiled_module) = self.module_cache.read().get(id) {
+            return Ok(Some(compiled_module.clone()));
+        }
+
+        if let Some(module_bytes) = self.get_module(id)? {
+            let module = Arc::new(CompiledModule::deserialize(&module_bytes).map_err(|e| {
+                SuiError::ModuleDeserializationFailure {
+                    error: e.to_string(),
+                }
+            })?);
+
+            self.module_cache.write().insert(id.clone(), module.clone());
+            Ok(Some(module))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+fn extract_field_from_move_struct(move_struct: &MoveStruct, field_name: &str) -> Option<MoveValue> {
+    match move_struct {
+        MoveStruct::WithFields(fields) => fields.iter().find_map(|(id, value)| {
+            if id.to_string() == field_name {
+                Some(value.clone())
+            } else {
+                None
+            }
+        }),
+        _ => None,
+    }
+}
+
+fn extract_object_id(value: &MoveValue) -> Option<ObjectID> {
+    match value {
+        MoveValue::Struct(MoveStruct::WithFields(fields)) => match fields.first() {
+            Some((_, MoveValue::Address(addr))) => Some(ObjectID::from(*addr)),
+            _ => None,
+        },
+        _ => None,
     }
 }
 

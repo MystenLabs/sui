@@ -162,8 +162,11 @@ pub struct DynamicFieldInfo {
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum DynamicFieldType {
-    Field(ObjectID),
-    Object,
+    #[serde(rename_all = "camelCase")]
+    DynamicField {
+        wrapped_object_id: ObjectID,
+    },
+    DynamicObject,
 }
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
