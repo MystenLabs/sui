@@ -34,10 +34,10 @@ async fn objects_transitioning_to_shared_remember_their_previous_version() {
     let (counter, _) = env.increment_owned_counter(counter).await;
     assert_ne!(counter.1, OBJECT_START_VERSION);
 
-    let ExecutionFailureStatus::MoveAbort(id, code) =
+    let ExecutionFailureStatus::MoveAbort(location, code) =
         env.share_counter(counter).await.unwrap_err() else { panic!() };
-    assert_eq!(id.address(), &SUI_FRAMEWORK_ADDRESS);
-    assert_eq!(id.name().as_str(), "transfer");
+    assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
+    assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
     // assert_ne!(counter.1, OBJECT_START_VERSION);
     // assert!(is_shared_at(&owner, counter.1));
@@ -49,10 +49,10 @@ async fn shared_object_owner_doesnt_change_on_write() {
     let (counter, _) = env.create_counter().await;
 
     let (inc_counter, _) = env.increment_owned_counter(counter).await;
-    let ExecutionFailureStatus::MoveAbort(id, code) =
+    let ExecutionFailureStatus::MoveAbort(location, code) =
         env.share_counter(inc_counter).await.unwrap_err() else { panic!() };
-    assert_eq!(id.address(), &SUI_FRAMEWORK_ADDRESS);
-    assert_eq!(id.name().as_str(), "transfer");
+    assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
+    assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
     // let (_, new_owner) = env
     //     .increment_shared_counter(old_counter, old_counter.1)
@@ -68,10 +68,10 @@ async fn initial_shared_version_mismatch_start_version() {
     let (counter, _) = env.create_counter().await;
 
     let (counter, _) = env.increment_owned_counter(counter).await;
-    let ExecutionFailureStatus::MoveAbort(id, code) =
+    let ExecutionFailureStatus::MoveAbort(location, code) =
         env.share_counter(counter).await.unwrap_err() else { panic!() };
-    assert_eq!(id.address(), &SUI_FRAMEWORK_ADDRESS);
-    assert_eq!(id.name().as_str(), "transfer");
+    assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
+    assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
 
     // let fx = env
@@ -91,10 +91,10 @@ async fn initial_shared_version_mismatch_current_version() {
     let mut env = TestEnvironment::new().await;
     let (counter, _) = env.create_counter().await;
 
-    let ExecutionFailureStatus::MoveAbort(id, code) =
+    let ExecutionFailureStatus::MoveAbort(location, code) =
         env.share_counter(counter).await.unwrap_err() else { panic!() };
-    assert_eq!(id.address(), &SUI_FRAMEWORK_ADDRESS);
-    assert_eq!(id.name().as_str(), "transfer");
+    assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
+    assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
     // let (counter, _) = env
     //     .increment_shared_counter(counter, counter.1)

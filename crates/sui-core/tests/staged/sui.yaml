@@ -224,11 +224,14 @@ ExecutionFailureStatus:
     28:
       SuiMoveVerificationError: UNIT
     29:
-      MovePrimitiveRuntimeError: UNIT
+      MovePrimitiveRuntimeError:
+        NEWTYPE:
+          OPTION:
+            TYPENAME: MoveLocation
     30:
       MoveAbort:
         TUPLE:
-          - TYPENAME: ModuleId
+          - TYPENAME: MoveLocation
           - U64
     31:
       VMVerificationOrDeserializationError: UNIT
@@ -284,6 +287,12 @@ MoveFieldLayout:
         TYPENAME: Identifier
     - layout:
         TYPENAME: MoveTypeLayout
+MoveLocation:
+  STRUCT:
+    - module:
+        TYPENAME: ModuleId
+    - function: U16
+    - instruction: U16
 MoveModulePublish:
   STRUCT:
     - modules:
