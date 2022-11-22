@@ -10,11 +10,19 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 async-trait = "0.1.57"
+chrono = { version = "0.4.23", features = [
+  "clock",
+  "serde",
+] }
+diesel = { version = "2.0.0", features = ["chrono", "postgres", "serde_json"] }
+futures = "0.3.23"
+dotenvy = "0.15"
+jsonrpsee = { version = "0.15.1", features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.83"
+thiserror = "1.0.34"
 tracing = "0.1.36"
 tokio = { version = "1.20.1", features = ["full"] }
-futures = "0.3.23"
-jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 sui = { path = "../sui" }
 sui-core = { path = "../sui-core" }
@@ -31,7 +39,6 @@ telemetry-subscribers.workspace = true
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 sui-framework-build = { path = "../sui-framework-build" }
-sui-sdk = { path = "../sui-sdk" }
 
 [[bin]]
 name = "sui-indexer"

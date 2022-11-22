@@ -457,6 +457,21 @@ impl TransactionDigest {
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_vec()
     }
+
+    /// Convert digest into a String
+    pub fn to_string(&self) -> String {
+        Base64::encode(self.0)
+    }
+
+    pub fn from_string(digest: String) -> Option<Self> {
+        match Base64::decode(digest.as_str()) {
+            Ok(bytes) => {
+                let slice: Result<&[u8; TRANSACTION_DIGEST_LENGTH], _> = bytes.as_slice().try_into();
+                slice.map(|slice| TransactionDigest::new(*slice)).ok()
+            },
+            Err(_) => None
+        }
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
@@ -516,6 +531,10 @@ impl ObjectDigest {
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
         Self::new(random_bytes)
+    }
+
+    pub fn to_string(&self) -> String {
+        Base64::encode(self.0)
     }
 }
 
@@ -610,8 +629,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
-        write!(f, "{}", s)?;
+        write!(f, "{}", self.to_string())?;
         Ok(())
     }
 }

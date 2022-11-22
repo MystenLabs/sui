@@ -2303,6 +2303,20 @@ impl SuiEvent {
             },
         })
     }
+
+    pub fn get_event_type(&self) -> String {
+        match self {
+            SuiEvent::MoveEvent { .. } => "MoveEvent".to_string(),
+            SuiEvent::Publish { .. } => "Publish".to_string(),
+            SuiEvent::TransferObject { .. } => "TransferObject".to_string(),
+            SuiEvent::DeleteObject { .. } => "DeleteObject".to_string(),
+            SuiEvent::NewObject { .. } => "NewObject".to_string(),
+            SuiEvent::EpochChange(..) => "EpochChange".to_string(),
+            SuiEvent::Checkpoint(..) => "CheckPoint".to_string(),
+            SuiEvent::CoinBalanceChange { .. } => "CoinBalanceChange".to_string(),
+            SuiEvent::MutateObject { .. } => "MutateObject".to_string(),
+        }
+    }
 }
 
 impl PartialEq<SuiEventEnvelope> for EventEnvelope {
