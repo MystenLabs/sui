@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExtractProps } from './types';
-
 import type { ReactNode } from 'react';
 
-import { Text } from '~/ui/Text';
+import { Text, type TextProps } from '~/ui/Text';
 
-export type LabelProps = ExtractProps<typeof Text>;
 
-export function Label(props: LabelProps) {
+export function Label(props: TextProps) {
     return (
         <dt className="col-span-1">
-            <Text {...props}>{props.children}</Text>
+            <Text variant="body" {...props}>{props.children}</Text>
         </dt>
     );
 }
@@ -22,7 +19,7 @@ export function Value({ children }: { children: ReactNode }) {
 }
 
 export type DescriptionListProps = {
-    children: ReactNode[];
+    children: ReactNode;
 };
 
 export function DescriptionList({ children }: DescriptionListProps) {

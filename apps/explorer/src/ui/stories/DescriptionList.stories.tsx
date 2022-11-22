@@ -27,13 +27,13 @@ export default {
 export const Default: StoryObj<DescriptionListProps> = {
     render: () => (
         <DescriptionList>
-            <Label variant="body">Object ID</Label>
+            <Label >Object ID</Label>
             <Value>
                 <Link variant="mono" to="/">
                     0xb758af2061e7c0e55df23de52c51968f6efbc959
                 </Link>
             </Value>
-            <Label variant="body">Owner</Label>
+            <Label variant="bodySmall">Owner</Label>
             <Value>Value 1</Value>
         </DescriptionList>
     ),
