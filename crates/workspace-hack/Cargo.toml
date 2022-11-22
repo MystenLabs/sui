@@ -23,8 +23,8 @@ aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 aliasable = { version = "0.1", features = ["alloc"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
@@ -658,9 +658,9 @@ aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 aliasable = { version = "0.1", features = ["alloc"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
