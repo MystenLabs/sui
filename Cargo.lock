@@ -10223,6 +10223,7 @@ dependencies = [
  "collectable",
  "eyre",
  "fdlimit",
+ "num_cpus",
  "once_cell",
  "proc-macro2 1.0.47",
  "prometheus",

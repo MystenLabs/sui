@@ -917,6 +917,9 @@ pub fn default_db_options() -> DBOptions {
     opt.set_max_total_wal_size(
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
+    // According to docs, we almost certainly want to set this to number of cores to not be bottlenecked
+    // by rocksdb
+    opt.increase_parallelism((num_cpus::get() as i32) / 8);
     DBOptions { options: opt }
 }
 
