@@ -181,8 +181,8 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         </TabPanel>
                     </TabPanels>
                 </TabGroup>
-                <FunctionView pkgId={id} selectedModuleName={selectedModule} />
             </div>
+            <FunctionView pkgId={id} selectedModuleName={selectedModule} />
         </div>
     );
 }
