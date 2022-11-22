@@ -1,5 +1,5 @@
 .card {
-    @apply rounded-lg bg-sui-grey-40 flex flex-col justify-end min-h-[320px] antialiased relative;
+    @apply rounded-lg bg-sui-grey-45 flex flex-col justify-end min-h-[320px] antialiased relative;
 }
 
 .container {
