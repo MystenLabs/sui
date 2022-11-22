@@ -30,7 +30,7 @@ section .codeview {
 
 .itemviewtitle,
 .title {
-    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
+    @apply text-gray-100 font-[500] text-lg  mt-5 mb-0;
 }
 
 section .codeview pre {

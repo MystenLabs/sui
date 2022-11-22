@@ -12,7 +12,7 @@
 }
 
 .layout > div:first-child {
-    @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
+    @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-gray-45;
 }
 
 .ownedobjects {
@@ -36,11 +36,11 @@
 }
 
 .ownedobjectheader > h2 {
-    @apply text-lg text-sui-grey-100;
+    @apply text-lg text-gray-100;
 }
 
 .typevalue {
-    @apply text-sui-grey-80 overflow-hidden;
+    @apply text-gray-80 overflow-hidden;
 
     display: block;
     display: -webkit-box; /* stylelint-disable-line value-no-vendor-prefix */
@@ -50,13 +50,13 @@
 }
 
 .gray {
-    @apply text-slate-500;
+    @apply text-gray-85;
 }
 
 .fail {
-    @apply text-red-600 font-sans font-semibold mt-2;
+    @apply text-issue-dark font-sans font-semibold mt-2;
 }
 
 .name {
-    @apply text-sui-grey-90 font-medium text-[13px] leading-[130%];
+    @apply text-gray-90 font-medium text-[13px] leading-[130%];
 }

@@ -11,11 +11,11 @@
 }
 
 .eventtitle {
-    @apply pl-2 text-gray-600;
+    @apply pl-2 text-gray-80;
 }
 
 .eventtitle:hover {
-    @apply bg-blue-100 cursor-pointer;
+    @apply bg-gray-45 cursor-pointer;
 
     border-radius: 6px;
 }
@@ -55,7 +55,7 @@
 
 .itemviewtitle,
 .txtitle {
-    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
+    @apply text-gray-100 font-[500] text-lg  mt-5 mb-0;
 }
 
 .itemviewcontentlabel {
@@ -78,13 +78,13 @@
 }
 
 .itemviewcontent .itemviewcontentitem {
-    @apply grid gap-1 text-[14px] md:text-[15px] text-gray-500 py-2;
+    @apply grid gap-1 text-[14px] md:text-[15px] text-gray-80 py-2;
 
     grid-template-columns: 1fr 3fr;
 }
 
 .itemviewcontentvalue {
-    @apply text-sm  text-gray-800 inline-flex content-center items-baseline md:block;
+    @apply text-sm text-gray-90 inline-flex content-center items-baseline md:block;
 
     line-break: anywhere;
     box-sizing: border-box;
@@ -131,5 +131,5 @@
 }
 
 .datetime {
-    @apply block sm:inline text-sui-grey-75 font-semibold text-bodySmall;
+    @apply block sm:inline text-gray-75 font-semibold text-bodySmall;
 }

@@ -3,7 +3,7 @@ div.txcardgrid h3 {
 }
 
 div.txcard {
-    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-100 pl-5 pr-5 bg-white mt-5 mb-5 text-left md:justify-around;
+    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-45 pl-5 pr-5 bg-white mt-5 mb-5 text-left md:justify-around;
 }
 
 div.txcardgridlarge {
@@ -55,11 +55,11 @@ div.txadd {
 }
 
 .txsearch input {
-    @apply shadow-sm mr-0 ml-0 rounded-none pl-2 pr-2 border-solid border border-gray-100 text-base;
+    @apply shadow-sm mr-0 ml-0 rounded-none pl-2 pr-2 border-solid border border-gray-45 text-base;
 }
 
 .txsearch [type='submit'] {
-    @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui h-16 shadow-sm border-solid border border-gray-100;
+    @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui h-16 shadow-sm border-solid border border-gray-45;
 }
 
 .txlatestresults .tab {
@@ -68,19 +68,19 @@ div.txadd {
 
 .moretxbtn {
     @apply bg-transparent cursor-pointer border-0 pl-0 pr-0 w-full
-   flex items-center gap-[6px] 
-    text-sui-grey-90 font-semibold text-[14px]
-    hover:text-sui-grey-70;
+   flex items-center gap-[6px]
+    text-gray-90 font-semibold text-[14px]
+    hover:text-gray-70;
 
     text-decoration: none;
 }
 
 .addresses svg {
-    @apply fill-sui-grey-60;
+    @apply fill-gray-60;
 }
 
 .moretxbtn svg {
-    @apply fill-sui-grey-75;
+    @apply fill-gray-75;
 }
 
 .success svg {
@@ -93,7 +93,7 @@ div.txadd {
 
 .moretxbtn:hover svg,
 .moretxbtn:hover {
-    @apply fill-sui-grey-70 transition-colors duration-200 ease-in-out;
+    @apply fill-gray-70 transition-colors duration-200 ease-in-out;
 }
 
 .txlatestresults td:nth-child(1) {

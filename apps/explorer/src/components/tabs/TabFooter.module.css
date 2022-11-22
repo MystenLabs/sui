@@ -3,5 +3,5 @@
 }
 
 .stats {
-    @apply ml-auto w-full text-right flex gap-2 justify-end items-center text-subtitle font-medium text-sui-grey-65;
+    @apply ml-auto w-full text-right flex gap-2 justify-end items-center text-subtitle font-medium text-gray-65;
 }

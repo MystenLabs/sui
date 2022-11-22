@@ -44,7 +44,7 @@ const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon> = {
     Address: () => (
         <SenderIcon
             style={{
-                '--icon-primary-color': 'var(--sui-steel)',
+                '--icon-primary-color': 'var(--steel)',
                 '--icon-secondary-color': 'white',
             }}
         />
@@ -60,8 +60,8 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
     return (
         <div data-testid="pageheader">
-            <div className="text-sui-grey-85 flex items-center gap-2 mb-3">
-                <Icon className="text-sui-steel" />
+            <div className="text-gray-85 flex items-center gap-2 mb-3">
+                <Icon className="text-steel" />
                 <Heading variant="heading4" weight="semibold">
                     {type}
                 </Heading>
@@ -79,7 +79,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                             navigator.clipboard.writeText(title);
                             toast.success('Copied!');
                         }}
-                        className="bg-transparent border-none cursor-pointer p-0 m-0 text-sui-steel flex justify-center items-center -mt-0.5"
+                        className="bg-transparent border-none cursor-pointer p-0 m-0 text-steel flex justify-center items-center -mt-0.5"
                     >
                         <span className="sr-only">Copy</span>
                         <CopyIcon aria-hidden="true" />
@@ -93,7 +93,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                 )}
             </div>
             {subtitle && (
-                <div className="text-sui-grey-75 mt-2 break-words">
+                <div className="text-gray-75 mt-2 break-words">
                     <Heading variant="heading4" weight="semibold">
                         {subtitle}
                     </Heading>

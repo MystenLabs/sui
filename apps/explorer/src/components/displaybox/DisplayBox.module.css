@@ -45,7 +45,7 @@ img.largeimage {
 }
 
 span.cross {
-    @apply text-offwhite bg-sui-grey-100 z-20 h-[30px] w-[30px] 
+    @apply text-offwhite bg-gray-100 z-20 h-[30px] w-[30px]
   flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl mx-auto;
 }
 
@@ -63,21 +63,15 @@ div.caption {
 }
 
 div.filetype {
-    @apply text-sm text-sui-grey-60 font-medium mt-0;
+    @apply text-sm text-gray-60 font-medium mt-0;
 }
 
 div.detailsbg {
-    @apply bg-sui-grey-100 z-20 opacity-[0.85];
-}
-
-.codebox {
-    @apply overflow-hidden
-    border-solid border-stone-300 rounded-lg mt-[1vh] w-[88vw]
-    w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
+    @apply bg-gray-100 z-20 opacity-[0.85];
 }
 
 .automod {
-    @apply border-0 border-b-2 border-solid border-gray-300 w-1/2;
+    @apply border-0 border-b-2 border-solid border-gray-45 w-1/2;
 
     background-color: #d8e5ea;
     position: relative;
@@ -91,5 +85,5 @@ div.detailsbg {
 }
 
 .brokenimage {
-    @apply stroke-sui-grey-65 bg-sui-grey-45 rounded-[6px];
+    @apply stroke-gray-65 bg-gray-45 rounded-[6px];
 }

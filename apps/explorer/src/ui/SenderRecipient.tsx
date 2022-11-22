@@ -37,13 +37,13 @@ export function SenderRecipient({
         : recipients;
 
     return (
-        <div className="flex flex-col justify-start text-sui-grey-100 gap-4">
+        <div className="flex flex-col justify-start text-gray-100 gap-4">
             <Heading variant="heading4" weight="semibold">
                 {singleTransferCoin ? 'Sender & Recipient' : 'Sender'}
             </Heading>
             <div className="flex flex-col gap-[15px] justify-center relative">
                 {singleTransferCoin && (
-                    <div className="absolute border-dashed border border-sui-steel overflow-y-hidden h-[calc(57%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l" />
+                    <div className="absolute border-dashed border border-steel overflow-y-hidden h-[calc(57%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l" />
                 )}
                 <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (
