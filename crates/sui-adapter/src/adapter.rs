@@ -13,8 +13,11 @@ use linked_hash_map::LinkedHashMap;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    errors::VMResult,
-    file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
+    errors::{VMError, VMResult},
+    file_format::{
+        AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex,
+        TypeParameterIndex,
+    },
 };
 use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
@@ -205,6 +208,12 @@ fn execute_internal<
         .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
         .collect();
     let mut session = new_session(vm, state_view, input_objects);
+    // check type arguments separately for error conversion
+    for (idx, ty) in type_args.iter().enumerate() {
+        session
+            .load_type(ty)
+            .map_err(|e| convert_type_argument_error(idx, e))?;
+    }
     // script visibility checked manually for entry points
     let (
         SerializedReturnValues {
@@ -1371,4 +1380,17 @@ fn missing_unwrapped_msg(id: &ObjectID) -> String {
         "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
         id
     )
+}
+
+fn convert_type_argument_error(idx: usize, error: VMError) -> ExecutionError {
+    use move_core_types::vm_status::StatusCode;
+    use sui_types::messages::EntryTypeArgumentErrorKind;
+    let kind = match error.major_status() {
+        StatusCode::LINKER_ERROR => EntryTypeArgumentErrorKind::ModuleNotFound,
+        StatusCode::TYPE_RESOLUTION_FAILURE => EntryTypeArgumentErrorKind::TypeNotFound,
+        StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => EntryTypeArgumentErrorKind::ArityMismatch,
+        StatusCode::CONSTRAINT_NOT_SATISFIED => EntryTypeArgumentErrorKind::ConstraintNotSatisfied,
+        _ => return error.into(),
+    };
+    ExecutionErrorKind::entry_type_argument_error(idx as TypeParameterIndex, kind).into()
 }

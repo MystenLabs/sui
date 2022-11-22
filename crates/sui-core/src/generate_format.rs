@@ -19,8 +19,8 @@ use sui_types::{
         AuthoritySignature, KeypairTraits, Signature,
     },
     messages::{
-        CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
-        ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+        CallArg, EntryArgumentErrorKind, EntryTypeArgumentErrorKind, ExecutionFailureStatus,
+        ExecutionStatus, ObjectArg, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
     storage::DeleteKind,
@@ -77,6 +77,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
     tracer.trace_type::<AbortLocation>(&samples)?;
     tracer.trace_type::<EntryArgumentErrorKind>(&samples)?;
+    tracer.trace_type::<EntryTypeArgumentErrorKind>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<ObjectArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;

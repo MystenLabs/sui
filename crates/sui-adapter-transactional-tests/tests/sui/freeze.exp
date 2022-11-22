@@ -15,9 +15,9 @@ task 3 'run'. lines 74-74:
 written: object(106), object(107)
 
 task 4 'run'. lines 76-76:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
 
 task 5 'run'. lines 78-78:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable objects cannot be passed by mutable reference, &mut.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Immutable objects cannot be passed by mutable reference, &mut.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByMuteRef }), source: Some("Argument 0 is expected to be mutable, immutable object found") } }

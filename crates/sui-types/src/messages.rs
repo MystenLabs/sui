@@ -21,7 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::file_format::LocalIndex;
+use move_binary_format::file_format::{LocalIndex, TypeParameterIndex};
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
@@ -1259,6 +1259,7 @@ pub enum ExecutionFailureStatus {
     NonEntryFunctionInvoked,
     EntryTypeArityMismatch,
     EntryArgumentError(EntryArgumentError),
+    EntryTypeArgumentError(EntryTypeArgumentError),
     CircularObjectOwnership(CircularObjectOwnership),
     InvalidChildObjectArgument(InvalidChildObjectArgument),
     InvalidSharedByValue(InvalidSharedByValue),
@@ -1310,6 +1311,20 @@ pub enum EntryArgumentErrorKind {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct EntryTypeArgumentError {
+    pub argument_idx: TypeParameterIndex,
+    pub kind: EntryTypeArgumentErrorKind,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub enum EntryTypeArgumentErrorKind {
+    ModuleNotFound,
+    TypeNotFound,
+    ArityMismatch,
+    ConstraintNotSatisfied,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
 pub struct CircularObjectOwnership {
     pub object: ObjectID,
 }
@@ -1328,6 +1343,13 @@ pub struct InvalidSharedByValue {
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
+    }
+
+    pub fn entry_type_argument_error(
+        argument_idx: TypeParameterIndex,
+        kind: EntryTypeArgumentErrorKind,
+    ) -> Self {
+        EntryTypeArgumentError { argument_idx, kind }.into()
     }
 
     pub fn circular_object_ownership(object: ObjectID) -> Self {
@@ -1400,7 +1422,10 @@ impl Display for ExecutionFailureStatus {
                 "Number of type arguments does not match the expected value",
             ),
             ExecutionFailureStatus::EntryArgumentError(data) => {
-                write!(f, "Entry Argument Type Error. {data}")
+                write!(f, "Entry Argument Error. {data}")
+            }
+            ExecutionFailureStatus::EntryTypeArgumentError(data) => {
+                write!(f, "Entry Type Argument Error. {data}")
             }
             ExecutionFailureStatus::CircularObjectOwnership(data) => {
                 write!(f, "Circular  Object Ownership. {data}")
@@ -1501,7 +1526,7 @@ impl Display for EntryArgumentErrorKind {
                 )
             }
             EntryArgumentErrorKind::ObjectKindMismatch => {
-                write!(f, "Mismtach with object argument kind and its actual kind.")
+                write!(f, "Mismatch with object argument kind and its actual kind.")
             }
             EntryArgumentErrorKind::UnsupportedPureArg => write!(
                 f,
@@ -1511,9 +1536,38 @@ impl Display for EntryArgumentErrorKind {
             EntryArgumentErrorKind::ArityMismatch => {
                 write!(
                     f,
-                    "Mismatch between the number of actual versus expected argument."
+                    "Mismatch between the number of actual versus expected arguments."
                 )
             }
+        }
+    }
+}
+
+impl Display for EntryTypeArgumentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let EntryTypeArgumentError { argument_idx, kind } = self;
+        write!(f, "Error for type argument at index {argument_idx}: {kind}",)
+    }
+}
+
+impl Display for EntryTypeArgumentErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryTypeArgumentErrorKind::ModuleNotFound => write!(
+                f,
+                "A package (or module) in the type argument was not found"
+            ),
+            EntryTypeArgumentErrorKind::TypeNotFound => {
+                write!(f, "A type was not found in the module specified",)
+            }
+            EntryTypeArgumentErrorKind::ArityMismatch => write!(
+                f,
+                "Mismatch between the number of actual versus expected type arguments."
+            ),
+            EntryTypeArgumentErrorKind::ConstraintNotSatisfied => write!(
+                f,
+                "A type provided did not match the specified constraints."
+            ),
         }
     }
 }
@@ -1585,6 +1639,12 @@ impl ExecutionStatus {
 impl From<EntryArgumentError> for ExecutionFailureStatus {
     fn from(error: EntryArgumentError) -> Self {
         Self::EntryArgumentError(error)
+    }
+}
+
+impl From<EntryTypeArgumentError> for ExecutionFailureStatus {
+    fn from(error: EntryTypeArgumentError) -> Self {
+        Self::EntryTypeArgumentError(error)
     }
 }
 

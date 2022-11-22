@@ -17,5 +17,5 @@ task 4 'run'. lines 39-47:
 written: object(107)
 
 task 5 'run'. lines 49-49:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Unexpected non-ASCII value (outside of ASCII character range) in argument 0") } }
