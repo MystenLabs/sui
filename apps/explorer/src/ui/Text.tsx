@@ -20,6 +20,20 @@ const textStyles = cva([], {
             caption: 'uppercase text-caption',
             captionSmall: 'uppercase text-captionSmall ',
         },
+
+        color: {
+            'grey-100': 'text-sui-grey-100',
+            'grey-90': 'text-sui-grey-90',
+            'grey-75': 'text-sui-grey-75',
+            'grey-70': 'text-sui-grey-70',
+            'grey-65': 'text-sui-grey-65',
+            'sui-dark': 'text-sui-dark',
+            sui: 'text-sui',
+            'sui-light': 'text-sui-light',
+            'sui-steel': 'text-sui-steel',
+            'sui-steel-dark': 'text-sui-steel-dark',
+            'sui-steel-darker': 'text-sui-steel-darker',
+        },
         italic: {
             true: 'italic',
             false: '',
