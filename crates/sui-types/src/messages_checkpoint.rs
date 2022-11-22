@@ -10,7 +10,6 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::waypoint::Waypoint;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
@@ -130,11 +129,6 @@ impl CheckpointSummary {
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> CheckpointSummary {
-        let mut waypoint = Box::new(Waypoint::default());
-        transactions.iter().for_each(|tx| {
-            waypoint.insert(tx);
-        });
-
         let content_digest = transactions.digest();
 
         Self {
@@ -364,7 +358,7 @@ impl CertifiedCheckpointSummary {
 #[derive(Clone, Debug)]
 pub struct VerifiedCheckpoint(CertifiedCheckpointSummary);
 
-// The only acceptible way to construct this type is via explicitly verifying it
+// The only acceptable way to construct this type is via explicitly verifying it
 static_assertions::assert_not_impl_any!(VerifiedCheckpoint: Serialize, DeserializeOwned);
 
 impl VerifiedCheckpoint {
