@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 
+import { FEATURES } from '../../experimentation/features';
 import DelegationCard from './delegation-card';
 import BottomMenuLayout, {
     Content,
@@ -12,7 +14,6 @@ import Button from '_app/shared/button';
 import CoinBalance from '_app/shared/coin-balance';
 import PageTitle from '_app/shared/page-title';
 import StatsCard, { StatsRow, StatsItem } from '_app/shared/stats-card';
-import { STAKING_ENABLED } from '_app/staking';
 import {
     activeDelegationIDsSelector,
     totalActiveStakedSelector,
@@ -29,6 +30,8 @@ function StakeHome() {
     const { loading, error, showError } = useObjectsState();
     const totalStaked = useAppSelector(totalActiveStakedSelector);
     const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
     return (
         <div className={st.container}>
             <PageTitle title="Stake & Earn" className={st.pageTitle} />
@@ -136,7 +139,7 @@ function StakeHome() {
                         className={st.action}
                         href="new"
                         title="Currently disabled"
-                        disabled={!STAKING_ENABLED}
+                        disabled={!stakingEnabled}
                     >
                         Stake Coins
                         <Icon

@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { FEATURES } from './experimentation/features';
 import { AppType } from './redux/slices/app/AppType';
-import { routes as stakeRoutes } from './staking';
+import StakeHome from './staking/home';
+import StakeNew from './staking/stake';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -53,6 +56,8 @@ const App = () => {
         const menuVisible = !HIDDEN_MENU_PATHS.includes(location.pathname);
         dispatch(setNavVisibility(menuVisible));
     }, [location, dispatch]);
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
     return (
         <Routes>
             <Route path="/*" element={<HomePage />}>
@@ -63,7 +68,10 @@ const App = () => {
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
-                {stakeRoutes}
+                <Route path="stake" element={<StakeHome />} />
+                {stakingEnabled ? (
+                    <Route path="stake/new" element={<StakeNew />} />
+                ) : null}
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}

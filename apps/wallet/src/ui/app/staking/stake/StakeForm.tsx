@@ -56,6 +56,7 @@ function StakeForm({
                     name="amount"
                     placeholder={`Total ${symbol} to stake`}
                     className={st.input}
+                    decimals
                 />
                 <div className={st.muted}>
                     Available balance: {formatted} {symbol}
