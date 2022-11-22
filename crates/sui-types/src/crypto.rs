@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
+use derive_more::From;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
     BLS12381Signature,
@@ -86,29 +87,17 @@ pub fn generate_proof_of_possession<K: KeypairTraits>(
 ///
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum SuiKeyPair {
     Ed25519SuiKeyPair(Ed25519KeyPair),
     Secp256k1SuiKeyPair(Secp256k1KeyPair),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, From)]
 pub enum PublicKey {
     Ed25519KeyPair(Ed25519PublicKey),
     Secp256k1KeyPair(Secp256k1PublicKey),
 }
-
-impl PartialEq for PublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (PublicKey::Ed25519KeyPair(a), PublicKey::Ed25519KeyPair(b)) => a == b,
-            (PublicKey::Secp256k1KeyPair(a), PublicKey::Secp256k1KeyPair(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for PublicKey {}
 
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
@@ -211,36 +200,12 @@ impl<'de> Deserialize<'de> for SuiKeyPair {
     }
 }
 
-impl From<Ed25519KeyPair> for SuiKeyPair {
-    fn from(key: Ed25519KeyPair) -> Self {
-        SuiKeyPair::Ed25519SuiKeyPair(key)
-    }
-}
-
-impl From<Secp256k1KeyPair> for SuiKeyPair {
-    fn from(key: Secp256k1KeyPair) -> Self {
-        SuiKeyPair::Secp256k1SuiKeyPair(key)
-    }
-}
-
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         match self {
             PublicKey::Ed25519KeyPair(pk) => pk.as_ref(),
             PublicKey::Secp256k1KeyPair(pk) => pk.as_ref(),
         }
-    }
-}
-
-impl From<Ed25519PublicKey> for PublicKey {
-    fn from(key: Ed25519PublicKey) -> Self {
-        PublicKey::Ed25519KeyPair(key)
-    }
-}
-
-impl From<Secp256k1PublicKey> for PublicKey {
-    fn from(key: Secp256k1PublicKey) -> Self {
-        PublicKey::Secp256k1KeyPair(key)
     }
 }
 
@@ -364,7 +329,7 @@ impl AuthorityPublicKeyBytes {
 /// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
 pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
 
-impl std::fmt::Debug for ConciseAuthorityPublicKeyBytes<'_> {
+impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
@@ -391,7 +356,7 @@ impl AsRef<[u8]> for AuthorityPublicKeyBytes {
     }
 }
 
-impl std::fmt::Debug for AuthorityPublicKeyBytes {
+impl Debug for AuthorityPublicKeyBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_impl(f)
     }
@@ -758,7 +723,7 @@ impl signature::Signature for Signature {
     }
 }
 
-impl std::fmt::Debug for Signature {
+impl Debug for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let flag = Base64::encode([self.scheme().flag()]);
         let s = Base64::encode(self.signature_bytes());
