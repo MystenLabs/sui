@@ -722,7 +722,7 @@ impl SequenceNumber {
         // Option 1: Freeze the object when sequence number reaches MAX.
         // Option 2: Reject tx with MAX sequence number.
         // Issue #182.
-        debug_assert_ne!(max_input.0, u64::MAX);
+        assert_ne!(max_input.0, u64::MAX);
 
         SequenceNumber(max_input.0 + 1)
     }
