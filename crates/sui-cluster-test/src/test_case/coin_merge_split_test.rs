@@ -118,7 +118,7 @@ impl CoinMergeSplitTest {
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
     ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
-        let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 20000];
+        let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 2000];
 
         let data = ctx
             .build_transaction_remotely("sui_mergeCoins", params)
@@ -135,7 +135,7 @@ impl CoinMergeSplitTest {
         amounts: Vec<u64>,
         gas_obj_id: ObjectID,
     ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
-        let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 20000];
+        let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 2000];
 
         let data = ctx
             .build_transaction_remotely("sui_splitCoin", params)
