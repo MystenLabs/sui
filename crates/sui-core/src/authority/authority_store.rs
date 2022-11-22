@@ -406,6 +406,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
 
         if !probe_lock_exists.is_empty() {
+            // It is possible that we probed the objects after they are written, but before the
+            // locks are created. In that case, if we attempt to execute the transaction, it will
+            // fail. Because the objects_committed() call is made only after the locks are written,
+            // the tx manager will be awoken after the locks are written.
             missing.extend(
                 self.lock_service
                     .get_missing_locks(probe_lock_exists)
