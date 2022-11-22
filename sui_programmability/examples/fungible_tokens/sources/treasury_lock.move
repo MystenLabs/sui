@@ -168,6 +168,7 @@ module fungible_tokens::treasury_lock {
 
 #[test_only]
 module fungible_tokens::treasury_lock_tests {
+    use std::option;
     use sui::test_scenario::{Self, Scenario};
     use sui::balance::{Self, Balance};
     use sui::transfer;
@@ -188,7 +189,8 @@ module fungible_tokens::treasury_lock_tests {
         // create a currency and lock it
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury = coin::create_currency(TREASURY_LOCK_TESTS {}, 0, test_scenario::ctx(scenario));
+            let (treasury, metadata) = coin::create_currency(TREASURY_LOCK_TESTS {}, 0, b"", b"", b"", option::none(), test_scenario::ctx(scenario));
+            transfer::freeze_object(metadata);
             let admin_cap = new_lock(treasury, test_scenario::ctx(scenario));
             transfer::transfer(
                 admin_cap,

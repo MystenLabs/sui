@@ -12,10 +12,12 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 -  [Function `transfer`](#0x2_sui_transfer)
 
 
-<pre><code><b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
 </code></pre>
 
 
@@ -66,9 +68,18 @@ This should be called only once during genesis creation.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> TxContext): Supply&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt; {
-    <a href="coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(
-        <a href="coin.md#0x2_coin_create_currency">coin::create_currency</a>(<a href="sui.md#0x2_sui_SUI">SUI</a> {}, 9, ctx)
-    )
+    <b>let</b> (treasury, metadata) = <a href="coin.md#0x2_coin_create_currency">coin::create_currency</a>(
+        <a href="sui.md#0x2_sui_SUI">SUI</a> {},
+        9,
+        b"<a href="sui.md#0x2_sui_SUI">SUI</a>",
+        b"Sui",
+        // TODO: add appropriate description and logo <a href="url.md#0x2_url">url</a>
+        b"",
+        <a href="_none">option::none</a>(),
+        ctx
+    );
+    <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(metadata);
+    <a href="coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury)
 }
 </code></pre>
 
