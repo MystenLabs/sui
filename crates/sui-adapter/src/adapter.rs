@@ -39,7 +39,7 @@ use move_vm_runtime::{
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
-use sui_types::storage::{SingleTxContext, TimestampResolver};
+use sui_types::storage::SingleTxContext;
 use sui_types::{
     base_types::*,
     error::ExecutionError,
@@ -116,8 +116,7 @@ pub fn execute<
         + ModuleResolver<Error = E>
         + Storage
         + ParentSync
-        + ChildObjectResolver
-        + TimestampResolver,
+        + ChildObjectResolver,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -193,8 +192,7 @@ fn execute_internal<
         + ModuleResolver<Error = E>
         + Storage
         + ParentSync
-        + ChildObjectResolver
-        + TimestampResolver,
+        + ChildObjectResolver,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -327,8 +325,7 @@ pub fn publish<
         + ModuleResolver<Error = E>
         + Storage
         + ParentSync
-        + ChildObjectResolver
-        + TimestampResolver,
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     natives: NativeFunctionTable,
@@ -360,8 +357,7 @@ pub fn store_package_and_init_modules<
         + ModuleResolver<Error = E>
         + Storage
         + ParentSync
-        + ChildObjectResolver
-        + TimestampResolver,
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -410,8 +406,7 @@ fn init_modules<
         + ModuleResolver<Error = E>
         + Storage
         + ParentSync
-        + ChildObjectResolver
-        + TimestampResolver,
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -541,7 +536,7 @@ pub fn generate_package_id(
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
 /// - Process creation of new objects and user-emittd events in `events`
 #[allow(clippy::too_many_arguments)]
-fn process_successful_execution<S: Storage + ParentSync + TimestampResolver>(
+fn process_successful_execution<S: Storage + ParentSync>(
     state_view: &mut S,
     module_id: &ModuleId,
     by_value_objects: &BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
@@ -577,7 +572,7 @@ fn process_successful_execution<S: Storage + ParentSync + TimestampResolver>(
     }
     let tx_digest = ctx.digest();
 
-    for (id, (write_kind, mut recipient, tag, abilities, contents)) in writes {
+    for (id, (write_kind, recipient, tag, abilities, contents)) in writes {
         let has_public_transfer = abilities.has_store();
         debug_assert_eq!(
             id,
@@ -615,26 +610,6 @@ fn process_successful_execution<S: Storage + ParentSync + TimestampResolver>(
         #[cfg(debug_assertions)]
         {
             check_transferred_object_invariants(&move_obj, &old_obj_ver)
-        }
-
-        // Remember the version this object was shared at, if this write was the one that shared it.
-        if let Owner::Shared {
-            initial_shared_version,
-        } = &mut recipient
-        {
-            assert_invariant!(
-                old_obj_ver.is_none(),
-                "The object should be guaranteed to be new by \
-                sui::transfer::share_object, which aborts if it is not new"
-            );
-            // TODO Consider a distinct Recipient enum within ObjectRuntime to enforce this
-            // invariant at the type level.
-            assert_eq!(
-                *initial_shared_version,
-                SequenceNumber::new(),
-                "Initial version should be blank before this point",
-            );
-            *initial_shared_version = state_view.lamport_timestamp();
         }
 
         let obj = Object::new_move(move_obj, recipient, tx_digest);

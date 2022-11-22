@@ -14,7 +14,7 @@ use tracing::trace;
 
 use crate::coin::Coin;
 use crate::event::BalanceChangeType;
-use crate::storage::{SingleTxContext, TimestampResolver};
+use crate::storage::SingleTxContext;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -162,7 +162,24 @@ impl<S> TemporaryStore<S> {
             // Update the version for the written object, as long as it is a move object and not a
             // package (whose versions are fixed to 1)
             if let Some(obj) = obj.data.try_as_move_mut() {
-                obj.increment_version_to(self.lamport_timestamp)
+                obj.increment_version_to(self.lamport_timestamp);
+            }
+
+            // Record the version that the shared object was created at in its owner field.  Note,
+            // this only works because shared objects must be created as shared (not created as
+            // owned in one transaction and later converted to shared in another).
+            if let Owner::Shared {
+                initial_shared_version,
+            } = &mut obj.owner
+            {
+                if kind == WriteKind::Create {
+                    assert_eq!(
+                        *initial_shared_version,
+                        SequenceNumber::new(),
+                        "Initial version should be blank before this point",
+                    );
+                    *initial_shared_version = self.lamport_timestamp;
+                }
             }
 
             // Create events for writes
@@ -824,12 +841,6 @@ impl<S> ResourceResolver for TemporaryStore<S> {
 impl<S: ParentSync> ParentSync for TemporaryStore<S> {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref(object_id)
-    }
-}
-
-impl<S> TimestampResolver for TemporaryStore<S> {
-    fn lamport_timestamp(&self) -> SequenceNumber {
-        self.lamport_timestamp
     }
 }
 
