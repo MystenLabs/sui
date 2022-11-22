@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 mod errors;
-mod iter;
-mod keys;
-mod values;
+pub(crate) mod iter;
+pub(crate) mod keys;
+pub(crate) mod values;
 
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
@@ -18,7 +18,12 @@ use rocksdb::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    borrow::Borrow, collections::BTreeMap, env, marker::PhantomData, path::Path, sync::Arc,
+    borrow::Borrow,
+    collections::BTreeMap,
+    env,
+    marker::PhantomData,
+    path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 use tap::TapFallible;
@@ -872,6 +877,66 @@ impl DBBatch {
     }
 
     /// Deletes a set of keys given as an iterator
+    pub fn delete_batch_non_consuming<J: Borrow<K>, K: Serialize, V>(
+        &mut self,
+        db: &DBMap<K, V>,
+        purged_vals: impl IntoIterator<Item = J>,
+    ) -> Result<(), TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        purged_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                self.batch.delete_cf(&db.cf(), k_buf);
+
+                Ok(())
+            })?;
+        Ok(())
+    }
+    /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
+    pub fn delete_range_non_consuming<'a, K: Serialize, V>(
+        &mut self,
+        db: &'a DBMap<K, V>,
+        from: &K,
+        to: &K,
+    ) -> Result<(), TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        let from_buf = be_fix_int_ser(from)?;
+        let to_buf = be_fix_int_ser(to)?;
+
+        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf)
+    }
+
+    /// inserts a range of (key, value) pairs given as an iterator
+    pub fn insert_batch_non_consuming<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<(), TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                let v_buf = bincode::serialize(v.borrow())?;
+                self.batch.put_cf(&db.cf(), k_buf, v_buf);
+                Ok(())
+            })?;
+        Ok(())
+    }
+}
+
+// TODO: Remove this entire implementation once we switch to sally
+impl DBBatch {
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
         mut self,
         db: &DBMap<K, V>,
@@ -1703,4 +1768,9 @@ impl DBMapTableConfigMap {
     pub fn to_map(&self) -> BTreeMap<String, DBOptions> {
         self.0.clone()
     }
+}
+
+pub enum RocksDBAccessType {
+    Primary,
+    Secondary(Option<PathBuf>),
 }
