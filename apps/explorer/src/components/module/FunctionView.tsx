@@ -6,6 +6,36 @@ import { useQuery } from '@tanstack/react-query';
 import { useRpc } from '~/hooks/useRpc';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
+// const argToString = (argData, typeparams, resultString) => JSON.stringify(argData)
+
+const argToString = (argData, typeparams, resultString?) => {
+    if (!resultString) resultString = '';
+
+    if (argData.TypeParameter !== undefined) {
+        return (
+            resultString +
+            typeparams[argData.TypeParameter].abilities.join(', ')
+        );
+    }
+
+    if (typeof argData === 'string') {
+        return resultString + argData;
+    }
+
+    if (argData.Struct !== undefined) {
+        return (
+            resultString +
+            Object.values(argData.Struct)
+                .filter((v) => typeof v === 'string')
+                .join('::')
+        );
+    }
+
+    resultString += Object.keys(argData)[0] + ' ';
+
+    return argToString(Object.values(argData)[0], typeparams, resultString);
+};
+
 function FunctionView({
     pkgId,
     selectedModuleName,
@@ -55,20 +85,10 @@ function FunctionView({
                                                                     key={index}
                                                                     className="pl-2.5 mt-4"
                                                                 >
-                                                                    {fnData
-                                                                        .type_parameters[
-                                                                        argData
-                                                                            .TypeParameter
-                                                                    ]
-                                                                        ? fnData.type_parameters[
-                                                                              argData
-                                                                                  .TypeParameter
-                                                                          ].abilities.join(
-                                                                              ', '
-                                                                          )
-                                                                        : JSON.stringify(
-                                                                              argData
-                                                                          )}
+                                                                    {argToString(
+                                                                        argData,
+                                                                        fnData.type_parameters
+                                                                    )}
                                                                 </div>
                                                             )
                                                         )}
