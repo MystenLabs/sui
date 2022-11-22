@@ -7,12 +7,12 @@ import { Link } from '~/ui/Link';
 
 const TRUNCATE_LENGTH = 16;
 
-type AddressLinkProps = {
+export type AddressLinkProps = {
     address: string;
     noTruncate?: boolean;
 };
 
-type ObjectLinkProps = {
+export type ObjectLinkProps = {
     objectId: string;
     noTruncate?: boolean;
 };
