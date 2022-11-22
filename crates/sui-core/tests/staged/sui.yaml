@@ -114,6 +114,21 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+EntryTypeArgumentError:
+  STRUCT:
+    - argument_idx: U16
+    - kind:
+        TYPENAME: EntryTypeArgumentErrorKind
+EntryTypeArgumentErrorKind:
+  ENUM:
+    0:
+      ModuleNotFound: UNIT
+    1:
+      TypeNotFound: UNIT
+    2:
+      ArityMismatch: UNIT
+    3:
+      ConstraintNotSatisfied: UNIT
 Envelope:
   STRUCT:
     - data:
@@ -167,23 +182,27 @@ ExecutionFailureStatus:
         NEWTYPE:
           TYPENAME: EntryArgumentError
     18:
+      EntryTypeArgumentError:
+        NEWTYPE:
+          TYPENAME: EntryTypeArgumentError
+    19:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    19:
+    20:
       InvalidChildObjectArgument:
         NEWTYPE:
           TYPENAME: InvalidChildObjectArgument
-    20:
+    21:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    21:
+    22:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    22:
+    23:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -191,29 +210,29 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    23:
+    24:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    24:
-      PublishErrorEmptyPackage: UNIT
     25:
-      PublishErrorNonZeroAddress: UNIT
+      PublishErrorEmptyPackage: UNIT
     26:
-      PublishErrorDuplicateModule: UNIT
+      PublishErrorNonZeroAddress: UNIT
     27:
-      SuiMoveVerificationError: UNIT
+      PublishErrorDuplicateModule: UNIT
     28:
-      MovePrimitiveRuntimeError: UNIT
+      SuiMoveVerificationError: UNIT
     29:
+      MovePrimitiveRuntimeError: UNIT
+    30:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    30:
-      VMVerificationOrDeserializationError: UNIT
     31:
+      VMVerificationOrDeserializationError: UNIT
+    32:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
