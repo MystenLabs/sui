@@ -33,7 +33,7 @@ export function ObjectLink({ objectId, noTruncate }: ObjectLinkProps) {
         ? objectId
         : truncate(objectId, TRUNCATE_LENGTH);
     return (
-        <Link to={`/objects/${encodeURIComponent(objectId)}`}>
+        <Link variant="mono" to={`/objects/${encodeURIComponent(objectId)}`}>
             {truncatedObjectId}
         </Link>
     );
