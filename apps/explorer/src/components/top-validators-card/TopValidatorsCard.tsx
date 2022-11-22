@@ -61,6 +61,7 @@ export function TopValidatorsCardAPI() {
     useEffect(() => {
         getValidatorState(rpc)
             .then((objState: ValidatorState) => {
+                console.log('objState', objState);
                 setObjectState(objState);
                 setLoadState('loaded');
             })
