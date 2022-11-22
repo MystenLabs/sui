@@ -817,7 +817,7 @@ impl LockService {
     /// Returns any locks from the input list that are still missing.
     pub async fn get_missing_locks(&self, objects: Vec<ObjectRef>) -> SuiResult<Vec<ObjectRef>> {
         block_on_future_in_sim(async move {
-            let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult<Vec<ObjectRef>>>();
             self.inner
                 .query_sender()
                 .send(LockServiceQueries::GetMissingLocks {

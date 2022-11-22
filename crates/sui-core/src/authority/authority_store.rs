@@ -409,7 +409,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             missing.extend(
                 self.lock_service
                     .get_missing_locks(probe_lock_exists)
-                    .await?,
+                    .await?
+                    .into_iter()
+                    .map(ObjectKey::from),
             );
         }
 
