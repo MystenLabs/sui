@@ -336,6 +336,13 @@ impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
     }
 }
 
+impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        write!(f, "k#{}..", s)
+    }
+}
+
 impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
     type Error = signature::Error;
 

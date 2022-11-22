@@ -13,6 +13,7 @@ use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
+use strum_macros::AsRefStr;
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -50,7 +51,7 @@ macro_rules! exit_main {
 }
 
 /// Custom error type for Sui.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
