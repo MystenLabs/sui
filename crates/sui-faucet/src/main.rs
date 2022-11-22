@@ -53,10 +53,8 @@ struct FaucetConfig {
     #[clap(long, default_value_t = 10)]
     max_request_per_second: u64,
 
-    // Setting timeout to be higher than fullnode maximum server-side timeout is a no-op.
-    // E.g. execute_transaction() has a 30s server-side timeout.
     #[clap(long, default_value_t = 60)]
-    timeout_secs: u64,
+    wallet_client_timeout_secs: u64,
 }
 
 struct AppState<F = SimpleFaucet> {
@@ -86,11 +84,11 @@ async fn main() -> Result<(), anyhow::Error> {
         host_ip,
         request_buffer_size,
         max_request_per_second,
-        timeout_secs,
+        wallet_client_timeout_secs,
         ..
     } = config;
 
-    let context = create_wallet_context(timeout_secs).await?;
+    let context = create_wallet_context(wallet_client_timeout_secs).await?;
 
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();
     info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
