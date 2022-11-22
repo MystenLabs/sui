@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store::ObjectKey, *};
-use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -13,86 +12,7 @@ use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;
 
-use sui_types::message_envelope::TrustedEnvelope;
 use typed_store_derive::DBMapUtils;
-
-/// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
-#[derive(DBMapUtils)]
-pub struct AuthorityEpochTables<S> {
-    /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    #[default_options_override_fn = "transactions_table_default_config"]
-    pub(crate) transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, S>>,
-
-    /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
-    /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
-    /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
-    /// TODO: These two maps should be merged into a single one (no reason to have two).
-    pub(crate) assigned_object_versions: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
-    pub(crate) next_object_versions: DBMap<ObjectID, SequenceNumber>,
-
-    /// Certificates that have been received from clients or received from consensus, but not yet
-    /// executed. Entries are cleared after execution.
-    /// This table is critical for crash recovery, because usually the consensus output progress
-    /// is updated after a certificate is committed into this table.
-    ///
-    /// If theory, this table may be superseded by storing consensus and checkpoint execution
-    /// progress. But it is more complex, because it would be necessary to track inflight
-    /// executions not ordered by indices. For now, tracking inflight certificates as a map
-    /// seems easier.
-    pub(crate) pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
-
-    /// Track which transactions have been processed in handle_consensus_transaction. We must be
-    /// sure to advance next_object_versions exactly once for each transaction we receive from
-    /// consensus. But, we may also be processing transactions from checkpoints, so we need to
-    /// track this state separately.
-    ///
-    /// Entries in this table can be garbage collected whenever we can prove that we won't receive
-    /// another handle_consensus_transaction call for the given digest. This probably means at
-    /// epoch change.
-    pub(crate) consensus_message_processed: DBMap<ConsensusTransactionKey, bool>,
-
-    /// Map stores pending transactions that this authority submitted to consensus
-    pub(crate) pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
-
-    /// This is an inverse index for consensus_message_processed - it allows to select
-    /// all transactions at the specific consensus range
-    ///
-    /// The consensus position for the transaction is defined as first position at which valid
-    /// certificate for this transaction is seen in consensus
-    pub(crate) consensus_message_order: DBMap<ExecutionIndices, TransactionDigest>,
-
-    /// The following table is used to store a single value (the corresponding key is a constant). The value
-    /// represents the index of the latest consensus message this authority processed. This field is written
-    /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
-    /// every message output by consensus (and in the right order).
-    pub(crate) last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
-
-    /// This table lists all checkpoint boundaries in the consensus sequence
-    ///
-    /// The key in this table is incremental index and value is corresponding narwhal
-    /// consensus output index
-    pub(crate) checkpoint_boundary: DBMap<u64, u64>,
-
-    /// Validators that have sent EndOfPublish message in this epoch
-    pub(crate) end_of_publish: DBMap<AuthorityName, ()>,
-}
-
-impl<S> AuthorityEpochTables<S>
-where
-    S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
-{
-    pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {
-        parent_path.join(format!("epoch_{}", epoch))
-    }
-
-    pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(Self::path(epoch, parent_path), db_options, None)
-    }
-
-    pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly<S> {
-        Self::get_read_only_handle(Self::path(epoch, parent_path), None, None)
-    }
-}
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -263,17 +183,8 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct ExecutionIndicesWithHash {
-    pub index: ExecutionIndices,
-    pub hash: u64,
-}
-
 // These functions are used to initialize the DB tables
 fn objects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
-}
-fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn certificates_table_default_config() -> DBOptions {

@@ -34,7 +34,6 @@ use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::Duration;
 use tracing::{error, warn};
-use typed_store::Map;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -158,9 +157,11 @@ impl ConsensusAdapter {
 
     fn submit_recovered(self: Arc<Self>) {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
-        let epoch_tables = self.authority.database.epoch_tables();
-        let recovered = epoch_tables.pending_consensus_transactions.iter();
-        let mut recovered: Vec<_> = recovered.map(|(_k, v)| v).collect();
+        let mut recovered = self
+            .authority
+            .database
+            .epoch_tables()
+            .get_all_pending_consensus_transactions();
         let pending_certificates = recovered
             .iter()
             .filter_map(|transaction| {
@@ -306,8 +307,7 @@ impl ConsensusAdapter {
         self.authority
             .database
             .epoch_tables()
-            .pending_consensus_transactions
-            .insert(&transaction.key(), &transaction)?;
+            .insert_pending_consensus_transactions(&transaction)?;
         if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
             self.pending_certificates
                 .lock()
@@ -395,8 +395,7 @@ impl ConsensusAdapter {
         self.authority
             .database
             .epoch_tables()
-            .pending_consensus_transactions
-            .remove(&transaction.key())
+            .remove_pending_consensus_transaction(&transaction.key())
             .expect("Storage error when removing consensus transaction");
         self.opt_metrics.as_ref().map(|metrics| {
             metrics.sequencing_certificate_success.inc();

@@ -45,6 +45,7 @@ impl TransactionManager {
             .enqueue(
                 transaction_manager
                     .authority_store
+                    .epoch_tables()
                     .all_pending_certificates()
                     .unwrap(),
             )
@@ -130,7 +131,11 @@ impl TransactionManager {
                 self.pending_certificates.remove(&digest);
                 // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
                 // Otherwise, this has to crash.
-                let cert = match self.authority_store.get_pending_certificate(&digest) {
+                let cert = match self
+                    .authority_store
+                    .epoch_tables()
+                    .get_pending_certificate(&digest)
+                {
                     Ok(Some(cert)) => cert,
                     Ok(None) => {
                         error!(tx_digest = ?digest,
