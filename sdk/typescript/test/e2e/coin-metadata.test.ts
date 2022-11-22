@@ -16,6 +16,7 @@ describe('Test Coin Metadata', () => {
   let toolbox: TestToolbox;
   let signer: RawSigner;
   let packageId: ObjectId;
+  let shouldSkip: boolean;
 
   beforeAll(async () => {
     toolbox = await setup();
@@ -24,11 +25,21 @@ describe('Test Coin Metadata', () => {
       toolbox.provider,
       new LocalTxnDataSerializer(toolbox.provider)
     );
+    // TODO: This API is only available under version 0.17.0. Clean
+    // up this once 0.17. is released
+    const version = await toolbox.provider.getRpcApiVersion();
+    if (version?.major === 0 && version?.minor < 17) {
+      shouldSkip = true;
+      return;
+    }
     const packagePath = __dirname + '/./data/coin_metadata';
     packageId = await publishPackage(signer, true, packagePath);
   });
 
   it('Test accessing coin metadata', async () => {
+    if (shouldSkip) {
+      return;
+    }
     // TODO: add a new RPC endpoint for fetching coin metadata
     const objectResponse = await toolbox.provider.getObject(packageId);
     const publishTxnDigest =
