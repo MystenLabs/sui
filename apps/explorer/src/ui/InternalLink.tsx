@@ -7,12 +7,12 @@ import { Link } from '~/ui/Link';
 
 const TRUNCATE_LENGTH = 16;
 
-export type AddressLinkProps = {
+type AddressLinkProps = {
     address: string;
     noTruncate?: boolean;
 };
 
-export type ObjectLinkProps = {
+type ObjectLinkProps = {
     objectId: string;
     noTruncate?: boolean;
 };
@@ -33,7 +33,7 @@ export function ObjectLink({ objectId, noTruncate }: ObjectLinkProps) {
         ? objectId
         : truncate(objectId, TRUNCATE_LENGTH);
     return (
-        <Link variant="mono" to={`/objects/${encodeURIComponent(objectId)}`}>
+        <Link to={`/objects/${encodeURIComponent(objectId)}`}>
             {truncatedObjectId}
         </Link>
     );
