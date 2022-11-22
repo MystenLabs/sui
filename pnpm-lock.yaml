@@ -397,6 +397,7 @@ importers:
       '@scure/bip32': ^1.1.0
       '@scure/bip39': ^1.1.0
       '@size-limit/preset-small-lib': ^7.0.8
+      '@suchipi/femver': ^1.0.0
       '@types/lossless-json': ^1.0.1
       axios: ^0.27.2
       cross-fetch: ^3.1.5
@@ -428,6 +429,7 @@ importers:
       '@noble/secp256k1': 1.6.3
       '@scure/bip32': 1.1.0
       '@scure/bip39': 1.1.0
+      '@suchipi/femver': 1.0.0
       cross-fetch: 3.1.5
       jayson: 3.7.0
       js-sha3: 0.8.0
@@ -4974,6 +4976,10 @@ packages:
   /@storybook/ui/7.0.0-alpha.38:
     resolution: {integrity: sha512-ZGoAmDuSjEAbAnw+OlqAC8wKC6BjzMs0sohrp4Dk2gYyULX0+zJ1U3G3IKIOicZSqanIzvITLrnEefCT0+tXIA==}
     dev: true
+
+  /@suchipi/femver/1.0.0:
+    resolution: {integrity: sha512-bprE8+K5V+DPX7q2e2K57ImqNBdfGHDIWaGI5xHxZoxbKOuQZn4wzPiUxOAHnsUr3w3xHrWXwN7gnG/iIuEMIg==}
+    dev: false
 
   /@svgr/babel-plugin-add-jsx-attribute/6.3.1_@babel+core@7.19.3:
     resolution: {integrity: sha512-jDBKArXYO1u0B1dmd2Nf8Oy6aTF5vLDfLoO9Oon/GLkqZ/NiggYWZA+a2HpUMH4ITwNqS3z43k8LWApB8S583w==}
