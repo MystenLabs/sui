@@ -5,7 +5,7 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 14-16:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 1: Mismatch between the number of actual versus expected argument.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 1: Mismatch between the number of actual versus expected arguments.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 1, kind: ArityMismatch }), source: Some("Expected 2 arguments calling function 'create', but found 1") } }
 
 task 3 'run'. lines 17-17:
