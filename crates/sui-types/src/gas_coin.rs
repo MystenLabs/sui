@@ -65,7 +65,7 @@ impl GasCoin {
     }
 
     pub fn to_object(&self, version: SequenceNumber) -> MoveObject {
-        MoveObject::new_gas_coin(version, self.to_bcs_bytes())
+        MoveObject::new_gas_coin(version, *self.id(), self.value())
     }
 
     pub fn layout() -> MoveStructLayout {

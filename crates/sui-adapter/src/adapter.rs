@@ -563,7 +563,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents_and_increment_version(new_contents);
+            .update_contents_and_increment_version(new_contents)?;
 
         changes.insert(
             obj_id,
@@ -625,7 +625,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
         };
         // safe because `has_public_transfer` was properly determined from the abilities
         let mut move_obj =
-            unsafe { MoveObject::new_from_execution(tag, has_public_transfer, version, contents) };
+            unsafe { MoveObject::new_from_execution(tag, has_public_transfer, version, contents)? };
 
         #[cfg(debug_assertions)]
         {
