@@ -60,16 +60,26 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
     return (
         <div data-testid="pageheader">
-            <div className="text-gray-85 flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3">
                 <Icon className="text-steel" />
-                <Heading variant="heading4" weight="semibold">
+                <Heading
+                    variant="heading4"
+                    weight="semibold"
+                    color="steel-darker"
+                >
                     {type}
                 </Heading>
             </div>
             <div className="flex flex-col lg:flex-row gap-2">
                 <div className="flex items-start gap-2 min-w-0">
                     <div className="break-words min-w-0">
-                        <Heading as="h2" variant="heading2" weight="bold" mono>
+                        <Heading
+                            as="h2"
+                            variant="heading2"
+                            weight="semibold"
+                            color="gray-90"
+                            mono
+                        >
                             {title}
                         </Heading>
                     </div>
@@ -93,8 +103,12 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                 )}
             </div>
             {subtitle && (
-                <div className="text-gray-75 mt-2 break-words">
-                    <Heading variant="heading4" weight="semibold">
+                <div className="mt-2 break-words">
+                    <Heading
+                        variant="heading4"
+                        weight="semibold"
+                        color="gray-75"
+                    >
                         {subtitle}
                     </Heading>
                 </div>

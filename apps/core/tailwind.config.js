@@ -18,8 +18,8 @@ module.exports = {
       gray: {
         100: "#182435",
         95: "#2A3645",
-        90: "#3D444D",
-        85: "#4E555D",
+        90: "#383F47",
+        85: "#5A6573",
         80: "#636870",
         75: "#767A81",
         70: "#898D93",
@@ -33,21 +33,22 @@ module.exports = {
       },
 
       sui: {
-        dark: "#1F6493",
         DEFAULT: "#6fbcf0",
+        bright: '#2A38EB',
         light: "#E1F3FF",
+        dark: "#1F6493",
       },
 
       steel: {
         DEFAULT: "#A0B6C3",
         dark: "#758F9E",
-        darker: "#627885",
+        darker: "#5C6F7A",
       },
 
       issue: {
         DEFAULT: "#FF794B",
         dark: "#EB5A29",
-        light: "#FFECE5",
+        light: "#FFECE6",
       },
       hero: {
         DEFAULT: "#0284AD",
