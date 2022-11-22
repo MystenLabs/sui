@@ -1405,6 +1405,7 @@ pub fn make_response_from_sui_system_state(
             SequenceNumber::from_u64(1),
             move_content,
         )
+        .unwrap()
     };
     let initial_shared_version = move_object.version();
     let object = Object::new_move(

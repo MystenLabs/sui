@@ -1228,6 +1228,10 @@ pub enum ExecutionFailureStatus {
     ModuleNotFound,
     FunctionNotFound,
     InvariantViolation,
+    MoveObjectTooBig {
+        object_size: u32,
+        max_object_size: u32,
+    },
 
     //
     // Transfer errors
@@ -1401,7 +1405,8 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
+            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),  
+            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),       
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(

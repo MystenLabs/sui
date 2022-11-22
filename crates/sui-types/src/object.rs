@@ -31,6 +31,13 @@ use crate::{
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
+/// Maximum size of the `contents` part of an object, in bytes
+pub const MAX_MOVE_OBJECT_SIZE: usize = 250 * 1024; // 250 KB
+
+// TODO: enforce this limit
+/// Maximum size of a Move package object, in bytes
+pub const MAX_MOVE_PACKAGE_SIZE: usize = 500 * 1024; // 500 KB
+
 /// Packages are immutable, version is always 1
 pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
@@ -75,24 +82,55 @@ impl MoveObject {
         has_public_transfer: bool,
         version: SequenceNumber,
         contents: Vec<u8>,
-    ) -> Self {
+    ) -> Result<Self, ExecutionError> {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
         debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
-        Self {
+        if contents.len() > MAX_MOVE_OBJECT_SIZE {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::MoveObjectTooBig {
+                    object_size: contents.len() as u32,
+                    max_object_size: MAX_MOVE_OBJECT_SIZE as u32,
+                },
+            ));
+        }
+        Ok(Self {
             type_,
             has_public_transfer,
             version,
             contents,
+        })
+    }
+
+    pub fn new_gas_coin(version: SequenceNumber, id: ObjectID, value: u64) -> Self {
+        // unwrap safe because coins are always smaller than the max object size
+        unsafe {
+            Self::new_from_execution(
+                GasCoin::type_(),
+                true,
+                version,
+                GasCoin::new(id, value).to_bcs_bytes(),
+            )
+            .unwrap()
         }
     }
 
-    pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, contents) }
-    }
-
-    pub fn new_coin(coin_type: StructTag, version: SequenceNumber, contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(coin_type, true, version, contents) }
+    pub fn new_coin(
+        coin_type: StructTag,
+        version: SequenceNumber,
+        id: ObjectID,
+        value: u64,
+    ) -> Self {
+        // unwrap safe because coins are always smaller than the max object size
+        unsafe {
+            Self::new_from_execution(
+                coin_type,
+                true,
+                version,
+                GasCoin::new(id, value).to_bcs_bytes(),
+            )
+            .unwrap()
+        }
     }
 
     pub fn has_public_transfer(&self) -> bool {
@@ -116,13 +154,28 @@ impl MoveObject {
     }
 
     /// Update the contents of this object and increment its version
-    pub fn update_contents_and_increment_version(&mut self, new_contents: Vec<u8>) {
-        self.update_contents_without_version_change(new_contents);
+    pub fn update_contents_and_increment_version(
+        &mut self,
+        new_contents: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
+        self.update_contents_without_version_change(new_contents)?;
         self.increment_version();
+        Ok(())
     }
 
     /// Update the contents of this object but does not increment its version
-    pub fn update_contents_without_version_change(&mut self, new_contents: Vec<u8>) {
+    pub fn update_contents_without_version_change(
+        &mut self,
+        new_contents: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
+        if new_contents.len() > MAX_MOVE_OBJECT_SIZE {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::MoveObjectTooBig {
+                    object_size: new_contents.len() as u32,
+                    max_object_size: MAX_MOVE_OBJECT_SIZE as u32,
+                },
+            ));
+        }
         #[cfg(debug_assertions)]
         let old_id = self.id();
         #[cfg(debug_assertions)]
@@ -136,6 +189,7 @@ impl MoveObject {
             debug_assert_eq!(self.id(), old_id);
             debug_assert_eq!(self.version(), old_version);
         }
+        Ok(())
     }
 
     /// Increase the version of this object by one
@@ -561,8 +615,7 @@ impl Object {
     /// Generate a new gas coin worth `value` with a random object ID and owner
     /// For testing purposes only
     pub fn new_gas_coin_for_testing(value: u64, owner: SuiAddress) -> Self {
-        let content = GasCoin::new(ObjectID::random(), value);
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::random(), value);
         Object::new_move(
             obj,
             Owner::AddressOwner(owner),

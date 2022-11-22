@@ -430,8 +430,8 @@ fn debit_coins_and_transfer<S>(
                     MoveObject::new_coin(
                         coin_type.clone(),
                         OBJECT_START_VERSION,
-                        bcs::to_bytes(&Coin::new(UID::new(tx_ctx.fresh_id()), *amount))
-                            .expect("Serializing coin value cannot fail"),
+                        tx_ctx.fresh_id(),
+                        *amount,
                     ),
                     Owner::AddressOwner(*recipient),
                     tx_ctx.digest(),
@@ -490,14 +490,13 @@ fn pay<S>(
                 DeleteKind::Normal,
             );
         } else {
-            // unwrapped unsafe because we checked that it was a coin object above
-            coin_object
-                .data
-                .try_as_move_mut()
-                .unwrap()
-                .update_contents_and_increment_version(
-                    bcs::to_bytes(&coin).expect("Coin serialization should not fail"),
-                );
+            let new_contents = bcs::to_bytes(&coin).expect("Coin serialization should not fail");
+            // unwrap safe because we checked that it was a coin object above
+            let move_obj = coin_object.data.try_as_move_mut().unwrap();
+            // unwrap safe because coin object is always below maximum size
+            move_obj
+                .update_contents_and_increment_version(new_contents)
+                .unwrap();
             temporary_store.write_object(&ctx, coin_object, WriteKind::Mutate);
         }
     }
@@ -590,18 +589,16 @@ fn transfer_sui<S>(
             .data
             .try_as_move_mut()
             .expect("Gas object must be Move object");
-        // We do not update the version number yet because gas charge will update it latter.
-        move_object.update_contents_without_version_change(
-            bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail"),
-        );
+        let new_contents = bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail");
+        // We do not update the version number yet because gas charge will update it later.
+        // unwrap safe because coin object is always below maximum size
+        move_object
+            .update_contents_without_version_change(new_contents)
+            .unwrap();
 
         // Creat a new gas coin with the amount.
         let new_object = Object::new_move(
-            MoveObject::new_gas_coin(
-                OBJECT_START_VERSION,
-                bcs::to_bytes(&GasCoin::new(tx_ctx.fresh_id(), amount))
-                    .expect("Serializing gas object cannot fail"),
-            ),
+            MoveObject::new_gas_coin(OBJECT_START_VERSION, tx_ctx.fresh_id(), amount),
             Owner::AddressOwner(recipient),
             tx_ctx.digest(),
         );

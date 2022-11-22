@@ -467,7 +467,13 @@ pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u6
     assert!(balance >= deduct_amount);
     let new_gas_coin = GasCoin::new(*gas_coin.id(), balance + rebate_amount - deduct_amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
+    // unwrap safe because GasCoin is guaranteed to serialize
+    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
+    assert_eq!(move_object.contents().len(), new_contents.len());
+    // unwrap safe gas object cannot exceed max object size
+    move_object
+        .update_contents_and_increment_version(new_contents)
+        .unwrap();
 }
 
 pub fn refund_gas(gas_object: &mut Object, amount: u64) {
@@ -476,7 +482,12 @@ pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     let balance = gas_coin.value();
     let new_gas_coin = GasCoin::new(*gas_coin.id(), balance + amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
+    // unwrap safe because GasCoin is guaranteed to serialize
+    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
+    // unwrap because safe gas object cannot exceed max object size
+    move_object
+        .update_contents_and_increment_version(new_contents)
+        .unwrap();
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {

@@ -155,11 +155,7 @@ pub fn transfer_coin<S>(
     previous_transaction: TransactionDigest,
 ) {
     let new_coin = Object::new_move(
-        MoveObject::new_coin(
-            coin_type,
-            OBJECT_START_VERSION,
-            bcs::to_bytes(coin).expect("Serializing coin value cannot fail"),
-        ),
+        MoveObject::new_coin(coin_type, OBJECT_START_VERSION, *coin.id(), coin.value()),
         Owner::AddressOwner(recipient),
         previous_transaction,
     );
@@ -177,16 +173,15 @@ pub fn update_input_coins<S>(
     recipient: Option<SuiAddress>,
 ) {
     let mut gas_coin_obj = coin_objects.remove(0);
+    let new_contents = bcs::to_bytes(gas_coin).expect("Coin serialization should not fail");
     // unwrap is safe because we checked that it was a coin object above.
     // update_contents_without_version_change b/c this is the gas coin,
     // whose version will be bumped upon gas payment.
-    gas_coin_obj
-        .data
-        .try_as_move_mut()
-        .unwrap()
-        .update_contents_without_version_change(
-            bcs::to_bytes(gas_coin).expect("Coin serialization should not fail"),
-        );
+    let move_obj = gas_coin_obj.data.try_as_move_mut().unwrap();
+    // unwrap is safe because size of coin contents should never change
+    move_obj
+        .update_contents_without_version_change(new_contents)
+        .unwrap();
     if let Some(recipient) = recipient {
         gas_coin_obj.transfer_without_version_change(recipient);
     }

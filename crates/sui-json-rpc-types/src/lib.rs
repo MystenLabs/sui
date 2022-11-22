@@ -500,7 +500,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
-                    )
+                    )?
                 })
             }
             SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)),

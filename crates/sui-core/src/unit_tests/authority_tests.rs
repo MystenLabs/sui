@@ -131,11 +131,8 @@ async fn construct_shared_object_transaction_with_sequence_number(
 
     let shared_object_id = ObjectID::random();
     let shared_object = {
-        use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
-
-        let content = GasCoin::new(shared_object_id, 10);
-        let obj = MoveObject::new_gas_coin(sequence_number, content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(sequence_number, shared_object_id, 10);
         Object::new_move(
             obj,
             Owner::Shared {
@@ -957,7 +954,8 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents_and_increment_version(old_contents);
+        o.update_contents_and_increment_version(old_contents)
+            .unwrap();
         authority_state.insert_genesis_object(sender_object).await;
     }
 
@@ -1168,11 +1166,8 @@ async fn test_handle_certificate_interrupted_retry() {
 
     let shared_object_id = ObjectID::random();
     let shared_object = {
-        use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
-
-        let content = GasCoin::new(shared_object_id, 10);
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
         };
@@ -2674,11 +2669,8 @@ async fn shared_object() {
 
     let shared_object_id = ObjectID::random();
     let shared_object = {
-        use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
-
-        let content = GasCoin::new(shared_object_id, 10);
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
         };
@@ -2751,11 +2743,8 @@ async fn test_consensus_message_processed() {
 
     let shared_object_id = ObjectID::random();
     let shared_object = {
-        use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
-
-        let content = GasCoin::new(shared_object_id, 10);
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
         };
