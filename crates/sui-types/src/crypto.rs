@@ -28,6 +28,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
+use strum::EnumString;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
@@ -1535,7 +1536,8 @@ pub mod bcs_signable_test {
     }
 }
 
-#[derive(Deserialize, Serialize, JsonSchema, Debug)]
+#[derive(Deserialize, Serialize, JsonSchema, Debug, EnumString, strum_macros::Display)]
+#[strum(serialize_all = "lowercase")]
 pub enum SignatureScheme {
     ED25519,
     Secp256k1,
@@ -1561,30 +1563,6 @@ impl SignatureScheme {
             _ => Err(SuiError::KeyConversionError(
                 "Invalid key scheme".to_string(),
             )),
-        }
-    }
-}
-
-impl FromStr for SignatureScheme {
-    type Err = SuiError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ed25519" => Ok(SignatureScheme::ED25519),
-            "secp256k1" => Ok(SignatureScheme::Secp256k1),
-            "bls12381" => Ok(SignatureScheme::BLS12381),
-            _ => Err(SuiError::KeyConversionError(
-                "Invalid key scheme".to_string(),
-            )),
-        }
-    }
-}
-
-impl ToString for SignatureScheme {
-    fn to_string(&self) -> String {
-        match self {
-            SignatureScheme::ED25519 => "ed25519".to_string(),
-            SignatureScheme::Secp256k1 => "secp256k1".to_string(),
-            SignatureScheme::BLS12381 => "bls12381".to_string(),
         }
     }
 }
