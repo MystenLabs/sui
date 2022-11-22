@@ -90,6 +90,7 @@ pub async fn test_gossip_after_revert() {
             state
                 .database
                 .revert_state_update(&digests[0].transaction)
+                .await
                 .unwrap();
             break;
         }
@@ -99,6 +100,7 @@ pub async fn test_gossip_after_revert() {
             state
                 .database
                 .revert_state_update(&digests[1].transaction)
+                .await
                 .unwrap();
         }
     }

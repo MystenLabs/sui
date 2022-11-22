@@ -773,6 +773,11 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
+    async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        self.database.check_owned_locks(owned_object_refs).await
+    }
+
+    #[instrument(level = "trace", skip_all)]
     async fn check_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1042,6 +1047,9 @@ impl AuthorityState {
         let _metrics_guard = start_timer(self.metrics.prepare_certificate_latency.clone());
         let (gas_status, input_objects) =
             transaction_input_checker::check_certificate_input(&self.database, certificate).await?;
+
+        let owned_object_refs = input_objects.filter_owned_objects();
+        self.check_owned_locks(&owned_object_refs).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.

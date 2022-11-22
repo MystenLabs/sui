@@ -77,6 +77,10 @@ enum LockServiceQueries {
         objects: Vec<ObjectRef>,
         resp: oneshot::Sender<SuiResult>,
     },
+    GetMissingLocks {
+        objects: Vec<ObjectRef>,
+        resp: oneshot::Sender<SuiResult<Vec<ObjectRef>>>,
+    },
     GetTxSequence {
         tx: TransactionDigest,
         resp: oneshot::Sender<Result<Option<TxSequenceNumber>, SuiError>>,
@@ -196,6 +200,17 @@ impl LockServiceImpl {
                 }
             },
         )
+    }
+
+    fn get_missing_locks(&self, objects: &[ObjectRef]) -> SuiResult<Vec<ObjectRef>> {
+        let locks = self.transaction_lock.multi_get(objects)?;
+        let mut missing = Vec::new();
+        for (lock, obj_ref) in locks.into_iter().zip(objects) {
+            if lock.is_none() {
+                missing.push(*obj_ref);
+            }
+        }
+        Ok(missing)
     }
 
     /// Checks multiple object locks exist.
@@ -526,6 +541,11 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
+                LockServiceQueries::GetMissingLocks { objects, resp } => {
+                    if let Err(_e) = resp.send(self.get_missing_locks(&objects)) {
+                        warn!("Could not respond to sender, sender dropped!");
+                    }
+                }
                 LockServiceQueries::GetTxSequence { tx, resp } => {
                     if let Err(_e) = resp.send(self.get_tx_sequence(tx)) {
                         warn!("Could not respond to sender, sender dropped!");
@@ -782,6 +802,25 @@ impl LockService {
             self.inner
                 .query_sender()
                 .send(LockServiceQueries::CheckLocksExist {
+                    objects,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
+    }
+
+    /// Returns any locks from the input list that are still missing.
+    pub async fn get_missing_locks(&self, objects: Vec<ObjectRef>) -> SuiResult<Vec<ObjectRef>> {
+        block_on_future_in_sim(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult<Vec<ObjectRef>>>();
+            self.inner
+                .query_sender()
+                .send(LockServiceQueries::GetMissingLocks {
                     objects,
                     resp: os_sender,
                 })
