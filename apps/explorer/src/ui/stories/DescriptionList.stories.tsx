@@ -27,7 +27,7 @@ export default {
 export const Default: StoryObj<DescriptionListProps> = {
     render: () => (
         <DescriptionList>
-            <Label >Object ID</Label>
+            <Label>Object ID</Label>
             <Value>
                 <Link variant="mono" to="/">
                     0xb758af2061e7c0e55df23de52c51968f6efbc959

@@ -5,11 +5,12 @@ import type { ReactNode } from 'react';
 
 import { Text, type TextProps } from '~/ui/Text';
 
-
 export function Label(props: TextProps) {
     return (
         <dt className="col-span-1">
-            <Text variant="body" {...props}>{props.children}</Text>
+            <Text variant="body" {...props}>
+                {props.children}
+            </Text>
         </dt>
     );
 }
