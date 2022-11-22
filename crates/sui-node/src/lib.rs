@@ -13,6 +13,7 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
+use std::collections::HashMap;
 use std::option::Option::None;
 use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
@@ -352,6 +353,7 @@ impl SuiNode {
                 narwhal_network::connectivity::ConnectionMonitor::spawn(
                     network.downgrade(),
                     network_connection_metrics,
+                    HashMap::default(),
                 );
 
             network

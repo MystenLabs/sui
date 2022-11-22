@@ -23,6 +23,7 @@ use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
+use std::collections::HashMap;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
 use sui_metrics::spawn_monitored_task;
@@ -206,10 +207,7 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
-        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-        );
+        let mut peer_types = HashMap::new();
 
         let other_workers = worker
             .worker_cache
@@ -221,6 +219,7 @@ impl Worker {
         // Add other workers we want to talk with to the known peers set.
         for (public_key, address) in other_workers {
             let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
+            peer_types.insert(peer_id, "other_worker".to_string());
             info!(
                 "Adding others workers with peer id {} and address {}",
                 peer_id, address
@@ -240,9 +239,27 @@ impl Worker {
 
         let (peer_id, address) =
             Self::add_peer_in_network(&network, primary_network_key.clone(), &primary_address);
+        peer_types.insert(peer_id, "our_primary".to_string());
         info!(
             "Adding our primary with peer id {} and address {}",
             peer_id, address
+        );
+
+        // update the peer_types with the "other_primary". We do not add them in the Network
+        // struct, otherwise the networking library will try to connect to it
+        let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
+            committee.load().others_primaries(&primary_name);
+        for (_, _, network_key) in other_primaries {
+            peer_types.insert(
+                PeerId(network_key.0.to_bytes()),
+                "other_primary".to_string(),
+            );
+        }
+
+        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+            network.downgrade(),
+            network_connection_metrics,
+            peer_types,
         );
 
         let network_admin_server_base_port = parameters

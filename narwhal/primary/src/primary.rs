@@ -35,6 +35,7 @@ use multiaddr::{Multiaddr, Protocol};
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
+use std::collections::HashMap;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet, BinaryHeap},
@@ -294,15 +295,13 @@ impl Primary {
             });
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
-        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-        );
+        let mut peer_types = HashMap::new();
 
         // Add my workers
         for worker in worker_cache.load().our_workers(&name).unwrap() {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            peer_types.insert(peer_id, "our_worker".to_string());
             info!(
                 "Adding our worker with peer id {} and address {}",
                 peer_id, address
@@ -313,6 +312,7 @@ impl Primary {
         for (_, worker) in worker_cache.load().others_workers(&name) {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            peer_types.insert(peer_id, "other_worker".to_string());
             info!(
                 "Adding others worker with peer id {} and address {}",
                 peer_id, address
@@ -328,11 +328,18 @@ impl Primary {
 
         for (public_key, address) in primaries {
             let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
+            peer_types.insert(peer_id, "other_primary".to_string());
             info!(
                 "Adding others primaries with peer id {} and address {}",
                 peer_id, address
             );
         }
+
+        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+            network.downgrade(),
+            network_connection_metrics,
+            peer_types,
+        );
 
         info!(
             "Primary {} listening to network admin messages on 127.0.0.1:{}",

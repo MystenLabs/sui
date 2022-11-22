@@ -20,7 +20,7 @@ impl NetworkConnectionMetrics {
             network_peer_connected: register_int_gauge_vec_with_registry!(
                 format!("{node}_network_peer_connected"),
                 "The connection status of a peer. 0 if not connected, 1 if connected",
-                &["peer_id"],
+                &["peer_id", "type"],
                 registry
             )
             .unwrap(),

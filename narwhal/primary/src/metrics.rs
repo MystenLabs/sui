@@ -313,6 +313,12 @@ impl PrimaryChannelMetrics {
 pub struct PrimaryMetrics {
     /// count number of headers that the node proposed
     pub headers_proposed: IntCounterVec,
+    /// the current proposed header round
+    pub proposed_header_round: IntGaugeVec,
+    /// The number of received votes for the proposed last round
+    pub votes_received_last_round: IntGauge,
+    /// The round of the latest created certificate by our node
+    pub certificate_created_round: IntGaugeVec,
     /// count number of certificates that the node created
     pub certificates_created: IntCounterVec,
     /// count number of certificates that the node processed (others + own)
@@ -364,6 +370,23 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            proposed_header_round: register_int_gauge_vec_with_registry!(
+                "proposed_header_round",
+                "The current proposed header round",
+                &["epoch"],
+                registry
+            ).unwrap(),
+            votes_received_last_round: register_int_gauge_with_registry!(
+                "votes_received_last_round",
+                "The number of received votes for the proposed last round",
+                registry
+            ).unwrap(),
+            certificate_created_round: register_int_gauge_vec_with_registry!(
+                "certificate_created_round",
+                "The round of the latest created certificate by our node",
+                &["epoch"],
+                registry
+            ).unwrap(),
             certificates_created: register_int_counter_vec_with_registry!(
                 "certificates_created",
                 "Number of certificates that node created",
