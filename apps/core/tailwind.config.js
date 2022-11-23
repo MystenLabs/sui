@@ -113,7 +113,6 @@ module.exports = {
       spacing: {
         4.5: '1.125rem',
         7.5: '1.875rem',
-        13: '3.125rem',
         15: '3.75rem',
         verticalListShort: '13.0625rem',
         verticalListLong: '35.6875rem',

@@ -195,7 +195,7 @@ function DisplayBoxWString({
                                         onClick={handleImageClick}
                                         aria-hidden
                                     >
-                                        <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-13 text-2xl mx-auto z-50">
+                                        <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-full text-2xl mx-auto z-50">
                                             &times;
                                         </span>
                                     </span>
@@ -214,7 +214,7 @@ function DisplayBoxWString({
                                     className="block mx-auto mt-[10vh] sm:hidden"
                                     aria-hidden
                                 >
-                                    <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-13 text-2xl mx-auto z-50">
+                                    <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-full text-2xl mx-auto z-50">
                                         &times;
                                     </span>
                                 </div>
