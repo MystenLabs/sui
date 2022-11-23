@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
 import { Button } from "./utils/Button";
+import { CloseIcon } from "./utils/Close";
 import { WhatIsAWallet } from "./WhatIsAWallet";
 
 // TODO: Ideally remove:
@@ -47,6 +48,8 @@ const Content = styled(Dialog.Content, {
 
 const Close = styled(Dialog.Close, {
   position: "absolute",
+  cursor: "pointer",
+  padding: 7,
   top: "$4",
   right: "$4",
   display: "flex",
@@ -60,19 +63,26 @@ const Close = styled(Dialog.Close, {
 
 const Title = styled(Dialog.Title, {
   margin: 0,
+  padding: "0 $2",
   fontSize: "$lg",
   fontWeight: "$title",
   color: "$textDark",
 });
 
-const ConnectWallet = styled("div", {
+const Panel = styled("div", {
   boxSizing: "border-box",
-  padding: "$4 $5",
-  height: "100%",
+  padding: "$5",
+  display: "flex",
+  flexDirection: "column",
+});
+
+const ConnectWallet = styled(Panel, {
   background: "$backgroundAccent",
+  height: "100%",
 });
 
 const WalletList = styled("div", {
+  marginTop: "$6",
   display: "flex",
   flexDirection: "column",
   gap: "$1",
@@ -81,7 +91,7 @@ const WalletList = styled("div", {
 const WalletItem = styled("button", {
   background: "none",
   display: "flex",
-  padding: "$1",
+  padding: "$2",
   gap: "$2",
   alignItems: "center",
   cursor: "pointer",
@@ -107,6 +117,30 @@ const WalletIcon = styled("img", {
   width: "$walletIcon",
   height: "$walletIcon",
   borderRadius: "$walletIcon",
+  objectFit: "cover",
+});
+
+const BodyCopy = styled("div", {
+  padding: "$10",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "center",
+  flex: 1,
+});
+
+const SelectedWalletIcon = styled("img", {
+  background: "white",
+  objectFit: "cover",
+  width: 72,
+  height: 72,
+  borderRadius: 16,
+});
+
+const RetryContainer = styled("div", {
+  position: "absolute",
+  bottom: "$8",
+  right: "$8",
 });
 
 export interface ConnectModalProps {
@@ -138,8 +172,6 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
       <Dialog.Portal>
         <Overlay />
         <Content>
-          <Close aria-label="Close" />
-
           <Div css={{ width: 240 }}>
             <ConnectWallet>
               <Title>Connect a Wallet</Title>
@@ -160,19 +192,14 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
               </WalletList>
             </ConnectWallet>
           </Div>
-          <Div css={{ flex: 1 }}>
+          <Panel css={{ flex: 1 }}>
             {selected ? (
-              <Div
-                css={{
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: "100%",
-                }}
-              >
+              <BodyCopy>
+                <SelectedWalletIcon src={wallet?.icon} />
                 <Div
                   css={{
+                    marginTop: "$3",
+                    marginBottom: "$1",
                     color: "$textDark",
                     fontSize: "$xl",
                     fontWeight: "$title",
@@ -192,21 +219,27 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
                 </Div>
 
                 {isError && (
-                  <Button color="secondary" onClick={() => select(selected)}>
-                    Retry Connection
-                  </Button>
+                  <RetryContainer>
+                    <Button color="secondary" onClick={() => select(selected)}>
+                      Retry Connection
+                    </Button>
+                  </RetryContainer>
                 )}
-              </Div>
+              </BodyCopy>
             ) : (
               <>
-                <Div css={{ display: "flex", justifyContent: "center" }}>
-                  <Title>What is a Wallet</Title>
-                </Div>
+                <Title css={{ textAlign: "center" }}>What is a Wallet</Title>
 
-                <WhatIsAWallet />
+                <BodyCopy>
+                  <WhatIsAWallet />
+                </BodyCopy>
               </>
             )}
-          </Div>
+          </Panel>
+
+          <Close aria-label="Close">
+            <CloseIcon />
+          </Close>
         </Content>
       </Dialog.Portal>
     </Dialog.Root>

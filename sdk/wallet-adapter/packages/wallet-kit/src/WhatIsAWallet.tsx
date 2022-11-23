@@ -1,7 +1,6 @@
 import { styled } from "./stitches";
 
 const Container = styled("div", {
-  flex: 1,
   display: "flex",
   flexDirection: "column",
   gap: "$5",

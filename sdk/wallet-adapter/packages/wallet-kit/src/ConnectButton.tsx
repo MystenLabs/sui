@@ -33,7 +33,12 @@ export function ConnectButton({
   return (
     <div className={theme}>
       {account ? (
-        <Button color="connected" size="lg" onClick={() => disconnect()}>
+        <Button
+          css={{ fontFamily: "$mono" }}
+          color="connected"
+          size="lg"
+          onClick={() => disconnect()}
+        >
           {`${account.slice(0, 4)}...${account.slice(-4)}`}
         </Button>
       ) : (

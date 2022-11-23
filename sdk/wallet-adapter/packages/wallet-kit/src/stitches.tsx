@@ -27,7 +27,7 @@ export const {
       backdrop: "rgba(24 36 53 / 20%)",
       backgroundIcon: "#F0F1F2",
       icon: "#383F47",
-      issue: '#FF794B',
+      issue: "#FF794B",
     },
     space: {
       1: makeSize(1),
@@ -38,6 +38,7 @@ export const {
       6: makeSize(6),
       7: makeSize(7),
       8: makeSize(8),
+      10: makeSize(10),
     },
     fontSizes: {
       xs: "13px",
@@ -48,11 +49,12 @@ export const {
     },
     fonts: {
       sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
+      mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
     },
     radii: {
       modal: "16px",
       buttonLg: "12px",
-      buttonMd: '8px',
+      buttonMd: "8px",
       wallet: "8px",
       walletIcon: "6px",
       close: "9999px",
