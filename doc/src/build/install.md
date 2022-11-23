@@ -2,7 +2,7 @@
 title: Install Sui to Build
 ---
 
-Learn how to install and configure Sui to develop on-chain.
+Learn how to install and configure Sui to develop smart contracts on the Sui blockchain.
 
 Before you install Sui, you need to install some prerequisite tools and configure your development environment.
 
@@ -60,7 +60,7 @@ Use the following command to install Rust and Cargo on macOS or Linux:
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Windows 11 users can use the [Rust installer](https://www.rust-lang.org/tools/install) available on the Rust website. 
+Windows 11 users can use the [Rust installer](https://www.rust-lang.org/tools/install) available on the Rust website. The installer detects if you do not have the required C++ build tools and prompts you to install. Select the option that best defines your environment and follow the instructions in the install wizard. 
 
 For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install) on the Rust website.
 
@@ -193,9 +193,9 @@ Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases
 
 Sui requires the following additional tools on computers running Windows.
 
- * For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
- * [C++ build tools](https://visualstudio.microsoft.com/downloads/)
- * The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
+ * For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/).
+ * [C++ build tools](https://visualstudio.microsoft.com/downloads/) are required to [install Rust](#rust-and-cargo), so you should already have these installed if you followed these instructions.
+ * The [LLVM Compiler Infrastructure](https://releases.llvm.org/).
 
 >**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
 >press the `enter` key in the command prompt to fix the issue.
