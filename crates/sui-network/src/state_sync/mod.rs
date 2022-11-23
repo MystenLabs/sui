@@ -83,6 +83,7 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
 }
 mod builder;
+mod metrics;
 mod server;
 #[cfg(test)]
 mod tests;
@@ -93,6 +94,8 @@ pub use generated::{
     state_sync_server::{StateSync, StateSyncServer},
 };
 pub use server::GetCheckpointSummaryRequest;
+
+use self::metrics::Metrics;
 
 /// A handle to the StateSync subsystem.
 ///
@@ -226,6 +229,7 @@ struct StateSyncEventLoop<S> {
     peer_heights: Arc<RwLock<PeerHeights>>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     network: anemo::Network,
+    metrics: Metrics,
 }
 
 impl<S> StateSyncEventLoop<S>
@@ -356,6 +360,10 @@ where
             self.store
                 .update_highest_synced_checkpoint(&checkpoint)
                 .expect("store operation should not fail");
+            self.metrics
+                .set_highest_verified_checkpoint(checkpoint.sequence_number());
+            self.metrics
+                .set_highest_synced_checkpoint(checkpoint.sequence_number());
 
             // We don't care if no one is listening as this is a broadcast channel
             let _ = self.checkpoint_event_sender.send(checkpoint.clone());
@@ -440,6 +448,7 @@ where
                 self.network.clone(),
                 self.store.clone(),
                 self.peer_heights.clone(),
+                self.metrics.clone(),
                 self.config.checkpoint_header_download_concurrency(),
                 // The if condition should ensure that this is Some
                 highest_known_checkpoint.unwrap(),
@@ -483,6 +492,7 @@ where
                 self.peer_heights.clone(),
                 self.weak_sender.clone(),
                 self.checkpoint_event_sender.clone(),
+                self.metrics.clone(),
                 self.config.transaction_download_concurrency(),
                 // The if condition should ensure that this is Some
                 highest_verified_checkpoint.unwrap(),
@@ -612,6 +622,7 @@ async fn sync_to_checkpoint<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
+    metrics: Metrics,
     checkpoint_header_download_concurrency: usize,
     checkpoint: Checkpoint,
 ) -> Result<()>
@@ -619,6 +630,8 @@ where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
 {
+    metrics.set_highest_known_checkpoint(checkpoint.sequence_number());
+
     let mut current = store
         .get_highest_verified_checkpoint()
         .expect("store operation should not fail");
@@ -748,6 +761,7 @@ where
         store
             .insert_checkpoint(checkpoint.clone())
             .expect("store operation should not fail");
+        metrics.set_highest_verified_checkpoint(checkpoint.sequence_number());
     }
 
     peer_heights
@@ -764,6 +778,7 @@ async fn sync_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     sender: mpsc::WeakSender<StateSyncMessage>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    metrics: Metrics,
     transaction_download_concurrency: usize,
     target_checkpoint: VerifiedCheckpoint,
 ) where
@@ -796,6 +811,7 @@ async fn sync_checkpoint_contents<S>(
                 store
                     .update_highest_synced_checkpoint(&checkpoint)
                     .expect("store operation should not fail");
+                metrics.set_highest_synced_checkpoint(checkpoint.sequence_number());
                 // We don't care if no one is listening as this is a broadcast channel
                 let _ = checkpoint_event_sender.send(checkpoint.clone());
                 highest_synced = Some(checkpoint);

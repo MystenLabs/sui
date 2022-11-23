@@ -24,6 +24,7 @@ multiaddr = "0.16.0"
 tap = "1.0.1"
 rand = "0.8.5"
 anyhow = "1.0.65"
+prometheus = "0.13.3"
 
 [build-dependencies]
 anemo-build.workspace = true

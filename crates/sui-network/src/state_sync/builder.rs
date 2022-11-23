@@ -14,14 +14,15 @@ use tokio::{
 };
 
 use super::{
-    server::Server, Handle, PeerHeights, StateSync, StateSyncEventLoop, StateSyncMessage,
-    StateSyncServer,
+    metrics::Metrics, server::Server, Handle, PeerHeights, StateSync, StateSyncEventLoop,
+    StateSyncMessage, StateSyncServer,
 };
 use sui_types::storage::WriteStore;
 
 pub struct Builder<S> {
     store: Option<S>,
     config: Option<StateSyncConfig>,
+    metrics: Option<Metrics>,
 }
 
 impl Builder<()> {
@@ -30,6 +31,7 @@ impl Builder<()> {
         Self {
             store: None,
             config: None,
+            metrics: None,
         }
     }
 }
@@ -39,11 +41,17 @@ impl<S> Builder<S> {
         Builder {
             store: Some(store),
             config: self.config,
+            metrics: self.metrics,
         }
     }
 
     pub fn config(mut self, config: StateSyncConfig) -> Self {
         self.config = Some(config);
+        self
+    }
+
+    pub fn with_metrics(mut self, registry: &prometheus::Registry) -> Self {
+        self.metrics = Some(Metrics::enabled(registry));
         self
     }
 }
@@ -59,9 +67,14 @@ where
     }
 
     pub(super) fn build_internal(self) -> (UnstartedStateSync<S>, Server<S>) {
-        let Builder { store, config } = self;
+        let Builder {
+            store,
+            config,
+            metrics,
+        } = self;
         let store = store.unwrap();
         let config = config.unwrap_or_default();
+        let metrics = metrics.unwrap_or_else(Metrics::disabled);
 
         let (sender, mailbox) = mpsc::channel(config.mailbox_capacity());
         let (checkpoint_event_sender, _reciever) =
@@ -93,6 +106,7 @@ where
                 store,
                 peer_heights,
                 checkpoint_event_sender,
+                metrics,
             },
             server,
         )
@@ -106,6 +120,7 @@ pub struct UnstartedStateSync<S> {
     pub(super) store: S,
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
     pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    pub(super) metrics: Metrics,
 }
 
 impl<S> UnstartedStateSync<S>
@@ -121,6 +136,7 @@ where
             store,
             peer_heights,
             checkpoint_event_sender,
+            metrics,
         } = self;
 
         (
@@ -135,6 +151,7 @@ where
                 peer_heights,
                 checkpoint_event_sender,
                 network,
+                metrics,
             },
             handle,
         )
