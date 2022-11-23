@@ -320,6 +320,7 @@ pub enum SuiError {
         obj_refs: Vec<ObjectRef>,
         locked_epoch: EpochId,
         new_epoch: EpochId,
+        locked_by_tx: TransactionDigest,
     },
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },

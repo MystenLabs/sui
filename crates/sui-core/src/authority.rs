@@ -1347,8 +1347,11 @@ impl AuthorityState {
                             // Only address owned objects have locks.
                             None
                         } else {
-                            self.get_transaction_lock(&object.compute_object_reference())
-                                .await?
+                            self.get_transaction_lock(
+                                &object.compute_object_reference(),
+                                self.epoch(),
+                            )
+                            .await?
                         };
                         let layout = match request_layout {
                             Some(format) => {
@@ -2134,13 +2137,15 @@ impl AuthorityState {
     ) -> Result<(), SuiError> {
         self.database.consensus_message_processed_notify(key).await
     }
+
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
+        epoch_id: EpochId,
     ) -> Result<Option<VerifiedSignedTransaction>, SuiError> {
         self.database
-            .get_object_locking_transaction(object_ref)
+            .get_object_locking_transaction(object_ref, epoch_id)
             .await
     }
 

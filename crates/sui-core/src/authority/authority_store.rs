@@ -487,6 +487,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Get the TransactionEnvelope that currently locks the given object, if any.
+    /// Since object locks are only valid for one epoch, we also need the epoch_id in the query.
     /// Returns SuiError::ObjectNotFound if no lock records for the given object can be found.
     /// Returns SuiError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
     /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
@@ -495,8 +496,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
+        epoch_id: EpochId,
     ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
-        let lock_info = self.lock_service.get_lock(*object_ref).await?;
+        let lock_info = self.lock_service.get_lock(*object_ref, epoch_id).await?;
         let lock_info = match lock_info {
             ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
                 return Err(SuiError::ObjectVersionUnavailableForConsumption {
@@ -509,7 +511,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             }
             ObjectLockStatus::LockedToTx { locked_by_tx } => locked_by_tx,
         };
-
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
         // just be a race.
