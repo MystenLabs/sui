@@ -160,7 +160,7 @@ impl ConsensusStore {
         self.last_committed.iter().collect()
     }
 
-    /// Load the last committed round of each validator.
+    /// Load the last committed round of a validator.
     pub fn read_last_committed_round(
         &self,
         validator: &PublicKey,

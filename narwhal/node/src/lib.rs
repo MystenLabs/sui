@@ -85,7 +85,8 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
-        let (rx_executor_network, tx_executor_network) = oneshot::channel();
+        let (tx_executor_network, rx_executor_network) = oneshot::channel();
+        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -97,7 +98,7 @@ impl Node {
         } else {
             let consensus_handles = Self::spawn_consensus(
                 name.clone(),
-                tx_executor_network,
+                rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),
                 store,
@@ -106,11 +107,13 @@ impl Node {
                 &tx_reconfigure,
                 rx_new_certificates,
                 tx_committed_certificates.clone(),
+                tx_consensus_round_updates,
                 registry,
             )
             .await?;
 
             handles.extend(consensus_handles);
+
             (None, NetworkModel::PartiallySynchronous)
         };
 
@@ -144,12 +147,13 @@ impl Node {
             store.vote_digest_store.clone(),
             tx_new_certificates,
             rx_committed_certificates,
+            rx_consensus_round_updates,
             dag,
             network_model,
             tx_reconfigure,
             tx_committed_certificates,
             registry,
-            Some(rx_executor_network),
+            Some(tx_executor_network),
         );
         handles.extend(primary_handles);
 
@@ -176,7 +180,7 @@ impl Node {
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
         name: PublicKey,
-        network: oneshot::Receiver<P2pNetwork>,
+        rx_executor_network: oneshot::Receiver<P2pNetwork>,
         worker_cache: SharedWorkerCache,
         committee: SharedCommittee,
         store: &NodeStorage,
@@ -185,6 +189,7 @@ impl Node {
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
+        tx_consensus_round_updates: watch::Sender<Round>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
@@ -230,6 +235,7 @@ impl Node {
             tx_reconfigure.subscribe(),
             rx_new_certificates,
             tx_committed_certificates,
+            tx_consensus_round_updates,
             tx_sequence,
             ordering_engine,
             consensus_metrics.clone(),
@@ -240,7 +246,7 @@ impl Node {
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
             name,
-            network,
+            rx_executor_network,
             worker_cache,
             (**committee.load()).clone(),
             execution_state,

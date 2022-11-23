@@ -24,14 +24,10 @@ pub struct StateHandler {
     worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
     rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-    /// Signals a new consensus round
-    tx_consensus_round_updates: watch::Sender<Round>,
     /// Receives notifications to reconfigure the system.
     rx_state_handler: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
-    /// The latest round committed by consensus.
-    last_committed_round: Round,
     /// A channel to update the committed rounds
     tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
@@ -45,7 +41,6 @@ impl StateHandler {
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-        tx_consensus_round_updates: watch::Sender<u64>,
         rx_state_handler: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
@@ -57,10 +52,8 @@ impl StateHandler {
                 committee,
                 worker_cache,
                 rx_committed_certificates,
-                tx_consensus_round_updates,
                 rx_state_handler,
                 tx_reconfigure,
-                last_committed_round: 0,
                 tx_commited_own_headers,
                 network,
             }
@@ -69,14 +62,7 @@ impl StateHandler {
         })
     }
 
-    async fn handle_sequenced(&mut self, round: Round, certificates: Vec<Certificate>) {
-        if round > self.last_committed_round {
-            self.last_committed_round = round;
-
-            // Trigger cleanup on the primary.
-            let _ = self.tx_consensus_round_updates.send(round); // ignore error when receivers dropped.
-        }
-
+    async fn handle_sequenced(&mut self, commit_round: Round, certificates: Vec<Certificate>) {
         // Now we are going to signal which of our own batches have been committed.
         let own_rounds_committed: Vec<_> = certificates
             .iter()
@@ -90,13 +76,13 @@ impl StateHandler {
             .collect();
         debug!(
             "Own committed rounds {:?} at round {:?}",
-            own_rounds_committed, round
+            own_rounds_committed, commit_round
         );
 
         // If a reporting channel is available send the committed own
         // headers to it.
         if let Some(sender) = &self.tx_commited_own_headers {
-            let _ = sender.send((round, own_rounds_committed)).await;
+            let _ = sender.send((commit_round, own_rounds_committed)).await;
         }
     }
 
@@ -153,8 +139,8 @@ impl StateHandler {
         );
         loop {
             tokio::select! {
-                Some((round, certificates)) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(round, certificates).await;
+                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(commit_round, certificates).await;
                 },
 
                 Some(message) = self.rx_state_handler.recv() => {
@@ -164,9 +150,6 @@ impl StateHandler {
                     let shutdown = match &message {
                         ReconfigureNotification::NewEpoch(committee) => {
                             self.update_committee(committee.to_owned());
-
-                            // Trigger cleanup on the primary.
-                            let _ = self.tx_consensus_round_updates.send(0); // ignore error when receivers dropped.
 
                             false
                         },

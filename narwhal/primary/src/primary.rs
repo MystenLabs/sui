@@ -41,13 +41,14 @@ use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap},
     net::Ipv4Addr,
     sync::Arc,
+    time::Duration,
 };
 use storage::{CertificateStore, PayloadToken, ProposerStore};
 use store::Store;
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, instrument, warn};
 pub use types::PrimaryMessage;
 use types::{
     ensure,
@@ -67,6 +68,9 @@ pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
+
+/// Maximum duration to fetch certficates from local storage.
+const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
 
 /// The network model in which the primary operates.
 pub enum NetworkModel {
@@ -93,13 +97,14 @@ impl Primary {
         vote_digest_store: Store<PublicKey, VoteInfo>,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
+        rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
-        rx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
+        tx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -178,7 +183,6 @@ impl Primary {
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
-        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
 
         let synchronizer = Arc::new(Synchronizer::new(
@@ -358,9 +362,9 @@ impl Primary {
             Some(tx_state_handler),
         );
 
-        if let Some(rx_executor_network) = rx_executor_network {
+        if let Some(tx_executor_network) = tx_executor_network {
             let executor_network = P2pNetwork::new(network.clone());
-            if rx_executor_network.send(executor_network).is_err() {
+            if tx_executor_network.send(executor_network).is_err() {
                 panic!("Executor shut down before primary has a chance to start");
             }
         }
@@ -459,7 +463,6 @@ impl Primary {
             committee.clone(),
             worker_cache.clone(),
             rx_committed_certificates,
-            tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
             Some(tx_commited_own_headers),
@@ -897,10 +900,15 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         }))
     }
 
+    #[instrument(level = "debug", skip_all, peer = ?request.peer_id())]
     async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        let time_start = Instant::now();
+        let peer = request
+            .peer_id()
+            .map_or_else(|| "None".to_string(), |peer_id| format!("{}", peer_id));
         let request = request.into_body();
         let mut response = FetchCertificatesResponse {
             certificates: Vec::new(),
@@ -914,18 +922,38 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
         // and avoids the pathological case of iterating through many missing rounds of a downed authority.
         let (lower_bound, skip_rounds) = request.get_bounds();
+        debug!(
+            "Fetching certificates after round {lower_bound} for peer {:?}, elapsed = {}ms",
+            peer,
+            time_start.elapsed().as_millis(),
+        );
+
         let mut fetch_queue = BinaryHeap::new();
         for (origin, rounds) in &skip_rounds {
+            if rounds.len() > 50 {
+                warn!(
+                    "{} rounds are available locally for origin {}. elapsed = {}ms",
+                    rounds.len(),
+                    origin,
+                    time_start.elapsed().as_millis(),
+                );
+            }
             let next_round = self.find_next_round(origin, lower_bound, rounds)?;
             if let Some(r) = next_round {
                 fetch_queue.push(Reverse((r, origin.clone())));
             }
         }
+        debug!(
+            "Initialized origins and rounds to fetch, elapsed = {}ms",
+            time_start.elapsed().as_millis(),
+        );
 
         // Iteratively pop the next smallest (Round, Authority) pair, and push to min-heap the next
         // higher round of the same authority that should not be skipped.
         // The process ends when there are no more pairs in the min-heap.
         while let Some(Reverse((round, origin))) = fetch_queue.pop() {
+            // Allow the request handler to be stopped after timeout.
+            tokio::task::yield_now().await;
             match self
                 .certificate_store
                 .read_by_index(origin.clone(), round)
@@ -942,6 +970,19 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 None => continue,
             };
             if response.certificates.len() == request.max_items {
+                debug!(
+                    "Collected enough certificates (num={}, elapsed={}ms), returning.",
+                    response.certificates.len(),
+                    time_start.elapsed().as_millis(),
+                );
+                break;
+            }
+            if time_start.elapsed() >= FETCH_CERTIFICATES_MAX_HANDLER_TIME {
+                debug!(
+                    "Spent enough time reading certificates (num={}, elapsed={}ms), returning.",
+                    response.certificates.len(),
+                    time_start.elapsed().as_millis(),
+                );
                 break;
             }
             assert!(response.certificates.len() < request.max_items);
