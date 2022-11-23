@@ -635,9 +635,7 @@ impl AuthorityStore {
         uncommitted_objects: &BTreeMap<ObjectID, &Object>,
     ) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
-        let move_object = if let Some(move_object) = o.data.try_as_move() {
-            move_object
-        } else {
+        let Some(move_object) = o.data.try_as_move() else {
             return Ok(None);
         };
         // We only index dynamic field objects
@@ -647,7 +645,10 @@ impl AuthorityStore {
         let move_struct =
             move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), &self)?;
 
-        let (name, type_, object_id) = DynamicFieldInfo::parse_move_object(&move_struct)?;
+        let Some((name, type_, object_id)) = DynamicFieldInfo::parse_move_object(&move_struct)? else{
+            return Ok(None)
+        };
+
         Ok(Some(match type_ {
             DynamicFieldType::DynamicObject => {
                 // Find the actual object from storage using the object id obtained from the wrapper.

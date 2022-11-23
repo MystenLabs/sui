@@ -41,7 +41,7 @@ impl DynamicFieldInfo {
 
     pub fn parse_move_object(
         move_struct: &MoveStruct,
-    ) -> SuiResult<(String, DynamicFieldType, ObjectID)> {
+    ) -> SuiResult<Option<(String, DynamicFieldType, ObjectID)>> {
         let name = extract_field_from_move_struct(move_struct, "name").ok_or_else(|| {
             SuiError::ObjectDeserializationError {
                 error: "Cannot extract [name] field from sui::dynamic_field::Field".to_string(),
@@ -55,16 +55,16 @@ impl DynamicFieldInfo {
         })?;
 
         // Extract value from value option
-        let value = match &value {
+        let Some(value) = (match &value {
             MoveValue::Struct(MoveStruct::WithTypes { type_: _, fields }) => match fields.first() {
                 Some((_, MoveValue::Vector(v))) => v.first().cloned(),
                 _ => None,
             },
             _ => None,
-        }
-        .ok_or_else(|| SuiError::ObjectDeserializationError {
-            error: "Cannot extract optional value".to_string(),
-        })?;
+        }) else {
+            // Skip processing if Field's value is not set.
+            return Ok(None)
+        };
 
         let object_id =
             extract_object_id(&value).ok_or_else(|| SuiError::ObjectDeserializationError {
@@ -74,7 +74,7 @@ impl DynamicFieldInfo {
                 ),
             })?;
 
-        Ok(if is_dynamic_object(move_struct) {
+        Ok(Some(if is_dynamic_object(move_struct) {
             let name = match name {
                 MoveValue::Struct(s) => extract_field_from_move_struct(&s, "name"),
                 _ => None,
@@ -93,7 +93,7 @@ impl DynamicFieldInfo {
                 },
                 object_id,
             )
-        })
+        }))
     }
 }
 
