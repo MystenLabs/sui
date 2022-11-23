@@ -23,11 +23,11 @@ impl EventHandler {
         Self { rpc_client }
     }
 
-    pub async fn start(&self) {
+    pub async fn start(&self) -> Result<(), IndexerError> {
+        info!("Indexer event handler started...");
         let mut pg_conn = establish_connection();
         let mut next_cursor = None;
-        // retry
-        let event_log = read_event_log(&mut pg_conn).unwrap();
+        let event_log = read_event_log(&mut pg_conn)?;
         let (tx_seq_opt, event_seq_opt) = (
             event_log.next_cursor_tx_seq,
             event_log.next_cursor_event_seq,
@@ -37,16 +37,13 @@ impl EventHandler {
         }
 
         loop {
-            // retry, otherwise log to errors and continue
-            let event_page = self.fetch_event_page(next_cursor).await.unwrap();
-            commit_events(&mut pg_conn, event_page.clone()).unwrap();
+            let event_page = self.fetch_event_page(next_cursor).await?;
+            commit_events(&mut pg_conn, event_page.clone())?;
             commit_event_log(
                 &mut pg_conn,
                 event_page.next_cursor.clone().map(|c| c.tx_seq),
                 event_page.next_cursor.clone().map(|c| c.event_seq),
-            )
-            .unwrap();
-
+            )?;
             next_cursor = event_page.next_cursor;
         }
     }

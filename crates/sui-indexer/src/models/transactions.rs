@@ -59,15 +59,13 @@ pub fn commit_transactions(
     conn: &mut PgConnection,
     tx_resps: Vec<SuiTransactionResponse>,
 ) -> Result<usize, IndexerError> {
-    let new_txn_res_vec: Vec<Result<NewTransaction, IndexerError>> = tx_resps
+    let new_txn_iter = tx_resps
         .into_iter()
-        .map(transaction_response_to_new_transaction)
-        .collect();
+        .map(transaction_response_to_new_transaction);
 
     let mut errors = vec![];
-    let new_txns: Vec<NewTransaction> = new_txn_res_vec
-        .into_iter()
-        .filter_map(|r| r.map_err(|e| errors.push(e.clone())).ok())
+    let new_txns: Vec<NewTransaction> = new_txn_iter
+        .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
     log_errors_to_pg(errors);
 
@@ -84,7 +82,6 @@ pub fn commit_transactions(
         })
 }
 
-// ?? retry, retry naive time will not help, thus no retry
 pub fn transaction_response_to_new_transaction(
     tx_resp: SuiTransactionResponse,
 ) -> Result<NewTransaction, IndexerError> {
@@ -92,12 +89,7 @@ pub fn transaction_response_to_new_transaction(
     let tx_digest = cer.transaction_digest.to_string();
     let gas_budget = cer.data.gas_budget;
     let sender = cer.data.sender.to_string();
-    let txn_kind_names: Vec<String> = cer
-        .data
-        .transactions
-        .iter()
-        .map(|k| k.to_string())
-        .collect();
+    let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());
 
     let effects = tx_resp.effects.clone();
     let created: Vec<String> = effects
@@ -128,10 +120,12 @@ pub fn transaction_response_to_new_transaction(
 
     let timestamp_opt_res = tx_resp.timestamp_ms.map(|time_milis| {
         let naive_time = NaiveDateTime::from_timestamp_millis(time_milis as i64);
-        naive_time.ok_or(IndexerError::InsertableParsingError(format!(
-            "Failed parsing timestamp in millis {:?} to NaiveDateTime",
-            time_milis
-        )))
+        naive_time.ok_or_else(|| {
+            IndexerError::InsertableParsingError(format!(
+                "Failed parsing timestamp in millis {:?} to NaiveDateTime",
+                time_milis
+            ))
+        })
     });
     let timestamp = match timestamp_opt_res {
         Some(Err(e)) => return Err(e),
@@ -152,10 +146,7 @@ pub fn transaction_response_to_new_transaction(
     Ok(NewTransaction {
         transaction_digest: tx_digest,
         sender,
-        transaction_kinds: txn_kind_names
-            .into_iter()
-            .map(|v| Some(v))
-            .collect::<Vec<Option<String>>>(),
+        transaction_kinds: txn_kind_iter.map(Some).collect::<Vec<Option<String>>>(),
         transaction_time: timestamp,
         created: vec_string_to_vec_opt_string(created),
         mutated: vec_string_to_vec_opt_string(mutated),
@@ -184,7 +175,5 @@ fn obj_ref_to_obj_id_string(obj_ref: SuiObjectRef) -> String {
 }
 
 fn vec_string_to_vec_opt_string(v: Vec<String>) -> Vec<Option<String>> {
-    v.into_iter()
-        .map(|v| Some(v))
-        .collect::<Vec<Option<String>>>()
+    v.into_iter().map(Some).collect::<Vec<Option<String>>>()
 }

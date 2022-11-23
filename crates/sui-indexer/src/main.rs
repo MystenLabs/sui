@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use backoff::future::retry;
+use backoff::ExponentialBackoff;
 use std::time::Duration;
 use sui::config::{PersistedConfig, SuiClientConfig};
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
@@ -17,13 +19,15 @@ async fn main() -> anyhow::Result<()> {
         .with_env()
         .init();
     info!("Sui indexer started...");
-    // TODOggao: add retrials here
-    let rpc_client = new_rpc_client().await?;
-    // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
-    // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
-    HandlerOrchestrator::new(rpc_client).run_forever().await;
 
-    Ok(())
+    retry(ExponentialBackoff::default(), || async {
+        let rpc_client = new_rpc_client().await?;
+        // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
+        // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
+        HandlerOrchestrator::new(rpc_client).run_forever().await;
+        Ok(())
+    })
+    .await
 }
 
 async fn new_rpc_client() -> Result<SuiClient, anyhow::Error> {

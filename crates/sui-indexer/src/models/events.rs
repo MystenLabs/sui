@@ -41,12 +41,12 @@ pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError>
             err
         ))
     })?;
-    let timestamp = NaiveDateTime::from_timestamp_millis(e.timestamp as i64).ok_or(
+    let timestamp = NaiveDateTime::from_timestamp_millis(e.timestamp as i64).ok_or_else(|| {
         IndexerError::DateTimeParsingError(format!(
             "Cannot convert timestamp {:?} to NaiveDateTime",
             e.timestamp
-        )),
-    )?;
+        ))
+    })?;
     Ok(NewEvent {
         transaction_digest: e.tx_digest.map(|digest| digest.to_string()),
         transaction_sequence: e.id.tx_seq,
@@ -57,19 +57,16 @@ pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError>
     })
 }
 
-// retry
 pub fn commit_events(
     conn: &mut PgConnection,
     event_page: EventPage,
 ) -> Result<usize, IndexerError> {
-    let events = event_page.data.clone();
-    let new_events_res: Vec<Result<NewEvent, IndexerError>> =
-        events.into_iter().map(event_to_new_event).collect();
-
+    let events = event_page.data;
     let mut errors = vec![];
-    let new_events: Vec<NewEvent> = new_events_res
+    let new_events: Vec<NewEvent> = events
         .into_iter()
-        .filter_map(|r| r.map_err(|e| errors.push(e.clone())).ok())
+        .map(event_to_new_event)
+        .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
     log_errors_to_pg(errors);
 

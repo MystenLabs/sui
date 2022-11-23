@@ -1,4 +1,5 @@
-// @generated automatically by Diesel CLI.
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 diesel::table! {
     error_logs (id) {

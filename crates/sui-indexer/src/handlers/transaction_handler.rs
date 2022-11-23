@@ -25,18 +25,24 @@ impl TransactionHandler {
         Self { rpc_client }
     }
 
-    pub async fn start(&self) {
+    pub async fn start(&self) -> Result<(), IndexerError> {
+        info!("Indexer transaction handler started...");
         let mut pg_conn = establish_connection();
         let mut next_cursor = None;
-        // retry
-        let txn_log = read_transaction_log(&mut pg_conn).unwrap();
+        let txn_log = read_transaction_log(&mut pg_conn)?;
         if let Some(txn_digest) = txn_log.next_cursor_tx_digest {
-            next_cursor = TransactionDigest::from_string(txn_digest);
+            let bytes = txn_digest.as_bytes();
+            let digest = TransactionDigest::try_from(bytes).map_err(|e| {
+                IndexerError::TransactionDigestParsingError(format!(
+                    "Failed parsing transaction digest {:?} with error: {:?}",
+                    txn_digest, e
+                ))
+            })?;
+            next_cursor = Some(digest);
         }
 
         loop {
-            // retry
-            let page = self.get_transaction_page(next_cursor).await.unwrap();
+            let page = self.get_transaction_page(next_cursor).await?;
             let txn_digest_vec = page.data;
             let txn_response_res_vec = join_all(
                 txn_digest_vec
@@ -48,18 +54,16 @@ impl TransactionHandler {
             let mut errors = vec![];
             let resp_vec: Vec<SuiTransactionResponse> = txn_response_res_vec
                 .into_iter()
-                .filter_map(|f| f.map_err(|e| errors.push(e.clone())).ok())
+                .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
                 .collect();
             log_errors_to_pg(errors);
 
-            // retry, and then log to error table
-            commit_transactions(&mut pg_conn, resp_vec).unwrap();
-            commit_transction_log(&mut pg_conn, page.next_cursor.map(|d| d.to_string())).unwrap();
+            commit_transactions(&mut pg_conn, resp_vec)?;
+            commit_transction_log(&mut pg_conn, page.next_cursor.map(|d| d.to_string()))?;
             next_cursor = page.next_cursor;
         }
     }
 
-    // retry
     async fn get_transaction_page(
         &self,
         cursor: Option<TransactionDigest>,
@@ -81,7 +85,6 @@ impl TransactionHandler {
             })
     }
 
-    // retry
     async fn get_transaction_response(
         &self,
         tx_digest: TransactionDigest,

@@ -5392,7 +5392,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "prost 0.11.0",
- "prost-build 0.11.1",
+ "prost-build 0.11.2",
  "protobuf-src",
  "rand 0.8.5",
  "roaring",
@@ -6594,9 +6594,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.11.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f835c582e6bd972ba8347313300219fed5bfa52caf175298d860b61ff6069bb"
+checksum = "1d8b442418ea0822409d9e7d047cbf1e7e9e1760b172bf9982cf29d517c93511"
 dependencies = [
  "bytes",
  "heck 0.4.0",
@@ -6605,9 +6605,11 @@ dependencies = [
  "log",
  "multimap",
  "petgraph 0.6.2",
+ "prettyplease",
  "prost 0.11.0",
  "prost-types 0.11.1",
  "regex",
+ "syn 1.0.103",
  "tempfile",
  "which",
 ]
@@ -8628,11 +8630,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backoff",
  "chrono",
  "diesel",
  "dotenvy",
  "futures",
  "jsonrpsee",
+ "narwhal-network",
  "serde 1.0.147",
  "serde_json",
  "sui",
@@ -8651,6 +8655,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9865,7 +9870,7 @@ checksum = "48c6fd7c2581e36d63388a9e04c350c21beb7a8b059580b2e93993c526899ddc"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
- "prost-build 0.11.1",
+ "prost-build 0.11.2",
  "quote 1.0.21",
  "syn 1.0.103",
 ]
@@ -10972,6 +10977,8 @@ dependencies = [
  "determinator",
  "deunicode",
  "dhat",
+ "diesel",
+ "diesel_derives",
  "diff",
  "difference",
  "difflib",
@@ -11286,6 +11293,7 @@ dependencies = [
  "polyval",
  "pprof",
  "ppv-lite86",
+ "pq-sys",
  "predicates",
  "predicates-core",
  "predicates-tree",
@@ -11304,7 +11312,7 @@ dependencies = [
  "prost 0.10.4",
  "prost 0.11.0",
  "prost-build 0.10.4",
- "prost-build 0.11.1",
+ "prost-build 0.11.2",
  "prost-derive 0.10.1",
  "prost-derive 0.11.0",
  "prost-types 0.10.1",

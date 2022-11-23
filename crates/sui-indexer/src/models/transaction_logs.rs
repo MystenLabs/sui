@@ -29,7 +29,7 @@ pub fn commit_transction_log(
 }
 
 pub fn read_transaction_log(conn: &mut PgConnection) -> Result<TransactionLog, IndexerError> {
-    let res = transaction_logs
+    transaction_logs
         .limit(1)
         .first::<TransactionLog>(conn)
         .map_err(|e| {
@@ -37,6 +37,5 @@ pub fn read_transaction_log(conn: &mut PgConnection) -> Result<TransactionLog, I
                 "Failed reading transaction log in PostgresDB with tx with error {:?}",
                 e
             ))
-        });
-    res
+        })
 }

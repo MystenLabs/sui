@@ -10,10 +10,7 @@ use tracing::error;
 pub fn log_errors_to_pg(errors: Vec<IndexerError>) {
     let mut pg_conn = establish_connection();
     let new_error_logs: Vec<NewErrorLog> = errors.into_iter().map(err_to_error_log).collect();
-    match commit_error_logs(&mut pg_conn, new_error_logs) {
-        Err(e) => {
-            error!("Failed writing error logs with error {:?}", e)
-        }
-        _ => {}
+    if let Err(e) = commit_error_logs(&mut pg_conn, new_error_logs) {
+        error!("Failed writing error logs with error {:?}", e);
     }
 }

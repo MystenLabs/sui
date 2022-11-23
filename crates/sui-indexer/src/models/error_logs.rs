@@ -32,7 +32,6 @@ pub fn err_to_error_log(error: IndexerError) -> NewErrorLog {
     }
 }
 
-// retry
 pub fn commit_error_logs(
     conn: &mut PgConnection,
     new_error_logs: Vec<NewErrorLog>,

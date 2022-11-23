@@ -457,26 +457,26 @@ impl TransactionDigest {
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_vec()
     }
-
-    /// Convert digest into a String
-    pub fn to_string(&self) -> String {
-        Base64::encode(self.0)
-    }
-
-    pub fn from_string(digest: String) -> Option<Self> {
-        match Base64::decode(digest.as_str()) {
-            Ok(bytes) => {
-                let slice: Result<&[u8; TRANSACTION_DIGEST_LENGTH], _> = bytes.as_slice().try_into();
-                slice.map(|slice| TransactionDigest::new(*slice)).ok()
-            },
-            Err(_) => None
-        }
-    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
     fn as_ref(&self) -> &[u8] {
         &self.0
+    }
+}
+
+impl fmt::Display for TransactionDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::LowerHex for TransactionDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", Hex::encode(self))
     }
 }
 
@@ -531,10 +531,6 @@ impl ObjectDigest {
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
         Self::new(random_bytes)
-    }
-
-    pub fn to_string(&self) -> String {
-        Base64::encode(self.0)
     }
 }
 
@@ -616,6 +612,21 @@ impl AsRef<[u8]> for ObjectDigest {
     }
 }
 
+impl fmt::Display for ObjectDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::LowerHex for ObjectDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", Hex::encode(self))
+    }
+}
+
 impl TryFrom<&[u8]> for ObjectDigest {
     type Error = SuiError;
 
@@ -629,7 +640,8 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.to_string())?;
+        let s = Base64::encode(self.0);
+        write!(f, "{}", s)?;
         Ok(())
     }
 }

@@ -29,11 +29,10 @@ pub fn commit_event_log(
 
 pub fn read_event_log(conn: &mut PgConnection) -> Result<EventLog, IndexerError> {
     // NOTE: always read one row, as event logs only have one row
-    let logs = event_logs.limit(1).first::<EventLog>(conn).map_err(|e| {
+    event_logs.limit(1).first::<EventLog>(conn).map_err(|e| {
         IndexerError::PostgresReadError(format!(
             "Failed reading event log in PostgresDB with error {:?}",
             e
         ))
-    });
-    logs
+    })
 }

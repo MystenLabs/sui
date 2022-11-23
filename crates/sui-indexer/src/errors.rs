@@ -19,6 +19,9 @@ pub enum IndexerError {
 
     #[error("Indexer failed to convert timestamp to NaiveDateTime with error: `{0}`")]
     DateTimeParsingError(String),
+
+    #[error("Indexer failed to parse transaction digest read from DB: `{0}`")]
+    TransactionDigestParsingError(String),
 }
 
 impl IndexerError {
@@ -29,6 +32,9 @@ impl IndexerError {
             IndexerError::PostgresWriteError(_) => "PostgresWriteError".to_string(),
             IndexerError::InsertableParsingError(_) => "InsertableParsingError".to_string(),
             IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".to_string(),
+            IndexerError::TransactionDigestParsingError(_) => {
+                "TransactionDigestParsingError".to_string()
+            }
         }
     }
 }
