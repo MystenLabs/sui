@@ -8,8 +8,8 @@ Sui provides a list of Move library functions that allows us to manipulate objec
 Objects in Sui can have different ownership types. Specifically, they are:
 - Exclusively owned by an address.
 - Exclusively owned by another object.
-- Shared and immutable.
-- Shared and mutable.
+- Immutable.
+- Shared.
 
 ### Owned by an address
 The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module provides all the APIs needed to manipulate the ownership of objects.
@@ -25,19 +25,22 @@ Once an address owns an object, for any future use (either read or write) of thi
 
 ### Owned by another object
 
-An object can be owned by another object when the former is added as a [dynamic object field](../programming-with-objects/ch5-dynamic-fields.md) of the latter. Note that the ownership is only tracked in Sui. From Move's perspective, these two objects are still more or less independent in that the child object isn't stored as part of the parent object, but they are associated with each other:
+An object can be owned by another object when the former is added as a [dynamic object field](../programming-with-objects/ch5-dynamic-fields.md) of the latter. While external tools can read the dynamic object field value at its original ID, from Move's perspective, it can only be accessed through the field on its owner using the `dynamic_object_field` APIs:
 
 ```
 use sui::dynamic_object_field as ofield;
 
-let a: &A = /* ... */;
-let b: &B = /* ... */;
+let a: &mut A = /* ... */;
+let b: B = /* ... */;
 
 // Adds `b` as a dynamic object field to `a` with "name" `0: u8`.
 ofield::add<u8, B>(&mut a.id, 0, b);
+
+// Get access to `b` at its new position
+let b: &B = ofield::borrow<u8, B>(&a.id, 0);
 ```
 
-Once an object is owned by another object, it is required that any references to that object go through its owner: If an object-owned object is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` owns object `b`, and `b` owns object `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
+If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing `b`, and `b` has a dynamic object field containing `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
 
 ```
 use sui::dynamic_object_field as ofield;
@@ -52,15 +55,15 @@ public entry fun entry_function(a: &A, ctx: &mut TxContext) {
 More examples of how objects can be transferred and owned can be found in
 [object_owner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/object_owner.move).
 
-### Shared and immutable
-To make an object `obj` shared and immutable, one can call:
+### Immutable
+To make an object `obj` immutable, one can call:
 ```
 transfer::freeze_object(obj);
 ```
 After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
 
-### Shared and mutable
-To make an object `obj` shared and mutable, one can call:
+### Shared
+To make an object `obj` shared, one can call:
 ```
 transfer::share_object(obj);
 ```
