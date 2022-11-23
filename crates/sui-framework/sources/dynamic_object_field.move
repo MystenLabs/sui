@@ -16,19 +16,6 @@ use sui::dynamic_field::{
 };
 use sui::object::{Self, UID, ID};
 
-/// The object already has a dynamic field with this name (with the value and type specified)
-const EFieldAlreadyExists: u64 = 0;
-
-/// Cannot load dynamic field.
-/// The object does not have a dynamic field with this name (with the value and type specified)
-const EFieldDoesNotExist: u64 = 1;
-
-/// The object has a field with that name, but the value type does not match
-const EFieldTypeMismatch: u64 = 2;
-
-/// Failed to serialize the field's name
-const EBCSSerializationFailure: u64 = 3;
-
 // Internal object used for storing the field and the name associated with the value
 // The separate type is necessary to prevent key collision with direct usage of dynamic_field
 struct Wrapper<Name> has copy, drop, store {

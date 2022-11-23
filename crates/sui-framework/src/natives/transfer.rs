@@ -111,5 +111,5 @@ fn object_runtime_transfer(
         }
     };
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.transfer(owner, ty, tag, obj)
+    obj_runtime.transfer(owner, ty, *tag, obj)
 }
