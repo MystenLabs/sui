@@ -5,7 +5,6 @@ members = [
     "crates/mysten-network",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
-    "crates/name-variant",
     "crates/prometheus-closure-metric",
     "crates/rccheck",
     "crates/sui",

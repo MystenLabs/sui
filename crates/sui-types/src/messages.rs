@@ -28,7 +28,6 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
 };
-use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
@@ -39,6 +38,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+use strum::IntoStaticStr;
 use tracing::debug;
 
 #[cfg(test)]
@@ -437,7 +437,7 @@ impl Display for SingleTransactionKind {
 
 // TODO: Make SingleTransactionKind a Box
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
     /// A single transaction.
     Single(SingleTransactionKind),
@@ -723,7 +723,7 @@ impl TransactionData {
 
     /// Returns the transaction kind as a &str (variant name, no fields)
     pub fn kind_as_str(&self) -> &'static str {
-        self.kind.variant_name()
+        (&self.kind).into()
     }
 
     pub fn gas(&self) -> ObjectRef {
