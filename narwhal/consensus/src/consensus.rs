@@ -222,6 +222,8 @@ pub struct Consensus<ConsensusProtocol> {
     rx_new_certificates: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
     tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
+    /// Outputs the highest committed round in the consensus. Controls GC round downstream.
+    tx_consensus_round_updates: watch::Sender<Round>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
 
@@ -251,6 +253,7 @@ where
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
+        tx_consensus_round_updates: watch::Sender<Round>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
@@ -266,6 +269,9 @@ where
             cert_store,
             gc_depth,
         );
+        tx_consensus_round_updates
+            .send(state.last_committed_round)
+            .expect("Failed to send last_committed_round on initialization!");
         let consensus_index = store
             .read_last_consensus_index()
             .expect("Failed to load consensus index from store");
@@ -275,6 +281,7 @@ where
             rx_reconfigure,
             rx_new_certificates,
             tx_committed_certificates,
+            tx_consensus_round_updates,
             tx_sequence,
             consensus_index,
             protocol,
@@ -288,8 +295,10 @@ where
     fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
         self.committee = new_committee.clone();
         self.protocol.update_committee(new_committee)?;
-
         self.consensus_index = 0;
+        self.tx_consensus_round_updates
+            .send(0)
+            .expect("Failed to reset last_committed_round!");
 
         let genesis = Certificate::genesis(&self.committee);
         Ok(ConsensusState::new(genesis, self.metrics.clone()))
@@ -386,6 +395,7 @@ where
                         .send((commit_round_leader, commited_certificates))
                         .await
                         .expect("Failed to send certificate to primary");
+                        self.tx_consensus_round_updates.send(0).expect("Failed to send committed leader round!");
                     }
 
                     self.metrics

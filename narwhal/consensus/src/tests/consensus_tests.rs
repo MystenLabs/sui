@@ -54,6 +54,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee.clone());
@@ -74,6 +75,7 @@ async fn test_consensus_recovery_with_bullshark() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics.clone(),
@@ -143,6 +145,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let storage = NodeStorage::reopen(temp_dir());
 
@@ -163,6 +166,7 @@ async fn test_consensus_recovery_with_bullshark() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics.clone(),
@@ -215,6 +219,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let bullshark = Bullshark::new(
         committee.clone(),
@@ -230,6 +235,7 @@ async fn test_consensus_recovery_with_bullshark() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics.clone(),

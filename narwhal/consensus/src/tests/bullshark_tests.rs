@@ -43,6 +43,7 @@ async fn commit_one() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -60,6 +61,7 @@ async fn commit_one() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
@@ -108,6 +110,7 @@ async fn dead_node() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -125,6 +128,7 @@ async fn dead_node() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
@@ -228,6 +232,7 @@ async fn not_enough_support() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -245,6 +250,7 @@ async fn not_enough_support() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
@@ -318,6 +324,7 @@ async fn missing_leader() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -335,6 +342,7 @@ async fn missing_leader() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
@@ -379,6 +387,7 @@ async fn epoch_change() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -396,6 +405,7 @@ async fn epoch_change() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
@@ -457,8 +467,86 @@ async fn epoch_change() {
     }
 }
 
+// Run for 11 dag rounds in ideal conditions (all nodes reference all other nodes).
+// Every two rounds (on odd rounds), restart consensus and check consistency.
+#[tokio::test]
+async fn recover_after_restart() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let epoch = committee.epoch();
+
+    // Make certificates for rounds 1 to 11.
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let (certificates, _) =
+        test_utils::make_certificates_with_epoch(&committee, 1..=11, epoch, &genesis, &keys);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let cert_store = make_certificate_store(&test_utils::temp_dir());
+
+    for commit_round in (1..=11usize).step_by(2) {
+        // Spawn consensus and create related channels.
+        let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+        let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
+        let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+
+        let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
+        let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+        let gc_depth = 50;
+        let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+        let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth, metrics.clone());
+
+        let handle = Consensus::spawn(
+            committee.clone(),
+            store.clone(),
+            cert_store.clone(),
+            rx_reconfigure,
+            rx_waiter,
+            tx_primary,
+            tx_consensus_round_updates,
+            tx_output,
+            bullshark,
+            metrics.clone(),
+            gc_depth,
+        );
+        assert_eq!(
+            rx_consensus_round_updates.borrow().to_owned() as usize,
+            commit_round.saturating_sub(3),
+        );
+
+        tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
+
+        // Feed certificates from two rounds into consensus.
+        let start_index = commit_round.saturating_sub(2) * committee.size();
+        let end_index = commit_round * committee.size();
+        for cert in certificates.iter().take(end_index).skip(start_index) {
+            tx_waiter.send(cert.clone()).await.unwrap();
+        }
+
+        // Ensure committed round gets updated.
+        let _ = rx_output.recv().await.unwrap();
+        // After sending round 2*n+1 to consensus, round 2*n should have been committed.
+        assert_eq!(
+            rx_consensus_round_updates.borrow().to_owned() as usize,
+            commit_round.saturating_sub(1),
+        );
+
+        // There should only be one item in the output.
+        let _ = rx_output.recv().await.unwrap();
+
+        // Shutdown consensus and wait for it to stop.
+        let message = ReconfigureNotification::Shutdown;
+        tx_reconfigure.send(message).unwrap();
+        handle.await.unwrap();
+    }
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
-// the leader of round 2. Then shutdown consensus and restart it in a
+// the leader of round 2. Then shutdown consensus and restart in a new epoch.
 #[tokio::test]
 async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
@@ -471,6 +559,7 @@ async fn restart_with_new_committee() {
         let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+        let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
         let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -487,6 +576,7 @@ async fn restart_with_new_committee() {
             rx_reconfigure,
             rx_waiter,
             tx_primary,
+            tx_consensus_round_updates,
             tx_output,
             bullshark,
             metrics.clone(),

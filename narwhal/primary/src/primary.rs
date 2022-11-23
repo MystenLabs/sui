@@ -97,14 +97,14 @@ impl Primary {
         vote_digest_store: Store<PublicKey, VoteInfo>,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
+        rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
-        last_committed_round: Round,
         registry: &Registry,
         // See comments in Subscriber::spawn
-        rx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
+        tx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -182,12 +182,6 @@ impl Primary {
         let new_certificates_gauge = tx_new_certificates.gauge().clone();
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
-
-        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
-        // Initialize gc round.
-        tx_consensus_round_updates
-            .send(last_committed_round)
-            .expect("Failed to send last_committed_round on initialization!");
 
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
 
@@ -368,9 +362,9 @@ impl Primary {
             Some(tx_state_handler),
         );
 
-        if let Some(rx_executor_network) = rx_executor_network {
+        if let Some(tx_executor_network) = tx_executor_network {
             let executor_network = P2pNetwork::new(network.clone());
-            if rx_executor_network.send(executor_network).is_err() {
+            if tx_executor_network.send(executor_network).is_err() {
                 panic!("Executor shut down before primary has a chance to start");
             }
         }
@@ -469,7 +463,6 @@ impl Primary {
             committee.clone(),
             worker_cache.clone(),
             rx_committed_certificates,
-            tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
             Some(tx_commited_own_headers),
