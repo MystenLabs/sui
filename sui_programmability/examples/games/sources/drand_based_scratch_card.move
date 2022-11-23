@@ -83,7 +83,6 @@ module games::drand_based_scratch_card {
     public entry fun create(
         reward: Coin<SUI>,
         reward_factor: u64,
-        creator: address,
         base_drand_round: u64,
         ctx: &mut TxContext
     ) {
@@ -93,7 +92,7 @@ module games::drand_based_scratch_card {
         let game = Game {
             id: object::new(ctx),
             reward_amount: coin::value(&reward),
-            creator,
+            creator: tx_context::sender(ctx),
             reward_factor,
             base_epoch: tx_context::epoch(ctx),
             base_drand_round,
@@ -184,7 +183,7 @@ module games::drand_based_scratch_card {
         game.base_epoch
     }
 
-    fun end_of_game_round(round: u64): u64 {
+    public fun end_of_game_round(round: u64): u64 {
         // Since users do not know when an epoch has began, they can only check if the game depends on a round that is
         // at least 24 hours from now. Since the creator does not know as well if its game is created in the beginning
         // or the end of the epoch, we define the end of the game to be 24h + 24h from when it started, +1h to be on

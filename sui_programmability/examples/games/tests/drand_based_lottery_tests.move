@@ -39,7 +39,7 @@ module games::drand_based_lottery_tests {
     }
 
     #[test]
-    fun test_play_drand_random_selection() {
+    fun test_play_drand_lottery() {
         let user1 = @0x0;
         let user2 = @0x1;
         let user3 = @0x2;
