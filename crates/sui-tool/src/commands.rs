@@ -295,9 +295,9 @@ impl std::fmt::Display for GrouppedObjectOutput {
                         for (i, (name, multiaddr, _, _, timespent)) in group.enumerate() {
                             writeln!(
                                 f,
-                                "        {:<4} {:<66} {:<56} (using {:.3} seconds)",
+                                "        {:<4} {:<16} {:<56} (using {:.3} seconds)",
                                 i,
-                                name,
+                                name.concise(),
                                 format!("{}", multiaddr),
                                 timespent
                             )?;
@@ -308,9 +308,9 @@ impl std::fmt::Display for GrouppedObjectOutput {
                         for (i, (name, multiaddr, _, resp, timespent)) in group.enumerate() {
                             writeln!(
                                 f,
-                                "        {:<4} {:<66} {:<56} (using {:.3} seconds) {:?}",
+                                "        {:<4} {:<16} {:<56} (using {:.3} seconds) {:?}",
                                 i,
-                                name,
+                                name.concise(),
                                 format!("{}", multiaddr),
                                 timespent,
                                 resp
@@ -329,8 +329,8 @@ struct ConciseObjectOutput(ObjectData);
 impl ConciseObjectOutput {
     fn header() -> String {
         format!(
-            "{:<66} {:<8} {:<66} {:<45} {}",
-            "validator", "version", "digest", "parent_cert", "owner"
+            "{:<16} {:<8} {:<66} {:<45} {:<51} {}",
+            "validator", "version", "digest", "parent_cert", "owner", "locked_by"
         )
     }
 }
@@ -341,14 +341,14 @@ impl std::fmt::Display for ConciseObjectOutput {
             for (version, resp, _time_elapsed) in versions {
                 write!(
                     f,
-                    "{:<66} {:<8}",
-                    format!("{:?}", name),
+                    "{:<16} {:<8}",
+                    format!("{:?}", name.concise()),
                     version.map(|s| s.value()).opt_debug("-")
                 )?;
                 match resp {
                     Err(_) => writeln!(
                         f,
-                        "{:<66} {:<45} {:<51}",
+                        "{:<16} {:<45} {:<51}",
                         "object-fetch-failed", "no-cert-available", "no-owner-available"
                     )?,
                     Ok(resp) => {
@@ -366,7 +366,16 @@ impl std::fmt::Display for ConciseObjectOutput {
                             .as_ref()
                             .map(|o| OwnerOutput(o.object.owner))
                             .opt_display("no-owner-available");
-                        write!(f, " {:<66} {:<45} {:<51}", objref, cert, owner)?;
+                        let locked_by = resp
+                            .object_and_lock
+                            .as_ref()
+                            .and_then(|o| o.lock.as_ref().map(|l| format!("{:?}", l.digest())))
+                            .opt_display("not-locked");
+                        write!(
+                            f,
+                            " {:<66} {:<45} {:<51} {}",
+                            objref, cert, owner, locked_by
+                        )?;
                     }
                 }
                 writeln!(f)?;
@@ -430,7 +439,11 @@ impl std::fmt::Display for VerboseObjectOutput {
                                 )?;
                             }
                             writeln!(f, "  -- owner: {}", object.owner)?;
-                            writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
+                            writeln!(
+                                f,
+                                "  -- locked by: {}",
+                                lock.as_ref().map(|l| l.digest()).opt_debug("<not locked>")
+                            )?;
                         }
                     }
                 }
@@ -664,9 +677,9 @@ impl ToolCommand {
                     }
                     for (j, res) in group.enumerate() {
                         println!(
-                            "        {:<4} {:<66} {:<56} (using {:.3} seconds)",
+                            "        {:<4} {:<16} {:<56} (using {:.3} seconds)",
                             j,
-                            res.0,
+                            res.0.concise(),
                             format!("{}", res.1),
                             res.3
                         );
@@ -714,7 +727,7 @@ impl ToolCommand {
                         .handle_checkpoint(CheckpointRequest::authenticated(sequence_number, true))
                         .await
                         .unwrap();
-                    println!("Validator: {:?}\n", name);
+                    println!("Validator: {:?}\n", name.concise());
                     match resp {
                         CheckpointResponse::AuthenticatedCheckpoint {
                             checkpoint,
