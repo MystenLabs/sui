@@ -17,8 +17,8 @@ export const {
     colors: {
       brand: "#0284AD",
       brandAccent: "#007195",
-      secondary: "#A0B6C3",
-      secondaryDark: "#758F9E",
+      secondary: "#C3C5C8",
+      secondaryAccent: "#636870",
       textDark: "#182435",
       textLight: "#767A81",
       textOnBrand: "#fff",
@@ -27,6 +27,7 @@ export const {
       backdrop: "rgba(24 36 53 / 20%)",
       backgroundIcon: "#F0F1F2",
       icon: "#383F47",
+      issue: '#FF794B',
     },
     space: {
       1: makeSize(1),
@@ -50,7 +51,8 @@ export const {
     },
     radii: {
       modal: "16px",
-      button: "12px",
+      buttonLg: "12px",
+      buttonMd: '8px',
       wallet: "8px",
       walletIcon: "6px",
       close: "9999px",

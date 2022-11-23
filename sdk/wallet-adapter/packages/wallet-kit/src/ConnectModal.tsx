@@ -2,6 +2,7 @@ import { useWallet } from "@mysten/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
+import { Button } from "./utils/Button";
 import { WhatIsAWallet } from "./WhatIsAWallet";
 
 // TODO: Ideally remove:
@@ -179,11 +180,22 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
                 >
                   Opening {selected}
                 </Div>
-                <Div css={{ color: "$textLight", fontSize: "$xs" }}>
-                  Confirm connection in the wallet...
+                <Div
+                  css={{
+                    color: isError ? "$issue" : "$textLight",
+                    fontSize: "$xs",
+                  }}
+                >
+                  {isError
+                    ? "Connection failed"
+                    : "Confirm connection in the wallet..."}
                 </Div>
 
-                {isError && "ERROR"}
+                {isError && (
+                  <Button color="secondary" onClick={() => select(selected)}>
+                    Retry Connection
+                  </Button>
+                )}
               </Div>
             ) : (
               <>

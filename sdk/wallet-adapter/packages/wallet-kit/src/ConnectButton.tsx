@@ -1,51 +1,9 @@
 import { ComponentProps, ReactNode, useEffect, useState } from "react";
-import { styled, theme } from "./stitches";
+import { theme } from "./stitches";
 
 import { ConnectModal } from "./ConnectModal";
 import { useWallet } from "@mysten/wallet-adapter-react";
-
-const Button = styled("button", {
-  cursor: "pointer",
-  border: "none",
-  borderRadius: "$button",
-  fontFamily: "$sans",
-  fontWeight: "$button",
-  fontSize: "$sm",
-
-  variants: {
-    size: {
-      md: {
-        padding: "$2 $4",
-      },
-      lg: {
-        padding: "$4 $6",
-      },
-    },
-    color: {
-      primary: {
-        backgroundColor: "$brand",
-        color: "$textOnBrand",
-        "&:hover": {
-          backgroundColor: "$brandAccent",
-        },
-        boxShadow: "$button",
-      },
-      secondary: {
-        backgroundColor: "transparent",
-        border: "1px solid $secondary",
-        color: "$secondaryAccent",
-      },
-      connected: {
-        boxShadow: "$button",
-        backgroundColor: "$background",
-        color: "$textDark",
-      },
-    },
-  },
-  defaultVariants: {
-    size: "md",
-  },
-});
+import { Button } from "./utils/Button";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;

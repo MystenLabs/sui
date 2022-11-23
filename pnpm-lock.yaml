@@ -618,6 +618,7 @@ importers:
       '@ladle/react': ^2.4.5
       '@mysten/core': workspace:*
       '@mysten/sui.js': workspace:*
+      '@mysten/wallet-adapter-base': workspace:*
       '@mysten/wallet-adapter-react': workspace:*
       '@mysten/wallet-adapter-wallet-standard': workspace:*
       '@radix-ui/react-dialog': ^1.0.2
@@ -631,6 +632,7 @@ importers:
     dependencies:
       '@headlessui/react': 1.7.2
       '@mysten/sui.js': link:../../../typescript
+      '@mysten/wallet-adapter-base': link:../adapters/base-adapter
       '@mysten/wallet-adapter-react': link:../react-providers
       '@mysten/wallet-adapter-wallet-standard': link:../adapters/wallet-standard-adapter
       '@radix-ui/react-dialog': 1.0.2

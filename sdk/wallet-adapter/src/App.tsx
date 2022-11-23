@@ -23,15 +23,13 @@ function App() {
 
   return (
     <div className="App">
-      <header className="App-header">
-        <WalletKitProvider adapters={adapters}>
-          <WalletProvider adapters={adapters}>
-            <TestButton />
-            <WalletWrapper />
-            <ConnectButton />
-          </WalletProvider>
-        </WalletKitProvider>
-      </header>
+      <WalletKitProvider adapters={adapters}>
+        <WalletProvider adapters={adapters}>
+          <TestButton />
+          <WalletWrapper />
+          <ConnectButton />
+        </WalletProvider>
+      </WalletKitProvider>
     </div>
   );
 }

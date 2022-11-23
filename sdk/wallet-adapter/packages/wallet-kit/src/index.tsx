@@ -1,13 +1,14 @@
-import {
-  WalletProvider,
-  WalletProviderProps,
-} from "@mysten/wallet-adapter-react";
+import { WalletAdapterList } from "@mysten/wallet-adapter-base";
+import { WalletProvider } from "@mysten/wallet-adapter-react";
 import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
-import { useMemo } from "react";
+import { ReactNode, useMemo } from "react";
 
 export * from "./ConnectButton";
 
-interface WalletKitProviderProps extends Partial<WalletProviderProps> {}
+interface WalletKitProviderProps {
+  adapters?: WalletAdapterList;
+  children: ReactNode;
+}
 
 export function WalletKitProvider({
   adapters: configuredAdapters,
