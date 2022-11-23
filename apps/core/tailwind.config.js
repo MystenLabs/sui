@@ -109,6 +109,7 @@ module.exports = {
         p4: ["11px", "1.3"],
       },
       fontFamily: {
+        system: fontFamily.sans,
         sans: ["InterVariable", "Inter", ...fontFamily.sans],
         mono: ["Red Hat MonoVariable", "Red Hat Mono", ...fontFamily.mono],
       },

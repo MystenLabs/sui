@@ -3,8 +3,12 @@
 
 import "./App.css";
 import { useMemo } from "react";
+import { WalletKitProvider, ConnectButton } from "@mysten/wallet-kit";
 import { WalletProvider } from "@mysten/wallet-adapter-react";
-import { WalletStandardAdapterProvider, UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-all-wallets";
+import {
+  WalletStandardAdapterProvider,
+  UnsafeBurnerWalletAdapter,
+} from "@mysten/wallet-adapter-all-wallets";
 import { WalletWrapper } from "@mysten/wallet-adapter-react-ui";
 import { TestButton } from "./TestButton";
 
@@ -20,10 +24,13 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <WalletProvider adapters={adapters}>
-          <TestButton />
-          <WalletWrapper />
-        </WalletProvider>
+        <WalletKitProvider adapters={adapters}>
+          <WalletProvider adapters={adapters}>
+            <TestButton />
+            <WalletWrapper />
+            <ConnectButton />
+          </WalletProvider>
+        </WalletKitProvider>
       </header>
     </div>
   );
