@@ -42,13 +42,13 @@ impl DynamicFieldInfo {
     pub fn parse_move_object(
         move_struct: &MoveStruct,
     ) -> SuiResult<(String, DynamicFieldType, ObjectID)> {
-        let name = extract_field_from_move_struct(&move_struct, "name").ok_or_else(|| {
+        let name = extract_field_from_move_struct(move_struct, "name").ok_or_else(|| {
             SuiError::ObjectDeserializationError {
                 error: "Cannot extract [name] field from sui::dynamic_field::Field".to_string(),
             }
         })?;
 
-        let value = extract_field_from_move_struct(&move_struct, "value").ok_or_else(|| {
+        let value = extract_field_from_move_struct(move_struct, "value").ok_or_else(|| {
             SuiError::ObjectDeserializationError {
                 error: "Cannot extract [value] field from sui::dynamic_field::Field".to_string(),
             }

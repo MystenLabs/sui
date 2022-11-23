@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;

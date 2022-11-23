@@ -93,8 +93,8 @@ pub trait RpcReadApi {
     #[method(name = "getDynamicFields")]
     async fn get_dynamic_fields(
         &self,
-        /// the ID of the owner object
-        object_id: ObjectID,
+        /// the ID of the parent object
+        parent_object_id: ObjectID,
     ) -> RpcResult<DynamicFieldPage>;
 
     /// Return the total number of transactions known to the server.
@@ -133,6 +133,16 @@ pub trait RpcReadApi {
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
+    ) -> RpcResult<GetObjectDataResponse>;
+
+    /// Return the dynamic field object information for a specified object
+    #[method(name = "getDynamicFieldObject")]
+    async fn get_dynamic_field_object(
+        &self,
+        /// the ID of the queried parent object
+        parent_object_id: ObjectID,
+        /// the Name of the dynamic field
+        name: String,
     ) -> RpcResult<GetObjectDataResponse>;
 }
 

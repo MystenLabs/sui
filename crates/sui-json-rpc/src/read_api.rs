@@ -76,10 +76,10 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_dynamic_fields(&self, object_id: ObjectID) -> RpcResult<DynamicFieldPage> {
+    async fn get_dynamic_fields(&self, parent_object_id: ObjectID) -> RpcResult<DynamicFieldPage> {
         let data = self
             .state
-            .get_dynamic_fields(object_id)
+            .get_dynamic_fields(parent_object_id)
             .map_err(|e| anyhow!("{e}"))?;
 
         Ok(DynamicFieldPage {
@@ -98,6 +98,23 @@ impl RpcReadApiServer for ReadApi {
                 anyhow!("{e}")
             })?
             .try_into()?)
+    }
+
+    async fn get_dynamic_field_object(
+        &self,
+        parent_object_id: ObjectID,
+        name: String,
+    ) -> RpcResult<GetObjectDataResponse> {
+        let data = self
+            .state
+            .get_dynamic_fields(parent_object_id)
+            .map_err(|e| anyhow!("{e}"))?;
+
+        let df = data.iter().find(|info| info.name == name).ok_or_else(|| {
+            anyhow!("Cannot find dynamic field [{name}] for object [{parent_object_id}].")
+        })?;
+
+        self.get_object(df.object_id).await
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
