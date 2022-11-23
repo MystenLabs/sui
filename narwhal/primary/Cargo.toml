@@ -51,6 +51,7 @@ mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 anemo.workspace = true
 anemo-tower.workspace = true
+fail = "0.5.1"
 
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }
