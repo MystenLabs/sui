@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Dialog, Transition } from '@headlessui/react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Fragment } from 'react';
 
 import { ReactComponent as BrokenImage } from '../assets/SVGIcons/24px/NFTTypeImage.svg';
-import {
-    FALLBACK_IMAGE,
-    ImageModClient,
-} from '../utils/imageModeratorClient';
+import { FALLBACK_IMAGE, ImageModClient } from '../utils/imageModeratorClient';
 import { transformURL, genFileTypeMsg } from '../utils/stringUtils';
 
 function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
@@ -162,12 +159,22 @@ function DisplayBoxWString({
     } else {
         return (
             <>
-                <Transition appear show={hasClickedImage} as="div">
+                <Transition appear show={hasClickedImage} as={Fragment}>
                     <Dialog as="div" onClose={handleImageClick}>
-                        <Transition.Child>
-                            <div className="fixed inset-0 bg-sui-grey-100 z-20 opacity-85" />
+                        <Transition.Child
+                            enter="ease-linear duration-300"
+                            enterFrom="opacity-0"
+                            enterTo="opacity-100"
+                            as={Fragment}
+                        >
+                            <div className="fixed inset-0 bg-sui-grey-100 z-20 bg-opacity-85" />
                         </Transition.Child>
-                        <Transition.Child className="w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex">
+                        <Transition.Child
+                            className="w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex"
+                            enter="ease-linear duration-300"
+                            enterFrom="opacity-0"
+                            enterTo="opacity-100"
+                        >
                             <Dialog.Panel
                                 as="div"
                                 className="mt-auto mb-15 sm:my-auto sm:relative sm:left-5"
