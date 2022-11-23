@@ -28,15 +28,16 @@ export function Amount({ amount, symbol, size = 'md', format }: AmountProps) {
             : amount;
 
     return (
-        <div className="flex items-end gap-1 text-sui-grey-100 break-words">
+        <div className="flex items-end gap-1 break-words">
             <Heading
                 variant={SIZE_FORMAT[size]}
                 weight={isLarge ? 'bold' : 'semibold'}
+                color="gray-90"
             >
                 {formattedAmount}
             </Heading>
             {symbol && (
-                <div className="text-sui-grey-80 text-bodySmall font-medium leading-4">
+                <div className="text-steel-dark text-bodySmall font-medium leading-4">
                     {isLarge ? (
                         <sup className="text-bodySmall">{symbol}</sup>
                     ) : (

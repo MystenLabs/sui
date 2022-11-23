@@ -16,6 +16,14 @@ export const Text: StoryObj<LinkProps> = {
     },
 };
 
+export const TextDisabled: StoryObj<LinkProps> = {
+    args: {
+        variant: 'text',
+        children: 'View more',
+        disabled: true,
+    },
+};
+
 export const Mono: StoryObj<LinkProps> = {
     args: {
         variant: 'mono',

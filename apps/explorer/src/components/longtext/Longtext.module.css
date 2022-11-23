@@ -1,7 +1,7 @@
 .extra,
 .copy16,
 .copy24 {
-    @apply cursor-pointer stroke-sui-grey-60 self-start sm:self-end leading-[100%] hover:stroke-sui-steel text-sui-grey-60 hover:text-sui-steel;
+    @apply cursor-pointer stroke-gray-60 self-start sm:self-end leading-[100%] hover:stroke-steel text-gray-60 hover:text-steel;
 }
 
 .copy16 {
@@ -9,7 +9,7 @@
 }
 
 .copied {
-    @apply text-green-600 text-sm self-start sm:self-center;
+    @apply text-success-dark text-sm self-start sm:self-center;
 }
 
 .copied span {

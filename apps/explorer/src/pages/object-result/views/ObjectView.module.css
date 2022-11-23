@@ -10,7 +10,7 @@
     }
 
     .textdetails > tbody > tr > td:first-child {
-        @apply text-sui-grey-80  font-medium pr-6 w-[150px];
+        @apply text-gray-80  font-medium pr-6 w-[150px];
     }
 
     .textdetails > tbody > tr > td:nth-child(2) {
@@ -28,16 +28,6 @@
 
 h1.title {
     @apply font-semibold text-3xl leading-6;
-}
-
-/* Text Box CSS */
-
-div.mutable {
-    @apply h-[1.5rem] p-2 border-none bg-blue-300;
-}
-
-div.immutable {
-    @apply h-[1.5rem] p-2 border-none bg-gray-300;
 }
 
 /* Description / Image CSS */
@@ -59,13 +49,13 @@ div.metadata > h2 {
 }
 
 div.metadata > p {
-    @apply text-sui-grey-80 text-[13px] leading-[12px];
+    @apply text-gray-80 text-[13px] leading-[12px];
 }
 
 .desktoppreviewmedia,
 .mobilepreviewmedia {
-    @apply bg-inherit border-0 p-0 cursor-pointer text-[14px] leading-[13px] 
-  text-sui-grey-80 font-semibold tracking-[-0.02em];
+    @apply bg-inherit border-0 p-0 cursor-pointer text-[14px] leading-[13px]
+  text-gray-80 font-semibold tracking-[-0.02em];
 }
 
 .desktoppreviewmedia {
@@ -114,7 +104,7 @@ table.properties {
 }
 
 td.objectid {
-    @apply text-sui-grey-90;
+    @apply text-gray-90;
 }
 
 .objecttypelink {
@@ -124,7 +114,7 @@ td.objectid {
 /* Clickable Header CSS */
 
 h2.header {
-    @apply text-sui-grey-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5 mt-0;
+    @apply text-gray-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5 mt-0;
 }
 
 div.accommodate > h2.header {

@@ -1,5 +1,5 @@
 div > div.problemrow > div:first-child {
-    @apply w-auto text-left mb-[1vh] text-red-600 block;
+    @apply w-auto text-left mb-[1vh] text-issue-dark block;
 }
 
 div > div.problemrow > div:nth-child(2) {

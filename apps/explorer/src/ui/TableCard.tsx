@@ -72,7 +72,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
     return (
         <div
             className={clsx(
-                'w-full overflow-x-auto border-solid border-0 border-sui-grey-45 border-b pb-4',
+                'w-full overflow-x-auto border-solid border-0 border-gray-45 border-b pb-4',
                 refetching && 'opacity-50'
             )}
         >
@@ -85,7 +85,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
-                                    className="text-sui-grey-75 h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
+                                    className="text-gray-75 h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
                                 >
                                     {header.isPlaceholder
                                         ? null
@@ -104,7 +104,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                             {row.getVisibleCells().map((cell: any) => (
                                 <td
                                     key={cell.id}
-                                    className="text-sui-grey-75 h-[30px] px-1 group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-body group-hover:first:rounded-l group-hover:last:rounded-r"
+                                    className="text-gray-75 h-[30px] px-1 group-hover:text-gray-90 group-hover:bg-gray-40 text-body group-hover:first:rounded-l group-hover:last:rounded-r"
                                 >
                                     {flexRender(
                                         cell.column.columnDef.cell,

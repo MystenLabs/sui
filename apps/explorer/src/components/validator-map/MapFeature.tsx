@@ -32,7 +32,7 @@ export function MapFeature({ path, feature, onMouseOver, onMouseOut }: Props) {
             d={path}
             fill="white"
             strokeWidth={0.2}
-            stroke="var(--sui-steel)"
+            stroke="var(--steel)"
         />
     );
 }

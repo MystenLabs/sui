@@ -91,10 +91,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     };
 
     return (
-        <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
+        <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-gray-45">
             <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={onChangeModule}>
-                    <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex mt-2.5 justify-between py-1">
+                    <div className="box-border border border-gray-50 border-solid rounded-md shadow-sm placeholder-gray-65 pl-3 w-full flex mt-2.5 justify-between py-1">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => query}
@@ -106,19 +106,19 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             className="bg-inherit border-none pr-2"
                             type="submit"
                         >
-                            <SearchIcon className="fill-sui-steel cursor-pointer h-4.5 w-4.5 align-middle" />
+                            <SearchIcon className="fill-steel cursor-pointer h-4.5 w-4.5 align-middle" />
                         </button>
                     </div>
                     <Combobox.Options className="overflow-auto absolute left-0 w-full box-border md:w-1/6 md:left-auto h-fit max-h-verticalListLong overflow-auto shadow-moduleOption rounded-md bg-white z-10 px-2 pb-5 pt-3 flex flex-col gap-1">
                         {filteredModules.length > 0 ? (
-                            <div className="text-caption font-semibold ml-1.5 pb-2 uppercase text-sui-grey-75">
+                            <div className="text-caption font-semibold ml-1.5 pb-2 uppercase text-gray-75">
                                 {filteredModules.length}
                                 {filteredModules.length === 1
                                     ? ' Result'
                                     : ' Results'}
                             </div>
                         ) : (
-                            <div className="text-sui-grey-70 text-body italic pt-2 px-3.5 text-center">
+                            <div className="text-gray-70 text-body italic pt-2 px-3.5 text-center">
                                 No results
                             </div>
                         )}
@@ -134,8 +134,8 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                         className={clsx(
                                             'cursor-pointer py-2 rounded-md text-body block w-full text-left mt-0.5 px-1.5 border',
                                             active
-                                                ? 'bg-sui/10 text-sui-grey-80 border-transparent'
-                                                : 'bg-white text-sui-grey-80 font-medium border-transparent'
+                                                ? 'bg-sui/10 text-gray-80 border-transparent'
+                                                : 'bg-white text-gray-80 font-medium border-transparent'
                                         )}
                                     >
                                         {name}
@@ -163,7 +163,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </VerticalList>
                 </div>
             </div>
-            <div className="border-0 md:border-l border-solid border-sui-grey-45 md:pl-7 pt-5 grow overflow-auto">
+            <div className="border-0 md:border-l border-solid border-gray-45 md:pl-7 pt-5 grow overflow-auto">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>

@@ -14,7 +14,7 @@ const badgeStyles = cva(
     {
         variants: {
             variant: {
-                current: 'bg-sui-grey-45 text-sui-grey-75',
+                current: 'bg-gray-40 text-steel-darker',
                 success: 'bg-success-light text-success-dark',
                 failure: 'bg-issue-light text-issue-dark',
             },

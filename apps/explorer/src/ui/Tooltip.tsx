@@ -134,12 +134,12 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
                             }}
                             {...getFloatingProps({ ref: floating })}
                         >
-                            <div className="bg-sui-grey-100 p-2 flex flex-col flex-nowrap gap-px rounded-md">
+                            <div className="bg-gray-100 p-2 flex flex-col flex-nowrap gap-px rounded-md">
                                 {tip}
                             </div>
                             <div
                                 ref={arrowRef}
-                                className="absolute z-[-1] bg-sui-grey-100 transform rotate-45 h-[12px] w-[12px]"
+                                className="absolute z-[-1] bg-gray-100 transform rotate-45 h-[12px] w-[12px]"
                                 style={arrowStyle}
                             />
                         </motion.div>

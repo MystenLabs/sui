@@ -13,11 +13,17 @@ export interface StatAmountProps extends Omit<AmountProps, 'size'> {
 
 export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
     return (
-        <div className="flex flex-col justify-start text-sui-grey-75 gap-2">
-            <div className="text-sui-grey-100 flex flex-col items-baseline gap-2.5">
+        <div className="flex flex-col justify-start text-gray-75 gap-2">
+            <div className="text-gray-100 flex flex-col items-baseline gap-2.5">
                 {date && <DateCard date={date} />}
                 <div className="flex flex-col items-baseline gap-2.5">
-                    <Heading as="h4" variant="heading4" weight="semibold">
+                    <Heading
+                        as="h4"
+                        variant="heading4"
+                        weight="semibold"
+                        color="gray-90"
+                        fixed
+                    >
                         Amount
                     </Heading>
 
@@ -25,7 +31,7 @@ export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
                 </div>
             </div>
             {dollarAmount && (
-                <Text variant="bodySmall" weight="semibold">
+                <Text variant="bodySmall" weight="semibold" color="steel-dark">
                     {new Intl.NumberFormat(undefined, {
                         style: 'currency',
                         currency: 'USD',
