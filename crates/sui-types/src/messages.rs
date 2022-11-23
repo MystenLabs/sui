@@ -21,7 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::file_format::{LocalIndex, TypeParameterIndex};
+use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
@@ -1285,13 +1285,20 @@ pub enum ExecutionFailureStatus {
     //
     // Errors from the Move VM
     //
-    // TODO module id + func def + offset?
-    MovePrimitiveRuntimeError,
+    // Indicates an error from a non-abort instruction
+    MovePrimitiveRuntimeError(Option<MoveLocation>),
     /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
     /// abort code
-    MoveAbort(ModuleId, u64), // TODO func def + offset?
+    MoveAbort(MoveLocation, u64), // TODO func def + offset?
     VMVerificationOrDeserializationError,
     VMInvariantViolation,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
+pub struct MoveLocation {
+    pub module: ModuleId,
+    pub function: u16,
+    pub instruction: CodeOffset,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1485,13 +1492,23 @@ impl Display for ExecutionFailureStatus {
                 "Sui Move Bytecode Verification Error. \
                 Please run the Sui Move Verifier for more information."
             ),
-            ExecutionFailureStatus::MovePrimitiveRuntimeError => write!(
-                f,
-                "Move Primitive Runtime Error. \
-                Arithmetic error, stack overflow, max value depth, etc."
-            ),
-            ExecutionFailureStatus::MoveAbort(m, c) => {
-                write!(f, "Move Runtime Abort. Module: {}, Status Code: {}", m, c)
+            ExecutionFailureStatus::MovePrimitiveRuntimeError(location) => {
+                write!(f, "Move Primitive Runtime Error. Location: ")?;
+                match location {
+                    None => write!(f, "UNKNOWN")?,
+                    Some(l) => write!(f, "{l}")?,
+                }
+                write!(
+                    f,
+                    ". Arithmetic error, stack overflow, max value depth, etc."
+                )
+            }
+            ExecutionFailureStatus::MoveAbort(location, c) => {
+                write!(
+                    f,
+                    "Move Runtime Abort. Location: {}, Abort Code: {}",
+                    location, c
+                )
             }
             ExecutionFailureStatus::VMVerificationOrDeserializationError => write!(
                 f,
@@ -1502,6 +1519,20 @@ impl Display for ExecutionFailureStatus {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
             }
         }
+    }
+}
+
+impl Display for MoveLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            module,
+            function,
+            instruction,
+        } = self;
+        write!(
+            f,
+            "{module} in function definition {function} at offset {instruction}"
+        )
     }
 }
 

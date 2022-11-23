@@ -5,7 +5,7 @@
 use crate::{
     base_types::*,
     committee::{EpochId, StakeUnit},
-    messages::ExecutionFailureStatus,
+    messages::{ExecutionFailureStatus, MoveLocation},
     object::Owner,
 };
 use move_binary_format::errors::{Location, PartialVMError, VMError};
@@ -673,11 +673,40 @@ impl From<VMError> for ExecutionError {
                 ExecutionFailureStatus::VMInvariantViolation
             }
             (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-                ExecutionFailureStatus::MoveAbort(id.to_owned(), code)
+                let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
+                debug_assert!(offset.is_some(), "Move should set the location on aborts");
+                let (function, instruction) = offset.unwrap_or((0, 0));
+                ExecutionFailureStatus::MoveAbort(
+                    MoveLocation {
+                        module: id.clone(),
+                        function,
+                        instruction,
+                    },
+                    code,
+                )
             }
             (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
-            _ => match error.major_status().status_type() {
-                StatusType::Execution => ExecutionFailureStatus::MovePrimitiveRuntimeError,
+            (_, _, location) => match error.major_status().status_type() {
+                StatusType::Execution => {
+                    debug_assert!(error.major_status() != StatusCode::ABORTED);
+                    let location = match location {
+                        Location::Module(id) => {
+                            let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
+                            debug_assert!(
+                                offset.is_some(),
+                                "Move should set the location on all execution errors"
+                            );
+                            let (function, instruction) = offset.unwrap_or((0, 0));
+                            Some(MoveLocation {
+                                module: id.clone(),
+                                function,
+                                instruction,
+                            })
+                        }
+                        _ => None,
+                    };
+                    ExecutionFailureStatus::MovePrimitiveRuntimeError(location)
+                }
                 StatusType::Validation
                 | StatusType::Verification
                 | StatusType::Deserialization
