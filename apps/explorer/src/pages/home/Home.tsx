@@ -19,7 +19,7 @@ const ValidatorMap = lazy(
     () => import('../../components/validator-map/ValidatorMap')
 );
 
-const TXN_PER_PAGE = 15;
+const TXN_PER_PAGE = 25;
 
 function HomeStatic() {
     return (

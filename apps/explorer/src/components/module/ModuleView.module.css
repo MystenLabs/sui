@@ -7,7 +7,6 @@ pre {
 
 section .codeview {
     border-color: transparent !important;
-    max-height: 450px !important;
     @apply font-mono text-sm pl-0 pr-0;
 }
 
@@ -31,7 +30,7 @@ section .codeview {
 
 .itemviewtitle,
 .title {
-    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
+    @apply text-gray-100 font-[500] text-lg  mt-5 mb-0;
 }
 
 section .codeview pre {
@@ -77,4 +76,8 @@ section .codeview pre {
 
 .modulewraper nav ul {
     @apply mt-3 md:mt-1 mx-0 px-0 justify-start;
+}
+
+.pagmodule {
+    @apply h-[556px] overflow-auto;
 }

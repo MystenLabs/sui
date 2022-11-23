@@ -34,15 +34,15 @@ export function TabGroup({ size, ...props }: TabGroupProps) {
 
 const tabStyles = cva(
     [
-        'border-b border-transparent ui-selected:border-sui-grey-65 font-semibold text-sui-grey-70 pb-2 -mb-px',
+        'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark hover:text-steel-darker active:text-steel pb-2 -mb-px',
         // TODO: remove once we have a CSS reset:
         'bg-transparent border-0 border-solid outline-none px-0 cursor-pointer',
     ],
     {
         variants: {
             size: {
-                lg: 'text-heading4 ui-selected:text-sui-grey-100',
-                md: 'text-body ui-selected:text-sui-grey-90',
+                lg: 'text-heading4 ui-selected:text-gray-100',
+                md: 'text-body ui-selected:text-gray-90',
             },
         },
         defaultVariants: {
@@ -72,7 +72,7 @@ export function TabList({
     return (
         <HeadlessTab.List
             className={clsx(
-                'flex gap-6 border-sui-grey-45 border-solid border-0',
+                'flex gap-6 border-gray-45 border-solid border-0',
                 fullWidth && 'flex-1',
                 !disableBottomBorder && 'border-b'
             )}

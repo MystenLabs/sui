@@ -42,8 +42,15 @@ describe('End-to-end Tests', () => {
 
         it('includes the sender time information', () => {
             cy.visit(`/transactions/${successID}`);
+            // TODO - use the custom command date format function
             cy.get('[data-testid=transaction-timestamp]').contains(
-                'Dec 15, 2024, 00:00:00 UTC'
+                new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: 'numeric',
+                }).format(new Date('Dec 15, 2024, 00:00:00 UTC'))
             );
         });
     });

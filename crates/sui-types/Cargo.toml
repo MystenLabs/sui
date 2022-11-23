@@ -21,7 +21,7 @@ sha2 = "0.9.9"
 thiserror = "1.0.34"
 tracing = "0.1"
 serde_bytes = "0.11.7"
-serde_json = "1.0.83"
+serde_json = "1.0.88"
 serde_with = "2.0.1"
 serde_repr = "0.1"
 signature = "1.6.0"
@@ -29,6 +29,7 @@ static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 zeroize = "1.5.7"
 schemars ="0.8.10"
+tap = "1.0.1"
 tonic = "0.8"
 strum = "^0.24"
 strum_macros = "^0.24"
@@ -54,6 +55,7 @@ name-variant = { path = "../../crates/name-variant" }
 
 workspace-hack.workspace = true
 proptest = "1.0.0"
+derive_more = "0.99.17"
 
 [dev-dependencies]
 bincode = "1.3.3"

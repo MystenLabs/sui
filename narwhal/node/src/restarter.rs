@@ -11,6 +11,7 @@ use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use types::ReconfigureNotification;
+use worker::TransactionValidator;
 
 // Module to start a node (primary, workers and default consensus), keep it running, and restarting it
 /// every time the committee changes.
@@ -26,6 +27,7 @@ impl NodeRestarter {
         storage_base_path: PathBuf,
         execution_state: Arc<State>,
         parameters: Parameters,
+        tx_validator: impl TransactionValidator,
         mut rx_reconfigure: Receiver<(
             KeyPair,
             NetworkKeyPair,
@@ -76,6 +78,7 @@ impl NodeRestarter {
                 worker_cache.clone(),
                 &store,
                 parameters.clone(),
+                tx_validator.clone(),
                 registry,
             );
 

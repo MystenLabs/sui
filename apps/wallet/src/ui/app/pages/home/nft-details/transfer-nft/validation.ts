@@ -6,7 +6,6 @@ import * as Yup from 'yup';
 import { SUI_ADDRESS_VALIDATION } from '_components/address-input/validation';
 
 export function createValidationSchema(
-    gasBalance: bigint,
     senderAddress: string,
     objectId: string
 ) {
@@ -22,16 +21,5 @@ export function createValidationSchema(
             `NFT address must be different from receiver address`,
             (value) => objectId !== value
         ),
-        amount: Yup.number()
-            .integer()
-            .required()
-            .test(
-                'nft-gas-balance-check',
-                `Insufficient balance to cover gas fee`,
-                (amount) => {
-                    return gasBalance >= BigInt(amount || 0);
-                }
-            )
-            .label('Amount'),
     });
 }

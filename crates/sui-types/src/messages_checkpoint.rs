@@ -10,7 +10,6 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::waypoint::Waypoint;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
@@ -108,8 +107,9 @@ pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
-    /// The total gas costs of all transactions included in this checkpoint.
-    pub gas_cost_summary: GasCostSummary,
+    /// The running total gas costs of all transactions included in the current epoch so far
+    /// until this checkpoint.
+    pub epoch_rolling_gas_cost_summary: GasCostSummary,
     /// If this checkpoint is the last checkpoint of the epoch, we also include the committee
     /// of the next epoch. This allows anyone receiving this checkpoint know that the epoch
     /// will change after this checkpoint, as well as what the new committee is.
@@ -126,14 +126,9 @@ impl CheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
-        gas_cost_summary: GasCostSummary,
+        epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> CheckpointSummary {
-        let mut waypoint = Box::new(Waypoint::default());
-        transactions.iter().for_each(|tx| {
-            waypoint.insert(tx);
-        });
-
         let content_digest = transactions.digest();
 
         Self {
@@ -141,7 +136,7 @@ impl CheckpointSummary {
             sequence_number,
             content_digest,
             previous_digest,
-            gas_cost_summary,
+            epoch_rolling_gas_cost_summary,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
         }
     }
@@ -160,11 +155,11 @@ impl Display for CheckpointSummary {
         write!(
             f,
             "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {},
-            gas_cost_summary: {:?}}}",
+            epoch_rolling_gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
             Hex::encode(self.content_digest),
-            self.gas_cost_summary,
+            self.epoch_rolling_gas_cost_summary,
         )
     }
 }
@@ -224,7 +219,7 @@ impl SignedCheckpointSummary {
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
-        gas_cost_summary: GasCostSummary,
+        epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -232,7 +227,7 @@ impl SignedCheckpointSummary {
             sequence_number,
             transactions,
             previous_digest,
-            gas_cost_summary,
+            epoch_rolling_gas_cost_summary,
             next_epoch_committee,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -363,7 +358,7 @@ impl CertifiedCheckpointSummary {
 #[derive(Clone, Debug)]
 pub struct VerifiedCheckpoint(CertifiedCheckpointSummary);
 
-// The only acceptible way to construct this type is via explicitly verifying it
+// The only acceptable way to construct this type is via explicitly verifying it
 static_assertions::assert_not_impl_any!(VerifiedCheckpoint: Serialize, DeserializeOwned);
 
 impl VerifiedCheckpoint {
@@ -375,6 +370,10 @@ impl VerifiedCheckpoint {
             Ok(()) => Ok(Self(checkpoint)),
             Err(err) => Err((checkpoint, err)),
         }
+    }
+
+    pub fn new_unchecked(checkpoint: CertifiedCheckpointSummary) -> Self {
+        Self(checkpoint)
     }
 
     pub fn inner(&self) -> &CertifiedCheckpointSummary {

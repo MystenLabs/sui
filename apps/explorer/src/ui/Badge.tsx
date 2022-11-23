@@ -4,7 +4,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import { ReactComponent as CheckIcon } from './icons/check.svg';
+import { ReactComponent as CheckIcon } from './icons/check_12x12.svg';
 import { ReactComponent as XIcon } from './icons/x.svg';
 
 const badgeStyles = cva(
@@ -14,7 +14,7 @@ const badgeStyles = cva(
     {
         variants: {
             variant: {
-                current: 'bg-sui-grey-45 text-sui-grey-75',
+                current: 'bg-gray-40 text-steel-darker',
                 success: 'bg-success-light text-success-dark',
                 failure: 'bg-issue-light text-issue-dark',
             },

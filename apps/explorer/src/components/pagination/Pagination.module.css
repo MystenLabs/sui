@@ -3,9 +3,9 @@
 @layer components {
     .basecontainer {
         @apply h-[2.3rem] inline-block
-        rounded border-[1px] border-solid border-sui-grey-50
-        font-sans items-center 
-        text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
+        rounded border-[1px] border-solid border-gray-50
+        font-sans items-center
+        text-gray-75 stroke-gray-75 bg-inherit;
 
         box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
     }
@@ -19,7 +19,7 @@
     }
 
     .btncontainer {
-        @apply basecontainer hover:bg-sui-light hover:text-sui-grey-100 hover:stroke-sui-grey-100 cursor-pointer inline-block;
+        @apply basecontainer hover:bg-sui-light hover:text-gray-100 hover:stroke-gray-100 cursor-pointer inline-block;
 
         transition: all 0.4s ease;
     }
@@ -43,7 +43,7 @@ button.gone {
 
 /* RHS stats styling */
 .rhs > div {
-    @apply capitalize text-sui-grey-75 text-sm mx-auto sm:mr-[12px] mt-2 sm:mt-0;
+    @apply capitalize text-gray-75 text-sm mx-auto sm:mr-[12px] mt-2 sm:mt-0;
 }
 
 .rhs {

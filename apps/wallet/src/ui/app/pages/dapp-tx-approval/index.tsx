@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useQuery } from '@tanstack/react-query';
 import cl from 'classnames';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -8,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Loading from '_components/loading';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
 import UserApproveContainer from '_components/user-approve-container';
 import {
     useAppDispatch,
@@ -22,6 +24,7 @@ import {
     txRequestsSelectors,
     deserializeTxn,
 } from '_redux/slices/transaction-requests';
+import { thunkExtras } from '_redux/store/thunk-extras';
 
 import type {
     SuiMoveNormalizedType,
@@ -155,24 +158,29 @@ function Permissions({ metadata }: PermissionsProps) {
 
 type TransferSummaryProps = {
     label: string;
-    content: string | number;
+    content: string | number | null;
+    loading: boolean;
 };
 
 const GAS_ESTIMATE_LABEL = 'Estimated Gas Fees';
 
-function TransactionSummery({ label, content }: TransferSummaryProps) {
+function TransactionSummery({ label, content, loading }: TransferSummaryProps) {
     const isGasEstimate = label === GAS_ESTIMATE_LABEL;
     const [gasEstimate, symbol] = useFormatCoin(
         (isGasEstimate && content) || 0,
         GAS_TYPE_ARG
     );
-
+    const valueContent =
+        content === null
+            ? '-'
+            : isGasEstimate
+            ? `${gasEstimate} ${symbol}`
+            : content;
     return (
         <>
             <div className={st.label}>{label}</div>
             <div className={st.value}>
-                {isGasEstimate ? gasEstimate : content}{' '}
-                {isGasEstimate ? symbol : ''}
+                {loading ? <LoadingIndicator /> : valueContent}
             </div>
         </>
     );
@@ -312,7 +320,43 @@ export function DappTxApprovalPage() {
         }
     }, [deserializeTxnFailed, loading, txRequest]);
 
-    const valuesContent = useMemo(() => {
+    const address = useAppSelector(({ account }) => account.address);
+    const txGasEstimationResult = useQuery({
+        queryKey: ['tx-request', 'gas-estimate', txRequest?.id, address],
+        queryFn: () => {
+            if (txRequest) {
+                const signer = thunkExtras.api.getSignerInstance(
+                    thunkExtras.keypairVault.getKeyPair()
+                );
+                let txToEstimate: Parameters<
+                    typeof signer.dryRunTransaction
+                >['0'];
+                const txType = txRequest.tx.type;
+                if (txType === 'v2' || txType === 'serialized-move-call') {
+                    txToEstimate = txRequest.tx.data;
+                } else {
+                    txToEstimate = {
+                        kind: 'moveCall',
+                        data: txRequest.tx.data,
+                    };
+                }
+                return signer.getGasCostEstimation(txToEstimate);
+            }
+            return Promise.resolve(null);
+        },
+        enabled: !!(txRequest && address),
+    });
+    const gasEstimation = txGasEstimationResult.data ?? null;
+    const valuesContent: {
+        label: string;
+        content: string | number | null;
+        loading?: boolean;
+    }[] = useMemo(() => {
+        const gasEstimationContent = {
+            label: GAS_ESTIMATE_LABEL,
+            content: gasEstimation,
+            loading: txGasEstimationResult.isLoading,
+        };
         switch (txRequest?.tx.type) {
             case 'v2': {
                 return [
@@ -320,6 +364,7 @@ export function DappTxApprovalPage() {
                         label: 'Transaction Type',
                         content: txRequest.tx.data.kind,
                     },
+                    gasEstimationContent,
                 ];
             }
             case 'move-call':
@@ -329,10 +374,7 @@ export function DappTxApprovalPage() {
                         label: 'Function',
                         content: txRequest.tx.data.function,
                     },
-                    {
-                        label: 'Gas Fees',
-                        content: txRequest.tx.data.gasBudget,
-                    },
+                    gasEstimationContent,
                 ];
             case 'serialized-move-call':
                 return [
@@ -352,24 +394,20 @@ export function DappTxApprovalPage() {
                                               ?.data as MoveCallTransaction
                                       ).function ?? '',
                               },
-                              {
-                                  label: GAS_ESTIMATE_LABEL,
-                                  content:
-                                      txRequest?.unSerializedTxn?.data
-                                          .gasBudget,
-                              },
+                              gasEstimationContent,
                           ]
                         : [
                               {
                                   label: 'Content',
                                   content: txRequest?.tx.data,
                               },
+                              gasEstimationContent,
                           ]),
                 ];
             default:
                 return [];
         }
-    }, [txRequest]);
+    }, [txRequest, gasEstimation, txGasEstimationResult.isLoading]);
 
     return (
         <Loading loading={loadingState}>
@@ -385,14 +423,17 @@ export function DappTxApprovalPage() {
                         <div className={st.card}>
                             <div className={st.header}>Transaction summary</div>
                             <div className={st.content}>
-                                {valuesContent.map(({ label, content }) => (
-                                    <div key={label} className={st.row}>
-                                        <TransactionSummery
-                                            label={label}
-                                            content={content}
-                                        />
-                                    </div>
-                                ))}
+                                {valuesContent.map(
+                                    ({ label, content, loading = false }) => (
+                                        <div key={label} className={st.row}>
+                                            <TransactionSummery
+                                                label={label}
+                                                content={content}
+                                                loading={loading}
+                                            />
+                                        </div>
+                                    )
+                                )}
                             </div>
                         </div>
                         <Permissions metadata={metadata} />

@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -20,7 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::file_format::LocalIndex;
+use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
@@ -909,33 +910,12 @@ impl Transaction {
     }
 }
 
-/// A transaction that is signed by a sender and also by an authority.
-pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
-pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
-
-impl VerifiedSignedTransaction {
-    /// Use signing key to create a signed object.
-    pub fn new(
-        epoch: EpochId,
-        transaction: VerifiedTransaction,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-    ) -> Self {
-        Self::new_from_verified(SignedTransaction::new(
-            epoch,
-            transaction.into_inner().into_data(),
-            secret,
-            authority,
-        ))
-    }
-
+impl VerifiedTransaction {
     pub fn new_change_epoch(
         next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
             epoch: next_epoch,
@@ -957,9 +937,25 @@ impl VerifiedSignedTransaction {
                 .unwrap()
                 .into(),
         };
+        Self::new_from_verified(Transaction::new(signed_data))
+    }
+}
+
+/// A transaction that is signed by a sender and also by an authority.
+pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
+pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
+
+impl VerifiedSignedTransaction {
+    /// Use signing key to create a signed object.
+    pub fn new(
+        epoch: EpochId,
+        transaction: VerifiedTransaction,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Self {
         Self::new_from_verified(SignedTransaction::new(
-            next_epoch,
-            signed_data,
+            epoch,
+            transaction.into_inner().into_data(),
             secret,
             authority,
         ))
@@ -1263,6 +1259,7 @@ pub enum ExecutionFailureStatus {
     NonEntryFunctionInvoked,
     EntryTypeArityMismatch,
     EntryArgumentError(EntryArgumentError),
+    EntryTypeArgumentError(EntryTypeArgumentError),
     CircularObjectOwnership(CircularObjectOwnership),
     InvalidChildObjectArgument(InvalidChildObjectArgument),
     InvalidSharedByValue(InvalidSharedByValue),
@@ -1288,13 +1285,20 @@ pub enum ExecutionFailureStatus {
     //
     // Errors from the Move VM
     //
-    // TODO module id + func def + offset?
-    MovePrimitiveRuntimeError,
+    // Indicates an error from a non-abort instruction
+    MovePrimitiveRuntimeError(Option<MoveLocation>),
     /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
     /// abort code
-    MoveAbort(ModuleId, u64), // TODO func def + offset?
+    MoveAbort(MoveLocation, u64), // TODO func def + offset?
     VMVerificationOrDeserializationError,
     VMInvariantViolation,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
+pub struct MoveLocation {
+    pub module: ModuleId,
+    pub function: u16,
+    pub instruction: CodeOffset,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1311,6 +1315,20 @@ pub enum EntryArgumentErrorKind {
     ObjectKindMismatch,
     UnsupportedPureArg,
     ArityMismatch,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct EntryTypeArgumentError {
+    pub argument_idx: TypeParameterIndex,
+    pub kind: EntryTypeArgumentErrorKind,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub enum EntryTypeArgumentErrorKind {
+    ModuleNotFound,
+    TypeNotFound,
+    ArityMismatch,
+    ConstraintNotSatisfied,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1332,6 +1350,13 @@ pub struct InvalidSharedByValue {
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
+    }
+
+    pub fn entry_type_argument_error(
+        argument_idx: TypeParameterIndex,
+        kind: EntryTypeArgumentErrorKind,
+    ) -> Self {
+        EntryTypeArgumentError { argument_idx, kind }.into()
     }
 
     pub fn circular_object_ownership(object: ObjectID) -> Self {
@@ -1404,7 +1429,10 @@ impl Display for ExecutionFailureStatus {
                 "Number of type arguments does not match the expected value",
             ),
             ExecutionFailureStatus::EntryArgumentError(data) => {
-                write!(f, "Entry Argument Type Error. {data}")
+                write!(f, "Entry Argument Error. {data}")
+            }
+            ExecutionFailureStatus::EntryTypeArgumentError(data) => {
+                write!(f, "Entry Type Argument Error. {data}")
             }
             ExecutionFailureStatus::CircularObjectOwnership(data) => {
                 write!(f, "Circular  Object Ownership. {data}")
@@ -1464,13 +1492,23 @@ impl Display for ExecutionFailureStatus {
                 "Sui Move Bytecode Verification Error. \
                 Please run the Sui Move Verifier for more information."
             ),
-            ExecutionFailureStatus::MovePrimitiveRuntimeError => write!(
-                f,
-                "Move Primitive Runtime Error. \
-                Arithmetic error, stack overflow, max value depth, etc."
-            ),
-            ExecutionFailureStatus::MoveAbort(m, c) => {
-                write!(f, "Move Runtime Abort. Module: {}, Status Code: {}", m, c)
+            ExecutionFailureStatus::MovePrimitiveRuntimeError(location) => {
+                write!(f, "Move Primitive Runtime Error. Location: ")?;
+                match location {
+                    None => write!(f, "UNKNOWN")?,
+                    Some(l) => write!(f, "{l}")?,
+                }
+                write!(
+                    f,
+                    ". Arithmetic error, stack overflow, max value depth, etc."
+                )
+            }
+            ExecutionFailureStatus::MoveAbort(location, c) => {
+                write!(
+                    f,
+                    "Move Runtime Abort. Location: {}, Abort Code: {}",
+                    location, c
+                )
             }
             ExecutionFailureStatus::VMVerificationOrDeserializationError => write!(
                 f,
@@ -1481,6 +1519,20 @@ impl Display for ExecutionFailureStatus {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
             }
         }
+    }
+}
+
+impl Display for MoveLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            module,
+            function,
+            instruction,
+        } = self;
+        write!(
+            f,
+            "{module} in function definition {function} at offset {instruction}"
+        )
     }
 }
 
@@ -1505,7 +1557,7 @@ impl Display for EntryArgumentErrorKind {
                 )
             }
             EntryArgumentErrorKind::ObjectKindMismatch => {
-                write!(f, "Mismtach with object argument kind and its actual kind.")
+                write!(f, "Mismatch with object argument kind and its actual kind.")
             }
             EntryArgumentErrorKind::UnsupportedPureArg => write!(
                 f,
@@ -1515,9 +1567,38 @@ impl Display for EntryArgumentErrorKind {
             EntryArgumentErrorKind::ArityMismatch => {
                 write!(
                     f,
-                    "Mismatch between the number of actual versus expected argument."
+                    "Mismatch between the number of actual versus expected arguments."
                 )
             }
+        }
+    }
+}
+
+impl Display for EntryTypeArgumentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let EntryTypeArgumentError { argument_idx, kind } = self;
+        write!(f, "Error for type argument at index {argument_idx}: {kind}",)
+    }
+}
+
+impl Display for EntryTypeArgumentErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryTypeArgumentErrorKind::ModuleNotFound => write!(
+                f,
+                "A package (or module) in the type argument was not found"
+            ),
+            EntryTypeArgumentErrorKind::TypeNotFound => {
+                write!(f, "A type was not found in the module specified",)
+            }
+            EntryTypeArgumentErrorKind::ArityMismatch => write!(
+                f,
+                "Mismatch between the number of actual versus expected type arguments."
+            ),
+            EntryTypeArgumentErrorKind::ConstraintNotSatisfied => write!(
+                f,
+                "A type provided did not match the specified constraints."
+            ),
         }
     }
 }
@@ -1589,6 +1670,12 @@ impl ExecutionStatus {
 impl From<EntryArgumentError> for ExecutionFailureStatus {
     fn from(error: EntryArgumentError) -> Self {
         Self::EntryArgumentError(error)
+    }
+}
+
+impl From<EntryTypeArgumentError> for ExecutionFailureStatus {
+    fn from(error: EntryTypeArgumentError) -> Self {
+        Self::EntryTypeArgumentError(error)
     }
 }
 
@@ -1675,6 +1762,30 @@ impl TransactionEffects {
     }
 }
 
+impl Message for TransactionEffectsDigest {
+    type DigestType = TransactionEffectsDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        *self
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+}
+
+impl Message for ExecutionDigests {
+    type DigestType = TransactionDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        self.transaction
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+}
+
 impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
@@ -1742,11 +1853,7 @@ impl Default for TransactionEffects {
             deleted: Vec::new(),
             wrapped: Vec::new(),
             gas_object: (
-                (
-                    ObjectID::random(),
-                    SequenceNumber::new(),
-                    ObjectDigest::new([0; 32]),
-                ),
+                random_object_ref(),
                 Owner::AddressOwner(SuiAddress::default()),
             ),
             events: Vec::new(),
@@ -1759,6 +1866,17 @@ pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
+pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
+pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
+pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
+
+impl From<ValidExecutionDigests> for ValidTransactionEffectsDigest {
+    fn from(ved: ValidExecutionDigests) -> ValidTransactionEffectsDigest {
+        let (data, validity) = ved.into_data_and_sig();
+        ValidTransactionEffectsDigest::new(data.effects, validity)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {
@@ -1932,10 +2050,18 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum ConsensusTransactionKey {
+    Certificate(TransactionDigest),
+    CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
+    EndOfPublish(AuthorityName),
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
+    EndOfPublish(AuthorityName),
 }
 
 impl ConsensusTransaction {
@@ -1964,6 +2090,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_end_of_publish(authority: AuthorityName) -> Self {
+        let mut hasher = DefaultHasher::new();
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_be_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::EndOfPublish(authority),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -1976,7 +2112,33 @@ impl ConsensusTransaction {
                 certificate.verify_signature(committee)
             }
             ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
+            ConsensusTransactionKind::EndOfPublish(_) => Ok(()),
         }
+    }
+
+    pub fn key(&self) -> ConsensusTransactionKey {
+        match &self.kind {
+            ConsensusTransactionKind::UserTransaction(cert) => {
+                ConsensusTransactionKey::Certificate(*cert.digest())
+            }
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                ConsensusTransactionKey::CheckpointSignature(
+                    data.summary.auth_signature.authority,
+                    data.summary.summary.sequence_number,
+                )
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                ConsensusTransactionKey::EndOfPublish(*authority)
+            }
+        }
+    }
+
+    pub fn is_user_certificate(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+    }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        matches!(self.kind, ConsensusTransactionKind::EndOfPublish(_))
     }
 }
 

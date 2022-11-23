@@ -57,6 +57,14 @@ pub struct GasCostSummary {
 }
 
 impl GasCostSummary {
+    pub fn new(computation_cost: u64, storage_cost: u64, storage_rebate: u64) -> GasCostSummary {
+        GasCostSummary {
+            computation_cost,
+            storage_cost,
+            storage_rebate,
+        }
+    }
+
     pub fn gas_used(&self) -> u64 {
         self.computation_cost + self.storage_cost
     }

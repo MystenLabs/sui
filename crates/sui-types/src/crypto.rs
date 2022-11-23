@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
+use derive_more::From;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
     BLS12381Signature,
@@ -86,29 +87,17 @@ pub fn generate_proof_of_possession<K: KeypairTraits>(
 ///
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum SuiKeyPair {
     Ed25519SuiKeyPair(Ed25519KeyPair),
     Secp256k1SuiKeyPair(Secp256k1KeyPair),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, From)]
 pub enum PublicKey {
     Ed25519KeyPair(Ed25519PublicKey),
     Secp256k1KeyPair(Secp256k1PublicKey),
 }
-
-impl PartialEq for PublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (PublicKey::Ed25519KeyPair(a), PublicKey::Ed25519KeyPair(b)) => a == b,
-            (PublicKey::Secp256k1KeyPair(a), PublicKey::Secp256k1KeyPair(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for PublicKey {}
 
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
@@ -162,15 +151,21 @@ impl EncodeDecodeBase64 for SuiKeyPair {
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
-                    let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
+                    let priv_key_bytes = bytes
+                        .get(1 + Ed25519PublicKey::LENGTH..)
+                        .ok_or_else(|| eyre::eyre!("Invalid length"))?;
+                    let sk = Ed25519PrivateKey::from_bytes(priv_key_bytes)?;
                     Ok(SuiKeyPair::Ed25519SuiKeyPair(<Ed25519KeyPair as From<
                         Ed25519PrivateKey,
                     >>::from(
                         sk
                     )))
                 } else if x == &Secp256k1SuiSignature::SCHEME.flag() {
-                    let sk =
-                        Secp256k1PrivateKey::from_bytes(&bytes[1 + Secp256k1PublicKey::LENGTH..])?;
+                    let sk = Secp256k1PrivateKey::from_bytes(
+                        bytes
+                            .get(1 + Secp256k1PublicKey::LENGTH..)
+                            .ok_or_else(|| eyre::eyre!("Invalid length"))?,
+                    )?;
                     Ok(SuiKeyPair::Secp256k1SuiKeyPair(
                         <Secp256k1KeyPair as From<Secp256k1PrivateKey>>::from(sk),
                     ))
@@ -205,36 +200,12 @@ impl<'de> Deserialize<'de> for SuiKeyPair {
     }
 }
 
-impl From<Ed25519KeyPair> for SuiKeyPair {
-    fn from(key: Ed25519KeyPair) -> Self {
-        SuiKeyPair::Ed25519SuiKeyPair(key)
-    }
-}
-
-impl From<Secp256k1KeyPair> for SuiKeyPair {
-    fn from(key: Secp256k1KeyPair) -> Self {
-        SuiKeyPair::Secp256k1SuiKeyPair(key)
-    }
-}
-
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         match self {
             PublicKey::Ed25519KeyPair(pk) => pk.as_ref(),
             PublicKey::Secp256k1KeyPair(pk) => pk.as_ref(),
         }
-    }
-}
-
-impl From<Ed25519PublicKey> for PublicKey {
-    fn from(key: Ed25519PublicKey) -> Self {
-        PublicKey::Ed25519KeyPair(key)
-    }
-}
-
-impl From<Secp256k1PublicKey> for PublicKey {
-    fn from(key: Secp256k1PublicKey) -> Self {
-        PublicKey::Secp256k1KeyPair(key)
     }
 }
 
@@ -251,10 +222,18 @@ impl EncodeDecodeBase64 for PublicKey {
         match bytes.first() {
             Some(x) => {
                 if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
-                    let pk = Ed25519PublicKey::from_bytes(&bytes[1..])?;
+                    let pk = Ed25519PublicKey::from_bytes(
+                        bytes
+                            .get(1..)
+                            .ok_or_else(|| eyre::eyre!("Invalid length"))?,
+                    )?;
                     Ok(PublicKey::Ed25519KeyPair(pk))
                 } else if x == &<Secp256k1PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
-                    let pk = Secp256k1PublicKey::from_bytes(&bytes[1..])?;
+                    let pk = Secp256k1PublicKey::from_bytes(
+                        bytes
+                            .get(1..)
+                            .ok_or_else(|| eyre::eyre!("Invalid length"))?,
+                    )?;
                     Ok(PublicKey::Secp256k1KeyPair(pk))
                 } else {
                     Err(eyre::eyre!("Invalid flag byte"))
@@ -350,9 +329,16 @@ impl AuthorityPublicKeyBytes {
 /// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
 pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
 
-impl std::fmt::Debug for ConciseAuthorityPublicKeyBytes<'_> {
+impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(&self.0 .0[0..4]);
+        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        write!(f, "k#{}..", s)
+    }
+}
+
+impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }
@@ -377,7 +363,7 @@ impl AsRef<[u8]> for AuthorityPublicKeyBytes {
     }
 }
 
-impl std::fmt::Debug for AuthorityPublicKeyBytes {
+impl Debug for AuthorityPublicKeyBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_impl(f)
     }
@@ -626,8 +612,12 @@ where
             bytes.len()
         )));
     }
-    let sk = <KP as KeypairTraits>::PrivKey::from_bytes(&bytes[..priv_length])
-        .map_err(|_| SuiError::InvalidPrivateKey)?;
+    let sk = <KP as KeypairTraits>::PrivKey::from_bytes(
+        bytes
+            .get(..priv_length)
+            .ok_or(SuiError::InvalidPrivateKey)?,
+    )
+    .map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KP = sk.into();
     if kp.public().as_ref() != &bytes[priv_length..] {
         return Err(SuiError::InvalidAddress);
@@ -740,7 +730,7 @@ impl signature::Signature for Signature {
     }
 }
 
-impl std::fmt::Debug for Signature {
+impl Debug for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let flag = Base64::encode([self.scheme().flag()]);
         let s = Base64::encode(self.signature_bytes());
@@ -936,10 +926,14 @@ pub trait SuiSignature: Sized + signature::Signature {
 
 impl<S: SuiSignatureInner + Sized> SuiSignature for S {
     fn signature_bytes(&self) -> &[u8] {
+        // Access array slice is safe because the array bytes is initialized as
+        // flag || signature || pubkey with its defined length.
         &self.as_ref()[1..1 + S::Sig::LENGTH]
     }
 
     fn public_key_bytes(&self) -> &[u8] {
+        // Access array slice is safe because the array bytes is initialized as
+        // flag || signature || pubkey with its defined length.
         &self.as_ref()[S::Sig::LENGTH + 1..]
     }
 
@@ -1396,11 +1390,9 @@ where
         // Remove name tag before deserialization using BCS
         let name = serde_name::trace_name::<Self>().expect("Self should be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();
-        let actual_bytes_len = bytes.len();
-        if name_byte_len >= actual_bytes_len {
-            anyhow::bail!("Failed to deserialize shorter than expected signable bytes (len:{actual_bytes_len}) to {name}.");
-        }
-        Ok(bcs::from_bytes(&bytes[name_byte_len..])?)
+        Ok(bcs::from_bytes(bytes.get(name_byte_len..).ok_or_else(
+            || anyhow!("Failed to deserialize to {name}."),
+        )?)?)
     }
 }
 

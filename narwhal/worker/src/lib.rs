@@ -13,6 +13,8 @@ mod handlers;
 pub mod metrics;
 mod primary_connector;
 mod quorum_waiter;
+mod tx_validator;
 mod worker;
 
+pub use crate::tx_validator::{TransactionValidator, TrivialTransactionValidator};
 pub use crate::worker::Worker;

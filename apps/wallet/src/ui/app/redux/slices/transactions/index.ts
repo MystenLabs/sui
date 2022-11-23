@@ -1,13 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest, isSuiMoveObject } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    isSuiMoveObject,
+    Coin as CoinAPI,
+} from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { accountCoinsSelector } from '_redux/slices/account';
 import {
     fetchAllOwnedAndRequiredObjects,
     suiObjectsAdapterSelectors,
@@ -40,35 +45,23 @@ export const sendTokens = createAsyncThunk<
         { getState, extra: { api, keypairVault }, dispatch }
     ) => {
         const state = getState();
-        const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
-        const coins: SuiMoveObject[] = suiObjectsAdapterSelectors
-            .selectAll(state)
-            .filter(
-                (anObj) =>
-                    isSuiMoveObject(anObj.data) && anObj.data.type === coinType
-            )
-            .map(({ data }) => data as SuiMoveObject);
-
+        const coins: SuiMoveObject[] = accountCoinsSelector(state);
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-
-        const response =
-            Coin.getCoinSymbol(tokenTypeArg) === 'SUI'
-                ? await Coin.transferSui(
-                      signer,
-                      coins,
-                      amount,
-                      recipientAddress
-                  )
-                : await Coin.transferCoin(
-                      signer,
-                      coins,
-                      amount,
-                      recipientAddress
-                  );
-
+        const response = await CoinAPI.transfer(
+            signer,
+            coins,
+            tokenTypeArg,
+            amount,
+            recipientAddress,
+            Coin.computeGasBudgetForPay(
+                coins.filter(
+                    (aCoin) => Coin.getCoinTypeArg(aCoin) === tokenTypeArg
+                ),
+                amount
+            )
+        );
         // TODO: better way to sync latest objects
         dispatch(fetchAllOwnedAndRequiredObjects());
-        // TODO: is this correct? Find a better way to do it
         return response;
     }
 );

@@ -20,8 +20,10 @@ export function SenderRecipientAddress({
             <div className="w-4 mt-1">
                 {isSender ? <Sender /> : <Recipient />}
             </div>
+
             <Link
                 variant="mono"
+                size="md"
                 to={`/addresses/${encodeURIComponent(address)}`}
             >
                 {address}

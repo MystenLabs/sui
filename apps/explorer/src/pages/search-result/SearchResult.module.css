@@ -12,7 +12,7 @@
 }
 
 .searchitem {
-    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-100 pl-5 pr-5 bg-white mt-5 mb-5 text-left md:justify-around;
+    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-45 pl-5 pr-5 bg-white mt-5 mb-5 text-left md:justify-around;
 }
 
 strong {

@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
@@ -16,7 +17,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -25,9 +26,10 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use parking_lot::RwLock;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use tap::TapFallible;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
@@ -51,10 +53,11 @@ use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiEventEnvelope, SuiTransactionEffects,
 };
 use sui_simulator::nondeterministic;
+use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     node_sync_store::NodeSyncStore,
-    write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
+    write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
 use sui_types::committee::EpochId;
@@ -81,12 +84,15 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::checkpoints2::{CheckpointMetrics, CheckpointService, LogCheckpointOutput};
+use crate::authority_aggregator::AuthorityAggregator;
+use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::committee_store::CommitteeStore;
+use crate::epoch::reconfiguration::ReconfigState;
 use crate::metrics::TaskUtilizationExt;
+use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::scoped_counter;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
@@ -98,6 +104,8 @@ use crate::{
     transaction_manager::TransactionManager,
     transaction_streamer::TransactionStreamer,
 };
+use narwhal_types::ConsensusOutput;
+use sui_types::gas::GasCostSummary;
 
 use self::authority_store::ObjectKey;
 
@@ -127,7 +135,8 @@ pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
-type CertTxGuard<'a> = DBTxGuard<'a, TrustedCertificate>;
+type CertTxGuard<'a> =
+    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -527,8 +536,6 @@ pub struct AuthorityState {
     pub event_handler: Option<Arc<EventHandler>>,
     pub transaction_streamer: Option<Arc<TransactionStreamer>>,
 
-    checkpoint_service: Arc<CheckpointService>,
-
     committee_store: Arc<CommitteeStore>,
 
     /// Manages pending certificates and their missing input objects.
@@ -555,7 +562,11 @@ pub struct AuthorityState {
 
     pub metrics: Arc<AuthorityMetrics>,
 
+    /// In-memory cache of the content from the reconfig_state db table.
+    reconfig_state_mem: RwLock<ReconfigState>,
+
     /// A channel to tell consensus to reconfigure.
+    /// TODO: This does not really belong to AuthorityState. We should move it out.
     _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
@@ -583,32 +594,13 @@ impl AuthorityState {
         &self.committee_store
     }
 
+    /// This is a private method and should be kept that way. It doesn't check whether
+    /// the provided transaction is a system transaction, and hence can only be called internally.
     async fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        // Ensure an idempotent answer.
-        // If a transaction was signed in a previous epoch, we should no longer reuse it.
-        if self
-            .database
-            .transaction_exists(self.epoch(), &transaction_digest)?
-        {
-            self.metrics.tx_already_processed.inc();
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-            return Ok(transaction_info);
-        }
-
-        // Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
-        if self.is_halted() {
-            // TODO: Do we want to include the new validator set?
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
@@ -639,6 +631,23 @@ impl AuthorityState {
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.data().data);
+
+        // Ensure an idempotent answer. This is checked before the system_tx check so that
+        // a validator is able to return the signed system tx if it was already signed locally.
+        if self
+            .database
+            .transaction_exists(self.epoch(), &transaction_digest)?
+        {
+            self.metrics.tx_already_processed.inc();
+            return self.make_transaction_info(&transaction_digest).await;
+        }
+
+        // CRITICAL! Validators should never sign an external system transaction.
+        fp_ensure!(
+            !transaction.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
         self.metrics.tx_orders.inc();
@@ -648,14 +657,10 @@ impl AuthorityState {
             Ok(r) => Ok(r),
             // If we see an error, it is possible that a certificate has already been processed.
             // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(err) => {
-                if self.database.effects_exists(&transaction_digest)? {
-                    self.metrics.tx_already_processed.inc();
-                    Ok(self.make_transaction_info(&transaction_digest).await?)
-                } else {
-                    Err(err)
-                }
-            }
+            Err(err) => self
+                .get_tx_info_already_executed(&transaction_digest)
+                .await?
+                .ok_or(err),
         }
     }
 
@@ -700,7 +705,7 @@ impl AuthorityState {
         }
 
         let resp = self
-            .process_certificate(tx_guard, certificate, true)
+            .process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?digest, "process_certificate failed: {e}"))?;
 
@@ -722,23 +727,6 @@ impl AuthorityState {
     pub async fn handle_certificate(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        self.handle_certificate_impl(certificate, false).await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub async fn handle_certificate_bypass_validator_halt(
-        &self,
-        certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        self.handle_certificate_impl(certificate, true).await
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_certificate_impl(
-        &self,
-        certificate: &VerifiedCertificate,
-        bypass_validator_halt: bool,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
         self.metrics.total_cert_attempts.inc();
@@ -777,9 +765,14 @@ impl AuthorityState {
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, certificate, bypass_validator_halt)
+        self.process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        self.database.check_owned_locks(owned_object_refs).await
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -844,23 +837,41 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
-        mut bypass_validator_halt: bool,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        // Any caller that verifies the signatures on the certificate will have already checked the
+        // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
+        // present the possibility of an epoch mismatch.
+        if certificate.epoch() != self.epoch() {
+            tx_guard.release();
+            return Err(SuiError::WrongEpoch {
+                expected_epoch: self.epoch(),
+                actual_epoch: certificate.epoch(),
+            });
+        }
+
+        // first check to see if we have already executed and committed the tx
+        // to the WAL
+        if let Some((inner_temporary_storage, signed_effects)) = self
+            .database
+            .wal
+            .get_execution_output(certificate.digest())?
+        {
+            return self
+                .commit_cert_and_notify(
+                    certificate,
+                    inner_temporary_storage,
+                    signed_effects,
+                    tx_guard,
+                )
+                .await;
+        }
+
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
             tx_guard.release();
             return Ok(info);
-        }
-
-        // We also bypass validator halt if this is the system transaction.
-        // TODO: Shared object transactions should also bypass validator halt.
-        bypass_validator_halt |= certificate.is_system_tx();
-
-        if self.is_halted() && !bypass_validator_halt {
-            tx_guard.release();
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
@@ -877,12 +888,35 @@ impl AuthorityState {
                 Ok(res) => res,
             };
 
+        // Write tx output to WAL as first commit phase. In second phase
+        // we write from WAL to permanent storage. The purpose of this scheme
+        // is to allow for retrying phase 2 from phase 1 in the case where we
+        // fail mid-write. We prefer this over making the write to permanent
+        // storage atomic as this allows for sharding storage across nodes, which
+        // would be more difficult in the alternative.
+        self.database.wal.write_execution_output(
+            &digest,
+            (inner_temporary_store.clone(), signed_effects.clone()),
+        )?;
+
+        self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)
+            .await
+    }
+
+    async fn commit_cert_and_notify(
+        &self,
+        certificate: &VerifiedCertificate,
+        inner_temporary_store: InnerTemporaryStore,
+        signed_effects: SignedTransactionEffects,
+        tx_guard: CertTxGuard<'_>,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.data().shared_objects.len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
+        let notifier_ticket = self.batch_notifier.ticket()?;
         let ticket_seq = notifier_ticket.seq();
         let output_keys: Vec<_> = inner_temporary_store
             .written
@@ -899,19 +933,7 @@ impl AuthorityState {
             .await;
         let seq = match res {
             Err(err) => {
-                if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
-                    debug!(
-                        ?digest,
-                        "validator halted and this cert will never be committed"
-                    );
-                    tx_guard.release();
-                } else {
-                    error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
-                }
-                debug!(
-                     seq=?ticket_seq,
-                    "Ticket not notified due to commit failure",
-                );
+                error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
                 // Check if we were able to sequence the tx at all
                 match self.db().get_tx_sequence(*certificate.digest()).await {
                     Err(db_err) => {
@@ -1023,6 +1045,9 @@ impl AuthorityState {
         let _metrics_guard = start_timer(self.metrics.prepare_certificate_latency.clone());
         let (gas_status, input_objects) =
             transaction_input_checker::check_certificate_input(&self.database, certificate).await?;
+
+        let owned_object_refs = input_objects.filter_owned_objects();
+        self.check_owned_locks(&owned_object_refs).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -1410,10 +1435,8 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
         _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
-        checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1422,20 +1445,13 @@ impl AuthorityState {
             adapter::new_move_vm(native_functions.clone())
                 .expect("We defined natives to not fail here"),
         );
-        // Only initialize an empty database.
-        if store
-            .database_is_empty()
-            .expect("Database read should not fail.")
-        {
-            store
-                .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
-                .await
-                .expect("Cannot bulk insert genesis objects");
-        }
         let committee = committee_store.get_latest_committee();
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
-        let event_handler =
-            event_store.map(|es| Arc::new(EventHandler::new(es, module_cache.clone())));
+        let event_handler = event_store.map(|es| {
+            let handler = EventHandler::new(es, module_cache.clone());
+            handler.regular_cleanup_task();
+            Arc::new(handler)
+        });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(tokio::sync::Mutex::new(
@@ -1466,9 +1482,17 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics,
+            reconfig_state_mem: RwLock::new(
+                store
+                    .load_reconfig_state()
+                    .expect("Load reconfig state at initialization cannot fail"),
+            ),
             _tx_reconfigure_consensus,
-            checkpoint_service,
         };
+
+        prometheus_registry
+            .register(Box::new(ModuleCacheGauge::new(&state.module_cache)))
+            .unwrap();
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
         // don't observe partially-committed txes.
@@ -1509,7 +1533,11 @@ impl AuthorityState {
         };
 
         // unwrap ok - for testing only.
-        let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
+        let store = Arc::new(
+            AuthorityStore::open(&path.join("store"), None, genesis)
+                .await
+                .unwrap(),
+        );
 
         let epochs = Arc::new(CommitteeStore::new(
             path.join("epochs"),
@@ -1523,15 +1551,6 @@ impl AuthorityState {
             None,
         ));
 
-        let checkpoint_service = CheckpointService::spawn(
-            &path.join("checkpoint2"),
-            Box::new(store.clone()),
-            LogCheckpointOutput::boxed(),
-            LogCheckpointOutput::boxed_certified(),
-            epochs.get_latest_committee(),
-            CheckpointMetrics::new_for_tests(),
-        );
-
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
@@ -1542,10 +1561,8 @@ impl AuthorityState {
             None,
             None,
             None,
-            genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
-            checkpoint_service,
         )
         .await
     }
@@ -1585,10 +1602,7 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self
-                    .process_certificate(tx_guard, &cert.into(), false)
-                    .await
-                {
+                if let Err(e) = self.process_certificate(tx_guard, &cert.into()).await {
                     warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
@@ -1614,26 +1628,59 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub(crate) fn is_halted(&self) -> bool {
-        self.batch_notifier.is_paused()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn halt_validator(&self) {
-        self.batch_notifier.pause();
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn unhalt_validator(&self) {
-        self.batch_notifier.unpause();
-    }
-
     pub fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
 
+    pub fn committee(&self) -> Guard<Arc<Committee>> {
+        self.committee.load()
+    }
+
     pub fn clone_committee(&self) -> Committee {
-        self.committee.load().clone().deref().clone()
+        self.committee().clone().deref().clone()
+    }
+
+    pub fn get_reconfig_state_read_lock_guard(
+        &self,
+    ) -> parking_lot::RwLockReadGuard<ReconfigState> {
+        self.reconfig_state_mem.read()
+    }
+
+    pub fn get_reconfig_state_write_lock_guard(
+        &self,
+    ) -> parking_lot::RwLockWriteGuard<ReconfigState> {
+        self.reconfig_state_mem.write()
+    }
+
+    // This method can only be called from ConsensusAdapter::begin_reconfiguration
+    pub fn close_user_certs(
+        &self,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
+    ) {
+        lock_guard.close_user_certs();
+        self.database
+            .store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+    }
+
+    pub async fn close_all_certs(
+        &self,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
+    ) {
+        lock_guard.close_all_certs();
+        self.database
+            .store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+    }
+
+    pub async fn open_all_certs(
+        &self,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
+    ) {
+        lock_guard.open_all_certs();
+        self.database
+            .store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
     }
 
     pub(crate) async fn get_object(
@@ -1957,7 +2004,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    async fn make_transaction_info(
+    pub async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
@@ -2059,7 +2106,9 @@ impl AuthorityState {
             Ok(false)
         } else {
             self.database
-                .consensus_message_processed(certificate.digest())
+                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+                    *certificate.digest(),
+                ))
                 .map(|r| !r)
         }
     }
@@ -2071,7 +2120,9 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
         self.database
-            .consensus_message_processed(certificate.digest())
+            .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+                *certificate.digest(),
+            ))
     }
 
     /// Check whether certificate was processed by consensus.
@@ -2079,11 +2130,9 @@ impl AuthorityState {
     /// Otherwise returns future that waits for message to be processed by consensus.
     pub async fn consensus_message_processed_notify(
         &self,
-        digest: &TransactionDigest,
+        key: ConsensusTransactionKey,
     ) -> Result<(), SuiError> {
-        self.database
-            .consensus_message_processed_notify(digest)
-            .await
+        self.database.consensus_message_processed_notify(key).await
     }
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
@@ -2149,28 +2198,28 @@ impl AuthorityState {
     /// This function returns unit error and is responsible for emitting log messages for internal errors
     pub(crate) fn verify_consensus_transaction(
         &self,
+        consensus_output: &ConsensusOutput,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _timer = self
             .metrics
             .verify_narwhal_transaction_duration_mcs
             .utilization_timer();
+        if self
+            .database
+            .consensus_message_processed(&transaction.transaction.key())
+            .expect("Storage error")
+        {
+            debug!(
+                consensus_index=?transaction.consensus_index,
+                tracking_id=?transaction.transaction.tracking_id,
+                "handle_consensus_transaction UserTransaction [skip]",
+            );
+            self.metrics.skipped_consensus_txns.inc();
+            return Err(());
+        }
         match &transaction.transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
-                if self
-                    .database
-                    .consensus_message_processed(certificate.digest())
-                    .expect("Storage error")
-                {
-                    debug!(
-                        consensus_index=?transaction.consensus_index,
-                        tracking_id=?transaction.transaction.tracking_id,
-                        tx_digest = ?certificate.digest(),
-                        "handle_consensus_transaction UserTransaction [skip]",
-                    );
-                    self.metrics.skipped_consensus_txns.inc();
-                    return Err(());
-                }
                 self.verify_narwhal_transaction(certificate)
                     .map_err(|err| {
                         warn!(
@@ -2180,12 +2229,28 @@ impl AuthorityState {
                     })?;
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
+                if AuthorityName::from(&consensus_output.certificate.origin())
+                    != data.summary.auth_signature.authority
+                {
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, consensus_output.certificate.origin() );
+                    return Err(());
+                }
                 data.verify(&self.committee.load()).map_err(|err|{
                     warn!(
                         "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
                         transaction.consensus_output.certificate.header.author, data.summary.summary.sequence_number, err
                     );
                 })?;
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                if &AuthorityName::from(&consensus_output.certificate.origin()) != authority {
+                    warn!(
+                        "EndOfPublish authority {} does not match narwhal certificate source {}",
+                        authority,
+                        consensus_output.certificate.origin()
+                    );
+                    return Err(());
+                }
             }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
@@ -2194,9 +2259,11 @@ impl AuthorityState {
     /// The transaction passed here went through verification in verify_consensus_transaction.
     /// This method is called in the exact sequence message are ordered in consensus.
     /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction(
+    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
+        consensus_output: &ConsensusOutput,
         transaction: VerifiedSequencedConsensusTransaction,
+        checkpoint_service: &Arc<C>,
     ) -> SuiResult {
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             consensus_output: _consensus_output,
@@ -2209,13 +2276,24 @@ impl AuthorityState {
             .handle_consensus_duration_mcs
             .utilization_timer();
         let tracking_id = transaction.get_tracking_id();
-        match transaction.kind {
+        // TODO: Somewhere here we check if we have seen 2f+1 EndOfPublish message, and if so,
+        // we call self.get_reconfig_state_write_lock_guard to get a guard, and then call
+        // self.close_all_certs() to close it.
+        match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                let authority = (&consensus_output.certificate.header.author).into();
+                if self.database.sent_end_of_publish(&authority)? {
+                    // This can not happen with valid authority
+                    // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
+                    // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
+                    // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
+                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
+                    return Ok(());
+                }
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
-                let certificate = VerifiedCertificate::new_unchecked(*certificate);
+                let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
 
-                // TODO: Decide whether to accept the certificate at epoch boundaries.
                 debug!(
                     ?consensus_index,
                     ?tracking_id,
@@ -2223,13 +2301,30 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
+                if !self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
+                    certificate.digest());
+                    return Ok(());
+                }
+
                 if certificate.contains_shared_object() {
                     self.database
-                        .record_shared_object_cert_from_consensus(&certificate, consensus_index)
+                        .record_shared_object_cert_from_consensus(
+                            &transaction,
+                            &certificate,
+                            consensus_index,
+                        )
                         .await?;
                 } else {
                     self.database
-                        .record_owned_object_cert_from_consensus(&certificate, consensus_index)
+                        .record_owned_object_cert_from_consensus(
+                            &transaction,
+                            &certificate,
+                            consensus_index,
+                        )
                         .await?;
                 }
 
@@ -2239,12 +2334,26 @@ impl AuthorityState {
                 transaction_manager.enqueue(vec![certificate]).await
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
-                self.checkpoint_service.notify_checkpoint_signature(info)
+                checkpoint_service.notify_checkpoint_signature(info)?;
+                self.database
+                    .record_consensus_transaction_processed(&transaction, consensus_index)
+                    .await
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                // todo - track authority stake and generate last checkpoint when 2f+1 EndOfPublish received
+                debug!("Received EndOfPublish from {:?}", authority.concise());
+                self.database
+                    .record_end_of_publish(*authority, &transaction, consensus_index)
+                    .await
             }
         }
     }
 
-    pub(crate) fn handle_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) -> SuiResult {
+    pub(crate) fn handle_commit_boundary<C: CheckpointServiceNotify>(
+        &self,
+        committed_dag: &Arc<CommittedSubDag>,
+        checkpoint_service: &Arc<C>,
+    ) -> SuiResult {
         let round = committed_dag.round();
         debug!("Commit boundary at {}", round);
         // This exchange is restart safe because of following:
@@ -2254,8 +2363,76 @@ impl AuthorityState {
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
         if let Some((index, roots)) = self.database.last_checkpoint(round)? {
-            self.checkpoint_service.notify_checkpoint(index, roots)?;
+            checkpoint_service.notify_checkpoint(index, roots, false)?;
         }
         self.database.record_checkpoint_boundary(round)
+    }
+
+    pub async fn create_advance_epoch_tx_cert(
+        &self,
+        next_epoch: EpochId,
+        gas_cost_summary: &GasCostSummary,
+        timeout: Duration,
+    ) -> anyhow::Result<VerifiedCertificate> {
+        debug!(
+            ?next_epoch,
+            computation_cost=?gas_cost_summary.computation_cost,
+            storage_cost=?gas_cost_summary.storage_cost,
+            storage_rebase=?gas_cost_summary.storage_rebate,
+            "Creating advance epoch transaction"
+        );
+        let tx = VerifiedTransaction::new_change_epoch(
+            next_epoch,
+            gas_cost_summary.storage_cost,
+            gas_cost_summary.computation_cost,
+            gas_cost_summary.storage_rebate,
+        );
+        // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
+        self.handle_transaction_impl(tx.clone()).await?;
+        debug!(?next_epoch, "Successfully signed advance epoch transaction");
+
+        // If constructing network fails, it's not recoverable.
+        let net = AuthorityAggregator::new_from_system_state(
+            &self.database,
+            &self.committee_store,
+            &Registry::new(),
+        )?;
+
+        let result = tokio::time::timeout(timeout, async {
+            loop {
+                // We may have already executed this transaction somewhere else.
+                // If so, no need to try to get it from the network.
+                if let Ok(Some(VerifiedTransactionInfoResponse {
+                    certified_transaction: Some(cert),
+                    ..
+                })) = self.get_tx_info_already_executed(tx.digest()).await
+                {
+                    return cert;
+                }
+                match net.process_transaction(tx.clone()).await {
+                    Ok(cert) => {
+                        return cert;
+                    }
+                    Err(err) => {
+                        debug!("Did not create advance epoch transaction cert: {:?}", err);
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+        match result {
+            Ok(cert) => {
+                debug!(
+                    "Successfully created advance epoch transaction cert: {:?}",
+                    cert
+                );
+                Ok(cert)
+            }
+            Err(err) => {
+                error!("Failed to create advance epoch transaction cert. Giving up");
+                Err(err.into())
+            }
+        }
     }
 }

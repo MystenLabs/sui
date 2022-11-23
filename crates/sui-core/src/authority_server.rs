@@ -4,7 +4,7 @@
 
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, SuiTxValidator},
     metrics::start_timer,
 };
 use anyhow::anyhow;
@@ -33,8 +33,12 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
-use crate::consensus_adapter::SubmitToConsensus;
+use crate::checkpoints::{
+    CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
+    SubmitCheckpointToConsensus,
+};
 use crate::consensus_handler::ConsensusHandler;
+use narwhal_types::TransactionsClient;
 use tracing::{debug, info, Instrument};
 
 #[cfg(test)]
@@ -81,7 +85,7 @@ impl AuthorityServerHandle {
 pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
-    consensus_adapter: ConsensusAdapter,
+    consensus_adapter: Arc<ConsensusAdapter>,
     min_batch_size: u64,
     max_delay: Duration,
     pub metrics: Arc<ValidatorServiceMetrics>,
@@ -93,15 +97,13 @@ impl AuthorityServer {
         state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
     ) -> Self {
-        use narwhal_types::TransactionsClient;
         let consensus_client = Box::new(TransactionsClient::new(
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         ));
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
-            state.clone_committee(),
-            Duration::from_secs(20),
+            state.clone(),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -150,7 +152,7 @@ impl AuthorityServer {
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
                 state: self.state,
-                consensus_adapter: Arc::new(self.consensus_adapter),
+                consensus_adapter: self.consensus_adapter,
                 metrics: self.metrics.clone(),
             }))
             .bind(&address)
@@ -259,23 +261,48 @@ impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
     pub async fn new(
-        consensus_client: Box<dyn SubmitToConsensus>,
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        checkpoint_store: Arc<CheckpointStore>,
+        state_sync_handle: sui_network::state_sync::Handle,
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
-        // Spawn the consensus node of this authority.
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+
+        let consensus_address = consensus_config.address().to_owned();
+        let consensus_client = TransactionsClient::new(
+            mysten_network::client::connect_lazy(&consensus_address)
+                .expect("Failed to connect to consensus"),
+        );
+
+        let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
+
+        let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
+            sender: consensus_client.clone(),
+            signer: state.secret.clone(),
+            authority: config.protocol_public_key(),
+        });
+
+        let checkpoint_service = CheckpointService::spawn(
+            state.clone(),
+            checkpoint_store,
+            Box::new(state.database.clone()),
+            checkpoint_output,
+            Box::new(certified_checkpoint_output),
+            CheckpointMetrics::new(&prometheus_registry),
+        );
+
         let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_worker_keypair = config.worker_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = ConsensusHandler::new(state.clone());
+        let consensus_execution_state = ConsensusHandler::new(state.clone(), checkpoint_service);
         let consensus_execution_state = Arc::new(consensus_execution_state);
+
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
@@ -289,24 +316,21 @@ impl ValidatorService {
             consensus_storage_base_path,
             consensus_execution_state,
             consensus_parameters,
+            // TODO: provide something more clever here to specify TX validity
+            SuiTxValidator::default(),
             rx_reconfigure_consensus,
             &registry,
         ));
 
-        let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
         // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter = ConsensusAdapter::new(
-            consensus_client,
-            state.clone_committee(),
-            timeout,
-            ca_metrics,
-        );
+        let consensus_adapter =
+            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
 
         Ok(Self {
             state,
-            consensus_adapter: Arc::new(consensus_adapter),
+            consensus_adapter,
             metrics: Arc::new(ValidatorServiceMetrics::new(&prometheus_registry)),
         })
     }
@@ -317,6 +341,7 @@ impl ValidatorService {
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let transaction = request.into_inner();
+
         let is_consensus_tx = transaction.contains_shared_object();
 
         let _metrics_guard = start_timer(if is_consensus_tx {
@@ -376,13 +401,7 @@ impl ValidatorService {
         let certificate = certificate.verify(&state.committee.load())?;
         drop(cert_verif_metrics_guard);
 
-        // 3) If the validator is already halted, we stop here, to avoid
-        // sending the transaction to consensus.
-        if state.is_halted() && !certificate.data().data.kind.is_system_tx() {
-            return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
-        }
-
-        // 4) All certificates are sent to consensus (at least by some authorities)
+        // 3) All certificates are sent to consensus (at least by some authorities)
         // For shared objects this will wait until either timeout or we have heard back from consensus.
         // For owned objects this will return without waiting for certificate to be sequenced
         // First do quick dirty non-async check
@@ -398,14 +417,20 @@ impl ValidatorService {
             } else {
                 None
             };
-            // Acquire more expensive registration
-            let processed_waiter = state.consensus_message_processed_notify(certificate.digest());
-            consensus_adapter
-                .submit(&state.name, &certificate, processed_waiter)
-                .await?;
+            let transaction = ConsensusTransaction::new_certificate_message(
+                &state.name,
+                certificate.clone().into(),
+            );
+            let waiter = consensus_adapter.submit(transaction)?;
+            if certificate.contains_shared_object() {
+                // This is expect on tokio JoinHandle result, not SuiResult
+                waiter
+                    .await
+                    .expect("Tokio runtime failure when waiting for consensus result");
+            }
         }
 
-        // 5) Execute the certificate.
+        // 4) Execute the certificate.
         // Often we cannot execute a cert due to dependenties haven't been executed, and we will
         // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
         // succeed.

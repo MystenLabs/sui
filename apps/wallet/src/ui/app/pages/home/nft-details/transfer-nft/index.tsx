@@ -10,15 +10,8 @@ import { createValidationSchema } from './validation';
 import PageTitle from '_app/shared/page-title';
 import NFTDisplayCard from '_components/nft-display';
 import { useAppSelector, useAppDispatch } from '_hooks';
-import {
-    accountNftsSelector,
-    accountAggregateBalancesSelector,
-} from '_redux/slices/account';
-import { transferSuiNFT } from '_redux/slices/sui-objects';
-import {
-    GAS_TYPE_ARG,
-    DEFAULT_NFT_TRANSFER_GAS_FEE,
-} from '_redux/slices/sui-objects/Coin';
+import { accountNftsSelector } from '_redux/slices/account';
+import { transferNFT } from '_redux/slices/sui-objects';
 
 import type { ObjectId } from '@mysten/sui.js';
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -28,7 +21,6 @@ import st from './TransferNFTForm.module.scss';
 
 const initialValues = {
     to: '',
-    amount: DEFAULT_NFT_TRANSFER_GAS_FEE,
 };
 
 export type FormValues = typeof initialValues;
@@ -40,7 +32,6 @@ interface TransferProps {
 function TransferNFTCard({ objectId }: TransferProps) {
     const address = useAppSelector(({ account: { address } }) => address);
     const dispatch = useAppDispatch();
-
     const nftCollections = useAppSelector(accountNftsSelector);
     const selectedNFTObj = useMemo(
         () =>
@@ -49,24 +40,10 @@ function TransferNFTCard({ objectId }: TransferProps) {
             )[0],
         [nftCollections, objectId]
     );
-
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-
-    const gasAggregateBalance = useMemo(
-        () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
-        [aggregateBalances]
-    );
-
     const [sendError, setSendError] = useState<string | null>(null);
-
     const validationSchema = useMemo(
-        () =>
-            createValidationSchema(
-                gasAggregateBalance,
-                address || '',
-                objectId || ''
-            ),
-        [gasAggregateBalance, address, objectId]
+        () => createValidationSchema(address || '', objectId || ''),
+        [address, objectId]
     );
     const navigate = useNavigate();
     const onHandleSubmit = useCallback(
@@ -80,13 +57,11 @@ function TransferNFTCard({ objectId }: TransferProps) {
             setSendError(null);
             try {
                 const resp = await dispatch(
-                    transferSuiNFT({
+                    transferNFT({
                         recipientAddress: to,
                         nftId: objectId,
-                        transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
                     })
                 ).unwrap();
-
                 resetForm();
                 if (resp.txId) {
                     navigate(
@@ -102,11 +77,9 @@ function TransferNFTCard({ objectId }: TransferProps) {
         },
         [dispatch, navigate, objectId]
     );
-
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
-
     return (
         <div className={st.container}>
             <PageTitle
@@ -126,8 +99,8 @@ function TransferNFTCard({ objectId }: TransferProps) {
                     onSubmit={onHandleSubmit}
                 >
                     <TransferNFTForm
+                        nftID={objectId}
                         submitError={sendError}
-                        gasBalance={gasAggregateBalance.toString()}
                         onClearSubmitError={handleOnClearSubmitError}
                     />
                 </Formik>

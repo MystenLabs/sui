@@ -1,56 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Amount, type AmountProps } from '~/ui/Amount';
+import { DateCard } from '~/ui/DateCard';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
-import { formatDate } from '~/utils/timeUtils';
 
-export interface StatAmountProps {
-    amount: number | string;
-    currency?: string;
+export interface StatAmountProps extends Omit<AmountProps, 'size'> {
     dollarAmount?: number;
-    date?: Date | number;
+    date?: Date | number | null;
 }
 
-export function StatAmount({
-    amount,
-    currency,
-    dollarAmount,
-    date,
-}: StatAmountProps) {
+export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
     return (
-        <div className="flex flex-col justify-start text-sui-grey-75 gap-2">
-            <div className="text-sui-grey-100 flex flex-col items-baseline gap-2.5">
-                {date && (
-                    <div className="text-sui-grey-75">
-                        <Text variant="bodySmall" weight="semibold">
-                            {formatDate(date, [
-                                'month',
-                                'day',
-                                'year',
-                                'hour',
-                                'minute',
-                            ])}
-                        </Text>
-                    </div>
-                )}
-                <Heading as="h4" variant="heading4" weight="semibold">
-                    Amount
-                </Heading>
-
-                <div className="flex flex-row items-start gap-1">
-                    <Heading as="h2" variant="heading2" weight="bold">
-                        {amount}
+        <div className="flex flex-col justify-start text-gray-75 gap-2">
+            <div className="text-gray-100 flex flex-col items-baseline gap-2.5">
+                {date && <DateCard date={date} />}
+                <div className="flex flex-col items-baseline gap-2.5">
+                    <Heading
+                        as="h4"
+                        variant="heading4"
+                        weight="semibold"
+                        color="gray-90"
+                        fixed
+                    >
+                        Amount
                     </Heading>
-                    {currency && (
-                        <div className="text-sui-grey-80 ">
-                            <Text variant="bodySmall">{currency}</Text>
-                        </div>
-                    )}
+
+                    <Amount size="lg" {...props} />
                 </div>
             </div>
             {dollarAmount && (
-                <Text variant="bodySmall" weight="semibold">
+                <Text variant="bodySmall" weight="semibold" color="steel-dark">
                     {new Intl.NumberFormat(undefined, {
                         style: 'currency',
                         currency: 'USD',

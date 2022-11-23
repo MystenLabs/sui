@@ -1,0 +1,28 @@
+processed 7 tasks
+
+init:
+A: object(100)
+
+task 1 'publish'. lines 8-15:
+created: object(104)
+written: object(103)
+
+task 2 'run'. lines 17-17:
+Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: A package (or module) in the type argument was not found
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ModuleNotFound }), source: None } }
+
+task 3 'run'. lines 19-19:
+Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: A type was not found in the module specified
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: TypeNotFound }), source: None } }
+
+task 4 'run'. lines 21-21:
+Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: Mismatch between the number of actual versus expected type arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ArityMismatch }), source: None } }
+
+task 5 'run'. lines 23-23:
+Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: Mismatch between the number of actual versus expected type arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ArityMismatch }), source: None } }
+
+task 6 'run'. lines 25-25:
+Error: Transaction Effects Status: Entry Type Argument Error. Error for type argument at index 0: A type provided did not match the specified constraints.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryTypeArgumentError(EntryTypeArgumentError { argument_idx: 0, kind: ConstraintNotSatisfied }), source: None } }

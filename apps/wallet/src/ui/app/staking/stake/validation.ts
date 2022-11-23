@@ -3,7 +3,11 @@
 
 import * as Yup from 'yup';
 
-import { GAS_TYPE_ARG, GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import {
+    GAS_TYPE_ARG,
+    GAS_SYMBOL,
+    DEFAULT_GAS_BUDGET_FOR_STAKE,
+} from '_redux/slices/sui-objects/Coin';
 import { createTokenValidation } from '_src/shared/validation';
 
 export function createValidationSchema(
@@ -22,7 +26,8 @@ export function createValidationSchema(
             coinSymbol,
             gasBalance,
             decimals,
-            gasDecimals
+            gasDecimals,
+            DEFAULT_GAS_BUDGET_FOR_STAKE
         ).test(
             'num-gas-coins-check',
             `Need at least 2 ${GAS_SYMBOL} coins to stake a ${GAS_SYMBOL} coin`,

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
+import { isTransactionEffects } from './index.guard';
+import { SuiEvent } from './events';
 import { ObjectId, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
 export type TransferObject = {
@@ -133,8 +135,7 @@ export type TransactionEffects = {
    */
   gasObject: OwnedObjectRef;
   /** The events emitted during execution. Note that only successful transactions emit events */
-  // TODO: properly define type when this is being used
-  events?: any[];
+  events?: SuiEvent[];
   /** The set of transaction digests this transaction depends on */
   dependencies?: TransactionDigest[];
 };
@@ -394,13 +395,22 @@ export function getExecutionStatusError(
 }
 
 export function getExecutionStatusGasSummary(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+  data:
+    | SuiTransactionResponse
+    | SuiExecuteTransactionResponse
+    | TransactionEffects
 ): GasCostSummary | undefined {
+  if (isTransactionEffects(data)) {
+    return data.gasUsed;
+  }
   return getTransactionEffects(data)?.gasUsed;
 }
 
 export function getTotalGasUsed(
-  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+  data:
+    | SuiTransactionResponse
+    | SuiExecuteTransactionResponse
+    | TransactionEffects
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
@@ -423,7 +433,7 @@ export function getTransactionEffects(
 
 export function getEvents(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse
-): any {
+): SuiEvent[] | undefined {
   return getTransactionEffects(data)?.events;
 }
 

@@ -1,3 +1,3 @@
 div.code {
-    @apply overflow-auto border-solid border-stone-300 p-2 whitespace-pre text-sm h-[30vh];
+    @apply overflow-auto border-solid border-gray-45 p-2 whitespace-pre text-sm;
 }

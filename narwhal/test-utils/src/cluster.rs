@@ -24,6 +24,7 @@ use tokio::{
 use tonic::transport::Channel;
 use tracing::info;
 use types::{ConfigurationClient, ProposerClient, TransactionsClient};
+use worker::TrivialTransactionValidator;
 
 #[cfg(test)]
 #[path = "tests/cluster_tests.rs"]
@@ -461,6 +462,7 @@ impl WorkerNodeDetails {
             self.worker_cache.clone(),
             &worker_store,
             self.parameters.clone(),
+            TrivialTransactionValidator::default(),
             &registry,
         );
 

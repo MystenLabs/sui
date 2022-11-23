@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use sui_config::p2p::StateSyncConfig;
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::{messages_checkpoint::VerifiedCheckpoint, storage::ReadStore};
 use tap::Pipe;
 use tokio::{
     sync::{broadcast, mpsc},
@@ -51,6 +51,7 @@ impl<S> Builder<S> {
 impl<S> Builder<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
+    <S as ReadStore>::Error: std::error::Error,
 {
     pub fn build(self) -> (UnstartedStateSync<S>, StateSyncServer<impl StateSync>) {
         let (builder, server) = self.build_internal();
@@ -110,6 +111,7 @@ pub struct UnstartedStateSync<S> {
 impl<S> UnstartedStateSync<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
+    <S as ReadStore>::Error: std::error::Error,
 {
     pub(super) fn build(self, network: anemo::Network) -> (StateSyncEventLoop<S>, Handle) {
         let Self {

@@ -15,6 +15,7 @@ eyre = "0.6.8"
 fdlimit = "0.2.1"
 once_cell = "1.15.0"
 tap = "1.0.1"
+num_cpus = "1.13.1"
 prometheus = "0.13.3"
 # deactivation of bzip2 due to https://github.com/rust-rocksdb/rust-rocksdb/issues/609
 rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }

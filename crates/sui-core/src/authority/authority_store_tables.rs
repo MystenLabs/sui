@@ -49,7 +49,10 @@ pub struct AuthorityEpochTables<S> {
     /// Entries in this table can be garbage collected whenever we can prove that we won't receive
     /// another handle_consensus_transaction call for the given digest. This probably means at
     /// epoch change.
-    pub(crate) consensus_message_processed: DBMap<TransactionDigest, bool>,
+    pub(crate) consensus_message_processed: DBMap<ConsensusTransactionKey, bool>,
+
+    /// Map stores pending transactions that this authority submitted to consensus
+    pub(crate) pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
     /// This is an inverse index for consensus_message_processed - it allows to select
     /// all transactions at the specific consensus range
@@ -69,6 +72,9 @@ pub struct AuthorityEpochTables<S> {
     /// The key in this table is incremental index and value is corresponding narwhal
     /// consensus output index
     pub(crate) checkpoint_boundary: DBMap<u64, u64>,
+
+    /// Validators that have sent EndOfPublish message in this epoch
+    pub(crate) end_of_publish: DBMap<AuthorityName, ()>,
 }
 
 impl<S> AuthorityEpochTables<S>
@@ -130,7 +136,9 @@ pub struct AuthorityPerpetualTables<S> {
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
+    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
+
+    pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
 
     // Tables used for authority batch structure
     // TODO: executed_sequence and batches both conceptually belong in AuthorityEpochTables,
@@ -151,6 +159,8 @@ pub struct AuthorityPerpetualTables<S> {
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+
+    pub reconfig_state: DBMap<u64, ReconfigState>,
 }
 
 impl<S> AuthorityPerpetualTables<S>

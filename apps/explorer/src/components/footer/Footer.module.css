@@ -1,5 +1,5 @@
 footer {
-    @apply bg-sui-grey-75 sm:pl-[5vw] pt-[10vh] pb-[2.5vh] sm:pt-[4vh] sm:pb-[6.2vh] xl:w-[50vw];
+    @apply bg-gray-75 sm:pl-[5vw] pt-[10vh] pb-[2.5vh] sm:pt-[4vh] sm:pb-[6.2vh] xl:w-[50vw];
 }
 
 nav.links {
@@ -7,7 +7,7 @@ nav.links {
 }
 
 nav.links > div > h6 {
-    @apply text-sui-grey-60 uppercase font-bold text-xs my-0 pb-0;
+    @apply text-gray-60 uppercase font-bold text-xs my-0 pb-0;
 }
 
 nav.links > div > ul {
@@ -43,5 +43,5 @@ nav.links a {
 }
 
 .logomobile > .copyright {
-    @apply mt-[14px] text-sui-grey-50;
+    @apply mt-[14px] text-gray-50;
 }

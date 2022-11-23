@@ -9,6 +9,7 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 
 
 -  [Resource `Coin`](#0x2_coin_Coin)
+-  [Resource `CoinMetadata`](#0x2_coin_CoinMetadata)
 -  [Resource `TreasuryCap`](#0x2_coin_TreasuryCap)
 -  [Struct `CurrencyCreated`](#0x2_coin_CurrencyCreated)
 -  [Constants](#@Constants_0)
@@ -34,14 +35,22 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `burn_`](#0x2_coin_burn_)
+-  [Function `update_name`](#0x2_coin_update_name)
+-  [Function `update_symbol`](#0x2_coin_update_symbol)
+-  [Function `update_description`](#0x2_coin_update_description)
+-  [Function `update_icon_url`](#0x2_coin_update_icon_url)
 
 
-<pre><code><b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<pre><code><b>use</b> <a href="">0x1::ascii</a>;
+<b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="">0x1::string</a>;
+<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="types.md#0x2_types">0x2::types</a>;
+<b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
 </code></pre>
 
 
@@ -74,6 +83,68 @@ A coin of type <code>T</code> worth <code>value</code>. Transferable and storabl
 </dt>
 <dd>
 
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_coin_CoinMetadata"></a>
+
+## Resource `CoinMetadata`
+
+Each Coin type T created through <code>create_currency</code> function will have a
+unique instance of CoinMetadata<T> that stores the metadata for this coin type.
+
+
+<pre><code><b>struct</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt; <b>has</b> store, key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>decimals: u8</code>
+</dt>
+<dd>
+ Number of decimal places the coin uses.
+ A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
+ E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
+ This is metadata for display usage only.
+</dd>
+<dt>
+<code>name: <a href="_String">string::String</a></code>
+</dt>
+<dd>
+ Name for the token
+</dd>
+<dt>
+<code>symbol: <a href="_String">ascii::String</a></code>
+</dt>
+<dd>
+ Symbol for the token
+</dd>
+<dt>
+<code>description: <a href="_String">string::String</a></code>
+</dt>
+<dd>
+ Description of the token
+</dd>
+<dt>
+<code>icon_url: <a href="_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;</code>
+</dt>
+<dd>
+ URL for the token logo
 </dd>
 </dl>
 
@@ -627,7 +698,7 @@ Create a new currency type <code>T</code> as and return the <code><a href="coin.
 type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a></code> per <code>T</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, icon_url: <a href="_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -639,8 +710,12 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
 <pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(
     witness: T,
     decimals: u8,
+    symbol: <a href="">vector</a>&lt;u8&gt;,
+    name: <a href="">vector</a>&lt;u8&gt;,
+    description: <a href="">vector</a>&lt;u8&gt;,
+    icon_url: Option&lt;Url&gt;,
     ctx: &<b>mut</b> TxContext
-): <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt; {
+): (<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
 
@@ -649,10 +724,20 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
         decimals
     });
 
-    <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
-        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        total_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(witness)
-    }
+    (
+        <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
+            id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+            total_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(witness)
+        },
+        <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a> {
+            id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+            decimals,
+            name: <a href="_utf8">string::utf8</a>(name),
+            symbol: <a href="_string">ascii::string</a>(symbol),
+            description: <a href="_utf8">string::utf8</a>(description),
+            icon_url
+        }
+    )
 }
 </code></pre>
 
@@ -793,6 +878,114 @@ Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
     <a href="coin.md#0x2_coin_burn">burn</a>(c, <a href="coin.md#0x2_coin">coin</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_update_name"></a>
+
+## Function `update_name`
+
+Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(
+    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>
+) {
+    metadata.name = name;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_update_symbol"></a>
+
+## Function `update_symbol`
+
+Update the symbol of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="_String">ascii::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(
+    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, symbol: <a href="_String">ascii::String</a>
+) {
+    metadata.symbol = symbol;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_update_description"></a>
+
+## Function `update_description`
+
+Update the description of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, description: <a href="_String">string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(
+    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, description: <a href="_String">string::String</a>
+) {
+    metadata.description = description;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_update_icon_url"></a>
+
+## Function `update_icon_url`
+
+Update the url of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(
+    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>
+) {
+    metadata.icon_url = <a href="_some">option::some</a>(<a href="url.md#0x2_url_new_unsafe">url::new_unsafe</a>(<a href="url.md#0x2_url">url</a>));
 }
 </code></pre>
 

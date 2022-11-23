@@ -4,33 +4,39 @@ use crate::{common::create_db_stores, synchronizer::Synchronizer};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use prometheus::Registry;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Duration,
+};
 use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
-use types::Certificate;
+use tokio::sync::watch;
+use types::{error::DagError, Certificate};
 
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
     let fixture = CommitteeFixture::builder().build();
     let name = fixture.authorities().next().unwrap().public_key();
-
-    // Make the current committee.
     let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
     let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
 
-    let mut synchronizer = Synchronizer::new(
+    let synchronizer = Synchronizer::new(
         name,
-        &committee,
+        fixture.committee().into(),
+        worker_cache.clone(),
         certificates_store,
         payload_store,
-        tx_header_waiter,
         tx_certificate_waiter,
+        rx_consensus_round_updates.clone(),
         Some(dag.clone()),
     );
 
@@ -66,21 +72,21 @@ async fn deliver_certificate_using_dag() {
 async fn deliver_certificate_using_store() {
     let fixture = CommitteeFixture::builder().build();
     let name = fixture.authorities().next().unwrap().public_key();
-
-    // Make the current committee.
     let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
     let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
     let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
-    let mut synchronizer = Synchronizer::new(
+    let synchronizer = Synchronizer::new(
         name,
-        &committee,
+        fixture.committee().into(),
+        worker_cache.clone(),
         certificates_store.clone(),
-        payload_store,
-        tx_header_waiter,
+        payload_store.clone(),
         tx_certificate_waiter,
+        rx_consensus_round_updates.clone(),
         None,
     );
 
@@ -116,21 +122,21 @@ async fn deliver_certificate_using_store() {
 async fn deliver_certificate_not_found_parents() {
     let fixture = CommitteeFixture::builder().build();
     let name = fixture.authorities().next().unwrap().public_key();
-
-    // Make the current committee.
     let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
     let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
     let (tx_certificate_waiter, mut rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
-    let mut synchronizer = Synchronizer::new(
+    let synchronizer = Synchronizer::new(
         name,
-        &committee,
-        certificates_store.clone(),
+        fixture.committee().into(),
+        worker_cache.clone(),
+        certificates_store,
         payload_store,
-        tx_header_waiter,
         tx_certificate_waiter,
+        rx_consensus_round_updates.clone(),
         None,
     );
 
@@ -161,4 +167,70 @@ async fn deliver_certificate_not_found_parents() {
     let certificate = rx_certificate_waiter.recv().await.unwrap();
 
     assert_eq!(certificate, test_certificate);
+}
+
+#[tokio::test]
+async fn sync_batches_drops_old() {
+    telemetry_subscribers::init_for_testing();
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let name = primary.public_key();
+    let author = fixture.authorities().nth(2).unwrap();
+    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+
+    let (_header_store, certificate_store, payload_store) = create_db_stores();
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee().into(),
+        worker_cache.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_waiter,
+        rx_consensus_round_updates.clone(),
+        None,
+    ));
+
+    let mut certificates = HashMap::new();
+    for _ in 0..3 {
+        let header = author
+            .header_builder(&fixture.committee())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .build(author.keypair())
+            .unwrap();
+
+        let certificate = fixture.certificate(&header);
+        let digest = certificate.clone().digest();
+
+        certificates.insert(digest, certificate.clone());
+        certificate_store.write(certificate.clone()).unwrap();
+        for payload in certificate.header.payload {
+            payload_store.async_write(payload, 1).await;
+        }
+    }
+    let test_header = author
+        .header_builder(&fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .build(author.keypair())
+        .unwrap();
+
+    tokio::task::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let _ = tx_consensus_round_updates.send(30);
+    });
+    match synchronizer
+        .sync_batches(&test_header, network.clone(), 10)
+        .await
+    {
+        Err(DagError::TooOld(_, _, _)) => (),
+        result => panic!("unexpected result {result:?}"),
+    }
 }

@@ -3,12 +3,13 @@
 
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
-use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
+use narwhal_types::{Certificate, ConsensusOutput, Transactions};
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::{
@@ -105,8 +106,6 @@ async fn submit_transaction_to_consensus_adapter() {
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
 
-    let committee = state.clone_committee();
-    let name = state.name;
     let state = Arc::new(state);
     let metrics = ConsensusAdapterMetrics::new_test();
 
@@ -116,34 +115,32 @@ async fn submit_transaction_to_consensus_adapter() {
     #[async_trait::async_trait]
     impl SubmitToConsensus for SubmitDirectly {
         async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
+            let authority = self.0.name;
+            let certificate = Certificate::new_test_empty(authority.try_into().unwrap());
+            let output = ConsensusOutput {
+                certificate,
+                ..Default::default()
+            };
             self.0
-                .handle_consensus_transaction(VerifiedSequencedConsensusTransaction::new_test(
-                    transaction.clone(),
-                ))
+                .handle_consensus_transaction(
+                    &output,
+                    VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
+                    &Arc::new(CheckpointServiceNoop {}),
+                )
                 .await
         }
     }
     // Make a new consensus adapter instance.
     let adapter = ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
-        committee.clone(),
-        /* timeout */ Duration::from_secs(5),
+        state.clone(),
         metrics,
     );
 
-    // Notify the adapter when a consensus transaction has been sequenced and executed.
-    let certificate = certificate.verify(&committee).unwrap();
-
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
-    loop {
-        let w = state.consensus_message_processed_notify(certificate.digest());
-        match adapter.submit(&name, &certificate, w).await {
-            Ok(_) => break,
-            Err(SuiError::ConsensusConnectionBroken(..)) => (),
-            Err(e) => panic!("Unexpected error message: {e}"),
-        }
-    }
+    let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
+    adapter.submit(transaction.clone()).unwrap().await.unwrap();
 }
 
 pub struct ConsensusMockServer {

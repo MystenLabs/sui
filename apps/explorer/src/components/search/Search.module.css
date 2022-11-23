@@ -7,7 +7,7 @@
 }
 
 .searchicon {
-    @apply fill-sui-grey-65 hover:fill-offwhite leading-8 stroke-1 hover:stroke-2;
+    @apply fill-gray-65 hover:fill-offwhite leading-8 stroke-1 hover:stroke-2;
 }
 
 .disabled {

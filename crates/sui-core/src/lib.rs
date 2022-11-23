@@ -15,6 +15,7 @@ pub mod gateway_state;
 pub mod metrics;
 pub mod quorum_driver;
 pub mod safe_client;
+pub mod storage;
 pub mod streamer;
 pub mod transaction_input_checker;
 pub mod transaction_orchestrator;
@@ -23,9 +24,11 @@ pub mod validator_info;
 
 pub mod test_utils;
 
-pub mod checkpoints2;
+pub mod checkpoints;
 mod consensus_handler;
+pub mod consensus_validator;
 mod histogram;
+mod module_cache_gauge;
 mod node_sync;
 mod query_helpers;
 mod transaction_manager;

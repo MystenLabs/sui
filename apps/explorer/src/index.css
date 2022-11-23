@@ -2,18 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-    font-family: Inter;
-    src: url('./assets/Fonts/Inter-VariableFont_slnt,wght.ttf')
-        format('truetype-variations');
-    font-weight: 1 999;
-}
-
-@font-face {
-    font-family: 'Space Mono';
-    src: url('./assets/Fonts/SpaceMono-Regular.ttf') format('truetype');
-}
-
 /* Define some colors as CSS variables for use outside of the Tailwind class context: */
 :root {
     --success-light: theme('colors.success.light');
@@ -22,11 +10,23 @@
     --warning-dark: theme('colors.warning.dark');
     --issue-light: theme('colors.issue.light');
     --issue-dark: theme('colors.issue.dark');
-    --sui-steel: theme('colors.sui.steel.DEFAULT');
+    --steel: theme('colors.steel.DEFAULT');
 }
 
 body {
     @apply m-0 text-offblack font-sans;
+}
+
+/*
+ * Reset the font-family for elements that override their font-family by default.
+ * This will no longer be needed once we use the Tailwind CSS Reset.
+ */
+button,
+input,
+optgroup,
+select,
+textarea {
+    font-family: inherit;
 }
 
 input:focus,

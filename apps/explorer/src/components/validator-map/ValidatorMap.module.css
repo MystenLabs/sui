@@ -1,5 +1,5 @@
 .card {
-    @apply rounded-lg bg-sui-grey-40 flex flex-col justify-end min-h-[320px] antialiased relative;
+    @apply rounded-lg bg-gray-45 flex flex-col justify-end min-h-[320px] antialiased relative;
 }
 
 .container {
@@ -11,15 +11,15 @@
 }
 
 .title {
-    @apply uppercase text-xs font-semibold text-sui-grey-65;
+    @apply uppercase text-xs font-semibold text-gray-65;
 }
 
 .stat {
-    @apply font-semibold text-2xl text-sui-grey-90;
+    @apply font-semibold text-2xl text-gray-90;
 }
 
 .button {
-    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-auto whitespace-nowrap;
+    @apply p-2 text-gray-80 border border-solid border-gray-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-auto whitespace-nowrap;
 }
 
 .mapcontainer {
@@ -35,7 +35,7 @@
 }
 
 .tooltip {
-    @apply bg-sui-grey-100 text-white p-2 absolute z-20 text-xs font-sans rounded-md min-w-[100px] hidden md:block z-40;
+    @apply bg-gray-100 text-white p-2 absolute z-20 text-xs font-sans rounded-md min-w-[100px] hidden md:block z-40;
 }
 
 .tipitem {
@@ -43,5 +43,5 @@
 }
 
 .tipdivider {
-    @apply my-1 h-px bg-sui-grey-90;
+    @apply my-1 h-px bg-gray-90;
 }

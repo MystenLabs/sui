@@ -264,7 +264,7 @@ pub fn make_network_authority_client_sets_from_system_state(
     sui_system_state: &SuiSystemState,
     network_config: &Config,
     network_metrics: Arc<NetworkAuthorityClientMetrics>,
-) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in &sui_system_state.validators.active_validators {
         let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
@@ -272,8 +272,8 @@ pub fn make_network_authority_client_sets_from_system_state(
             .connect_lazy(&address)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
-        let name: &[u8] = &validator.metadata.name;
-        let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
+        let name: &[u8] = &validator.metadata.pubkey_bytes;
+        let public_key_bytes = AuthorityName::from_bytes(name)?;
         authority_clients.insert(public_key_bytes, client);
     }
     Ok(authority_clients)
@@ -283,7 +283,7 @@ pub fn make_network_authority_client_sets_from_committee(
     committee: &CommitteeWithNetAddresses,
     network_config: &Config,
     network_metrics: Arc<NetworkAuthorityClientMetrics>,
-) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for (name, _stakes) in &committee.committee.voting_rights {
         let address = committee.net_addresses.get(name).ok_or_else(|| {

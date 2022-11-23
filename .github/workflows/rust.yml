@@ -95,6 +95,9 @@ jobs:
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - uses: arduino/setup-protoc@v1
+        # this avoids rate-limiting
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: cargo build
         run: |
           cargo build --all-features
@@ -138,6 +141,9 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: arduino/setup-protoc@v1
+        # this avoids rate-limiting
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:

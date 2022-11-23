@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    certificate_waiter::CertificateWaiter, common::create_test_vote_store, core::Core,
-    header_waiter::HeaderWaiter, metrics::PrimaryMetrics, synchronizer::Synchronizer,
+    certificate_waiter::CertificateWaiter, core::Core, metrics::PrimaryMetrics,
+    synchronizer::Synchronizer,
 };
 use anemo::async_trait;
 use anyhow::Result;
@@ -15,8 +15,8 @@ use network::P2pNetwork;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use storage::CertificateStore;
 use storage::NodeStorage;
-use storage::{CertificateStore, ProposerStore};
 
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
@@ -29,15 +29,14 @@ use tokio::{
 use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderDigest, LatestHeaderRequest, LatestHeaderResponse, Metadata, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, Round,
+    HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
+    RequestVoteRequest, RequestVoteResponse, Round,
 };
 
 pub struct NetworkProxy {
     request: Sender<FetchCertificatesRequest>,
     response: Arc<Mutex<Receiver<FetchCertificatesResponse>>>,
-    proposer_store: ProposerStore,
 }
 
 #[async_trait]
@@ -50,6 +49,12 @@ impl PrimaryToPrimary for NetworkProxy {
             "FetchCertificateProxy::send_message() is unimplemented!! {:#?}",
             request
         );
+    }
+    async fn request_vote(
+        &self,
+        _request: anemo::Request<RequestVoteRequest>,
+    ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
     async fn get_certificates(
         &self,
@@ -75,20 +80,6 @@ impl PrimaryToPrimary for NetworkProxy {
         _request: anemo::Request<PayloadAvailabilityRequest>,
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
-    }
-
-    async fn get_latest_header(
-        &self,
-        _request: anemo::Request<LatestHeaderRequest>,
-    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
-        let latest_header = self.proposer_store.get_last_proposed().map_err(|e| {
-            anemo::rpc::Status::internal(format!(
-                "error fetching latest proposed header from store: {e}"
-            ))
-        })?;
-        Ok(anemo::Response::new(LatestHeaderResponse {
-            header: latest_header,
-        }))
     }
 }
 
@@ -132,7 +123,7 @@ fn verify_certificates_not_in_store(
         .is_none());
 }
 
-// Unsed below to construct malformed Headers
+// Used below to construct malformed Headers
 // Note: this should always mimic the Header struct, only changing the visibility of the id field to public
 #[allow(dead_code)]
 struct BadHeader {
@@ -149,7 +140,6 @@ struct BadHeader {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_basic() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
@@ -158,15 +148,11 @@ async fn fetch_certificates_basic() {
 
     // kept empty
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    // synchronizer to header waiter
-    let (tx_header_waiter, rx_header_waiter) = test_utils::test_channel!(1000);
+        watch::channel(ReconfigureNotification::NewEpoch(fixture.committee()));
     // synchronizer to certificate waiter
     let (tx_certificate_waiter, rx_certificate_waiter) = test_utils::test_channel!(1000);
-    // primary messages
-    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1000);
-    // header waiter to primary
-    let (tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1000);
+    // certificates
+    let (tx_certificates, rx_certificates) = test_utils::test_channel!(1000);
     // certificate waiter to primary
     let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1000);
     // proposer back to the core
@@ -185,26 +171,27 @@ async fn fetch_certificates_basic() {
     let certificate_store = store.certificate_store.clone();
     let payload_store = store.payload_store.clone();
 
-    // Signal consensus round
+    // Signal rounds
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
 
     // Make a synchronizer for the core.
-    let synchronizer = Synchronizer::new(
+    let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
-        &committee,
+        fixture.committee().into(),
+        worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_header_waiter,
         tx_certificate_waiter,
+        rx_consensus_round_updates.clone(),
         None,
-    );
+    ));
 
     let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
     let fake_route =
         anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(NetworkProxy {
             request: tx_fetch_req,
             response: Arc::new(Mutex::new(rx_fetch_resp)),
-            proposer_store: ProposerStore::new_for_tests(),
         }));
     let fake_server_network = anemo::Network::bind(fake_primary_addr.clone())
         .server_name("narwhal")
@@ -220,27 +207,10 @@ async fn fetch_certificates_basic() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let gc_depth: Round = 50;
 
-    // Make a headerWaiter
-    let _header_waiter_handle = HeaderWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache.clone(),
-        certificate_store.clone(),
-        payload_store.clone(),
-        rx_consensus_round_updates.clone(),
-        gc_depth,
-        rx_reconfigure.clone(),
-        rx_header_waiter,
-        tx_headers_loopback,
-        tx_primary_messages.clone(),
-        metrics.clone(),
-        P2pNetwork::new(client_network.clone()),
-    );
-
     // Make a certificate waiter
     let _certificate_waiter_handle = CertificateWaiter::spawn(
         name.clone(),
-        committee.clone(),
+        fixture.committee(),
         P2pNetwork::new(client_network.clone()),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
@@ -254,28 +224,27 @@ async fn fetch_certificates_basic() {
     // Spawn the core.
     let _core_handle = Core::spawn(
         name.clone(),
-        committee.clone(),
+        fixture.committee(),
         worker_cache,
         store.header_store.clone(),
         certificate_store.clone(),
-        create_test_vote_store(),
-        synchronizer,
+        synchronizer.clone(),
         signature_service,
         rx_consensus_round_updates,
+        rx_narwhal_round_updates,
         gc_depth,
         rx_reconfigure,
-        /* rx_primaries */ rx_primary_messages,
-        rx_headers_loopback,
+        rx_certificates,
         rx_certificates_loopback,
-        /* rx_proposer */ rx_headers,
+        rx_headers,
         tx_consensus,
-        /* tx_proposer */ tx_parents,
+        tx_parents,
         metrics.clone(),
         P2pNetwork::new(client_network),
     );
 
     // Generate headers and certificates in successive rounds
-    let genesis_certs: Vec<_> = Certificate::genesis(&committee);
+    let genesis_certs: Vec<_> = Certificate::genesis(&fixture.committee());
     for cert in genesis_certs.iter() {
         certificate_store
             .write(cert.clone())
@@ -317,10 +286,8 @@ async fn fetch_certificates_basic() {
 
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
-    tx_primary_messages
-        .send(PrimaryMessage::Certificate(
-            certificates[target_index].clone(),
-        ))
+    tx_certificates
+        .send((certificates[target_index].clone(), None))
         .await
         .unwrap();
 

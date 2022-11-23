@@ -10,7 +10,7 @@ use sui_types::error::SuiResult;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
-    SignedCheckpointSummary,
+    SignedCheckpointSummary, VerifiedCheckpoint,
 };
 use tracing::{debug, info};
 
@@ -103,6 +103,35 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
             summary.summary.sequence_number,
             Hex::encode(summary.summary.digest())
         );
+        Ok(())
+    }
+}
+
+pub struct SendCheckpointToStateSync {
+    handle: sui_network::state_sync::Handle,
+}
+
+impl SendCheckpointToStateSync {
+    pub fn new(handle: sui_network::state_sync::Handle) -> Self {
+        Self { handle }
+    }
+}
+
+#[async_trait]
+impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
+    async fn certified_checkpoint_created(
+        &self,
+        summary: &CertifiedCheckpointSummary,
+    ) -> SuiResult {
+        info!(
+            "Certified checkpoint with sequence {} and digest {}",
+            summary.summary.sequence_number,
+            Hex::encode(summary.summary.digest())
+        );
+        self.handle
+            .send_checkpoint(VerifiedCheckpoint::new_unchecked(summary.to_owned()))
+            .await;
+
         Ok(())
     }
 }

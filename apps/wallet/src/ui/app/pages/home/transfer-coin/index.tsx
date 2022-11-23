@@ -18,7 +18,10 @@ import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
-import { accountAggregateBalancesSelector } from '_redux/slices/account';
+import {
+    accountAggregateBalancesSelector,
+    accountCoinsSelector,
+} from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
@@ -64,7 +67,23 @@ function TransferCoinPage() {
 
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-
+    const allCoins = useAppSelector(accountCoinsSelector);
+    const allCoinsOfSelectedTypeArg = useMemo(
+        () =>
+            allCoins.filter(
+                (aCoin) => coinType && Coin.getCoinTypeArg(aCoin) === coinType
+            ),
+        [coinType, allCoins]
+    );
+    const [amountToSend, setAmountToSend] = useState(BigInt(0));
+    const gasBudget = useMemo(
+        () =>
+            Coin.computeGasBudgetForPay(
+                allCoinsOfSelectedTypeArg,
+                amountToSend
+            ),
+        [allCoinsOfSelectedTypeArg, amountToSend]
+    );
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
@@ -73,7 +92,8 @@ function TransferCoinPage() {
                 coinSymbol,
                 gasAggregateBalance,
                 coinDecimals,
-                gasDecimals
+                gasDecimals,
+                gasBudget
             ),
         [
             coinType,
@@ -82,6 +102,7 @@ function TransferCoinPage() {
             coinDecimals,
             gasDecimals,
             gasAggregateBalance,
+            gasBudget,
         ]
     );
     const validationSchemaStepTwo = useMemo(
@@ -163,11 +184,10 @@ function TransferCoinPage() {
             onSubmit={handleNextStep}
         >
             <StepOne
-                submitError={sendError}
-                coinBalance={coinBalance.toString()}
                 coinSymbol={coinSymbol}
                 coinType={coinType}
                 onClearSubmitError={handleOnClearSubmitError}
+                onAmountChanged={(anAmount) => setAmountToSend(anAmount)}
             />
         </Formik>
     );
@@ -181,7 +201,7 @@ function TransferCoinPage() {
         >
             <StepTwo
                 submitError={sendError}
-                coinBalance={coinBalance.toString()}
+                gasBudget={gasBudget}
                 coinSymbol={coinSymbol}
                 coinType={coinType}
                 onClearSubmitError={handleOnClearSubmitError}

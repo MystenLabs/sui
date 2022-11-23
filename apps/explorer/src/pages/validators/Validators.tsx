@@ -13,7 +13,6 @@ import { useLocation } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
-import TabFooter from '../../components/tabs/TabFooter';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
 import theme from '../../styles/theme.module.css';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -140,27 +139,19 @@ function ValidatorPageResult() {
 }
 
 export function processValidators(set: Validator[]) {
-    return set.map((av, i) => {
-        const rawName = av.fields.metadata.fields.name;
-        const name = textDecoder.decode(
-            new Base64DataBuffer(rawName).getData()
-        );
-        return {
-            name: name,
-            address: av.fields.metadata.fields.sui_address,
-            pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
-            position: i + 1,
-        };
-    });
-}
-
-export function getTabFooter(count: number) {
-    return {
-        stats: {
-            count: count,
-            stats_text: 'total validators',
-        },
-    };
+    return set
+        .map((av) => {
+            const rawName = av.fields.metadata.fields.name;
+            const name = textDecoder.decode(
+                new Base64DataBuffer(rawName).getData()
+            );
+            return {
+                name: name,
+                address: av.fields.metadata.fields.sui_address,
+                pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
+            };
+        })
+        .sort((a, b) => (a.name > b.name ? 1 : -1));
 }
 
 function ValidatorsPage({ state }: { state: ValidatorState }) {
@@ -172,7 +163,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }) {
         data: validatorsData.map((validator) => {
             return {
                 name: validator.name,
-                position: validator.position,
                 address: (
                     <Longtext
                         text={validator.address}
@@ -192,10 +182,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }) {
             };
         }),
         columns: [
-            {
-                headerLabel: '#',
-                accessorKey: 'position',
-            },
             {
                 headerLabel: 'Name',
                 accessorKey: 'name',
@@ -218,14 +204,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }) {
             </Heading>
             <div className="mt-8">
                 <TableCard data={tableData.data} columns={tableData.columns} />
-                <TabFooter stats={getTabFooter(validatorsData.length).stats}>
-                    <Longtext
-                        text=""
-                        category="validators"
-                        isLink={false}
-                        alttext=""
-                    />
-                </TabFooter>
             </div>
         </div>
     );

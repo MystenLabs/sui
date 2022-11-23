@@ -9,8 +9,10 @@ import { Base64DataBuffer } from '../serialization/base64';
 import {
   ExecuteTransactionRequestType,
   FaucetResponse,
+  getTotalGasUsed,
   SuiAddress,
   SuiExecuteTransactionResponse,
+  TransactionEffects,
 } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
@@ -130,6 +132,57 @@ export abstract class SignerWithProvider implements Signer {
           `Unknown transaction kind: "${(transaction as any).kind}"`
         );
     }
+  }
+
+  /**
+   * Dry run a transaction and return the result.
+   * @param tx the transaction as SignableTransaction or string (in base64) that will dry run
+   * @returns The transaction effects
+   */
+  async dryRunTransaction(tx: SignableTransaction | string | Base64DataBuffer): Promise<TransactionEffects> {
+    const address = await this.getAddress();
+    let dryRunTxBytes: string;
+    if (typeof tx === 'string') {
+      dryRunTxBytes = tx;
+    } else if (tx instanceof Base64DataBuffer){
+      dryRunTxBytes = tx.toString();
+    }else{
+      switch (tx.kind) {
+        case 'bytes':
+          dryRunTxBytes = new Base64DataBuffer(tx.data).toString();
+          break;
+        case 'mergeCoin':
+          dryRunTxBytes = (await this.serializer.newMergeCoin(address, tx.data)).toString();
+          break;
+        case 'moveCall':
+          dryRunTxBytes = (await this.serializer.newMoveCall(address, tx.data)).toString();
+          break;
+        case 'pay':
+          dryRunTxBytes = (await this.serializer.newPay(address, tx.data)).toString();
+          break;
+        case 'payAllSui':
+          dryRunTxBytes = (await this.serializer.newPayAllSui(address, tx.data)).toString();
+          break;
+        case 'paySui':
+          dryRunTxBytes = (await this.serializer.newPaySui(address, tx.data)).toString();
+          break;
+        case 'publish':
+          dryRunTxBytes = (await this.serializer.newPublish(address, tx.data)).toString();
+          break;
+        case 'splitCoin':
+          dryRunTxBytes = (await this.serializer.newSplitCoin(address, tx.data)).toString();
+          break;
+        case 'transferObject':
+          dryRunTxBytes = (await this.serializer.newTransferObject(address, tx.data)).toString();
+          break;
+        case 'transferSui':
+          dryRunTxBytes = (await this.serializer.newTransferSui(address, tx.data)).toString();
+          break;
+        default:
+          throw new Error(`Error, unknown transaction kind ${(tx as any).kind}. Can't dry run transaction.`);
+      }
+    }
+    return this.provider.dryRunTransaction(dryRunTxBytes);
   }
 
   /**
@@ -271,5 +324,20 @@ export abstract class SignerWithProvider implements Signer {
       transaction
     );
     return await this.signAndExecuteTransaction(txBytes, requestType);
+  }
+
+  /**
+   * Returns the estimated gas cost for the transaction
+   * @param tx The transaction to estimate the gas cost. When string it is assumed it's a serialized tx in base64
+   * @returns total gas cost estimation
+   * @throws whens fails to estimate the gas cost
+   */
+  async getGasCostEstimation(...args: Parameters<SignerWithProvider['dryRunTransaction']>) {
+    const txEffects = await this.dryRunTransaction(...args);
+    const gasEstimation = getTotalGasUsed(txEffects);
+    if (typeof gasEstimation === 'undefined') {
+      throw new Error('Failed to estimate the gas cost from transaction');
+    }
+    return gasEstimation;
   }
 }

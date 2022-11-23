@@ -97,7 +97,6 @@ function ModuleView({ id, name, code }: Props) {
 
     return (
         <section className={styles.modulewrapper}>
-            <div className={styles.moduletitle}>{name}</div>
             <div className={cl(codestyle.code, styles.codeview)}>
                 <Highlight
                     {...defaultProps}

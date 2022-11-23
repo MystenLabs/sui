@@ -400,7 +400,11 @@ mod tests {
 
     impl fmt::Display for MockDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
+            write!(
+                f,
+                "{}",
+                base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            )
         }
     }
 

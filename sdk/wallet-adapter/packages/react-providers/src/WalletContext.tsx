@@ -47,15 +47,16 @@ export const WalletContext = createContext<WalletContextState | null>(null);
 
 // TODO: Add storage adapter interface
 // TODO: Add storage key option
-// TODO: Add autoConnect option
 export interface WalletProviderProps {
   children: ReactNode;
   adapters: WalletAdapterList;
+  autoConnect?: boolean;
 }
 
 export const WalletProvider: FC<WalletProviderProps> = ({
   children,
   adapters,
+  autoConnect = true,
 }) => {
   const wallets = useWalletAdapters(adapters);
 
@@ -101,13 +102,13 @@ export const WalletProvider: FC<WalletProviderProps> = ({
 
   // Auto-connect to the preferred wallet if there is one in storage:
   useEffect(() => {
-    if (!wallet && !connected && !connecting) {
+    if (!wallet && !connected && !connecting && autoConnect) {
       let preferredWallet = localStorage.getItem(DEFAULT_STORAGE_KEY);
       if (typeof preferredWallet === "string") {
         select(preferredWallet);
       }
     }
-  }, [wallet, connected, connecting, select]);
+  }, [wallet, connected, connecting, select, autoConnect]);
 
   const walletContext = useMemo<WalletContextState>(
     () => ({

@@ -1,21 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
+import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
+import { Amount, type AmountProps } from '~/ui/Amount';
 
-// Passing amount as a string or number for optional number suffix
-export type CoinBalanceProps = { amount: number | string; symbol?: string };
+export interface CoinBalanceProps extends Omit<AmountProps, 'symbol'> {
+    coinType?: string | null;
+}
 
-export function CoinBalance({ amount, symbol }: CoinBalanceProps) {
-    return (
-        <div className="flex items-end gap-1 text-sui-grey-100 break-words">
-            <Heading variant="heading4">{amount}</Heading>
-            {symbol && (
-                <div className="text-sui-grey-80">
-                    <Text variant="bodySmall">{symbol}</Text>
-                </div>
-            )}
-        </div>
+export function CoinBalance({
+    amount,
+    coinType,
+    format,
+    ...props
+}: CoinBalanceProps) {
+    const [formattedAmount, symbol] = useFormatCoin(
+        amount,
+        coinType,
+        format || CoinFormat.FULL
     );
+
+    // format balance if no symbol is provided
+    // this handles instances where getCoinDenominationInfo is not available
+    const formattedBalance = coinType ? formattedAmount : amount;
+
+    return <Amount amount={formattedBalance} symbol={symbol} {...props} />;
 }

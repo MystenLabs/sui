@@ -13,11 +13,15 @@ const linkStyles = cva(
     {
         variants: {
             variant: {
-                text: 'text-body font-semibold text-sui-grey-75 hover:text-sui-grey-90 active:text-sui-grey-100',
+                text: 'text-body font-semibold text-steel-dark hover:text-steel-darker active:text-steel disabled:text-gray-60',
                 mono: 'font-mono text-bodySmall font-medium text-sui-dark',
             },
             uppercase: {
                 true: 'uppercase',
+            },
+            size: {
+                md: '!text-body',
+                sm: '!text-bodySmall',
             },
         },
         defaultVariants: {
@@ -30,6 +34,8 @@ export interface LinkProps
     extends ButtonOrLinkProps,
         VariantProps<typeof linkStyles> {}
 
-export function Link({ variant, ...props }: LinkProps) {
-    return <ButtonOrLink className={linkStyles({ variant })} {...props} />;
+export function Link({ variant, size, ...props }: LinkProps) {
+    return (
+        <ButtonOrLink className={linkStyles({ variant, size })} {...props} />
+    );
 }

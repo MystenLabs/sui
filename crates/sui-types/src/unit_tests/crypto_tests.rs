@@ -5,6 +5,35 @@ use crate::crypto::bcs_signable_test::Foo;
 use proptest::collection;
 use proptest::prelude::*;
 
+#[test]
+fn public_key_equality() {
+    let (_, ed_kp1) = random_key_pair_by_type(SignatureScheme::ED25519).unwrap();
+    let (_, ed_kp2) = random_key_pair_by_type(SignatureScheme::ED25519).unwrap();
+    let (_, k1_kp1) = random_key_pair_by_type(SignatureScheme::Secp256k1).unwrap();
+    let (_, k1_kp2) = random_key_pair_by_type(SignatureScheme::Secp256k1).unwrap();
+
+    let ed_pk1 = ed_kp1.public();
+    let ed_pk2 = ed_kp2.public();
+    let k1_pk1 = k1_kp1.public();
+    let k1_pk2 = k1_kp2.public();
+
+    // reflexivity
+    assert_eq!(ed_pk1, ed_pk1);
+    assert_eq!(ed_pk2, ed_pk2);
+    assert_eq!(k1_pk1, k1_pk1);
+    assert_eq!(k1_pk2, k1_pk2);
+
+    // different scheme
+    assert_ne!(ed_pk1, k1_pk1);
+    assert_ne!(ed_pk1, k1_pk2);
+    assert_ne!(ed_pk2, k1_pk1);
+    assert_ne!(ed_pk2, k1_pk2);
+
+    // different key
+    assert_ne!(ed_pk1, ed_pk2);
+    assert_ne!(k1_pk1, k1_pk2);
+}
+
 proptest! {
     // Check those functions do not panic
     #[test]

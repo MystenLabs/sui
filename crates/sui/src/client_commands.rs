@@ -884,7 +884,8 @@ impl WalletContext {
             .create_rpc_client(request_timeout)
             .await?;
         #[cfg(msim)]
-        let client = sui_sdk::embedded_gateway::SuiClient::new(&config_path.parent().unwrap())?;
+        let client =
+            sui_sdk::embedded_gateway::SuiClient::new(&config_path.parent().unwrap()).await?;
         #[cfg(msim)]
         let _request_timeout = request_timeout; // silence linter.
 

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use core::time::Duration;
 use std::sync::Arc;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -42,6 +43,17 @@ impl EventHandler {
             module_cache,
             event_streamer: streamer,
             event_store,
+        }
+    }
+
+    /// Run a regular cleanup task on the store
+    pub fn regular_cleanup_task(&self) {
+        let store_copy = self.event_store.clone();
+        match store_copy.as_ref() {
+            EventStoreType::SqlEventStore(db) => {
+                // Start periodic task to clean up WAL
+                let _handle = db.wal_cleanup_thread(Some(Duration::from_secs(300)));
+            }
         }
     }
 
