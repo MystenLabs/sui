@@ -14,6 +14,8 @@ import {
   ObjectId,
   RawSigner,
 } from '../../../src';
+import { retry } from 'ts-retry-promise';
+import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
 
 const TEST_ENDPOINTS = NETWORK_TO_API[Network.LOCAL];
 const DEFAULT_FAUCET_URL =
@@ -66,7 +68,14 @@ export async function setup(providerType: ProviderType = 'rpc') {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   const provider = getProvider(providerType);
-  await provider.requestSuiFromFaucet(address);
+  await retry(() => provider.requestSuiFromFaucet(address), {
+    backoff: 'EXPONENTIAL',
+    // overall timeout in 60 seconds
+    timeout: 1000 * 60,
+    // skip retry if we hit the rate-limit error
+    retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
+    logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
+  });
 
   return new TestToolbox(keypair, provider);
 }
