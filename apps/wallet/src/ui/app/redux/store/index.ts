@@ -19,7 +19,7 @@ const store = configureStore({
         }).concat(
             KeypairVaultMiddleware,
             NetworkSwitchMiddleware,
-            FaucetRequestGasMiddleware,
+            FaucetRequestGasMiddleware
         ),
 });
 
