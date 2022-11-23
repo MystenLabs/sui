@@ -8871,6 +8871,7 @@ dependencies = [
  "futures",
  "multiaddr 0.16.0",
  "mysten-network 0.2.0",
+ "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
  "sui-config",
