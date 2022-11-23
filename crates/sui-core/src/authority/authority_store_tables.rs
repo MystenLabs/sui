@@ -7,6 +7,7 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;

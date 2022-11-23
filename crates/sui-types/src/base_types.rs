@@ -149,26 +149,6 @@ impl From<&ObjectInfo> for ObjectRef {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct DynamicFieldInfo {
-    pub name: String,
-    pub type_: DynamicFieldType,
-    pub object_type: String,
-    pub object_id: ObjectID,
-    pub version: SequenceNumber,
-    pub digest: ObjectDigest,
-}
-
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub enum DynamicFieldType {
-    #[serde(rename_all = "camelCase")]
-    DynamicField {
-        wrapped_object_id: ObjectID,
-    },
-    DynamicObject,
-}
-
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 
 #[serde_as]

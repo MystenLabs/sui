@@ -435,6 +435,8 @@ pub enum SuiError {
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
+    #[error("Failure deserializing object in the requested format: {:?}", error)]
+    ObjectDeserializationError { error: String },
     #[error("Event store component is not active on this node")]
     NoEventStore,
 

@@ -14,8 +14,6 @@ use crate::authority::authority_per_epoch_store::{
 use arc_swap::ArcSwap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::value::{MoveStruct, MoveValue};
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -34,6 +32,9 @@ use sui_storage::{
     mutex_table::{LockGuard, MutexTable},
     LockService,
 };
+use sui_types::crypto::AuthoritySignInfo;
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
+use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::object::Owner;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
@@ -600,9 +601,11 @@ impl AuthorityStore {
                     .owner_index
                     .insert(&(addr, object_ref.0), &ObjectInfo::new(&object_ref, object))?,
                 Owner::ObjectOwner(object_id) => {
-                    if let Some(info) =
-                        self.try_create_dynamic_field_info(&object_ref, object, Default::default())
-                    {
+                    if let Some(info) = self.try_create_dynamic_field_info(
+                        &object_ref,
+                        object,
+                        &Default::default(),
+                    )? {
                         self.perpetual_tables
                             .dynamic_field_index
                             .insert(&(ObjectID::from(object_id), object_ref.0), &info)?
@@ -629,90 +632,59 @@ impl AuthorityStore {
         &self,
         oref: &ObjectRef,
         o: &Object,
-        other_objects: BTreeMap<ObjectID, &Object>,
-    ) -> Option<DynamicFieldInfo> {
-        let move_object = o.data.try_as_move()?;
-        if !is_dynamic_field(&move_object.type_) {
-            return None;
+        uncommitted_objects: &BTreeMap<ObjectID, &Object>,
+    ) -> SuiResult<Option<DynamicFieldInfo>> {
+        // Skip if not a move object
+        let move_object = if let Some(move_object) = o.data.try_as_move() {
+            move_object
+        } else {
+            return Ok(None);
+        };
+        // We only index dynamic field objects
+        if !DynamicFieldInfo::is_dynamic_field(&move_object.type_) {
+            return Ok(None);
         }
-        let move_struct = move_object
-            .to_move_struct_with_resolver(
-                ObjectFormatOptions {
-                    include_types: false,
-                },
-                &self,
-            )
-            .ok()?;
+        let move_struct =
+            move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), &self)?;
 
-        let name = extract_field_from_move_struct(&move_struct, "name")
-            .expect("Expecting [name] field in sui::dynamic_field::Field");
-        let value = extract_field_from_move_struct(&move_struct, "value")
-            .expect("Expecting [value] field in sui::dynamic_field::Field");
-        // Extract value from value option
-        let value = match value {
-            MoveValue::Struct(MoveStruct::WithFields(fields)) => match fields.first() {
-                Some((_, MoveValue::Vector(v))) => v.first().cloned(),
-                _ => None,
-            },
-            _ => None,
-        }?;
+        let (name, type_, object_id) = DynamicFieldInfo::parse_move_object(&move_struct)?;
+        Ok(Some(match type_ {
+            DynamicFieldType::DynamicObject => {
+                // Find the actual object from storage using the object id obtained from the wrapper.
+                let (object_type, version, digest) =
+                    if let Some(o) = uncommitted_objects.get(&object_id) {
+                        o.data
+                            .type_()
+                            .map(|type_| (type_.clone(), o.version(), o.digest()))
+                    } else if let Ok(Some(o)) = self.get_object(&object_id) {
+                        o.data
+                            .type_()
+                            .map(|type_| (type_.clone(), o.version(), o.digest()))
+                    } else {
+                        None
+                    }
+                    .ok_or_else(|| SuiError::ObjectDeserializationError {
+                        error: format!("Cannot found data for dynamic object {object_id}"),
+                    })?;
 
-        Some(
-            if is_dynamic_object_field(&move_object.type_.type_params[0]) {
-                let name = match name {
-                    MoveValue::Struct(s) => extract_field_from_move_struct(&s, "name"),
-                    _ => None,
-                }
-                .expect("Expecting [name] field in sui::dynamic_object_field::Wrapper.");
-
-                let object_id = extract_object_id(&value)
-                    .expect("Cannot extract dynamic object's object id from Field::value");
-
-                let (object_type, version, digest) = if let Some(o) = other_objects.get(&object_id)
-                {
-                    o.data
-                        .type_()
-                        .cloned()
-                        .map(|type_| (type_, o.version(), o.digest()))
-                } else if let Ok(Some(o)) = self.get_object(&object_id) {
-                    o.data
-                        .type_()
-                        .cloned()
-                        .map(|type_| (type_, o.version(), o.digest()))
-                } else {
-                    warn!("Cannot get struct type for dynamic object {object_id}");
-                    None
-                }?;
                 DynamicFieldInfo {
-                    name: name.to_string(),
-                    type_: DynamicFieldType::DynamicObject,
+                    name,
+                    type_,
                     object_type: object_type.to_string(),
                     object_id,
                     version,
                     digest,
                 }
-            } else {
-                let wrapped_object_id = match value {
-                    // UID
-                    MoveValue::Struct(s) => match extract_field_from_move_struct(&s, "id") {
-                        // ID
-                        Some(MoveValue::Struct(s)) => extract_field_from_move_struct(&s, "id")
-                            .and_then(|v| extract_object_id(&v)),
-                        _ => None,
-                    },
-                    _ => None,
-                }
-                .expect("Cannot extract dynamic object's object id from Field::value");
-                DynamicFieldInfo {
-                    name: name.to_string(),
-                    type_: DynamicFieldType::DynamicField { wrapped_object_id },
-                    object_type: move_object.type_.type_params[1].to_string(),
-                    object_id: oref.0,
-                    version: oref.1,
-                    digest: oref.2,
-                }
+            }
+            DynamicFieldType::DynamicField { .. } => DynamicFieldInfo {
+                name,
+                type_,
+                object_type: move_object.type_.type_params[1].to_string(),
+                object_id: oref.0,
+                version: oref.1,
+                digest: oref.2,
             },
-        )
+        }))
     }
 
     /// This function is used by the bench.rs script, and should not be used in other contexts
@@ -725,6 +697,38 @@ impl AuthorityStore {
             .map(|o| (o.compute_object_reference(), o))
             .collect();
 
+        let (owner_insert, dynamic_field_insert): (Vec<_>, Vec<_>) = ref_and_objects
+            .iter()
+            .map(|(object_ref, o)| match o.owner {
+                Owner::AddressOwner(address) => (
+                    Some(((address, o.id()), ObjectInfo::new(object_ref, o))),
+                    None,
+                ),
+                Owner::ObjectOwner(object_id) => (
+                    None,
+                    Some(((ObjectID::from(object_id), o.id()), (object_ref, o))),
+                ),
+                _ => (None, None),
+            })
+            .unzip();
+
+        let owner_insert = owner_insert.into_iter().flatten();
+
+        let uncommitted_objects = ref_and_objects
+            .iter()
+            .map(|((id, ..), o)| (*id, **o))
+            .collect();
+
+        let dynamic_field_insert = dynamic_field_insert
+            .into_iter()
+            .flatten()
+            .flat_map(|(key, (oref, o))| {
+                self.try_create_dynamic_field_info(oref, o, &uncommitted_objects)
+                    .transpose()
+                    .map(|info| info.map(|info| (key, info)))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
+
         batch
             .insert_batch(
                 &self.perpetual_tables.objects,
@@ -732,33 +736,10 @@ impl AuthorityStore {
                     .iter()
                     .map(|(oref, o)| (ObjectKey::from(oref), **o)),
             )?
-            .insert_batch(
-                &self.perpetual_tables.owner_index,
-                ref_and_objects.iter().filter_map(|(oref, o)| {
-                    if let Owner::AddressOwner(addr) = o.owner {
-                        Some(((addr, oref.0), ObjectInfo::new(oref, o)))
-                    } else {
-                        None
-                    }
-                }),
-            )?
+            .insert_batch(&self.perpetual_tables.owner_index, owner_insert)?
             .insert_batch(
                 &self.perpetual_tables.dynamic_field_index,
-                ref_and_objects.iter().filter_map(|(oref, o)| {
-                    if let Owner::ObjectOwner(object_id) = o.owner {
-                        self.try_create_dynamic_field_info(
-                            oref,
-                            o,
-                            ref_and_objects
-                                .iter()
-                                .map(|((id, ..), o)| (*id, **o))
-                                .collect(),
-                        )
-                        .map(|info| ((ObjectID::from(object_id), oref.0), info))
-                    } else {
-                        None
-                    }
-                }),
+                dynamic_field_insert,
             )?
             .insert_batch(
                 &self.perpetual_tables.parent_sync,
@@ -1033,7 +1014,7 @@ impl AuthorityStore {
                 )
             }),
         )?;
-
+        let uncommitted_objects = written.iter().map(|(id, (_, o, _))| (*id, o)).collect();
         // Update the indexes of the objects written
         let (owner_written, dynamic_field_written): (Vec<_>, Vec<_>) = written
             .iter()
@@ -1044,19 +1025,22 @@ impl AuthorityStore {
                 ),
                 Owner::ObjectOwner(object_id) => (
                     None,
-                    self.try_create_dynamic_field_info(
-                        object_ref,
-                        new_object,
-                        written.iter().map(|(id, (_, o, _))| (*id, o)).collect(),
-                    )
-                    .map(|info| ((ObjectID::from(object_id), *id), info)),
+                    Some(((ObjectID::from(object_id), *id), (object_ref, new_object))),
                 ),
                 _ => (None, None),
             })
             .unzip();
 
         let owner_written = owner_written.into_iter().flatten();
-        let dynamic_field_written = dynamic_field_written.into_iter().flatten();
+        let dynamic_field_written = dynamic_field_written
+            .into_iter()
+            .flatten()
+            .flat_map(|(key, (oref, o))| {
+                self.try_create_dynamic_field_info(oref, o, &uncommitted_objects)
+                    .transpose()
+                    .map(|info| info.map(|info| (key, info)))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
 
         write_batch =
             write_batch.insert_batch(&self.perpetual_tables.owner_index, owner_written)?;
@@ -1229,15 +1213,9 @@ impl AuthorityStore {
                             None,
                         )
                     }
-                    Owner::ObjectOwner(object_id) => (
-                        None,
-                        self.try_create_dynamic_field_info(
-                            &obj.compute_object_reference(),
-                            &obj,
-                            Default::default(),
-                        )
-                        .map(|info| ((ObjectID::from(object_id), obj.id()), info)),
-                    ),
+                    Owner::ObjectOwner(object_id) => {
+                        (None, Some(((ObjectID::from(object_id), obj.id()), obj)))
+                    }
                     _ => (None, None),
                 }
             })
@@ -1245,7 +1223,19 @@ impl AuthorityStore {
 
         let (old_objects, old_locks): (Vec<_>, Vec<_>) =
             old_objects_and_locks.into_iter().flatten().unzip();
-        let old_dynamic_fields = old_dynamic_fields.into_iter().flatten();
+        let old_dynamic_fields = old_dynamic_fields
+            .into_iter()
+            .flatten()
+            .flat_map(|(key, o)| {
+                self.try_create_dynamic_field_info(
+                    &o.compute_object_reference(),
+                    &o,
+                    &Default::default(),
+                )
+                .transpose()
+                .map(|info| info.map(|info| (key, info)))
+            })
+            .collect::<SuiResult<Vec<_>>>()?;
 
         write_batch =
             write_batch.insert_batch(&self.perpetual_tables.owner_index, old_modified_objects)?;
@@ -1665,41 +1655,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> GetModule for &SuiDa
             Ok(None)
         }
     }
-}
-
-fn extract_field_from_move_struct(move_struct: &MoveStruct, field_name: &str) -> Option<MoveValue> {
-    match move_struct {
-        MoveStruct::WithFields(fields) => fields.iter().find_map(|(id, value)| {
-            if id.to_string() == field_name {
-                Some(value.clone())
-            } else {
-                None
-            }
-        }),
-        _ => None,
-    }
-}
-
-fn extract_object_id(value: &MoveValue) -> Option<ObjectID> {
-    match value {
-        MoveValue::Struct(MoveStruct::WithFields(fields)) => match fields.first() {
-            Some((_, MoveValue::Address(addr))) => Some(ObjectID::from(*addr)),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-fn is_dynamic_field(tag: &StructTag) -> bool {
-    tag.address == SUI_FRAMEWORK_ADDRESS
-        && tag.module.as_str() == "dynamic_field"
-        && tag.name.as_str() == "Field"
-}
-
-fn is_dynamic_object_field(tag: &TypeTag) -> bool {
-    matches!(tag, TypeTag::Struct(tag) if tag.address == SUI_FRAMEWORK_ADDRESS
-        && tag.module.as_str() == "dynamic_object_field"
-        && tag.name.as_str() == "Wrapper")
 }
 
 /// A wrapper to make Orphan Rule happy

@@ -98,6 +98,8 @@ use crate::{
     transaction_manager::TransactionManager,
     transaction_streamer::TransactionStreamer,
 };
+use narwhal_types::ConsensusOutput;
+use sui_types::dynamic_field::DynamicFieldInfo;
 
 use sui_types::gas::GasCostSummary;
 

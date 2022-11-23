@@ -43,6 +43,8 @@ use sui_types::{
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
+use narwhal_types::Certificate;
+use sui_types::dynamic_field::DynamicFieldType;
 use tracing::info;
 
 pub enum TestCallArg {
