@@ -3014,19 +3014,17 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    let state = init_state_with_ids(objects).await;
-    let pkg = build_package("src/unit_tests/data/object_basics");
-    let pkg_ref = pkg.compute_object_reference();
-    state.insert_genesis_object(pkg).await;
-    (state, pkg_ref)
-}
-
-#[cfg(test)]
-pub fn build_package(package_path: &str) -> Object {
     use sui_framework_build::compiled_package::BuildConfig;
 
+    let state = init_state().await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        state.insert_genesis_object(obj).await;
+    }
+
+    // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push(package_path);
+    path.push("src/unit_tests/data/object_basics");
     let modules = BuildConfig::default()
         .build(path)
         .unwrap()
@@ -3034,7 +3032,10 @@ pub fn build_package(package_path: &str) -> Object {
         .into_iter()
         .cloned()
         .collect();
-    Object::new_package(modules, TransactionDigest::genesis().unwrap())
+    let pkg = Object::new_package(modules, TransactionDigest::genesis().unwrap());
+    let pkg_ref = pkg.compute_object_reference();
+    state.insert_genesis_object(pkg).await;
+    (state, pkg_ref)
 }
 
 #[cfg(test)]

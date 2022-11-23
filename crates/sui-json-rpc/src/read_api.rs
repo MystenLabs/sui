@@ -397,25 +397,3 @@ pub async fn get_move_modules_by_package(
         _ => Err(anyhow!("Package object does not exist with ID {}", package)),
     }?)
 }
-
-/*
-#[test]
-fn test() {
-    let tag = "0x2::dynamic_field::Field<0x2::dynamic_object_field::Wrapper<0x2::typed_id::TypedID<0xdf496988c6d4571684d9f4edcaec5a1cf889fa2c::geniteam::Farm>>, 0x2::object::ID>";
-    let tag2 = "0x2::dynamic_field::Field<0x2::object::ID, 0xdf496988c6d4571684d9f4edcaec5a1cf889fa2c::marketplace::Listing<0x2::devnet_nft::DevNetNFT, 0x2::sui::SUI>>";
-
-    let tag = parse_sui_struct_tag(tag).unwrap();
-    let tag2 = parse_sui_struct_tag(tag2).unwrap();
-
-    for tag in [tag, tag2] {
-        if is_dynamic_field(&tag) {
-            if matches!(&tag.type_params[0], TypeTag::Struct(tag) if is_dynamic_field_wrapper(&tag))
-            {
-                println!("1")
-            } else {
-                println!("2")
-            }
-        }
-    }
-}
-*/

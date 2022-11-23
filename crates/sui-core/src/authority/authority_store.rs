@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
 use std::{fmt::Debug, path::PathBuf};
 
-use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, ExecutionIndicesWithHash,
-};
 use arc_swap::ArcSwap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -22,11 +19,6 @@ use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, info, trace};
 
 use narwhal_executor::ExecutionIndices;
-use std::collections::BTreeSet;
-use std::iter;
-use std::path::Path;
-use std::sync::Arc;
-use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     lock_service::ObjectLockStatus,
     mutex_table::{LockGuard, MutexTable},
@@ -42,6 +34,9 @@ use sui_types::{batch::TxSequenceNumber, object::PACKAGE_VERSION};
 use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
 
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, ExecutionIndicesWithHash,
+};
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 
 use super::{
