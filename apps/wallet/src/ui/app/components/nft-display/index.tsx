@@ -58,7 +58,7 @@ function NFTDisplayCard({
         showlabel && displayTitle ? (
             <div
                 className={cl(
-                    'items-center mt-2 text-sui-steel-dark',
+                    'items-center mt-2 text-steel-dark',
                     animateHover &&
                         'group-hover:text-black duration-200 ease-ease-in-out-cubic'
                 )}
@@ -71,7 +71,7 @@ function NFTDisplayCard({
     const borderRadiusHoverCl =
         borderRadius === 'md' ? 'rounded-sm' : 'rounded-[5px]';
     const mediaContainerCls = animateHover
-        ? `ease-ease-out-cubic duration-[400ms] group-hover:shadow-sui-steel/50 group-hover:shadow-[0_0_20px_0] ${borderRadiusCl} hover:${borderRadiusHoverCl}`
+        ? `ease-ease-out-cubic duration-[400ms] group-hover:shadow-steel/50 group-hover:shadow-[0_0_20px_0] ${borderRadiusCl} hover:${borderRadiusHoverCl}`
         : '';
     const mediaCls = animateHover
         ? 'group-hover:scale-[115%] duration-500 ease-ease-out-cubic'

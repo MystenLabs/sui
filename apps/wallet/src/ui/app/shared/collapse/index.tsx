@@ -25,9 +25,9 @@ export function Collapse({
         <div className="flex flex-nowrap flex-col items-stretch">
             <div
                 className={cl(
-                    `group cursor-pointer text-sui-steel-darker hover:text-hero
+                    `group cursor-pointer text-steel-darker hover:text-hero
                      ease-ease-in-out-cubic duration-200
-                     border-0 border-b border-solid border-b-sui-grey-45 hover:border-b-hero
+                     border-0 border-b border-solid border-b-gray-45 hover:border-b-hero
                      flex flex-nowrap flex-row pb-2`
                 )}
                 onClick={() => setIsOpen(!isOpen)}
@@ -38,7 +38,7 @@ export function Collapse({
                 <Icon
                     icon={SuiIcons.ArrowDown}
                     className={cl(
-                        `text-sui-steel group-hover:text-hero text-[12px]
+                        `text-steel group-hover:text-hero text-[12px]
                         ease-ease-in-out-cubic duration-200`,
                         !isOpen && '-rotate-90'
                     )}

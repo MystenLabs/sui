@@ -47,7 +47,7 @@ function NftsPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-sui-steel-darker font-semibold text-caption flex-1 self-center flex items-center">
+                    <div className="text-steel-darker font-semibold text-caption flex-1 self-center flex items-center">
                         No NFTs found
                     </div>
                 )}

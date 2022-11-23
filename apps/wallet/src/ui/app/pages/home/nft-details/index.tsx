@@ -36,10 +36,8 @@ function LabelValueItems({
                     className="flex flex-row flex-nowrap gap-1"
                     key={key || label}
                 >
-                    <div className="flex-1 text-sui-grey-80 truncate">
-                        {label}
-                    </div>
-                    <div className="max-w-[60%] text-sui-grey-90 truncate">
+                    <div className="flex-1 text-gray-80 truncate">{label}</div>
+                    <div className="max-w-[60%] text-gray-90 truncate">
                         {value}
                     </div>
                 </div>
@@ -119,7 +117,7 @@ function NFTDetailsPage() {
                                         type={ExplorerLinkType.object}
                                         objectID={nftId}
                                         className={cl(
-                                            'text-sui-steel-dark no-underline flex flex-nowrap gap-2 items-center',
+                                            'text-steel-dark no-underline flex flex-nowrap gap-2 items-center',
                                             'text-captionSmall font-semibold uppercase hover:text-hero duration-100',
                                             'ease-ease-in-out-cubic'
                                         )}
