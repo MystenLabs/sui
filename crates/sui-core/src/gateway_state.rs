@@ -63,10 +63,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use sui_config::genesis::Genesis;
 use tap::TapFallible;
 
-#[cfg(test)]
-#[path = "unit_tests/gateway_state_tests.rs"]
-mod gateway_state_tests;
-
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub type GatewayClient = Arc<dyn GatewayAPI + Sync + Send>;
