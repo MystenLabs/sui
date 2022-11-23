@@ -115,12 +115,7 @@ use tracing::Level;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_subscriber::{
-    filter,
-    fmt::{self, format::FmtSpan},
-    layer::SubscriberExt,
-    reload,
-    util::SubscriberInitExt,
-    EnvFilter, Layer, Registry,
+    filter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter, Layer, Registry,
 };
 
 use crossterm::tty::IsTty;
@@ -390,7 +385,6 @@ impl TelemetryConfig {
             // Output to file or to stderr with ANSI colors
             let fmt_layer = fmt::layer()
                 .with_ansi(config.log_file.is_none() && stderr().is_tty())
-                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                 .with_writer(nb_output)
                 .with_filter(log_filter)
                 .boxed();
@@ -428,7 +422,6 @@ pub fn init_for_testing() {
             )
             .with_file(true)
             .with_line_number(true)
-            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .with_test_writer()
             .finish();
         ::tracing::subscriber::set_global_default(subscriber)
