@@ -51,7 +51,6 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
 typed-store.workspace = true
-name-variant = { path = "../../crates/name-variant" }
 
 workspace-hack.workspace = true
 proptest = "1.0.0"

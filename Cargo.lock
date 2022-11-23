@@ -5052,16 +5052,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "034a0ad7deebf0c2abcf2435950a6666c3c15ea9d8fad0c0f48efa8a7f843fed"
 
 [[package]]
-name = "name-variant"
-version = "0.1.0"
-dependencies = [
- "proc-macro2 1.0.47",
- "quote 1.0.21",
- "syn 1.0.103",
- "workspace-hack",
-]
-
-[[package]]
 name = "named-lock"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9184,7 +9174,6 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-vm-types",
- "name-variant",
  "narwhal-executor",
  "once_cell",
  "opentelemetry 0.17.0",
