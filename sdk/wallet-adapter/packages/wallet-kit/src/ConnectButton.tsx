@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { ComponentProps, ReactNode } from "react";
+import { ComponentProps, ReactNode, useEffect, useState } from "react";
 import { styled, theme } from "./stitches";
 
 import { ConnectModal } from "./ConnectModal";
+import { useWallet } from "@mysten/wallet-adapter-react";
 
 const Button = styled("button", {
   cursor: "pointer",
@@ -31,8 +32,7 @@ const Button = styled("button", {
       },
       secondary: {
         backgroundColor: "transparent",
-        borderWidth: 1,
-        borderColor: "$secondary",
+        border: "1px solid $secondary",
         color: "$secondaryDark",
       },
       connected: {
@@ -46,18 +46,6 @@ const Button = styled("button", {
   },
 });
 
-export function ConnectedButton() {
-  const address = "damir.sui";
-  const balance = "0 SUI";
-
-  return (
-    <button className="border-none p-0 bg-white rounded-xl text-sui-grey-100 gap-2 flex items-center font-system shadow-xl">
-      <div className="pl-4">{balance}</div>
-      <div className="m-0.5 p-2 bg-[#f0f0f0] rounded-[11px]">{address}</div>
-    </button>
-  );
-}
-
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
 }
@@ -66,6 +54,28 @@ export function ConnectButton({
   connectText = "Connect Wallet",
   ...props
 }: ConnectButtonProps) {
+  const { connected, getAccounts } = useWallet();
+  const [account, setAccount] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!connected) return;
+
+    getAccounts()
+      .then((accounts) => setAccount(accounts[0]))
+      .catch((e) => {
+        console.warn("Error getting accounts");
+      });
+  }, [connected]);
+
+  if (account) {
+    const truncatedAddress = `${account.slice(0, 4)}...${account.slice(-4)}`;
+    return (
+      <Button color="connected" size="lg">
+        {truncatedAddress}
+      </Button>
+    );
+  }
+
   return (
     <Dialog.Root>
       <div className={theme}>
