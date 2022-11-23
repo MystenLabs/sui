@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { trimStdLibPrefix, alttextgen } from '../../../utils/stringUtils';
-import DisplayBox from '../../displaybox/DisplayBox';
 import Longtext from '../../longtext/Longtext';
 import { type DataType } from '../OwnedObjectConstants';
 
 import styles from '../styles/OwnedObjects.module.css';
+
+import DisplayBox from '~/ui/DisplayBox';
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
     return (

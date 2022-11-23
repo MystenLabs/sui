@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
-import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
@@ -24,6 +23,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
+import DisplayBox from '~/ui/DisplayBox';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function TokenView({ data }: { data: DataType }) {

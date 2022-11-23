@@ -4,12 +4,12 @@
 import { Dialog, Transition } from '@headlessui/react';
 import { useState, useCallback, useEffect } from 'react';
 
-import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
+import { ReactComponent as BrokenImage } from '../assets/SVGIcons/24px/NFTTypeImage.svg';
 import {
     FALLBACK_IMAGE,
     ImageModClient,
-} from '../../utils/imageModeratorClient';
-import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
+} from '../utils/imageModeratorClient';
+import { transformURL, genFileTypeMsg } from '../utils/stringUtils';
 
 function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     return (
