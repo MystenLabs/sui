@@ -14,6 +14,7 @@ use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
+use tracing::info;
 use types::ReconfigureNotification;
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
@@ -470,7 +471,7 @@ async fn epoch_change() {
 // Run for 11 dag rounds in ideal conditions (all nodes reference all other nodes).
 // Every two rounds (on odd rounds), restart consensus and check consistency.
 #[tokio::test]
-async fn recover_after_restart() {
+async fn committed_round_after_restart() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
@@ -487,7 +488,7 @@ async fn recover_after_restart() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
 
-    for commit_round in (1..=11usize).step_by(2) {
+    for input_round in (1..=11usize).step_by(2) {
         // Spawn consensus and create related channels.
         let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
@@ -513,30 +514,44 @@ async fn recover_after_restart() {
             metrics.clone(),
             gc_depth,
         );
-        assert_eq!(
-            rx_consensus_round_updates.borrow().to_owned() as usize,
-            commit_round.saturating_sub(3),
-        );
 
-        tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
+        // When `input_round` is 2 * r + 1, r > 1, the previous commit round would be 2 * (r - 1),
+        // and the expected commit round after sending in certificates up to `input_round` would
+        // be 2 * r.
+
+        let last_committed_round = rx_consensus_round_updates.borrow().to_owned() as usize;
+        assert_eq!(last_committed_round, input_round.saturating_sub(3),);
+        info!("Consensus started at last_committed_round={last_committed_round}");
 
         // Feed certificates from two rounds into consensus.
-        let start_index = commit_round.saturating_sub(2) * committee.size();
-        let end_index = commit_round * committee.size();
+        let start_index = input_round.saturating_sub(2) * committee.size();
+        let end_index = input_round * committee.size();
         for cert in certificates.iter().take(end_index).skip(start_index) {
             tx_waiter.send(cert.clone()).await.unwrap();
         }
+        info!("Sent certificates {start_index} ~ {end_index} to consensus");
 
-        // Ensure committed round gets updated.
-        let _ = rx_output.recv().await.unwrap();
-        // After sending round 2*n+1 to consensus, round 2*n should have been committed.
+        // There should only be one new item in the output streams.
+        if input_round > 1 {
+            let committed = rx_output.recv().await.unwrap();
+            info!(
+                "Received output from consensus, committed_round={}",
+                committed.leader.round()
+            );
+            let (round, _certs) = rx_primary.recv().await.unwrap();
+            info!("Received committed certificates from consensus, committed_round={round}",);
+        }
+
+        // After sending inputs upt to round 2 * r + 1 to consensus, round 2 * r should have been
+        // committed.
         assert_eq!(
             rx_consensus_round_updates.borrow().to_owned() as usize,
-            commit_round.saturating_sub(1),
+            input_round.saturating_sub(1),
         );
-
-        // There should only be one item in the output.
-        let _ = rx_output.recv().await.unwrap();
+        info!(
+            "Committed round adanced to {}",
+            input_round.saturating_sub(1)
+        );
 
         // Shutdown consensus and wait for it to stop.
         let message = ReconfigureNotification::Shutdown;

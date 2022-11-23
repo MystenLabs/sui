@@ -62,7 +62,7 @@ impl StateHandler {
         })
     }
 
-    async fn handle_sequenced(&mut self, round: Round, certificates: Vec<Certificate>) {
+    async fn handle_sequenced(&mut self, commit_round: Round, certificates: Vec<Certificate>) {
         // Now we are going to signal which of our own batches have been committed.
         let own_rounds_committed: Vec<_> = certificates
             .iter()
@@ -76,13 +76,13 @@ impl StateHandler {
             .collect();
         debug!(
             "Own committed rounds {:?} at round {:?}",
-            own_rounds_committed, round
+            own_rounds_committed, commit_round
         );
 
         // If a reporting channel is available send the committed own
         // headers to it.
         if let Some(sender) = &self.tx_commited_own_headers {
-            let _ = sender.send((round, own_rounds_committed)).await;
+            let _ = sender.send((commit_round, own_rounds_committed)).await;
         }
     }
 
@@ -139,8 +139,8 @@ impl StateHandler {
         );
         loop {
             tokio::select! {
-                Some((round, certificates)) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(round, certificates).await;
+                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(commit_round, certificates).await;
                 },
 
                 Some(message) = self.rx_state_handler.recv() => {

@@ -340,7 +340,6 @@ where
                     }
 
                     // Process the certificate using the selected consensus protocol.
-                    let commit_round_leader = certificate.header.round;
                     let committed_sub_dags =
                         self.protocol
                             .process_certificate(&mut self.state, self.consensus_index, certificate)?;
@@ -391,11 +390,14 @@ where
                     }
 
                     if !commited_certificates.is_empty(){
+                        // Highest committed certificate round is the leader round / commit round
+                        // expected by primary.
+                        let leader_commit_round = commited_certificates.iter().map(|c| c.round()).max().unwrap();
                         self.tx_committed_certificates
-                        .send((commit_round_leader, commited_certificates))
+                        .send((leader_commit_round, commited_certificates))
                         .await
-                        .expect("Failed to send certificate to primary");
-                        self.tx_consensus_round_updates.send(0).expect("Failed to send committed leader round!");
+                        .expect("Failed to send committed round and certificates to primary");
+                        self.tx_consensus_round_updates.send(leader_commit_round).expect("Failed to notify primary about committed round!");
                     }
 
                     self.metrics
