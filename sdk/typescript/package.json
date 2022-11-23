@@ -91,6 +91,7 @@
     "@noble/secp256k1": "^1.6.3",
     "@scure/bip32": "^1.1.0",
     "@scure/bip39": "^1.1.0",
+    "@suchipi/femver": "^1.0.0",
     "cross-fetch": "^3.1.5",
     "jayson": "^3.6.6",
     "js-sha3": "^0.8.0",

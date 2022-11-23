@@ -1026,7 +1026,10 @@ export function isTransactionEffects(obj: any, _argumentName?: string): obj is T
             )) &&
         isOwnedObjectRef(obj.gasObject) as boolean &&
         (typeof obj.events === "undefined" ||
-            Array.isArray(obj.events)) &&
+            Array.isArray(obj.events) &&
+            obj.events.every((e: any) =>
+                isSuiEvent(e) as boolean
+            )) &&
         (typeof obj.dependencies === "undefined" ||
             Array.isArray(obj.dependencies) &&
             obj.dependencies.every((e: any) =>
