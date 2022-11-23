@@ -851,7 +851,7 @@ impl Signer<Signature> for Secp256k1KeyPair {
 // This struct exists due to the limitations of the `enum_dispatch` library.
 //
 pub trait SuiSignatureInner: Sized + signature::Signature + PartialEq + Eq + Hash {
-    type Sig: Authenticator<PubKey = Self::PubKey> + ToObligationSignature;
+    type Sig: Authenticator<PubKey = Self::PubKey>;
     type PubKey: VerifyingKey<Sig = Self::Sig> + SuiPublicKey;
     type KeyPair: KeypairTraits<PubKey = Self::PubKey, Sig = Self::Sig>;
 
@@ -966,7 +966,6 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
                 error: format!("{}", e),
             })
     }
-
 }
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
@@ -1379,37 +1378,6 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     hash.into()
 }
 
-//
-// Helper enum to statically dispatch sender sigs to verification obligation.
-//
-
-pub enum ObligationSignature<'a> {
-    AuthoritySig((&'a AuthoritySignature, &'a AuthorityPublicKey)),
-    None, // Do not verify signature/public key pair
-}
-
-pub trait ToObligationSignature: Authenticator {
-    fn to_obligation_signature<'a>(
-        &'a self,
-        _pubkey: &'a <Self as Authenticator>::PubKey,
-    ) -> ObligationSignature<'a> {
-        ObligationSignature::None
-    }
-}
-
-impl ToObligationSignature for AuthoritySignature {
-    fn to_obligation_signature<'a>(
-        &'a self,
-        pubkey: &'a <Self as Authenticator>::PubKey,
-    ) -> ObligationSignature<'a> {
-        ObligationSignature::AuthoritySig((self, pubkey))
-    }
-}
-// Careful, the implementation may be overlapping with the AuthoritySignature implementation. Be sure to fix it if it does:
-// TODO: Change all these into macros.
-impl ToObligationSignature for Secp256k1Signature {}
-impl ToObligationSignature for Ed25519Signature {}
-
 #[derive(Default)]
 pub struct VerificationObligation {
     pub messages: Vec<Vec<u8>>,
@@ -1419,9 +1387,7 @@ pub struct VerificationObligation {
 
 impl VerificationObligation {
     pub fn new() -> VerificationObligation {
-        VerificationObligation {
-            ..Default::default()
-        }
+        VerificationObligation::default()
     }
 
     /// Add a new message to the list of messages to be verified.
@@ -1441,32 +1407,24 @@ impl VerificationObligation {
     }
 
     // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
-    pub fn add_signature_and_public_key<
-        S: ToObligationSignature + Authenticator<PubKey = P>,
-        P: VerifyingKey<Sig = S>,
-    >(
+    pub fn add_signature_and_public_key(
         &mut self,
-        signature: S,
-        public_key: P,
+        signature: &AuthoritySignature,
+        public_key: &AuthorityPublicKey,
         idx: usize,
     ) -> SuiResult<()> {
-        match signature.to_obligation_signature(&public_key) {
-            ObligationSignature::AuthoritySig((sig, pubkey)) => {
-                self.public_keys
-                    .get_mut(idx)
-                    .ok_or(SuiError::InvalidAuthenticator)?
-                    .push(pubkey.clone());
-                self.signatures
-                    .get_mut(idx)
-                    .ok_or(SuiError::InvalidAuthenticator)?
-                    .add_signature(sig.clone())
-                    .map_err(|_| SuiError::InvalidSignature {
-                        error: "Failed to add signature to obligation".to_string(),
-                    })?;
-                Ok(())
-            }
-            ObligationSignature::None => Err(SuiError::SenderSigUnbatchable),
-        }
+        self.public_keys
+            .get_mut(idx)
+            .ok_or(SuiError::InvalidAuthenticator)?
+            .push(public_key.clone());
+        self.signatures
+            .get_mut(idx)
+            .ok_or(SuiError::InvalidAuthenticator)?
+            .add_signature(signature.clone())
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Failed to add signature to obligation".to_string(),
+            })?;
+        Ok(())
     }
 
     pub fn verify_all(self) -> SuiResult<()> {
