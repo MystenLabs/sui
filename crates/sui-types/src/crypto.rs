@@ -916,13 +916,6 @@ pub trait SuiSignature: Sized + signature::Signature {
     fn verify_secure<T>(&self, value: &T, intent: Intent, author: SuiAddress) -> SuiResult<()>
     where
         T: Serialize;
-
-    fn add_to_verification_obligation_or_verify(
-        &self,
-        author: SuiAddress,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()>;
 }
 
 impl<S: SuiSignatureInner + Sized> SuiSignature for S {
@@ -974,24 +967,6 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
             })
     }
 
-    fn add_to_verification_obligation_or_verify(
-        &self,
-        author: SuiAddress,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        let (sig, pk) = self.get_verification_inputs(author)?;
-        match obligation.add_signature_and_public_key(sig.clone(), pk.clone(), idx) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                let msg = &obligation.messages[idx][..];
-                pk.verify(msg, &sig)
-                    .map_err(|_| SuiError::InvalidSignature {
-                        error: err.to_string(),
-                    })
-            }
-        }
-    }
 }
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
