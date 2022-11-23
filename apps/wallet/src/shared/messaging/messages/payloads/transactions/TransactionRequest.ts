@@ -20,10 +20,12 @@ export type TransactionRequest = {
     tx: TransactionDataType;
     unSerializedTxn?: UnserializedSignableTransaction | null;
     txnMeta?: {
-        coinSymbol?: string | null;
-        amount?: number | null;
-        isListing?: boolean;
-        objectId?: string | null;
+        objectIDs: string[];
+        coins: {
+            amount: number;
+            coinType: string;
+            receiverAddress: string;
+        }[];
     } | null;
     txGasEstimation?: number | null;
 };

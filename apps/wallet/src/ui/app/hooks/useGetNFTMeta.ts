@@ -1,45 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getObjectFields,
-    isSuiObject,
-    type GetObjectDataResponse,
-} from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
+import { getObjectFields, isSuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { api } from '../redux/store/thunk-extras';
+import { useGetObjectData } from './useGetObjectData';
 
 type NFTMetadata = {
     name: string | false;
     description: string | false;
-    url?: string;
+    url: string;
 } | null;
 
-export function useGetObjectData(
-    objectId: string | null
-): GetObjectDataResponse | null {
-    const data = useQuery(
-        ['object', objectId],
-        async () => {
-            if (!objectId) return null;
-            return api.instance.fullNode.getObject(objectId);
-        },
-        { enabled: !!objectId, staleTime: Infinity }
-    );
-    return data?.data || null;
-}
-
-export function useGetNFTMeta(objectID: string | null): NFTMetadata {
-    const data = useGetObjectData(objectID);
+export function useGetNFTMeta(objectID: string): NFTMetadata {
+    const { data, isError } = useGetObjectData(objectID);
 
     const nftMeta = useMemo(() => {
-        if (!data) return null;
-        const { details } = data || {};
-        if (!isSuiObject(details)) return null;
-        const fields = getObjectFields(data);
+        if (isError) return null;
 
+        const { details } = data || {};
+        if (!isSuiObject(details) || !data) return null;
+        const fields = getObjectFields(data);
         if (!fields?.url) return null;
         return {
             description:
@@ -47,6 +28,7 @@ export function useGetNFTMeta(objectID: string | null): NFTMetadata {
             name: typeof fields.name === 'string' && fields.name,
             url: fields.url,
         };
-    }, [data]);
+    }, [data, isError]);
+
     return nftMeta;
 }

@@ -7,41 +7,35 @@ import type { ReactNode } from 'react';
 import st from './DappTxApprovalPage.module.scss';
 
 type SummaryCardProps = {
-    header?: string | React.ReactElement;
-    transparentHeader?: true;
-    children: ReactNode | ReactNode[];
+    header?: ReactNode;
+    transparentHeader?: boolean;
+    children: ReactNode;
 };
 
 export function SummaryCardHeader({
-    header,
+    children,
     transparentHeader,
 }: {
-    header: string | React.ReactElement;
-    transparentHeader?: true;
+    children: ReactNode;
+    transparentHeader?: boolean;
 }) {
     return (
         <div
             className={cl(st.header, transparentHeader && st.transparentHeader)}
         >
-            {header}
+            {children}
         </div>
     );
 }
 
-export function SummaryCard({
-    header,
-    transparentHeader,
-    children,
-}: SummaryCardProps) {
+export function SummaryCardContent({ children }: { children: ReactNode }) {
+    return <div className={st.contentWrapper}>{children}</div>;
+}
+
+export function SummaryCard({ transparentHeader, children }: SummaryCardProps) {
     return (
         <div className={cl(st.card, transparentHeader && st.packageInfo)}>
-            {header ? (
-                <SummaryCardHeader
-                    header={header}
-                    transparentHeader={transparentHeader}
-                />
-            ) : null}
-            <div className={st.contentWrapper}>{children}</div>
+            {children}
         </div>
     );
 }

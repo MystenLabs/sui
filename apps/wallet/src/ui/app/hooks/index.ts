@@ -17,4 +17,5 @@ export { useObjectsState } from './useObjectsState';
 export { useWaitForElement } from './useWaitForElement';
 export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
 export { useGetNFTMeta } from './useGetNFTMeta';
+export { useRpc } from './useRpc';
 export * from './useSigner';

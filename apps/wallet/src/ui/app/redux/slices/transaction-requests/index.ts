@@ -6,6 +6,7 @@ import {
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
+    getTotalGasUsed,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -66,63 +67,69 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
     }
 );
 
+export type CoinsMetaProps = {
+    amount: number;
+    coinType: string;
+    receiverAddress: string;
+};
+
 export type TxnMetaResponse = {
-    coinSymbol?: string | null;
-    amount?: number | null;
-    objectId?: string;
-    isListing?: boolean;
-} | null;
+    objectIDs: string[];
+    coins: CoinsMetaProps[];
+};
 
 const getRequestCost = (
     txEffects: TransactionEffects,
     address: string
-): TxnMetaResponse | null => {
+): TxnMetaResponse => {
     const events = txEffects?.events || [];
 
-    let sumCoin = 0;
-    const coinMeta: {
-        objectId?: string;
-        amount?: number;
-        coinSymbol?: string;
-        isListing?: boolean;
-    } = {};
-
-    for (const event of events) {
-        if (
-            'coinBalanceChange' in event ||
-            'transferObject' in event ||
-            'moveEvent' in event
-        ) {
-            // Get the amount in move events
-            if (
-                event.moveEvent?.sender === address &&
-                event.moveEvent?.fields?.price
-            ) {
-                sumCoin += event.moveEvent.fields.price;
-                coinMeta.amount = sumCoin;
-                coinMeta.coinSymbol = '0x2::sui::SUI';
-                coinMeta.isListing = true;
-            }
-
-            // aggregate coin balance for pay
-            if (
+    const coinsMeta = events
+        .filter(
+            (event) =>
+                'coinBalanceChange' in event &&
                 event.coinBalanceChange?.changeType === 'Pay' &&
                 event.coinBalanceChange?.owner.AddressOwner === address
-            ) {
-                sumCoin += event.coinBalanceChange?.amount || 0;
-                coinMeta.amount = sumCoin;
-                coinMeta.coinSymbol = event.coinBalanceChange?.coinType
-                    ? event.coinBalanceChange.coinType
-                    : '';
-            }
+        )
+        .map((event) => {
+            return {
+                amount: event.coinBalanceChange?.amount || 0,
+                coinType: event.coinBalanceChange?.coinType || null,
+                coinObjectId: event.coinBalanceChange?.coinObjectId || null,
+                receiverAddress: event.coinBalanceChange?.sender,
+            };
+        });
 
-            // TODO - support multiple objectIds
-            if (event.transferObject?.recipient?.AddressOwner === address) {
-                coinMeta.objectId = event.transferObject.objectId;
-            }
-        }
-    }
-    return coinMeta || null;
+    const objectIDs: string[] = events
+        .filter(
+            (event) =>
+                'transferObject' in event &&
+                event.transferObject?.recipient?.AddressOwner === address
+        )
+        .map((event) => event.transferObject?.objectId)
+        .filter(Boolean);
+
+    /// Group coins by receiverAddress
+    // sum coins by coinType for each receiverAddress
+
+    const getAllReceiverAddress = coinsMeta.reduce((acc, value, _) => {
+        return {
+            ...acc,
+            [`${value.receiverAddress}${value.coinType}`]: {
+                amount:
+                    value?.amount +
+                    (acc[`${value.receiverAddress}${value.coinType}`]?.amount ||
+                        0),
+                coinType: value.coinType,
+                receiverAddress: value.receiverAddress,
+            },
+        };
+    }, {} as { [coinType: string]: CoinsMetaProps });
+
+    return {
+        objectIDs,
+        coins: Object.values(getAllReceiverAddress),
+    };
 };
 
 export const executeDryRunTransactionRequest = createAsyncThunk<
@@ -142,11 +149,10 @@ export const executeDryRunTransactionRequest = createAsyncThunk<
         const { txData, id } = data;
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
         const activeAddress = getState().account.address;
+
         /// dry run the transaction to get the effects
-        const [dryRunResponse, txGasEstimation] = await Promise.all([
-            signer.dryRunTransaction(txData),
-            signer.getGasCostEstimation(txData),
-        ]);
+        const dryRunResponse = await signer.dryRunTransaction(txData);
+        const txGasEstimation = getTotalGasUsed(dryRunResponse);
 
         const txnMeta =
             dryRunResponse && activeAddress
@@ -323,23 +329,17 @@ const slice = createSlice({
             (state, { payload }) => {
                 const { txRequestID, txnMeta, txGasEstimation } = payload;
 
-                if (txnMeta) {
-                    txRequestsAdapter.updateOne(state, {
-                        id: txRequestID,
-                        changes: {
-                            txnMeta,
-                        },
-                    });
-                }
+                const meta = {
+                    ...(txnMeta && { txnMeta }),
+                    ...(txGasEstimation && { txGasEstimation }),
+                };
 
-                if (txGasEstimation) {
-                    txRequestsAdapter.updateOne(state, {
-                        id: txRequestID,
-                        changes: {
-                            txGasEstimation,
-                        },
-                    });
-                }
+                txRequestsAdapter.updateOne(state, {
+                    id: txRequestID,
+                    changes: {
+                        ...meta,
+                    },
+                });
             }
         );
         build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {

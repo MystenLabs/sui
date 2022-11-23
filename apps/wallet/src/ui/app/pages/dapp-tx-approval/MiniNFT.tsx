@@ -3,15 +3,13 @@
 
 import st from './DappTxApprovalPage.module.scss';
 
-export function MiniNFT({
-    size = 'tiny',
-    url,
-    name,
-}: {
-    size?: 'tiny' | 'small';
+export type MiniNFTProps = {
+    size?: 'xs' | 'sm';
     url: string;
     name?: string | null;
-}) {
-    const sizes = size === 'tiny' ? st.nftImageTiny : st.nftImageSmall;
+};
+
+export function MiniNFT({ size = 'sm', url, name }: MiniNFTProps) {
+    const sizes = size === 'xs' ? st.nftImageTiny : st.nftImageSmall;
     return <img src={url} className={sizes} alt={name || 'Nft Image'} />;
 }

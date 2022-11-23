@@ -1,27 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { MiniNFT } from './MiniNFT';
-import { SummaryCard } from './SummaryCard';
-import AccountAddress from '_components/account-address';
-import ExplorerLink from '_components/explorer-link';
-import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import ExternalLink from '_components/external-link';
-import Loading from '_components/loading';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
-import UserApproveContainer from '_components/user-approve-container';
+import { Permissions } from './Permissions';
 import {
-    useAppDispatch,
-    useAppSelector,
-    useMiddleEllipsis,
-    useFormatCoin,
-    useGetNFTMeta,
-} from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+    SummaryCard,
+    SummaryCardHeader,
+    SummaryCardContent,
+} from './SummaryCard';
+import { TransactionSummaryCard } from './TransactionSummaryCard';
+import { TransactionTypeCard } from './TransactionTypeCard';
+import Loading from '_components/loading';
+import UserApproveContainer from '_components/user-approve-container';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
@@ -71,256 +64,6 @@ function unwrapTypeReference(
         }
     }
     return null;
-}
-
-type TabType = 'transfer' | 'modify' | 'read';
-
-const TRUNCATE_MAX_LENGTH = 10;
-const TRUNCATE_PREFIX_LENGTH = 6;
-
-function PassedObject({ id, module }: { id: string; module: string }) {
-    const objectId = useMiddleEllipsis(
-        id,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
-    // Render the NFT if ID is a NFT
-    const nftMeta = useGetNFTMeta(id);
-
-    return (
-        <div className={st.permissionsContent}>
-            <div className={st.permissionsContentLabel}>
-                <ExplorerLink
-                    type={ExplorerLinkType.object}
-                    objectID={id}
-                    className={cl(st.objectId, 'text-sui-dark')}
-                    showIcon={false}
-                >
-                    {objectId}
-                </ExplorerLink>
-                <div className={st.objectName}>{module}</div>
-            </div>
-
-            {nftMeta && nftMeta.url && (
-                <MiniNFT
-                    url={nftMeta.url}
-                    name={nftMeta?.name || 'NFT Image'}
-                    size="small"
-                />
-            )}
-        </div>
-    );
-}
-
-type PermissionsProps = {
-    metadata: {
-        transfer: MetadataGroup;
-        modify: MetadataGroup;
-        read: MetadataGroup;
-    } | null;
-};
-
-function Permissions({ metadata }: PermissionsProps) {
-    const [tab, setTab] = useState<TabType | null>(null);
-    // Set the initial tab state to whatever is visible:
-    useEffect(() => {
-        if (tab || !metadata) return;
-        setTab(
-            metadata.transfer.children.length
-                ? 'transfer'
-                : metadata.modify.children.length
-                ? 'modify'
-                : metadata.read.children.length
-                ? 'read'
-                : null
-        );
-    }, [tab, metadata]);
-    return (
-        metadata &&
-        tab && (
-            <SummaryCard header="Permissions requested">
-                <div className={st.content}>
-                    <div className={st.tabs}>
-                        {Object.entries(metadata).map(
-                            ([key, value]) =>
-                                value.children.length > 0 && (
-                                    <button
-                                        type="button"
-                                        key={key}
-                                        className={cl(
-                                            st.tab,
-                                            tab === key && st.active
-                                        )}
-                                        // eslint-disable-next-line react/jsx-no-bind
-                                        onClick={() => {
-                                            setTab(key as TabType);
-                                        }}
-                                    >
-                                        {value.name}
-                                    </button>
-                                )
-                        )}
-                    </div>
-                    <div className={st.objects}>
-                        {metadata[tab].children.map(({ id, module }, index) => (
-                            <PassedObject key={index} id={id} module={module} />
-                        ))}
-                    </div>
-                </div>
-            </SummaryCard>
-        )
-    );
-}
-
-type TransactionTypeCardProps = {
-    label: string;
-    content: string | number | null;
-    loading: boolean;
-};
-
-const GAS_ESTIMATE_LABEL = 'Estimated Gas Fees';
-
-function TransactionTypeCard({
-    label,
-    content,
-    loading,
-}: TransactionTypeCardProps) {
-    const isGasEstimate = label === GAS_ESTIMATE_LABEL;
-    const [gasEstimate, symbol] = useFormatCoin(
-        (isGasEstimate && content) || 0,
-        GAS_TYPE_ARG
-    );
-
-    const valueContent =
-        content === null
-            ? '-'
-            : isGasEstimate
-            ? `${gasEstimate} ${symbol}`
-            : content;
-    return (
-        <>
-            <div className={st.label}>{label}</div>
-            <div className={st.value}>
-                {loading ? <LoadingIndicator /> : valueContent}
-            </div>
-        </>
-    );
-}
-
-type TransferSummerCardProps = {
-    coinSymbol: string | null;
-    amount: number | null;
-    origin: string;
-    objectId: string | null;
-    nftImage?: string | null;
-    gasEstimate: number | null;
-    isListing?: boolean;
-};
-
-function MiniNFTLink({
-    id,
-    url,
-    name,
-}: {
-    id: string;
-    url: string;
-    name?: string | null;
-}) {
-    const objectId = useMiddleEllipsis(
-        id,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
-    return (
-        <>
-            <MiniNFT url={url} name={name} />
-            <ExplorerLink
-                type={ExplorerLinkType.object}
-                objectID={id}
-                className={st.objectId}
-                showIcon={false}
-            >
-                {objectId}
-            </ExplorerLink>
-        </>
-    );
-}
-
-function TransactionSummaryCard({
-    coinSymbol,
-    amount,
-    objectId,
-    origin,
-    nftImage,
-    gasEstimate,
-    isListing,
-}: TransferSummerCardProps) {
-    const [gasEst, gasSymbol] = useFormatCoin(gasEstimate || 0, GAS_TYPE_ARG);
-
-    const [formatedAmount, symbol] = useFormatCoin(
-        amount ? Math.abs(amount) : 0,
-        coinSymbol
-    );
-
-    return (
-        <SummaryCard header="Transaction summary">
-            {formatedAmount && symbol && (
-                <div className={st.content}>
-                    <div className={st.row}>
-                        <div className={st.label}>
-                            {isListing ? 'Your Listing Price' : 'Send'}
-                        </div>
-                        <div className={st.value}>
-                            {formatedAmount} {symbol}
-                        </div>
-                    </div>
-
-                    <div className={st.row}>
-                        <div className={st.label}>
-                            {isListing ? 'Listing On' : 'To'}
-                        </div>
-                        <div className={st.value}>
-                            <ExternalLink
-                                href={origin}
-                                className={st.origin}
-                                showIcon={false}
-                            >
-                                {new URL(origin || '').host}
-                            </ExternalLink>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {nftImage && objectId && (
-                <div className={st.content}>
-                    <div className={st.row}>
-                        <div className={st.label}>Send</div>
-                        <div className={st.value}>
-                            <MiniNFTLink id={objectId} url={nftImage} />
-                        </div>
-                    </div>
-                    <div className={st.row}>
-                        <div className={st.label}>To</div>
-                        <div className={st.value}>
-                            <AccountAddress
-                                showLink={false}
-                                copyable={false}
-                                className={st.ownerAddress}
-                                mode="normal"
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-            <div className={st.cardFooter}>
-                <div>Estimated Gas Fees</div>
-                {gasEst} {gasSymbol}
-            </div>
-        </SummaryCard>
-    );
 }
 
 export function DappTxApprovalPage() {
@@ -406,8 +149,6 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest, dispatch]);
 
-    const nftMeta = useGetNFTMeta(txRequest?.txnMeta?.objectId || null);
-
     const metadata = useMemo(() => {
         if (
             (txRequest?.tx?.type !== 'move-call' &&
@@ -490,8 +231,9 @@ export function DappTxApprovalPage() {
     }, [deserializeTxnFailed, loading, txRequest]);
 
     const transactionSummary = txRequest?.txnMeta;
-
     const gasEstimation = txRequest?.txGasEstimation ?? null;
+
+    // eslint-disable-next-line no-lone-blocks
 
     const valuesContent: {
         label: string;
@@ -548,17 +290,6 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest?.tx, txRequest?.unSerializedTxn]);
 
-    const TransactionTypeHeader = (
-        <>
-            <div className="font-medium text-sui-steel-darker">
-                Transaction Type
-            </div>
-            <div className="font-semibold text-sui-steel-darker">
-                {txRequest?.unSerializedTxn?.kind ?? txRequest?.tx?.type}
-            </div>
-        </>
-    );
-
     return (
         <Loading loading={loadingState}>
             {txRequest ? (
@@ -571,36 +302,45 @@ export function DappTxApprovalPage() {
                 >
                     <section className={st.txInfo}>
                         {transactionSummary && (
-                            <TransactionSummaryCard
-                                objectId={transactionSummary?.objectId || null}
-                                amount={transactionSummary?.amount || null}
-                                coinSymbol={
-                                    transactionSummary?.coinSymbol || null
-                                }
-                                nftImage={nftMeta?.url}
-                                gasEstimate={gasEstimation}
-                                origin={txRequest.origin}
-                                isListing={transactionSummary?.isListing}
-                            />
+                            <>
+                                <TransactionSummaryCard
+                                    objectIDs={transactionSummary.objectIDs}
+                                    coinsMeta={transactionSummary?.coins}
+                                    gasEstimate={gasEstimation}
+                                    origin={txRequest.origin}
+                                />
+                            </>
                         )}
                         <Permissions metadata={metadata} />
-                        <SummaryCard
-                            header={TransactionTypeHeader}
-                            transparentHeader
-                        >
-                            <div className={st.content}>
-                                {valuesContent.map(
-                                    ({ label, content, loading = false }) => (
-                                        <div key={label} className={st.row}>
-                                            <TransactionTypeCard
-                                                label={label}
-                                                content={content}
-                                                loading={loading}
-                                            />
-                                        </div>
-                                    )
-                                )}
-                            </div>
+                        <SummaryCard transparentHeader>
+                            <SummaryCardHeader>
+                                <div className="font-medium text-sui-steel-darker">
+                                    Transaction Type
+                                </div>
+                                <div className="font-semibold text-sui-steel-darker">
+                                    {txRequest?.unSerializedTxn?.kind ??
+                                        txRequest?.tx?.type}
+                                </div>
+                            </SummaryCardHeader>
+                            <SummaryCardContent>
+                                <div className={st.content}>
+                                    {valuesContent.map(
+                                        ({
+                                            label,
+                                            content,
+                                            loading = false,
+                                        }) => (
+                                            <div key={label} className={st.row}>
+                                                <TransactionTypeCard
+                                                    label={label}
+                                                    content={content}
+                                                    loading={loading}
+                                                />
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            </SummaryCardContent>
                         </SummaryCard>
                     </section>
                 </UserApproveContainer>

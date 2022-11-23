@@ -23,7 +23,7 @@ function AccountAddress({
     className,
     showLink = true,
     shorten = true,
-    copyable = true,
+    copyable,
     mode = 'normal',
 }: AccountAddressProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
