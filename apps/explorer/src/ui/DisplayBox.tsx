@@ -22,17 +22,19 @@ function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     );
 }
 
-function DisplayBox({
-    display,
-    caption,
-    fileInfo,
-    modalImage,
-}: {
+export type DisplayBoxProps = {
     display: string | undefined;
     caption?: string;
     fileInfo?: string;
     modalImage?: [boolean, (hasClickedImage: boolean) => void];
-}) {
+};
+
+export function DisplayBox({
+    display,
+    caption,
+    fileInfo,
+    modalImage,
+}: DisplayBoxProps) {
     if (!display) return <ShowBrokenImage />;
 
     return (
@@ -167,7 +169,7 @@ function DisplayBoxWString({
                             enterTo="opacity-100"
                             as={Fragment}
                         >
-                            <div className="fixed inset-0 bg-sui-grey-100 z-20 bg-opacity-85" />
+                            <div className="fixed inset-0 bg-sui-grey-100 z-20 bg-opacity-90" />
                         </Transition.Child>
                         <Transition.Child
                             className="w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex"
@@ -185,7 +187,7 @@ function DisplayBoxWString({
                                     ) : (
                                         <img
                                             id="loadedImage"
-                                            className="max-w-[80vw] max-h-[80vh] z-50 self-start border-0 rounded-md"
+                                            className="max-w-[80vw] max-h-[80vh] z-50 self-start border-0 rounded-sm"
                                             alt="Object's NFT"
                                             src={transformURL(display)}
                                         />
@@ -202,7 +204,7 @@ function DisplayBoxWString({
                                         onClick={handleImageClick}
                                         aria-hidden
                                     >
-                                        <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-full text-2xl mx-auto z-50">
+                                        <span className="text-offwhite bg-sui-grey-90 h-7.5 w-7.5 flex justify-center items-center rounded-full text-2xl mx-auto z-50">
                                             &times;
                                         </span>
                                     </span>
@@ -221,7 +223,7 @@ function DisplayBoxWString({
                                     className="block mx-auto mt-[10vh] sm:hidden"
                                     aria-hidden
                                 >
-                                    <span className="text-offwhite bg-sui-grey-100 h-7.5 w-7.5 flex justify-center items-center rounded-full text-2xl mx-auto z-50">
+                                    <span className="text-offwhite bg-sui-grey-90 h-7.5 w-7.5 flex justify-center items-center rounded-full text-2xl mx-auto z-50">
                                         &times;
                                     </span>
                                 </div>
@@ -259,5 +261,3 @@ function DisplayBoxWString({
         );
     }
 }
-
-export default DisplayBox;
