@@ -23,7 +23,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import DisplayBox from '~/ui/DisplayBox';
+import { DisplayBox } from '~/ui/DisplayBox';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function TokenView({ data }: { data: DataType }) {
