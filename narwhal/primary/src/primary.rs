@@ -303,8 +303,14 @@ impl Primary {
 
         // Add my workers
         for worker in worker_cache.load().our_workers(&name).unwrap() {
-            let (peer_id, address) =
-                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            let (peer_id, address) = Self::add_peer_in_network(
+                &network,
+                worker.name,
+                worker
+                    .internal_worker_address
+                    .as_ref()
+                    .unwrap_or(&worker.worker_address),
+            );
             peer_types.insert(peer_id, "our_worker".to_string());
             info!(
                 "Adding our worker with peer id {} and address {}",

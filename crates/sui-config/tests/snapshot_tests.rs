@@ -80,6 +80,7 @@ fn populated_genesis_snapshot_matches() {
         network_address: Multiaddr::empty(),
         narwhal_primary_address: Multiaddr::empty(),
         narwhal_worker_address: Multiaddr::empty(),
+        narwhal_internal_worker_address: None,
         narwhal_consensus_address: Multiaddr::empty(),
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());

@@ -99,6 +99,9 @@ fn get_registry() -> Result<Registry> {
             WorkerInfo {
                 name: worker_pk,
                 worker_address: "/ip4/127.0.0.1/tcp/500/http".to_string().parse().unwrap(),
+                internal_worker_address: Some(
+                    "/ip4/127.0.0.1/tcp/500/http".to_string().parse().unwrap(),
+                ),
                 transactions: "/ip4/127.0.0.1/tcp/400/http".to_string().parse().unwrap(),
             },
         )]

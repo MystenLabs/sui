@@ -213,6 +213,7 @@ pub struct ValidatorInfo {
 
     //TODO remove all of these as they shouldn't be needed to be encoded in genesis
     pub narwhal_worker_address: Multiaddr,
+    pub narwhal_internal_worker_address: Option<Multiaddr>,
     pub narwhal_consensus_address: Multiaddr,
 }
 

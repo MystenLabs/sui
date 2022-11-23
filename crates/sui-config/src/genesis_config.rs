@@ -105,6 +105,7 @@ pub struct ValidatorGenesisInfo {
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+    pub narwhal_internal_worker_address: Option<Multiaddr>,
     pub narwhal_consensus_address: Multiaddr,
 }
 
@@ -126,6 +127,7 @@ impl ValidatorGenesisInfo {
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_network_address(),
             narwhal_worker_address: utils::new_network_address(),
+            narwhal_internal_worker_address: None,
             narwhal_consensus_address: utils::new_network_address(),
         }
     }
@@ -156,6 +158,7 @@ impl ValidatorGenesisInfo {
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_addr(2000 + port_offset),
             narwhal_worker_address: make_addr(3000 + port_offset),
+            narwhal_internal_worker_address: None,
             narwhal_consensus_address: make_addr(4000 + port_offset),
         }
     }

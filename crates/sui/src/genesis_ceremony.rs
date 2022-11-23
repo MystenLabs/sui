@@ -65,6 +65,8 @@ pub enum CeremonyCommand {
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
         #[clap(long)]
+        narwhal_internal_worker_address: Option<Multiaddr>,
+        #[clap(long)]
         narwhal_consensus_address: Multiaddr,
     },
 
@@ -110,6 +112,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             network_address,
             narwhal_primary_address,
             narwhal_worker_address,
+            narwhal_internal_worker_address,
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
@@ -132,6 +135,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     network_address,
                     narwhal_primary_address,
                     narwhal_worker_address,
+                    narwhal_internal_worker_address,
                     narwhal_consensus_address,
                 },
                 pop,
@@ -300,6 +304,7 @@ mod test {
                     network_address: utils::new_network_address(),
                     narwhal_primary_address: utils::new_network_address(),
                     narwhal_worker_address: utils::new_network_address(),
+                    narwhal_internal_worker_address: None,
                     narwhal_consensus_address: utils::new_network_address(),
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
@@ -358,6 +363,9 @@ mod test {
                     network_address: validator.network_address().to_owned(),
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
+                    narwhal_internal_worker_address: validator
+                        .narwhal_internal_worker_address
+                        .clone(),
                     narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                 },
             };
