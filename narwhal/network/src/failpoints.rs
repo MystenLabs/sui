@@ -7,8 +7,9 @@ use tracing::warn;
 pub fn initialise_network_failpoints() {
     let mut failpoints: HashMap<String, String> = HashMap::new();
     // failpoints.insert(String::from("rpc-delay"), String::from(".5%sleep(60000)"));
-    failpoints.insert(String::from("request-batch"), String::from("5%return"));
-    failpoints.insert(String::from("report-our-batch"), String::from("5%return"));
+    // failpoints.insert(String::from("request-batch"), String::from("5%return"));
+    // failpoints.insert(String::from("report-our-batch"), String::from("5%return"));
+    failpoints.insert(String::from("request-vote"), String::from("5%return"));
 
     if fail::has_failpoints() {
         warn!("Failpoints are enabled");
