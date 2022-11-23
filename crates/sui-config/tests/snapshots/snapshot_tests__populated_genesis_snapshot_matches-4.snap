@@ -8,5 +8,5 @@ workers:
       name: DX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=
       transactions: ""
       worker_address: ""
+      internal_worker_address: ~
 epoch: 0
-

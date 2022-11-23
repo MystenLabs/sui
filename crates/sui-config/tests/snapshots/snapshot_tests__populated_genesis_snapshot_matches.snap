@@ -14,5 +14,5 @@ expression: genesis.validator_set()
   network-address: ""
   narwhal-primary-address: ""
   narwhal-worker-address: ""
+  narwhal-internal-worker-address: ~
   narwhal-consensus-address: ""
-

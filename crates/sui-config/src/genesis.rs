@@ -115,6 +115,7 @@ impl Genesis {
                             .expect("Can't get worker key"),
                         transactions: validator.narwhal_consensus_address.clone(),
                         worker_address: validator.narwhal_worker_address.clone(),
+                        internal_worker_address: validator.narwhal_internal_worker_address.clone(),
                     },
                 )]
                 .into_iter()
@@ -643,6 +644,7 @@ mod test {
             network_address: utils::new_network_address(),
             narwhal_primary_address: utils::new_network_address(),
             narwhal_worker_address: utils::new_network_address(),
+            narwhal_internal_worker_address: None,
             narwhal_consensus_address: utils::new_network_address(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
