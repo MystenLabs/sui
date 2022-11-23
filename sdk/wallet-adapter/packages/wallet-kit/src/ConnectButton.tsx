@@ -1,4 +1,3 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { ComponentProps, ReactNode, useEffect, useState } from "react";
 import { styled, theme } from "./stitches";
 
@@ -19,7 +18,7 @@ const Button = styled("button", {
         padding: "$2 $4",
       },
       lg: {
-        padding: "$3 $5",
+        padding: "$4 $6",
       },
     },
     color: {
@@ -27,15 +26,17 @@ const Button = styled("button", {
         backgroundColor: "$brand",
         color: "$textOnBrand",
         "&:hover": {
-          backgroundColor: "$brandDark",
+          backgroundColor: "$brandAccent",
         },
+        boxShadow: "$button",
       },
       secondary: {
         backgroundColor: "transparent",
         border: "1px solid $secondary",
-        color: "$secondaryDark",
+        color: "$secondaryAccent",
       },
       connected: {
+        boxShadow: "$button",
         backgroundColor: "$background",
         color: "$textDark",
       },
@@ -54,39 +55,41 @@ export function ConnectButton({
   connectText = "Connect Wallet",
   ...props
 }: ConnectButtonProps) {
-  const { connected, getAccounts } = useWallet();
+  const [open, setOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!connected) return;
+  const { connected, getAccounts, disconnect } = useWallet();
 
-    getAccounts()
-      .then((accounts) => setAccount(accounts[0]))
-      .catch((e) => {
-        console.warn("Error getting accounts");
-      });
+  useEffect(() => {
+    if (!connected) {
+      setAccount(null);
+    } else {
+      getAccounts()
+        .then((accounts) => setAccount(accounts[0]))
+        .catch((e) => {
+          console.warn("Error getting accounts");
+        });
+    }
   }, [connected]);
 
-  if (account) {
-    const truncatedAddress = `${account.slice(0, 4)}...${account.slice(-4)}`;
-    return (
-      <Button color="connected" size="lg">
-        {truncatedAddress}
-      </Button>
-    );
-  }
-
   return (
-    <Dialog.Root>
-      <div className={theme}>
-        <Dialog.Trigger asChild>
-          <Button color="primary" size="lg" {...props}>
-            {connectText}
-          </Button>
-        </Dialog.Trigger>
+    <div className={theme}>
+      {account ? (
+        <Button color="connected" size="lg" onClick={() => disconnect()}>
+          {`${account.slice(0, 4)}...${account.slice(-4)}`}
+        </Button>
+      ) : (
+        <Button
+          color="primary"
+          size="lg"
+          onClick={() => setOpen(true)}
+          {...props}
+        >
+          {connectText}
+        </Button>
+      )}
 
-        <ConnectModal />
-      </div>
-    </Dialog.Root>
+      <ConnectModal open={open} onClose={() => setOpen(false)} />
+    </div>
   );
 }

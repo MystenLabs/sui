@@ -26,14 +26,17 @@ const Overlay = styled(Dialog.Overlay, {
 });
 
 const Content = styled(Dialog.Content, {
+  overflow: "hidden",
   backgroundColor: "$background",
   borderRadius: "$modal",
+  boxShadow: "$modal",
   position: "fixed",
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
   fontFamily: "$sans",
   display: "flex",
+
   // TODO: Good values for these:
   width: "90vw",
   minHeight: "50vh",
@@ -65,14 +68,36 @@ const ConnectWallet = styled("div", {
   boxSizing: "border-box",
   padding: "$4 $5",
   height: "100%",
-  // TODO: Move value:
-  background: "#6FBCF01A",
+  background: "$backgroundAccent",
 });
 
 const WalletList = styled("div", {
   display: "flex",
   flexDirection: "column",
   gap: "$1",
+});
+
+const WalletItem = styled("button", {
+  background: "none",
+  display: "flex",
+  padding: "$1",
+  gap: "$2",
+  alignItems: "center",
+  cursor: "pointer",
+  color: "$textDark",
+  border: "none",
+  fontWeight: "$button",
+  fontSize: "$md",
+  borderRadius: "$wallet",
+
+  variants: {
+    selected: {
+      true: {
+        background: "$background",
+        boxShadow: "$wallet",
+      },
+    },
+  },
 });
 
 const WalletIcon = styled("img", {
@@ -83,92 +108,95 @@ const WalletIcon = styled("img", {
   borderRadius: "$walletIcon",
 });
 
-const WalletItem = styled("button", {
-  background: "none",
-  display: "flex",
-  padding: "$1",
-  gap: "$2",
-  alignItems: "center",
-  color: "$textDark",
-  border: "none",
-  fontWeight: "$button",
-  fontSize: "$md",
-  borderRadius: "$wallet",
+export interface ConnectModalProps {
+  open: boolean;
+  onClose(): void;
+}
 
-  "&:hover": {
-    backgroundColor: "rgba(111, 188, 240, 0.1)",
-  },
-});
-
-export function ConnectModal() {
-  const { wallets, select, wallet } = useWallet();
+export function ConnectModal({ open, onClose }: ConnectModalProps) {
+  const { wallets, select, wallet, connected, isError } = useWallet();
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selected) {
-      select(selected);
+    if (!open) {
+      setSelected(null);
     }
-  }, [selected]);
+  }, [open]);
+
+  useEffect(() => {
+    if (connected && wallet?.name === selected) {
+      onClose();
+    }
+  }, [wallet, selected, connected]);
 
   return (
-    <Dialog.Portal>
-      <Overlay />
-      <Content>
-        <Close aria-label="Close" />
+    <Dialog.Root
+      open={open}
+      onOpenChange={(isOpen) => (isOpen ? null : onClose())}
+    >
+      <Dialog.Portal>
+        <Overlay />
+        <Content>
+          <Close aria-label="Close" />
 
-        <Div css={{ width: 240 }}>
-          <ConnectWallet>
-            <Title>Connect a Wallet</Title>
-            <WalletList>
-              {wallets.map((wallet) => (
-                <WalletItem
-                  key={wallet.name}
-                  onClick={() => setSelected(wallet.name)}
-                >
-                  <WalletIcon src={wallet.icon} />
-                  <Truncate>{wallet.name}</Truncate>
-                </WalletItem>
-              ))}
-            </WalletList>
-          </ConnectWallet>
-        </Div>
-        <Div css={{ flex: 1 }}>
-          {selected ? (
-            <Div
-              css={{
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100%",
-              }}
-            >
+          <Div css={{ width: 240 }}>
+            <ConnectWallet>
+              <Title>Connect a Wallet</Title>
+              <WalletList>
+                {wallets.map((wallet) => (
+                  <WalletItem
+                    key={wallet.name}
+                    selected={wallet.name === selected}
+                    onClick={() => {
+                      setSelected(wallet.name);
+                      select(wallet.name);
+                    }}
+                  >
+                    <WalletIcon src={wallet.icon} />
+                    <Truncate>{wallet.name}</Truncate>
+                  </WalletItem>
+                ))}
+              </WalletList>
+            </ConnectWallet>
+          </Div>
+          <Div css={{ flex: 1 }}>
+            {selected ? (
               <Div
                 css={{
-                  color: "$textDark",
-                  fontSize: "$xl",
-                  fontWeight: "$title",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: "100%",
                 }}
               >
-                Opening {selected}
-              </Div>
-              <Div css={{ color: "$textLight", fontSize: "$xs" }}>
-                Confirm connection in the wallet...
-              </Div>
-            </Div>
-          ) : (
-            <>
-              <Div css={{ display: "flex", justifyContent: "center" }}>
-                <Title>What is a Wallet</Title>
-              </Div>
+                <Div
+                  css={{
+                    color: "$textDark",
+                    fontSize: "$xl",
+                    fontWeight: "$title",
+                  }}
+                >
+                  Opening {selected}
+                </Div>
+                <Div css={{ color: "$textLight", fontSize: "$xs" }}>
+                  Confirm connection in the wallet...
+                </Div>
 
-              {selected}
+                {isError && "ERROR"}
+              </Div>
+            ) : (
+              <>
+                <Div css={{ display: "flex", justifyContent: "center" }}>
+                  <Title>What is a Wallet</Title>
+                </Div>
 
-              <WhatIsAWallet />
-            </>
-          )}
-        </Div>
-      </Content>
-    </Dialog.Portal>
+                <WhatIsAWallet />
+              </>
+            )}
+          </Div>
+        </Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

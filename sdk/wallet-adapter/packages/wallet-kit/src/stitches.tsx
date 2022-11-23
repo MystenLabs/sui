@@ -16,13 +16,14 @@ export const {
   theme: {
     colors: {
       brand: "#0284AD",
-      brandDark: "#007195",
+      brandAccent: "#007195",
       secondary: "#A0B6C3",
       secondaryDark: "#758F9E",
       textDark: "#182435",
       textLight: "#767A81",
       textOnBrand: "#fff",
       background: "#fff",
+      backgroundAccent: "#F7F8F8",
       backdrop: "rgba(24 36 53 / 20%)",
       backgroundIcon: "#F0F1F2",
       icon: "#383F47",
@@ -63,6 +64,10 @@ export const {
       walletIcon: "28px",
     },
     transitions: {},
-    shadows: {},
+    shadows: {
+      button: "0px 4px 12px rgba(0, 0, 0, 0.1)",
+      modal: "0px 0px 44px rgba(0, 0, 0, 0.15)",
+      wallet: "0px 2px 6px rgba(0, 0, 0, 0.05)",
+    },
   },
 });

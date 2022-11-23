@@ -8,6 +8,7 @@
   },
   "references": [
     { "path": "../../../typescript" },
+    { "path": "../react-providers" },
     { "path": "../adapters/wallet-standard-adapter" }
   ]
 }
