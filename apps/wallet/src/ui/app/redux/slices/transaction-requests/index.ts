@@ -85,12 +85,13 @@ const getRequestCost = (
     const events = txEffects?.events || [];
 
     const coinsMeta = events
-        .filter(
-            (event) =>
+        .filter((event) => {
+            return (
                 'coinBalanceChange' in event &&
                 event?.coinBalanceChange?.changeType === 'Pay' &&
                 event?.coinBalanceChange?.owner?.AddressOwner === address
-        )
+            );
+        })
         .map((event) => {
             return {
                 amount: event.coinBalanceChange?.amount || 0,
@@ -111,8 +112,7 @@ const getRequestCost = (
 
     /// Group coins by receiverAddress
     // sum coins by coinType for each receiverAddress
-
-    const getAllReceiverAddress = coinsMeta.reduce((acc, value, _) => {
+    const meta = coinsMeta.reduce((acc, value, _) => {
         return {
             ...acc,
             [`${value.receiverAddress}${value.coinType}`]: {
@@ -128,7 +128,7 @@ const getRequestCost = (
 
     return {
         objectIDs,
-        coins: Object.values(getAllReceiverAddress),
+        coins: Object.values(meta),
     };
 };
 
@@ -328,12 +328,10 @@ const slice = createSlice({
             executeDryRunTransactionRequest.fulfilled,
             (state, { payload }) => {
                 const { txRequestID, txnMeta, txGasEstimation } = payload;
-
                 const meta = {
                     ...(txnMeta && { txnMeta }),
                     ...(txGasEstimation && { txGasEstimation }),
                 };
-
                 txRequestsAdapter.updateOne(state, {
                     id: txRequestID,
                     changes: {
