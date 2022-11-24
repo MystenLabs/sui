@@ -268,13 +268,13 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference())
+        .get_transaction_lock(&object.compute_object_reference(), 0)
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference())
+        .get_transaction_lock(&object.compute_object_reference(), 0)
         .await
         .unwrap()
         .is_none());
@@ -374,13 +374,13 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference())
+        .get_transaction_lock(&object.compute_object_reference(), 0)
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference())
+        .get_transaction_lock(&object.compute_object_reference(), 0)
         .await
         .unwrap()
         .is_none());
@@ -448,12 +448,12 @@ async fn test_handle_transfer_transaction_ok() {
 
     // Check the initial state of the locks
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), test_object.digest()))
+        .get_transaction_lock(&(object_id, 0.into(), test_object.digest()), 0)
         .await
         .unwrap()
         .is_none());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), test_object.digest()))
+        .get_transaction_lock(&(object_id, 1.into(), test_object.digest()), 0)
         .await
         .is_err());
 
@@ -468,7 +468,7 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap()
         .unwrap();
     let pending_confirmation = authority_state
-        .get_transaction_lock(&object.compute_object_reference())
+        .get_transaction_lock(&object.compute_object_reference(), 0)
         .await
         .unwrap()
         .unwrap();
@@ -479,13 +479,13 @@ async fn test_handle_transfer_transaction_ok() {
 
     // Check the final state of the locks
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), object.digest()))
+        .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
         .await
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
-            .get_transaction_lock(&(object_id, 0.into(), object.digest()))
+            .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
             .await
             .unwrap()
             .as_ref()
@@ -1090,11 +1090,11 @@ async fn test_handle_confirmation_transaction_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), old_account.digest()))
+        .get_transaction_lock(&(object_id, 0.into(), old_account.digest()), 0)
         .await
         .is_err());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), new_account.digest()))
+        .get_transaction_lock(&(object_id, 1.into(), new_account.digest()), 0)
         .await
         .expect("Exists")
         .is_none());
