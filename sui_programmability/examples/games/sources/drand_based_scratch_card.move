@@ -18,7 +18,7 @@
 /// - Wait until the relevant drand round's randomness is available, and can call evaluate().
 /// - If received an object Winner, claim the reward using take_reward().
 ///
-/// Importnat: There is 1 reward per game, and there is no limit on the number of tickets that can be bought for a
+/// Important: There is 1 reward per game, and there is no limit on the number of tickets that can be bought for a
 /// a single game. *Only* the winner of a game who called take_reward first will receive a reward.
 /// One may extend this game and add another round in which winners can register their winner tickets, and then one of
 /// the winners is chosen at random. This part, however, will require using a shared object.
