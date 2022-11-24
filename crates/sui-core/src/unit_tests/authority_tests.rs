@@ -36,7 +36,7 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::VerifiedTransaction,
-    object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
+    object::{Owner, GAS_VALUE_FOR_TESTING, MAX_MOVE_PACKAGE_SIZE, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -769,6 +769,46 @@ async fn test_publish_non_existing_dependent_module() {
             .version(),
         gas_payment_object_ref.1
     );
+}
+
+// make sure that publishing a package above the size limit fails
+#[tokio::test]
+async fn test_package_size_limit() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, u64::MAX);
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
+    let mut package = Vec::new();
+    let mut package_size = 0;
+    // create a package larger than the max size
+    while package_size <= MAX_MOVE_PACKAGE_SIZE {
+        let mut module = file_format::empty_module();
+        // generate unique name
+        module.identifiers[0] = Identifier::new(format!("TestModule{:?}", package_size)).unwrap();
+        let module_bytes = {
+            let mut bytes = Vec::new();
+            module.serialize(&mut bytes).unwrap();
+            bytes
+        };
+        package_size += module_bytes.len() as u64;
+        package.push(module_bytes);
+    }
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let data = TransactionData::new_module(sender, gas_payment_object_ref, package, MAX_GAS);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let response = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap();
+    assert_eq!(
+        response.signed_effects.unwrap().status,
+        ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MovePackageTooBig {
+                object_size: package_size,
+                max_object_size: MAX_MOVE_PACKAGE_SIZE
+            }
+        }
+    )
 }
 
 #[tokio::test]
@@ -2354,7 +2394,7 @@ pub async fn init_state_with_ids_and_object_basics<
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
