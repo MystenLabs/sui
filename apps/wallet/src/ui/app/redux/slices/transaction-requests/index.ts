@@ -136,7 +136,7 @@ const getRequestCost = (
             ...acc,
             [`${value.receiverAddress}${value.coinType}`]: {
                 amount:
-                    value?.amount +
+                    value.amount +
                     (acc[`${value.receiverAddress}${value.coinType}`]?.amount ||
                         0),
                 coinType: value.coinType,
