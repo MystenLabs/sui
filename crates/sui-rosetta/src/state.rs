@@ -257,7 +257,7 @@ impl PseudoBlockProvider {
                         transactions: vec![transaction],
                         metadata: None,
                     },
-                    other_transactions: vec![TransactionIdentifier { hash: digest }],
+                    other_transactions: vec![],
                 };
 
                 let ops = Operation::from_data_and_events(
