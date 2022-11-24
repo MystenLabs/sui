@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { WalletProvider } from '@mysten/wallet-adapter-react';
+import { WalletStandardAdapterProvider } from '@mysten/wallet-adapter-wallet-standard';
 import * as Sentry from '@sentry/react';
 import { BrowserTracing } from '@sentry/tracing';
 import React from 'react';
@@ -25,11 +27,15 @@ if (import.meta.env.PROD) {
     });
 }
 
+const adapters = [new WalletStandardAdapterProvider()];
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <Router>
-            <App />
-        </Router>
+        <WalletProvider adapters={adapters} autoConnect={false}>
+            <Router>
+                <App />
+            </Router>
+        </WalletProvider>
     </React.StrictMode>
 );
 

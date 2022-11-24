@@ -35,9 +35,15 @@ export function ModuleFunctionsInteraction({
 
     if (error) {
         return (
-            <Banner variant="error" fullWidth>
+            <Banner variant="error">
                 Error loading module <strong>{moduleName}</strong> details.
             </Banner>
+        );
+    }
+
+    if (!isLoading && !executableFunctions.length) {
+        return (
+            <Banner variant="message">No public entry functions found.</Banner>
         );
     }
 
