@@ -88,8 +88,8 @@ const getRequestCost = (
         .filter(
             (event) =>
                 'coinBalanceChange' in event &&
-                event.coinBalanceChange?.changeType === 'Pay' &&
-                event.coinBalanceChange?.owner.AddressOwner === address
+                event?.coinBalanceChange?.changeType === 'Pay' &&
+                event?.coinBalanceChange?.owner?.AddressOwner === address
         )
         .map((event) => {
             return {
@@ -104,7 +104,7 @@ const getRequestCost = (
         .filter(
             (event) =>
                 'transferObject' in event &&
-                event.transferObject?.recipient?.AddressOwner === address
+                event?.transferObject?.recipient?.AddressOwner === address
         )
         .map((event) => event.transferObject?.objectId)
         .filter(Boolean);
