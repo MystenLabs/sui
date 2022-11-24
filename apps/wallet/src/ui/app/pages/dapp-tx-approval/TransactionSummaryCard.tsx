@@ -65,7 +65,7 @@ function CoinMeta({
     coinMeta: CoinsMetaProps;
     origin: string;
 }) {
-    const [formatedAmount, symbol] = useFormatCoin(
+    const [formattedAmount, symbol] = useFormatCoin(
         coinMeta.amount ? Math.abs(coinMeta.amount) : 0,
         coinMeta.coinType
     );
@@ -74,7 +74,7 @@ function CoinMeta({
             <div className={st.row}>
                 <div className={st.label}>Send</div>
                 <div className={st.value}>
-                    {formatedAmount} {symbol}
+                    {formattedAmount} {symbol}
                 </div>
             </div>
 
