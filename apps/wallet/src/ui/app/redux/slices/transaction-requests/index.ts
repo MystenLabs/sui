@@ -24,7 +24,6 @@ import type {
     MoveCallTransaction,
     UnserializedSignableTransaction,
     TransactionEffects,
-    ObjectOwner,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { TransactionRequest } from '_payloads/transactions';
@@ -99,7 +98,7 @@ const getRequestCost = (
             const { coinBalanceChange } = event;
             const { coinType, amount, coinObjectId, sender, owner } =
                 coinBalanceChange;
-            const { AddressOwner } = owner as { AddressOwner: ObjectOwner };
+            const { AddressOwner } = owner as { AddressOwner: string };
             if (AddressOwner !== address) {
                 return null;
             }
@@ -121,7 +120,7 @@ const getRequestCost = (
             }
             const { transferObject } = event;
             const { AddressOwner } = transferObject.recipient as {
-                AddressOwner: ObjectOwner;
+                AddressOwner: string;
             };
             if (AddressOwner !== address) {
                 return null;
