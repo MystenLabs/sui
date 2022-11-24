@@ -3036,7 +3036,7 @@ pub async fn init_state_with_ids_and_object_basics<
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis().unwrap());
+    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)

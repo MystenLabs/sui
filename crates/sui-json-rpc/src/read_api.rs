@@ -7,7 +7,6 @@ use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
-use signature::Signature;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::intent::{Intent, IntentMessage};
@@ -76,6 +75,36 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
+        let dynamic_fields: DynamicFieldPage =
+            self.get_dynamic_fields(object_id, None, None).await?;
+
+        let mut object_info = vec![];
+        for info in dynamic_fields.data {
+            // TODO: Remove this
+            // This is very expensive, it's only for backward compatibilities and should be removed asap.
+            let object = self
+                .state
+                .get_object_read(&info.object_id)
+                .await
+                .and_then(|read| read.into_object())
+                .map_err(|e| anyhow!(e))?;
+            object_info.push(SuiObjectInfo {
+                object_id: object.id(),
+                version: object.version(),
+                digest: object.digest(),
+                // Package cannot be owned by object, safe to unwrap.
+                type_: format!("{}", object.type_().unwrap()),
+                owner: object.owner,
+                previous_transaction: object.previous_transaction,
+            });
+        }
+        Ok(object_info)
+    }
+
     async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
@@ -87,10 +116,8 @@ impl RpcReadApiServer for ReadApi {
             .state
             .get_dynamic_fields(parent_object_id, cursor, limit + 1)
             .map_err(|e| anyhow!("{e}"))?;
-
         let next_cursor = data.get(limit).map(|info| info.object_id);
         data.truncate(limit);
-
         Ok(DynamicFieldPage { data, next_cursor })
     }
 

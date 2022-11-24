@@ -36,12 +36,8 @@ use typed_store::traits::Map;
 use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ExecutionIndicesWithHash,
 };
-use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 
-use super::{
-    authority_store_tables::{AuthorityEpochTables, AuthorityPerpetualTables},
-    *,
-};
+use super::{authority_store_tables::AuthorityPerpetualTables, *};
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 
