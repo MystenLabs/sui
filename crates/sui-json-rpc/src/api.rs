@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use anyhow::anyhow;
+use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use std::collections::BTreeMap;
-use sui_types::sui_system_state::SuiSystemState;
 
-use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Balance, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
@@ -27,6 +27,7 @@ use sui_types::event::EventID;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::sui_system_state::SuiSystemState;
 
 /// Maximum number of events returned in an event query.
 /// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
@@ -95,6 +96,10 @@ pub trait RpcReadApi {
         &self,
         /// the ID of the parent object
         parent_object_id: ObjectID,
+        /// Optional paging cursor
+        cursor: Option<ObjectID>,
+        /// Maximum item returned per page
+        limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage>;
 
     /// Return the total number of transactions known to the server.
@@ -534,14 +539,11 @@ pub trait TransactionExecutionApi {
     ) -> RpcResult<SuiExecuteTransactionResponse>;
 }
 
-pub fn cap_page_limit(limit: Option<usize>) -> Result<usize, anyhow::Error> {
-    let limit = limit.unwrap_or(QUERY_MAX_RESULT_LIMIT);
-    if limit == 0 {
-        Err(anyhow!("Page result limit must be larger then 0."))?;
-    }
-    Ok(if limit > QUERY_MAX_RESULT_LIMIT {
+pub fn cap_page_limit(limit: Option<usize>) -> usize {
+    let limit = limit.unwrap_or_default();
+    if limit > QUERY_MAX_RESULT_LIMIT || limit == 0 {
         QUERY_MAX_RESULT_LIMIT
     } else {
         limit
-    })
+    }
 }

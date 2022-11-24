@@ -1867,8 +1867,21 @@ impl AuthorityState {
         self.database.get_owner_objects(owner)
     }
 
-    pub fn get_dynamic_fields(&self, owner: ObjectID) -> SuiResult<Vec<DynamicFieldInfo>> {
-        self.database.get_dynamic_fields(owner)
+    pub fn get_dynamic_fields(
+        &self,
+        owner: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+        self.database.get_dynamic_fields(owner, cursor, limit)
+    }
+
+    pub fn get_dynamic_field_object_id(
+        &self,
+        owner: ObjectID,
+        name: &str,
+    ) -> SuiResult<Option<ObjectID>> {
+        self.database.get_dynamic_field_object_id(owner, name)
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {

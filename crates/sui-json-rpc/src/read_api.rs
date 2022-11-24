@@ -76,16 +76,22 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_dynamic_fields(&self, parent_object_id: ObjectID) -> RpcResult<DynamicFieldPage> {
-        let data = self
+    async fn get_dynamic_fields(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> RpcResult<DynamicFieldPage> {
+        let limit = cap_page_limit(limit);
+        let mut data = self
             .state
-            .get_dynamic_fields(parent_object_id)
+            .get_dynamic_fields(parent_object_id, cursor, limit + 1)
             .map_err(|e| anyhow!("{e}"))?;
 
-        Ok(DynamicFieldPage {
-            data,
-            next_cursor: None,
-        })
+        let next_cursor = data.get(limit).map(|info| info.object_id);
+        data.truncate(limit);
+
+        Ok(DynamicFieldPage { data, next_cursor })
     }
 
     async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
@@ -105,16 +111,14 @@ impl RpcReadApiServer for ReadApi {
         parent_object_id: ObjectID,
         name: String,
     ) -> RpcResult<GetObjectDataResponse> {
-        let data = self
+        let id = self
             .state
-            .get_dynamic_fields(parent_object_id)
-            .map_err(|e| anyhow!("{e}"))?;
-
-        let df = data.iter().find(|info| info.name == name).ok_or_else(|| {
-            anyhow!("Cannot find dynamic field [{name}] for object [{parent_object_id}].")
-        })?;
-
-        self.get_object(df.object_id).await
+            .get_dynamic_field_object_id(parent_object_id, &name)
+            .map_err(|e| anyhow!("{e}"))?
+            .ok_or_else(|| {
+                anyhow!("Cannot find dynamic field [{name}] for object [{parent_object_id}].")
+            })?;
+        self.get_object(id).await
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
@@ -312,7 +316,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
-        let limit = cap_page_limit(limit)?;
+        let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
 
         // Retrieve 1 extra item for next cursor

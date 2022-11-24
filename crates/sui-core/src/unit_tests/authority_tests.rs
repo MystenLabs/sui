@@ -2684,7 +2684,9 @@ async fn test_store_get_dynamic_object() {
     assert!(add_effects.status.is_ok());
     assert_eq!(add_effects.created.len(), 1);
 
-    let fields = authority_state.get_dynamic_fields(outer_v0.0).unwrap();
+    let fields = authority_state
+        .get_dynamic_fields(outer_v0.0, None, usize::MAX)
+        .unwrap();
     assert_eq!(fields.len(), 1);
     assert_eq!(fields[0].type_, DynamicFieldType::DynamicObject);
 }
@@ -2755,7 +2757,9 @@ async fn test_store_get_dynamic_field() {
     assert!(add_effects.status.is_ok());
     assert_eq!(add_effects.created.len(), 1);
 
-    let fields = authority_state.get_dynamic_fields(outer_v0.0).unwrap();
+    let fields = authority_state
+        .get_dynamic_fields(outer_v0.0, None, usize::MAX)
+        .unwrap();
     assert_eq!(fields.len(), 1);
     assert!(
         matches!(fields[0].type_, DynamicFieldType::DynamicField {wrapped_object_id} if wrapped_object_id == inner_v0.0)

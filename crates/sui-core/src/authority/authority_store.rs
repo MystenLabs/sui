@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
@@ -242,18 +241,40 @@ impl AuthorityStore {
             .map(|(_, object_info)| object_info))
     }
 
-    // Methods to read the store
-    pub fn get_dynamic_fields(&self, object: ObjectID) -> Result<Vec<DynamicFieldInfo>, SuiError> {
+    pub fn get_dynamic_fields(
+        &self,
+        object: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<DynamicFieldInfo>, SuiError> {
         debug!(?object, "get_dynamic_fields");
+        let cursor = cursor.unwrap_or(ObjectID::ZERO);
+        Ok(self
+            .perpetual_tables
+            .dynamic_field_index
+            .iter()
+            // The object id 0 is the smallest possible
+            .skip_to(&(object, cursor))?
+            .take_while(|((object_owner, _), _)| (object_owner == &object))
+            .map(|(_, object_info)| object_info)
+            .take(limit)
+            .collect())
+    }
+
+    pub fn get_dynamic_field_object_id(
+        &self,
+        object: ObjectID,
+        name: &str,
+    ) -> Result<Option<ObjectID>, SuiError> {
+        debug!(?object, "get_dynamic_field_object_id");
         Ok(self
             .perpetual_tables
             .dynamic_field_index
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(object, ObjectID::ZERO))?
-            .take_while(|((object_owner, _), _)| (object_owner == &object))
-            .map(|(_, object_info)| object_info)
-            .collect())
+            .find(|((object_owner, _), info)| (object_owner == &object && info.name == name))
+            .map(|(_, object_info)| object_info.object_id))
     }
 
     pub fn get_object_by_key(
