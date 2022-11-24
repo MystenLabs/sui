@@ -115,7 +115,7 @@ async fn test_all_transaction_type() {
         .unwrap();
     let package = package.clone().reference.to_object_ref();
     // TODO: Improve tx response to make it easier to find objects.
-    let treasury = find_module_object(&effect, "managed").unwrap();
+    let treasury = find_module_object(&effect, "managed", "TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let tx = SingleTransactionKind::Call(MoveCall {
@@ -219,18 +219,23 @@ async fn test_all_transaction_type() {
     test_transaction(&client, keystore, vec![recipient], sender, tx, Some(coin1)).await;
 }
 
-fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<OwnedObjectRef> {
-    effects
+fn find_module_object(
+    effects: &SuiTransactionEffects,
+    module: &str,
+    object_type_name: &str,
+) -> OwnedObjectRef {
+    let mut results: Vec<_> = effects
         .events
         .iter()
-        .find_map(|event| {
+        .filter_map(|event| {
             if let SuiEvent::NewObject {
                 transaction_module,
                 object_id,
+                object_type,
                 ..
             } = event
             {
-                if transaction_module == module {
+                if transaction_module == module && object_type.contains(object_type_name) {
                     return effects
                         .created
                         .iter()
@@ -240,6 +245,10 @@ fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<O
             None
         })
         .cloned()
+        .collect();
+    // Check that there is only one object found, and hence no ambiguity.
+    assert_eq!(results.len(), 1);
+    results.pop().unwrap()
 }
 
 // Record current Sui balance of an address then execute the transaction,
