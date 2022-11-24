@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::iter;
 use std::time::Duration;
 use std::{
     collections::{HashMap, VecDeque},
@@ -2301,6 +2302,8 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
+                self.record_canonical_certificate_maybe(&certificate).await?;
+
                 if !self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
@@ -2434,5 +2437,20 @@ impl AuthorityState {
                 Err(err.into())
             }
         }
+    }
+
+    pub async fn record_canonical_certificate_maybe(
+        &self,
+        certificate: &VerifiedCertificate
+    ) -> SuiResult<()> {
+        let mut write_batch = self.database.perpetual_tables.canonical_certificates.batch();
+
+        // Store the certificate indexed by transaction digest
+        let transaction_digest: &TransactionDigest = certificate.digest();
+        write_batch = write_batch.insert_batch(
+            &self.database.perpetual_tables.canonical_certificates,
+            iter::once((transaction_digest, certificate.serializable_ref())),
+        )?;
+        write_batch.write().map_err(|e| SuiError::from("Failed to update canonical cert: {"))
     }
 }

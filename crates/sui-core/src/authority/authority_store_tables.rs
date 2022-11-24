@@ -117,6 +117,14 @@ pub struct AuthorityPerpetualTables<S> {
     /// by a specific user, and their object reference.
     pub(crate) owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
 
+    /// This is a map between the transaction digest and the corresponding certificate with
+    /// user canonical signature for all certificates that have been successfully processed by 
+    /// this authority. This set of certificates along with the genesis allows the reconstruction 
+    /// of all other state, and a full sync to this authority.
+    #[default_options_override_fn = "certificates_table_default_config"]
+    pub(crate) canonical_certificates: DBMap<TransactionDigest, TrustedCertificate>,
+
+    // TODO: move this certificate into epoch table
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this

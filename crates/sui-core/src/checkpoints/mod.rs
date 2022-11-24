@@ -32,7 +32,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
-    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
+    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint, CheckpointTransactionContent,
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tracing::{debug, error, info, warn};
@@ -278,6 +278,7 @@ impl CheckpointBuilder {
         }
     }
 
+
     async fn make_checkpoint(
         &self,
         height: CheckpointCommitHeight,
@@ -291,6 +292,7 @@ impl CheckpointBuilder {
         let roots = self.effects_store.notify_read(roots).await?;
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
+
         let new_checkpoint = self
             .create_checkpoint(sorted, last_checkpoint_of_epoch)
             .await;
@@ -338,6 +340,12 @@ impl CheckpointBuilder {
         Ok(())
     }
 
+
+    async fn get_checkpoint_tx_contents(self, effects: Vec<TransactionEffects>) -> Vec<CheckpointTransactionContent> {
+        // read from canonical_certificate table and get user sig
+        unimplemented!()
+    }
+
     async fn create_checkpoint(
         &self,
         mut effects: Vec<TransactionEffects>,
@@ -365,9 +373,11 @@ impl CheckpointBuilder {
         if effects.is_empty() {
             return None;
         }
-        let contents = CheckpointContents::new_with_causally_ordered_transactions(
-            effects.iter().map(TransactionEffects::execution_digests),
-        );
+        let transactions = self.get_checkpoint_tx_contents(effects);
+        let contents = CheckpointContents { transactions };
+        // let contents = CheckpointContents::new_with_causally_ordered_transactions(
+        //     effects.iter().map(TransactionEffects::execution_digests),
+        // );
         let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
         let sequence_number = last_checkpoint
             .as_ref()

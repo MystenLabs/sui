@@ -5,9 +5,9 @@ use fastcrypto::encoding::{Encoding, Hex};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
-use crate::base_types::ExecutionDigests;
+use crate::base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest};
 use crate::committee::{EpochId, StakeUnit};
-use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::{
@@ -399,13 +399,22 @@ pub struct CheckpointSignatureMessage {
     pub summary: SignedCheckpointSummary,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointTransactionContent {
+    pub transaction: TransactionDigest,
+    pub effects: TransactionEffectsDigest,
+    // TODO: need a structure to guarantee the vec is sorted
+    pub user_signature: Vec<Signature>,
+}
+
 /// CheckpointContents are the transactions included in an upcoming checkpoint.
 /// They must have already been causally ordered. Since the causal order algorithm
 /// is the same among validators, we expect all honest validators to come up with
 /// the same order for each checkpoint content.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    transactions: Vec<ExecutionDigests>,
+    // transactions: Vec<ExecutionDigests>,
+    transactions: Vec<CheckpointTransactionContent>,
 }
 
 impl CheckpointSignatureMessage {
