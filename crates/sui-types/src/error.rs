@@ -6,6 +6,7 @@ use crate::{
     base_types::*,
     committee::{EpochId, StakeUnit},
     messages::{ExecutionFailureStatus, MoveLocation},
+    messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
 use move_binary_format::errors::{Location, PartialVMError, VMError};
@@ -163,6 +164,11 @@ pub enum SuiError {
     },
     #[error("System Transaction not accepted")]
     InvalidSystemTransaction,
+    #[error("TransactionEffects with digests {effects_digests:?} for checkpoint {checkpoint:?} do not exist in checkpoint cert")]
+    InvalidTransactionEffects {
+        effects_digests: Vec<TransactionEffectsDigest>,
+        checkpoint: CheckpointSequenceNumber,
+    },
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
@@ -234,6 +240,10 @@ pub enum SuiError {
     SubscriptionServiceClosed,
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
+    #[error("Checkpoint {checkpoint:?} does not exist in checkpoint store")]
+    CheckpointMissingInStoreError {
+        checkpoint: CheckpointSequenceNumber,
+    },
     #[error(
         "ExecutionDriver error for {:?}: {} - Caused by : {}",
         digest,

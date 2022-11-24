@@ -58,6 +58,8 @@ use gossip::GossipMetrics;
 
 use crate::authority_client::NetworkAuthorityClientMetrics;
 
+pub mod checkpoint_executor;
+
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
