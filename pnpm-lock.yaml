@@ -415,6 +415,7 @@ importers:
       size-limit: ^7.0.8
       ts-auto-guard: ^2.4.1
       ts-node: ^10.9.1
+      ts-retry-promise: ^0.7.0
       tslib: ^2.3.1
       tsup: ^6.2.2
       tweetnacl: ^1.0.3
@@ -450,6 +451,7 @@ importers:
       size-limit: 7.0.8
       ts-auto-guard: 2.4.1
       ts-node: 10.9.1_typescript@4.8.3
+      ts-retry-promise: 0.7.0
       tslib: 2.4.0
       tsup: 6.2.2_qv3zdqwr5cvvfboiktsp7a3dfa
       typedoc: 0.23.11_typescript@4.8.3
@@ -18836,6 +18838,11 @@ packages:
       typescript: 4.8.3
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
+    dev: true
+
+  /ts-retry-promise/0.7.0:
+    resolution: {integrity: sha512-x6yWZXC4BfXy4UyMweOFvbS1yJ/Y5biSz/mEPiILtJZLrqD3ZxIpzVOGGgifHHdaSe3WxzFRtsRbychI6zofOg==}
+    engines: {node: '>=6'}
     dev: true
 
   /tsconfig-paths/3.14.1:
