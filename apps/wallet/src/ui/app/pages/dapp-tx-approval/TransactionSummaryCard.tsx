@@ -70,7 +70,7 @@ function CoinMeta({
         coinMeta.coinType
     );
     return (
-        <div className={st.content} key={receiverAddress}>
+        <div className={st.content}>
             <div className={st.row}>
                 <div className={st.label}>Send</div>
                 <div className={st.value}>
@@ -87,7 +87,7 @@ function CoinMeta({
                             className={st.origin}
                             showIcon={false}
                         >
-                            {new URL(origin || '').host}
+                            {new URL(origin).host}
                         </ExternalLink>
                     </div>
                 </div>
