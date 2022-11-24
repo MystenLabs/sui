@@ -25,7 +25,7 @@ module games_with_chance::test_satoshi_flip {
 
     fun start(ctx: &mut TxContext, house: address, player: address) {
         // send coins to players
-        let coinA = coin::mint_for_testing<SUI>(50000, ctx);
+        let coinA = coin::mint_for_testing<SUI>(5000, ctx);
         let coinB = coin::mint_for_testing<SUI>(5000, ctx);
         transfer::transfer(coinA, house);
         transfer::transfer(coinB, player);
@@ -97,7 +97,7 @@ module games_with_chance::test_satoshi_flip {
 
             // check that house has the correct amount
             let coinA = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            assert!(coin::value(&coinA) == 55000, EWronghouseTotal);
+            assert!(coin::value(&coinA) == 10000, EWronghouseTotal);
             test_scenario::return_to_sender(scenario, coinA);
 
             //check the game's outcome
@@ -186,14 +186,6 @@ module games_with_chance::test_satoshi_flip {
             test_scenario::return_shared(game_val);
         };
 
-        // check house's balance.
-        test_scenario::next_tx(scenario, house);
-        {
-            // check that house has the correct amount.
-            let coinA = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            assert!(coin::value(&coinA) == 45000, EWronghouseTotal);
-            test_scenario::return_to_sender(scenario, coinA);
-        };
         test_scenario::end(scenario_val);
     }
 
@@ -239,7 +231,7 @@ module games_with_chance::test_satoshi_flip {
         {
             // check that house has the correct amount.
             let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            assert!(coin::value(&coin) == 50000, EWronghouseTotal);
+            assert!(coin::value(&coin) == 5000, EWronghouseTotal);
             test_scenario::return_to_sender(scenario, coin);
         };
 
@@ -338,6 +330,13 @@ module games_with_chance::test_satoshi_flip {
     // tests for bet function with wrong data.
 
     // player stake too high.
+    fun start2(ctx: &mut TxContext, house: address, player: address) {
+        // send coins to players
+        let coinA = coin::mint_for_testing<SUI>(4999, ctx);
+        let coinB = coin::mint_for_testing<SUI>(5000, ctx);
+        transfer::transfer(coinA, house);
+        transfer::transfer(coinB, player);
+    }
     #[test]
     #[expected_failure(abort_code = 0)]
     fun player_stake_exceeds_max_bet() {
@@ -352,7 +351,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            start(test_scenario::ctx(scenario), house, player);
+            start2(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game.
@@ -381,6 +380,13 @@ module games_with_chance::test_satoshi_flip {
     }
 
     // player stake too low.
+    fun start3(ctx: &mut TxContext, house: address, player: address) {
+        // send coins to players
+        let coinA = coin::mint_for_testing<SUI>(10000, ctx);
+        let coinB = coin::mint_for_testing<SUI>(5000, ctx);
+        transfer::transfer(coinA, house);
+        transfer::transfer(coinB, player);
+    }
     #[test]
     #[expected_failure(abort_code = 1)]
     fun player_stake_bellow_min_bet() {
@@ -395,7 +401,7 @@ module games_with_chance::test_satoshi_flip {
         let scenario_val = test_scenario::begin(world);
         let scenario = &mut scenario_val;
         {
-            start(test_scenario::ctx(scenario), house, player);
+            start3(test_scenario::ctx(scenario), house, player);
         };
 
         // house creates the game.
@@ -475,7 +481,7 @@ module games_with_chance::test_satoshi_flip {
         let random_player = @0xCAFE;
         let secret = b"supersecret";
         let secret_hash = sha3_256(secret);
-        let max_bet = 40000; 
+        let max_bet = 5000; 
         let min_bet = 1000;
 
         let scenario_val = test_scenario::begin(world);
@@ -529,7 +535,7 @@ module games_with_chance::test_satoshi_flip {
         let secret = b"supersecret";
         let wrong_secret = b"simplesecret";
         let secret_hash = sha3_256(secret);
-        let max_bet = 40000; 
+        let max_bet = 5000; 
         let min_bet = 1000;
 
         let scenario_val = test_scenario::begin(world);

@@ -27,7 +27,8 @@ module games_with_chance::satoshi_flip {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    
+
+
     /* Terminology
         house: The user who picks the secret.
         player: The user who wages an amount on his/her guess.
@@ -46,6 +47,9 @@ module games_with_chance::satoshi_flip {
     const HASH: vector<u8> = b"SHA3-256";
 
     /// How many epochs must pass after `fun bet` was called, until the player may cancel a game.
+    ///
+    /// We chose 7 epochs because 7 days is the norm for fraud proof systems. This timeframe takes into account system/custody malfunctions,
+    /// network outages, blockchain monitoring delays, potential need for cold key retrieval, holidays, weekends...
     // TODO: This should be possible to be set by house up to a max limit.
     const EpochsCancelAfter: u64 = 7;
 
@@ -59,7 +63,7 @@ module games_with_chance::satoshi_flip {
     const ENotEnoughEpochsPassedToCancel: u64 = 6; // Can only cancel after above EpochsCancelAfter epochs, after the bet was placed.
     const ENotAllowedToEndGame: u64 = 7; // Only house may end a game.
     const ECannotCancelBeforeBetting: u64 = 8; // Only a game that has received a bet may be cancelled.
-    const EHouseCoinNotEnough: u64 = 9; // House provided coin with insuficient balance to cover max bet.
+    const EHouseCoinNotEnoughOrTooMuch: u64 = 9; // House provided coin should match the max_bet exactly.
     const EZeroMinBet: u64 = 10; // House set min_bet = 0.
     const EGameNotEnded: u64 = 11;
     const EAlreadyAcceptedBet: u64 = 12;
@@ -109,18 +113,13 @@ module games_with_chance::satoshi_flip {
     // fun(ctions)!
 
     /// Creates a new game and makes it a transfered object.
-    /// A user who wants to become house should call this function.
+    /// A user who wants to become house should call this function and provide a coin with balance equal to max_bet.
     ///
     /// The hash should be a SHA3-256 digest of at least 16 random bytes. The house is repsonsible for picking a proper random secret.
-    ///
-    /// The contract accepts a SUI coin with higher value as the house_coin than the max_bet.
-    /// because its logic ensures the difference will be returned when the game ends.
-    /// This is possible because everything is an object in Sui.
-    /// It is still highly recommended to use a coin with equal value to max_bet.
     public entry fun start_game(hash: vector<u8>, house_coin: Coin<SUI>, min_bet: u64, max_bet: u64, ctx: &mut TxContext) {
         assert!(min_bet > 0, EZeroMinBet);
         assert!(max_bet >= min_bet, EMinBetTooHigh);
-        assert!(coin::value(&house_coin) >= max_bet, EHouseCoinNotEnough);
+        assert!(coin::value(&house_coin) == max_bet, EHouseCoinNotEnoughOrTooMuch);
         let house_data = HouseData {
             house_balance: coin::into_balance(house_coin),
             min_bet,
