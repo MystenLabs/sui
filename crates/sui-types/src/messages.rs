@@ -2078,7 +2078,7 @@ impl ConsensusTransaction {
         let tx_digest = certificate.digest();
         tx_digest.hash(&mut hasher);
         authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
+        let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
@@ -2088,7 +2088,7 @@ impl ConsensusTransaction {
     pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
         data.summary.auth_signature.signature.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
+        let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::CheckpointSignature(Box::new(data)),
@@ -2098,7 +2098,7 @@ impl ConsensusTransaction {
     pub fn new_end_of_publish(authority: AuthorityName) -> Self {
         let mut hasher = DefaultHasher::new();
         authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
+        let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::EndOfPublish(authority),
