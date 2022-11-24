@@ -14,6 +14,8 @@
 ///
 /// The secret should be unpredictable, random and at least 16 bytes in size. The house is responsible for the randomness and picking a proper secret.
 /// This implementation checks the last bit of the first byte of the secret.
+///
+/// The secret must be hashed use the SHA3-256 algo since this implementation will check with this one for the validity of the secret.
 module games_with_chance::satoshi_flip {
     // imports
     use std::option::{Self, Option};
@@ -42,9 +44,6 @@ module games_with_chance::satoshi_flip {
         A guess = 2 in the outcome means player has not bet but the game was ended
         A guess = 3 in the outcome means player has bet but house refused to reveal in time
     */
-
-    /// Hash function the house will use.
-    const HASH: vector<u8> = b"SHA3-256";
 
     /// How many epochs must pass after `fun bet` was called, until the player may cancel a game.
     ///
