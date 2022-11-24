@@ -14,6 +14,8 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { notEmpty } from '_helpers';
+
 import type {
     SuiMoveNormalizedFunction,
     SuiTransactionResponse,
@@ -22,6 +24,7 @@ import type {
     MoveCallTransaction,
     UnserializedSignableTransaction,
     TransactionEffects,
+    ObjectOwner,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { TransactionRequest } from '_payloads/transactions';
@@ -85,30 +88,47 @@ const getRequestCost = (
     const events = txEffects?.events || [];
 
     const coinsMeta = events
-        .filter((event) => {
-            return (
-                'coinBalanceChange' in event &&
-                event?.coinBalanceChange?.changeType === 'Pay' &&
-                event?.coinBalanceChange?.owner?.AddressOwner === address
-            );
-        })
+
         .map((event) => {
+            if (
+                !('coinBalanceChange' in event) ||
+                event?.coinBalanceChange?.changeType !== 'Pay'
+            ) {
+                return null;
+            }
+            const { coinBalanceChange } = event;
+            const { coinType, amount, coinObjectId, sender, owner } =
+                coinBalanceChange;
+            const { AddressOwner } = owner as { AddressOwner: ObjectOwner };
+            if (AddressOwner !== address) {
+                return null;
+            }
+
             return {
-                amount: event.coinBalanceChange?.amount || 0,
-                coinType: event.coinBalanceChange?.coinType || null,
-                coinObjectId: event.coinBalanceChange?.coinObjectId || null,
-                receiverAddress: event.coinBalanceChange?.sender,
+                amount: amount,
+                coinType: coinType,
+                coinObjectId: coinObjectId,
+                receiverAddress: sender,
             };
-        });
+        })
+        .filter(notEmpty);
 
     const objectIDs: string[] = events
-        .filter(
-            (event) =>
-                'transferObject' in event &&
-                event?.transferObject?.recipient?.AddressOwner === address
-        )
-        .map((event) => event.transferObject?.objectId)
-        .filter(Boolean);
+
+        .map((event) => {
+            if (!('transferObject' in event)) {
+                return null;
+            }
+            const { transferObject } = event;
+            const { AddressOwner } = transferObject.recipient as {
+                AddressOwner: ObjectOwner;
+            };
+            if (AddressOwner !== address) {
+                return null;
+            }
+            return transferObject?.objectId;
+        })
+        .filter(notEmpty);
 
     /// Group coins by receiverAddress
     // sum coins by coinType for each receiverAddress
