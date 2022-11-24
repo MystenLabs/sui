@@ -185,7 +185,7 @@ module games_with_chance::satoshi_flip {
     /// Called by the player for a game with null BetData.
     /// The player should have already split the coin to be used so that it has a proper balance,
     /// the value should be between min and max bet.
-    public entry fun bet(game: &mut Game, guess: u8, stake_coin: Coin<SUI>, ctx: &mut TxContext) {
+    public entry fun play(game: &mut Game, guess: u8, stake_coin: Coin<SUI>, ctx: &mut TxContext) {
         assert!(option::is_none(&game.bet_data), EAlreadyAcceptedBet);
         let house_data = option::borrow(&game.house_data);
         assert!(coin::value(&stake_coin) <= house_data.max_bet, EStakeTooHigh);

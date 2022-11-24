@@ -73,7 +73,7 @@ module games_with_chance::test_satoshi_flip {
             let guess = 0;
 
             // ready to place the bet.
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -150,7 +150,7 @@ module games_with_chance::test_satoshi_flip {
 
             let guess = 1;
 
-            satoshi_flip::bet(&mut game_val, guess, coinB, ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB, ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -372,7 +372,7 @@ module games_with_chance::test_satoshi_flip {
             let guess = 0;
 
             // ready to place the bet.
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -422,7 +422,7 @@ module games_with_chance::test_satoshi_flip {
             let guess = 0;
 
             // ready to place the bet.
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -462,7 +462,7 @@ module games_with_chance::test_satoshi_flip {
             let ctx = test_scenario::ctx(scenario);
 
             let guess = 5;
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -507,7 +507,7 @@ module games_with_chance::test_satoshi_flip {
             let guess = 0;
 
             // ready to place the bet.
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -560,7 +560,7 @@ module games_with_chance::test_satoshi_flip {
 
             let guess = 0;
 
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
@@ -655,7 +655,7 @@ module games_with_chance::test_satoshi_flip {
             let guess = 0;
 
             // ready to place the bet.
-            satoshi_flip::bet(&mut game_val, guess, coinB,  ctx);
+            satoshi_flip::play(&mut game_val, guess, coinB,  ctx);
 
             test_scenario::return_shared(game_val);
         };
