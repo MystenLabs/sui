@@ -80,26 +80,30 @@ export type TxnMetaResponse = {
     coins: CoinsMetaProps[];
 };
 
-const getRequestCost = (
+const getEventsSummary = (
     txEffects: TransactionEffects,
     address: string
 ): TxnMetaResponse => {
     const events = txEffects?.events || [];
 
     const coinsMeta = events
-
         .map((event) => {
             if (
                 !('coinBalanceChange' in event) ||
-                event?.coinBalanceChange?.changeType !== 'Pay'
+                (event?.coinBalanceChange?.changeType !== 'Receive' &&
+                    event?.coinBalanceChange?.changeType !== 'Pay')
             ) {
                 return null;
             }
+            /// Combine all the coin balance changes from Pay and Receive events
+            /// A net positive amount means the user received coins
+            /// A net negative amount means the user sent coins
             const { coinBalanceChange } = event;
-            const { coinType, amount, coinObjectId, sender, owner } =
-                coinBalanceChange;
+            const { coinType, amount, coinObjectId, owner } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
-            if (AddressOwner !== address) {
+            const { ObjectOwner } = owner as { ObjectOwner: string };
+
+            if (ObjectOwner) {
                 return null;
             }
 
@@ -107,7 +111,7 @@ const getRequestCost = (
                 amount: amount,
                 coinType: coinType,
                 coinObjectId: coinObjectId,
-                receiverAddress: sender,
+                receiverAddress: AddressOwner,
             };
         })
         .filter(notEmpty);
@@ -175,7 +179,7 @@ export const executeDryRunTransactionRequest = createAsyncThunk<
 
         const txnMeta =
             dryRunResponse && activeAddress
-                ? getRequestCost(dryRunResponse, activeAddress)
+                ? getEventsSummary(dryRunResponse, activeAddress)
                 : null;
         return {
             txRequestID: id,

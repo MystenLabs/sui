@@ -313,7 +313,7 @@ export function DappTxApprovalPage() {
                         )}
                         <Permissions metadata={metadata} />
                         <SummaryCard transparentHeader>
-                            <SummaryCardHeader>
+                            <SummaryCardHeader transparentHeader>
                                 <div className="font-medium text-sui-steel-darker">
                                     Transaction Type
                                 </div>

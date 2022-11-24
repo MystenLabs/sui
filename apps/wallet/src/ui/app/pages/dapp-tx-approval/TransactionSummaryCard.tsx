@@ -69,17 +69,22 @@ function CoinMeta({
         coinMeta.amount ? Math.abs(coinMeta.amount) : 0,
         coinMeta.coinType
     );
+
+    /// A net positive amount means the user received coins and verse versa.
+    const sendLabel = coinMeta.amount < 0 ? 'Send' : 'Receive';
+    const receiveLabel = coinMeta.amount < 0 ? 'To' : 'From';
+
     return (
         <div className={st.content}>
             <div className={st.row}>
-                <div className={st.label}>Send</div>
+                <div className={st.label}>{sendLabel}</div>
                 <div className={st.value}>
                     {formattedAmount} {symbol}
                 </div>
             </div>
 
             <div className={st.row}>
-                <div className={st.label}>To</div>
+                <div className={st.label}>{receiveLabel}</div>
                 <div className={st.value}>
                     <div className={st.value}>
                         <ExternalLink
