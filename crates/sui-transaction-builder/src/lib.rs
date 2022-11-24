@@ -320,7 +320,7 @@ impl TransactionBuilder {
             .try_as_package()
             .cloned()
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
-        let package: MovePackage = MovePackage::new(package.id, &package.module_map);
+        let package: MovePackage = MovePackage::new(package.id, &package.module_map)?;
 
         let json_args = resolve_move_function_args(
             &package,

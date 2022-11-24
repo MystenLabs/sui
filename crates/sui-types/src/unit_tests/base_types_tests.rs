@@ -333,7 +333,7 @@ fn test_move_object_size_for_gas_metering() {
 #[test]
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
-    let package = Object::new_package(vec![module], TransactionDigest::genesis());
+    let package = Object::new_package(vec![module], TransactionDigest::genesis()).unwrap();
     let size = package.object_size_for_gas_metering();
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.

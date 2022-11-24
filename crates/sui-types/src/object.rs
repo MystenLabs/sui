@@ -32,11 +32,11 @@ pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 /// Maximum size of the `contents` part of an object, in bytes
-pub const MAX_MOVE_OBJECT_SIZE: usize = 250 * 1024; // 250 KB
+pub const MAX_MOVE_OBJECT_SIZE: u64 = 250 * 1024; // 250 KB
 
-// TODO: enforce this limit
+// TODO: increase to 500 KB. currently, publishing a package > 500 KB exceeds the max computation gas cost
 /// Maximum size of a Move package object, in bytes
-pub const MAX_MOVE_PACKAGE_SIZE: usize = 500 * 1024; // 500 KB
+pub const MAX_MOVE_PACKAGE_SIZE: u64 = 100 * 1024; // 100 KB
 
 /// Packages are immutable, version is always 1
 pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;
@@ -86,11 +86,11 @@ impl MoveObject {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
         debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
-        if contents.len() > MAX_MOVE_OBJECT_SIZE {
+        if contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
-                    object_size: contents.len() as u32,
-                    max_object_size: MAX_MOVE_OBJECT_SIZE as u32,
+                    object_size: contents.len() as u64,
+                    max_object_size: MAX_MOVE_OBJECT_SIZE,
                 },
             ));
         }
@@ -168,11 +168,11 @@ impl MoveObject {
         &mut self,
         new_contents: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        if new_contents.len() > MAX_MOVE_OBJECT_SIZE {
+        if new_contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
-                    object_size: new_contents.len() as u32,
-                    max_object_size: MAX_MOVE_OBJECT_SIZE as u32,
+                    object_size: new_contents.len() as u64,
+                    max_object_size: MAX_MOVE_OBJECT_SIZE,
                 },
             ));
         }
@@ -423,13 +423,13 @@ impl Object {
     pub fn new_package(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
-    ) -> Self {
-        Object {
-            data: Data::Package(MovePackage::from_iter(modules)),
+    ) -> Result<Self, ExecutionError> {
+        Ok(Object {
+            data: Data::Package(MovePackage::from_module_iter(modules)?),
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
-        }
+        })
     }
 
     pub fn is_immutable(&self) -> bool {
