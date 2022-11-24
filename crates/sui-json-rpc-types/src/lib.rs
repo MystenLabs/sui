@@ -544,7 +544,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                     )?
                 })
             }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)),
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
         };
         Ok(Object {
             data,

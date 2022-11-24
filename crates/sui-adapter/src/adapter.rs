@@ -378,7 +378,7 @@ pub fn store_package_and_init_modules<
 
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
-    let package_object = Object::new_package(modules, ctx.digest());
+    let package_object = Object::new_package(modules, ctx.digest())?;
     let id = package_object.id();
     let changes = BTreeMap::from([(
         id,
