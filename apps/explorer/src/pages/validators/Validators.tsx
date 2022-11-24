@@ -125,6 +125,34 @@ export function getValidatorState(
         });
 }
 
+export function sortValidatorsByStake(validators: Validator[]) {
+    validators.sort((a: Validator, b: Validator): number => {
+        if (a.fields.stake_amount < b.fields.stake_amount) return 1;
+        if (a.fields.stake_amount > b.fields.stake_amount) return -1;
+        return 0;
+    });
+}
+
+
+export function stakeColumn(validator: {
+    stake: BigInt;
+    stakePercent: number;
+}): JSX.Element {
+    return (
+        <div>
+            {' '}
+            {validator.stake.toString()}{' '}
+            <span>
+                {' '}
+                {validator.stakePercent.toFixed(2)} %
+            </span>
+        </div>
+    );
+}
+
+export const getStakePercent = (stake: bigint, total: bigint): number =>
+    Number(BigInt(stake) * BigInt(100)) / Number(total);
+
 function ValidatorPageResult() {
     const { state } = useLocation();
 
@@ -139,7 +167,7 @@ function ValidatorPageResult() {
     );
 }
 
-export function processValidators(set: Validator[]) {
+export function processValidators(set: Validator[], totalStake: bigint) {
     return set
         .map((av) => {
             const rawName = av.fields.metadata.fields.name;
@@ -156,8 +184,10 @@ export function processValidators(set: Validator[]) {
 }
 
 function ValidatorsPage({ state }: { state: ValidatorState }) {
+    const totalStake = state.validators.fields.total_validator_stake;
     const validatorsData = processValidators(
-        state.validators.fields.active_validators
+        state.validators.fields.active_validators,
+        totalStake
     );
 
     const tableData = {

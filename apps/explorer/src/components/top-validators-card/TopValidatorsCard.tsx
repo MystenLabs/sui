@@ -9,6 +9,8 @@ import {
     getValidatorState,
     processValidators,
     ValidatorLoadFail,
+    sortValidatorsByStake,
+    stakeColumn,
     type ValidatorState,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
@@ -109,9 +111,16 @@ export function TopValidatorsCardAPI() {
 }
 
 function TopValidatorsCard({ state }: { state: ValidatorState }) {
+
+
+    const totalStake = state.validators.fields.total_validator_stake;
     const validatorsData = processValidators(
-        state.validators.fields.active_validators
+        state.validators.fields.active_validators,
+        totalStake
     );
+    // sort by order of descending stake
+    sortValidatorsByStake(state.validators.fields.active_validators);
+  
 
     // map the above data to match the table - combine stake and stake percent
     // limit number validators to 10
@@ -119,6 +128,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
     const tableData = {
         data: validatorsData.splice(0, 10).map((validator) => ({
             name: validator.name,
+            stake: stakeColumn(validator.pubkeyBytes, validator.stake),
             address: (
                 <Longtext
                     text={validator.address}
