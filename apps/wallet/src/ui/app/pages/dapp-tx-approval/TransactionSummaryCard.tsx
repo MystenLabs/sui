@@ -109,10 +109,10 @@ export function TransactionSummaryCard({
             <SummaryCardHeader>Transaction summary</SummaryCardHeader>
             <SummaryCardContent>
                 {coinsMeta &&
-                    coinsMeta.map((coinMeta, index) => (
+                    coinsMeta.map((coinMeta) => (
                         <CoinMeta
                             receiverAddress={coinMeta.receiverAddress}
-                            key={index}
+                            key={coinMeta.receiverAddress + coinMeta.coinType}
                             coinMeta={coinMeta}
                             origin={origin}
                         />
