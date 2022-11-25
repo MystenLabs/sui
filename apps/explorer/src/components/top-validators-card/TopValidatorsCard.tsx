@@ -182,7 +182,12 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
                         {validator.stake.toString()}
                     </Text>
                 ),
-                address: <AddressLink address={validator.address} noTruncate={!limit}/>,
+                address: (
+                    <AddressLink
+                        address={validator.address}
+                        noTruncate={!limit}
+                    />
+                ),
             };
         }),
         columns: [
