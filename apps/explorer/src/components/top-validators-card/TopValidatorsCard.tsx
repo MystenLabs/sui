@@ -205,7 +205,7 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
 export function TopValidatorsCard({ limit }: { limit?: number }) {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
-        
+
     const validatorData =
         data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
             ? (data.details.data.fields as ValidatorState)
