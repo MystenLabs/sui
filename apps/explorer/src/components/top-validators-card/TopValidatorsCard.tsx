@@ -1,29 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    Base64DataBuffer,
-    isSuiObject,
-    isSuiMoveObject,
-    type GetObjectDataResponse,
-} from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
+import { Base64DataBuffer, isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { truncate } from '../../utils/stringUtils';
-import { mockState } from './mockData';
 
-import { useRpc } from '~/hooks/useRpc';
+import { useGetObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
+import { AddressLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 
 const VALIDATORS_OBJECT_ID = '0x05';
-const TRUNCATE_LENGTH = 16;
 const NUMBER_OF_VALIDATORS = 10;
 
 export type ValidatorMetadata = {
@@ -122,15 +114,7 @@ export type ValidatorState = {
     };
 };
 
-export function sortValidatorsByStake(validators: Validator[]) {
-    validators.sort((a: Validator, b: Validator): number => {
-        if (a.fields.stake_amount < b.fields.stake_amount) return 1;
-        if (a.fields.stake_amount > b.fields.stake_amount) return -1;
-        return 0;
-    });
-}
-
-function stakeColumn(validator: {
+function StakeColumn(validator: {
     stake: BigInt;
     stakePercent: number;
 }): JSX.Element {
@@ -146,77 +130,59 @@ function stakeColumn(validator: {
     );
 }
 
-export function processValidators(set: Validator[], totalStake: bigint) {
-    return set
-        .map((av) => {
-            const rawName = av.fields.metadata.fields.name;
-            const name = textDecoder.decode(
-                new Base64DataBuffer(rawName).getData()
-            );
-            return {
-                name: name,
-                address: av.fields.metadata.fields.sui_address,
-                pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
-                stake: av.fields.stake_amount,
-                stakePercent: getStakePercent(
-                    av.fields.stake_amount,
-                    totalStake
-                ),
-                delegation_count: av.fields.delegation_count || 0,
-            };
-        })
-        .sort((a, b) => (a.name > b.name ? 1 : -1));
+export function processSortValidators(set: Validator[], totalStake: bigint) {
+    return set.map((av) => {
+        const rawName = av.fields.metadata.fields.name;
+        const name = textDecoder.decode(
+            new Base64DataBuffer(rawName).getData()
+        );
+        return {
+            name: name,
+            address: av.fields.metadata.fields.sui_address,
+            pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
+            stake: av.fields.stake_amount,
+            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
+            delegation_count: av.fields.delegation_count || 0,
+        };
+    });
 }
 
-export const getStakePercent = (stake: bigint, total: bigint): number =>
-    Number(BigInt(stake) * BigInt(100)) / Number(total);
+export const getStakePercent = (stake: bigint, total: bigint): number => {
+    const bnStake = new BigNumber(stake.toString());
+    const bnTotal = new BigNumber(total.toString());
+    return bnStake.div(bnTotal).multipliedBy(100).toNumber();
+};
 
 const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
     const totalStake = validatorsData.validators.fields.total_validator_stake;
-    sortValidatorsByStake(validatorsData.validators.fields.active_validators);
-    const validators = processValidators(
+
+    const validators = processSortValidators(
         validatorsData.validators.fields.active_validators,
         totalStake
-    );
+    ).sort((a, b) => (a.name > b.name ? 1 : -1));
 
-    let cumulativeStakePercent = 0;
-    const validatorsItmes = limit ? validators.splice(0, limit) : validators;
+    const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
     return {
-        data: validatorsItmes.map((validator) => {
-            cumulativeStakePercent += validator.stakePercent;
+        data: validatorsItems.map((validator) => {
             return {
                 name: (
                     <Text variant="bodySmall" color="steel-dark">
                         {validator.name}
                     </Text>
                 ),
-                stake: stakeColumn(validator),
+                stake: (
+                    <StakeColumn
+                        stake={validator.stake}
+                        stakePercent={validator.stakePercent}
+                    />
+                ),
                 delegation: (
                     <Text variant="bodySmall" color="steel-darker">
                         {validator.stake.toString()}
                     </Text>
                 ),
-                cumulativeStake: (
-                    <Text variant="bodySmall" color="steel-darker">
-                        {cumulativeStakePercent.toFixed(2)}%
-                    </Text>
-                ),
-                address: (
-                    <Link
-                        variant="mono"
-                        to={`/addresses/${encodeURIComponent(
-                            validator.address
-                        )}`}
-                    >
-                        {truncate(validator.address, TRUNCATE_LENGTH)}
-                    </Link>
-                ),
-                pubkeyBytes: (
-                    <Text variant="bodySmall" color="steel-dark">
-                        {truncate(validator.pubkeyBytes, TRUNCATE_LENGTH)}
-                    </Text>
-                ),
+                address: <AddressLink address={validator.address} />,
             };
         }),
         columns: [
@@ -232,49 +198,22 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
                 headerLabel: 'Stake',
                 accessorKey: 'stake',
             },
-            {
-                headerLabel: 'Distribution',
-                accessorKey: 'cumulativeStake',
-            },
-            {
-                headerLabel: 'Pubkey Bytes',
-                accessorKey: 'pubkeyBytes',
-            },
         ],
     };
 };
 
-function TopValidatorsCardStatic({ limit }: { limit?: number }) {
-    const { data, columns } = validatorsTable(mockState, limit);
-    return <TableCard data={data} columns={columns} />;
-}
-
-function TopValidatorsCardAPI({ limit }: { limit?: number }) {
-    const rpc = useRpc();
-
-    const { data, isLoading, isSuccess, isError } = useQuery(
-        ['validatorS'],
-        async () => {
-            const validatorData: GetObjectDataResponse = await rpc.getObject(
-                VALIDATORS_OBJECT_ID
-            );
-            if (
-                !(
-                    isSuiObject(validatorData.details) &&
-                    isSuiMoveObject(validatorData.details.data)
-                )
-            ) {
-                throw new Error(
-                    'sui system state information not shaped as expected'
-                );
-            }
-            return validatorData.details.data.fields as ValidatorState;
-        }
-    );
+export function TopValidatorsCard({ limit }: { limit?: number }) {
+    const { data, isLoading, isSuccess, isError } =
+        useGetObject(VALIDATORS_OBJECT_ID);
+        
+    const validatorData =
+        data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
+            ? (data.details.data.fields as ValidatorState)
+            : null;
 
     const tableData = useMemo(
-        () => (data ? validatorsTable(data, limit) : null),
-        [data, limit]
+        () => (validatorData ? validatorsTable(validatorData, limit) : null),
+        [validatorData, limit]
     );
 
     if (isError || (!isLoading && !tableData?.data.length)) {
@@ -291,14 +230,8 @@ function TopValidatorsCardAPI({ limit }: { limit?: number }) {
                 <PlaceholderTable
                     rowCount={limit || NUMBER_OF_VALIDATORS}
                     rowHeight="13px"
-                    colHeadings={[
-                        'Name',
-                        'Address',
-                        'Stake',
-                        'Distribution',
-                        'Pubkey Bytes',
-                    ]}
-                    colWidths={['135px', '135px', '90px', '135px', '220px']}
+                    colHeadings={['Name', 'Address', 'Stake']}
+                    colWidths={['220px', '220px', '220px']}
                 />
             )}
 
@@ -321,13 +254,5 @@ function TopValidatorsCardAPI({ limit }: { limit?: number }) {
                 </>
             )}
         </>
-    );
-}
-
-export function TopValidatorsCard({ limit }: { limit?: number }) {
-    return IS_STATIC_ENV ? (
-        <TopValidatorsCardStatic limit={limit} />
-    ) : (
-        <TopValidatorsCardAPI limit={limit} />
     );
 }
