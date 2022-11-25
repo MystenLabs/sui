@@ -356,6 +356,170 @@
       ]
     },
     {
+      "name": "sui_executeTransactionSerializedSig",
+      "tags": [
+        {
+          "name": "APIs to execute transactions."
+        }
+      ],
+      "params": [
+        {
+          "name": "tx_bytes",
+          "description": "transaction data bytes, as base-64 encoded string",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "signature",
+          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "request_type",
+          "description": "The request type",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ExecuteTransactionRequestType"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiExecuteTransactionResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiExecuteTransactionResponse"
+        }
+      },
+      "examples": [
+        {
+          "name": "Execute an transaction with serialized signature",
+          "params": [
+            {
+              "name": "tx_bytes",
+              "value": "VHJhbnNhY3Rpb25EYXRhOjoAAG78RO21zT3+MvS/bD6KxC7vE4XgFAPkmkspatyyLqJ9PJLkziJWrGQCAAAAAAAAACDj8oL6SLPgEDupu+1qBhU7n8SG4QHw6eJwOshmbQauzLUWBLUYN139/dtd9SR4/whdIVoLXLq9w2zxufLshIGibKfYEWlVl5QCAAAAAAAAACACi48C5DAqVZXYiJpnxtMcbJcOVn8D72fYEaT4Q2ZbjQEAAAAAAAAA6AMAAAAAAAA="
+            },
+            {
+              "name": "signature",
+              "value": "ACKEmGsaz85GBvHaUVX0s1f6Eev26tiIPpRN3qvpUeYGG+h8/svy0+xxFSbsy8pw/rGUl2t74ZRiMwhsKmXApwQETxNsaJH6UBKN/GfiZ46X8iMV/dyLU/zHwVMrBp9VTQ=="
+            },
+            {
+              "name": "request_type",
+              "value": "WaitForLocalExecution"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "certificate": {
+                "transactionDigest": "ewa++QvMPU1gkIJuz9F9r5RMGyAjOGZWB5+jBqkmDfg=",
+                "data": {
+                  "transactions": [
+                    {
+                      "TransferObject": {
+                        "recipient": "0x6efc44edb5cd3dfe32f4bf6c3e8ac42eef1385e0",
+                        "objectRef": {
+                          "objectId": "0x1403e49a4b296adcb22ea27d3c92e4ce2256ac64",
+                          "version": 2,
+                          "digest": "4/KC+kiz4BA7qbvtagYVO5/EhuEB8OnicDrIZm0Grsw="
+                        }
+                      }
+                    }
+                  ],
+                  "sender": "0xb51604b518375dfdfddb5df52478ff085d215a0b",
+                  "gasPayment": {
+                    "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794",
+                    "version": 2,
+                    "digest": "AouPAuQwKlWV2IiaZ8bTHGyXDlZ/A+9n2BGk+ENmW40="
+                  },
+                  "gasBudget": 1000
+                },
+                "txSignature": "ACKEmGsaz85GBvHaUVX0s1f6Eev26tiIPpRN3qvpUeYGG+h8/svy0+xxFSbsy8pw/rGUl2t74ZRiMwhsKmXApwQETxNsaJH6UBKN/GfiZ46X8iMV/dyLU/zHwVMrBp9VTQ==",
+                "authSignInfo": {
+                  "epoch": 0,
+                  "signature": "",
+                  "signers_map": [
+                    58,
+                    48,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              },
+              "effects": {
+                "status": {
+                  "status": "success"
+                },
+                "gasUsed": {
+                  "computationCost": 100,
+                  "storageCost": 100,
+                  "storageRebate": 10
+                },
+                "transactionDigest": "Td9+eSajYZcMZaWxLEOAXQ1vVAKnrQ2lvexUnHzeoGs=",
+                "mutated": [
+                  {
+                    "owner": {
+                      "AddressOwner": "0xb51604b518375dfdfddb5df52478ff085d215a0b"
+                    },
+                    "reference": {
+                      "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794",
+                      "version": 2,
+                      "digest": "AouPAuQwKlWV2IiaZ8bTHGyXDlZ/A+9n2BGk+ENmW40="
+                    }
+                  },
+                  {
+                    "owner": {
+                      "AddressOwner": "0x6efc44edb5cd3dfe32f4bf6c3e8ac42eef1385e0"
+                    },
+                    "reference": {
+                      "objectId": "0x1403e49a4b296adcb22ea27d3c92e4ce2256ac64",
+                      "version": 2,
+                      "digest": "4/KC+kiz4BA7qbvtagYVO5/EhuEB8OnicDrIZm0Grsw="
+                    }
+                  }
+                ],
+                "gasObject": {
+                  "owner": {
+                    "ObjectOwner": "0xb51604b518375dfdfddb5df52478ff085d215a0b"
+                  },
+                  "reference": {
+                    "objectId": "0x5cbabdc36cf1b9f2ec8481a26ca7d81169559794",
+                    "version": 2,
+                    "digest": "AouPAuQwKlWV2IiaZ8bTHGyXDlZ/A+9n2BGk+ENmW40="
+                  }
+                },
+                "events": [
+                  {
+                    "transferObject": {
+                      "packageId": "0x0000000000000000000000000000000000000002",
+                      "transactionModule": "native",
+                      "sender": "0xb51604b518375dfdfddb5df52478ff085d215a0b",
+                      "recipient": {
+                        "AddressOwner": "0x6efc44edb5cd3dfe32f4bf6c3e8ac42eef1385e0"
+                      },
+                      "objectType": "0x2::example::Object",
+                      "objectId": "0x1403e49a4b296adcb22ea27d3c92e4ce2256ac64",
+                      "version": 2
+                    }
+                  }
+                ]
+              },
+              "timestamp_ms": null,
+              "parsed_data": null
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "sui_getCoinMetadata",
       "tags": [
         {
