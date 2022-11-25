@@ -179,7 +179,6 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
         totalStake
     );
 
-    // sort by order of descending stake
     let cumulativeStakePercent = 0;
     const validatorsItmes = limit ? validators.splice(0, limit) : validators;
 
