@@ -5,10 +5,7 @@ import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
-import {
-    TopValidatorsCardStatic,
-    TopValidatorsCardAPI,
-} from '../../components/top-validators-card/TopValidatorsCard';
+import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
@@ -33,7 +30,18 @@ function HomeStatic() {
                 <LatestTxCard />
             </section>
             <section className="right-item">
-                <TopValidatorsCardStatic />
+                <div data-testid="validators-table">
+                    <TabGroup>
+                        <TabList>
+                            <Tab>Validators</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <TopValidatorsCard limit={10} />
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
+                </div>
             </section>
         </div>
     );
@@ -55,14 +63,21 @@ function HomeAPI() {
                 </ErrorBoundary>
             </section>
             <section className="right-item flex flex-col gap-10 md:gap-12">
-                <ErrorBoundary>
-                    <TopValidatorsCardAPI />
-                </ErrorBoundary>
-                <ErrorBoundary>
-                    <Suspense fallback={null}>
-                        <ValidatorMap />
-                    </Suspense>
-                </ErrorBoundary>
+                <div data-testid="validators-table">
+                    <TabGroup>
+                        <TabList>
+                            <Tab>Validators</Tab>
+                        </TabList>
+                        <TabPanels>
+                            <TabPanel>
+                                <TopValidatorsCard limit={10} />
+                            </TabPanel>
+                        </TabPanels>
+                    </TabGroup>
+                </div>
+                <Suspense fallback={null}>
+                    <ValidatorMap />
+                </Suspense>
                 <div>
                     <TabGroup>
                         <TabList>
