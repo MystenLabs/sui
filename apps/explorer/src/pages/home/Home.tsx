@@ -3,6 +3,7 @@
 import cl from 'clsx';
 import { lazy, Suspense } from 'react';
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import {
     TopValidatorsCardStatic,
@@ -46,16 +47,22 @@ function HomeAPI() {
             className={cl([styles.home, styles.container])}
         >
             <section className="left-item mb-4 md:mb-0">
-                <LatestTxCard
-                    txPerPage={TXN_PER_PAGE}
-                    paginationtype="more button"
-                />
+                <ErrorBoundary>
+                    <LatestTxCard
+                        txPerPage={TXN_PER_PAGE}
+                        paginationtype="more button"
+                    />
+                </ErrorBoundary>
             </section>
             <section className="right-item flex flex-col gap-10 md:gap-12">
-                <TopValidatorsCardAPI />
-                <Suspense fallback={null}>
-                    <ValidatorMap />
-                </Suspense>
+                <ErrorBoundary>
+                    <TopValidatorsCardAPI />
+                </ErrorBoundary>
+                <ErrorBoundary>
+                    <Suspense fallback={null}>
+                        <ValidatorMap />
+                    </Suspense>
+                </ErrorBoundary>
                 <div>
                     <TabGroup>
                         <TabList>
@@ -63,7 +70,9 @@ function HomeAPI() {
                         </TabList>
                         <TabPanels>
                             <TabPanel>
-                                <RecentModulesCard />
+                                <ErrorBoundary>
+                                    <RecentModulesCard />
+                                </ErrorBoundary>
                             </TabPanel>
                         </TabPanels>
                     </TabGroup>

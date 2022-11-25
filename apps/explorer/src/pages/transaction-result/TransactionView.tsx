@@ -14,6 +14,7 @@ import {
 } from '@mysten/sui.js';
 import cl from 'clsx';
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
     eventToDisplay,
     getAddressesLinks,
@@ -512,10 +513,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         styles.txgridcolspan3,
                                     ])}
                                 >
-                                    <ModulesWrapper
-                                        id={txKindData.objectId?.value}
-                                        data={modules}
-                                    />
+                                    <ErrorBoundary>
+                                        <ModulesWrapper
+                                            id={txKindData.objectId?.value}
+                                            data={modules}
+                                        />
+                                    </ErrorBoundary>
                                 </section>
                             )}
                         </div>

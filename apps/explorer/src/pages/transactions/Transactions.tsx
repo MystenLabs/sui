@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
@@ -24,11 +25,13 @@ function TransactionsAPI() {
             id="transaction"
             className={styles.container}
         >
-            <LatestTxCard
-                txPerPage={TXN_PER_PAGE}
-                paginationtype="pagination"
-                truncateLength={TRUNCATE_LENGTH}
-            />
+            <ErrorBoundary>
+                <LatestTxCard
+                    txPerPage={TXN_PER_PAGE}
+                    paginationtype="pagination"
+                    truncateLength={TRUNCATE_LENGTH}
+                />
+            </ErrorBoundary>
         </div>
     );
 }
