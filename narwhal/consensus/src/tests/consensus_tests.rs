@@ -105,7 +105,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let mut committed_output_no_crash: Vec<Certificate> = Vec::new();
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
-        assert_eq!(sub_dag.consensus_index, consensus_index_counter);
+        assert_eq!(sub_dag.sub_dag_index, consensus_index_counter);
         for output in sub_dag.certificates {
             assert!(output.round() <= 4);
 
@@ -194,7 +194,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let mut committed_output_before_crash: Vec<Certificate> = Vec::new();
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
-        assert_eq!(sub_dag.consensus_index, consensus_index_counter);
+        assert_eq!(sub_dag.sub_dag_index, consensus_index_counter);
         for output in sub_dag.certificates {
             assert!(output.round() <= 2);
 

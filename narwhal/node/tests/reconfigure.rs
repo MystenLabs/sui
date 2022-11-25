@@ -23,7 +23,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::Certificate;
+use types::{ConsensusOutput, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
 
@@ -74,17 +74,34 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    async fn handle_consensus_transaction(
-        &self,
-        _consensus_output: &Arc<Certificate>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
-    ) {
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+        let mut i = 0;
+        for (_, batches) in consensus_output.batches {
+            for batch in batches {
+                for transaction in batch.transactions.into_iter() {
+                    i += 1;
+                    let mut change_epoch = false;
+                    if i % 3 == 0 {
+                        change_epoch = true
+                    }
+                    self.process_transaction(transaction, change_epoch).await;
+                }
+            }
+        }
+    }
+
+    async fn load_execution_indices(&self) -> ExecutionIndices {
+        ExecutionIndices::default()
+    }
+}
+
+impl SimpleExecutionState {
+    async fn process_transaction(&self, transaction: Transaction, change_epoch: bool) {
         let transaction: u64 = bincode::deserialize(&transaction).unwrap();
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
+        if transaction >= epoch && change_epoch {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
@@ -110,10 +127,6 @@ impl ExecutionState for SimpleExecutionState {
         }
 
         let _ = self.tx_output.send(epoch).await;
-    }
-
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        ExecutionIndices::default()
     }
 }
 

@@ -102,7 +102,7 @@ impl ConsensusProtocol for Tusk {
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-                consensus_index,
+                sub_dag_index: consensus_index,
             };
 
             // Increase the global consensus index.

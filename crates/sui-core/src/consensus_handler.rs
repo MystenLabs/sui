@@ -6,7 +6,7 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
 use async_trait::async_trait;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{Certificate, CommittedSubDag};
+use narwhal_types::{CommittedSubDag, ConsensusOutput};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -32,7 +32,7 @@ impl ConsensusHandler {
     fn update_hash(
         last_seen: &Mutex<ExecutionIndicesWithHash>,
         index: ExecutionIndices,
-        v: &[u8],
+        v: &[u8; 8],
     ) -> Option<ExecutionIndicesWithHash> {
         let mut last_seen_guard = last_seen
             .try_lock()
@@ -46,11 +46,11 @@ impl ConsensusHandler {
         previous_hash.hash(&mut hasher);
         v.hash(&mut hasher);
         let hash = hasher.finish();
-        // Log hash for every certificate
-        if index.next_transaction_index == 1 && index.next_batch_index == 1 {
+        // Log hash for every sub dag
+        if index.sub_dag_index == 1 && last_seen_guard.index.sub_dag_index == 1 {
             debug!(
-                "Integrity hash for consensus output at certificate {} is {:016x}",
-                index.next_certificate_index, hash
+                "Integrity hash for consensus output at subdag {} is {:016x}",
+                index.sub_dag_index, hash
             );
         }
         let last_seen = ExecutionIndicesWithHash { index, hash };
@@ -63,58 +63,74 @@ impl ConsensusHandler {
 impl ExecutionState for ConsensusHandler {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_output(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: &Arc<Certificate>,
-        consensus_index: ExecutionIndices,
-        serialized_transaction: Vec<u8>,
+        consensus_output: ConsensusOutput,
     ) {
-        let index = Self::update_hash(
-            &self.last_seen,
-            consensus_index.clone(),
-            &serialized_transaction,
-        );
-        let index = if let Some(index) = index {
-            index
-        } else {
-            debug!(
+        let mut sequenced_transactions = Vec::new();
+        let mut seq = 0;
+
+        for (cert, batches) in consensus_output.batches {
+            let round = cert.header.round;
+            let author = cert.header.author.clone();
+            let output_cert = Arc::new(cert);
+            for batch in batches {
+                for serialized_transaction in batch.transactions {
+                    let transaction = match bincode::deserialize::<ConsensusTransaction>(
+                        &serialized_transaction,
+                    ) {
+                        Ok(transaction) => transaction,
+                        Err(err) => {
+                            warn!(
+                                    "Ignoring malformed transaction (failed to deserialize) from {}: {}",
+                                    author, err
+                                );
+                            continue;
+                        }
+                    };
+                    let index = ExecutionIndices {
+                        last_committed_round: round,
+                        sub_dag_index: consensus_output.sub_dag.sub_dag_index,
+                        transaction_index: seq,
+                    };
+
+                    let index_with_hash =
+                        match Self::update_hash(&self.last_seen, index, &transaction.tracking_id) {
+                            Some(i) => i,
+                            None => {
+                                debug!(
                 "Ignore consensus transaction at index {:?} as it appear to be already processed",
-                consensus_index
+                index
             );
-            return;
-        };
-        let transaction =
-            match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
-                Ok(transaction) => transaction,
-                Err(err) => {
-                    warn!(
-                        "Ignoring malformed transaction (failed to deserialize) from {}: {}",
-                        consensus_output.header.author, err
-                    );
-                    return;
+                                continue;
+                            }
+                        };
+
+                    sequenced_transactions.push(SequencedConsensusTransaction {
+                        certificate: output_cert.clone(),
+                        consensus_index: index_with_hash,
+                        transaction,
+                    });
+                    seq += 1;
                 }
+            }
+        }
+
+        for sequenced_transaction in sequenced_transactions {
+            let verified_transaction = match self
+                .state
+                .verify_consensus_transaction(sequenced_transaction)
+            {
+                Ok(verified_transaction) => verified_transaction,
+                Err(()) => return,
             };
-        let sequenced_transaction = SequencedConsensusTransaction {
-            consensus_output: consensus_output.clone(),
-            consensus_index: index,
-            transaction,
-        };
-        let verified_transaction = match self
-            .state
-            .verify_consensus_transaction(consensus_output.as_ref(), sequenced_transaction)
-        {
-            Ok(verified_transaction) => verified_transaction,
-            Err(()) => return,
-        };
-        self.state
-            .handle_consensus_transaction(
-                consensus_output.as_ref(),
-                verified_transaction,
-                &self.checkpoint_service,
-            )
-            .await
-            .expect("Unrecoverable error in consensus handler");
+
+            self.state
+                .handle_consensus_transaction(verified_transaction, &self.checkpoint_service)
+                .await
+                .expect("Unrecoverable error in consensus handler");
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(result))]
@@ -141,7 +157,7 @@ impl ExecutionState for ConsensusHandler {
 }
 
 pub struct SequencedConsensusTransaction {
-    pub consensus_output: Arc<narwhal_types::Certificate>,
+    pub certificate: Arc<narwhal_types::Certificate>,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: ConsensusTransaction,
 }
@@ -160,7 +176,7 @@ impl SequencedConsensusTransaction {
     pub fn new_test(transaction: ConsensusTransaction) -> Self {
         Self {
             transaction,
-            consensus_output: Default::default(),
+            certificate: Default::default(),
             consensus_index: Default::default(),
         }
     }
@@ -169,30 +185,29 @@ impl SequencedConsensusTransaction {
 #[test]
 pub fn test_update_hash() {
     let index0 = ExecutionIndices {
-        next_certificate_index: 0,
-        next_batch_index: 0,
-        next_transaction_index: 0,
+        sub_dag_index: 0,
+        transaction_index: 0,
         last_committed_round: 0,
     };
     let index1 = ExecutionIndices {
-        next_certificate_index: 0,
-        next_batch_index: 1,
-        next_transaction_index: 0,
+        sub_dag_index: 0,
+        transaction_index: 1,
         last_committed_round: 0,
     };
     let index2 = ExecutionIndices {
-        next_certificate_index: 0,
-        next_batch_index: 2,
-        next_transaction_index: 0,
+        sub_dag_index: 1,
+        transaction_index: 0,
         last_committed_round: 0,
     };
 
     let last_seen = ExecutionIndicesWithHash {
-        index: index1.clone(),
+        index: index1,
         hash: 1000,
     };
+
     let last_seen = Mutex::new(last_seen);
-    assert!(ConsensusHandler::update_hash(&last_seen, index0, &[0]).is_none());
-    assert!(ConsensusHandler::update_hash(&last_seen, index1, &[0]).is_none());
-    assert!(ConsensusHandler::update_hash(&last_seen, index2, &[0]).is_some());
+    let tx = &[0, 0, 0, 0, 0, 0, 0, 0];
+    assert!(ConsensusHandler::update_hash(&last_seen, index0, tx).is_none());
+    assert!(ConsensusHandler::update_hash(&last_seen, index1, tx).is_none());
+    assert!(ConsensusHandler::update_hash(&last_seen, index2, tx).is_some());
 }
