@@ -100,7 +100,7 @@ cast = { version = "0.3", default-features = false }
 cbc = { version = "0.1", features = ["alloc", "block-padding", "std"] }
 cfg-expr = { version = "0.12", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
-chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
+chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "serde", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
 ciborium = { version = "0.2", features = ["std"] }
 ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
@@ -163,6 +163,7 @@ derive_builder = { version = "0.11", features = ["std"] }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 dhat = { version = "0.3", default-features = false }
+diesel = { version = "2", features = ["32-column-tables", "bitflags", "byteorder", "chrono", "itoa", "postgres", "postgres_backend", "pq-sys", "serde_json", "with-deprecated"] }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -420,6 +421,7 @@ plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3", features = ["fallback"] }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
+pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2", features = ["diff", "difflib", "float-cmp", "normalize-line-endings", "regex"] }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
@@ -750,7 +752,7 @@ cc = { version = "1", default-features = false, features = ["jobserver", "parall
 cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.12", features = ["target-lexicon", "targets"] }
 cfg-if = { version = "1", default-features = false }
-chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
+chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "serde", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
 chrono-tz-build = { version = "0.0.3", default-features = false }
 ciborium = { version = "0.2", features = ["std"] }
@@ -827,6 +829,8 @@ derive_more = { version = "0.99", features = ["add", "add_assign", "as_mut", "as
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 dhat = { version = "0.3", default-features = false }
+diesel = { version = "2", features = ["32-column-tables", "bitflags", "byteorder", "chrono", "itoa", "postgres", "postgres_backend", "pq-sys", "serde_json", "with-deprecated"] }
+diesel_derives = { version = "2", features = ["32-column-tables", "postgres", "with-deprecated"] }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -1116,6 +1120,7 @@ plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3", features = ["fallback"] }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
+pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2", features = ["diff", "difflib", "float-cmp", "normalize-line-endings", "regex"] }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
@@ -1134,7 +1139,7 @@ proptest-derive = { version = "0.3", default-features = false }
 prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
 prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
 prost-build-93f6ce9d446188ac = { package = "prost-build", version = "0.10" }
-prost-build-a6292c17cd707f01 = { package = "prost-build", version = "0.11" }
+prost-build-a6292c17cd707f01 = { package = "prost-build", version = "0.11", features = ["format", "prettyplease", "syn"] }
 prost-derive-93f6ce9d446188ac = { package = "prost-derive", version = "0.10", default-features = false }
 prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
 prost-types-93f6ce9d446188ac = { package = "prost-types", version = "0.10", default-features = false }
