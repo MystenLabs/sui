@@ -15,7 +15,7 @@ use network::failpoints::initialise_network_failpoints;
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
-use storage::NodeStorage;
+use storage::{failpoints::initialize_storage_failpoints, NodeStorage};
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
@@ -118,6 +118,7 @@ impl Node {
         };
 
         initialise_network_failpoints();
+        initialize_storage_failpoints();
 
         // Spawn the primary.
         let primary_handles = Primary::spawn(
@@ -254,6 +255,7 @@ impl Node {
 
         let metrics = initialise_metrics(registry);
         initialise_network_failpoints();
+        initialize_storage_failpoints();
 
         for (id, keypair) in ids_and_keypairs {
             let worker_handles = Worker::spawn(

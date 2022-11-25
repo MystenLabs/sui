@@ -59,6 +59,12 @@ impl CertificateStore {
 
     /// Inserts a certificate to the store
     pub fn write(&self, certificate: Certificate) -> StoreResult<()> {
+        fail::fail_point!("certificate-store", |_| {
+            Err(TypedStoreError::RocksDBError(format!(
+                "Injected error in certificate store write"
+            )))
+        });
+
         let mut batch = self.certificates_by_id.batch();
 
         let id = certificate.digest();
@@ -96,6 +102,12 @@ impl CertificateStore {
         &self,
         certificates: impl IntoIterator<Item = Certificate>,
     ) -> StoreResult<()> {
+        fail::fail_point!("certificate-store", |_| {
+            Err(TypedStoreError::RocksDBError(format!(
+                "Injected error in certificate store write all"
+            )))
+        });
+
         let mut batch = self.certificates_by_id.batch();
 
         let certificates: Vec<_> = certificates
@@ -137,6 +149,12 @@ impl CertificateStore {
     /// Retrieves a certificate from the store. If not found
     /// then None is returned as result.
     pub fn read(&self, id: CertificateDigest) -> StoreResult<Option<Certificate>> {
+        fail::fail_point!("certificate-store", |_| {
+            Err(TypedStoreError::RocksDBError(format!(
+                "Injected error in certificate store read"
+            )))
+        });
+
         self.certificates_by_id.get(&id)
     }
 
@@ -147,6 +165,12 @@ impl CertificateStore {
         origin: PublicKey,
         round: Round,
     ) -> StoreResult<Option<Certificate>> {
+        fail::fail_point!("certificate-store", |_| {
+            Err(TypedStoreError::RocksDBError(format!(
+                "Injected error in certificate store read by index"
+            )))
+        });
+
         match self.certificate_id_by_origin.get(&(origin, round))? {
             Some(d) => self.certificates_by_id.get(&d),
             None => Ok(None),
@@ -159,6 +183,12 @@ impl CertificateStore {
         &self,
         ids: impl IntoIterator<Item = CertificateDigest>,
     ) -> StoreResult<Vec<Option<Certificate>>> {
+        fail::fail_point!("certificate-store", |_| {
+            Err(TypedStoreError::RocksDBError(format!(
+                "Injected error in certificate store read all"
+            )))
+        });
+
         self.certificates_by_id.multi_get(ids)
     }
 

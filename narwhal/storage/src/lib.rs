@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod certificate_store;
+pub mod failpoints;
 mod node_store;
 mod proposer_store;
 
