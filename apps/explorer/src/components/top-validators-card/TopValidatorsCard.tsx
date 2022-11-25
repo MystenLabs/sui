@@ -136,7 +136,7 @@ function stakeColumn(validator: {
 }): JSX.Element {
     return (
         <div className="flex gap-1.5 items-end">
-            <Text variant="body" color="steel-darker">
+            <Text variant="bodySmall" color="steel-darker">
                 {validator.stake.toString()}
             </Text>
             <Text variant="caption" color="steel">
