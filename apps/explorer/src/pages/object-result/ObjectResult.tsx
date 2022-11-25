@@ -94,11 +94,7 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     }, [objID, rpc]);
 
     if (showObjectState.loadState === 'loaded') {
-        return (
-            <ErrorBoundary>
-                <ObjectView data={showObjectState as DataType} />
-            </ErrorBoundary>
-        );
+        return <ObjectView data={showObjectState as DataType} />;
     }
     if (showObjectState.loadState === 'pending') {
         return (
@@ -133,14 +129,20 @@ function ObjectResult() {
     const { state } = useLocation();
 
     if (instanceOfDataType(state)) {
-        return <ObjectView data={state} />;
+        return (
+            <ErrorBoundary>
+                <ObjectView data={state} />
+            </ErrorBoundary>
+        );
     }
 
     if (objID !== undefined) {
         return IS_STATIC_ENV ? (
             <ObjectResultStatic objID={objID} />
         ) : (
-            <ObjectResultAPI objID={objID} />
+            <ErrorBoundary>
+                <ObjectResultAPI objID={objID} />
+            </ErrorBoundary>
         );
     }
 

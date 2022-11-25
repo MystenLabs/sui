@@ -30,7 +30,7 @@ function ObjectView({ data }: { data: DataType }) {
                     <PkgView data={data} />
                 ) : (
                     <TokenView data={data} />
-                )}{' '}
+                )}
             </ErrorBoundary>
         </>
     );
