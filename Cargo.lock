@@ -2134,6 +2134,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68c186a7418a2aac330bb76cde82f16c36b03a66fb91db32d20214311f9f6545"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "chrono",
+ "diesel_derives",
+ "itoa 1.0.4",
+ "pq-sys",
+ "serde_json",
+]
+
+[[package]]
+name = "diesel_derives"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "143b758c91dbc3fe1fdcb0dba5bd13276c6a66422f2ef5795b58488248a310aa"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "syn 1.0.103",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5451,7 +5478,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "prost 0.11.0",
- "prost-build 0.11.1",
+ "prost-build 0.11.2",
  "protobuf-src",
  "rand 0.8.5",
  "roaring",
@@ -6424,6 +6451,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
 
 [[package]]
+name = "pq-sys"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b845d6d8ec554f972a2c5298aad68953fd64e7441e846075450b44656a016d1"
+dependencies = [
+ "vcpkg",
+]
+
+[[package]]
 name = "predicates"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6650,9 +6686,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.11.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f835c582e6bd972ba8347313300219fed5bfa52caf175298d860b61ff6069bb"
+checksum = "1d8b442418ea0822409d9e7d047cbf1e7e9e1760b172bf9982cf29d517c93511"
 dependencies = [
  "bytes",
  "heck 0.4.0",
@@ -6661,9 +6697,11 @@ dependencies = [
  "log",
  "multimap",
  "petgraph 0.6.2",
+ "prettyplease",
  "prost 0.11.0",
  "prost-types 0.11.1",
  "regex",
+ "syn 1.0.103",
  "tempfile",
  "which",
 ]
@@ -8690,6 +8728,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "backoff",
+ "chrono",
+ "diesel",
+ "dotenvy",
+ "futures",
+ "jsonrpsee",
+ "narwhal-network",
+ "serde 1.0.147",
+ "serde_json",
+ "sui",
+ "sui-config",
+ "sui-core",
+ "sui-framework-build",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "telemetry-subscribers",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-json"
 version = "0.0.0"
 dependencies = [
@@ -9909,7 +9981,7 @@ checksum = "48c6fd7c2581e36d63388a9e04c350c21beb7a8b059580b2e93993c526899ddc"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
- "prost-build 0.11.1",
+ "prost-build 0.11.2",
  "quote 1.0.21",
  "syn 1.0.103",
 ]
@@ -11029,6 +11101,8 @@ dependencies = [
  "determinator",
  "deunicode",
  "dhat",
+ "diesel",
+ "diesel_derives",
  "diff",
  "difference",
  "difflib",
@@ -11346,6 +11420,7 @@ dependencies = [
  "portable-atomic",
  "pprof",
  "ppv-lite86",
+ "pq-sys",
  "predicates",
  "predicates-core",
  "predicates-tree",
@@ -11364,7 +11439,7 @@ dependencies = [
  "prost 0.10.4",
  "prost 0.11.0",
  "prost-build 0.10.4",
- "prost-build 0.11.1",
+ "prost-build 0.11.2",
  "prost-derive 0.10.1",
  "prost-derive 0.11.0",
  "prost-types 0.10.1",

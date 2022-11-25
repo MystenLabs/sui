@@ -20,6 +20,7 @@ members = [
     "crates/sui-framework",
     "crates/sui-framework-build",
     "crates/sui-gateway",
+    "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-types",
