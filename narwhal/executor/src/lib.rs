@@ -5,14 +5,12 @@ mod state;
 mod subscriber;
 
 mod metrics;
-mod notifier;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
 use tracing::info;
 
 use crate::metrics::ExecutorMetrics;
-use crate::notifier::Notifier;
 use async_trait::async_trait;
 use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
@@ -28,7 +26,7 @@ use mockall::automock;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore,
+    metered_channel, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore,
     ReconfigureNotification,
 };
 
@@ -43,12 +41,7 @@ pub type SerializedTransactionDigest = u64;
 // Important - if you add method with the default implementation here make sure to update impl ExecutionState for Arc<T>
 pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
-    async fn handle_consensus_transaction(
-        &self,
-        consensus_output: &Arc<Certificate>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
-    );
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput);
 
     /// Notifies executor that narwhal commit boundary was reached
     /// Consumers can use this boundary as an approximate signal that it might take some
@@ -85,9 +78,6 @@ impl Executor {
     {
         let metrics = ExecutorMetrics::new(registry);
 
-        let (tx_notifier, rx_notifier) =
-            metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
-
         // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
         let arc_metrics = Arc::new(metrics);
 
@@ -99,17 +89,15 @@ impl Executor {
             committee,
             tx_reconfigure.subscribe(),
             rx_sequence,
-            tx_notifier,
-            arc_metrics.clone(),
+            arc_metrics,
             restored_consensus_output,
+            execution_state,
         );
-
-        let notifier_handler = Notifier::spawn(rx_notifier, execution_state, arc_metrics);
 
         // Return the handle.
         info!("Consensus subscriber successfully started");
 
-        Ok(vec![subscriber_handle, notifier_handler])
+        Ok(subscriber_handle)
     }
 }
 
@@ -146,7 +134,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         sub_dags.push(CommittedSubDag {
             certificates,
             leader,
-            consensus_index,
+            sub_dag_index: consensus_index,
         });
     }
 
@@ -155,14 +143,9 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 
 #[async_trait]
 impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
-    async fn handle_consensus_transaction(
-        &self,
-        consensus_output: &Arc<Certificate>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
-    ) {
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         self.as_ref()
-            .handle_consensus_transaction(consensus_output, execution_indices, transaction)
+            .handle_consensus_output(consensus_output)
             .await
     }
 

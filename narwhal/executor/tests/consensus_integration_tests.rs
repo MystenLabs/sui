@@ -115,10 +115,9 @@ async fn test_recovery() {
             .expect_load_execution_indices()
             .times(1)
             .returning(move || ExecutionIndices {
-                next_certificate_index: last_executed_certificate_index,
-                next_batch_index: 0,
-                next_transaction_index: 0,
                 last_committed_round: leader_round,
+                sub_dag_index: 0,
+                transaction_index: 0,
             });
 
         let consensus_output = get_restored_consensus_output(

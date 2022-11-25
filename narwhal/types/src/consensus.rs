@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Certificate, CertificateDigest, Round};
+use crate::{Batch, Certificate, CertificateDigest, Round};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use store::{
     rocks::{DBMap, TypedStoreError},
     traits::Map,
@@ -16,6 +17,14 @@ use tokio::sync::mpsc;
 /// A global sequence number assigned to every CommittedSubDag.
 pub type SequenceNumber = u64;
 
+#[derive(Clone, Debug)]
+/// The output of Consensus, which includes all the batches for each certificate in the sub dag
+/// It is sent to the the ExecutionState handle_consensus_transactions
+pub struct ConsensusOutput {
+    pub sub_dag: Arc<CommittedSubDag>,
+    pub batches: Vec<(Certificate, Vec<Batch>)>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct CommittedSubDag {
     /// The sequence of committed certificates.
@@ -23,7 +32,7 @@ pub struct CommittedSubDag {
     /// The leader certificate responsible of committing this sub-dag.
     pub leader: Certificate,
     /// The index associated with this CommittedSubDag
-    pub consensus_index: SequenceNumber,
+    pub sub_dag_index: SequenceNumber,
 }
 
 impl CommittedSubDag {
@@ -35,7 +44,7 @@ impl CommittedSubDag {
         self.len() == 0
     }
 
-    pub fn num_of_batches(&self) -> usize {
+    pub fn num_batches(&self) -> usize {
         self.certificates
             .iter()
             .map(|x| x.header.payload.len())
@@ -69,7 +78,7 @@ impl CommittedSubDagShell {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
-            consensus_index: sub_dag.consensus_index,
+            consensus_index: sub_dag.sub_dag_index,
         }
     }
 }

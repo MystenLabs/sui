@@ -356,7 +356,7 @@ where
                     // Output the sequence in the right order.
                     let mut i = 0;
                     for committed_sub_dag in committed_sub_dags {
-                         tracing::debug!("Commit in Sequence {:?}", committed_sub_dag.consensus_index);
+                         tracing::debug!("Commit in Sequence {:?}", committed_sub_dag.sub_dag_index);
 
                         for certificate in &committed_sub_dag.certificates {
                             i+=1;
