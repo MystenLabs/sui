@@ -109,7 +109,7 @@ export function generateTransactionDigest(
       pk = new Secp256k1PublicKey(publicKey);
   }
   const publicKeyBytes = pk.toBytes();
-  const schemeByte = new Uint8Array(SIGNATURE_SCHEME_TO_FLAG[signatureScheme]);
+  const schemeByte = new Uint8Array([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
 
   const txSignature = new Uint8Array(
     1 + signatureBytes.length + publicKeyBytes.length
