@@ -3,6 +3,16 @@
 
 import { Base64DataBuffer } from '../serialization/base64';
 import { ObjectId } from './objects';
+import { bcs, TransactionData } from './sui-bcs';
+import {
+  PublicKey,
+  PublicKeyInitData,
+  SIGNATURE_SCHEME_TO_FLAG,
+  SignatureScheme,
+} from '../cryptography/publickey';
+import { sha256Hash } from '../cryptography/hash';
+import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
+import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
 
 /** Base64 string representing the object digest */
 export type TransactionDigest = string;
@@ -71,6 +81,51 @@ export function normalizeSuiObjectId(
   forceAdd0x: boolean = false
 ): ObjectId {
   return normalizeSuiAddress(value, forceAdd0x);
+}
+
+/**
+ * Generates transaction digest.
+ *
+ * @param data transaction data
+ * @param signatureScheme signature scheme
+ * @param signature signature as a base64 string
+ * @param publicKey public key
+ */
+export function generateTransactionDigest(
+  data: TransactionData,
+  signatureScheme: SignatureScheme,
+  signature: string,
+  publicKey: PublicKeyInitData
+): string {
+  const signatureBytes = new Base64DataBuffer(signature).getData();
+
+  let pk: PublicKey;
+  switch (signatureScheme) {
+    case 'ED25519':
+      pk = new Ed25519PublicKey(publicKey);
+      break;
+    case 'Secp256k1':
+      pk = new Secp256k1PublicKey(publicKey);
+  }
+  const publicKeyBytes = pk.toBytes();
+  const schemeByte = new Uint8Array([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+
+  const txSignature = new Uint8Array(
+    1 + signatureBytes.length + publicKeyBytes.length
+  );
+  txSignature.set(schemeByte);
+  txSignature.set(signatureBytes, 1);
+  txSignature.set(publicKeyBytes, 1 + signatureBytes.length);
+
+  const senderSignedData = {
+    data,
+    txSignature,
+  };
+  const senderSignedDataBytes = bcs
+    .ser('SenderSignedData', senderSignedData)
+    .toBytes();
+
+  return sha256Hash('SenderSignedData', senderSignedDataBytes);
 }
 
 function isHex(value: string): boolean {
