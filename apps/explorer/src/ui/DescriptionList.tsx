@@ -5,17 +5,20 @@ import type { ReactNode } from 'react';
 
 import { Text, type TextProps } from '~/ui/Text';
 
-export function Label(props: TextProps) {
+export interface LabelProps extends TextProps {}
+export type ValueProps = {
+    children: ReactNode;
+};
+
+export function Label(props: LabelProps) {
     return (
         <dt className="col-span-1">
-            <Text variant="body" {...props}>
-                {props.children}
-            </Text>
+            <Text variant="body" {...props} />
         </dt>
     );
 }
 
-export function Value({ children }: { children: ReactNode }) {
+export function Value({ children }: ValueProps) {
     return <dd className="ml-0 col-span-2">{children}</dd>;
 }
 
