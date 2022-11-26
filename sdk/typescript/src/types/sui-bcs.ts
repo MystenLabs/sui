@@ -336,4 +336,12 @@ bcs.registerStructType('TransactionData', {
   gasBudget: 'u64',
 });
 
+/**
+ * Signed transaction data needed to generate transaction digest.
+ */
+bcs.registerStructType('SenderSignedData', {
+  data: 'TransactionData',
+  txSignature: 'vector<u8>',
+});
+
 export { bcs };
