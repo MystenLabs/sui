@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Items for Capys.
@@ -32,19 +32,6 @@ module capy::capy_items {
         id: ID,
         type: vector<u8>,
         name: vector<u8>,
-    }
-
-    /// Create new item and send it to sender. Only available to Capy Admin.
-    public entry fun create_and_take(
-        cap: &CapyManagerCap,
-        type: vector<u8>,
-        name: vector<u8>,
-        ctx: &mut TxContext
-    ) {
-        sui::transfer::transfer(
-            create_item(cap, type, name, ctx),
-            sui::tx_context::sender(ctx)
-        );
     }
 
     /// Admin-only action - create an item. Ideally to place it later to the marketplace or send to someone.

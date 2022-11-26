@@ -1,7 +1,11 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// The Capy module. Defines the Capy type and its functions.
+///
+/// Main functions:
+///   1. `breeding` - breed two owned capys and tran
+///
 module capy::capy {
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
@@ -64,6 +68,7 @@ module capy::capy {
         gen: u64,
         url: Url,
         genes: Genes,
+        dev_genes: Genes,
         item_count: u8,
         attributes: vector<Attribute>,
     }
@@ -102,6 +107,7 @@ module capy::capy {
         id: ID,
         gen: u64,
         genes: Genes,
+        dev_genes: Genes,
         birthday: u64,
         attributes: vector<Attribute>,
         parent_one: ID,
@@ -121,6 +127,12 @@ module capy::capy {
         item_id: ID,
     }
 
+    // ======== View Functions ========
+
+    /// Read extra gene sequence of a Capy as `vector<u8>`.
+    public fun dev_genes(self: &Capy): &vector<u8> {
+        &self.dev_genes.sequence
+    }
 
     // ======== Functions =========
 
@@ -154,7 +166,7 @@ module capy::capy {
     ///     [selector_u8, ...name_bytes]
     /// ]
     /// ```
-    entry fun add_gene(
+    public entry fun add_gene(
         _: &CapyManagerCap,
         reg: &mut CapyRegistry,
         name: vector<u8>,
@@ -172,9 +184,12 @@ module capy::capy {
     }
 
     /// Batch-add new Capys with predefined gene sequences.
-    entry fun batch(_: &CapyManagerCap, reg: &mut CapyRegistry, genes: vector<vector<u8>>, ctx: &mut TxContext) {
+    public fun batch(_: &CapyManagerCap, reg: &mut CapyRegistry, genes: vector<vector<u8>>, ctx: &mut TxContext): vector<Capy> {
+        let capys = vector[];
         while (vec::length(&genes) > 0) {
-            let genes = Genes { sequence: vec::pop_back(&mut genes) };
+            let sequence = vec::pop_back(&mut genes);
+            let dev_genes = Genes { sequence: hash(*&sequence) };
+            let genes = Genes { sequence };
             let id = object::new(ctx);
 
             reg.capy_born = reg.capy_born + 1;
@@ -182,6 +197,7 @@ module capy::capy {
             vec::append(&mut reg.capy_hash, object::uid_to_bytes(&id));
             vec::push_back(&mut reg.capy_hash, (reg.capy_day as u8));
             reg.capy_hash = hash(reg.capy_hash);
+
 
             let sender = tx_context::sender(ctx);
             let attributes = get_attributes(&reg.genes, &genes);
@@ -191,21 +207,25 @@ module capy::capy {
                 gen: 0,
                 attributes: *&attributes,
                 genes: *&genes,
+                dev_genes: *&dev_genes,
                 birthday: tx_context::epoch(ctx),
                 parent_one: object::id(reg),
                 parent_two: object::id(reg),
                 bred_by: sender
             });
 
-            transfer::transfer(Capy {
+            vec::push_back(&mut capys, Capy {
                 url: img_url(&id),
                 id,
                 genes,
-                gen: 0,
+                dev_genes,
                 attributes,
+                gen: 0,
                 item_count: 0,
-            }, sender)
-        }
+            })
+        };
+
+        capys
     }
 
 
@@ -213,7 +233,7 @@ module capy::capy {
 
     /// Attach an Item to a Capy. Function is generic and allows any app to attach items to
     /// Capys but the total count of items has to be lower than 255.
-    entry fun add_item<T: key + store>(capy: &mut Capy, item: T) {
+    public entry fun add_item<T: key + store>(capy: &mut Capy, item: T) {
         emit(ItemAdded<T> {
             capy_id: object::id(capy),
             item_id: object::id(&item)
@@ -223,7 +243,7 @@ module capy::capy {
     }
 
     /// Remove item from the Capy.
-    entry fun remove_item<T: key + store>(capy: &mut Capy, item_id: ID, ctx: &mut TxContext) {
+    public entry fun remove_item<T: key + store>(capy: &mut Capy, item_id: ID, ctx: &mut TxContext) {
         emit(ItemRemoved<T> {
             capy_id: object::id(capy),
             item_id: *&item_id
@@ -233,7 +253,7 @@ module capy::capy {
     }
 
     /// Breed capys and keep the newborn at sender's address.
-    entry fun breed_and_keep(
+    public entry fun breed_and_keep(
         reg: &mut CapyRegistry,
         c1: &mut Capy,
         c2: &mut Capy,
@@ -255,10 +275,15 @@ module capy::capy {
         // Update capy hash in the registry
         vec::append(&mut reg.capy_hash, object::uid_to_bytes(&id));
         vec::push_back(&mut reg.capy_hash, (reg.capy_day as u8));
-        reg.capy_hash = hash(reg.capy_hash);
 
         // compute genes
+        reg.capy_hash = hash(reg.capy_hash);
         let genes = compute_genes(&reg.capy_hash, &c1.genes, &c2.genes, GENES);
+
+        // compute dev-genes
+        reg.capy_hash = hash(reg.capy_hash);
+        let dev_genes = compute_genes(&reg.capy_hash, &c1.genes, &c2.genes, GENES);
+
         let gen = math::max(c1.gen, c2.gen) + 1;
         let attributes = get_attributes(&reg.genes, &genes);
         let sender = tx_context::sender(ctx);
@@ -266,8 +291,9 @@ module capy::capy {
         emit(CapyBorn {
             id: object::uid_to_inner(&id),
             gen,
-            attributes: *&attributes,
             genes: *&genes,
+            attributes: *&attributes,
+            dev_genes: *&dev_genes,
             birthday: tx_context::epoch(ctx),
             parent_one: object::id(c1),
             parent_two: object::id(c2),
@@ -280,6 +306,7 @@ module capy::capy {
             id,
             gen,
             genes,
+            dev_genes,
             attributes,
             item_count: 0,
         }
@@ -404,5 +431,40 @@ module capy::capy {
         vec::append(&mut capy_url, b"/svg");
 
         url::new_unsafe_from_bytes(capy_url)
+    }
+
+    #[test]
+    fun test_raw_vec_to_values() {
+        let definitions: vector<vector<u8>> = vec::empty();
+
+        /* push [127, "red"] */ {
+            let def = vec::empty();
+            vec::push_back(&mut def, 127);
+            vec::append(&mut def, b"red");
+            vec::push_back(&mut definitions, def);
+        };
+
+        /* push [255, "blue"] */ {
+            let def = vec::empty();
+            vec::push_back(&mut def, 255);
+            vec::append(&mut def, b"blue");
+            vec::push_back(&mut definitions, def);
+        };
+
+        let values: vector<Value> = raw_vec_to_values(definitions);
+
+        /* expect [255, blue] */ {
+            let Value { selector, name } = vec::pop_back(&mut values);
+            assert!(selector == 255, 0);
+            assert!(string::bytes(&name) == &b"blue", 0);
+        };
+
+        /* expect [127, red] */ {
+            let Value { selector, name } = vec::pop_back(&mut values);
+            assert!(selector == 127, 0);
+            assert!(string::bytes(&name) == &b"red", 0);
+        };
+
+        vec::destroy_empty(values);
     }
 }

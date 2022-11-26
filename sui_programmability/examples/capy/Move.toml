@@ -3,7 +3,7 @@ name = "sui-capybaras"
 version = "0.1.0"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "7e98f5c7791520289230e9ec54ef082805c7e86b" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "e2dccbf3514f174bab2687496a46a6a14e83051c" }
 
 [addresses]
 capy = "0x0"
