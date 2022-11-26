@@ -56,6 +56,7 @@ import {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  CommitteeInfo,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -1074,4 +1075,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getCommitteeInfo(epoch?: number): Promise<CommitteeInfo> {
+    try {
+      const committeeInfo = await this.client.requestWithType(
+        'sui_getCommitteeInfo',
+        [epoch],
+        CommitteeInfo
+      );
+
+      return committeeInfo;
+    } catch (error) {
+      throw new Error(`Error getCommitteeInfo : ${error}`);
+    }
+  }
 }

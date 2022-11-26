@@ -12,8 +12,11 @@ import {
   union,
   Infer,
   optional,
+  nullable,
+  tuple,
 } from 'superstruct';
 import { SuiAddress } from './common';
+import { AuthorityName } from './transactions';
 
 export const ValidatorMetaData = object({
   sui_address: SuiAddress,
@@ -39,6 +42,7 @@ export type ValidatorMetaData = Infer<typeof ValidatorMetaData>;
 export type ValidatorsFields = Infer<typeof ValidatorsFields>;
 export type Validators = Infer<typeof Validators>;
 export type ActiveValidator = Infer<typeof ActiveValidator>;
+export type CommitteeInfo = Infer<typeof CommitteeInfo>;
 
 // Staking
 export const Id = object({
@@ -227,4 +231,9 @@ export const Validators = object({
   type: string(),
   has_public_transfer: boolean(),
   fields: ValidatorsFields,
+});
+
+export const CommitteeInfo = object({
+  epoch: number(),
+  committee_info: nullable(array(tuple([AuthorityName, number()]))),
 });

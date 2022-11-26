@@ -43,6 +43,7 @@ import {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  CommitteeInfo,
 } from '../types';
 import { Provider } from './provider';
 
@@ -317,5 +318,9 @@ export class VoidProvider extends Provider {
     _digest: CheckPointContentsDigest,
   ): Promise<CheckpointContents> {
     throw this.newError('getCheckpointContentsByDigest');
+  }
+
+  async getCommitteeInfo(_epoch?: number): Promise<CommitteeInfo> {
+    throw this.newError('getCommitteeInfo');
   }
 }
