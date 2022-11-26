@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import Longtext from '../../../components/longtext/Longtext';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
 import TxForID from '../../../components/transaction-card/TxForID';
@@ -89,11 +90,14 @@ function PkgView({ data }: { data: DataType }) {
                         Modules
                     </Heading>
                 </div>
-
-                <PkgModulesWrapper id={data.id} modules={properties} />
+                <ErrorBoundary>
+                    <PkgModulesWrapper id={data.id} modules={properties} />
+                </ErrorBoundary>
                 <div className={styles.txsection}>
-                    <h2 className={styles.header}>Transactions </h2>
-                    <TxForID id={viewedData.id} category="object" />
+                    <h2 className={styles.header}>Transactions</h2>
+                    <ErrorBoundary>
+                        <TxForID id={viewedData.id} category="object" />
+                    </ErrorBoundary>
                 </div>
             </div>
         </div>

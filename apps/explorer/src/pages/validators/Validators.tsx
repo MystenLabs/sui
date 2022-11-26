@@ -11,6 +11,7 @@ import {
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
@@ -203,7 +204,12 @@ function ValidatorsPage({ state }: { state: ValidatorState }) {
                 Validators
             </Heading>
             <div className="mt-8">
-                <TableCard data={tableData.data} columns={tableData.columns} />
+                <ErrorBoundary>
+                    <TableCard
+                        data={tableData.data}
+                        columns={tableData.columns}
+                    />
+                </ErrorBoundary>
             </div>
         </div>
     );
