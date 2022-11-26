@@ -2,10 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// The Capy module. Defines the Capy type and its functions.
-///
-/// Main functions:
-///   1. `breeding` - breed two owned capys and tran
-///
 module capy::capy {
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
