@@ -70,14 +70,18 @@ function HomeAPI() {
                         </TabList>
                         <TabPanels>
                             <TabPanel>
-                                <TopValidatorsCard limit={10} />
+                                <ErrorBoundary>
+                                    <TopValidatorsCard limit={10} />
+                                </ErrorBoundary>
                             </TabPanel>
                         </TabPanels>
                     </TabGroup>
                 </div>
-                <Suspense fallback={null}>
-                    <ValidatorMap />
-                </Suspense>
+                <ErrorBoundary>
+                    <Suspense fallback={null}>
+                        <ValidatorMap />
+                    </Suspense>
+                </ErrorBoundary>
                 <div>
                     <TabGroup>
                         <TabList>
