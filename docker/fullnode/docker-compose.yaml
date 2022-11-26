@@ -5,9 +5,11 @@ services:
     image: mysten/sui-node:stable
     ports:
     - "9000:9000"
+    - "9001:9001"
     - "9184:9184"
     expose:
     - "9000"
+    - "9001"
     - "9184"
     volumes:
     - ./fullnode-template.yaml:/sui/fullnode.yaml:ro
