@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/react';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -128,14 +129,20 @@ function ObjectResult() {
     const { state } = useLocation();
 
     if (instanceOfDataType(state)) {
-        return <ObjectView data={state} />;
+        return (
+            <ErrorBoundary>
+                <ObjectView data={state} />
+            </ErrorBoundary>
+        );
     }
 
     if (objID !== undefined) {
         return IS_STATIC_ENV ? (
             <ObjectResultStatic objID={objID} />
         ) : (
-            <ObjectResultAPI objID={objID} />
+            <ErrorBoundary>
+                <ObjectResultAPI objID={objID} />
+            </ErrorBoundary>
         );
     }
 
