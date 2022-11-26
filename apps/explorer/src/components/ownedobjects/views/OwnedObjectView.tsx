@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ErrorBoundary } from '../../error-boundary/ErrorBoundary';
 import PaginationLogic from '../../pagination/PaginationLogic';
 import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 import OwnedCoinView from './OwnedCoinView';
@@ -38,9 +37,7 @@ export default function OwnedObjectView({ results }: { results: DataType }) {
                     <div className={styles.ownedobjectheader}>
                         <h2>Coins</h2>
                     </div>
-                    <ErrorBoundary>
-                        <OwnedCoinView results={coin_results} />
-                    </ErrorBoundary>
+                    <OwnedCoinView results={coin_results} />
                 </div>
             )}
             {other_results.length > 0 && (
