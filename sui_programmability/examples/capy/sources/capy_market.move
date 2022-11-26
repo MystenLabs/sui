@@ -1,12 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// CapyMarket for Capy-related objects.
-/// Allows selling  and accessories.
+/// CapyMarket - a generic Marketplace for capy-related assets.
+/// Currently, allows selling Capys and accessories.
 ///
-/// TODO: refactor usage of events - many of the parameters are redundant
-/// and can be linked off-chain with additional tooling. Kept for usability
-/// and development speed purposes.
+/// The structure of the Markeptlace storage is the following:
+/// ```
+///                  /+---(item_id)--> Listing<T> ---(bool)--> Item #1
+/// ( CapyMarket<T> ) +---(item_id)--> Listing<T> ---(bool)--> Item #2
+///                  \+---(item_id)--> Listing<T> ---(bool)--> Item #N
+/// ```
 module capy::capy_market {
     use sui::object::{Self, UID, ID};
     use sui::transfer;
