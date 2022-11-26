@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
 use prometheus::Registry;
 
 use sui::config::SuiEnv;

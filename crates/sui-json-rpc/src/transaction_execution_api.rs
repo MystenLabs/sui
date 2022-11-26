@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee_core::server::rpc_module::RpcModule;
+use jsonrpsee::RpcModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use signature::Signature;
 use std::sync::Arc;
@@ -85,7 +85,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             txn_digest,
             self.module_cache.as_ref(),
         )
-        .map_err(jsonrpsee_core::Error::from)
+        .map_err(jsonrpsee::core::Error::from)
     }
 }
 

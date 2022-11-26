@@ -5,7 +5,6 @@ use crate::api::RpcTransactionBuilderServer;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee_core::server::rpc_module::RpcModule;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo, SuiTypeTag, TransactionBytes};
@@ -15,6 +14,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
 
 use fastcrypto::encoding::Base64;
+use jsonrpsee::RpcModule;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;

@@ -8,9 +8,11 @@ edition = "2021"
 
 [dependencies]
 fastcrypto = { workspace = true }
-jsonrpsee = { version = "0.15.1", features = ["full"] }
-jsonrpsee-core = "0.15.1"
-jsonrpsee-proc-macros = "0.15.1"
+jsonrpsee = { version = "0.16.1", features = ["full"] }
+jsonrpsee-proc-macros = "0.16.1"
+hyper = "0.14"
+tower = "0.4.12"
+tower-http = { version = "0.3.4", features = ["full"] }
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
