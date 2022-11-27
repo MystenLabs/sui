@@ -1,10 +1,16 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useWallet } from "@mysten/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
-import { Button } from "./utils/Button";
-import { CloseIcon } from "./utils/Close";
+import { Button, Panel } from "./utils/ui";
+import { BackIcon, CloseIcon } from "./utils/icons";
 import { WhatIsAWallet } from "./WhatIsAWallet";
+import { Body, Content, Overlay, Title } from "./utils/Dialog";
+import { SELECTED_GETTING_STARTED, WalletList } from "./WalletList";
+import { GettingStarted } from "./GettingStarted";
 
 // TODO: Ideally remove:
 const Div = styled("div");
@@ -14,37 +20,6 @@ export interface ConnectModalProps {
   onClose(): void;
   closeIcon?: void;
 }
-
-const Truncate = styled("div", {
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-});
-
-const Overlay = styled(Dialog.Overlay, {
-  backgroundColor: "$backdrop",
-  position: "fixed",
-  inset: 0,
-});
-
-const Content = styled(Dialog.Content, {
-  overflow: "hidden",
-  backgroundColor: "$background",
-  borderRadius: "$modal",
-  boxShadow: "$modal",
-  position: "fixed",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  fontFamily: "$sans",
-  display: "flex",
-
-  // TODO: Good values for these:
-  width: "90vw",
-  minHeight: "50vh",
-  maxWidth: "700px",
-  maxHeight: "85vh",
-});
 
 const Close = styled(Dialog.Close, {
   position: "absolute",
@@ -61,63 +36,21 @@ const Close = styled(Dialog.Close, {
   borderRadius: "$close",
 });
 
-const Title = styled(Dialog.Title, {
-  margin: 0,
-  padding: "0 $2",
-  fontSize: "$lg",
-  fontWeight: "$title",
-  color: "$textDark",
-});
-
-const Panel = styled("div", {
-  boxSizing: "border-box",
-  padding: "$5",
-  display: "flex",
-  flexDirection: "column",
-});
-
-const ConnectWallet = styled(Panel, {
-  background: "$backgroundAccent",
-  height: "100%",
-});
-
-const WalletList = styled("div", {
-  marginTop: "$6",
-  display: "flex",
-  flexDirection: "column",
-  gap: "$1",
-});
-
-const WalletItem = styled("button", {
-  background: "none",
-  display: "flex",
-  padding: "$2",
-  gap: "$2",
-  alignItems: "center",
+const BackButton = styled("button", {
+  position: "absolute",
   cursor: "pointer",
-  color: "$textDark",
+  top: "$4",
+  left: "$4",
+  display: "flex",
   border: "none",
-  fontWeight: "$button",
-  fontSize: "$md",
-  borderRadius: "$wallet",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "$icon",
+  backgroundColor: "transparent",
 
-  variants: {
-    selected: {
-      true: {
-        background: "$background",
-        boxShadow: "$wallet",
-      },
-    },
+  "@md": {
+    display: "none",
   },
-});
-
-const WalletIcon = styled("img", {
-  flexShrink: 0,
-  background: "white",
-  width: "$walletIcon",
-  height: "$walletIcon",
-  borderRadius: "$walletIcon",
-  objectFit: "cover",
 });
 
 const BodyCopy = styled("div", {
@@ -137,16 +70,55 @@ const SelectedWalletIcon = styled("img", {
   borderRadius: 16,
 });
 
-const RetryContainer = styled("div", {
+const ButtonContainer = styled("div", {
   position: "absolute",
   bottom: "$8",
   right: "$8",
+  marginTop: "$4",
+});
+
+const LeftPanel = styled("div", {
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  "@md": {
+    width: 240,
+  },
+
+  variants: {
+    hasSelected: {
+      true: {
+        display: "none",
+        "@md": {
+          display: "block",
+        },
+      },
+    },
+  },
 });
 
 export interface ConnectModalProps {
   open: boolean;
   onClose(): void;
 }
+
+const MobileInfoButton = styled("button", {
+  background: "$backgroundAccent",
+  textAlign: "center",
+  width: "100%",
+  padding: "$4",
+  border: "none",
+  color: "$textLight",
+  fontWeight: "$button",
+  fontFamily: "$sans",
+  cursor: "pointer",
+
+  "@md": {
+    display: "none",
+  },
+});
+
+const SELECTED_INFO = "@@internal/what-is-wallet";
 
 export function ConnectModal({ open, onClose }: ConnectModalProps) {
   const { wallets, select, wallet, connected, isError } = useWallet();
@@ -172,74 +144,97 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
       <Dialog.Portal>
         <Overlay />
         <Content>
-          <Div css={{ width: 240 }}>
-            <ConnectWallet>
-              <Title>Connect a Wallet</Title>
-              <WalletList>
-                {wallets.map((wallet) => (
-                  <WalletItem
-                    key={wallet.name}
-                    selected={wallet.name === selected}
-                    onClick={() => {
-                      setSelected(wallet.name);
-                      select(wallet.name);
+          <Body>
+            <LeftPanel hasSelected={!!selected}>
+              <WalletList
+                selected={selected}
+                onChange={(walletName) => {
+                  setSelected(walletName);
+                  select(walletName);
+                }}
+              />
+              <MobileInfoButton onClick={() => setSelected(SELECTED_INFO)}>
+                What is a Wallet
+              </MobileInfoButton>
+            </LeftPanel>
+
+            <Panel responsiveHidden={!selected}>
+              <BackButton onClick={() => setSelected(null)} aria-label="Back">
+                <BackIcon />
+              </BackButton>
+
+              {!selected || selected === SELECTED_INFO ? (
+                <>
+                  <Title css={{ textAlign: "center" }}>What is a Wallet</Title>
+
+                  <BodyCopy>
+                    <WhatIsAWallet />
+                  </BodyCopy>
+                </>
+              ) : selected && selected !== SELECTED_GETTING_STARTED ? (
+                <BodyCopy>
+                  <SelectedWalletIcon src={wallet?.icon} />
+                  <Div
+                    css={{
+                      marginTop: "$3",
+                      marginBottom: "$1",
+                      color: "$textDark",
+                      fontSize: "$xl",
+                      fontWeight: "$title",
                     }}
                   >
-                    <WalletIcon src={wallet.icon} />
-                    <Truncate>{wallet.name}</Truncate>
-                  </WalletItem>
-                ))}
-              </WalletList>
-            </ConnectWallet>
-          </Div>
-          <Panel css={{ flex: 1 }}>
-            {selected ? (
-              <BodyCopy>
-                <SelectedWalletIcon src={wallet?.icon} />
-                <Div
-                  css={{
-                    marginTop: "$3",
-                    marginBottom: "$1",
-                    color: "$textDark",
-                    fontSize: "$xl",
-                    fontWeight: "$title",
-                  }}
-                >
-                  Opening {selected}
-                </Div>
-                <Div
-                  css={{
-                    color: isError ? "$issue" : "$textLight",
-                    fontSize: "$xs",
-                  }}
-                >
-                  {isError
-                    ? "Connection failed"
-                    : "Confirm connection in the wallet..."}
-                </Div>
+                    Opening {selected}
+                  </Div>
+                  <Div
+                    css={{
+                      color: isError ? "$issue" : "$textLight",
+                      fontSize: "$xs",
+                    }}
+                  >
+                    {isError
+                      ? "Connection failed"
+                      : "Confirm connection in the wallet..."}
+                  </Div>
 
-                {isError && (
-                  <RetryContainer>
-                    <Button color="secondary" onClick={() => select(selected)}>
-                      Retry Connection
-                    </Button>
-                  </RetryContainer>
-                )}
-              </BodyCopy>
-            ) : (
-              <>
-                <Title css={{ textAlign: "center" }}>What is a Wallet</Title>
-
-                <BodyCopy>
-                  <WhatIsAWallet />
+                  {isError && (
+                    <ButtonContainer>
+                      <Button
+                        color="secondary"
+                        onClick={() => select(selected)}
+                      >
+                        Retry Connection
+                      </Button>
+                    </ButtonContainer>
+                  )}
                 </BodyCopy>
-              </>
-            )}
-          </Panel>
+              ) : (
+                <>
+                  <Title css={{ textAlign: "center" }}>
+                    Get Started with Sui
+                  </Title>
 
-          <Close aria-label="Close">
-            <CloseIcon />
-          </Close>
+                  <BodyCopy>
+                    <GettingStarted />
+                    <ButtonContainer>
+                      <Button
+                        as="a"
+                        color="secondary"
+                        href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Install Wallet Extension
+                      </Button>
+                    </ButtonContainer>
+                  </BodyCopy>
+                </>
+              )}
+            </Panel>
+
+            <Close aria-label="Close">
+              <CloseIcon />
+            </Close>
+          </Body>
         </Content>
       </Dialog.Portal>
     </Dialog.Root>

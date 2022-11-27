@@ -1,28 +1,11 @@
-import { styled } from "./stitches";
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
-const Container = styled("div", {
-  display: "flex",
-  flexDirection: "column",
-  gap: "$5",
-});
-
-const Heading = styled("h3", {
-  color: "$textDark",
-  fontSize: "$sm",
-  margin: 0,
-  marginBottom: "$1",
-});
-
-const Description = styled("div", {
-  color: "$textLight",
-  fontSize: "$sm",
-  fontWeight: "$copy",
-  lineHeight: "1.3",
-});
+import { CopyContainer, Description, Heading } from "./utils/ui";
 
 export function WhatIsAWallet() {
   return (
-    <Container>
+    <CopyContainer>
       <div>
         <Heading>Easy Login</Heading>
         <Description>
@@ -38,6 +21,6 @@ export function WhatIsAWallet() {
           coins.
         </Description>
       </div>
-    </Container>
+    </CopyContainer>
   );
 }

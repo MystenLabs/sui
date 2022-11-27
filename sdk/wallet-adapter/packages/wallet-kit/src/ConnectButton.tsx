@@ -1,9 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { ComponentProps, ReactNode, useEffect, useState } from "react";
 import { theme } from "./stitches";
 
 import { ConnectModal } from "./ConnectModal";
 import { useWallet } from "@mysten/wallet-adapter-react";
-import { Button } from "./utils/Button";
+import { Button } from "./utils/ui";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;

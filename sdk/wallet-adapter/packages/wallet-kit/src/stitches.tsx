@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { createStitches } from "@stitches/react";
 
 const BASE_UNIT = 4;
@@ -13,6 +16,11 @@ export const {
   createTheme,
   config,
 } = createStitches({
+  media: {
+    sm: '(min-width: 640px)',
+    md: '(min-width: 768px)',
+    lg: '(min-width: 1024px)',
+  },
   theme: {
     colors: {
       brand: "#0284AD",
@@ -56,16 +64,12 @@ export const {
       buttonLg: "12px",
       buttonMd: "8px",
       wallet: "8px",
-      walletIcon: "6px",
       close: "9999px",
     },
     fontWeights: {
       copy: 500,
       button: 600,
       title: 600,
-    },
-    sizes: {
-      walletIcon: "28px",
     },
     transitions: {},
     shadows: {
