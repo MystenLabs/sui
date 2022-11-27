@@ -62,7 +62,7 @@ impl NetworkConfig {
     }
 
     pub fn generate_fullnode_config(&self) -> NodeConfig {
-        self.generate_fullnode_config_with_random_dir_name(false, true)
+        self.generate_fullnode_config_with_random_dir_name(false)
     }
 
     /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
@@ -70,7 +70,6 @@ impl NetworkConfig {
     pub fn generate_fullnode_config_with_random_dir_name(
         &self,
         use_random_dir_name: bool,
-        enable_websocket: bool,
     ) -> NodeConfig {
         let protocol_key_pair: Arc<AuthorityKeyPair> =
             Arc::new(get_key_pair_from_rng(&mut OsRng).1);
@@ -113,11 +112,6 @@ impl NetworkConfig {
             metrics_address: utils::available_local_socket_address(),
             admin_interface_port: utils::get_available_port(),
             json_rpc_address: utils::available_local_socket_address(),
-            websocket_address: if enable_websocket {
-                Some(utils::available_local_socket_address())
-            } else {
-                None
-            },
             consensus_config: None,
             enable_event_processing,
             enable_checkpoint: false,

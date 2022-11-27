@@ -144,9 +144,11 @@ impl SuiNode {
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
-        let transaction_streamer = config
-            .websocket_address
-            .map(|_| Arc::new(TransactionStreamer::new()));
+        let transaction_streamer = if is_full_node {
+            Some(Arc::new(TransactionStreamer::new()))
+        } else {
+            None
+        };
 
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
             config.db_path().join("node_sync_db"),
