@@ -44,6 +44,13 @@ export const LongMessage: StoryObj<BannerProps> = {
     },
 };
 
+export const LongMessageDismissible: StoryObj<BannerProps> = {
+    args: {
+        children: 'This is a very long message. '.repeat(20),
+        onDismiss: () => null,
+    },
+};
+
 export const CenteredFullWidth: StoryObj<BannerProps> = {
     args: {
         fullWidth: true,
@@ -64,5 +71,30 @@ export const NoIcon: StoryObj<BannerProps> = {
         icon: null,
         variant: 'message',
         children: 'Message',
+    },
+};
+
+export const Dismissible: StoryObj<BannerProps> = {
+    args: {
+        fullWidth: false,
+        children: 'Message',
+        onDismiss: () => null,
+    },
+};
+
+export const DismissibleFullWidth: StoryObj<BannerProps> = {
+    args: {
+        fullWidth: true,
+        children: 'Message',
+        onDismiss: () => null,
+    },
+};
+
+export const DismissibleCenteredFullWidth: StoryObj<BannerProps> = {
+    args: {
+        fullWidth: true,
+        align: 'center',
+        children: 'Message',
+        onDismiss: () => null,
     },
 };

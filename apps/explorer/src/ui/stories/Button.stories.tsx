@@ -55,3 +55,8 @@ export const Outline: StoryObj<ButtonProps> = {
     ...Primary,
     args: { variant: 'outline' },
 };
+
+export const Txt: StoryObj<ButtonProps> = {
+    ...Primary,
+    args: { variant: 'txt' },
+};

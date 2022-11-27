@@ -8,10 +8,12 @@ import {
 import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { useEffect } from 'react';
+import { useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
 import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
+import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 
 import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
@@ -20,6 +22,7 @@ import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const argsSchema = z.object({
     params: z.optional(z.array(z.object({ value: z.string().trim().min(1) }))),
@@ -42,7 +45,7 @@ export function ModuleFunction({
 }: ModuleFunctionProps) {
     const { connected, signAndExecuteTransaction } = useWallet();
     const paramsDetails = useFunctionParamsDetails(functionDetails.parameters);
-    const { handleSubmit, formState, register } = useZodForm({
+    const { handleSubmit, formState, register, control, reset } = useZodForm({
         schema: argsSchema,
     });
     const execute = useMutation({
@@ -66,6 +69,14 @@ export function ModuleFunction({
             return result;
         },
     });
+    const executeFunctionError = execute.error
+        ? (execute.error as Error).message
+        : false;
+    const allValues = useWatch({ control });
+    const mutationReset = execute.reset;
+    useEffect(() => {
+        mutationReset();
+    }, [allValues, mutationReset]);
     const isExecuteDisabled =
         formState.isValidating ||
         !formState.isValid ||
@@ -75,39 +86,28 @@ export function ModuleFunction({
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
                 onSubmit={handleSubmit(({ params }) =>
-                    toast
-                        .promise(
-                            execute.mutateAsync(
-                                (params || []).map(({ value }) => value)
-                            ),
-                            {
-                                loading: 'Executing...',
-                                error: (e) => 'Transaction failed',
-                                success: 'Done',
-                            }
-                        )
+                    execute
+                        .mutateAsync((params || []).map(({ value }) => value))
                         .catch((e) => null)
                 )}
                 autoComplete="off"
                 className="flex flex-col flex-nowrap items-stretch gap-4"
             >
-                {paramsDetails.map(({ paramTypeText }, index) => {
-                    return (
-                        <Input
-                            key={index}
-                            label={`Arg${index}`}
-                            {...register(`params.${index}.value` as const)}
-                            placeholder={paramTypeText}
-                        />
-                    );
-                })}
-                <div className="flex items-stretch justify-end gap-1.5">
+                {paramsDetails.map(({ paramTypeText }, index) => (
+                    <Input
+                        key={index}
+                        label={`Arg${index}`}
+                        {...register(`params.${index}.value` as const)}
+                        placeholder={paramTypeText}
+                    />
+                ))}
+                <div className="flex items-center justify-end gap-1.5">
                     <Button
                         variant="primary"
                         type="submit"
                         disabled={isExecuteDisabled}
                     >
-                        Execute
+                        {execute.isLoading ? <LoadingSpinner /> : 'Execute'}
                     </Button>
                     <ConnectButton
                         connectText={
@@ -128,6 +128,16 @@ export function ModuleFunction({
                         )}
                     />
                 </div>
+                {executeFunctionError || execute.data ? (
+                    <FunctionExecutionResult
+                        error={executeFunctionError}
+                        result={execute.data || null}
+                        onClear={() => {
+                            execute.reset();
+                            reset();
+                        }}
+                    />
+                ) : null}
             </form>
         </DisclosureBox>
     );
