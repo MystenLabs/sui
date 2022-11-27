@@ -184,7 +184,7 @@ $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" -
 ```
 Now let's see what objects the `RECIPIENT` owns:
 ```
-$ sui client objects --address $RECIPIENT
+$ sui client objects $RECIPIENT
 ```
 We should be able to see that one of the objects in the list is the new `ColorObject`! This means the transfer was successful.
 
@@ -205,7 +205,7 @@ $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" -
 In the output, you will see in the `Transaction Effects` section a list of deleted objects.
 This shows that the object was successfully deleted. If we run this again:
 ```
-$ sui client objects --address $RECIPIENT
+$ sui client objects $RECIPIENT
 ```
 We will see that this object is no longer there in the address.
 

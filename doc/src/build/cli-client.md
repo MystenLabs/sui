@@ -90,7 +90,7 @@ $ sui client addresses
 
 ### Active address
 
-You can specify an active address or default address to use to execute commands. 
+You can specify an active address or default address to use to execute commands.
 
 Sui sets a default address to use for commands. It uses the active address for commands that require an address. To view the current active address, use the `active-address` command.
 
@@ -126,7 +126,7 @@ $ sui client objects
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 ```shell
-$ sui client objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
+$ sui client objects 0x913cf36f370613ed131868ac6f9da2420166062e
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
@@ -155,7 +155,7 @@ $ sui client gas
 You can specify an address to see the amount of gas for that address instead of the active address.
 
 ```shell
-$ sui client gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
+$ sui client gas 0x562f07cf6369e8d22dbf226a5bfedc6300014837
 ```
 
 ## Create new account addresses
@@ -168,7 +168,7 @@ Sui Client CLI includes 1 address by default. To add more, create new addresses 
 $ sui client new-address ed25519
 ```
 
-You must specify the key scheme, either `ed25519` or `secp256k1`. 
+You must specify the key scheme, either `ed25519` or `secp256k1`.
 
 ### Add existing accounts to client.yaml
 
@@ -184,16 +184,16 @@ Use the `objects` command to view the objects an address owns.
 sui client objects
 ```
 
-To view the objects for a different address than the active address, use `--address` in the command and specify the address to see objects for.
+To view the objects for a different address than the active address, specify the address to see objects for.
 
 ```shell
-$ sui client objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
+$ sui client objects 0x66af3898e7558b79e115ab61184a958497d1905a
 ```
 
 To view more information about an object, use the `object` command.
 
 ```shell
-    sui client object --id <ID>
+    sui client object <ID>
 ```
 
 The result shows some basic information about the object, the owner,
@@ -202,7 +202,7 @@ version, ID, if the object is immutable and the type of the object.
 To view the JSON representation of the object, include `--json` in the command.
 
 ```shell
-    sui client object --id <ID> --json
+    sui client object <ID> --json
 ```
 
 ## Transfer objects
@@ -307,7 +307,7 @@ You need at lease three coin objects to merge coins, two coins to merge and one 
 Use the following command to view the objects that the specified address owns.
 
 ```shell
-$ sui client objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+$ sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 Use the IDs returns from the previous command in the `merge-coin` command.
@@ -337,7 +337,7 @@ To split a coin you need at least 2 coin objects, one to split and one to pay fo
 
 Use the following command to view the objects the address owns.
 ```shell
-$ sui client objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
+$ sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
 ```
 
 Then use the IDs returned in the `split-coin` command.
@@ -351,7 +351,7 @@ $ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --a
 Use the `objects` command to view the new coin objects.
 
 ```
-$ sui client objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
+$ sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
 ```
 
 The following example splits a coin into three equal parts. To split a coin evenly, don't include the `--amount` argument in the command.
@@ -382,7 +382,7 @@ simplicity.
 Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
 
 ```shell
-$ sui client objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
+$ sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x471c8e241d0473c34753461529b70f9c4ed3151b |     0      | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
@@ -433,9 +433,9 @@ Note the third argument to the `transfer` function representing
 is a required argument for all functions callable from Sui and is
 auto-injected by the platform at the point of a function call.
 
-> **Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`. 
+> **Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`.
 >
-> Additionally, when you specify a vector of object IDs, you must enclose each ID in double quotes. For example, 
+> Additionally, when you specify a vector of object IDs, you must enclose each ID in double quotes. For example,
 > `'["0x471c8e241d0473c34753461529b70f9c4ed3151b","0x53b50e3020a01e1fd6acf832a871feee240183f0"]'`
 
 To gain a deeper view into the object, include the
@@ -473,7 +473,7 @@ of the `transfer` function) by querying objects that are now owned by
 the sender:
 
 ```shell
-$ sui client objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
+$ sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
@@ -488,7 +488,7 @@ And if we inspect this object, we can see it has the new
 owner, different from the original one:
 
 ```shell
-$ sui client object --id 0x471c8e241d0473c34753461529b70f9c4ed3151b
+$ sui client object 0x471c8e241d0473c34753461529b70f9c4ed3151b
 ```
 
 Resulting in:
@@ -528,7 +528,7 @@ an upper limit we use 1000 as our gas budget.
 Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`) which now has 4 objects left:
 
 ```shell
-$ sui client objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+$ sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 Outputting:

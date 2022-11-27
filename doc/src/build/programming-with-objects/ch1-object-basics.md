@@ -188,7 +188,7 @@ $ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 ```
 We can inspect this object and see what kind of object it is:
 ```
-$ sui client object --id $OBJECT
+$ sui client object $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
@@ -202,7 +202,7 @@ As we can see, it's owned by the current default client address that we saw earl
 
 You can also look at the data content of the object by adding the `--json` parameter:
 ```
-$ sui client object --id $OBJECT --json
+$ sui client object $OBJECT --json
 ```
 This will print the values of all the fields in the Move object, such as the values of `red`, `green`, and `blue`.
 
