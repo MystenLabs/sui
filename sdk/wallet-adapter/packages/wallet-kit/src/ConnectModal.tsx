@@ -81,7 +81,9 @@ const LeftPanel = styled("div", {
   display: "flex",
   flexDirection: "column",
   width: "100%",
+  flex: 1,
   "@md": {
+    flex: 0,
     width: 240,
   },
 
@@ -121,7 +123,7 @@ const MobileInfoButton = styled("button", {
 const SELECTED_INFO = "@@internal/what-is-wallet";
 
 export function ConnectModal({ open, onClose }: ConnectModalProps) {
-  const { wallets, select, wallet, connected, isError } = useWallet();
+  const { select, wallet, connected, isError } = useWallet();
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {

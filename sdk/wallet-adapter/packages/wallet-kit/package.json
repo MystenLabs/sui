@@ -31,13 +31,11 @@
     "react-dom": "*"
   },
   "dependencies": {
-    "@headlessui/react": "^1.7.2",
     "@mysten/wallet-adapter-base": "workspace:*",
     "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
     "@radix-ui/react-dialog": "^1.0.2",
-    "@stitches/react": "^1.2.8",
-    "@wallet-standard/core": "1.0.0"
+    "@stitches/react": "^1.2.8"
   },
   "devDependencies": {
     "@mysten/sui.js": "workspace:*",

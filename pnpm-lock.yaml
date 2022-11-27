@@ -605,24 +605,20 @@ importers:
 
   sdk/wallet-adapter/packages/wallet-kit:
     specifiers:
-      '@headlessui/react': ^1.7.2
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-adapter-base': workspace:*
       '@mysten/wallet-adapter-react': workspace:*
       '@mysten/wallet-adapter-wallet-standard': workspace:*
       '@radix-ui/react-dialog': ^1.0.2
       '@stitches/react': ^1.2.8
-      '@wallet-standard/core': 1.0.0
       tsup: ^6.2.2
       typescript: ^4.8.3
     dependencies:
-      '@headlessui/react': 1.7.2
       '@mysten/wallet-adapter-base': link:../adapters/base-adapter
       '@mysten/wallet-adapter-react': link:../react-providers
       '@mysten/wallet-adapter-wallet-standard': link:../adapters/wallet-standard-adapter
       '@radix-ui/react-dialog': 1.0.2
       '@stitches/react': 1.2.8
-      '@wallet-standard/core': 1.0.0
     devDependencies:
       '@mysten/sui.js': link:../../../typescript
       tsup: 6.2.2_typescript@4.8.3
@@ -2837,14 +2833,6 @@ packages:
     dependencies:
       '@hapi/hoek': 9.3.0
     dev: true
-
-  /@headlessui/react/1.7.2:
-    resolution: {integrity: sha512-snLv2lxwsf2HNTOBNgHYdvoYZ3ChJE8QszPi1d/hl9js8KrFrUulTaQBfSyPbJP5BybVreWh9DxCgz9S0Z6hKQ==}
-    engines: {node: '>=10'}
-    peerDependencies:
-      react: ^16 || ^17 || ^18
-      react-dom: ^16 || ^17 || ^18
-    dev: false
 
   /@headlessui/react/1.7.2_biqbaboplfbrettd7655fr4n2y:
     resolution: {integrity: sha512-snLv2lxwsf2HNTOBNgHYdvoYZ3ChJE8QszPi1d/hl9js8KrFrUulTaQBfSyPbJP5BybVreWh9DxCgz9S0Z6hKQ==}

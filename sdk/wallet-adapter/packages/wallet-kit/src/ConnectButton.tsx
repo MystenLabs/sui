@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ComponentProps, ReactNode, useEffect, useState } from "react";
-import { theme } from "./stitches";
 
 import { ConnectModal } from "./ConnectModal";
 import { useWallet } from "@mysten/wallet-adapter-react";
@@ -34,13 +33,14 @@ export function ConnectButton({
   }, [connected]);
 
   return (
-    <div className={theme}>
+    <>
       {account ? (
         <Button
           css={{ fontFamily: "$mono" }}
           color="connected"
           size="lg"
           onClick={() => disconnect()}
+          {...props}
         >
           {`${account.slice(0, 4)}...${account.slice(-4)}`}
         </Button>
@@ -56,6 +56,6 @@ export function ConnectButton({
       )}
 
       <ConnectModal open={open} onClose={() => setOpen(false)} />
-    </div>
+    </>
   );
 }

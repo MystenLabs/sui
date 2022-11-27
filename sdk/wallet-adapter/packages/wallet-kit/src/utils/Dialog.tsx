@@ -42,7 +42,7 @@ export const Body = styled("div", {
   borderRadius: "$modal",
   boxShadow: "$modal",
   width: "100%",
-  // minHeight: "50vh",
+  minHeight: "50vh",
   maxWidth: "700px",
   maxHeight: "85vh",
   display: "flex",
