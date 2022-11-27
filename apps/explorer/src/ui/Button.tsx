@@ -20,6 +20,7 @@ const buttonStyles = cva(
                     'bg-gray-90 text-gray-50 hover:text-white border-none',
                 outline:
                     'bg-white border border-solid border-steel text-steel-dark hover:text-steel-darker hover:border-steel-dark active:text-steel active:border-steel disabled:border-gray-45 disabled:text-steel-dark',
+                txt: 'bg-transparent border-0 text-steel-dark hover:text-steel-darker active:text-steel disabled:text-gray-60',
             },
             size: {
                 md: 'px-3 py-2 rounded-md text-bodySmall font-semibold',

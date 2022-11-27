@@ -9,6 +9,7 @@ import type { ObjectId } from '@mysten/sui.js';
 
 import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
 import { Banner } from '~/ui/Banner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 export type ModuleFunctionsInteractionProps = {
     packageId: ObjectId;
@@ -32,26 +33,30 @@ export function ModuleFunctionsInteraction({
             .filter(([_, anFn]) => anFn.is_entry)
             .map(([fnName, details]) => ({ name: fnName, details }));
     }, [normalizedModule]);
-
-    if (error) {
+    const isEmpty = !isLoading && !executableFunctions.length && !error;
+    if (isEmpty || error || isLoading) {
         return (
-            <Banner variant="error">
-                Error loading module <strong>{moduleName}</strong> details.
-            </Banner>
+            <div className="flex h-full items-center justify-center">
+                {error ? (
+                    <Banner variant="error">
+                        Error loading module <strong>{moduleName}</strong>{' '}
+                        details.
+                    </Banner>
+                ) : isEmpty ? (
+                    <div className="text-body font-medium text-steel-dark">
+                        No public entry functions found.
+                    </div>
+                ) : (
+                    <LoadingSpinner text="Loading data" />
+                )}
+            </div>
         );
     }
-
-    if (!isLoading && !executableFunctions.length) {
-        return (
-            <Banner variant="message">No public entry functions found.</Banner>
-        );
-    }
-
-    return !isLoading && executableFunctions.length ? (
+    return (
         <div className="flex flex-col gap-3">
             {executableFunctions.map(({ name, details }) => (
                 <ModuleFunction
-                    key={name}
+                    key={[packageId, moduleName, name].join('::')}
                     functionName={name}
                     functionDetails={details}
                     moduleName={moduleName}
@@ -59,5 +64,5 @@ export function ModuleFunctionsInteraction({
                 />
             ))}
         </div>
-    ) : null;
+    );
 }

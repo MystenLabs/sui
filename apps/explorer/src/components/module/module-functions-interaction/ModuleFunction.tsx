@@ -10,10 +10,10 @@ import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo } from 'react';
 import { useWatch } from 'react-hook-form';
-import toast from 'react-hot-toast';
 import { z } from 'zod';
 
 import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
+import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
 
@@ -24,6 +24,7 @@ import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const argsSchema = z.object({
     params: z.optional(z.array(z.string().trim().min(1))),
@@ -46,7 +47,7 @@ export function ModuleFunction({
     functionDetails,
 }: ModuleFunctionProps) {
     const { connected, signAndExecuteTransaction } = useWallet();
-    const { handleSubmit, formState, register, control } = useZodForm({
+    const { handleSubmit, formState, register, control, reset } = useZodForm({
         schema: argsSchema,
     });
     const typeArguments = useFunctionTypeArguments(
@@ -85,6 +86,9 @@ export function ModuleFunction({
             return result;
         },
     });
+    const executeFunctionError = execute.error
+        ? (execute.error as Error).message
+        : false;
     const isExecuteDisabled =
         formState.isValidating ||
         !formState.isValid ||
@@ -94,44 +98,34 @@ export function ModuleFunction({
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
                 onSubmit={handleSubmit((formData) =>
-                    toast
-                        .promise(execute.mutateAsync(formData), {
-                            loading: 'Executing...',
-                            error: (e) => 'Transaction failed',
-                            success: 'Done',
-                        })
-                        .catch((e) => null)
+                    execute.mutateAsync(formData)
                 )}
                 autoComplete="off"
                 className="flex flex-col flex-nowrap items-stretch gap-4"
             >
-                {typeArguments.map((aTypeArgument, index) => {
-                    return (
-                        <Input
-                            key={index}
-                            label={`Type${index}`}
-                            {...register(`types.${index}` as const)}
-                            placeholder={aTypeArgument}
-                        />
-                    );
-                })}
-                {paramsDetails.map(({ paramTypeText }, index) => {
-                    return (
-                        <Input
-                            key={index}
-                            label={`Arg${index}`}
-                            {...register(`params.${index}` as const)}
-                            placeholder={paramTypeText}
-                        />
-                    );
-                })}
+                {typeArguments.map((aTypeArgument, index) => (
+                    <Input
+                        key={index}
+                        label={`Type${index}`}
+                        {...register(`types.${index}` as const)}
+                        placeholder={aTypeArgument}
+                    />
+                ))}
+                {paramsDetails.map(({ paramTypeText }, index) => (
+                    <Input
+                        key={index}
+                        label={`Arg${index}`}
+                        {...register(`params.${index}` as const)}
+                        placeholder={paramTypeText}
+                    />
+                ))}
                 <div className="flex items-stretch justify-end gap-1.5">
                     <Button
                         variant="primary"
                         type="submit"
                         disabled={isExecuteDisabled}
                     >
-                        Execute
+                        {execute.isLoading ? <LoadingSpinner /> : 'Execute'}
                     </Button>
                     <ConnectButton
                         connectText={
@@ -152,6 +146,16 @@ export function ModuleFunction({
                         )}
                     />
                 </div>
+                {executeFunctionError || execute.data ? (
+                    <FunctionExecutionResult
+                        error={executeFunctionError}
+                        result={execute.data || null}
+                        onClear={() => {
+                            execute.reset();
+                            reset();
+                        }}
+                    />
+                ) : null}
             </form>
         </DisclosureBox>
     );
