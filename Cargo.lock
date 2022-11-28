@@ -8590,6 +8590,7 @@ dependencies = [
  "chrono",
  "diesel",
  "dotenvy",
+ "fastcrypto",
  "futures",
  "jsonrpsee",
  "narwhal-network",

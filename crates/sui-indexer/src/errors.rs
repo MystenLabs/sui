@@ -22,6 +22,12 @@ pub enum IndexerError {
 
     #[error("Indexer failed to parse transaction digest read from DB: `{0}`")]
     TransactionDigestParsingError(String),
+
+    #[error("Indexer failed to find object mutations, which should never happen.")]
+    ObjectMutationNotAvailable,
+
+    #[error("Indexer failed to deserialize event from events table: `{0}`")]
+    EventDeserializationError(String),
 }
 
 impl IndexerError {
@@ -35,6 +41,8 @@ impl IndexerError {
             IndexerError::TransactionDigestParsingError(_) => {
                 "TransactionDigestParsingError".to_string()
             }
+            IndexerError::ObjectMutationNotAvailable => "ObjectMutationNotAvailable".to_string(),
+            IndexerError::EventDeserializationError(_) => "EventDeserializationError".to_string(),
         }
     }
 }

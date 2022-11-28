@@ -39,6 +39,8 @@ sui-sdk = { path = "../sui-sdk" }
 telemetry-subscribers.workspace = true
 workspace-hack = { path = "../workspace-hack"}
 
+fastcrypto = { workspace = true, features = ["copy_key"] }
+
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 sui-framework-build = { path = "../sui-framework-build" }

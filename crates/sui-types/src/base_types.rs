@@ -488,6 +488,10 @@ impl TransactionDigest {
     pub fn into_bytes(self) -> [u8; TRANSACTION_DIGEST_LENGTH] {
         self.0
     }
+
+    pub fn encode(&self) -> String {
+        Base64::encode(self.0)
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
@@ -562,6 +566,10 @@ impl ObjectDigest {
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
         Self::new(random_bytes)
+    }
+
+    pub fn encode(&self) -> String {
+        Base64::encode(self.0)
     }
 }
 

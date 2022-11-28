@@ -14,6 +14,16 @@ pub struct EventLog {
     pub next_cursor_event_seq: Option<i64>,
 }
 
+pub fn read_event_log(conn: &mut PgConnection) -> Result<EventLog, IndexerError> {
+    // NOTE: always read one row, as event logs only have one row
+    event_logs.limit(1).first::<EventLog>(conn).map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading event log in PostgresDB with error {:?}",
+            e
+        ))
+    })
+}
+
 pub fn commit_event_log(
     conn: &mut PgConnection,
     tx_seq: Option<i64>,
@@ -25,14 +35,4 @@ pub fn commit_event_log(
             tx_seq, event_seq, e
         ))
     )
-}
-
-pub fn read_event_log(conn: &mut PgConnection) -> Result<EventLog, IndexerError> {
-    // NOTE: always read one row, as event logs only have one row
-    event_logs.limit(1).first::<EventLog>(conn).map_err(|e| {
-        IndexerError::PostgresReadError(format!(
-            "Failed reading event log in PostgresDB with error {:?}",
-            e
-        ))
-    })
 }
