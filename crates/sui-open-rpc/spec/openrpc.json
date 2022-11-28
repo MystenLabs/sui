@@ -356,6 +356,32 @@
       ]
     },
     {
+      "name": "sui_getCoinMetadata",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return metadata(e.g., symbol, decimals) for a coin",
+      "params": [
+        {
+          "name": "coin_type",
+          "description": "fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiCoinMetadata",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiCoinMetadata"
+        }
+      }
+    },
+    {
       "name": "sui_getCommitteeInfo",
       "tags": [
         {
@@ -3796,6 +3822,53 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          }
+        }
+      },
+      "SuiCoinMetadata": {
+        "type": "object",
+        "required": [
+          "decimals",
+          "description",
+          "name",
+          "symbol"
+        ],
+        "properties": {
+          "decimals": {
+            "description": "Number of decimal places the coin uses.",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "description": {
+            "description": "Description of the token",
+            "type": "string"
+          },
+          "iconUrl": {
+            "description": "URL for the token logo",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Object id for the CoinMetadata object",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "description": "Name for the token",
+            "type": "string"
+          },
+          "symbol": {
+            "description": "Symbol for the token",
+            "type": "string"
           }
         }
       },

@@ -14,3 +14,8 @@ export function parseVersionFromString(
 ): RpcApiVersion | undefined {
   return parse(version);
 }
+
+export function versionToString(version: RpcApiVersion): string {
+  const { major, minor, patch } = version;
+  return `${major}.${minor}.${patch}`;
+}
