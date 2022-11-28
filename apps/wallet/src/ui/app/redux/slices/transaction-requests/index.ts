@@ -90,8 +90,9 @@ const getEventsSummary = (
         .map((event) => {
             if (
                 !('coinBalanceChange' in event) ||
-                (event?.coinBalanceChange?.changeType !== 'Receive' &&
-                    event?.coinBalanceChange?.changeType !== 'Pay')
+                ['Receive', 'Pay'].includes(
+                    event?.coinBalanceChange?.changeType
+                )
             ) {
                 return null;
             }

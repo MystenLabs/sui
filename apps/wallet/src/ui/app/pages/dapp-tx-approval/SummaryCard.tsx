@@ -32,9 +32,21 @@ export function SummaryCardContent({ children }: { children: ReactNode }) {
     return <div className={st.contentWrapper}>{children}</div>;
 }
 
-export function SummaryCard({ transparentHeader, children }: SummaryCardProps) {
+export function SummaryCard({
+    transparentHeader,
+    children,
+    header,
+}: SummaryCardProps) {
     return (
         <div className={cl(st.card, transparentHeader && st.packageInfo)}>
+            <div
+                className={cl(
+                    st.header,
+                    transparentHeader && st.transparentHeader
+                )}
+            >
+                {header}
+            </div>
             {children}
         </div>
     );
