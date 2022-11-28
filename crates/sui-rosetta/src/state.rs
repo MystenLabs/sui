@@ -240,7 +240,7 @@ impl PseudoBlockProvider {
 
                 let transaction = Transaction {
                     transaction_identifier: TransactionIdentifier { hash: digest },
-                    operations: operations,
+                    operations,
                     related_transactions: vec![],
                     metadata: None,
                 };
