@@ -114,11 +114,7 @@ export type ValidatorState = {
     };
 };
 
-
-function StakeColumn(prop: {
-    stake: bigint;
-    stakePercent: number;
-}) {
+function StakeColumn(prop: { stake: bigint; stakePercent: number }) {
     return (
         <div className="flex gap-0.5 items-end">
             <Text variant="bodySmall" color="steel-darker">

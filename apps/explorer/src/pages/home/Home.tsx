@@ -8,7 +8,6 @@ import { RecentModulesCard } from '../../components/recent-packages-card/RecentP
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
-
 import styles from './Home.module.css';
 
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -18,7 +17,6 @@ const ValidatorMap = lazy(
 );
 
 const TXN_PER_PAGE = 25;
-
 
 function Home() {
     return (
@@ -73,7 +71,5 @@ function Home() {
         </div>
     );
 }
-
-
 
 export default Home;
