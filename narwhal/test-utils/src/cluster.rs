@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{temp_dir, CommitteeFixture};
 use arc_swap::ArcSwap;
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{
+    NetworkAdminServerParameters, Parameters, SharedCommittee, SharedWorkerCache, WorkerId,
+};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
@@ -454,6 +456,8 @@ impl WorkerNodeDetails {
             temp_dir()
         };
 
+        info!("Worker Node {} will use path {:?}", self.id, store_path);
+
         let worker_store = NodeStorage::reopen(store_path.clone());
         let worker_handlers = Node::spawn_workers(
             self.name.clone(),
@@ -519,11 +523,14 @@ impl AuthorityDetails {
     ) -> Self {
         // Create all the nodes we have in the committee
         let name = key_pair.public().clone();
+        let mut primary_param = parameters.clone();
+        primary_param.network_admin_server = NetworkAdminServerParameters::default();
+
         let primary = PrimaryNodeDetails::new(
             id,
             key_pair,
             network_key_pair,
-            parameters.clone(),
+            primary_param,
             committee.clone(),
             worker_cache.clone(),
             internal_consensus_enabled,
@@ -534,10 +541,13 @@ impl AuthorityDetails {
         // the nodes independently.
         let mut workers = HashMap::new();
         for (worker_id, addresses) in worker_cache.load().workers.get(&name).unwrap().0.clone() {
+            let mut worker_param = parameters.clone();
+            worker_param.network_admin_server = NetworkAdminServerParameters::default();
+
             let worker = WorkerNodeDetails::new(
                 worker_id,
                 name.clone(),
-                parameters.clone(),
+                worker_param,
                 addresses.transactions.clone(),
                 committee.clone(),
                 worker_cache.clone(),
