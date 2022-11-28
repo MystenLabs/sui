@@ -1086,7 +1086,7 @@ ouroboros_macro-274715c4dabd11b0 = { package = "ouroboros_macro", version = "0.9
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
 parity-scale-codec = { version = "2", default-features = false, features = ["bitvec", "chain-error", "max-encoded-len", "parity-scale-codec-derive", "serde", "std"] }
-parity-scale-codec-derive = { version = "3", default-features = false, features = ["max-encoded-len"] }
+parity-scale-codec-derive = { version = "2", default-features = false, features = ["max-encoded-len"] }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot-5ef9efb8ec2df382 = { package = "parking_lot", version = "0.12" }
 parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0.8", default-features = false }
