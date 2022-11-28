@@ -9,13 +9,20 @@ describe('PaginationWrapper has buttons', () => {
     const paginationContext = '#NFTSection';
 
     it('to go to the next page', () => {
-        const address = 'ownsAllAddress';
-        cy.visit(`/addresses/${address}`);
-        cy.get(paginationContext).within(() => {
-            cy.get('[data-testid=nextBtn]:visible').click();
-            cy.get(nftObject(1)).click();
+        cy.task('faucet')
+        .then((address) => cy.task('mint', address))
+        .then((tx) => {
+            if (!('EffectsCert' in tx)) {
+                throw new Error('Missing effects cert');
+            }
+            cy.get(paginationContext).within(() => {
+                cy.get('[data-testid=nextBtn]:visible').click();
+                cy.get(nftObject(1)).click();
+            });
+            cy.get('#objectID').contains('Image2');
         });
-        cy.get('#objectID').contains('Image2');
+
+     
     });
 
     it('to go to the last page', () => {
