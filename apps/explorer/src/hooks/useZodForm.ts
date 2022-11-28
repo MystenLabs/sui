@@ -4,18 +4,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import type { Resolver } from '@hookform/resolvers/zod';
 import type { UseFormProps } from 'react-hook-form';
-import type { z, ZodTypeAny } from 'zod';
+import type { ZodSchema, TypeOf } from 'zod';
 
-export function useZodForm<S extends ZodTypeAny, TContext = any>(
-    zodSchema: S,
-    formOptions?: Omit<UseFormProps<z.infer<S>, TContext>, 'resolver'>,
-    zodSchemaOptions?: Parameters<Resolver>['1'],
-    zodFactoryOptions?: Parameters<Resolver>['2']
-) {
-    return useForm<z.infer<S>>({
-        ...formOptions,
-        resolver: zodResolver(zodSchema, zodSchemaOptions, zodFactoryOptions),
-    });
+interface UseZodFormProps<T extends ZodSchema<any>>
+    extends UseFormProps<TypeOf<T>> {
+    schema: T;
 }
+
+export const useZodForm = <T extends ZodSchema<any>>({
+    schema,
+    ...formConfig
+}: UseZodFormProps<T>) => {
+    return useForm({
+        ...formConfig,
+        resolver: zodResolver(schema),
+    });
+};

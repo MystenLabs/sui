@@ -97,7 +97,8 @@ function CustomRPCInput({
     value: string;
     onChange(networkUrl: string): void;
 }) {
-    const { register, handleSubmit, formState } = useZodForm(CustomRPCSchema, {
+    const { register, handleSubmit, formState } = useZodForm({
+        schema: CustomRPCSchema,
         mode: 'all',
         defaultValues: {
             url: value,

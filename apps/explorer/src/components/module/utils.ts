@@ -68,12 +68,12 @@ export function getNormalizedFunctionParameterTypeDetails(
     param: SuiMoveNormalizedType,
     functionTypeArgNames?: string[]
 ) {
-    const paramTypeTxt = normalizedFunctionParameterTypeToString(
+    const paramTypeText = normalizedFunctionParameterTypeToString(
         param,
         functionTypeArgNames
     );
     return {
-        isTxContext: paramTypeTxt === '0x2::tx_context::TxContext',
-        paramTypeTxt,
+        isTxContext: paramTypeText === '0x2::tx_context::TxContext',
+        paramTypeText,
     };
 }

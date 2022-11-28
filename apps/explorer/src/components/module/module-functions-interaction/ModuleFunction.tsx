@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    getExecutionStatusType,
+    getExecutionStatusError,
+} from '@mysten/sui.js';
 import { useWallet } from '@mysten/wallet-adapter-react';
 import { WalletWrapper } from '@mysten/wallet-adapter-react-ui';
+import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { useMemo } from 'react';
-import { useFieldArray } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
-import { FunctionParamInput } from './FuncitonParamInput';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 
 import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
@@ -17,6 +19,7 @@ import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
 import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
+import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
     params: z.array(z.object({ value: z.string().trim().min(1) })),
@@ -38,29 +41,31 @@ export function ModuleFunction({
     functionDetails,
 }: ModuleFunctionProps) {
     const { connected, signAndExecuteTransaction } = useWallet();
-    const allParamsDetails = useFunctionParamsDetails(
-        functionDetails.parameters
-    );
-    const filteredParamsDetails = useMemo(
-        () => allParamsDetails.filter((aParam) => !aParam.isTxContext),
-        [allParamsDetails]
-    );
-    const defaultValues = useMemo(
-        () =>
-            Array.from({ length: filteredParamsDetails.length }, () => ({
-                value: '',
-            })),
-        [filteredParamsDetails.length]
-    );
-    const { register, handleSubmit, formState, control } = useZodForm(
-        argsSchema,
-        {
-            defaultValues: {
-                params: defaultValues,
-            },
-        }
-    );
-    const { fields } = useFieldArray({ control, name: 'params' });
+    const paramsDetails = useFunctionParamsDetails(functionDetails.parameters);
+    const { handleSubmit, formState, register } = useZodForm({
+        schema: argsSchema,
+    });
+    const execute = useMutation({
+        mutationFn: async (params: string[]) => {
+            const result = await signAndExecuteTransaction({
+                kind: 'moveCall',
+                data: {
+                    packageObjectId: packageId,
+                    module: moduleName,
+                    function: functionName,
+                    arguments: params,
+                    typeArguments: [], // TODO: currently move calls that expect type argument will fail
+                    gasBudget: 2000,
+                },
+            });
+            if (getExecutionStatusType(result) === 'failure') {
+                throw new Error(
+                    getExecutionStatusError(result) || 'Transaction failed'
+                );
+            }
+            return result;
+        },
+    });
     const isExecuteDisabled =
         formState.isValidating ||
         !formState.isValid ||
@@ -69,48 +74,33 @@ export function ModuleFunction({
     return (
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
-                onSubmit={handleSubmit(async ({ params }) => {
-                    try {
-                        await toast.promise(
-                            signAndExecuteTransaction({
-                                kind: 'moveCall',
-                                data: {
-                                    packageObjectId: packageId,
-                                    module: moduleName,
-                                    function: functionName,
-                                    arguments: params.map(({ value }) => value),
-                                    typeArguments: [], // TODO: currently move calls that expect type argument will fail
-                                    gasBudget: 2000,
-                                },
-                            }).then((tx) => {
-                                if (tx.effects.status.status === 'failure') {
-                                    throw new Error(
-                                        tx.effects.status.error ||
-                                            'Transaction failed'
-                                    );
-                                }
-                            }),
+                onSubmit={handleSubmit(({ params }) =>
+                    toast
+                        .promise(
+                            execute.mutateAsync(
+                                params.map(({ value }) => value)
+                            ),
                             {
                                 loading: 'Executing...',
                                 error: (e) => 'Transaction failed',
                                 success: 'Done',
                             }
-                        );
-                    } catch (e) {}
-                })}
+                        )
+                        .catch((e) => null)
+                )}
                 autoComplete="off"
-                className="flex flex-col flex-nowrap items-stretch gap-3.75"
+                className="flex flex-col flex-nowrap items-stretch gap-4"
             >
-                {filteredParamsDetails.map(({ paramTypeTxt }, index) => (
-                    <FunctionParamInput
-                        key={fields[index].id}
-                        id={fields[index].id}
-                        paramTypeTxt={paramTypeTxt}
-                        paramIndex={index}
-                        register={register}
-                        name={`params.${index}.value`}
-                    />
-                ))}
+                {paramsDetails.map(({ paramTypeText }, index) => {
+                    return (
+                        <Input
+                            key={index}
+                            label={`Arg${index}`}
+                            {...register(`params.${index}.value` as const)}
+                            placeholder={paramTypeText}
+                        />
+                    );
+                })}
                 <div className="flex items-center justify-end gap-1.5">
                     <Button
                         variant="primary"

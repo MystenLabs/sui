@@ -13,12 +13,14 @@ export function useFunctionParamsDetails(
 ) {
     return useMemo(
         () =>
-            params.map((aParam) =>
-                getNormalizedFunctionParameterTypeDetails(
-                    aParam,
-                    functionTypeArgNames
+            params
+                .map((aParam) =>
+                    getNormalizedFunctionParameterTypeDetails(
+                        aParam,
+                        functionTypeArgNames
+                    )
                 )
-            ),
+                .filter(({ isTxContext }) => !isTxContext),
         [params, functionTypeArgNames]
     );
 }
