@@ -22,7 +22,7 @@ type ReadApi = sui_sdk::embedded_gateway::ReadApi;
 
 #[derive(Debug, Error)]
 pub enum DependencyVerificationError {
-    #[error("Could not read a dependencies' on-chain object: {0:?}")]
+    #[error("Could not read a dependency's on-chain object: {0:?}")]
     DependencyObjectReadFailure(anyhow::Error),
 
     #[error("Dependency object does not exist or was deleted: {0:?}")]
