@@ -13,7 +13,6 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use tempfile;
 use test_utils::network::init_cluster_builder_env_aware;
 use test_utils::transaction::publish_package_with_wallet;
 
