@@ -18,15 +18,10 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
-use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, SenderSignedData,
-};
-use sui_types::{
-    crypto,
-    crypto::SignableBytes,
-    messages::{Transaction, TransactionData},
-};
-
+use sui_types::intent::Intent;
+use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
+use sui_types::{crypto, messages::Transaction};
+use tracing::info;
 pub struct FullNodeTransactionExecutionApi {
     pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
@@ -54,8 +49,8 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         pub_key: Base64,
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse> {
-        let data =
-            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let tx_data =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         let flag = vec![sig_scheme.flag()];
         let signature = crypto::Signature::from_bytes(
             &[
@@ -66,7 +61,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             .concat(),
         )
         .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(SenderSignedData::new(data, signature));
+        let txn = Transaction::from_data(tx_data, Intent::default(), signature);
         let txn_digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
@@ -94,12 +89,15 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         signature: Base64,
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse> {
-        let data =
-            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let tx_data =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+        info!("==loltx_data: {:?}", tx_data);
         let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
             .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(SenderSignedData::new(data, signature));
+
+        let txn = Transaction::from_data(tx_data, Intent::default(), signature);
         let txn_digest = *txn.digest();
+        info!("==loltxn_digest: {:?}", txn_digest);
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
@@ -111,6 +109,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         .await
         .map_err(|e| anyhow!(e))? // for JoinError
         .map_err(|e| anyhow!(e))?; // For Sui transaction execution error (SuiResult<ExecuteTransactionResponse>)
+        info!("==lolresponse: {:?}", response);
 
         SuiExecuteTransactionResponse::from_execute_transaction_response(
             response,

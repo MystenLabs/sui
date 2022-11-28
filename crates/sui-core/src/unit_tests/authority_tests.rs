@@ -183,7 +183,10 @@ async fn test_dry_run_transaction() {
     let transaction_digest = *transaction.digest();
 
     let response = authority
-        .dry_exec_transaction(transaction.data().data.clone(), transaction_digest)
+        .dry_exec_transaction(
+            transaction.data().intent_message.value.clone(),
+            transaction_digest,
+        )
         .await;
     assert!(response.is_ok());
 
@@ -253,7 +256,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     bad_signature_transfer_transaction
         .data_mut_for_testing()
         .tx_signature =
-        Signature::new_temp(&transfer_transaction.data().data.to_bytes(), &unknown_key);
+        Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key);
 
     assert!(client
         .handle_transaction(bad_signature_transfer_transaction)
@@ -476,14 +479,22 @@ async fn test_handle_transfer_transaction_ok() {
     );
 
     // Check the final state of the locks
-    let Some(envelope) = authority_state.get_transaction_lock(
-        &(object_id, before_object_version, object.digest()),
-        0,
-    ).await.unwrap() else {
-        panic!("No verified envelope for transaction");
-    };
-
-    assert_eq!(envelope.data().data, transfer_transaction.data().data);
+    assert!(authority_state
+        .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
+        .await
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        authority_state
+            .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
+            .await
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .data()
+            .intent_message,
+        transfer_transaction.data().intent_message
+    );
 }
 
 #[tokio::test]

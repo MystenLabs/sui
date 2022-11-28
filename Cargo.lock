@@ -8931,6 +8931,7 @@ name = "sui-open-rpc"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap 3.2.23",
  "fastcrypto",
  "move-core-types",

@@ -340,7 +340,10 @@ where
         {
             votes.push(signed.auth_sig().clone());
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction.data().data == signed.data().data);
+                assert!(
+                    inner_transaction.data().intent_message.value
+                        == signed.data().intent_message.value
+                );
             }
             transaction = Some(signed);
         }

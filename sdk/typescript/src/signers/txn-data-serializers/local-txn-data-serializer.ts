@@ -49,7 +49,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     txn: UnserializedSignableTransaction
   ): Promise<Base64DataBuffer> {
     try {
+      const version = await this.provider.getRpcApiVersion();
       return await this.serializeTransactionData(
+        version?.major === 0 && version?.minor > 17,
         await this.constructTransactionData(signerAddress, txn)
       );
     } catch (e) {
@@ -317,31 +319,36 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
    * Serialize `TransactionData` into BCS encoded bytes
    */
   public async serializeTransactionData(
+    useIntentSigning: boolean,
     tx: TransactionData,
     // TODO: derive the buffer size automatically
     size: number = 8192
   ): Promise<Base64DataBuffer> {
-    const format = 'TransactionData';
-
-    const dataBytes = bcs.ser(format, tx, size).toBytes();
-    const serialized = new Uint8Array(
-      TRANSACTION_DATA_TYPE_TAG.length + dataBytes.length
-    );
-    serialized.set(TRANSACTION_DATA_TYPE_TAG);
-    serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);
-    return new Base64DataBuffer(serialized);
+    const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
+    if (useIntentSigning) {
+      // If use intent signing, do not append type tag. This is mirroed in the rpc tx data serializer TransactionBytes::from_data.
+      return new Base64DataBuffer(dataBytes);
+    } else {
+      const serialized = new Uint8Array(
+        TRANSACTION_DATA_TYPE_TAG.length + dataBytes.length
+      );
+      serialized.set(TRANSACTION_DATA_TYPE_TAG);
+      serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);  
+      return new Base64DataBuffer(serialized);
+    }
   }
 
   /**
    * Deserialize BCS encoded bytes into `SignableTransaction`
    */
   public async deserializeTransactionBytesToSignableTransaction(
+    useIntentSigning: boolean,
     bytes: Base64DataBuffer
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {
     return this.transformTransactionDataToSignableTransaction(
-      deserializeTransactionBytesToTransactionData(bytes)
+      deserializeTransactionBytesToTransactionData(useIntentSigning, bytes)
     );
   }
 

@@ -14,6 +14,7 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use sui_types::intent::{Intent, IntentMessage};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -31,10 +32,20 @@ pub enum Keystore {
 }
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
+    #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
     fn keys(&self) -> Vec<PublicKey>;
     fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
+
+    fn sign_secure<T>(
+        &self,
+        address: &SuiAddress,
+        msg: &T,
+        intent: Intent,
+    ) -> Result<Signature, signature::Error>
+    where
+        T: Serialize;
     fn addresses(&self) -> Vec<SuiAddress> {
         self.keys().iter().map(|k| k.into()).collect()
     }
@@ -127,6 +138,7 @@ impl<'de> Deserialize<'de> for FileBasedKeystore {
 }
 
 impl AccountKeystore for FileBasedKeystore {
+    #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keys
             .get(address)
@@ -134,6 +146,23 @@ impl AccountKeystore for FileBasedKeystore {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
             .try_sign(msg)
+    }
+
+    fn sign_secure<T>(
+        &self,
+        address: &SuiAddress,
+        msg: &T,
+        intent: Intent,
+    ) -> Result<Signature, signature::Error>
+    where
+        T: Serialize,
+    {
+        Ok(Signature::new_secure(
+            &IntentMessage::new(intent, msg),
+            self.keys.get(address).ok_or_else(|| {
+                signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
+            })?,
+        ))
     }
 
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
@@ -208,6 +237,7 @@ pub struct InMemKeystore {
 }
 
 impl AccountKeystore for InMemKeystore {
+    #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keys
             .get(address)
@@ -215,6 +245,23 @@ impl AccountKeystore for InMemKeystore {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
             .try_sign(msg)
+    }
+
+    fn sign_secure<T>(
+        &self,
+        address: &SuiAddress,
+        msg: &T,
+        intent: Intent,
+    ) -> Result<Signature, signature::Error>
+    where
+        T: Serialize,
+    {
+        Ok(Signature::new_secure(
+            &IntentMessage::new(intent, msg),
+            self.keys.get(address).ok_or_else(|| {
+                signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
+            })?,
+        ))
     }
 
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {

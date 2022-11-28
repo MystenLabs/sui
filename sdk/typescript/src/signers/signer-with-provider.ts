@@ -32,6 +32,9 @@ import {
   SignableTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
+// See: sui/crates/sui-types/src/intent.rs 
+// This is currently hardcoded with [IntentScope::TransactionData = 0, Version::V0 = 0, AppId::Sui = 0]
+const INTENT_BYTES = [0, 0, 0];
 ///////////////////////////////
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
@@ -99,16 +102,29 @@ export abstract class SignerWithProvider implements Signer {
         transaction instanceof Base64DataBuffer
           ? transaction
           : new Base64DataBuffer(transaction.data);
-      const sig = await this.signData(txBytes);
+      const version = await this.provider.getRpcApiVersion();
+      let dataToSign;
+      let txBytesToSubmit;
+      if (version?.major == 0 && version?.minor < 18) {
+        dataToSign = txBytes;
+        txBytesToSubmit = txBytes;
+      } else {
+        const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.getLength());
+        intentMessage.set(INTENT_BYTES);
+        intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+        
+        dataToSign = new Base64DataBuffer(intentMessage);
+        txBytesToSubmit = txBytes;
+      }
+      const sig = await this.signData(dataToSign);
       return await this.provider.executeTransaction(
-        txBytes,
+        txBytesToSubmit,
         sig.signatureScheme,
         sig.signature,
         sig.pubKey,
         requestType
       );
     }
-
     return await this.signAndExecuteTransaction(
       await this.serializer.serializeToBytes(
         await this.getAddress(),
@@ -131,11 +147,20 @@ export abstract class SignerWithProvider implements Signer {
         tx
       );
     }
+    const version = await this.provider.getRpcApiVersion();
+    const useIntentSigning = version?.major == 0 && version?.minor > 17;
+    let dataToSign;
+    if (useIntentSigning) {
+      const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.getLength());
+      intentMessage.set(INTENT_BYTES);
+      intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+      dataToSign = new Base64DataBuffer(intentMessage);
+    } else {
+      dataToSign = txBytes;
+    }
 
-    const sig = await this.signData(txBytes);
-    const data = deserializeTransactionBytesToTransactionData(txBytes);
-    let version = await this.provider.getRpcApiVersion();
-    
+    const sig = await this.signData(dataToSign);
+    const data = deserializeTransactionBytesToTransactionData(useIntentSigning, txBytes);
     return generateTransactionDigest(
       data,
       sig.signatureScheme,

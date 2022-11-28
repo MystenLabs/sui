@@ -339,12 +339,20 @@ export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
 );
 
 export function deserializeTransactionBytesToTransactionData(
-  bytes: Base64DataBuffer
+  useIntentSigning: boolean,
+  bytes: Base64DataBuffer, 
 ): TransactionData {
-  return bcs.de(
-    'TransactionData',
-    bytes.getData().slice(TRANSACTION_DATA_TYPE_TAG.length)
-  );
+  if (useIntentSigning) {
+    return bcs.de(
+      'TransactionData',
+      bytes.getData()
+    );
+  } else {
+    return bcs.de(
+      'TransactionData',
+      bytes.getData().slice(TRANSACTION_DATA_TYPE_TAG.length)
+    );
+  }
 }
 
 /**
