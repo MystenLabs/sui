@@ -119,11 +119,11 @@ function StakeColumn(validator: {
     stakePercent: number;
 }): JSX.Element {
     return (
-        <div className="flex gap-1.5 items-end">
+        <div className="flex gap-0.5 items-end">
             <Text variant="bodySmall" color="steel-darker">
                 {validator.stake.toString()}
             </Text>
-            <Text variant="caption" color="steel">
+            <Text variant="captionSmall" color="steel-dark">
                 {validator.stakePercent.toFixed(2)}%
             </Text>
         </div>
@@ -167,7 +167,7 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
         data: validatorsItems.map((validator) => {
             return {
                 name: (
-                    <Text variant="bodySmall" color="steel-dark">
+                    <Text variant="bodySmall" color="steel-darker" weight="medium">
                         {validator.name}
                     </Text>
                 ),
