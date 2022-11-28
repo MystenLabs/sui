@@ -32,7 +32,7 @@ module capy::eden {
         })
     }
 
-    /// Admin-only action to set 2 capys for breeding in the `Eden` object.
+    /// Action to set 2 capys for breeding in the `Eden` object.
     entry fun set(eden: &mut Eden, capy_one: Capy, capy_two: Capy) {
         option::fill(&mut eden.capy_one, capy_one);
         option::fill(&mut eden.capy_two, capy_two)
