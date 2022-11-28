@@ -129,10 +129,8 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
-criterion-468e82937335b1c9 = { package = "criterion", version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
-criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
-criterion-plot-9fbad63c4bcf4a8f = { package = "criterion-plot", version = "0.4", default-features = false }
-criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
+criterion = { version = "0.4", features = ["async", "async_tokio", "cargo_bench_support", "futures", "plotters", "rayon", "tokio"] }
+criterion-plot = { version = "0.5", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
 crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
 crossbeam-deque = { version = "0.8", features = ["crossbeam-epoch", "crossbeam-utils", "std"] }
@@ -498,7 +496,6 @@ serde-name = { version = "0.2", default-features = false }
 serde-reflection = { version = "0.3", default-features = false }
 serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11", features = ["std"] }
-serde_cbor = { version = "0.11", features = ["std"] }
 serde_json = { version = "1", features = ["alloc", "indexmap", "preserve_order", "raw_value", "std", "unbounded_depth"] }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
@@ -784,10 +781,8 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
-criterion-468e82937335b1c9 = { package = "criterion", version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
-criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
-criterion-plot-9fbad63c4bcf4a8f = { package = "criterion-plot", version = "0.4", default-features = false }
-criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
+criterion = { version = "0.4", features = ["async", "async_tokio", "cargo_bench_support", "futures", "plotters", "rayon", "tokio"] }
+criterion-plot = { version = "0.5", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
 crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
 crossbeam-deque = { version = "0.8", features = ["crossbeam-epoch", "crossbeam-utils", "std"] }
@@ -1215,7 +1210,6 @@ serde-name = { version = "0.2", default-features = false }
 serde-reflection = { version = "0.3", default-features = false }
 serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11", features = ["std"] }
-serde_cbor = { version = "0.11", features = ["std"] }
 serde_derive = { version = "1" }
 serde_derive_internals = { version = "0.26", default-features = false }
 serde_json = { version = "1", features = ["alloc", "indexmap", "preserve_order", "raw_value", "std", "unbounded_depth"] }
