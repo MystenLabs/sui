@@ -10,19 +10,17 @@ describe('PaginationWrapper has buttons', () => {
 
     it('to go to the next page', () => {
         cy.task('faucet')
-        .then((address) => cy.task('mint', address))
-        .then((tx) => {
-            if (!('EffectsCert' in tx)) {
-                throw new Error('Missing effects cert');
-            }
-            cy.get(paginationContext).within(() => {
-                cy.get('[data-testid=nextBtn]:visible').click();
-                cy.get(nftObject(1)).click();
+            .then((address) => cy.task('mint', address))
+            .then((tx) => {
+                if (!('EffectsCert' in tx)) {
+                    throw new Error('Missing effects cert');
+                }
+                cy.get(paginationContext).within(() => {
+                    cy.get('[data-testid=nextBtn]:visible').click();
+                    cy.get(nftObject(1)).click();
+                });
+                cy.get('#objectID').contains('Image2');
             });
-            cy.get('#objectID').contains('Image2');
-        });
-
-     
     });
 
     it('to go to the last page', () => {
