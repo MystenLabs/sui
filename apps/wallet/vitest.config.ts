@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { pathAlias } from '@mysten/core/vite.config';
 import { defineConfig } from 'vitest/config';
 
-const alias = (folder: string) => new URL(folder, import.meta.url).pathname;
-
 export default defineConfig({
-    plugins: [tsconfigPaths()],
+    plugins: [],
     test: {
         // TODO: Create custom extension environment.
         environment: 'happy-dom',
@@ -16,8 +14,7 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            '@mysten/sui.js': alias('../../sdk/typescript/src'),
-            '@mysten/bcs': alias('../../sdk/bcs/src'),
+            ...pathAlias(import.meta.url),
         },
     },
 });
