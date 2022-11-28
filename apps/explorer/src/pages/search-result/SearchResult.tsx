@@ -35,7 +35,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
                 .getTransactionWithEffects(input)
                 .then((data) => [
                     {
-                        category: 'transactions',
+                        category: 'transaction',
                         data: data,
                     },
                 ])
@@ -49,7 +49,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
                         throw new Error('No objects for Address');
 
                     return {
-                        category: 'addresses',
+                        category: 'address',
                         data: data,
                     };
                 }),
@@ -60,7 +60,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
                         throw new Error('no object found');
                     }
                     return {
-                        category: 'objects',
+                        category: 'object',
                         data: data,
                     };
                 }),

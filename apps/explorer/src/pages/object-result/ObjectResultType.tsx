@@ -22,7 +22,6 @@ export type DataType = {
     readonly?: string;
     objType: string;
     name?: string;
-    ethAddress?: string;
     ethTokenId?: string;
     publisherAddress?: string;
     contract_id?: { bytes: string };

@@ -17,7 +17,7 @@ export const navigateWithUnknown = async (
             rpc(network)
                 .getTransactionWithEffects(input)
                 .then((data) => ({
-                    category: 'transactions',
+                    category: 'transaction',
                     data: data,
                 }))
         );
@@ -35,7 +35,7 @@ export const navigateWithUnknown = async (
                         throw new Error('No objects for Address');
 
                     return {
-                        category: 'addresses',
+                        category: 'address',
                         data: data,
                     };
                 }),
@@ -46,7 +46,7 @@ export const navigateWithUnknown = async (
                         throw new Error('no object found');
                     }
                     return {
-                        category: 'objects',
+                        category: 'object',
                         data: data,
                     };
                 }),

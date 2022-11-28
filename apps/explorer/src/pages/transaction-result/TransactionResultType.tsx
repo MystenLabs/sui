@@ -23,8 +23,7 @@ export type DataType = CertifiedTransaction & {
 };
 
 export type Category =
-    | 'objects'
-    | 'transactions'
-    | 'addresses'
-    | 'ethAddress'
+    | 'object'
+    | 'transaction'
+    | 'address'
     | 'unknown';
