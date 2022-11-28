@@ -1531,34 +1531,6 @@ dependencies = [
 
 [[package]]
 name = "criterion"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b01d6de93b2b6c65e17c634a26653a29d107b3c98c607c765bf38d041531cd8f"
-dependencies = [
- "atty",
- "cast",
- "clap 2.34.0",
- "criterion-plot 0.4.5",
- "csv",
- "futures",
- "itertools",
- "lazy_static 1.4.0",
- "num-traits 0.2.15",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde 1.0.147",
- "serde_cbor",
- "serde_derive",
- "serde_json",
- "tinytemplate",
- "tokio",
- "walkdir",
-]
-
-[[package]]
-name = "criterion"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c76e09c1aae2bc52b3d2f29e13c6572553b30c4aa1b8a49fd70de6412654cb"
@@ -1568,7 +1540,7 @@ dependencies = [
  "cast",
  "ciborium",
  "clap 3.2.22",
- "criterion-plot 0.5.0",
+ "criterion-plot",
  "futures",
  "itertools",
  "lazy_static 1.4.0",
@@ -1583,16 +1555,6 @@ dependencies = [
  "tinytemplate",
  "tokio",
  "walkdir",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2673cc8207403546f45f5fd319a974b1e6983ad1a3ee7e6041650013be041876"
-dependencies = [
- "cast",
- "itertools",
 ]
 
 [[package]]
@@ -5115,7 +5077,7 @@ dependencies = [
  "bincode",
  "bytes",
  "cfg-if",
- "criterion 0.4.0",
+ "criterion",
  "fastcrypto",
  "futures",
  "indexmap",
@@ -5147,7 +5109,7 @@ version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
  "bincode",
- "criterion 0.4.0",
+ "criterion",
  "eyre",
  "fastcrypto",
  "hex-literal",
@@ -5454,7 +5416,7 @@ dependencies = [
  "base64",
  "bincode",
  "bytes",
- "criterion 0.4.0",
+ "criterion",
  "dashmap",
  "derive_builder",
  "fastcrypto",
@@ -6423,7 +6385,7 @@ checksum = "e20150f965e0e4c925982b9356da71c84bcd56cb66ef4e894825837cbcf6613e"
 dependencies = [
  "backtrace",
  "cfg-if",
- "criterion 0.4.0",
+ "criterion",
  "findshlibs",
  "inferno",
  "libc",
@@ -7682,16 +7644,6 @@ version = "0.11.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfc50e8183eeeb6178dcb167ae34a8051d63535023ae38b5d8d12beae193d37b"
 dependencies = [
- "serde 1.0.147",
-]
-
-[[package]]
-name = "serde_cbor"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
-dependencies = [
- "half",
  "serde 1.0.147",
 ]
 
@@ -9079,7 +9031,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "criterion 0.4.0",
+ "criterion",
  "enum_dispatch",
  "eyre",
  "fdlimit",
@@ -11064,10 +11016,8 @@ dependencies = [
  "crc",
  "crc-catalog",
  "crc32fast",
- "criterion 0.3.6",
- "criterion 0.4.0",
- "criterion-plot 0.4.5",
- "criterion-plot 0.5.0",
+ "criterion",
+ "criterion-plot",
  "crossbeam",
  "crossbeam-channel",
  "crossbeam-deque",
@@ -11535,7 +11485,6 @@ dependencies = [
  "serde-reflection",
  "serde-value",
  "serde_bytes",
- "serde_cbor",
  "serde_derive",
  "serde_derive_internals",
  "serde_json",
