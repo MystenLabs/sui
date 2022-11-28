@@ -3,6 +3,8 @@
 
 Cypress.config('baseUrl', 'http://localhost:3000');
 
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
+
 describe('PaginationWrapper has buttons', () => {
     const paginationContext = '#NFTSection';
 
