@@ -3,7 +3,6 @@
 
 Cypress.config('baseUrl', 'http://localhost:3000');
 
-
 describe('PaginationWrapper has buttons', () => {
     const paginationContext = '#NFTSection';
 
@@ -27,7 +26,6 @@ describe('PaginationWrapper has buttons', () => {
         cy.get('#objectID').contains('CollectionObject');
     });
 
-
     it('to go back a page', () => {
         const address = 'ownsAllAddress';
         cy.visit(`/addresses/${address}`);
@@ -50,5 +48,4 @@ describe('PaginationWrapper has buttons', () => {
         cy.get(nftObject(1)).click();
         cy.get('#objectID').contains('ChildObjectWBrokenImage');
     });
-
 });

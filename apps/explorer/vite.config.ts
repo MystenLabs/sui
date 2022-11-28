@@ -24,7 +24,7 @@ export default defineConfig({
         // Set the output directory to match what CRA uses:
         outDir: 'build',
     },
-    
+
     resolve: {
         alias: {
             '~': new URL('./src', import.meta.url).pathname,
