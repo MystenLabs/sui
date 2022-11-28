@@ -3,7 +3,7 @@
 
 use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
-    traits::{Lucky, ReliableNetwork, UnreliableNetwork},
+    traits::{ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
 };
 use anemo::PeerId;
@@ -11,7 +11,6 @@ use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::{traits::KeyPair, NetworkPublicKey};
-use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
@@ -30,8 +29,6 @@ fn default_executor() -> BoundedExecutor {
 pub struct P2pNetwork {
     network: anemo::Network,
     retry_config: RetryConfig,
-    /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
-    rng: SmallRng,
     // One bounded executor per address
     executors: HashMap<PeerId, BoundedExecutor>,
 }
@@ -47,7 +44,6 @@ impl P2pNetwork {
         Self {
             network,
             retry_config,
-            rng: SmallRng::from_entropy(),
             executors: HashMap::new(),
         }
     }
@@ -152,12 +148,6 @@ impl P2pNetwork {
             .spawn_with_retries(self.retry_config, message_send);
 
         CancelOnDropHandler(handle)
-    }
-}
-
-impl Lucky for P2pNetwork {
-    fn rng(&mut self) -> &mut SmallRng {
-        &mut self.rng
     }
 }
 

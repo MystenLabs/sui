@@ -23,8 +23,7 @@ pub use crate::{
     p2p::P2pNetwork,
     retry::RetryConfig,
     traits::{
-        Lucky, LuckyNetwork, PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork,
-        UnreliableNetwork, WorkerRpc,
+        PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork, UnreliableNetwork, WorkerRpc,
     },
 };
 
