@@ -35,7 +35,7 @@ describe('Pagination unit test', () => {
         expect(prevBtn).not.toHaveProperty('disabled', true);
     });
 
-    it('check pagination values', () => {
+    it('check pagination button values', () => {
         const { container } = render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} />
         );
