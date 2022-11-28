@@ -96,7 +96,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608#74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb#2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -111,11 +111,11 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "rcgen 0.9.3",
+ "ring",
  "rustls",
  "serde 1.0.147",
  "serde_json",
  "tokio",
- "tokio-stream",
  "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tracing",
@@ -126,7 +126,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608#74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb#2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
@@ -137,7 +137,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608#74bbe807bdd4ac4d58c2aba12adc33ea1a2bc608"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb#2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb"
 dependencies = [
  "anemo",
  "bytes",
@@ -2887,15 +2887,6 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "fxhash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
-dependencies = [
- "byteorder",
 ]
 
 [[package]]
@@ -6806,16 +6797,16 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.8.5"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b435e71d9bfa0d8889927231970c51fb89c58fa63bffcab117c9c7a41e5ef8f"
+checksum = "57659b2d8340fa1a8b9358d14597b0b62ea8b9f6cd77cde07895079d619d2d4e"
 dependencies = [
  "bytes",
- "futures-channel",
- "futures-util",
- "fxhash",
+ "futures-io",
+ "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
+ "rustc-hash",
  "rustls",
  "thiserror",
  "tokio",
@@ -6825,16 +6816,15 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.8.4"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fce546b9688f767a57530652488420d419a8b1f44a478b451c3d1ab6d992a55"
+checksum = "57098b1a3d2159d13dc3a98c0e3a5f8ab91ac3dd2471e52b1d712ea0c1085555"
 dependencies = [
  "bytes",
- "fxhash",
  "rand 0.8.5",
  "ring",
+ "rustc-hash",
  "rustls",
- "rustls-pemfile 0.2.1",
  "slab",
  "thiserror",
  "tinyvec",
@@ -6844,16 +6834,15 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.1.3"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f832d8958db3e84d2ec93b5eb2272b45aa23cf7f8fe6e79f578896f4e6c231b"
+checksum = "43f8c8ab02188aa3eac88cdeb2a0b6b78bddc29cb11b3bfe7044b3268fc7ddd0"
 dependencies = [
- "futures-util",
  "libc",
  "quinn-proto",
  "socket2",
- "tokio",
  "tracing",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -7399,18 +7388,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
 dependencies = [
  "openssl-probe",
- "rustls-pemfile 1.0.1",
+ "rustls-pemfile",
  "schannel",
  "security-framework",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eebeaeb360c87bfb72e84abdb3447159c0eaececf1bef2aecd65a8be949d1c9"
-dependencies = [
- "base64",
 ]
 
 [[package]]
@@ -8137,7 +8117,7 @@ dependencies = [
  "paste",
  "percent-encoding",
  "rustls",
- "rustls-pemfile 1.0.1",
+ "rustls-pemfile",
  "sha2 0.10.6",
  "smallvec",
  "sqlformat",
@@ -9975,7 +9955,7 @@ dependencies = [
  "pin-project",
  "prost 0.11.0",
  "prost-derive 0.11.0",
- "rustls-pemfile 1.0.1",
+ "rustls-pemfile",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
@@ -11200,7 +11180,6 @@ dependencies = [
  "futures-task",
  "futures-timer",
  "futures-util",
- "fxhash",
  "generic-array",
  "gethostname",
  "getrandom 0.1.16",
@@ -11525,8 +11504,7 @@ dependencies = [
  "rustix",
  "rustls",
  "rustls-native-certs",
- "rustls-pemfile 0.2.1",
- "rustls-pemfile 1.0.1",
+ "rustls-pemfile",
  "rustversion",
  "rusty-fork",
  "rustyline",
@@ -11739,7 +11717,9 @@ dependencies = [
  "winapi",
  "winapi-util",
  "windows-sys 0.36.1",
+ "windows-sys 0.42.0",
  "windows_x86_64_msvc 0.36.1",
+ "windows_x86_64_msvc 0.42.0",
  "winreg",
  "wyhash",
  "wyz",
