@@ -19,6 +19,7 @@ import {
 import ObjectView from './views/ObjectView';
 
 import { useRpc } from '~/hooks/useRpc';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const DATATYPE_DEFAULT: DataType = {
     id: '',
@@ -98,7 +99,9 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     }
     if (showObjectState.loadState === 'pending') {
         return (
-            <div className={theme.pending}>Please wait for results to load</div>
+            <div className={theme.pending}>
+                <LoadingSpinner text="Loading data" />
+            </div>
         );
     }
     if (showObjectState.loadState === 'fail') {
