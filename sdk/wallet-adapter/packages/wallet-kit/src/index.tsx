@@ -7,6 +7,7 @@ import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-sta
 import { ReactNode, useMemo } from "react";
 
 export * from "./ConnectButton";
+export * from './ConnectModal';
 export * from "@mysten/wallet-adapter-react";
 
 interface WalletKitProviderProps {

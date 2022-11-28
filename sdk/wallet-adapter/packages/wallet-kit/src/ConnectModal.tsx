@@ -12,13 +12,9 @@ import { Body, Content, Overlay, Title } from "./utils/Dialog";
 import { SELECTED_GETTING_STARTED, WalletList } from "./WalletList";
 import { GettingStarted } from "./GettingStarted";
 
-// TODO: Ideally remove:
-const Div = styled("div");
-
 export interface ConnectModalProps {
   open: boolean;
   onClose(): void;
-  closeIcon?: void;
 }
 
 const Close = styled(Dialog.Close, {
@@ -99,6 +95,31 @@ const LeftPanel = styled("div", {
   },
 });
 
+const OpeningWalletTitle = styled("div", {
+  marginTop: "$3",
+  marginBottom: "$1",
+  color: "$textDark",
+  fontSize: "$xl",
+  fontWeight: "$title",
+});
+
+const ConnectionText = styled("div", {
+  fontSize: "$xs",
+  variants: {
+    isError: {
+      true: {
+        color: "$issue",
+      },
+      false: {
+        color: "$textLight",
+      },
+    },
+  },
+  defaultVariants: {
+    isError: false,
+  },
+});
+
 export interface ConnectModalProps {
   open: boolean;
   onClose(): void;
@@ -176,27 +197,12 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
               ) : selected && selected !== SELECTED_GETTING_STARTED ? (
                 <BodyCopy>
                   <SelectedWalletIcon src={wallet?.icon} />
-                  <Div
-                    css={{
-                      marginTop: "$3",
-                      marginBottom: "$1",
-                      color: "$textDark",
-                      fontSize: "$xl",
-                      fontWeight: "$title",
-                    }}
-                  >
-                    Opening {selected}
-                  </Div>
-                  <Div
-                    css={{
-                      color: isError ? "$issue" : "$textLight",
-                      fontSize: "$xs",
-                    }}
-                  >
+                  <OpeningWalletTitle>Opening {selected}</OpeningWalletTitle>
+                  <ConnectionText isError={isError}>
                     {isError
                       ? "Connection failed"
                       : "Confirm connection in the wallet..."}
-                  </Div>
+                  </ConnectionText>
 
                   {isError && (
                     <ButtonContainer>
