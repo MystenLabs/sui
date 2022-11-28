@@ -1569,6 +1569,7 @@ dependencies = [
  "ciborium",
  "clap 3.2.22",
  "criterion-plot 0.5.0",
+ "futures",
  "itertools",
  "lazy_static 1.4.0",
  "num-traits 0.2.15",
@@ -1580,6 +1581,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
@@ -5145,7 +5147,7 @@ version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
  "bincode",
- "criterion 0.3.6",
+ "criterion 0.4.0",
  "eyre",
  "fastcrypto",
  "hex-literal",
@@ -5452,7 +5454,7 @@ dependencies = [
  "base64",
  "bincode",
  "bytes",
- "criterion 0.3.6",
+ "criterion 0.4.0",
  "dashmap",
  "derive_builder",
  "fastcrypto",
@@ -9077,7 +9079,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "criterion 0.3.6",
+ "criterion 0.4.0",
  "enum_dispatch",
  "eyre",
  "fdlimit",
