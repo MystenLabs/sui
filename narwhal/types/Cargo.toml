@@ -43,7 +43,7 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-util-mem.workspace = true
 
 [dev-dependencies]
-criterion = "0.3.6"
+criterion = "0.4.0"
 serde_test = "1.0.147"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
