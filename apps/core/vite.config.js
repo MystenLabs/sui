@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 const ts = require("typescript");
 
 module.exports.pathAlias = (base) => {
