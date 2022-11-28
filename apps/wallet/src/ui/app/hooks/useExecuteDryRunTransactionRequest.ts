@@ -127,7 +127,8 @@ export function useGetRequestTxnMeta({
     txData,
     id,
     activeAddress,
-}: ExecuteDryRunTransactionRequestProps): ExecuteDryRunTransactionReqResponse {
+}: ExecuteDryRunTransactionRequestProps): ExecuteDryRunTransactionReqResponse | null {
+
     const { data } = useExecuteDryRunTransactionRequest(txData);
 
     const txnMeta = data ? getEventsSummary(data, activeAddress) : null;
