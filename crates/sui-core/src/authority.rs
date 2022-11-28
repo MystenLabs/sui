@@ -604,7 +604,7 @@ impl AuthorityState {
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
-            &transaction.data().data,
+            &transaction.data().intent_message.value,
         )
         .await?;
 
@@ -630,7 +630,7 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.data().data);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", &transaction.data().intent_message.value);
 
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
@@ -717,7 +717,7 @@ impl AuthorityState {
                 ?observed_effects_digest,
                 expected_effects=?effects.data(),
                 ?resp.signed_effects,
-                input_objects = ?certificate.data().data.input_objects(),
+                input_objects = ?certificate.data().intent_message.value.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
@@ -757,7 +757,7 @@ impl AuthorityState {
         let span = tracing::debug_span!(
             "validator_acquire_tx_guard",
             ?tx_digest,
-            tx_kind = certificate.data().data.kind_as_str()
+            tx_kind = certificate.data().intent_message.value.kind_as_str()
         );
         let tx_guard = self
             .database
@@ -1019,7 +1019,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.data().data.kind.batch_size() as f64);
+            .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
 
         Ok(VerifiedTransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -1052,7 +1052,14 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.data().data.kind.is_change_epoch_tx() {
+        if !shared_object_refs.is_empty()
+            && !certificate
+                .data()
+                .intent_message
+                .value
+                .kind
+                .is_change_epoch_tx()
+        {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
@@ -1075,7 +1082,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                certificate.data().data.clone(),
+                certificate.data().intent_message.value.clone(),
                 *certificate.digest(),
                 transaction_dependencies,
                 &self.move_vm,
@@ -1147,7 +1154,8 @@ impl AuthorityState {
         indexes.index_tx(
             cert.sender_address(),
             cert.data()
-                .data
+                .intent_message
+                .value
                 .input_objects()?
                 .iter()
                 .map(|o| o.object_id()),
@@ -1156,7 +1164,8 @@ impl AuthorityState {
                 .all_mutated()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
-                .data
+                .intent_message
+                .value
                 .move_calls()
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),

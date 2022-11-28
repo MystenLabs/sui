@@ -37,7 +37,7 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_core::{execution_engine, test_utils::to_sender_signed_transaction};
+use sui_core::{execution_engine, test_utils::to_verified_transaction};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
@@ -445,7 +445,7 @@ impl<'a> SuiTestAdapter<'a> {
         let storage_mut = Arc::get_mut(&mut self.storage).unwrap();
         storage_mut.insert_object(gas_object);
         let data = txn_data(sender, gas_payment);
-        to_sender_signed_transaction(data, sender_key)
+        to_verified_transaction(data, sender_key)
     }
 
     fn execute_txn(
@@ -457,7 +457,8 @@ impl<'a> SuiTestAdapter<'a> {
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
             .data()
-            .data
+            .intent_message
+            .value
             .input_objects()?
             .into_iter()
             .flat_map(|kind| {
@@ -491,7 +492,7 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             temporary_store,
-            transaction.into_inner().into_data().data,
+            transaction.into_inner().into_data().intent_message.value,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

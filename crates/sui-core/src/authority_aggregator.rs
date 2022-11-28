@@ -1653,7 +1653,10 @@ where
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
         );
-        trace!("Transaction data: {:?}", transaction.data().data);
+        trace!(
+            "Transaction data: {:?}",
+            transaction.data().intent_message.value
+        );
 
         #[derive(Default)]
         struct ProcessTransactionState {

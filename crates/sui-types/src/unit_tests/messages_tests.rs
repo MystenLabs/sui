@@ -43,26 +43,32 @@ fn test_signed_values() {
     );
     let committee = Committee::new(0, authorities).unwrap();
 
-    let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
-            _a2,
-            random_object_ref(),
-            a_sender,
-            random_object_ref(),
-            10000,
+    let transaction = Transaction::from_data(
+        IntentMessage::new(
+            Intent::default(),
+            TransactionData::new_transfer(
+                _a2,
+                random_object_ref(),
+                a_sender,
+                random_object_ref(),
+                10000,
+            ),
         ),
         &sender_sec,
     )
     .verify()
     .unwrap();
 
-    let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
-            _a2,
-            random_object_ref(),
-            a_sender,
-            random_object_ref(),
-            10000,
+    let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data(
+        IntentMessage::new(
+            Intent::default(),
+            TransactionData::new_transfer(
+                _a2,
+                random_object_ref(),
+                a_sender,
+                random_object_ref(),
+                10000,
+            ),
         ),
         &sender_sec2,
     ));
@@ -118,13 +124,16 @@ fn test_certificates() {
     );
     let committee = Committee::new(0, authorities).unwrap();
 
-    let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
-            a2,
-            random_object_ref(),
-            a_sender,
-            random_object_ref(),
-            10000,
+    let transaction = Transaction::from_data(
+        IntentMessage::new(
+            Intent::default(),
+            TransactionData::new_transfer(
+                a2,
+                random_object_ref(),
+                a_sender,
+                random_object_ref(),
+                10000,
+            ),
         ),
         &sender_sec,
     )
@@ -430,8 +439,17 @@ fn test_digest_caching() {
 
     let committee = Committee::new(0, authorities).unwrap();
 
-    let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
+    let transaction = Transaction::from_data(
+        IntentMessage::new(
+            Intent::default(),
+            TransactionData::new_transfer(
+                sa1,
+                random_object_ref(),
+                sa2,
+                random_object_ref(),
+                10000,
+            ),
+        ),
         &ssec2,
     )
     .verify()
@@ -447,7 +465,11 @@ fn test_digest_caching() {
 
     let initial_digest = *signed_tx.digest();
 
-    signed_tx.data_mut_for_testing().data.gas_budget += 1;
+    signed_tx
+        .data_mut_for_testing()
+        .intent_message
+        .value
+        .gas_budget += 1;
 
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
@@ -503,8 +525,12 @@ fn test_user_signature_committed_in_transactions() {
         random_object_ref(),
         10000,
     );
-    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
+    let transaction_a = Transaction::from_data(
+        IntentMessage::new(Intent::default(), tx_data.clone()),
+        &sender_sec,
+    );
+    let transaction_b =
+        Transaction::from_data(IntentMessage::new(Intent::default(), tx_data), &sender_sec2);
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
     assert_ne!(tx_digest_a, tx_digest_b);
@@ -536,12 +562,15 @@ fn test_user_signature_committed_in_signed_transactions() {
         random_object_ref(),
         10000,
     );
-    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec)
-        .verify()
-        .unwrap();
+    let transaction_a = Transaction::from_data(
+        IntentMessage::new(Intent::default(), tx_data.clone()),
+        &sender_sec,
+    )
+    .verify()
+    .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
-    let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        tx_data,
+    let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data(
+        IntentMessage::new(Intent::default(), tx_data),
         &sender_sec2,
     ));
 
@@ -602,8 +631,12 @@ fn test_user_signature_committed_in_checkpoints() {
         10000,
     );
 
-    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
+    let transaction_a = Transaction::from_data(
+        IntentMessage::new(Intent::default(), tx_data.clone()),
+        &sender_sec,
+    );
+    let transaction_b =
+        Transaction::from_data(IntentMessage::new(Intent::default(), tx_data), &sender_sec2);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -677,9 +710,10 @@ fn verify_sender_signature_correctly_with_flag() {
         10000,
     );
 
-    let transaction = Transaction::from_data_and_signer(tx_data, &sender_kp)
-        .verify()
-        .unwrap();
+    let transaction =
+        Transaction::from_data(IntentMessage::new(Intent::default(), tx_data), &sender_kp)
+            .verify()
+            .unwrap();
 
     // create tx also signed by authority
     let signed_tx = SignedTransaction::new(
@@ -702,13 +736,16 @@ fn verify_sender_signature_correctly_with_flag() {
         .is_ok());
 
     // creates transaction envelope with Ed25519 signature
-    let transaction_1 = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
-            receiver_address,
-            random_object_ref(),
-            (&sender_kp_2.public()).into(),
-            random_object_ref(),
-            10000,
+    let transaction_1 = Transaction::from_data(
+        IntentMessage::new(
+            Intent::default(),
+            TransactionData::new_transfer(
+                receiver_address,
+                random_object_ref(),
+                (&sender_kp_2.public()).into(),
+                random_object_ref(),
+                10000,
+            ),
         ),
         &sender_kp_2,
     )

@@ -638,7 +638,7 @@ where
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
     async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
-        let input_objects = transaction.data().data.input_objects()?;
+        let input_objects = transaction.data().intent_message.value.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             if object_opt.is_none() {
@@ -672,7 +672,7 @@ where
         let span = tracing::debug_span!(
             "execute_transaction",
             tx_digest = ?tx_digest,
-            tx_kind = transaction.data().data.kind_as_str()
+            tx_kind = transaction.data().intent_message.value.kind_as_str()
         );
         let exec_result = self
             .authorities
@@ -744,7 +744,7 @@ where
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.store,
-            &transaction.data().data,
+            &transaction.data().intent_message.value,
         )
         .await?;
 
@@ -1033,8 +1033,8 @@ where
         equal_parts: bool,
     ) -> anyhow::Result<SuiParsedTransactionResponse> {
         let call = Self::try_get_move_call(&certificate)?;
-        let signer = certificate.data().data.signer();
-        let (gas_payment, _, _) = certificate.data().data.gas();
+        let signer = certificate.data().intent_message.value.signer();
+        let (gas_payment, _, _) = certificate.data().intent_message.value.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
             [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
                 (id, arg)
@@ -1106,7 +1106,7 @@ where
                 .into())
             }
         };
-        let (gas_payment, _, _) = certificate.data().data.gas();
+        let (gas_payment, _, _) = certificate.data().intent_message.value.gas();
 
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
@@ -1138,7 +1138,7 @@ where
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
         if let TransactionKind::Single(SingleTransactionKind::Call(ref call)) =
-            certificate.data().data.kind
+            certificate.data().intent_message.value.kind
         {
             Ok(call)
         } else {
@@ -1332,7 +1332,7 @@ where
         where
             A: AuthorityAPI + Send + Sync + 'static + Clone,
         {
-            let tx_kind = tx.data().data.kind.clone();
+            let tx_kind = tx.data().intent_message.value.kind.clone();
             let tx_digest = tx.digest();
 
             debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
@@ -1345,7 +1345,7 @@ where
                         let span = tracing::debug_span!(
                             "gateway_execute_transaction",
                             ?tx_digest,
-                            tx_kind = tx.data().data.kind_as_str()
+                            tx_kind = tx.data().intent_message.value.kind_as_str()
                         );
 
                         // Use start_coarse_time() if the below turns out to have a perf impact

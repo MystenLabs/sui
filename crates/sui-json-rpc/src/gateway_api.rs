@@ -20,11 +20,11 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::SignatureScheme;
+use sui_types::intent::IntentMessage;
 use sui_types::messages::SenderSignedData;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
-    crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
 use tracing::debug;
@@ -77,8 +77,9 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<SuiTransactionResponse> {
-        let data =
-            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let intent_msg = IntentMessage::<TransactionData>::from_bytes(
+            &tx_bytes.to_vec().map_err(|e| anyhow!(e))?,
+        )?;
         let flag = vec![sig_scheme.flag()];
         let signature = crypto::Signature::from_bytes(
             &[
@@ -91,7 +92,9 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
         .map_err(|e| anyhow!(e))?;
         let result = self
             .client
-            .execute_transaction(Transaction::new(SenderSignedData::new(data, signature)))
+            .execute_transaction(Transaction::new(SenderSignedData::new(
+                intent_msg, signature,
+            )))
             .await;
         Ok(result?)
     }

@@ -248,7 +248,7 @@ impl PseudoBlockProvider {
                 let (tx, effect) = state.get_transaction(digest).await?;
 
                 let ops = Operation::from_data_and_events(
-                    &tx.data().data,
+                    &tx.data().intent_message.value,
                     &effect.status,
                     &effect.events,
                 )?;

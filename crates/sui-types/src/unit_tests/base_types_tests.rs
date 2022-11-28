@@ -10,15 +10,10 @@ use move_binary_format::file_format;
 
 use crate::crypto::bcs_signable_test::{Bar, Foo};
 use crate::crypto::{
-    get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
-    SuiAuthoritySignature, SuiSignature,
+    get_key_pair, get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
+    Signature, SuiAuthoritySignature, SuiSignature,
 };
-use crate::{
-    crypto::{get_key_pair, Signature},
-    gas_coin::GasCoin,
-    object::Object,
-    SUI_FRAMEWORK_ADDRESS,
-};
+use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
 
 use super::*;
 

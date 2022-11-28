@@ -18,12 +18,12 @@ use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_metrics::spawn_monitored_task;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
+use sui_types::intent::IntentMessage;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, SenderSignedData,
 };
 use sui_types::{
     crypto,
-    crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
 
@@ -54,8 +54,9 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         pub_key: Base64,
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse> {
-        let data =
-            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let intent_msg = IntentMessage::<TransactionData>::from_bytes(
+            &tx_bytes.to_vec().map_err(|e| anyhow!(e))?,
+        )?;
         let flag = vec![sig_scheme.flag()];
         let signature = crypto::Signature::from_bytes(
             &[
@@ -66,7 +67,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             .concat(),
         )
         .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(SenderSignedData::new(data, signature));
+        let txn = Transaction::new(SenderSignedData::new(intent_msg, signature));
         let txn_digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();

@@ -6,7 +6,7 @@ use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
-    test_utils::to_sender_signed_transaction,
+    test_utils::to_verified_transaction,
 };
 
 use super::*;
@@ -169,7 +169,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
     );
     (
         authority,
-        to_sender_signed_transaction(data, &keypair),
+        to_verified_transaction(data, &keypair),
         gas_object_id,
         shared_object_id,
     )
@@ -183,7 +183,10 @@ async fn test_dry_run_transaction() {
     let transaction_digest = *transaction.digest();
 
     let response = authority
-        .dry_exec_transaction(transaction.data().data.clone(), transaction_digest)
+        .dry_exec_transaction(
+            transaction.data().intent_message.value.clone(),
+            transaction_digest,
+        )
         .await;
     assert!(response.is_ok());
 
@@ -253,7 +256,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     bad_signature_transfer_transaction
         .data_mut_for_testing()
         .tx_signature =
-        Signature::new_temp(&transfer_transaction.data().data.to_bytes(), &unknown_key);
+        Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key);
 
     assert!(client
         .handle_transaction(bad_signature_transfer_transaction)
@@ -491,8 +494,8 @@ async fn test_handle_transfer_transaction_ok() {
             .as_ref()
             .unwrap()
             .data()
-            .data,
-        transfer_transaction.data().data
+            .intent_message,
+        transfer_transaction.data().intent_message
     );
 }
 
@@ -577,7 +580,7 @@ async fn test_objected_owned_gas() {
         10000,
     );
 
-    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let transaction = to_verified_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
         result.unwrap_err(),
@@ -672,7 +675,7 @@ async fn test_publish_dependent_module_ok() {
         vec![dependent_module_bytes],
         MAX_GAS,
     );
-    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let transaction = to_verified_transaction(data, &sender_key);
 
     let dependent_module_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
 
@@ -707,7 +710,7 @@ async fn test_publish_module_no_dependencies_ok() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
-    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let transaction = to_verified_transaction(data, &sender_key);
     let _module_object_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -755,7 +758,7 @@ async fn test_publish_non_existing_dependent_module() {
         vec![dependent_module_bytes],
         MAX_GAS,
     );
-    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let transaction = to_verified_transaction(data, &sender_key);
     let response = authority.handle_transaction(transaction).await;
     assert!(std::string::ToString::to_string(&response.unwrap_err())
         .contains("DependentPackageNotFound"));
@@ -861,7 +864,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         object.compute_object_reference(),
         200,
     );
-    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let transaction = to_verified_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
         result.unwrap_err(),
@@ -1429,7 +1432,7 @@ async fn test_move_call_insufficient_gas() {
         gas_used - 5,
     );
 
-    let transaction = to_sender_signed_transaction(data, &recipient_key);
+    let transaction = to_verified_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();
     let response = send_and_confirm_transaction(&authority_state, transaction)
         .await
@@ -1786,7 +1789,7 @@ async fn test_transfer_sui_no_amount() {
     );
 
     // Make sure transaction handling works as usual.
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = to_verified_transaction(tx_data, &sender_key);
     authority_state
         .handle_transaction(transaction.clone())
         .await
@@ -1834,7 +1837,7 @@ async fn test_transfer_sui_with_amount() {
         gas_object.compute_object_reference(),
         MAX_GAS,
     );
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = to_verified_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
         .handle_certificate(&certificate)
@@ -1887,7 +1890,7 @@ async fn test_store_revert_transfer_sui() {
         MAX_GAS,
     );
 
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = to_verified_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
@@ -1942,7 +1945,7 @@ async fn test_store_revert_wrap_move_call() {
 
     let object_v0 = create_effects.created[0].0;
 
-    let wrap_txn = to_sender_signed_transaction(
+    let wrap_txn = to_verified_transaction(
         TransactionData::new_move_call(
             sender,
             object_basics,
@@ -2029,7 +2032,7 @@ async fn test_store_revert_unwrap_move_call() {
 
     let wrapper_v0 = wrap_effects.created[0].0;
 
-    let unwrap_txn = to_sender_signed_transaction(
+    let unwrap_txn = to_verified_transaction(
         TransactionData::new_move_call(
             sender,
             object_basics,
@@ -2112,7 +2115,7 @@ async fn test_store_revert_add_ofield() {
     let outer_v0 = create_outer_effects.created[0].0;
     let inner_v0 = create_inner_effects.created[0].0;
 
-    let add_txn = to_sender_signed_transaction(
+    let add_txn = to_verified_transaction(
         TransactionData::new_move_call(
             sender,
             object_basics,
@@ -2227,7 +2230,7 @@ async fn test_store_revert_remove_ofield() {
     let outer_v1 = find_by_id(&add_effects.mutated, outer_v0.0).unwrap();
     let inner_v1 = find_by_id(&add_effects.mutated, inner_v0.0).unwrap();
 
-    let remove_ofield_txn = to_sender_signed_transaction(
+    let remove_ofield_txn = to_verified_transaction(
         TransactionData::new_move_call(
             sender,
             object_basics,
@@ -2415,7 +2418,7 @@ pub fn init_transfer_transaction(
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref, 10000);
-    to_sender_signed_transaction(data, secret)
+    to_verified_transaction(data, secret)
 }
 
 #[cfg(test)]
@@ -2527,7 +2530,7 @@ pub async fn call_move_with_shared(
         MAX_GAS,
     );
 
-    let transaction = to_sender_signed_transaction(data, sender_key);
+    let transaction = to_verified_transaction(data, sender_key);
     let response =
         send_and_confirm_transaction_with_shared(authority, transaction, with_shared).await?;
     Ok(response.signed_effects.unwrap().into_data())
@@ -2638,7 +2641,7 @@ async fn make_test_transaction(
         MAX_GAS,
     );
 
-    let transaction = to_sender_signed_transaction(data, sender_key);
+    let transaction = to_verified_transaction(data, sender_key);
 
     let committee = authorities[0].committee.load();
     let mut sigs = vec![];

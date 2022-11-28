@@ -12,7 +12,7 @@ use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
 use sui_core::test_utils::{
-    dummy_transaction_effects, to_sender_signed_transaction, to_sender_signed_transaction_arc,
+    dummy_transaction_effects, to_verified_transaction, to_verified_transaction_arc,
 };
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiObjectInfo;
@@ -141,10 +141,8 @@ pub async fn make_transactions_with_wallet_context(
                 obj.to_object_ref(),
                 MAX_GAS,
             );
-            let tx = to_sender_signed_transaction(
-                data,
-                context.config.keystore.get_key(address).unwrap(),
-            );
+            let tx =
+                to_verified_transaction(data, context.config.keystore.get_key(address).unwrap());
             res.push(tx);
         }
     }
@@ -178,7 +176,7 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
         })],
         MAX_GAS,
     );
-    to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
+    to_verified_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
 /// Make a few different single-writer test transactions owned by specific addresses.
@@ -214,7 +212,7 @@ pub fn make_transactions_with_pre_genesis_objects(
             /* gas_object_ref */ o2.compute_object_reference(),
             MAX_GAS,
         );
-        let tx = to_sender_signed_transaction(data, keys.get_key(&sender).unwrap());
+        let tx = to_verified_transaction(data, keys.get_key(&sender).unwrap());
         transactions.push(tx);
     }
     (transactions, gas_objects)
@@ -253,7 +251,7 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
             ],
             MAX_GAS,
         );
-        transactions.push(to_sender_signed_transaction(data, &keypair));
+        transactions.push(to_verified_transaction(data, &keypair));
     }
     transactions
 }
@@ -270,7 +268,8 @@ pub fn create_publish_move_package_transaction(
         .unwrap()
         .get_package_bytes();
     let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
-    to_sender_signed_transaction(data, keypair)
+    println!("~~create_publish_move_package_transaction");
+    to_verified_transaction(data, keypair)
 }
 
 pub fn make_transfer_sui_transaction(
@@ -281,7 +280,8 @@ pub fn make_transfer_sui_transaction(
     keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
-    to_sender_signed_transaction(data, keypair)
+    println!("~~make_transfer_sui_transaction");
+    to_verified_transaction(data, keypair)
 }
 
 pub fn make_transfer_object_transaction(
@@ -292,7 +292,7 @@ pub fn make_transfer_object_transaction(
     recipient: SuiAddress,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    to_sender_signed_transaction(data, keypair)
+    to_verified_transaction(data, keypair)
 }
 
 pub fn make_transfer_object_transaction_with_wallet_context(
@@ -303,7 +303,7 @@ pub fn make_transfer_object_transaction_with_wallet_context(
     recipient: SuiAddress,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
+    to_verified_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
 pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransaction {
@@ -315,7 +315,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
         .unwrap()
         .get_package_bytes();
     let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
-    to_sender_signed_transaction(data, &keypair)
+    to_verified_transaction(data, &keypair)
 }
 
 pub fn random_object_digest() -> ObjectRef {
@@ -349,7 +349,7 @@ pub fn make_counter_create_transaction(
         vec![],
         MAX_GAS,
     );
-    to_sender_signed_transaction(data, keypair)
+    to_verified_transaction(data, keypair)
 }
 
 pub fn make_counter_increment_transaction(
@@ -373,7 +373,7 @@ pub fn make_counter_increment_transaction(
         })],
         MAX_GAS,
     );
-    to_sender_signed_transaction_arc(data, keypair)
+    to_verified_transaction_arc(data, keypair)
 }
 
 /// Make a transaction calling a specific move module & function.
@@ -409,7 +409,7 @@ pub fn move_transaction_with_type_tags(
         arguments,
         MAX_GAS,
     );
-    to_sender_signed_transaction(data, &keypair)
+    to_verified_transaction(data, &keypair)
 }
 
 /// Make a test certificates for each input transaction.

@@ -1,15 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This file contain response types used by the GatewayAPI, most of the types mirrors it's internal type counterparts.
-/// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
-///
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
-
+use anyhow::anyhow;
 use colored::Colorize;
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
@@ -27,7 +19,16 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+/// This file contain response types used by the GatewayAPI, most of the types mirrors it's internal type counterparts.
+/// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
+///
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use sui_types::coin::CoinMetadata;
+use sui_types::intent::{Intent, IntentMessage};
 use tracing::warn;
 
 use fastcrypto::encoding::{Base64, Encoding};
@@ -37,7 +38,7 @@ use sui_types::base_types::{
     TransactionEffectsDigest,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
+use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
@@ -1738,7 +1739,7 @@ pub struct SuiChangeEpoch {
 pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
+    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
     pub tx_signature: Signature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: AuthorityStrongQuorumSignInfo,
@@ -1767,7 +1768,7 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
         let (data, sig) = cert.into_data_and_sig();
         Ok(Self {
             transaction_digest: digest,
-            data: data.data.try_into()?,
+            data: data.intent_message.value.try_into()?,
             tx_signature: data.tx_signature,
             auth_sign_info: sig,
         })
@@ -2776,7 +2777,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
-    /// transaction data bytes, as base-64 encoded string
+    /// intent message bytes, as base-64 encoded string
     pub tx_bytes: Base64,
     /// the gas object to be used
     pub gas: SuiObjectRef,
@@ -2786,10 +2787,12 @@ pub struct TransactionBytes {
 
 impl TransactionBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
+        let data1 = data.clone();
+        let bytes = bcs::to_bytes(&IntentMessage::new(Intent::default(), data))?;
         Ok(Self {
-            tx_bytes: Base64::from_bytes(&data.to_bytes()),
-            gas: data.gas().into(),
-            input_objects: data
+            tx_bytes: Base64::from_bytes(&bytes),
+            gas: data1.gas().into(),
+            input_objects: data1
                 .input_objects()?
                 .into_iter()
                 .map(SuiInputObjectKind::from)
@@ -2798,9 +2801,10 @@ impl TransactionBytes {
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(
-            &self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?,
-        )
+        let intent_msg = IntentMessage::<TransactionData>::from_bytes(
+            &self.tx_bytes.to_vec().map_err(|e| anyhow!(e))?,
+        )?;
+        Ok(intent_msg.value)
     }
 }
 
