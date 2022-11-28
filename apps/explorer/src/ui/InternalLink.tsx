@@ -22,7 +22,7 @@ export function AddressLink({ address, noTruncate }: AddressLinkProps) {
         ? address
         : truncate(address, TRUNCATE_LENGTH);
     return (
-        <Link variant="mono"  to={`/address/${encodeURIComponent(address)}`}>
+        <Link variant="mono" to={`/address/${encodeURIComponent(address)}`}>
             {truncatedAddress}
         </Link>
     );

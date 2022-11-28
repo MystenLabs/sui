@@ -167,7 +167,11 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
         data: validatorsItems.map((validator) => {
             return {
                 name: (
-                    <Text variant="bodySmall" color="steel-darker" weight="medium">
+                    <Text
+                        variant="bodySmall"
+                        color="steel-darker"
+                        weight="medium"
+                    >
                         {validator.name}
                     </Text>
                 ),
