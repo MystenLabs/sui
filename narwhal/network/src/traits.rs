@@ -35,24 +35,23 @@ pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
     }
 }
 
-#[async_trait]
 pub trait ReliableNetwork<Request: Clone + Send + Sync> {
     type Response: Clone + Send + Sync;
 
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &Request,
     ) -> CancelOnDropHandler<Result<anemo::Response<Self::Response>>>;
 
-    async fn broadcast(
+    fn broadcast(
         &mut self,
         peers: Vec<NetworkPublicKey>,
         message: &Request,
     ) -> Vec<CancelOnDropHandler<Result<anemo::Response<Self::Response>>>> {
         let mut handlers = Vec::new();
         for peer in peers {
-            let handle = self.send(peer, message).await;
+            let handle = self.send(peer, message);
             handlers.push(handle);
         }
         handlers

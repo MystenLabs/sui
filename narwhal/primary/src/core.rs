@@ -429,8 +429,7 @@ impl Core {
             .collect();
         let tasks = self
             .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate))
-            .await;
+            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,

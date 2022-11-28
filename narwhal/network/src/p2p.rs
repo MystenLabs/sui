@@ -90,8 +90,7 @@ impl P2pNetwork {
         }))
     }
 
-    // TODO: remove async in a cleanup, this doesn't need it anymore.
-    async fn send<F, R, Fut>(
+    fn send<F, R, Fut>(
         &mut self,
         peer: NetworkPublicKey,
         f: F,
@@ -155,10 +154,9 @@ impl UnreliableNetwork<PrimaryMessage> for P2pNetwork {
     }
 }
 
-#[async_trait]
 impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &PrimaryMessage,
@@ -173,7 +171,7 @@ impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
             }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
@@ -228,10 +226,10 @@ impl UnreliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
         self.unreliable_send(peer, f)
     }
 }
-#[async_trait]
+
 impl ReliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerReconfigureMessage,
@@ -242,7 +240,7 @@ impl ReliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
             async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
@@ -271,10 +269,9 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
 // Worker-to-Primary
 //
 
-#[async_trait]
 impl ReliableNetwork<WorkerOurBatchMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerOurBatchMessage,
@@ -289,14 +286,13 @@ impl ReliableNetwork<WorkerOurBatchMessage> for P2pNetwork {
             }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
-#[async_trait]
 impl ReliableNetwork<WorkerOthersBatchMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerOthersBatchMessage,
@@ -311,7 +307,7 @@ impl ReliableNetwork<WorkerOthersBatchMessage> for P2pNetwork {
             }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
@@ -333,10 +329,9 @@ impl UnreliableNetwork<WorkerBatchMessage> for P2pNetwork {
     }
 }
 
-#[async_trait]
 impl ReliableNetwork<WorkerBatchMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerBatchMessage,
@@ -347,7 +342,7 @@ impl ReliableNetwork<WorkerBatchMessage> for P2pNetwork {
             async move { WorkerToWorkerClient::new(peer).report_batch(message).await }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
