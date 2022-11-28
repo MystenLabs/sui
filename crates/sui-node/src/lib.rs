@@ -303,6 +303,7 @@ impl SuiNode {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
             .store(state_sync_store)
+            .with_metrics(prometheus_registry)
             .build();
 
         let (discovery, discovery_server) = discovery::Builder::new()
