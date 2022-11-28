@@ -8,10 +8,10 @@ Sui provides a list of Move library functions that allows us to manipulate objec
 Objects in Sui can have different ownership types. Specifically, they are:
 - Exclusively owned by an address.
 - Exclusively owned by another object.
-- Shared and immutable.
-- Shared and mutable (work-in-progress).
+- Immutable.
+- Shared.
 
-### Transfer to address
+### Owned by an address
 The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module provides all the APIs needed to manipulate the ownership of objects.
 
 The most common case is to transfer an object to an address. For example, when a new object is created, it is typically transferred to an address so that the address owns the object. To transfer an object `obj` to an address `recipient`:
@@ -23,55 +23,47 @@ transfer::transfer(obj, recipient);
 This call will fully consume the object, making it no longer accessible in the current transaction.
 Once an address owns an object, for any future use (either read or write) of this object, the signer of the transaction must be the owner of the object.
 
-### Transfer to object
-We can also transfer an object to be owned by another object. Note that the ownership is only tracked in Sui. From Move's perspective, these two objects are still more or less independent, in that the child object isn't part of the parent object in terms of data store.
-Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
+### Owned by another object
+
+An object can be owned by another object when the former is added as a [dynamic object field](../programming-with-objects/ch5-dynamic-fields.md) of the latter. While external tools can read the dynamic object field value at its original ID, from Move's perspective, it can only be accessed through the field on its owner using the `dynamic_object_field` APIs:
+
 ```
-// signer of ctx is Addr1.
-public entry fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
+use sui::dynamic_object_field as ofield;
+
+let a: &mut A = /* ... */;
+let b: B = /* ... */;
+
+// Adds `b` as a dynamic object field to `a` with "name" `0: u8`.
+ofield::add<u8, B>(&mut a.id, 0, b);
+
+// Get access to `b` at its new position
+let b: &B = ofield::borrow<u8, B>(&a.id, 0);
 ```
 
-A common pattern of object owning another object is to have a field in the parent object to track the ID of the child object. It is important to ensure that we keep such a field's value consistent with the actual ownership relationship. For example, we do not end up in a situation where the parent's child field contains an ID pointing to object A, while in fact the parent owns object B. To ensure the consistency, we defined a custom type called `ChildRef` to represent object ownership. Whenever an object is transferred to another object, a `ChildRef` instance is created to uniquely identify the ownership. The library implementation ensures that the `ChildRef` goes side-by-side with the child object so that we never lose track or mix up objects.
-To transfer an object `obj` (whose owner is an address) to another object `owner`:
+If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing `b`, and `b` has a dynamic object field containing `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
+
 ```
-transfer::transfer_to_object(obj, &mut owner);
+use sui::dynamic_object_field as ofield;
+
+// signed of ctx is Addr1
+public entry fun entry_function(a: &A, ctx: &mut TxContext) {
+  let b: &B = ofield::borrow<u8, B>(&a.id, 0);
+  let c: &C = ofield::borrow<u8, C>(&b.id, 0);
+}
 ```
-This function returns a `ChildRef` instance that cannot be dropped arbitrarily. It can be stored in the parent as a field.
-Sometimes we need to set the child field of a parent while constructing it. In this case, we don't yet have a parent object to transfer into. In this case, we can call the `transfer_to_object_id` API. Example:
-```
-let parent_info = object::new(ctx);
-let child = Child { info: object::new(ctx) };
-let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_info);
-let parent = Parent {
-    info: parent_info,
-    child: child_ref,
-};
-transfer::transfer(parent, tx_context::sender(ctx));
-```
-To transfer an object `child` from one parent object to a new parent object `new_parent`, we can use the following API:
-```
-transfer::transfer_child_to_object(child, child_ref, &mut new_parent);
-```
-Note that in this call, we must also have the `child_ref` to prove the original ownership. The call will return a new instance of `ChildRef` that the new parent can maintain.
-To transfer an object `child` from an object to an address `recipient`, we can use the following API:
-```
-transfer::transfer_child_to_address(child, child_ref, recipient);
-```
-This call also requires to have the `child_ref` as proof of original ownership.
-After this transfer, the object will be owned by `recipient`.
 
 More examples of how objects can be transferred and owned can be found in
 [object_owner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/object_owner.move).
 
-### Freeze an object
-To make an object `obj` shared and immutable, one can call:
+### Immutable
+To make an object `obj` immutable, one can call:
 ```
 transfer::freeze_object(obj);
 ```
 After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
 
-### Share an object
-To make an object `obj` shared and mutable, one can call:
+### Shared
+To make an object `obj` shared, one can call:
 ```
 transfer::share_object(obj);
 ```
