@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use itertools::Itertools;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, TransactionEffectsDigest},
+    base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
     committee::StakeUnit,
     error::{SuiError, SuiResult},
-    message_envelope::Message,
     messages::{TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
@@ -33,8 +31,6 @@ impl CheckpointExecutor {
     pub fn new(
         state_sync_handle: &sui_network::state_sync::Handle,
         checkpoint_store: Arc<CheckpointStore>,
-        // (Note to Self): this can be passed in from AuthorityState in SuiNode::start()
-        // transaction_manager: Arc<Mutex<TransactionManager>>,
         authority_state: Arc<AuthorityState>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Result<Self, TypedStoreError> {
@@ -56,7 +52,10 @@ impl CheckpointExecutor {
             match self.mailbox.recv().await {
                 Ok(checkpoint) => {
                     let last_to_exec = checkpoint.sequence_number() as u64;
-                    let next_to_exec = self.highest_executed_checkpoint.unwrap_or(0) + 1;
+                    let next_to_exec = self
+                        .highest_executed_checkpoint
+                        .map(|highest| highest + 1)
+                        .unwrap_or(0);
 
                     for seq_num in next_to_exec..=last_to_exec {
                         let next_checkpoint = match self
@@ -144,10 +143,8 @@ impl CheckpointExecutor {
             .get_checkpoint_contents(&checkpoint.content_digest())
             .map_err(SuiError::from)?
         {
-            let seq_number = checkpoint.summary().sequence_number;
             let txes = checkpoint_contents.into_inner();
-            self.execute_and_verify_transactions(txes, seq_number)
-                .await?
+            self.execute_and_verify_transactions(txes).await?
         } else {
             warn!(
                 "Checkpoint contents empty: {:?}",
@@ -165,12 +162,9 @@ impl CheckpointExecutor {
     async fn execute_and_verify_transactions(
         &self,
         transactions: Vec<ExecutionDigests>,
-        sequence_number: CheckpointSequenceNumber,
     ) -> SuiResult<Vec<TransactionEffects>> {
-        let (tx_digests, expected_fx_digests): (Vec<_>, Vec<_>) = transactions
-            .iter()
-            .map(|tx| (tx.transaction, tx.effects))
-            .unzip();
+        let tx_digests: Vec<TransactionDigest> =
+            transactions.iter().map(|tx| tx.transaction).collect();
 
         // TODO Potentially need to aquire shared object locks for these txes?
         let mut verified_certs = Vec::<VerifiedCertificate>::new();
@@ -191,13 +185,6 @@ impl CheckpointExecutor {
             .database
             .notify_read(tx_digests)
             .await?;
-        let actual_fx_digests = actual_fx.iter().map(|fx| fx.digest());
-
-        self.confirm_effects(
-            HashSet::from_iter(expected_fx_digests.into_iter()),
-            HashSet::from_iter(actual_fx_digests),
-            sequence_number,
-        )?;
         Ok(actual_fx)
     }
 
@@ -215,22 +202,5 @@ impl CheckpointExecutor {
         let diff = highest_synced - highest_executed;
         self.metrics.checkpoint_exec_lag.set(diff as i64);
         Ok(())
-    }
-
-    fn confirm_effects(
-        &self,
-        expected_fx_digests: HashSet<TransactionEffectsDigest>,
-        actual_fx_digests: HashSet<TransactionEffectsDigest>,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiResult {
-        let diff: HashSet<_> = actual_fx_digests.difference(&expected_fx_digests).collect();
-        if diff.is_empty() {
-            Ok(())
-        } else {
-            Err(SuiError::InvalidTransactionEffects {
-                effects_digests: diff.into_iter().copied().collect_vec(),
-                checkpoint: sequence_number,
-            })
-        }
     }
 }
