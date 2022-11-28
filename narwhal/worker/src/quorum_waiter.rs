@@ -96,7 +96,7 @@ impl QuorumWaiter {
                         .collect();
                     let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
                     let message  = WorkerBatchMessage{batch: batch.clone()};
-                    let handlers = self.network.broadcast(worker_names, &message).await;
+                    let handlers = self.network.broadcast(worker_names, &message);
 
                     // Collect all the handlers to receive acknowledgements.
                     let mut wait_for_quorum: FuturesUnordered<_> = primary_names
