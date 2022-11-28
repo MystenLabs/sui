@@ -85,7 +85,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
-                                    className="text-gray-75 h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
+                                    className="text-steel-dark h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
                                 >
                                     {header.isPlaceholder
                                         ? null

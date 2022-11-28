@@ -3,7 +3,7 @@
 
 import { Base64DataBuffer } from '@mysten/sui.js';
 
-import { type Validator, type ValidatorState } from './Validators';
+import { type Validator, type ValidatorState } from './TopValidatorsCard';
 
 const encoder = new TextEncoder();
 
