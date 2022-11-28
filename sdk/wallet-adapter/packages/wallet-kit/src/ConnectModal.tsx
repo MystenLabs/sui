@@ -6,9 +6,9 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
 import { Button, Panel } from "./utils/ui";
-import { BackIcon, CloseIcon } from "./utils/icons";
+import { BackIcon } from "./utils/icons";
 import { WhatIsAWallet } from "./WhatIsAWallet";
-import { Body, Content, Overlay, Title } from "./utils/Dialog";
+import { Body, CloseButton, Content, Overlay, Title } from "./utils/Dialog";
 import { SELECTED_GETTING_STARTED, WalletList } from "./WalletList";
 import { GettingStarted } from "./GettingStarted";
 
@@ -16,21 +16,6 @@ export interface ConnectModalProps {
   open: boolean;
   onClose(): void;
 }
-
-const Close = styled(Dialog.Close, {
-  position: "absolute",
-  cursor: "pointer",
-  padding: 7,
-  top: "$4",
-  right: "$4",
-  display: "flex",
-  border: "none",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "$icon",
-  backgroundColor: "$backgroundIcon",
-  borderRadius: "$close",
-});
 
 const BackButton = styled("button", {
   position: "absolute",
@@ -167,7 +152,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
       <Dialog.Portal>
         <Overlay />
         <Content>
-          <Body>
+          <Body connect>
             <LeftPanel hasSelected={!!selected}>
               <WalletList
                 selected={selected}
@@ -239,9 +224,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
               )}
             </Panel>
 
-            <Close aria-label="Close">
-              <CloseIcon />
-            </Close>
+            <CloseButton />
           </Body>
         </Content>
       </Dialog.Portal>

@@ -6,6 +6,7 @@ import { ComponentProps, ReactNode, useEffect, useState } from "react";
 import { ConnectModal } from "./ConnectModal";
 import { useWallet } from "@mysten/wallet-adapter-react";
 import { Button } from "./utils/ui";
+import { AccountModal } from "./AccountModal";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
@@ -18,7 +19,7 @@ export function ConnectButton({
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
 
-  const { connected, getAccounts, disconnect } = useWallet();
+  const { connected, getAccounts } = useWallet();
 
   useEffect(() => {
     if (!connected) {
@@ -39,7 +40,7 @@ export function ConnectButton({
           css={{ fontFamily: "$mono" }}
           color="connected"
           size="lg"
-          onClick={() => disconnect()}
+          onClick={() => setOpen(true)}
           {...props}
         >
           {`${account.slice(0, 4)}...${account.slice(-4)}`}
@@ -55,7 +56,15 @@ export function ConnectButton({
         </Button>
       )}
 
-      <ConnectModal open={open} onClose={() => setOpen(false)} />
+      {account ? (
+        <AccountModal
+          account={account}
+          open={open}
+          onClose={() => setOpen(false)}
+        />
+      ) : (
+        <ConnectModal open={open} onClose={() => setOpen(false)} />
+      )}
     </>
   );
 }

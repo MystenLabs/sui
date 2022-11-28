@@ -3,6 +3,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { styled } from "../stitches";
+import { CloseIcon } from "./icons";
 
 export const Title = styled(Dialog.Title, {
   margin: 0,
@@ -41,14 +42,43 @@ export const Body = styled("div", {
   backgroundColor: "$background",
   borderRadius: "$modal",
   boxShadow: "$modal",
-  width: "100%",
-  minHeight: "50vh",
-  maxWidth: "700px",
-  maxHeight: "85vh",
   display: "flex",
-  flexDirection: 'column',
+  flexDirection: "column",
 
-  "@md": {
-    flexDirection: 'row'
+  variants: {
+    connect: {
+      true: {
+        width: "100%",
+        minHeight: "50vh",
+        maxWidth: "700px",
+        maxHeight: "85vh",
+        "@md": {
+          flexDirection: "row",
+        },
+      },
+    },
   },
 });
+
+const Close = styled(Dialog.Close, {
+  position: "absolute",
+  cursor: "pointer",
+  padding: 7,
+  top: "$4",
+  right: "$4",
+  display: "flex",
+  border: "none",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "$icon",
+  backgroundColor: "$backgroundIcon",
+  borderRadius: "$close",
+});
+
+export function CloseButton() {
+  return (
+    <Close aria-label="Close">
+      <CloseIcon />
+    </Close>
+  );
+}
