@@ -239,9 +239,11 @@ async fn shared_object_sync() {
     );
     let effects = submit_single_owner_transaction(
         create_counter_transaction.clone(),
-        // this is a bit fragile: validator #2 is one of the two validators that submit this TX,
-        // see consensus_adapter
-        &configs.validator_set()[2..3],
+        // this is a bit fragile (see consensus adapter):
+        // 2022-11-11 huitseeker: validator #2 is one of the two validators that submit this TX.
+        // 2022-11-25 amnn: For reasons completely unrelated to this test, validator #2 is no
+        //     longer one of the validators that submits this TX, but validator #1 is.
+        &configs.validator_set()[0..1],
     )
     .await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));

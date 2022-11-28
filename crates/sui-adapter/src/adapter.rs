@@ -53,8 +53,6 @@ use sui_verifier::{
 };
 use tracing::instrument;
 
-use crate::bytecode_rewriter::ModuleHandleRewriter;
-
 macro_rules! assert_invariant {
     ($cond:expr, $msg:expr) => {
         if !$cond {
@@ -497,37 +495,33 @@ pub fn generate_package_id(
     modules: &mut [CompiledModule],
     ctx: &mut TxContext,
 ) -> Result<ObjectID, ExecutionError> {
-    let mut sub_map = BTreeMap::new();
     let package_id = ctx.fresh_id();
-    for module in modules.iter() {
-        let old_module_id = module.self_id();
-        let old_address = *old_module_id.address();
-        if old_address != AccountAddress::ZERO {
-            let handle = module.module_handle_at(module.self_module_handle_idx);
-            let name = module.identifier_at(handle.name);
+    let new_address = AccountAddress::from(package_id);
+
+    for module in modules.iter_mut() {
+        let self_handle = module.self_handle().clone();
+        let self_address_idx = self_handle.address;
+
+        let addrs = &mut module.address_identifiers;
+        let Some(address_mut) = addrs.get_mut(self_address_idx.0 as usize) else {
+            let name = module.identifier_at(self_handle.name);
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishErrorNonZeroAddress,
+                format!("Publishing module {name} with invalid address index"),
+            ));
+        };
+
+        if *address_mut != AccountAddress::ZERO {
+            let name = module.identifier_at(self_handle.name);
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishErrorNonZeroAddress,
                 format!("Publishing module {name} with non-zero address is not allowed"),
             ));
-        }
-        let new_module_id = ModuleId::new(
-            AccountAddress::from(package_id),
-            old_module_id.name().to_owned(),
-        );
-        if sub_map.insert(old_module_id, new_module_id).is_some() {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::PublishErrorDuplicateModule,
-                "Publishing two modules with the same ID",
-            ));
-        }
+        };
+
+        *address_mut = new_address;
     }
 
-    // Safe to unwrap because we checked for duplicate domain entries above, and range entries are fresh ID's
-    let rewriter = ModuleHandleRewriter::new(sub_map).unwrap();
-    for module in modules.iter_mut() {
-        // rewrite module handles to reflect freshly generated ID's
-        rewriter.sub_module_ids(module);
-    }
     Ok(package_id)
 }
 
