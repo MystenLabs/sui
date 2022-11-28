@@ -5,11 +5,11 @@
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
+use config::{Committee, NetworkAdminServerParameters, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
 use node::{restarter::NodeRestarter, Node};
 use prometheus::Registry;
@@ -19,10 +19,7 @@ use std::{
 };
 use storage::NodeStorage;
 use test_utils::CommitteeFixture;
-use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
-    time::{interval, sleep, Duration, MissedTickBehavior},
-};
+use tokio::{sync::mpsc::{channel, Receiver, Sender}, time::{interval, sleep, Duration, MissedTickBehavior}};
 use types::ConsensusOutput;
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
@@ -197,7 +194,11 @@ async fn restart() {
 
         let committee = committee.clone();
         let worker_cache = worker_cache.clone();
-        let parameters = parameters.clone();
+
+        let mut parameters = parameters.clone();
+        // acquire a new admin port for this node
+        parameters.network_admin_server = NetworkAdminServerParameters::default();
+
         let keypair = a.keypair().copy();
         let network_keypair = a.network_keypair().copy();
         tokio::spawn(async move {
@@ -241,7 +242,9 @@ async fn restart() {
     for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
         handles.push(tokio::spawn(async move {
             let mut current_epoch = 0u64;
+
             while let Some(epoch) = rx.recv().await {
+                println!("Received epoch {}", epoch);
                 if epoch == 5 {
                     return;
                 }
@@ -250,9 +253,14 @@ async fn restart() {
                     tx.send(current_epoch).await.unwrap();
                 }
             }
+
+            if current_epoch < 5 {
+                panic!("Node never reached epoch 5, something broke our connection");
+            }
         }));
     }
-    join_all(handles).await;
+
+    try_join_all(handles).await.expect("No error should occurred");
 }
 
 #[tokio::test]
