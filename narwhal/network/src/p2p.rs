@@ -4,16 +4,15 @@
 use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
     traits::{ReliableNetwork, UnreliableNetwork},
-    BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
+    CancelOnDropHandler, RetryConfig,
 };
 use anemo::PeerId;
 use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::{traits::KeyPair, NetworkPublicKey};
-use std::collections::HashMap;
 use std::time::Duration;
-use tokio::{runtime::Handle, task::JoinHandle};
+use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, PrimaryMessage, PrimaryToPrimaryClient,
@@ -22,15 +21,9 @@ use types::{
     WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
-fn default_executor() -> BoundedExecutor {
-    BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current())
-}
-
 pub struct P2pNetwork {
     network: anemo::Network,
     retry_config: RetryConfig,
-    // One bounded executor per address
-    executors: HashMap<PeerId, BoundedExecutor>,
 }
 
 impl P2pNetwork {
@@ -44,7 +37,6 @@ impl P2pNetwork {
         Self {
             network,
             retry_config,
-            executors: HashMap::new(),
         }
     }
 
@@ -91,15 +83,11 @@ impl P2pNetwork {
             anemo::Error::msg(format!("Network has no connection with peer {peer_id}"))
         })?;
 
-        self.executors
-            .entry(peer_id)
-            .or_insert_with(default_executor)
-            .try_spawn(async move {
-                f(peer)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("RPC error: {e:?}"))
-            })
-            .map_err(|e| anemo::Error::msg(e.to_string()))
+        Ok(tokio::spawn(async move {
+            f(peer)
+                .await
+                .map_err(|e| anyhow::anyhow!("RPC error: {e:?}"))
+        }))
     }
 
     // TODO: remove async in a cleanup, this doesn't need it anymore.
@@ -118,7 +106,6 @@ impl P2pNetwork {
         // Here the callers are [`PrimaryNetwork::broadcast`] and [`PrimaryNetwork::send`],
         // at respectively N and K calls per round.
         //  (where N is the number of primaries, K the number of workers for this primary)
-        // See the TODO on spawn_with_retries for lifting this restriction.
 
         let network = self.network.clone();
         let peer_id = PeerId(peer.0.to_bytes());
@@ -141,13 +128,9 @@ impl P2pNetwork {
             }
         };
 
-        let handle = self
-            .executors
-            .entry(peer_id)
-            .or_insert_with(default_executor)
-            .spawn_with_retries(self.retry_config, message_send);
+        let task = tokio::spawn(self.retry_config.retry(message_send));
 
-        CancelOnDropHandler(handle)
+        CancelOnDropHandler(task)
     }
 }
 
