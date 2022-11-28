@@ -34,6 +34,7 @@ members = [
     "crates/sui-rosetta",
     "crates/sui-sdk",
     "crates/sui-simulator",
+    "crates/sui-source-validation",
     "crates/sui-storage",
     "crates/sui-swarm",
     "crates/sui-telemetry",
@@ -114,6 +115,7 @@ move-transactional-test-runner = { git = "https://github.com/move-language/move"
 move-ir-types = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
 move-prover = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", package = "fastcrypto-zkp" }

@@ -85,10 +85,17 @@ pub fn compile_basics_package() -> Vec<Vec<u8>> {
 }
 
 /// Helper function to publish basic package.
-/// Returns the published package's ObjectRef.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
+    publish_package_with_wallet(context, sender, compile_basics_package()).await
+}
+
+/// Returns the published package's ObjectRef.
+pub async fn publish_package_with_wallet(
+    context: &WalletContext,
+    sender: SuiAddress,
+    all_module_bytes: Vec<Vec<u8>>,
+) -> ObjectRef {
     let transaction = {
-        let all_module_bytes = compile_basics_package();
         let data = context
             .client
             .transaction_builder()

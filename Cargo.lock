@@ -8346,6 +8346,7 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-simulator",
+ "sui-source-validation",
  "sui-swarm",
  "sui-types",
  "telemetry-subscribers",
@@ -9058,6 +9059,32 @@ dependencies = [
  "sui-framework",
  "sui-types",
  "telemetry-subscribers",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-source-validation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
+ "move-symbol-pool",
+ "rand 0.8.5",
+ "sui",
+ "sui-framework",
+ "sui-framework-build",
+ "sui-sdk",
+ "sui-types",
+ "tempfile",
+ "test-utils",
+ "thiserror",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]

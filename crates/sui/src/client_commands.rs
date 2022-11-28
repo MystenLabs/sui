@@ -21,9 +21,11 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
+use sui_framework::build_move_package;
+use sui_source_validation::BytecodeSourceVerifier;
 use tracing::info;
 
-use sui_framework::build_move_package;
+use crate::config::{Config, PersistedConfig, SuiClientConfig};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -51,7 +53,7 @@ use sui_sdk::embedded_gateway::SuiClient;
 #[cfg(not(msim))]
 use sui_sdk::SuiClient;
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
+use crate::config::SuiEnv;
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -127,6 +129,11 @@ pub enum SuiClientCommands {
         /// Gas budget for running module initializers
         #[clap(long)]
         gas_budget: u64,
+
+        /// Confirms that compiling dependencies from source results in bytecode matching the
+        /// dependency found on-chain.
+        #[clap(long)]
+        verify_dependencies: bool,
     },
 
     /// Call Move function
@@ -411,19 +418,29 @@ impl SuiClientCommands {
                 gas,
                 build_config,
                 gas_budget,
+                verify_dependencies,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package(
+                let compiled_package = build_move_package(
                     &package_path,
                     BuildConfig {
                         config: build_config,
                         run_bytecode_verifier: true,
                         print_diags_to_stderr: true,
                     },
-                )?
-                .get_package_bytes();
+                )?;
+
+                let compiled_modules = compiled_package.get_package_bytes();
+
+                if verify_dependencies {
+                    BytecodeSourceVerifier::new(context.client.read_api(), false)
+                        .verify_deployed_dependencies(&compiled_package.package)
+                        .await?;
+                    println!("Successfully verified dependencies on-chain against source.");
+                }
+
                 let data = context
                     .client
                     .transaction_builder()
