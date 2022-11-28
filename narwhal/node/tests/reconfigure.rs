@@ -5,7 +5,9 @@
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use config::{Committee, NetworkAdminServerParameters, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
+use config::{
+    Committee, NetworkAdminServerParameters, Parameters, SharedWorkerCache, WorkerCache, WorkerId,
+};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
@@ -19,7 +21,10 @@ use std::{
 };
 use storage::NodeStorage;
 use test_utils::CommitteeFixture;
-use tokio::{sync::mpsc::{channel, Receiver, Sender}, time::{interval, sleep, Duration, MissedTickBehavior}};
+use tokio::{
+    sync::mpsc::{channel, Receiver, Sender},
+    time::{interval, sleep, Duration, MissedTickBehavior},
+};
 use types::ConsensusOutput;
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
@@ -260,7 +265,9 @@ async fn restart() {
         }));
     }
 
-    try_join_all(handles).await.expect("No error should occurred");
+    try_join_all(handles)
+        .await
+        .expect("No error should occurred");
 }
 
 #[tokio::test]
