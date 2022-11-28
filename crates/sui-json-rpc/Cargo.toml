@@ -20,7 +20,7 @@ tracing = "0.1.36"
 async-trait = "0.1.57"
 serde = { version = "1.0.144", features = ["derive"] }
 futures = "0.3.23"
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 signature = "1.6.0"
 
 tap = "1.0"

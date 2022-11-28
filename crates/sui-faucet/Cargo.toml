@@ -12,7 +12,7 @@ async-trait = "0.1.57"
 axum = "0.5.16"
 clap = { version = "3.2.17", features = ["derive"] }
 thiserror = "1.0.34"
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
 serde = { version = "1.0.144", features = ["derive"] }
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }

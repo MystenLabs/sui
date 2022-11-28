@@ -13,7 +13,7 @@ serde_json = "1.0.88"
 serde_yaml = "0.8.26"
 signature = "1.6.0"
 camino = "1.1.1"
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 async-trait = "0.1.57"
 serde_with = { version = "2.0.1", features = ["hex"] }
 tracing = "0.1.36"
