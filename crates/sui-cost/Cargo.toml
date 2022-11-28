@@ -10,7 +10,7 @@ edition = "2021"
 workspace-hack.workspace = true
 sui-types = {path = "../sui-types"}
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"

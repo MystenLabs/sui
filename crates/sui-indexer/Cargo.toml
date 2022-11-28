@@ -23,7 +23,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
 thiserror = "1.0.34"
 tracing = "0.1.36"
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 narwhal-network = { path = "../../narwhal/network" }
 sui = { path = "../sui" }

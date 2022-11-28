@@ -17,7 +17,7 @@ sui-config = { path = "../sui-config" }
 
 mysten-network.workspace = true
 workspace-hack.workspace = true
-tokio = { version = "1.17.0", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.37"
 futures = "0.3.24"
 multiaddr = "0.16.0"
@@ -31,4 +31,4 @@ tonic-build = { version = "0.8.2", features = [ "transport" ] }
 
 [dev-dependencies]
 telemetry-subscribers.workspace = true
-tokio = { version = "1.17.0", features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util"] }
