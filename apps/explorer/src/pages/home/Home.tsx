@@ -7,7 +7,7 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
+
 
 import styles from './Home.module.css';
 
@@ -19,35 +19,8 @@ const ValidatorMap = lazy(
 
 const TXN_PER_PAGE = 25;
 
-function HomeStatic() {
-    return (
-        <div
-            data-testid="home-page"
-            id="home"
-            className={cl([styles.home, styles.container])}
-        >
-            <section className="left-item">
-                <LatestTxCard />
-            </section>
-            <section className="right-item">
-                <div data-testid="validators-table">
-                    <TabGroup>
-                        <TabList>
-                            <Tab>Validators</Tab>
-                        </TabList>
-                        <TabPanels>
-                            <TabPanel>
-                                <TopValidatorsCard limit={10} />
-                            </TabPanel>
-                        </TabPanels>
-                    </TabGroup>
-                </div>
-            </section>
-        </div>
-    );
-}
 
-function HomeAPI() {
+function Home() {
     return (
         <div
             data-testid="home-page"
@@ -101,8 +74,6 @@ function HomeAPI() {
     );
 }
 
-function Home() {
-    return IS_STATIC_ENV ? <HomeStatic /> : <HomeAPI />;
-}
+
 
 export default Home;

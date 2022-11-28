@@ -15,7 +15,7 @@ export function useGetObject(
         async () => {
             return rpc.getObject(objectId);
         },
-        { enabled: !!objectId, staleTime: Infinity }
+        { enabled: !!objectId }
     );
 
     return response;

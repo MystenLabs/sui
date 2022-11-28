@@ -41,7 +41,7 @@ export type Validator = {
         pending_delegator_withdraw_count: number;
         pending_stake: {
             type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>';
-            fields: any[keyof string];
+            fields: any;
         };
         pending_withdraw: bigint;
         stake_amount: bigint;
@@ -82,7 +82,7 @@ const textDecoder = new TextDecoder();
 
 export type ObjFields = {
     type: string;
-    fields: any[keyof string];
+    fields: any;
 };
 
 export type SystemParams = {
@@ -114,23 +114,24 @@ export type ValidatorState = {
     };
 };
 
-function StakeColumn(validator: {
-    stake: BigInt;
+
+function StakeColumn(prop: {
+    stake: bigint;
     stakePercent: number;
-}): JSX.Element {
+}) {
     return (
         <div className="flex gap-0.5 items-end">
             <Text variant="bodySmall" color="steel-darker">
-                {validator.stake.toString()}
+                {prop.stake.toString()}
             </Text>
             <Text variant="captionSmall" color="steel-dark">
-                {validator.stakePercent.toFixed(2)}%
+                {prop.stakePercent.toFixed(2)}%
             </Text>
         </div>
     );
 }
 
-export function processSortValidators(set: Validator[], totalStake: bigint) {
+export function processValidators(set: Validator[], totalStake: bigint) {
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;
         const name = textDecoder.decode(
@@ -156,7 +157,7 @@ export const getStakePercent = (stake: bigint, total: bigint): number => {
 const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
     const totalStake = validatorsData.validators.fields.total_validator_stake;
 
-    const validators = processSortValidators(
+    const validators = processValidators(
         validatorsData.validators.fields.active_validators,
         totalStake
     ).sort((a, b) => (a.name > b.name ? 1 : -1));
