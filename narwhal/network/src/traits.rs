@@ -4,7 +4,6 @@ use crate::CancelOnDropHandler;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::NetworkPublicKey;
-use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
@@ -33,41 +32,6 @@ pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
             handlers.push(handle);
         }
         handlers
-    }
-}
-
-pub trait Lucky {
-    fn rng(&mut self) -> &mut SmallRng;
-}
-
-pub trait LuckyNetwork<Request> {
-    type Response: Clone + Send + Sync;
-    /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
-    /// message only to them. This is useful to pick nodes with whom to sync.
-    fn lucky_broadcast(
-        &mut self,
-        peers: Vec<NetworkPublicKey>,
-        message: &Request,
-        num_nodes: usize,
-    ) -> Vec<Result<JoinHandle<Result<anemo::Response<Self::Response>>>>>;
-}
-
-impl<T, M> LuckyNetwork<M> for T
-where
-    M: Clone + Send + Sync,
-    T: UnreliableNetwork<M> + Send,
-    T: Lucky,
-{
-    type Response = T::Response;
-    fn lucky_broadcast(
-        &mut self,
-        mut peers: Vec<NetworkPublicKey>,
-        message: &M,
-        nodes: usize,
-    ) -> Vec<Result<JoinHandle<Result<anemo::Response<Self::Response>>>>> {
-        peers.shuffle(self.rng());
-        peers.truncate(nodes);
-        self.unreliable_broadcast(peers, message)
     }
 }
 
