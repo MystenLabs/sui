@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useWallet } from "@mysten/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { styled } from "./stitches";
