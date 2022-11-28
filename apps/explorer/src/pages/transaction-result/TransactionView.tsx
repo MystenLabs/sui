@@ -390,7 +390,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                           label: 'Module',
                           monotypeClass: true,
                           value: txKindData.module.value,
-                          href: `/objects/${txKindData.package.value}?module=${txKindData.module.value}`,
+                          href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
                       },
                       {
                           label: 'Function',

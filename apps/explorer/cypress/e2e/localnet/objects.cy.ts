@@ -13,13 +13,13 @@ describe('Objects', () => {
                 }
                 const { objectId } =
                     tx.EffectsCert.effects.effects.created![0].reference;
-                cy.visit(`/objects/${objectId}`);
+                cy.visit(`/object/${objectId}`);
                 cy.get('#objectID').contains(objectId);
             });
     });
 
     it('displays an error when no objects', () => {
-        cy.visit(`/objects/fakeAddress`);
+        cy.visit(`/object/fakeAddress`);
         cy.get('#errorResult');
     });
 
@@ -34,7 +34,7 @@ describe('Objects', () => {
 
                     const address = tx.EffectsCert.certificate.data.sender;
                     const [nft] = tx.EffectsCert.effects.effects.created!;
-                    cy.visit(`/addresses/${address}`);
+                    cy.visit(`/address/${address}`);
 
                     // Find a reference to the NFT:
                     cy.contains(nft.reference.objectId.slice(0, 4)).click();
@@ -42,7 +42,7 @@ describe('Objects', () => {
 
                     // Find a reference to the owning address:
                     cy.contains(address).click();
-                    cy.url().should('include', `/addresses/${address}`);
+                    cy.url().should('include', `/address/${address}`);
                 });
         });
     });

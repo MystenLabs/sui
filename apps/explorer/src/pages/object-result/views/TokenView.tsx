@@ -74,7 +74,7 @@ function TokenView({ data }: { data: DataType }) {
     const genhref = (objType: string) => {
         const metadataarr = objType.split('::');
         const address = normalizeSuiAddress(metadataarr[0]);
-        return `/objects/${address}?module=${metadataarr[1]}`;
+        return `/object/${address}?module=${metadataarr[1]}`;
     };
 
     return (
