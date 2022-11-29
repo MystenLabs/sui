@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const { fontFamily } = require("tailwindcss/defaultTheme");
-const colors = require('tailwindcss/colors');
+const colors = require("tailwindcss/colors");
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -34,7 +34,7 @@ module.exports = {
 
       sui: {
         DEFAULT: "#6fbcf0",
-        bright: '#2A38EB',
+        bright: "#2A38EB",
         light: "#E1F3FF",
         dark: "#1F6493",
       },
@@ -70,6 +70,7 @@ module.exports = {
       },
       offwhite: "#fefefe",
       offblack: "#111111",
+      ebony: "#101828",
     },
 
     extend: {

@@ -26,6 +26,12 @@
             "@mysten/wallet-standard": [
                 "../../sdk/wallet-adapter/packages/wallet-standard/src/"
             ],
+            "@mysten/wallet-adapter-all-wallets": [
+                "../../sdk/wallet-adapter/packages/adapters/all-wallets/src/"
+            ],
+            "@mysten/wallet-adapter-unsafe-burner": [
+                "../../sdk/wallet-adapter/packages/adapters/unsafe-burner/src/"
+            ],
             "@mysten/wallet-adapter-wallet-standard": [
                 "../../sdk/wallet-adapter/packages/adapters/wallet-standard-adapter/src/"
             ],

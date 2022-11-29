@@ -37,9 +37,9 @@ importers:
       '@hookform/resolvers': ^2.9.10
       '@mysten/core': workspace:*
       '@mysten/sui.js': workspace:*
+      '@mysten/wallet-adapter-all-wallets': workspace:*
       '@mysten/wallet-adapter-react': workspace:*
       '@mysten/wallet-adapter-react-ui': workspace:*
-      '@mysten/wallet-adapter-wallet-standard': workspace:*
       '@sentry/react': ^7.6.0
       '@sentry/tracing': ^7.6.0
       '@storybook/addon-a11y': 7.0.0-alpha.38
@@ -113,9 +113,9 @@ importers:
       '@hookform/resolvers': 2.9.10_react-hook-form@7.39.2
       '@mysten/core': link:../core
       '@mysten/sui.js': link:../../sdk/typescript
+      '@mysten/wallet-adapter-all-wallets': link:../../sdk/wallet-adapter/packages/adapters/all-wallets
       '@mysten/wallet-adapter-react': link:../../sdk/wallet-adapter/packages/react-providers
       '@mysten/wallet-adapter-react-ui': link:../../sdk/wallet-adapter/packages/ui
-      '@mysten/wallet-adapter-wallet-standard': link:../../sdk/wallet-adapter/packages/adapters/wallet-standard-adapter
       '@sentry/react': 7.11.1_react@18.2.0
       '@sentry/tracing': 7.11.1
       '@tanstack/react-query': 4.14.1_biqbaboplfbrettd7655fr4n2y
