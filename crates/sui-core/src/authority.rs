@@ -32,8 +32,8 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use tap::TapFallible;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use tokio::sync::{broadcast::error::RecvError, mpsc};
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -566,10 +566,6 @@ pub struct AuthorityState {
 
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
-
-    /// A channel to tell consensus to reconfigure.
-    /// TODO: This does not really belong to AuthorityState. We should move it out.
-    _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -579,8 +575,12 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    pub fn is_validator(&self) -> bool {
+        self.committee.load().authority_exists(&self.name)
+    }
+
     pub fn is_fullnode(&self) -> bool {
-        !self.committee.load().authority_exists(&self.name)
+        !self.is_validator()
     }
 
     /// Get a broadcast receiver for updates
@@ -1441,8 +1441,7 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        prometheus_registry: &prometheus::Registry,
-        _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        prometheus_registry: &Registry,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1493,7 +1492,6 @@ impl AuthorityState {
                     .load_reconfig_state()
                     .expect("Load reconfig state at initialization cannot fail"),
             ),
-            _tx_reconfigure_consensus,
         };
 
         prometheus_registry
@@ -1520,7 +1518,6 @@ impl AuthorityState {
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
-        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1567,8 +1564,7 @@ impl AuthorityState {
             None,
             None,
             None,
-            &prometheus::Registry::new(),
-            tx_reconfigure_consensus,
+            &Registry::new(),
         )
         .await
     }
@@ -1621,18 +1617,17 @@ impl AuthorityState {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn update_committee(&self, new_committee: Committee) -> SuiResult {
-        // TODO: It's likely safer to do the following operations atomically, in case this function
-        // gets called from different threads. It cannot happen today, but worth the caution.
+    pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {
+        // TODO: We should move the committee into epoch db store, so that the operation below
+        // can become atomic.
         fp_ensure!(
             self.epoch() + 1 == new_committee.epoch,
             SuiError::from("Invalid new epoch to sign and update")
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        // TODO: Do we want to make it possible to subscribe to committee changes?
         self.committee.swap(Arc::new(new_committee));
+        self.db().reopen_epoch_db(self.epoch());
         Ok(())
     }
 

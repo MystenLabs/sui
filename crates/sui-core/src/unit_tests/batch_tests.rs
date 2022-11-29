@@ -66,7 +66,6 @@ pub(crate) async fn init_state(
     let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
-    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
 
     let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
@@ -85,7 +84,6 @@ pub(crate) async fn init_state(
         None,
         None,
         &prometheus::Registry::new(),
-        tx_reconfigure_consensus,
     )
     .await
 }
@@ -774,15 +772,8 @@ async fn test_safe_batch_stream() {
 
     // Byzantine cases:
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-    let state_b = AuthorityState::new_for_testing(
-        committee.clone(),
-        &authority_key,
-        None,
-        None,
-        tx_reconfigure_consensus,
-    )
-    .await;
+    let state_b =
+        AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None).await;
     let committee_store = state_b.committee_store().clone();
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
     let public_key_bytes_b = authority_key.public().into();
