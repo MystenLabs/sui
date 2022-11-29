@@ -5,9 +5,7 @@
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use config::{
-    Committee, NetworkAdminServerParameters, Parameters, SharedWorkerCache, WorkerCache, WorkerId,
-};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
@@ -171,12 +169,6 @@ async fn restart() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
 
-    let parameters = Parameters {
-        batch_size: 200,
-        max_header_num_of_batches: 1,
-        ..Parameters::default()
-    };
-
     // Spawn the nodes.
     let mut rx_nodes = Vec::new();
     for a in fixture.authorities() {
@@ -200,9 +192,11 @@ async fn restart() {
         let committee = committee.clone();
         let worker_cache = worker_cache.clone();
 
-        let mut parameters = parameters.clone();
-        // acquire a new admin port for this node
-        parameters.network_admin_server = NetworkAdminServerParameters::default();
+        let parameters = Parameters {
+            batch_size: 200,
+            max_header_num_of_batches: 1,
+            ..Parameters::default()
+        };
 
         let keypair = a.keypair().copy();
         let network_keypair = a.network_keypair().copy();
