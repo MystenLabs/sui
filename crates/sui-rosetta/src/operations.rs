@@ -63,7 +63,7 @@ impl Operation {
     pub fn from_data_and_events(
         data: &TransactionData,
         status: &ExecutionStatus,
-        events: &Vec<Event>,
+        events: &[Event],
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let sender = data.signer();
         let mut counter = IndexCounter::default();
@@ -116,9 +116,7 @@ impl Operation {
         // Aggregate balance changes by address, rosetta don't care about coins.
         let mut balance_change = balance_to_subtract;
         let mut gas: HashMap<SuiAddress, i128> = HashMap::new();
-        for (type_, address, amount) in events
-            .iter()
-            .flat_map(|event| Self::get_balance_change_from_event(event))
+        for (type_, address, amount) in events.iter().flat_map(Self::get_balance_change_from_event)
         {
             if type_ == OperationType::SuiBalanceChange {
                 let sum = balance_change.entry(address).or_default();
