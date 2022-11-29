@@ -228,10 +228,10 @@ impl PseudoBlockProvider {
                     index,
                     hash: digest.as_ref().try_into()?,
                 };
-                
+
                 // update balance
-                let (tx, effect) = state.get_transaction(digest).await?; 
-                
+                let (tx, effect) = state.get_transaction(digest).await?;
+
                 let operations = Operation::from_data_and_events(
                     &tx.data().data,
                     &effect.status,
