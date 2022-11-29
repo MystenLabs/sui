@@ -35,7 +35,7 @@ To keep Sui builders up-to-date with the latest happenings, we provide the follo
  * Improve source discoverability.
     * Add the ability for developers to verify source code dependencies against their on-chain counterparts when publishing packages.
     * Enable third-party package managers like Movey to resolve dependencies in Sui Move packages. This enables library developers to distribute their packages under easy-to-identify names. This also removes the error-prone need for developers to remember the GitHub repository, revision, and subdirectories for all their dependencies.
- * Better debug printing for structs (including field names + nice formatting)
+ * Better debug printing for structs (including field names + nice formatting).
 
 
 ## Sui CLI
