@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::{stream, StreamExt};
 use sui_core::authority_client::AuthorityAPI;
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
@@ -229,7 +230,7 @@ async fn shared_object_sync() {
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
-    // Send a transaction to create a counter, but only to one authority.
+    // Send a transaction to create a counter, to all but one authority.
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -239,11 +240,7 @@ async fn shared_object_sync() {
     );
     let effects = submit_single_owner_transaction(
         create_counter_transaction.clone(),
-        // this is a bit fragile (see consensus adapter):
-        // 2022-11-11 huitseeker: validator #2 is one of the two validators that submit this TX.
-        // 2022-11-25 amnn: For reasons completely unrelated to this test, validator #2 is no
-        //     longer one of the validators that submits this TX, but validator #1 is.
-        &configs.validator_set()[0..1],
+        &configs.validator_set()[1..],
     )
     .await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -255,9 +252,11 @@ async fn shared_object_sync() {
 
     // Check that the counter object only exist in one validator, but not the rest.
     // count the number of validators that have the counter object.
-    let mut provisioned_authorities = 0;
-    for config in configs.validator_set() {
-        provisioned_authorities += get_client(config)
+
+    // Check that the counter object exists in at least one of the validators the transaction was
+    // sent to.
+    let has_counter = stream::iter(&configs.validator_set()[1..]).any(|config| async move {
+        get_client(config)
             .handle_object_info_request(ObjectInfoRequest {
                 object_id: counter_id,
                 request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
@@ -265,10 +264,21 @@ async fn shared_object_sync() {
             .await
             .unwrap()
             .object()
-            .map(|_x| 1)
-            .unwrap_or_default();
-    }
-    assert_eq!(1, provisioned_authorities);
+            .is_some()
+    });
+
+    assert!(has_counter.await);
+
+    // Check that the validator that wasn't sent the transaction is unaware of the counter object
+    assert!(get_client(&configs.validator_set()[0])
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: counter_id,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+        })
+        .await
+        .unwrap()
+        .object()
+        .is_none());
 
     // Make a transaction to increment the counter.
     let increment_counter_transaction = move_transaction(
@@ -279,21 +289,23 @@ async fn shared_object_sync() {
         vec![CallArg::Object(counter_object_arg)],
     );
 
-    // Let's submit the transaction to just one authority (including only one up-to-date).
+    // Let's submit the transaction to the original set of validators.
     let effects = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
-        &configs.validator_set()[1..4],
+        &configs.validator_set()[1..],
     )
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
-    // Submit transactions to out-of-date authorities.
+    // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    let effects =
-        submit_shared_object_transaction(increment_counter_transaction, configs.validator_set())
-            .await
-            .unwrap();
+    let effects = submit_shared_object_transaction(
+        increment_counter_transaction,
+        &configs.validator_set()[0..1],
+    )
+    .await
+    .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
 
