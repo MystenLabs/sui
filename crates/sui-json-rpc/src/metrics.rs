@@ -15,8 +15,6 @@ use prometheus::{
     IntCounterVec,
 };
 use serde::Deserialize;
-use tokio::runtime::Handle;
-use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tower::Layer;
 
@@ -65,7 +63,7 @@ impl<S> Layer<S> for MetricsLayer {
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcMetricService<S> {
-    inner: Arc<Mutex<S>>,
+    inner: S,
     metrics: Arc<Metrics>,
 }
 
@@ -85,16 +83,13 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 impl<S> JsonRpcMetricService<S> {
     pub fn new(inner: S, metrics: Arc<Metrics>) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(inner)),
-            metrics,
-        }
+        Self { inner, metrics }
     }
 }
 
 impl<S> Service<Request<Body>> for JsonRpcMetricService<S>
 where
-    S: Service<Request<Body>, Response = Response<Body>> + Send + Sync + 'static,
+    S: Service<Request<Body>, Response = Response<Body>> + Clone + Send + 'static,
     S::Response: 'static,
     S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
     S::Future: Send + 'static,
@@ -106,16 +101,13 @@ where
 
     #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let handle = Handle::current();
-        let _ = handle.enter();
-        let mut v = futures::executor::block_on(self.inner.lock());
-        (*v).poll_ready(cx).map_err(Into::into)
+        self.inner.poll_ready(cx).map_err(Into::into)
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let started_at = Instant::now();
         let metrics = self.metrics.clone();
-        let inner = self.inner.clone();
+        let mut inner = self.inner.clone();
 
         let res_fut = async move {
             // Parse request to retrieve RPC method name.
@@ -136,7 +128,7 @@ where
                 (None, req)
             };
 
-            let fut = (*inner.lock().await).call(req);
+            let fut = inner.call(req);
             let res = fut.await.map_err(|err| err.into())?;
 
             // Record metrics if the request is a http RPC request.
