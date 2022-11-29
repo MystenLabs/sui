@@ -74,7 +74,7 @@ function TokenView({ data }: { data: DataType }) {
     const genhref = (objType: string) => {
         const metadataarr = objType.split('::');
         const address = normalizeSuiAddress(metadataarr[0]);
-        return `/objects/${address}?module=${metadataarr[1]}`;
+        return `/object/${address}?module=${metadataarr[1]}`;
     };
 
     return (
@@ -100,7 +100,7 @@ function TokenView({ data }: { data: DataType }) {
                                 <td id="objectID" className={styles.objectid}>
                                     <Longtext
                                         text={viewedData.id}
-                                        category="objects"
+                                        category="object"
                                         isLink={false}
                                     />
                                 </td>
@@ -112,7 +112,7 @@ function TokenView({ data }: { data: DataType }) {
                                     <td>
                                         <Longtext
                                             text={viewedData.tx_digest}
-                                            category="transactions"
+                                            category="transaction"
                                             isLink
                                         />
                                     </td>
@@ -147,7 +147,7 @@ function TokenView({ data }: { data: DataType }) {
                                     <td>
                                         <Longtext
                                             text={viewedData.contract_id.bytes}
-                                            category="objects"
+                                            category="object"
                                             isLink
                                         />
                                     </td>

@@ -6,8 +6,11 @@ import {
   getExecutionStatusType,
   getNewlyCreatedCoinRefsAfterSplit,
   getObjectId,
+  getTransactionDigest,
   LocalTxnDataSerializer,
   RawSigner,
+  SignableTransaction,
+  SuiMoveObject,
 } from '../../src';
 import {
   DEFAULT_RECIPIENT,
@@ -39,44 +42,50 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.splitCoin({
-        coinObjectId: coins[0].objectId,
-        splitAmounts: [DEFAULT_GAS_BUDGET * 2],
-        gasBudget: DEFAULT_GAS_BUDGET,
+      await validateTransaction(signer, {
+        kind: 'splitCoin',
+        data: {
+          coinObjectId: coins[0].objectId,
+          splitAmounts: [DEFAULT_GAS_BUDGET * 2],
+          gasBudget: DEFAULT_GAS_BUDGET,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('Merge coin', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.mergeCoin({
-        primaryCoin: coins[0].objectId,
-        coinToMerge: coins[1].objectId,
-        gasBudget: DEFAULT_GAS_BUDGET,
+      await validateTransaction(signer, {
+        kind: 'mergeCoin',
+        data: {
+          primaryCoin: coins[0].objectId,
+          coinToMerge: coins[1].objectId,
+          gasBudget: DEFAULT_GAS_BUDGET,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('Move Call', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.executeMoveCall({
-        packageObjectId: '0x2',
-        module: 'devnet_nft',
-        function: 'mint',
-        typeArguments: [],
-        arguments: [
-          'Example NFT',
-          'An NFT created by the wallet Command Line Tool',
-          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-        ],
-        gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: coins[0].objectId,
+      await validateTransaction(signer, {
+        kind: 'moveCall',
+        data: {
+          packageObjectId: '0x2',
+          module: 'devnet_nft',
+          function: 'mint',
+          typeArguments: [],
+          arguments: [
+            'Example NFT',
+            'An NFT created by the wallet Command Line Tool',
+            'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+          ],
+          gasBudget: DEFAULT_GAS_BUDGET,
+          gasPayment: coins[0].objectId,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('Move Shared Object Call', async () => {
@@ -90,47 +99,52 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const validator_address = (validator_metadata as SuiMoveObject).fields
         .sui_address;
 
-      const txn = await signer.executeMoveCall({
-        packageObjectId: '0x2',
-        module: 'sui_system',
-        function: 'request_add_delegation',
-        typeArguments: [],
-        arguments: [
-          SUI_SYSTEM_STATE_OBJECT_ID,
-          coins[2].objectId,
-          validator_address,
-        ],
-        gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: coins[3].objectId,
+      await validateTransaction(signer, {
+        kind: 'moveCall',
+        data: {
+          packageObjectId: '0x2',
+          module: 'sui_system',
+          function: 'request_add_delegation',
+          typeArguments: [],
+          arguments: [
+            SUI_SYSTEM_STATE_OBJECT_ID,
+            coins[2].objectId,
+            validator_address,
+          ],
+          gasBudget: DEFAULT_GAS_BUDGET,
+          gasPayment: coins[3].objectId,
+        },
       });
-
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('Transfer Sui', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.transferSui({
-        suiObjectId: coins[0].objectId,
-        gasBudget: DEFAULT_GAS_BUDGET,
-        recipient: DEFAULT_RECIPIENT,
-        amount: 100,
+      await validateTransaction(signer, {
+        kind: 'transferSui',
+        data: {
+          suiObjectId: coins[0].objectId,
+          gasBudget: DEFAULT_GAS_BUDGET,
+          recipient: DEFAULT_RECIPIENT,
+          amount: 100,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('Transfer Object', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.transferObject({
-        objectId: coins[0].objectId,
-        gasBudget: DEFAULT_GAS_BUDGET,
-        recipient: DEFAULT_RECIPIENT,
-        gasPayment: coins[1].objectId,
+      await validateTransaction(signer, {
+        kind: 'transferObject',
+        data: {
+          objectId: coins[0].objectId,
+          gasBudget: DEFAULT_GAS_BUDGET,
+          recipient: DEFAULT_RECIPIENT,
+          gasPayment: coins[1].objectId,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('Pay', async () => {
@@ -152,14 +166,16 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       );
 
       // use the newly created coins as the input coins for the pay transaction
-      const txn = await signer.pay({
-        inputCoins: splitCoins,
-        gasBudget: DEFAULT_GAS_BUDGET,
-        recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-        amounts: [4, 2],
-        gasPayment: getObjectId(coins[2]),
+      await validateTransaction(signer, {
+        kind: 'pay',
+        data: {
+          inputCoins: splitCoins,
+          gasBudget: DEFAULT_GAS_BUDGET,
+          recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
+          amounts: [4, 2],
+          gasPayment: getObjectId(coins[2]),
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('PaySui', async () => {
@@ -180,13 +196,15 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         getObjectId(c)
       );
 
-      const txn = await signer.paySui({
-        inputCoins: splitCoins,
-        recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-        amounts: [1000, 1000],
-        gasBudget: gasBudget,
+      await validateTransaction(signer, {
+        kind: 'paySui',
+        data: {
+          inputCoins: splitCoins,
+          recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
+          amounts: [1000, 1000],
+          gasBudget: gasBudget,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
 
     it('PayAllSui', async () => {
@@ -206,13 +224,24 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c)
       );
-
-      const txn = await signer.payAllSui({
-        inputCoins: splitCoins,
-        recipient: DEFAULT_RECIPIENT,
-        gasBudget: gasBudget,
+      await validateTransaction(signer, {
+        kind: 'payAllSui',
+        data: {
+          inputCoins: splitCoins,
+          recipient: DEFAULT_RECIPIENT,
+          gasBudget: gasBudget,
+        },
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
     });
   }
 );
+
+async function validateTransaction(
+  signer: RawSigner,
+  txn: SignableTransaction
+) {
+  const localDigest = await signer.getTransactionDigest(txn);
+  const result = await signer.signAndExecuteTransaction(txn);
+  expect(localDigest).toEqual(getTransactionDigest(result));
+  expect(getExecutionStatusType(result)).toEqual('success');
+}

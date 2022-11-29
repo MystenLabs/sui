@@ -9,7 +9,6 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::TransactionDigest;
 use crate::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, SingleTxContext, WriteKind};
 use crate::temporary_store::TemporaryStore;
@@ -18,6 +17,7 @@ use crate::{
     error::{ExecutionError, ExecutionErrorKind},
     object::{Data, Object},
 };
+use crate::{base_types::TransactionDigest, error::SuiError};
 use crate::{
     base_types::{ObjectID, SuiAddress},
     id::UID,
@@ -27,6 +27,7 @@ use schemars::JsonSchema;
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
 pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
+pub const COIN_METADATA_STRUCT_NAME: &IdentStr = ident_str!("CoinMetadata");
 
 pub const PAY_MODULE_NAME: &IdentStr = ident_str!("pay");
 pub const PAY_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
@@ -59,7 +60,8 @@ impl Coin {
 
     /// Is this other StructTag representing a Coin?
     pub fn is_coin(other: &StructTag) -> bool {
-        other.module.as_ident_str() == COIN_MODULE_NAME
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
             && other.name.as_ident_str() == COIN_STRUCT_NAME
     }
 
@@ -194,5 +196,55 @@ pub fn update_input_coins<S>(
             coin_object.version(),
             DeleteKind::Normal,
         )
+    }
+}
+
+// Rust version of the Move sui::coin::CoinMetadata type
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
+pub struct CoinMetadata {
+    pub id: UID,
+    /// Number of decimal places the coin uses.
+    pub decimals: u8,
+    /// Name for the token
+    pub name: String,
+    /// Symbol for the token
+    pub symbol: String,
+    /// Description of the token
+    pub description: String,
+    /// URL for the token logo
+    pub icon_url: Option<String>,
+}
+
+impl CoinMetadata {
+    /// Is this other StructTag representing a CoinMetadata?
+    pub fn is_coin_metadata(other: &StructTag) -> bool {
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
+            && other.name.as_ident_str() == COIN_METADATA_STRUCT_NAME
+    }
+
+    /// Create a coin from BCS bytes
+    pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
+        bcs::from_bytes(content).map_err(|err| SuiError::TypeError {
+            error: format!("Unable to deserialize CoinMetadata object: {:?}", err),
+        })
+    }
+}
+
+impl TryFrom<Object> for CoinMetadata {
+    type Error = SuiError;
+    fn try_from(object: Object) -> Result<Self, Self::Error> {
+        match &object.data {
+            Data::Move(o) => {
+                if CoinMetadata::is_coin_metadata(&o.type_) {
+                    return CoinMetadata::from_bcs_bytes(o.contents());
+                }
+            }
+            Data::Package(_) => {}
+        }
+
+        Err(SuiError::TypeError {
+            error: format!("Object type is not a CoinMetadata: {:?}", object),
+        })
     }
 }

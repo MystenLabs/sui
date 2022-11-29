@@ -36,12 +36,12 @@ describe('End-to-end Tests', () => {
         });
 
         it('can be reached through URL', () => {
-            cy.visit(`/transactions/${successID}`);
+            cy.visit(`/transaction/${successID}`);
             cy.get('[data-testid=pageheader]').contains(successID);
         });
 
         it('includes the sender time information', () => {
-            cy.visit(`/transactions/${successID}`);
+            cy.visit(`/transaction/${successID}`);
             // TODO - use the custom command date format function
             cy.get('[data-testid=transaction-timestamp]').contains(
                 new Intl.DateTimeFormat('en-US', {
@@ -57,7 +57,7 @@ describe('End-to-end Tests', () => {
 
     describe('Owned Objects have links that enable', () => {
         it('going from object to child object and back', () => {
-            cy.visit('/objects/player2');
+            cy.visit('/object/player2');
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('Image1');
             cy.get(ownerButton).click();
@@ -66,7 +66,7 @@ describe('End-to-end Tests', () => {
 
         it('going from parent to broken image object and back', () => {
             const parentValue = 'ObjectWBrokenChild';
-            cy.visit(`/objects/${parentValue}`);
+            cy.visit(`/object/${parentValue}`);
             cy.get(nftObject(1)).click();
             cy.get('#noImage');
             cy.get(ownerButton).click();
@@ -79,7 +79,7 @@ describe('End-to-end Tests', () => {
 
         it('to go to the next page', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get(paginationContext).within(() => {
                 cy.get('[data-testid=nextBtn]:visible').click();
                 cy.get(nftObject(1)).click();
@@ -89,7 +89,7 @@ describe('End-to-end Tests', () => {
 
         it('to go to the last page', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get(paginationContext).within(() => {
                 cy.get('[data-testid=lastBtn]:visible').click();
                 cy.get(nftObject(1)).click();
@@ -99,7 +99,7 @@ describe('End-to-end Tests', () => {
 
         it('where last and next disappear in final page', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get(paginationContext).within(() => {
                 cy.get('[data-testid=lastBtn]:visible').click();
 
@@ -115,7 +115,7 @@ describe('End-to-end Tests', () => {
 
         it('to go back a page', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get(paginationContext).within(() => {
                 cy.get('[data-testid=lastBtn]:visible').click();
                 cy.get('[data-testid=backBtn]:visible').click();
@@ -126,7 +126,7 @@ describe('End-to-end Tests', () => {
 
         it('to go to first page', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get(paginationContext).within(() => {
                 cy.get('[data-testid=lastBtn]:visible').click();
                 cy.get('[data-testid=backBtn]:visible').click();
@@ -138,7 +138,7 @@ describe('End-to-end Tests', () => {
 
         it('where first and back disappear in first page', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get(paginationContext).within(() => {
                 //Back and First buttons are disabled:
                 cy.get('[data-testid=backBtn]:visible').should('be.disabled');
@@ -160,7 +160,7 @@ describe('End-to-end Tests', () => {
             const count = '[data-testid=ownedcoinobjcount]';
             const balance = '[data-testid=ownedcoinbalance]';
 
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
 
             cy.get(`${rowCSSSelector(1)} ${label}`).contains('USD');
             cy.get(`${rowCSSSelector(1)} ${count}`).contains('2');
@@ -179,14 +179,14 @@ describe('End-to-end Tests', () => {
     describe('Transactions for ID', () => {
         it('are displayed from and to address', () => {
             const address = 'ownsAllAddress';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
 
             cy.get('[data-testid=tx] td').should('have.length.greaterThan', 0);
         });
 
         it('are displayed for input and mutated object', () => {
             const address = 'CollectionObject';
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
 
             cy.get('[data-testid=tx] td').should('have.length.greaterThan', 0);
         });

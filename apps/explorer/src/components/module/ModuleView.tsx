@@ -125,7 +125,7 @@ function ModuleView({ id, name, code }: Props) {
                                                 )) &&
                                             reference
                                         ) {
-                                            const href = `/objects/${reference.address}?module=${reference.module}`;
+                                            const href = `/object/${reference.address}?module=${reference.module}`;
 
                                             return (
                                                 <LinkWithQuery

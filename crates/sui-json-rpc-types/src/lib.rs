@@ -27,6 +27,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::coin::CoinMetadata;
 use tracing::warn;
 
 use fastcrypto::encoding::{Base64, Encoding};
@@ -412,6 +413,46 @@ impl SuiExecuteTransactionResponse {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiCoinMetadata {
+    /// Number of decimal places the coin uses.
+    pub decimals: u8,
+    /// Name for the token
+    pub name: String,
+    /// Symbol for the token
+    pub symbol: String,
+    /// Description of the token
+    pub description: String,
+    /// URL for the token logo
+    pub icon_url: Option<String>,
+    /// Object id for the CoinMetadata object
+    pub id: Option<ObjectID>,
+}
+
+impl TryFrom<Object> for SuiCoinMetadata {
+    type Error = SuiError;
+    fn try_from(object: Object) -> Result<Self, Self::Error> {
+        let metadata: CoinMetadata = object.try_into()?;
+        let CoinMetadata {
+            decimals,
+            name,
+            symbol,
+            description,
+            icon_url,
+            id,
+        } = metadata;
+        Ok(Self {
+            id: Some(*id.object_id()),
+            decimals,
+            name,
+            symbol,
+            description,
+            icon_url,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiParsedSplitCoinResponse {
@@ -503,7 +544,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                     )?
                 })
             }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)),
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
         };
         Ok(Object {
             data,
@@ -2302,6 +2343,20 @@ impl SuiEvent {
                 version,
             },
         })
+    }
+
+    pub fn get_event_type(&self) -> String {
+        match self {
+            SuiEvent::MoveEvent { .. } => "MoveEvent".to_string(),
+            SuiEvent::Publish { .. } => "Publish".to_string(),
+            SuiEvent::TransferObject { .. } => "TransferObject".to_string(),
+            SuiEvent::DeleteObject { .. } => "DeleteObject".to_string(),
+            SuiEvent::NewObject { .. } => "NewObject".to_string(),
+            SuiEvent::EpochChange(..) => "EpochChange".to_string(),
+            SuiEvent::Checkpoint(..) => "CheckPoint".to_string(),
+            SuiEvent::CoinBalanceChange { .. } => "CoinBalanceChange".to_string(),
+            SuiEvent::MutateObject { .. } => "MutateObject".to_string(),
+        }
     }
 }
 

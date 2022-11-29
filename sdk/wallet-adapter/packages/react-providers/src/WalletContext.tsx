@@ -13,7 +13,6 @@ import {
 } from "react";
 import type {
   SuiAddress,
-  MoveCallTransaction,
   SuiTransactionResponse,
   SignableTransaction,
 } from "@mysten/sui.js";
@@ -22,6 +21,14 @@ import { useWalletAdapters } from "./useWalletAdapters";
 
 const DEFAULT_STORAGE_KEY = "preferredSuiWallet";
 
+export enum WalletConnectionStatus {
+  DISCONNECTED = "DISCONNECTED",
+  CONNECTING = "CONNECTING",
+  CONNECTED = "CONNECTED",
+  // TODO: Figure out if this is really a separate status, or is just a piece of state alongside the `disconnected` state:
+  ERROR = "ERROR",
+}
+
 export interface WalletContextState {
   adapters: WalletAdapterList;
   wallets: WalletAdapter[];
@@ -29,9 +36,10 @@ export interface WalletContextState {
   // Wallet that we are currently connected to
   wallet: WalletAdapter | null;
 
+  status: WalletConnectionStatus;
   connecting: boolean;
   connected: boolean;
-  // disconnecting: boolean;
+  isError: boolean;
 
   select(walletName: string): void;
   disconnect(): Promise<void>;
@@ -60,13 +68,16 @@ export const WalletProvider: FC<WalletProviderProps> = ({
 }) => {
   const wallets = useWalletAdapters(adapters);
 
+  const [status, setStatus] = useState(WalletConnectionStatus.DISCONNECTED);
   const [wallet, setWallet] = useState<WalletAdapter | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+
+  const connected = status === WalletConnectionStatus.CONNECTED;
+  const connecting = status === WalletConnectionStatus.CONNECTING;
+  const isError = status === WalletConnectionStatus.ERROR;
 
   const disconnect = useCallback(async () => {
     wallet?.disconnect();
-    setConnected(false);
+    setStatus(WalletConnectionStatus.DISCONNECTED);
     setWallet(null);
     localStorage.removeItem(DEFAULT_STORAGE_KEY);
   }, []);
@@ -87,14 +98,15 @@ export const WalletProvider: FC<WalletProviderProps> = ({
 
       if (selectedWallet && !selectedWallet.connecting) {
         try {
-          setConnecting(true);
+          setStatus(WalletConnectionStatus.CONNECTING);
           await selectedWallet.connect();
-          setConnected(true);
+          setStatus(WalletConnectionStatus.CONNECTED);
         } catch (e) {
-          setConnected(false);
-        } finally {
-          setConnecting(false);
+          console.log("Wallet connection error", e);
+          setStatus(WalletConnectionStatus.ERROR);
         }
+      } else {
+        setStatus(WalletConnectionStatus.DISCONNECTED);
       }
     },
     [wallets]
@@ -115,8 +127,10 @@ export const WalletProvider: FC<WalletProviderProps> = ({
       adapters,
       wallets,
       wallet,
+      status,
       connecting,
       connected,
+      isError,
       select,
       disconnect,
 
@@ -137,7 +151,17 @@ export const WalletProvider: FC<WalletProviderProps> = ({
         return wallet.signAndExecuteTransaction(transaction);
       },
     }),
-    [wallets, adapters, wallet, select, disconnect, connecting, connected]
+    [
+      wallets,
+      adapters,
+      wallet,
+      select,
+      disconnect,
+      connecting,
+      connected,
+      status,
+      isError,
+    ]
   );
 
   return (

@@ -9,22 +9,22 @@ expression: common_costs_actual
     "storage_rebate": 0
   },
   "Publish": {
-    "computation_cost": 974,
-    "storage_cost": 121,
+    "computation_cost": 973,
+    "storage_cost": 119,
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
-    "computation_cost": 198,
+    "computation_cost": 196,
     "storage_cost": 31,
     "storage_rebate": 15
   },
   "SharedCounterCreate": {
-    "computation_cost": 109,
+    "computation_cost": 108,
     "storage_cost": 31,
     "storage_rebate": 0
   },
   "SharedCounterIncrement": {
-    "computation_cost": 198,
+    "computation_cost": 196,
     "storage_cost": 31,
     "storage_rebate": 15
   },

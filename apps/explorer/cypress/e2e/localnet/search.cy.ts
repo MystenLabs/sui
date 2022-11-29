@@ -8,7 +8,7 @@ describe('search', () => {
         cy.task('faucet').then((address) => {
             cy.visit('/');
             cy.get('[data-testid=search]').type(address).type('{enter}');
-            cy.url().should('include', `/addresses/${address}`);
+            cy.url().should('include', `/address/${address}`);
         });
     });
 
@@ -23,7 +23,7 @@ describe('search', () => {
                     tx.EffectsCert.effects.effects.created![0].reference;
                 cy.visit('/');
                 cy.get('[data-testid=search]').type(objectId).type('{enter}');
-                cy.url().should('include', `/objects/${objectId}`);
+                cy.url().should('include', `/object/${objectId}`);
             });
     });
 });

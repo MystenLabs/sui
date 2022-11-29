@@ -11,11 +11,13 @@ import { useMemo } from 'react';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
+type Category = 'object' | 'transaction' | 'address' | 'unknown';
+
 export type LinkObj = {
     url: string;
     name?: string;
     copy?: boolean;
-    category?: string;
+    category?: Category;
     isLink?: boolean;
 };
 
@@ -85,7 +87,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
-                                    className="text-gray-75 h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
+                                    className="text-steel-dark h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
                                 >
                                     {header.isPlaceholder
                                         ? null

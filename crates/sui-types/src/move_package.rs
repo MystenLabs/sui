@@ -3,7 +3,8 @@
 
 use crate::{
     base_types::ObjectID,
-    error::{SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
+    object::MAX_MOVE_PACKAGE_SIZE,
 };
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -34,11 +35,53 @@ pub struct MovePackage {
 }
 
 impl MovePackage {
-    pub fn new(id: ObjectID, module_map: &BTreeMap<String, Vec<u8>>) -> Self {
-        Self {
+    pub fn new(
+        id: ObjectID,
+        module_map: &BTreeMap<String, Vec<u8>>,
+    ) -> Result<Self, ExecutionError> {
+        let pkg = Self {
             id,
             module_map: module_map.clone(),
+        };
+        let object_size = pkg.size() as u64;
+        if object_size > MAX_MOVE_PACKAGE_SIZE {
+            return Err(ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size: MAX_MOVE_PACKAGE_SIZE,
+            }
+            .into());
         }
+        Ok(pkg)
+    }
+
+    pub fn from_module_iter<T: IntoIterator<Item = CompiledModule>>(
+        iter: T,
+    ) -> Result<Self, ExecutionError> {
+        let mut iter = iter.into_iter().peekable();
+        let id = ObjectID::from(
+            *iter
+                .peek()
+                .expect("Tried to build a Move package from an empty iterator of Compiled modules")
+                .self_id()
+                .address(),
+        );
+
+        Self::new(
+            id,
+            &iter
+                .map(|module| {
+                    let mut bytes = Vec::new();
+                    module.serialize(&mut bytes).unwrap();
+                    (module.self_id().name().to_string(), bytes)
+                })
+                .collect(),
+        )
+    }
+
+    /// Return the size of the package in bytes. Only count the bytes of the modules themselves--the
+    /// fact that we store them in a map is an implementation detail
+    pub fn size(&self) -> usize {
+        self.module_map.values().map(|b| b.len()).sum()
     }
 
     pub fn id(&self) -> ObjectID {
@@ -112,28 +155,4 @@ where
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
     Ok(normalized_modules)
-}
-
-impl FromIterator<CompiledModule> for MovePackage {
-    fn from_iter<T: IntoIterator<Item = CompiledModule>>(iter: T) -> Self {
-        let mut iter = iter.into_iter().peekable();
-        let id = ObjectID::from(
-            *iter
-                .peek()
-                .expect("Tried to build a Move package from an empty iterator of Compiled modules")
-                .self_id()
-                .address(),
-        );
-
-        Self::new(
-            id,
-            &iter
-                .map(|module| {
-                    let mut bytes = Vec::new();
-                    module.serialize(&mut bytes).unwrap();
-                    (module.self_id().name().to_string(), bytes)
-                })
-                .collect(),
-        )
-    }
 }

@@ -12,5 +12,5 @@ tracing = "0.1"
 scopeguard = "1"
 prometheus = "0.13"
 once_cell = "1"
-tokio = "1"
+tokio = { workspace = true }
 tap = "1.0"

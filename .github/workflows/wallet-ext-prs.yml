@@ -4,6 +4,7 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     outputs:
+      # TODO: This is currently unused because the wallet builds are not stable.
       isWalletExt: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-wallet')) || steps.diff.outputs.isRust }}
       isSrcChange: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-wallet')) }}
     steps:
@@ -18,7 +19,7 @@ jobs:
   run_checks:
     name: Lint, Test & Build
     needs: diff
-    if: needs.diff.outputs.isWalletExt == 'true'
+    if: needs.diff.outputs.isSrcChange == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

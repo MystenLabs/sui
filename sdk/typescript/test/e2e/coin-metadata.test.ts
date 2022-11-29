@@ -40,30 +40,12 @@ describe('Test Coin Metadata', () => {
     if (shouldSkip) {
       return;
     }
-    // TODO: add a new RPC endpoint for fetching coin metadata
-    const objectResponse = await toolbox.provider.getObject(packageId);
-    const publishTxnDigest =
-      getObjectExistsResponse(objectResponse)!.previousTransaction;
-    const publishTxn = await toolbox.provider.getTransactionWithEffects(
-      publishTxnDigest
+    const coinMetadata = await signer.provider.getCoinMetadata(
+      `${packageId}::test::TEST`
     );
-    const coinMetadataId = getEvents(publishTxn)!
-      .map((event) => {
-        if (
-          'newObject' in event &&
-          event.newObject.objectType.includes('CoinMetadata')
-        ) {
-          return event.newObject.objectId;
-        }
-        return undefined;
-      })
-      .filter((e) => e)[0]!;
-    const coinMetadata = getObjectFields(
-      await toolbox.provider.getObject(coinMetadataId)
-    )!;
     expect(coinMetadata.decimals).to.equal(2);
     expect(coinMetadata.name).to.equal('Test Coin');
     expect(coinMetadata.description).to.equal('Test coin metadata');
-    expect(coinMetadata.icon_url).to.equal('http://sui.io');
+    expect(coinMetadata.iconUrl).to.equal('http://sui.io');
   });
 });

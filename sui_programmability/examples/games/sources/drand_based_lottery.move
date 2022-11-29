@@ -39,22 +39,20 @@
 /// All the external inputs needed for the following APIs can be retrieved from one of drand's public APIs, e.g. using
 /// the above curl commands.
 ///
-module games::drand_random_selection {
-    use std::vector;
-
+module games::drand_based_lottery {
     use sui::object::{Self, ID, UID};
     use std::option::{Self, Option};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::bls12381;
-    use std::hash::sha2_256;
+
+    use games::drand_lib::{derive_randomness, safe_selection, verify_drand_signature};
+
 
     /// Error codes
     const EGameNotInProgress: u64 = 0;
     const EGameAlreadyCompleted: u64 = 1;
     const EInvalidRandomness: u64 = 2;
-    const EInvalidSeed: u64 = 3;
-    const EInvalidTicket: u64 = 4;
+    const EInvalidTicket: u64 = 3;
 
     /// Game status
     const IN_PROGRESS: u8 = 0;
@@ -102,23 +100,17 @@ module games::drand_random_selection {
     /// Anyone can close the game by providing the randomness of round-2.
     public entry fun close(game: &mut Game, drand_sig: vector<u8>, drand_prev_sig: vector<u8>) {
         assert!(game.status == IN_PROGRESS, EGameNotInProgress);
-        assert!(
-            verify_drand_signature(DRAND_PUBLIC_KEY, drand_sig, drand_prev_sig, closing_round(game.round)) == true,
-            EInvalidRandomness
-        );
+        verify_drand_signature(drand_sig, drand_prev_sig, closing_round(game.round));
         game.status = CLOSED;
     }
 
     /// Anyone can complete the game by providing the randomness of round.
     public entry fun complete(game: &mut Game, drand_sig: vector<u8>, drand_prev_sig: vector<u8>) {
         assert!(game.status != COMPLETED, EGameAlreadyCompleted);
-        assert!(
-            verify_drand_signature(DRAND_PUBLIC_KEY, drand_sig, drand_prev_sig, game.round) == true,
-            EInvalidRandomness
-        );
+        verify_drand_signature(drand_sig, drand_prev_sig, game.round);
         game.status = COMPLETED;
         // The randomness is derived from drand_sig by passing it through sha2_256 to make it uniform.
-        let digest = sha2_256(drand_sig);
+        let digest = derive_randomness(drand_sig);
         game.winner = option::some(safe_selection(game.participants, digest));
     }
 
@@ -167,49 +159,5 @@ module games::drand_random_selection {
 
     fun closing_round(round: u64): u64 {
         round - 2
-    }
-
-    // Converts the first 16 bytes of rnd to a u128 number and outputs its modulo with input n.
-    // Since n is u64, the output is at most 2^{-64} biased assuming rnd is uniformly random.
-    fun safe_selection(n: u64, rnd: vector<u8>): u64 {
-        assert!(vector::length(&rnd) >= 16, EInvalidSeed);
-        let m: u128 = 0;
-        let i = 0;
-        while (i < 16) {
-            m = m << 8;
-            let curr_byte = *vector::borrow(&rnd, i);
-            m = m + (curr_byte as u128);
-            i = i + 1;
-        };
-        let n_128 = (n as u128);
-        let module_128  = m % n_128;
-        let res = (module_128 as u64);
-        res
-    }
-
-    // drand related code.
-
-    // The public key of chain 8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce.
-    const DRAND_PUBLIC_KEY: vector<u8> =
-        x"868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31";
-
-    fun verify_drand_signature(pk: vector<u8>, sig: vector<u8>, prev_sig: vector<u8>, round: u64): bool {
-        // Convert round to a byte array in big-endian order.
-        let round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
-        let i = 7;
-        while (i > 0) {
-            let curr_byte = round % 0x100;
-            let curr_element = vector::borrow_mut(&mut round_bytes, i);
-            *curr_element = (curr_byte as u8);
-            round = round >> 8;
-            i = i - 1;
-        };
-
-        // Compute sha256(prev_sig, round_bytes).
-        vector::append(&mut prev_sig, round_bytes);
-        let digest = sha2_256(prev_sig);
-
-        // Verify the signature on the hash.
-        bls12381::bls12381_min_pk_verify(&sig, &pk, &digest)
     }
 }

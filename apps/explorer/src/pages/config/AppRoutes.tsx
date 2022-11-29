@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import AddressResult from '../address-result/AddressResult';
 import Home from '../home/Home';
@@ -12,17 +12,37 @@ import TransactionResult from '../transaction-result/TransactionResult';
 import Transactions from '../transactions/Transactions';
 import { ValidatorPageResult } from '../validators/Validators';
 
+function RedirectWithId({ base }: { base: string }) {
+    const params = useParams();
+    return <Navigate to={`/${base}/${params.id}`} replace />;
+}
+
 function AppRoutes() {
     return (
         <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/transactions" element={<Transactions />} />
-            <Route path="/objects/:id" element={<ObjectResult />} />
-            <Route path="/transactions/:id" element={<TransactionResult />} />
-            <Route path="/addresses/:id" element={<AddressResult />} />
+            <Route path="/object/:id" element={<ObjectResult />} />
+            <Route path="/transaction/:id" element={<TransactionResult />} />
+            <Route path="/address/:id" element={<AddressResult />} />
             <Route path="/validators" element={<ValidatorPageResult />} />
             <Route path="/search-result/:id" element={<SearchResult />} />
             <Route path="/error/:category/:id" element={<SearchError />} />
+
+            {/* Support the existing plural routes: */}
+            <Route
+                path="/objects/:id"
+                element={<RedirectWithId base="object" />}
+            />
+            <Route
+                path="/transactions/:id"
+                element={<RedirectWithId base="transaction" />}
+            />
+            <Route
+                path="/addresses/:id"
+                element={<RedirectWithId base="address" />}
+            />
+
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
     );

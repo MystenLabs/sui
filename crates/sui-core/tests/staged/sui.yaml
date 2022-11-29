@@ -89,12 +89,8 @@ DeleteKind:
 Ed25519KeyPair:
   STRUCT:
     - type: STR
-    - name:
-        TYPENAME: Ed25519PublicKey
-    - secret:
-        TYPENAME: Ed25519PublicKey
-Ed25519PublicKey:
-  NEWTYPESTRUCT: STR
+    - name: STR
+    - secret: STR
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8
@@ -158,56 +154,63 @@ ExecutionFailureStatus:
     6:
       MoveObjectTooBig:
         STRUCT:
-          - object_size: U32
-          - max_object_size: U32
+          - object_size: U64
+          - max_object_size: U64
     7:
-      InvalidTransferObject: UNIT
+      MovePackageTooBig:
+        STRUCT:
+          - object_size: U64
+          - max_object_size: U64
     8:
-      InvalidTransferSui: UNIT
+      InvalidTransferObject: UNIT
     9:
-      InvalidTransferSuiInsufficientBalance: UNIT
+      InvalidTransferSui: UNIT
     10:
-      InvalidCoinObject: UNIT
+      InvalidTransferSuiInsufficientBalance: UNIT
     11:
-      EmptyInputCoins: UNIT
+      InvalidCoinObject: UNIT
     12:
-      EmptyRecipients: UNIT
+      InvalidCoinMetadataObject: UNIT
     13:
-      RecipientsAmountsArityMismatch: UNIT
+      EmptyInputCoins: UNIT
     14:
-      InsufficientBalance: UNIT
+      EmptyRecipients: UNIT
     15:
-      CoinTypeMismatch: UNIT
+      RecipientsAmountsArityMismatch: UNIT
     16:
-      NonEntryFunctionInvoked: UNIT
+      InsufficientBalance: UNIT
     17:
-      EntryTypeArityMismatch: UNIT
+      CoinTypeMismatch: UNIT
     18:
+      NonEntryFunctionInvoked: UNIT
+    19:
+      EntryTypeArityMismatch: UNIT
+    20:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    19:
+    21:
       EntryTypeArgumentError:
         NEWTYPE:
           TYPENAME: EntryTypeArgumentError
-    20:
+    22:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    21:
+    23:
       InvalidChildObjectArgument:
         NEWTYPE:
           TYPENAME: InvalidChildObjectArgument
-    22:
+    24:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    23:
+    25:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    24:
+    26:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -215,32 +218,32 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    25:
+    27:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    26:
-      PublishErrorEmptyPackage: UNIT
-    27:
-      PublishErrorNonZeroAddress: UNIT
     28:
-      PublishErrorDuplicateModule: UNIT
+      PublishErrorEmptyPackage: UNIT
     29:
-      SuiMoveVerificationError: UNIT
+      PublishErrorNonZeroAddress: UNIT
     30:
+      PublishErrorDuplicateModule: UNIT
+    31:
+      SuiMoveVerificationError: UNIT
+    32:
       MovePrimitiveRuntimeError:
         NEWTYPE:
           OPTION:
             TYPENAME: MoveLocation
-    31:
+    33:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    32:
+    34:
       VMVerificationOrDeserializationError: UNIT
-    33:
+    35:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:

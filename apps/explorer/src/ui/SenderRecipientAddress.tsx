@@ -24,7 +24,7 @@ export function SenderRecipientAddress({
             <Link
                 variant="mono"
                 size="md"
-                to={`/addresses/${encodeURIComponent(address)}`}
+                to={`/address/${encodeURIComponent(address)}`}
             >
                 {address}
             </Link>

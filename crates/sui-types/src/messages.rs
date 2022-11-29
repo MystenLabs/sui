@@ -1229,8 +1229,12 @@ pub enum ExecutionFailureStatus {
     FunctionNotFound,
     InvariantViolation,
     MoveObjectTooBig {
-        object_size: u32,
-        max_object_size: u32,
+        object_size: u64,
+        max_object_size: u64,
+    },
+    MovePackageTooBig {
+        object_size: u64,
+        max_object_size: u64,
     },
 
     //
@@ -1240,6 +1244,7 @@ pub enum ExecutionFailureStatus {
     InvalidTransferSui,
     InvalidTransferSuiInsufficientBalance,
     InvalidCoinObject,
+    InvalidCoinMetadataObject,
 
     //
     // Pay errors
@@ -1407,6 +1412,7 @@ impl Display for ExecutionFailureStatus {
             }
             ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),  
             ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),       
+            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),       
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
@@ -1522,6 +1528,9 @@ impl Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
+            }
+            ExecutionFailureStatus::InvalidCoinMetadataObject => {
+                write!(f, "Invalid CoinMetadata type")
             }
         }
     }
@@ -2078,7 +2087,7 @@ impl ConsensusTransaction {
         let tx_digest = certificate.digest();
         tx_digest.hash(&mut hasher);
         authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
+        let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
@@ -2088,7 +2097,7 @@ impl ConsensusTransaction {
     pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
         data.summary.auth_signature.signature.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
+        let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::CheckpointSignature(Box::new(data)),
@@ -2098,7 +2107,7 @@ impl ConsensusTransaction {
     pub fn new_end_of_publish(authority: AuthorityName) -> Self {
         let mut hasher = DefaultHasher::new();
         authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_be_bytes();
+        let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::EndOfPublish(authority),

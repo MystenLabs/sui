@@ -159,6 +159,8 @@ pub struct SuiAddress(
 );
 
 impl SuiAddress {
+    pub const ZERO: Self = Self([0u8; SUI_ADDRESS_LENGTH]);
+
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
@@ -489,6 +491,21 @@ impl AsRef<[u8]> for TransactionDigest {
     }
 }
 
+impl fmt::Display for TransactionDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::LowerHex for TransactionDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", Hex::encode(self))
+    }
+}
+
 /// Returns a Context for OpenTelemetry tracing from a TransactionDigest
 // NOTE: See https://github.com/MystenLabs/sui/issues/852
 // The current code doesn't really work.  Maybe the traceparent needs to be a specific format,
@@ -618,6 +635,21 @@ impl std::fmt::Debug for ObjectDigest {
 impl AsRef<[u8]> for ObjectDigest {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
+    }
+}
+
+impl fmt::Display for ObjectDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::LowerHex for ObjectDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", Hex::encode(self))
     }
 }
 

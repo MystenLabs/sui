@@ -17,11 +17,11 @@ import {
   isSuiMoveNormalizedStruct,
   isSuiTransactionResponse,
   isTransactionEffects,
+  isCoinMetadata,
 } from '../types/index.guard';
 import {
   Coin,
   ExecuteTransactionRequestType,
-  CoinDenominationInfoResponse,
   GatewayTxSeqNumber,
   GetObjectDataResponse,
   getObjectReference,
@@ -44,7 +44,6 @@ import {
   TransactionDigest,
   TransactionQuery,
   SUI_TYPE_ARG,
-  normalizeSuiAddress,
   RpcApiVersion,
   parseVersionFromString,
   EventQuery,
@@ -53,6 +52,9 @@ import {
   FaucetResponse,
   Order,
   TransactionEffects,
+  CoinMetadata,
+  versionToString,
+  normalizeSuiAddress,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -62,6 +64,7 @@ import {
 } from '../rpc/websocket-client';
 import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
+import { lt } from '@suchipi/femver';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -165,6 +168,41 @@ export class JsonRpcProvider extends Provider {
       console.warn('Error fetching version number of the RPC API', err);
     }
     return undefined;
+  }
+
+  async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
+    try {
+      const version = await this.getRpcApiVersion();
+      // TODO: clean up after 0.17.0 is deployed on both DevNet and TestNet
+      if (version && lt(versionToString(version), '0.17.0')) {
+        const [packageId, module, symbol] = coinType.split('::');
+        if (
+          normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
+          module != 'sui' ||
+          symbol !== 'SUI'
+        ) {
+          throw new Error(
+            'only SUI coin is supported in getCoinMetadata for RPC version priort to 0.17.0.'
+          );
+        }
+        return {
+          decimals: 9,
+          name: 'Sui',
+          symbol: 'SUI',
+          description: '',
+          iconUrl: null,
+          id: null,
+        };
+      }
+      return await this.client.requestWithType(
+        'sui_getCoinMetadata',
+        [coinType],
+        isCoinMetadata,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(`Error fetching CoinMetadata for ${coinType}: ${err}`);
+    }
   }
 
   async requestSuiFromFaucet(
@@ -292,25 +330,6 @@ export class JsonRpcProvider extends Provider {
   async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
-  }
-
-  getCoinDenominationInfo(coinType: string): CoinDenominationInfoResponse {
-    const [packageId, module, symbol] = coinType.split('::');
-    if (
-      normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-      module != 'sui' ||
-      symbol !== 'SUI'
-    ) {
-      throw new Error(
-        'only SUI coin is supported in getCoinDenominationInfo for now.'
-      );
-    }
-
-    return {
-      coinType: coinType,
-      basicUnit: 'MIST',
-      decimalNumber: 9,
-    };
   }
 
   async getCoinBalancesOwnedByAddress(
@@ -577,21 +596,21 @@ export class JsonRpcProvider extends Provider {
 
   // Events
   async getEvents(
-      query: EventQuery,
-      cursor: EventId | null,
-      limit: number | null,
-      order: Order = 'descending'
+    query: EventQuery,
+    cursor: EventId | null,
+    limit: number | null,
+    order: Order = 'descending'
   ): Promise<PaginatedEvents> {
     try {
       return await this.client.requestWithType(
-          'sui_getEvents',
-          [query, cursor, limit, order === 'descending'],
-          isPaginatedEvents,
-          this.options.skipDataValidation
+        'sui_getEvents',
+        [query, cursor, limit, order === 'descending'],
+        isPaginatedEvents,
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-          `Error getting events for query: ${err} for query ${query}`
+        `Error getting events for query: ${err} for query ${query}`
       );
     }
   }
@@ -617,7 +636,9 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error dry running transaction with request type: ${err}`);
+      throw new Error(
+        `Error dry running transaction with request type: ${err}`
+      );
     }
   }
 }

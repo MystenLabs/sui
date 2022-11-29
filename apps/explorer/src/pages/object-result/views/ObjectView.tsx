@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import { extractName } from '../../../utils/objectUtils';
 import { type DataType } from '../ObjectResultType';
 import PkgView from './PkgView';
@@ -24,7 +25,13 @@ function ObjectView({ data }: { data: DataType }) {
                     subtitle={name}
                 />
             </div>
-            {isPackage ? <PkgView data={data} /> : <TokenView data={data} />}
+            <ErrorBoundary>
+                {isPackage ? (
+                    <PkgView data={data} />
+                ) : (
+                    <TokenView data={data} />
+                )}
+            </ErrorBoundary>
         </>
     );
 }

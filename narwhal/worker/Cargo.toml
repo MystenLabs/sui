@@ -16,7 +16,7 @@ multiaddr = "0.16.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.144", features = ["derive"] }
 tap = "1.0.1"
-tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-stream = "0.1.10"
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"

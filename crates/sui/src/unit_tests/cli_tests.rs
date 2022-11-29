@@ -45,6 +45,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Start network without authorities
     let start = SuiCommand::Start {
         config: Some(config),
+        no_full_node: false,
     }
     .execute()
     .await;
@@ -308,6 +309,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
+        verify_dependencies: true,
     }
     .execute(context)
     .await?;
@@ -476,6 +478,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
+        verify_dependencies: true,
     }
     .execute(context)
     .await?;

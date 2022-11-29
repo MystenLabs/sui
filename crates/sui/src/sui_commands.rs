@@ -45,6 +45,8 @@ pub enum SuiCommand {
     Start {
         #[clap(long = "network.config")]
         config: Option<PathBuf>,
+        #[clap(long = "no-full-node")]
+        no_full_node: bool,
     },
     #[clap(name = "network")]
     Network {
@@ -116,7 +118,10 @@ pub enum SuiCommand {
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
-            SuiCommand::Start { config } => {
+            SuiCommand::Start {
+                config,
+                no_full_node,
+            } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
                     genesis(None, None, None, false).await?;
@@ -134,9 +139,14 @@ impl SuiCommand {
                         ))
                     })?;
 
-                let mut swarm = Swarm::builder()
-                    .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
-                    .from_network_config(sui_config_dir()?, network_config);
+                let mut swarm = if no_full_node {
+                    Swarm::builder()
+                } else {
+                    Swarm::builder()
+                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
+                }
+                .from_network_config(sui_config_dir()?, network_config);
+
                 swarm.launch().await?;
 
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));

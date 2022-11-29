@@ -15,11 +15,11 @@ const navigateWithUnknown = async (
     const ownedObjects = findOwnedObjectsfromID(input);
 
     if (data?.category === 'transaction') {
-        navigate(`../transactions/${input}`, { state: data });
+        navigate(`../transaction/${input}`, { state: data });
     } else if (data?.category === 'object') {
-        navigate(`../objects/${input}`, { state: data });
+        navigate(`../object/${input}`, { state: data });
     } else if (ownedObjects && ownedObjects.length > 0) {
-        navigate(`../addresses/${input}`, { state: data });
+        navigate(`../address/${input}`, { state: data });
     } else {
         navigate(`../error/missing/${input}`);
     }

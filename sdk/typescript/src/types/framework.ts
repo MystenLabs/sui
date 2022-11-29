@@ -37,6 +37,15 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
 
+export type CoinMetadata = {
+  decimals: number;
+  name: string;
+  symbol: string;
+  description: string;
+  iconUrl: string | null;
+  id: ObjectId | null;
+};
+
 /**
  * Utility class for 0x2::coin
  * as defined in https://github.com/MystenLabs/sui/blob/ca9046fd8b1a9e8634a4b74b0e7dabdc7ea54475/sui_programmability/framework/sources/Coin.move#L4
@@ -295,12 +304,14 @@ export class Coin {
       gasBudget: Number(gasBudget),
     };
     if (isSuiTransfer) {
-      return signer.serializer.newPaySui(signerAddress, {
-        ...txCommon,
+      return signer.serializer.serializeToBytes(signerAddress, {
+        kind: 'paySui',
+        data: { ...txCommon },
       });
     }
-    return signer.serializer.newPay(signerAddress, {
-      ...txCommon,
+    return signer.serializer.serializeToBytes(signerAddress, {
+      kind: 'pay',
+      data: { ...txCommon },
       // we know there is a gas coin with enough balance to cover
       // the gas budget let rpc select one for us
     });
