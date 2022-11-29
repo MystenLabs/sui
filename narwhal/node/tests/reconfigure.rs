@@ -162,6 +162,7 @@ async fn run_client(
     }
 }
 
+#[ignore]
 #[tokio::test]
 async fn restart() {
     telemetry_subscribers::init_for_testing();
