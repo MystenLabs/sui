@@ -26,12 +26,7 @@ function Longtext({
     extra,
 }: {
     text: string;
-    category:
-        | 'object'
-        | 'transaction'
-        | 'address'
-        | 'validators'
-        | 'unknown';
+    category: 'object' | 'transaction' | 'address' | 'validators' | 'unknown';
     isLink?: boolean;
     alttext?: string;
     copyButton?: '16' | '24' | 'none';
