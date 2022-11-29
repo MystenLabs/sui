@@ -89,12 +89,8 @@ DeleteKind:
 Ed25519KeyPair:
   STRUCT:
     - type: STR
-    - name:
-        TYPENAME: Ed25519PublicKey
-    - secret:
-        TYPENAME: Ed25519PublicKey
-Ed25519PublicKey:
-  NEWTYPESTRUCT: STR
+    - name: STR
+    - secret: STR
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8
