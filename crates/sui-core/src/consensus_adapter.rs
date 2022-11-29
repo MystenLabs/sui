@@ -439,6 +439,13 @@ impl<'a> Drop for InflightDropGuard<'a> {
 // TODO: replace by a ConsensusTxValidator in order to make Narwhal-side validation effective
 pub use narwhal_worker::TrivialTransactionValidator as SuiTxValidator;
 
+#[async_trait::async_trait]
+impl SubmitToConsensus for Arc<ConsensusAdapter> {
+    async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
+        self.submit(transaction.clone()).map(|_| ())
+    }
+}
+
 #[cfg(test)]
 mod adapter_tests {
     use super::ConsensusAdapter;

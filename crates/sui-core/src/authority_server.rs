@@ -280,8 +280,13 @@ impl ValidatorService {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
 
+        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
+        // The consensus adapter allows the authority to send user certificates through consensus.
+        let consensus_adapter =
+            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
+
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
-            sender: consensus_client.clone(),
+            sender: consensus_adapter.clone(),
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
         });
@@ -321,12 +326,6 @@ impl ValidatorService {
             rx_reconfigure_consensus,
             &registry,
         ));
-
-        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
-
-        // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter =
-            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
 
         Ok(Self {
             state,
