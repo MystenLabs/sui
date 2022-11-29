@@ -16,6 +16,8 @@ import {
   TransactionData,
   TypeTag,
   SuiObjectRef,
+  TRANSACTION_DATA_TYPE_TAG,
+  deserializeTransactionBytesToTransactionData,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -35,8 +37,6 @@ import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
 import { TypeTagSerializer } from './type-tag-serializer';
 
-const TYPE_TAG = Array.from('TransactionData::').map((e) => e.charCodeAt(0));
-
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
    * Need a provider to fetch the latest object reference. Ideally the provider
@@ -44,258 +44,170 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
    */
   constructor(private provider: Provider) {}
 
-  async newTransferObject(
-    signerAddress: SuiAddress,
-    t: TransferObjectTransaction
+  async serializeToBytes(
+    signerAddress: string,
+    txn: UnserializedSignableTransaction
   ): Promise<Base64DataBuffer> {
     try {
-      const objectRef = await this.provider.getObjectRef(t.objectId);
-      const tx = {
-        TransferObject: {
-          recipient: t.recipient,
-          object_ref: objectRef!,
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'transferObject', data: t },
-        t.gasPayment,
-        signerAddress
+      return await this.serializeTransactionData(
+        await this.constructTransactionData(signerAddress, txn)
       );
-    } catch (err) {
+    } catch (e) {
       throw new Error(
-        `Error constructing a TransferObject transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
+        `Encountered error when serializing a ${txn.kind} transaction for ` +
+          `address ${signerAddress} for transaction ${JSON.stringify(
+            txn,
+            null,
+            2
+          )}: ${e}`
       );
     }
   }
 
-  async newTransferSui(
-    signerAddress: SuiAddress,
-    t: TransferSuiTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const tx = {
-        TransferSui: {
-          recipient: t.recipient,
-          amount: t.amount == null ? { None: null } : { Some: t.amount },
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'transferSui', data: t },
-        t.suiObjectId,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a TransferSui transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
+  async constructTransactionData(
+    signerAddress: string,
+    unserializedTxn: UnserializedSignableTransaction
+  ): Promise<TransactionData> {
+    let tx: Transaction;
+    let gasPayment: ObjectId | undefined;
+    switch (unserializedTxn.kind) {
+      case 'transferObject':
+        const t = unserializedTxn.data as TransferObjectTransaction;
+        const objectRef = await this.provider.getObjectRef(t.objectId);
+        tx = {
+          TransferObject: {
+            recipient: t.recipient,
+            object_ref: objectRef!,
+          },
+        };
+        gasPayment = t.gasPayment;
+        break;
+      case 'transferSui':
+        const transferSui = unserializedTxn.data as TransferSuiTransaction;
+        tx = {
+          TransferSui: {
+            recipient: transferSui.recipient,
+            amount:
+              transferSui.amount == null
+                ? { None: null }
+                : { Some: transferSui.amount },
+          },
+        };
+        gasPayment = transferSui.suiObjectId;
+        break;
+      case 'pay':
+        const pay = unserializedTxn.data as PayTransaction;
+        const inputCoinRefs = (
+          await Promise.all(
+            pay.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+          )
+        ).map((ref) => ref!);
+        tx = {
+          Pay: {
+            coins: inputCoinRefs,
+            recipients: pay.recipients,
+            amounts: pay.amounts,
+          },
+        };
+        gasPayment = pay.gasPayment;
+        break;
+      case 'paySui':
+        const paySui = unserializedTxn.data as PaySuiTransaction;
+        const paySuiInputCoinRefs = (
+          await Promise.all(
+            paySui.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+          )
+        ).map((ref) => ref!);
+        tx = {
+          PaySui: {
+            coins: paySuiInputCoinRefs,
+            recipients: paySui.recipients,
+            amounts: paySui.amounts,
+          },
+        };
+        gasPayment = paySui.inputCoins[0];
+        break;
+      case 'payAllSui':
+        const payAllSui = unserializedTxn.data as PayAllSuiTransaction;
+        const payAllSuiInputCoinRefs = (
+          await Promise.all(
+            payAllSui.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+          )
+        ).map((ref) => ref!);
+        tx = {
+          PayAllSui: {
+            coins: payAllSuiInputCoinRefs,
+            recipient: payAllSui.recipient,
+          },
+        };
+        gasPayment = payAllSui.inputCoins[0];
+        break;
+      case 'moveCall':
+        const moveCall = unserializedTxn.data as MoveCallTransaction;
+        const pkg = await this.provider.getObjectRef(moveCall.packageObjectId);
+        tx = {
+          Call: {
+            package: pkg!,
+            module: moveCall.module,
+            function: moveCall.function,
+            typeArguments: moveCall.typeArguments.map((a) =>
+              typeof a === 'string'
+                ? new TypeTagSerializer().parseFromStr(a)
+                : (a as TypeTag)
+            ),
+            arguments: await new CallArgSerializer(
+              this.provider
+            ).serializeMoveCallArguments(moveCall),
+          },
+        };
+        gasPayment = moveCall.gasPayment;
+        break;
+      case 'mergeCoin':
+        const mergeCoin = unserializedTxn.data as MergeCoinTransaction;
+        return this.constructTransactionData(signerAddress, {
+          kind: 'moveCall',
+          data: {
+            packageObjectId: SUI_FRAMEWORK_ADDRESS,
+            module: PAY_MODULE_NAME,
+            function: PAY_JOIN_COIN_FUNC_NAME,
+            typeArguments: [await this.getCoinStructTag(mergeCoin.coinToMerge)],
+            arguments: [mergeCoin.primaryCoin, mergeCoin.coinToMerge],
+            gasPayment: mergeCoin.gasPayment,
+            gasBudget: mergeCoin.gasBudget,
+          },
+        });
+      case 'splitCoin':
+        const splitCoin = unserializedTxn.data as SplitCoinTransaction;
+        return this.constructTransactionData(signerAddress, {
+          kind: 'moveCall',
+          data: {
+            packageObjectId: SUI_FRAMEWORK_ADDRESS,
+            module: PAY_MODULE_NAME,
+            function: PAY_SPLIT_COIN_VEC_FUNC_NAME,
+            typeArguments: [
+              await this.getCoinStructTag(splitCoin.coinObjectId),
+            ],
+            arguments: [splitCoin.coinObjectId, splitCoin.splitAmounts],
+            gasPayment: splitCoin.gasPayment,
+            gasBudget: splitCoin.gasBudget,
+          },
+        });
+      case 'publish':
+        const publish = unserializedTxn.data as PublishTransaction;
+        tx = {
+          Publish: {
+            modules: publish.compiledModules as ArrayLike<ArrayLike<number>>,
+          },
+        };
+        gasPayment = publish.gasPayment;
+        break;
     }
-  }
-
-  async newPay(
-    signerAddress: SuiAddress,
-    t: PayTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const inputCoinRefs = (
-        await Promise.all(
-          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
-        )
-      ).map((ref) => ref!);
-      const tx = {
-        Pay: {
-          coins: inputCoinRefs,
-          recipients: t.recipients,
-          amounts: t.amounts,
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'pay', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a Pay transaction: ${err} args ${JSON.stringify(t)}`
-      );
-    }
-  }
-
-  async newPaySui(
-    signerAddress: SuiAddress,
-    t: PaySuiTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const inputCoinRefs = (
-        await Promise.all(
-          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
-        )
-      ).map((ref) => ref!);
-      const tx = {
-        PaySui: {
-          coins: inputCoinRefs,
-          recipients: t.recipients,
-          amounts: t.amounts,
-        },
-      };
-      const gas_coin_obj = t.inputCoins[0];
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'paySui', data: t },
-        gas_coin_obj,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a PaySui transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
-  }
-
-  async newPayAllSui(
-    signerAddress: SuiAddress,
-    t: PayAllSuiTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const inputCoinRefs = (
-        await Promise.all(
-          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
-        )
-      ).map((ref) => ref!);
-      const tx = {
-        PayAllSui: {
-          coins: inputCoinRefs,
-          recipient: t.recipient,
-        },
-      };
-      const gas_coin_obj = t.inputCoins[0];
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'payAllSui', data: t },
-        gas_coin_obj,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a PayAllSui transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
-  }
-
-  async newMoveCall(
-    signerAddress: SuiAddress,
-    t: MoveCallTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const pkg = await this.provider.getObjectRef(t.packageObjectId);
-      const tx = {
-        Call: {
-          package: pkg!,
-          module: t.module,
-          function: t.function,
-          typeArguments: t.typeArguments.map((a) =>
-            typeof a === 'string'
-              ? new TypeTagSerializer().parseFromStr(a)
-              : (a as TypeTag)
-          ),
-          arguments: await new CallArgSerializer(
-            this.provider
-          ).serializeMoveCallArguments(t),
-        },
-      };
-
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'moveCall', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a move call: ${err} args ${JSON.stringify(t)}`
-      );
-    }
-  }
-
-  async newMergeCoin(
-    signerAddress: SuiAddress,
-    t: MergeCoinTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      return await this.newMoveCall(signerAddress, {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: PAY_MODULE_NAME,
-        function: PAY_JOIN_COIN_FUNC_NAME,
-        typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
-        arguments: [t.primaryCoin, t.coinToMerge],
-        gasPayment: t.gasPayment,
-        gasBudget: t.gasBudget,
-      });
-    } catch (err) {
-      throw new Error(
-        `Error constructing a MergeCoin Transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
-  }
-
-  async newSplitCoin(
-    signerAddress: SuiAddress,
-    t: SplitCoinTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      return await this.newMoveCall(signerAddress, {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: PAY_MODULE_NAME,
-        function: PAY_SPLIT_COIN_VEC_FUNC_NAME,
-        typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
-        arguments: [t.coinObjectId, t.splitAmounts],
-        gasPayment: t.gasPayment,
-        gasBudget: t.gasBudget,
-      });
-    } catch (err) {
-      throw new Error(
-        `Error constructing a SplitCoin Transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
-  }
-
-  async newPublish(
-    signerAddress: SuiAddress,
-    t: PublishTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const tx = {
-        Publish: {
-          modules: t.compiledModules as ArrayLike<ArrayLike<number>>,
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'publish', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a newPublish transaction: ${err} with args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    return this.constructTransactionDataHelper(
+      tx,
+      unserializedTxn,
+      gasPayment,
+      signerAddress
+    );
   }
 
   /**
@@ -369,12 +281,12 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     return { struct: Coin.getCoinStructTag(coinTypeArg) };
   }
 
-  private async constructTransactionData(
+  private async constructTransactionDataHelper(
     tx: Transaction,
     originalTx: UnserializedSignableTransaction,
     gasObjectId: ObjectId | undefined,
     signerAddress: SuiAddress
-  ): Promise<Base64DataBuffer> {
+  ): Promise<TransactionData> {
     if (gasObjectId === undefined) {
       gasObjectId = await this.selectGasPaymentForTransaction(
         originalTx,
@@ -387,7 +299,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       }
     }
     const gasPayment = await this.provider.getObjectRef(gasObjectId);
-    const txData = {
+    return {
       kind: {
         // TODO: support batch txns
         Single: tx,
@@ -399,8 +311,6 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       gasBudget: originalTx.data.gasBudget,
       sender: signerAddress,
     };
-
-    return await this.serializeTransactionData(txData);
   }
 
   /**
@@ -414,9 +324,11 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     const format = 'TransactionData';
 
     const dataBytes = bcs.ser(format, tx, size).toBytes();
-    const serialized = new Uint8Array(TYPE_TAG.length + dataBytes.length);
-    serialized.set(TYPE_TAG);
-    serialized.set(dataBytes, TYPE_TAG.length);
+    const serialized = new Uint8Array(
+      TRANSACTION_DATA_TYPE_TAG.length + dataBytes.length
+    );
+    serialized.set(TRANSACTION_DATA_TYPE_TAG);
+    serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);
     return new Base64DataBuffer(serialized);
   }
 
@@ -429,17 +341,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {
     return this.transformTransactionDataToSignableTransaction(
-      await this.deserializeTransactionBytesToTransactionData(bytes)
+      deserializeTransactionBytesToTransactionData(bytes)
     );
-  }
-
-  /**
-   * Deserialize BCS encoded bytes into `TransactionData`
-   */
-  public async deserializeTransactionBytesToTransactionData(
-    bytes: Base64DataBuffer
-  ): Promise<TransactionData> {
-    return bcs.de('TransactionData', bytes.getData().slice(TYPE_TAG.length));
   }
 
   /**

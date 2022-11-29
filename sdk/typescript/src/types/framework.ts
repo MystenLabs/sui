@@ -304,12 +304,14 @@ export class Coin {
       gasBudget: Number(gasBudget),
     };
     if (isSuiTransfer) {
-      return signer.serializer.newPaySui(signerAddress, {
-        ...txCommon,
+      return signer.serializer.serializeToBytes(signerAddress, {
+        kind: 'paySui',
+        data: { ...txCommon },
       });
     }
-    return signer.serializer.newPay(signerAddress, {
-      ...txCommon,
+    return signer.serializer.serializeToBytes(signerAddress, {
+      kind: 'pay',
+      data: { ...txCommon },
       // we know there is a gas coin with enough balance to cover
       // the gas budget let rpc select one for us
     });

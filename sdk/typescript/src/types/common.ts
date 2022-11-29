@@ -84,7 +84,7 @@ export function normalizeSuiObjectId(
 }
 
 /**
- * Generates transaction digest.
+ * Generate transaction digest.
  *
  * @param data transaction data
  * @param signatureScheme signature scheme
@@ -94,21 +94,31 @@ export function normalizeSuiObjectId(
 export function generateTransactionDigest(
   data: TransactionData,
   signatureScheme: SignatureScheme,
-  signature: string,
-  publicKey: PublicKeyInitData
+  signature: string | Base64DataBuffer,
+  publicKey: PublicKeyInitData | PublicKey
 ): string {
-  const signatureBytes = new Base64DataBuffer(signature).getData();
+  const signatureBytes = (
+    typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
+  ).getData();
 
   let pk: PublicKey;
   switch (signatureScheme) {
     case 'ED25519':
-      pk = new Ed25519PublicKey(publicKey);
+      pk =
+        publicKey instanceof Ed25519PublicKey
+          ? publicKey
+          : new Ed25519PublicKey(publicKey as PublicKeyInitData);
       break;
     case 'Secp256k1':
-      pk = new Secp256k1PublicKey(publicKey);
+      pk =
+        publicKey instanceof Secp256k1PublicKey
+          ? publicKey
+          : new Secp256k1PublicKey(publicKey as PublicKeyInitData);
   }
   const publicKeyBytes = pk.toBytes();
-  const schemeByte = new Uint8Array([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+  const schemeByte = new Uint8Array([
+    SIGNATURE_SCHEME_TO_FLAG[signatureScheme],
+  ]);
 
   const txSignature = new Uint8Array(
     1 + signatureBytes.length + publicKeyBytes.length
@@ -124,7 +134,6 @@ export function generateTransactionDigest(
   const senderSignedDataBytes = bcs
     .ser('SenderSignedData', senderSignedData)
     .toBytes();
-
   return sha256Hash('SenderSignedData', senderSignedDataBytes);
 }
 

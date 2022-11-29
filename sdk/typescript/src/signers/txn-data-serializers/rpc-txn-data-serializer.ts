@@ -4,7 +4,6 @@
 import { isTransactionBytes } from '../../types/index.guard';
 import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
-import { SuiAddress } from '../../types';
 import {
   MoveCallTransaction,
   MergeCoinTransaction,
@@ -16,6 +15,7 @@ import {
   PayAllSuiTransaction,
   PublishTransaction,
   TxnDataSerializer,
+  UnserializedSignableTransaction,
 } from './txn-data-serializer';
 
 /**
@@ -46,200 +46,133 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     this.client = new JsonRpcClient(endpoint);
   }
 
-  async newTransferObject(
-    signerAddress: SuiAddress,
-    t: TransferObjectTransaction
+  async serializeToBytes(
+    signerAddress: string,
+    unserializedTxn: UnserializedSignableTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_transferObject',
-        [signerAddress, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(
-        `Error transferring object: ${err} with args ${JSON.stringify(t)}`
-      );
-    }
-  }
-
-  async newTransferSui(
-    signerAddress: SuiAddress,
-    t: TransferSuiTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_transferSui',
-        [signerAddress, t.suiObjectId, t.gasBudget, t.recipient, t.amount],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(
-        `Error transferring Sui coin: ${err} with args ${JSON.stringify(t)}`
-      );
-    }
-  }
-
-  async newPay(
-    signerAddress: SuiAddress,
-    t: PayTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_pay',
-        [
+    let endpoint: string;
+    let args: Array<any>;
+    switch (unserializedTxn.kind) {
+      case 'transferObject':
+        const t = unserializedTxn.data as TransferObjectTransaction;
+        endpoint = 'sui_transferObject';
+        args = [
           signerAddress,
-          t.inputCoins,
-          t.recipients,
-          t.amounts,
+          t.objectId,
           t.gasPayment,
           t.gasBudget,
-        ],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(
-        `Error executing Pay transaction: ${err} with args ${JSON.stringify(t)}`
-      );
-    }
-  }
-
-  async newPaySui(
-    signerAddress: SuiAddress,
-    t: PaySuiTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_paySui',
-        [signerAddress, t.inputCoins, t.recipients, t.amounts, t.gasBudget],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(
-        `Error executing PaySui transaction: ${err} with args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
-  }
-
-  async newPayAllSui(
-    signerAddress: SuiAddress,
-    t: PayAllSuiTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_payAllSui',
-        [signerAddress, t.inputCoins, t.recipient, t.gasBudget],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(
-        `Error executing PayAllSui transaction: ${err} with args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
-  }
-
-  async newMoveCall(
-    signerAddress: SuiAddress,
-    t: MoveCallTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_moveCall',
-        [
+          t.recipient,
+        ];
+        break;
+      case 'transferSui':
+        const transferSui = unserializedTxn.data as TransferSuiTransaction;
+        endpoint = 'sui_transferSui';
+        args = [
           signerAddress,
-          t.packageObjectId,
-          t.module,
-          t.function,
-          t.typeArguments,
-          t.arguments,
-          t.gasPayment,
-          t.gasBudget,
-        ],
+          transferSui.suiObjectId,
+          transferSui.gasBudget,
+          transferSui.recipient,
+          transferSui.amount,
+        ];
+        break;
+      case 'pay':
+        const pay = unserializedTxn.data as PayTransaction;
+        endpoint = 'sui_pay';
+        args = [
+          signerAddress,
+          pay.inputCoins,
+          pay.recipients,
+          pay.amounts,
+          pay.gasPayment,
+          pay.gasBudget,
+        ];
+        break;
+      case 'paySui':
+        const paySui = unserializedTxn.data as PaySuiTransaction;
+        endpoint = 'sui_paySui';
+        args = [
+          signerAddress,
+          paySui.inputCoins,
+          paySui.recipients,
+          paySui.amounts,
+          paySui.gasBudget,
+        ];
+        break;
+      case 'payAllSui':
+        const payAllSui = unserializedTxn.data as PayAllSuiTransaction;
+        endpoint = 'sui_payAllSui';
+        args = [
+          signerAddress,
+          payAllSui.inputCoins,
+          payAllSui.recipient,
+          payAllSui.gasBudget,
+        ];
+        break;
+      case 'moveCall':
+        const moveCall = unserializedTxn.data as MoveCallTransaction;
+        endpoint = 'sui_moveCall';
+        args = [
+          signerAddress,
+          moveCall.packageObjectId,
+          moveCall.module,
+          moveCall.function,
+          moveCall.typeArguments,
+          moveCall.arguments,
+          moveCall.gasPayment,
+          moveCall.gasBudget,
+        ];
+        break;
+      case 'mergeCoin':
+        const mergeCoin = unserializedTxn.data as MergeCoinTransaction;
+        endpoint = 'sui_mergeCoins';
+        args = [
+          signerAddress,
+          mergeCoin.primaryCoin,
+          mergeCoin.coinToMerge,
+          mergeCoin.gasPayment,
+          mergeCoin.gasBudget,
+        ];
+        break;
+      case 'splitCoin':
+        const splitCoin = unserializedTxn.data as SplitCoinTransaction;
+        endpoint = 'sui_splitCoin';
+        args = [
+          signerAddress,
+          splitCoin.coinObjectId,
+          splitCoin.splitAmounts,
+          splitCoin.gasPayment,
+          splitCoin.gasBudget,
+        ];
+        break;
+      case 'publish':
+        const publish = unserializedTxn.data as PublishTransaction;
+        endpoint = 'sui_publish';
+        args = [
+          signerAddress,
+          publish.compiledModules,
+          publish.gasPayment,
+          publish.gasBudget,
+        ];
+        break;
+    }
+
+    try {
+      const resp = await this.client.requestWithType(
+        endpoint,
+        args,
         isTransactionBytes,
         this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
+    } catch (e) {
       throw new Error(
-        `Error executing a move call: ${err} with args ${JSON.stringify(t)}`
+        `Encountered error when calling RpcTxnDataSerialize for a ${unserializedTxn.kind} transaction for ` +
+          `address ${signerAddress} for transaction ${JSON.stringify(
+            unserializedTxn,
+            null,
+            2
+          )}: ${e}`
       );
-    }
-  }
-
-  async newMergeCoin(
-    signerAddress: SuiAddress,
-    t: MergeCoinTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_mergeCoins',
-        [
-          signerAddress,
-          t.primaryCoin,
-          t.coinToMerge,
-          t.gasPayment,
-          t.gasBudget,
-        ],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(`Error merging coin: ${err}`);
-    }
-  }
-
-  async newSplitCoin(
-    signerAddress: SuiAddress,
-    t: SplitCoinTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_splitCoin',
-        [
-          signerAddress,
-          t.coinObjectId,
-          t.splitAmounts,
-          t.gasPayment,
-          t.gasBudget,
-        ],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(`Error splitting coin: ${err}`);
-    }
-  }
-
-  async newPublish(
-    signerAddress: SuiAddress,
-    t: PublishTransaction
-  ): Promise<Base64DataBuffer> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_publish',
-        [signerAddress, t.compiledModules, t.gasPayment, t.gasBudget],
-        isTransactionBytes,
-        this.skipDataValidation
-      );
-      return new Base64DataBuffer(resp.txBytes);
-    } catch (err) {
-      throw new Error(`Error publishing package ${err}`);
     }
   }
 }
