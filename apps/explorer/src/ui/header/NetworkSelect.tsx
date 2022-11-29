@@ -17,11 +17,9 @@ import {
     useFloating,
 } from '@floating-ui/react-dom-interactions';
 import { Popover } from '@headlessui/react';
-import { zodResolver } from '@hookform/resolvers/zod';
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
@@ -30,6 +28,8 @@ import { ReactComponent as MenuIcon } from '../icons/menu.svg';
 import { NavItem } from './NavItem';
 
 import type { ComponentProps, ReactNode } from 'react';
+
+import { useZodForm } from '~/hooks/useZodForm';
 
 export interface NetworkOption {
     id: string;
@@ -97,12 +97,9 @@ function CustomRPCInput({
     value: string;
     onChange(networkUrl: string): void;
 }) {
-    // TODO: Generalize into `useZodForm`.
-    const { register, handleSubmit, formState } = useForm<
-        z.infer<typeof CustomRPCSchema>
-    >({
+    const { register, handleSubmit, formState } = useZodForm({
+        schema: CustomRPCSchema,
         mode: 'all',
-        resolver: zodResolver(CustomRPCSchema),
         defaultValues: {
             url: value,
         },
