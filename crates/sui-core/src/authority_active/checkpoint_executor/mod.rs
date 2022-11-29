@@ -13,10 +13,7 @@ use sui_types::{
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use tokio::{
-    sync::{
-        broadcast::{self, error::RecvError},
-        Semaphore,
-    },
+    sync::broadcast::{self, error::RecvError},
     task::JoinHandle,
 };
 use tokio_stream::StreamExt;
@@ -28,11 +25,13 @@ use crate::{
     checkpoints::{CheckpointMetrics, CheckpointStore},
 };
 
+const TASKS_PER_CORE: usize = 1;
+
 pub struct CheckpointExecutor {
-    mailbox: Box<broadcast::Receiver<VerifiedCheckpoint>>,
+    mailbox: broadcast::Receiver<VerifiedCheckpoint>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_state: Arc<AuthorityState>,
-    highest_executed_checkpoint: Box<Option<CheckpointSequenceNumber>>,
+    highest_executed_checkpoint: Option<CheckpointSequenceNumber>,
     metrics: Arc<CheckpointMetrics>,
 }
 
@@ -43,9 +42,9 @@ impl CheckpointExecutor {
         authority_state: Arc<AuthorityState>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Result<Self, TypedStoreError> {
-        let mailbox = Box::new(state_sync_handle.subscribe_to_synced_checkpoints());
+        let mailbox = state_sync_handle.subscribe_to_synced_checkpoints();
         let highest_executed_checkpoint =
-            Box::new(checkpoint_store.get_highest_executed_checkpoint_seq_number()?);
+            checkpoint_store.get_highest_executed_checkpoint_seq_number()?;
 
         Ok(Self {
             mailbox,
@@ -59,13 +58,17 @@ impl CheckpointExecutor {
     pub async fn run(mut self) {
         let mut finished: FuturesOrdered<JoinHandle<(u64, VerifiedCheckpoint)>> =
             FuturesOrdered::new();
-        let limit = Arc::new(Semaphore::new(num_cpus::get()));
+        // let limit = Arc::new(Semaphore::new(num_cpus::get()));
+        let task_limit = TASKS_PER_CORE * num_cpus::get();
 
         loop {
             tokio::select! {
-                // execution worker consumer branch
+                // Check for completed workers and ratchet the highest_checkpoint_executed
+                // watermark accordingly. Note that given that checkpoints are guaranteed to
+                // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
+                // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((seq_num, checkpoint))) = finished.next() => {
-                    *self.highest_executed_checkpoint = Some(seq_num as CheckpointSequenceNumber);
+                    self.highest_executed_checkpoint = Some(seq_num as CheckpointSequenceNumber);
                     self.metrics.last_executed_checkpoint.set(seq_num as i64);
                     self.update_lag_metric(seq_num)
                         .unwrap_or_else(|err| error!("Update lag metric error: {:?}", err));
@@ -74,14 +77,23 @@ impl CheckpointExecutor {
                         .update_highest_executed_checkpoint(&checkpoint)
                         .unwrap();
                 },
-                // execution worker producer branch
-                received = self.mailbox.recv() => match received {
+                // Limits to `task_limit` worker tasks. If we are at capacity, we reloop and either
+                // check again or attempt to process and consume the FuturesOrdered queue for
+                // finished tasks
+                received = self.mailbox.recv(), if finished.len() < task_limit => match received {
                     Ok(checkpoint) => {
-                        let last_to_exec = checkpoint.sequence_number() as u64;
                         let next_to_exec = self
                             .highest_executed_checkpoint
                             .map(|highest| highest + 1)
                             .unwrap_or(0);
+
+                        // We need to be careful here to not exceed our task capacity limit
+                        // in the case where we are lagging by a larger amount.
+                        let task_capacity_avail = task_limit - finished.len();
+                        let last_to_exec = std::cmp::min(
+                            next_to_exec + (task_capacity_avail as u64) - 1,
+                            checkpoint.sequence_number() as u64,
+                        );
 
                         for seq_num in next_to_exec..=last_to_exec {
                             let next_checkpoint = match self
@@ -107,37 +119,27 @@ impl CheckpointExecutor {
                             // Since StateSync is guaranteed to produce checkpoint sync messages
                             // in monotonically increasing order, then a mismatch of epoch would
                             // mean that we failed to execute reconfig at the epoch boundary.
-                            assert!(
-                                next_checkpoint.epoch()
-                                    != self
-                                        .authority_state
-                                        .committee_store()
-                                        .get_latest_committee()
-                                        .epoch()
-                            );
+                            assert!(next_checkpoint.epoch() == self.authority_state.epoch());
 
-                            // TODO get semaphore here to rate limit number of spawned tasks
-                            // Unfortunately blocking on the semaphore here in the case where
-                            // we are rate limited on threads means we also blocking from
-                            // consuming from the finished queue (first branch).. Need to
-                            // think through this
-                            let limit = limit.clone();
-                            // hold semaphore permit until task completes. unwrap ok because we never close
-                            // the semaphore in this context.
-                            let permit = limit.acquire_owned().await.unwrap();
-
+                            let state = self.authority_state.clone();
+                            let store = self.checkpoint_store.clone();
+                            let next_checkpoint_clone = next_checkpoint.clone();
+                            let metrics = self.metrics.clone();
                             finished.push_back(spawn_monitored_task!(async move {
-                                let _guard = permit;
-                                while let Err(err) = self.execute_checkpoint(&next_checkpoint).await {
+                                while let Err(err) = execute_checkpoint(
+                                    next_checkpoint_clone.clone(),
+                                    state.clone(),
+                                    store.clone(),
+                                ).await {
                                     error!(
                                         "Error while executing checkpoint, will retry in 1s: {:?}",
                                         err
                                     );
                                     tokio::time::sleep(Duration::from_secs(1)).await;
-                                    self.metrics.checkpoint_exec_errors.inc();
+                                    metrics.checkpoint_exec_errors.inc();
                                 }
 
-                                (seq_num, next_checkpoint)
+                                (seq_num, next_checkpoint_clone)
                             }));
 
                             // Last checkpoint of epoch
@@ -170,56 +172,6 @@ impl CheckpointExecutor {
         }
     }
 
-    pub async fn execute_checkpoint(
-        &self,
-        checkpoint: &VerifiedCheckpoint,
-    ) -> SuiResult<Vec<TransactionEffects>> {
-        let effects = if let Some(checkpoint_contents) = self
-            .checkpoint_store
-            .get_checkpoint_contents(&checkpoint.content_digest())
-            .map_err(SuiError::from)?
-        {
-            let txes = checkpoint_contents.into_inner();
-            self.execute_and_verify_transactions(txes).await?
-        } else {
-            warn!(
-                "Checkpoint contents empty: {:?}",
-                checkpoint.content_digest()
-            );
-            Vec::new()
-        };
-        Ok(effects)
-    }
-
-    async fn execute_and_verify_transactions(
-        &self,
-        transactions: Vec<ExecutionDigests>,
-    ) -> SuiResult<Vec<TransactionEffects>> {
-        let tx_digests: Vec<TransactionDigest> =
-            transactions.iter().map(|tx| tx.transaction).collect();
-
-        // TODO Potentially need to aquire shared object locks for these txes?
-        let mut verified_certs = Vec::<VerifiedCertificate>::new();
-        for digest in tx_digests.iter() {
-            match self.authority_state.database.read_certificate(digest)? {
-                Some(cert) => verified_certs.push(cert),
-                None => return Err(SuiError::TransactionNotFound { digest: *digest }),
-            }
-        }
-
-        {
-            let mut tm_guard = self.authority_state.transaction_manager.lock().await;
-            tm_guard.enqueue(verified_certs).await?;
-        }
-
-        let actual_fx = self
-            .authority_state
-            .database
-            .notify_read(tx_digests)
-            .await?;
-        Ok(actual_fx)
-    }
-
     async fn reconfig(&self, _next_epoch_committee: &[(AuthorityName, StakeUnit)]) -> SuiResult {
         // TODO(william) call into Reconfig
         Ok(())
@@ -235,4 +187,50 @@ impl CheckpointExecutor {
         self.metrics.checkpoint_exec_lag.set(diff as i64);
         Ok(())
     }
+}
+
+pub async fn execute_checkpoint(
+    checkpoint: VerifiedCheckpoint,
+    authority_state: Arc<AuthorityState>,
+    checkpoint_store: Arc<CheckpointStore>,
+) -> SuiResult<Vec<TransactionEffects>> {
+    let effects = if let Some(checkpoint_contents) = checkpoint_store
+        .get_checkpoint_contents(&checkpoint.content_digest())
+        .map_err(SuiError::from)?
+    {
+        let txes = checkpoint_contents.into_inner();
+        execute_and_verify_transactions(txes, authority_state).await?
+    } else {
+        warn!(
+            "Checkpoint contents empty: {:?}",
+            checkpoint.content_digest()
+        );
+        Vec::new()
+    };
+    Ok(effects)
+}
+
+async fn execute_and_verify_transactions(
+    transactions: Vec<ExecutionDigests>,
+    authority_state: Arc<AuthorityState>,
+) -> SuiResult<Vec<TransactionEffects>> {
+    let tx_digests: Vec<TransactionDigest> = transactions.iter().map(|tx| tx.transaction).collect();
+
+    // TODO Need to acquire shared object locks currently. Instead, replcae with call to transaction manager
+    // using transaction effects (which has object version numbers and therefore is already sequenced)
+    let mut verified_certs = Vec::<VerifiedCertificate>::new();
+    for digest in tx_digests.iter() {
+        match authority_state.database.read_certificate(digest)? {
+            Some(cert) => verified_certs.push(cert),
+            None => return Err(SuiError::TransactionNotFound { digest: *digest }),
+        }
+    }
+
+    {
+        let mut tm_guard = authority_state.transaction_manager.lock().await;
+        tm_guard.enqueue(verified_certs).await?;
+    }
+
+    let actual_fx = authority_state.database.notify_read(tx_digests).await?;
+    Ok(actual_fx)
 }
