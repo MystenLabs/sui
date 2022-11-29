@@ -44,7 +44,7 @@ eyre = "0.6.8"
 anyhow = "1.0.64"
 criterion = { version = "0.4.0", features = ["async", "async_tokio"] }
 tempfile = "3.3.0"
-num_cpus = "1.13.1"
+num_cpus = "1.14.0"
 pretty_assertions = "1.2.0"
 once_cell = "1.16"
 
