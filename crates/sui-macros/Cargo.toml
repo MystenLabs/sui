@@ -12,7 +12,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-syn = "1"
+syn = "1.0.104"
 workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
