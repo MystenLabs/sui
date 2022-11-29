@@ -56,7 +56,7 @@ function addressContent(label: string, addr: SuiAddress) {
         label: label,
         value: addr,
         link: true,
-        category: 'addresses' as Category,
+        category: 'address' as Category,
         monotypeClass: true,
     };
 }
@@ -66,7 +66,7 @@ function objectContent(label: string, id: ObjectId) {
         label: label,
         value: id,
         link: true,
-        category: 'objects' as Category,
+        category: 'object' as Category,
         monotypeClass: true,
     };
 }

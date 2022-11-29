@@ -9,7 +9,6 @@ import { ReactComponent as ContentCopyIcon16 } from '../../assets/SVGIcons/16px/
 import { ReactComponent as ContentCopyIcon24 } from '../../assets/SVGIcons/24px/Copy.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
-import ExternalLink from '../external-link/ExternalLink';
 
 import type { ReactNode } from 'react';
 
@@ -27,13 +26,7 @@ function Longtext({
     extra,
 }: {
     text: string;
-    category:
-        | 'objects'
-        | 'transactions'
-        | 'addresses'
-        | 'ethAddress'
-        | 'validators'
-        | 'unknown';
+    category: 'object' | 'transaction' | 'address' | 'validators' | 'unknown';
     isLink?: boolean;
     alttext?: string;
     copyButton?: '16' | '24' | 'none';
@@ -86,7 +79,7 @@ function Longtext({
 
     // temporary hack to make display of the genesis transaction clearer
     if (
-        category === 'transactions' &&
+        category === 'transaction' &&
         text === 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
     ) {
         text = 'Genesis';
@@ -100,14 +93,6 @@ function Longtext({
                 <div className={styles.longtext} onClick={navigateUnknown}>
                     {alttext ? alttext : text}
                 </div>
-            );
-        } else if (category === 'ethAddress') {
-            textComponent = (
-                <ExternalLink
-                    href={`https://etherscan.io/address/${text}`}
-                    label={text}
-                    className={styles.longtext}
-                />
             );
         } else {
             textComponent = (

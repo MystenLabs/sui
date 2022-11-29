@@ -6,7 +6,7 @@ Cypress.config('baseUrl', 'http://localhost:3000');
 describe('Address', () => {
     it('can be directly visted', () => {
         cy.task('faucet').then((address) => {
-            cy.visit(`/addresses/${address}`);
+            cy.visit(`/address/${address}`);
             cy.get('[data-testid=pageheader]').contains(address);
         });
     });
