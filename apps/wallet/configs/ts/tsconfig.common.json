@@ -15,6 +15,7 @@
         "isolatedModules": true,
         "outDir": "../../dist",
         "baseUrl": "../../",
+        "sourceMap": true,
         "paths": {
             // for internal aliases start them with _ for eslint to use the correct import group
             "_src/*": ["./src/*"],
