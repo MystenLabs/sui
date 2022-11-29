@@ -77,9 +77,9 @@ export const navigateWithUnknown = async (
 
                 if (
                     pac?.data &&
-                    (pac?.category === 'objects' ||
-                        pac?.category === 'addresses' ||
-                        pac?.category === 'transactions')
+                    (pac?.category === 'object' ||
+                        pac?.category === 'address' ||
+                        pac?.category === 'transaction')
                 ) {
                     navigate(
                         `../${pac.category}/${encodeURIComponent(input)}`,
