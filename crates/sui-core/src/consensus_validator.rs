@@ -118,7 +118,9 @@ mod tests {
         consensus_validator::ConsensusTxValidator,
     };
 
-    #[tokio::test]
+    use sui_macros::sim_test;
+
+    #[sim_test]
     async fn accept_valid_transaction() {
         // Initialize an authority with a (owned) gas object and a shared object; then
         // make a test certificate.

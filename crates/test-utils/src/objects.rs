@@ -6,14 +6,17 @@ use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
 
 /// Make a few test gas objects (all with the same owner).
 pub fn test_gas_objects() -> Vec<Object> {
-    (0..50)
-        .map(|i| {
-            let seed = format!("0x444444444444444{i}");
-            let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
-            let (owner, _) = test_account_keys().pop().unwrap();
-            Object::with_id_owner_for_testing(gas_object_id, owner)
-        })
-        .collect()
+    thread_local! {
+        static GAS_OBJECTS: Vec<Object> = (0..50)
+            .map(|_| {
+                let gas_object_id = ObjectID::random();
+                let (owner, _) = test_account_keys().pop().unwrap();
+                Object::with_id_owner_for_testing(gas_object_id, owner)
+            })
+            .collect();
+    }
+
+    GAS_OBJECTS.with(|v| v.clone())
 }
 
 /// Make a test gas objects.
@@ -58,9 +61,8 @@ where
     owners
         .into_iter()
         .enumerate()
-        .map(|(i, owner)| {
-            let seed = format!("0x555555555555555{i}");
-            let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
+        .map(|(_, owner)| {
+            let gas_object_id = ObjectID::random();
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect()
@@ -69,9 +71,11 @@ where
 // TODO: duplicated in consensus_tests
 /// make a test shared object.
 pub fn test_shared_object() -> Object {
-    let seed = "0x6666666666666660";
-    let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
-    let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+    thread_local! {
+        static SHARED_OBJECT_ID: ObjectID = ObjectID::random();
+    }
+
+    let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, SHARED_OBJECT_ID.with(|id| *id), 10);
     let owner = Owner::Shared {
         initial_shared_version: obj.version(),
     };
