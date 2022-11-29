@@ -17,7 +17,7 @@ tempfile = "3.3.0"
 tokio = { workspace = true, features = ["full"] }
 strum = "0.24.1"
 strum_macros = "0.24.3"
-num_cpus = "1.13.1"
+num_cpus = "1.14.0"
 rocksdb = "0.19.0"
 serde_with = { version = "2.1.0", features = ["hex"] }
 tracing = "0.1.36"
