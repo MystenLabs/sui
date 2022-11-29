@@ -26,6 +26,7 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
+    "@mysten/wallet-adapter-react": "workspace:*",
     "react": "*",
     "react-dom": "*"
   },
@@ -37,8 +38,9 @@
     "typescript": "^4.8.3"
   },
   "dependencies": {
+    "@emotion/react": "^11.10.5",
+    "@emotion/styled": "^11.10.5",
     "@mui/icons-material": "^5.8.4",
-    "@mui/material": "^5.8.4",
-    "@mysten/wallet-adapter-react": "workspace:*"
+    "@mui/material": "^5.8.4"
   }
 }
