@@ -54,7 +54,7 @@ function PkgView({ data }: { data: DataType }) {
                                         >
                                             <Longtext
                                                 text={viewedData.id}
-                                                category="objects"
+                                                category="object"
                                                 isLink={false}
                                             />
                                         </td>
@@ -73,7 +73,7 @@ function PkgView({ data }: { data: DataType }) {
                                                     text={
                                                         viewedData.publisherAddress
                                                     }
-                                                    category="addresses"
+                                                    category="address"
                                                     isLink={!isPublisherGenesis}
                                                 />
                                             </td>

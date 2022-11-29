@@ -24,7 +24,7 @@ function getExplorerUrl(path: string, apiEnv: API_ENV = DEFAULT_API_ENV) {
 }
 
 export function getObjectUrl(objectID: ObjectId, apiEnv: API_ENV) {
-    return getExplorerUrl(`/objects/${objectID}`, apiEnv);
+    return getExplorerUrl(`/object/${objectID}`, apiEnv);
 }
 
 export function getTransactionUrl(
@@ -32,11 +32,11 @@ export function getTransactionUrl(
     apiEnv: API_ENV
 ) {
     return getExplorerUrl(
-        `/transactions/${encodeURIComponent(txDigest)}`,
+        `/transaction/${encodeURIComponent(txDigest)}`,
         apiEnv
     );
 }
 
 export function getAddressUrl(address: SuiAddress, apiEnv: API_ENV) {
-    return getExplorerUrl(`/addresses/${address}`, apiEnv);
+    return getExplorerUrl(`/address/${address}`, apiEnv);
 }

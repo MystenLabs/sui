@@ -30,7 +30,7 @@ function CoinItem({
             <div className={styles.openrow}>
                 <div className={styles.label}>Object ID</div>
                 <div className={`${styles.oneline} ${styles.value}`}>
-                    <Longtext text={id} category="objects" />
+                    <Longtext text={id} category="object" />
                 </div>
             </div>
             <div className={styles.openrow}>

@@ -11,11 +11,13 @@ import { useMemo } from 'react';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
+type Category = 'object' | 'transaction' | 'address' | 'unknown';
+
 export type LinkObj = {
     url: string;
     name?: string;
     copy?: boolean;
-    category?: string;
+    category?: Category;
     isLink?: boolean;
 };
 

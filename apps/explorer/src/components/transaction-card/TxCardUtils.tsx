@@ -47,16 +47,11 @@ export type LinkObj = {
     url: string;
     name?: string;
     copy?: boolean;
-    category?: string;
+    category?: Category;
     isLink?: boolean;
 };
 
-type Category =
-    | 'objects'
-    | 'transactions'
-    | 'addresses'
-    | 'ethAddress'
-    | 'unknown';
+type Category = 'object' | 'transaction' | 'address' | 'unknown';
 
 type TxStatus = {
     txTypeName: TransactionKindName | undefined;
@@ -94,7 +89,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}
-                        category={(itm.category as Category) || 'unknown'}
+                        category={itm.category || 'unknown'}
                         isLink={itm?.isLink}
                         copyButton={itm?.copy ? '16' : 'none'}
                     />
@@ -139,7 +134,7 @@ export const genTableDataFromTxData = (
                         {
                             url: txn.txId,
                             name: truncate(txn.txId, truncateLength),
-                            category: 'transactions',
+                            category: 'transaction',
                             isLink: true,
                             copy: false,
                         },
@@ -152,7 +147,7 @@ export const genTableDataFromTxData = (
                         {
                             url: txn.From,
                             name: truncate(txn.From, truncateLength),
-                            category: 'addresses',
+                            category: 'address',
                             isLink: true,
                             copy: false,
                         },
@@ -161,10 +156,10 @@ export const genTableDataFromTxData = (
                                   {
                                       url: txn.To,
                                       name: truncate(txn.To, truncateLength),
-                                      category: 'addresses',
+                                      category: 'address',
                                       isLink: true,
                                       copy: false,
-                                  },
+                                  } as const,
                               ]
                             : []),
                     ]}

@@ -95,16 +95,16 @@ function formatByTransactionKind(
                 sender: {
                     value: sender,
                     link: true,
-                    category: 'addresses',
+                    category: 'address',
                 },
                 objectId: {
                     value: transfer.objectRef.objectId,
                     link: true,
-                    category: 'objects',
+                    category: 'object',
                 },
                 recipient: {
                     value: transfer.recipient,
-                    category: 'addresses',
+                    category: 'address',
                     link: true,
                 },
             };
@@ -115,12 +115,12 @@ function formatByTransactionKind(
                 sender: {
                     value: sender,
                     link: true,
-                    category: 'addresses',
+                    category: 'address',
                 },
                 package: {
                     value: getObjectId(moveCall.package),
                     link: true,
-                    category: 'objects',
+                    category: 'object',
                 },
                 module: {
                     value: moveCall.module,
@@ -149,7 +149,7 @@ function formatByTransactionKind(
                           sender: {
                               value: sender,
                               link: true,
-                              category: 'addresses',
+                              category: 'address',
                           },
                       }
                     : {}),
@@ -383,14 +383,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                           label: 'Package ID',
                           monotypeClass: true,
                           link: true,
-                          category: 'objects',
+                          category: 'object',
                           value: txKindData.package.value,
                       },
                       {
                           label: 'Module',
                           monotypeClass: true,
                           value: txKindData.module.value,
-                          href: `/objects/${txKindData.package.value}?module=${txKindData.module.value}`,
+                          href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
                       },
                       {
                           label: 'Function',
