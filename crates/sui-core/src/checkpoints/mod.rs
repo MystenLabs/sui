@@ -283,7 +283,7 @@ impl CheckpointBuilder {
         height: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
-    ) -> SuiResult {
+    ) -> anyhow::Result<()> {
         let _timer = self.metrics.builder_utilization.utilization_timer();
         self.metrics
             .checkpoint_roots_count
@@ -293,7 +293,7 @@ impl CheckpointBuilder {
         let sorted = CasualOrder::casual_sort(unsorted);
         let new_checkpoint = self
             .create_checkpoint(sorted, last_checkpoint_of_epoch)
-            .await;
+            .await?;
         self.write_checkpoint(height, new_checkpoint).await?;
         Ok(())
     }
@@ -342,7 +342,7 @@ impl CheckpointBuilder {
         &self,
         mut effects: Vec<TransactionEffects>,
         last_checkpoint_of_epoch: bool,
-    ) -> Option<(CheckpointSummary, CheckpointContents)> {
+    ) -> anyhow::Result<Option<(CheckpointSummary, CheckpointContents)>> {
         let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
         let epoch_rolling_gas_cost_summary = Self::get_epoch_total_gas_cost(
             last_checkpoint.as_ref().map(|(_, c)| c),
@@ -350,20 +350,11 @@ impl CheckpointBuilder {
             self.state.epoch(),
         );
         if last_checkpoint_of_epoch {
-            if let Err(err) = self
-                .augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
-                .await
-            {
-                error!(
-                    "Failed to augment the last checkpoint of the epoch: {:?}",
-                    err
-                );
-                // TODO: Is returning None the best we can do here?
-                return None;
-            }
+            self.augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
+                .await?;
         }
         if effects.is_empty() {
-            return None;
+            return Ok(None);
         }
         let contents = CheckpointContents::new_with_causally_ordered_transactions(
             effects.iter().map(TransactionEffects::execution_digests),
@@ -392,7 +383,7 @@ impl CheckpointBuilder {
                 None
             },
         );
-        Some((summary, contents))
+        Ok(Some((summary, contents)))
     }
 
     fn get_epoch_total_gas_cost(
