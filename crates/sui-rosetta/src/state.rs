@@ -229,6 +229,22 @@ impl PseudoBlockProvider {
                     hash: digest.as_ref().try_into()?,
                 };
 
+                // update balance
+                let (tx, effect) = state.get_transaction(digest).await?;
+
+                let operations = Operation::from_data_and_events(
+                    &tx.data().data,
+                    &effect.status,
+                    &effect.events,
+                )?;
+
+                let transaction = Transaction {
+                    transaction_identifier: TransactionIdentifier { hash: digest },
+                    operations,
+                    related_transactions: vec![],
+                    metadata: None,
+                };
+
                 let new_block = BlockResponse {
                     block: Block {
                         block_identifier: block_identifier.clone(),
@@ -238,14 +254,11 @@ impl PseudoBlockProvider {
                             .map_err(|e| Error::new_with_cause(InternalError, e))?
                             .as_millis()
                             .try_into()?,
-                        transactions: vec![],
+                        transactions: vec![transaction],
                         metadata: None,
                     },
-                    other_transactions: vec![TransactionIdentifier { hash: digest }],
+                    other_transactions: vec![],
                 };
-
-                // update balance
-                let (tx, effect) = state.get_transaction(digest).await?;
 
                 let ops = Operation::from_data_and_events(
                     &tx.data().data,
