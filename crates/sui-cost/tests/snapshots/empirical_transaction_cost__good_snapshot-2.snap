@@ -4,6 +4,7 @@ expression: common_costs_estimate
 ---
 {
   "MergeCoin": {
+<<<<<<< HEAD
     "computation_cost": 6027,
     "storage_cost": 8898,
     "storage_rebate": 0
@@ -11,6 +12,15 @@ expression: common_costs_estimate
   "Publish": {
     "computation_cost": 6814,
     "storage_cost": 9994,
+=======
+    "computation_cost": 6189,
+    "storage_cost": 9138,
+    "storage_rebate": 0
+  },
+  "Publish": {
+    "computation_cost": 6976,
+    "storage_cost": 10234,
+>>>>>>> 0dd1437da ([sui framework] use drand round for time more fine-grained than an epoch)
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
@@ -29,8 +39,13 @@ expression: common_costs_estimate
     "storage_rebate": 0
   },
   "SplitCoin": {
+<<<<<<< HEAD
     "computation_cost": 6005,
     "storage_cost": 8866,
+=======
+    "computation_cost": 6167,
+    "storage_cost": 9106,
+>>>>>>> 0dd1437da ([sui framework] use drand round for time more fine-grained than an epoch)
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {

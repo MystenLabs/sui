@@ -3,9 +3,9 @@
 
 #[test_only]
 module games::drand_based_lottery_tests {
+    use sui::drand::verify_time_has_passed;
     use sui::test_scenario::{Self};
     use games::drand_based_lottery::{Self, Game, Ticket, GameWinner};
-    use games::drand_lib::verify_time_has_passed;
 
     #[test]
     fun test_verify_time_has_passed_success() {
@@ -26,7 +26,7 @@ module games::drand_based_lottery_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = games::drand_lib::EInvalidProof)]
+    #[expected_failure(abort_code = sui::drand::ERoundAlreadyPassed)]
     fun test_verify_time_has_passed_failure() {
         // Taken from the output of
         // curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/8

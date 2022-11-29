@@ -40,12 +40,12 @@
 /// the above curl commands.
 ///
 module games::drand_based_lottery {
+    use sui::drand::{derive_randomness, safe_selection, verify_drand_signature};
     use sui::object::{Self, ID, UID};
     use std::option::{Self, Option};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use games::drand_lib::{derive_randomness, safe_selection, verify_drand_signature};
 
 
     /// Error codes

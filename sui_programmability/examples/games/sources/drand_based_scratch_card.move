@@ -28,13 +28,12 @@ module games::drand_based_scratch_card {
     use sui::balance::{Self};
     use sui::coin::{Self, Coin};
     use sui::digest;
+    use sui::drand;
     use sui::hmac::hmac_sha3_256;
     use sui::object::{Self, ID, UID};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-
-    use games::drand_lib;
 
     /// Error codes
     const EInvalidDeposit: u64 = 0;
@@ -128,14 +127,14 @@ module games::drand_based_scratch_card {
         ctx: &mut TxContext
     ) {
         assert!(ticket.game_id == object::id(game), EInvalidTicket);
-        drand_lib::verify_drand_signature(drand_sig, drand_prev_sig, end_of_game_round(game.base_drand_round));
+        drand::verify_drand_signature(drand_sig, drand_prev_sig, end_of_game_round(game.base_drand_round));
         // The randomness for the current ticket is derived by HMAC(drand randomness, ticket id).
         // A solution like checking if (drand randomness % reward_factor) == (ticket id % reward_factor) is not secure
         // as the adversary can control the values of ticket id. (For this particular game this attack is not
         // devestating, but for similar games it might be.)
-        let random_key = drand_lib::derive_randomness(drand_sig);
+        let random_key = drand::derive_randomness(drand_sig);
         let randomness = hmac_sha3_256(&random_key, &object::id_to_bytes(&object::id(&ticket)));
-        let is_winner = (drand_lib::safe_selection(game.reward_factor, digest::sha3_256_digest_to_bytes(&randomness)) == 0);
+        let is_winner = (drand::safe_selection(game.reward_factor, digest::sha3_256_digest_to_bytes(&randomness)) == 0);
 
         if (is_winner) {
             let winner = Winner {
