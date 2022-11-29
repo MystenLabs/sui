@@ -19,13 +19,4 @@ export type TransactionRequest = {
     createdDate: string;
     tx: TransactionDataType;
     unSerializedTxn?: UnserializedSignableTransaction | null;
-    txnMeta?: {
-        objectIDs: string[];
-        coins: {
-            amount: number;
-            coinType: string;
-            receiverAddress: string;
-        }[];
-    } | null;
-    txGasEstimation?: number | null;
 };

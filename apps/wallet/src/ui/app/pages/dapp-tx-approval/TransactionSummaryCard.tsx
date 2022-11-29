@@ -12,9 +12,12 @@ import {
     useFormatCoin,
     useGetNFTMeta,
     useAppSelector,
+    useGetRequestTxnMeta,
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
+import type { SignableTransaction, Base64DataBuffer } from '@mysten/sui.js';
+import type { TransactionRequest } from '_payloads/transactions';
 import type { CoinsMetaProps } from '_redux/slices/transaction-requests';
 
 import st from './DappTxApprovalPage.module.scss';
@@ -125,7 +128,7 @@ function CoinMeta({
     );
 }
 
-export function TransactionSummaryCard({
+function TransactionSummary({
     objectIDs,
     coinsMeta,
     gasEstimate,
@@ -174,5 +177,44 @@ export function TransactionSummaryCard({
                 {gasEst} {gasSymbol}
             </div>
         </SummaryCard>
+    );
+}
+
+export function TransactionSummaryCard({
+    txRequest,
+    address,
+}: {
+    txRequest: TransactionRequest;
+    address: string;
+}) {
+    const txData =
+        txRequest.tx.type === 'move-call'
+            ? {
+                  kind: 'moveCall',
+                  data: txRequest.tx.data,
+              }
+            : txRequest.tx.data;
+
+    const txReqData = {
+        id: txRequest.id,
+        txData: txData as string | SignableTransaction | Base64DataBuffer,
+        activeAddress: address,
+    };
+
+    const txnMeta = useGetRequestTxnMeta(txReqData);
+
+    const gasEstimation = txnMeta.txGasEstimation ?? null;
+    const transactionSummary = txnMeta.txnMeta;
+
+    if (!transactionSummary) {
+        return null;
+    }
+    return (
+        <TransactionSummary
+            objectIDs={transactionSummary.objectIDs}
+            coinsMeta={transactionSummary.coins}
+            gasEstimate={gasEstimation}
+            origin={txRequest.origin}
+        />
     );
 }

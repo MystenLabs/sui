@@ -15,7 +15,6 @@ import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
     txRequestsSelectors,
-    executeDryRunTransactionRequest,
     deserializeTxn,
 } from '_redux/slices/transaction-requests';
 
@@ -105,15 +104,6 @@ export function DappTxApprovalPage() {
                     functionName: txRequest.tx.data.function,
                 })
             );
-            dispatch(
-                executeDryRunTransactionRequest({
-                    txData: {
-                        kind: 'moveCall',
-                        data: txRequest.tx.data,
-                    },
-                    id: txRequest.id,
-                })
-            );
         }
 
         if (
@@ -124,21 +114,6 @@ export function DappTxApprovalPage() {
             dispatch(
                 deserializeTxn({
                     serializedTxn: txRequest?.tx.data,
-                    id: txRequest.id,
-                })
-            );
-            dispatch(
-                executeDryRunTransactionRequest({
-                    txData: txRequest?.tx.data,
-                    id: txRequest.id,
-                })
-            );
-        }
-
-        if (txRequest?.tx?.type === 'v2' && txRequest?.tx?.data) {
-            dispatch(
-                executeDryRunTransactionRequest({
-                    txData: txRequest.tx.data,
                     id: txRequest.id,
                 })
             );
@@ -226,9 +201,6 @@ export function DappTxApprovalPage() {
         }
     }, [deserializeTxnFailed, loading, txRequest]);
 
-    const transactionSummary = txRequest?.txnMeta;
-    const gasEstimation = txRequest?.txGasEstimation ?? null;
-
     // eslint-disable-next-line no-lone-blocks
 
     const valuesContent: {
@@ -296,6 +268,7 @@ export function DappTxApprovalPage() {
             </div>
         </>
     );
+    const address = useAppSelector(({ account: { address } }) => address);
 
     return (
         <Loading loading={loadingState}>
@@ -308,13 +281,11 @@ export function DappTxApprovalPage() {
                     onSubmit={handleOnSubmit}
                 >
                     <section className={st.txInfo}>
-                        {transactionSummary && (
+                        {txRequest?.tx && address && (
                             <>
                                 <TransactionSummaryCard
-                                    objectIDs={transactionSummary.objectIDs}
-                                    coinsMeta={transactionSummary?.coins}
-                                    gasEstimate={gasEstimation}
-                                    origin={txRequest.origin}
+                                    txRequest={txRequest}
+                                    address={address}
                                 />
                             </>
                         )}
