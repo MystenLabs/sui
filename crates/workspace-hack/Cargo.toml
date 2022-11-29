@@ -31,17 +31,15 @@ anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["base_field", "curve", "scalar_field", "std"] }
 ark-bls12-381 = { version = "0.3", features = ["curve", "scalar_field"] }
-ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-crypto-primitives = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
 ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-ed-on-bw6-761 = { version = "0.3" }
-ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
 ark-ff = { version = "0.3", features = ["asm", "parallel", "rayon", "std"] }
 ark-groth16 = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-poly = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
 ark-relations = { version = "0.3", features = ["std", "tracing-subscriber"] }
 ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
 ark-snark = { version = "0.3", default-features = false }
-ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-std = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
@@ -75,16 +73,14 @@ bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-featur
 bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["alloc", "std"] }
 blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10", features = ["std"] }
 blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2s_simd = { version = "1", features = ["std"] }
 blake3 = { version = "1", features = ["digest", "std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2-with-parallelism-toggle", default-features = false, features = ["parallel"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
-bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
+bstr = { version = "0.2", default-features = false, features = ["std"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 byte-slice-cast = { version = "1", features = ["std"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "0800fc79a98ca304bd449878f545cdcaff6f94bb", features = ["fiat"] }
@@ -123,8 +119,7 @@ console = { version = "0.15", default-features = false, features = ["ansi-parsin
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
-constant_time_eq-c65f7effa3be6d31 = { package = "constant_time_eq", version = "0.1", default-features = false }
-constant_time_eq-6f8ce4dd05d13bba = { package = "constant_time_eq", version = "0.2", default-features = false }
+constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
@@ -144,8 +139,6 @@ crunchy = { version = "0.2", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "rand_core", "std"] }
 crypto-mac = { version = "0.8", default-features = false }
-csv = { version = "1", default-features = false }
-csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
@@ -187,13 +180,12 @@ ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["f
 either = { version = "1", features = ["use_std"] }
 elliptic-curve = { version = "0.12", default-features = false, features = ["arithmetic", "digest", "ff", "group", "hazmat", "sec1"] }
 endian-type = { version = "0.1", default-features = false }
-env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", features = ["copy_key", "secure", "threads-bls_12_377"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", features = ["copy_key", "secure"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -274,8 +266,7 @@ instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
 itertools = { version = "0.10", features = ["use_alloc", "use_std"] }
-itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4", features = ["std"] }
-itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
+itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
 jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
@@ -302,7 +293,6 @@ libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
@@ -444,7 +434,7 @@ radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-feature
 radix_trie = { version = "0.2", default-features = false }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
+rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
@@ -664,10 +654,8 @@ anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["base_field", "curve", "scalar_field", "std"] }
 ark-bls12-381 = { version = "0.3", features = ["curve", "scalar_field"] }
-ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-crypto-primitives = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
 ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-ed-on-bw6-761 = { version = "0.3" }
-ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
 ark-ff = { version = "0.3", features = ["asm", "parallel", "rayon", "std"] }
 ark-ff-asm = { version = "0.3", default-features = false }
 ark-ff-macros = { version = "0.3", default-features = false }
@@ -677,7 +665,7 @@ ark-relations = { version = "0.3", features = ["std", "tracing-subscriber"] }
 ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
 ark-serialize-derive = { version = "0.3", default-features = false }
 ark-snark = { version = "0.3", default-features = false }
-ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-std = { version = "0.3", default-features = false, features = ["parallel", "rayon", "std"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
@@ -719,16 +707,14 @@ bitvec-cdcf2f9584511fe6 = { package = "bitvec", version = "0.19", default-featur
 bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["alloc", "std"] }
 blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10", features = ["std"] }
 blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2s_simd = { version = "1", features = ["std"] }
 blake3 = { version = "1", features = ["digest", "std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2-with-parallelism-toggle", default-features = false, features = ["parallel"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
-bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
+bstr = { version = "0.2", default-features = false, features = ["std"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
 byte-slice-cast = { version = "1", features = ["std"] }
@@ -774,8 +760,7 @@ console = { version = "0.15", default-features = false, features = ["ansi-parsin
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
-constant_time_eq-c65f7effa3be6d31 = { package = "constant_time_eq", version = "0.1", default-features = false }
-constant_time_eq-6f8ce4dd05d13bba = { package = "constant_time_eq", version = "0.2", default-features = false }
+constant_time_eq = { version = "0.2", default-features = false }
 convert_case = { version = "0.4", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
@@ -796,8 +781,6 @@ crunchy = { version = "0.2", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "rand_core", "std"] }
 crypto-mac = { version = "0.8", default-features = false }
-csv = { version = "1", default-features = false }
-csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
@@ -851,14 +834,13 @@ either = { version = "1", features = ["use_std"] }
 elliptic-curve = { version = "0.12", default-features = false, features = ["arithmetic", "digest", "ff", "group", "hazmat", "sec1"] }
 endian-type = { version = "0.1", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
-env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", features = ["copy_key", "secure", "threads-bls_12_377"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbd69732ac8410a324c6b175229522590264202c", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", features = ["copy_key", "secure"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -947,8 +929,7 @@ instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
 itertools = { version = "0.10", features = ["use_alloc", "use_std"] }
-itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4", features = ["std"] }
-itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
+itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
@@ -979,7 +960,6 @@ libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
@@ -1150,7 +1130,7 @@ radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-feature
 radix_trie = { version = "0.2", default-features = false }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
+rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
