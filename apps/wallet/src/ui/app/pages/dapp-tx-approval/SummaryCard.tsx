@@ -12,26 +12,6 @@ type SummaryCardProps = {
     children: ReactNode;
 };
 
-export function SummaryCardHeader({
-    children,
-    transparentHeader,
-}: {
-    children: ReactNode;
-    transparentHeader?: boolean;
-}) {
-    return (
-        <div
-            className={cl(st.header, transparentHeader && st.transparentHeader)}
-        >
-            {children}
-        </div>
-    );
-}
-
-export function SummaryCardContent({ children }: { children: ReactNode }) {
-    return <div className={st.contentWrapper}>{children}</div>;
-}
-
 export function SummaryCard({
     transparentHeader,
     children,
@@ -47,7 +27,7 @@ export function SummaryCard({
             >
                 {header}
             </div>
-            {children}
+            <div className={st.contentWrapper}>{children}</div>
         </div>
     );
 }

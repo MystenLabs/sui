@@ -5,11 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { Permissions } from './Permissions';
-import {
-    SummaryCard,
-    SummaryCardHeader,
-    SummaryCardContent,
-} from './SummaryCard';
+import { SummaryCard } from './SummaryCard';
 import { TransactionSummaryCard } from './TransactionSummaryCard';
 import { TransactionTypeCard } from './TransactionTypeCard';
 import Loading from '_components/loading';
@@ -290,6 +286,17 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest?.tx, txRequest?.unSerializedTxn]);
 
+    const TransactionTypeHeader = (
+        <>
+            <div className="font-medium text-sui-steel-darker">
+                Transaction Type
+            </div>
+            <div className="font-semibold text-sui-steel-darker">
+                {txRequest?.unSerializedTxn?.kind ?? txRequest?.tx?.type}
+            </div>
+        </>
+    );
+
     return (
         <Loading loading={loadingState}>
             {txRequest ? (
@@ -312,35 +319,23 @@ export function DappTxApprovalPage() {
                             </>
                         )}
                         <Permissions metadata={metadata} />
-                        <SummaryCard transparentHeader>
-                            <SummaryCardHeader transparentHeader>
-                                <div className="font-medium text-sui-steel-darker">
-                                    Transaction Type
-                                </div>
-                                <div className="font-semibold text-sui-steel-darker">
-                                    {txRequest?.unSerializedTxn?.kind ??
-                                        txRequest?.tx?.type}
-                                </div>
-                            </SummaryCardHeader>
-                            <SummaryCardContent>
-                                <div className={st.content}>
-                                    {valuesContent.map(
-                                        ({
-                                            label,
-                                            content,
-                                            loading = false,
-                                        }) => (
-                                            <div key={label} className={st.row}>
-                                                <TransactionTypeCard
-                                                    label={label}
-                                                    content={content}
-                                                    loading={loading}
-                                                />
-                                            </div>
-                                        )
-                                    )}
-                                </div>
-                            </SummaryCardContent>
+                        <SummaryCard
+                            transparentHeader
+                            header={TransactionTypeHeader}
+                        >
+                            <div className={st.content}>
+                                {valuesContent.map(
+                                    ({ label, content, loading = false }) => (
+                                        <div key={label} className={st.row}>
+                                            <TransactionTypeCard
+                                                label={label}
+                                                content={content}
+                                                loading={loading}
+                                            />
+                                        </div>
+                                    )
+                                )}
+                            </div>
                         </SummaryCard>
                     </section>
                 </UserApproveContainer>

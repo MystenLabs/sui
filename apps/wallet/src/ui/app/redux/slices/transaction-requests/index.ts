@@ -89,31 +89,32 @@ const getEventsSummary = (
     const coinsMeta = events
         .map((event) => {
             if (
-                !('coinBalanceChange' in event) ||
+                'coinBalanceChange' in event &&
                 ['Receive', 'Pay'].includes(
                     event?.coinBalanceChange?.changeType
                 )
             ) {
-                return null;
-            }
-            /// Combine all the coin balance changes from Pay and Receive events
-            /// A net positive amount means the user received coins
-            /// A net negative amount means the user sent coins
-            const { coinBalanceChange } = event;
-            const { coinType, amount, coinObjectId, owner } = coinBalanceChange;
-            const { AddressOwner } = owner as { AddressOwner: string };
-            const { ObjectOwner } = owner as { ObjectOwner: string };
+                /// Combine all the coin balance changes from Pay and Receive events
+                /// A net positive amount means the user received coins
+                /// A net negative amount means the user sent coins
+                const { coinBalanceChange } = event;
+                const { coinType, amount, coinObjectId, owner } =
+                    coinBalanceChange;
+                const { AddressOwner } = owner as { AddressOwner: string };
+                const { ObjectOwner } = owner as { ObjectOwner: string };
 
-            if (ObjectOwner) {
-                return null;
-            }
+                if (ObjectOwner) {
+                    return null;
+                }
 
-            return {
-                amount: amount,
-                coinType: coinType,
-                coinObjectId: coinObjectId,
-                receiverAddress: AddressOwner,
-            };
+                return {
+                    amount: AddressOwner ? amount : 0,
+                    coinType: coinType,
+                    coinObjectId: coinObjectId,
+                    receiverAddress: AddressOwner,
+                };
+            }
+            return null;
         })
         .filter(notEmpty);
 

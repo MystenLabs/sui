@@ -5,11 +5,7 @@ import cl from 'classnames';
 import { useEffect, useState } from 'react';
 
 import { MiniNFT } from './MiniNFT';
-import {
-    SummaryCard,
-    SummaryCardHeader,
-    SummaryCardContent,
-} from './SummaryCard';
+import { SummaryCard } from './SummaryCard';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useMiddleEllipsis, useGetNFTMeta } from '_hooks';
@@ -83,48 +79,39 @@ export function Permissions({ metadata }: PermissionsProps) {
                 : null
         );
     }, [tab, metadata]);
+
+    if (!metadata || !tab) return null;
+
     return (
-        metadata &&
-        tab && (
-            <SummaryCard>
-                <SummaryCardHeader>Permissions requested</SummaryCardHeader>
-                <SummaryCardContent>
-                    <div className={st.content}>
-                        <div className={st.tabs}>
-                            {Object.entries(metadata).map(
-                                ([key, value]) =>
-                                    value.children.length > 0 && (
-                                        <button
-                                            type="button"
-                                            key={key}
-                                            className={cl(
-                                                st.tab,
-                                                tab === key && st.active
-                                            )}
-                                            // eslint-disable-next-line react/jsx-no-bind
-                                            onClick={() => {
-                                                setTab(key as TabType);
-                                            }}
-                                        >
-                                            {value.name}
-                                        </button>
-                                    )
-                            )}
-                        </div>
-                        <div className={st.objects}>
-                            {metadata[tab].children.map(
-                                ({ id, module }, index) => (
-                                    <PassedObject
-                                        key={index}
-                                        id={id}
-                                        module={module}
-                                    />
-                                )
-                            )}
-                        </div>
-                    </div>
-                </SummaryCardContent>
-            </SummaryCard>
-        )
+        <SummaryCard header="Permissions requested">
+            <div className={st.content}>
+                <div className={st.tabs}>
+                    {Object.entries(metadata).map(
+                        ([key, value]) =>
+                            value.children.length > 0 && (
+                                <button
+                                    type="button"
+                                    key={key}
+                                    className={cl(
+                                        st.tab,
+                                        tab === key && st.active
+                                    )}
+                                    // eslint-disable-next-line react/jsx-no-bind
+                                    onClick={() => {
+                                        setTab(key as TabType);
+                                    }}
+                                >
+                                    {value.name}
+                                </button>
+                            )
+                    )}
+                </div>
+                <div className={st.objects}>
+                    {metadata[tab].children.map(({ id, module }, index) => (
+                        <PassedObject key={index} id={id} module={module} />
+                    ))}
+                </div>
+            </div>
+        </SummaryCard>
     );
 }
