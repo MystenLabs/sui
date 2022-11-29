@@ -9,7 +9,7 @@ expression: common_costs_actual
     "storage_rebate": 0
   },
   "Publish": {
-    "computation_cost": 973,
+    "computation_cost": 974,
     "storage_cost": 119,
     "storage_rebate": 0
   },
