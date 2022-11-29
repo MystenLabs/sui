@@ -56,7 +56,7 @@ import {
   versionToString,
   normalizeSuiAddress,
 } from '../types';
-import { SignatureScheme } from '../cryptography/publickey';
+import { PublicKey, SignatureScheme, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
@@ -65,6 +65,7 @@ import {
 import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
+import { Base64DataBuffer } from '../serialization/base64';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -543,19 +544,36 @@ export class JsonRpcProvider extends Provider {
   }
 
   async executeTransaction(
-    txnBytes: string,
+    txnBytes: Base64DataBuffer,
     signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string,
+    signature: Base64DataBuffer,
+    pubkey: PublicKey,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
   ): Promise<SuiExecuteTransactionResponse> {
     try {
-      const resp = await this.client.requestWithType(
-        'sui_executeTransaction',
-        [txnBytes, signatureScheme, signature, pubkey, requestType],
-        isSuiExecuteTransactionResponse,
-        this.options.skipDataValidation
-      );
+      let resp;
+      let version = await this.getRpcApiVersion();
+      if (version?.major === 0 && version?.minor < 19) {
+        resp = await this.client.requestWithType(
+          'sui_executeTransaction',
+          [txnBytes.toString(), signatureScheme, signature.toString(), pubkey.toString(), requestType],
+          isSuiExecuteTransactionResponse,
+          this.options.skipDataValidation
+        );
+      } else {
+        // Serialize sigature field as: `flag || signature || pubkey`
+        const serialized_sig = new Uint8Array(1 + signature.getLength() + pubkey.toBytes().length);
+        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+        serialized_sig.set(signature.getData(), 1);
+        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
+
+        resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [txnBytes.toString(), new Base64DataBuffer(serialized_sig).toString(), requestType],
+          isSuiExecuteTransactionResponse,
+          this.options.skipDataValidation
+        );
+      };
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}}`);

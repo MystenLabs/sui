@@ -101,10 +101,10 @@ export abstract class SignerWithProvider implements Signer {
           : new Base64DataBuffer(transaction.data);
       const sig = await this.signData(txBytes);
       return await this.provider.executeTransaction(
-        txBytes.toString(),
+        txBytes,
         sig.signatureScheme,
-        sig.signature.toString(),
-        sig.pubKey.toString(),
+        sig.signature,
+        sig.pubKey,
         requestType
       );
     }
