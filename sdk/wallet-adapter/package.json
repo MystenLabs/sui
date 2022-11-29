@@ -3,10 +3,6 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "@emotion/react": "^11.9.3",
-    "@emotion/styled": "^11.9.3",
-    "@mui/icons-material": "^5.8.4",
-    "@mui/material": "^5.9.0",
     "@mysten/core": "workspace:*",
     "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-all-wallets": "workspace:*",
@@ -14,6 +10,7 @@
     "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-react-ui": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
+    "@mysten/wallet-kit": "workspace:*",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
     "@testing-library/user-event": "^13.5.0",

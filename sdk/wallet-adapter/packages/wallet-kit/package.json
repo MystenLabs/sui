@@ -1,7 +1,7 @@
 {
-  "name": "@mysten/wallet-adapter-react-ui",
-  "version": "0.2.6",
-  "description": "UI for the Sui Wallet Adapter",
+  "name": "@mysten/wallet-kit",
+  "version": "0.0.1",
+  "description": "TODO: Write description",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "main": "./dist/index.js",
@@ -21,26 +21,25 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build": "pnpm build:types && tsup ./src/index.tsx --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@mysten/wallet-adapter-react": "workspace:*",
+    "@mysten/sui.js": "workspace:*",
     "react": "*",
     "react-dom": "*"
   },
+  "dependencies": {
+    "@mysten/wallet-adapter-base": "workspace:*",
+    "@mysten/wallet-adapter-react": "workspace:*",
+    "@mysten/wallet-adapter-wallet-standard": "workspace:*",
+    "@radix-ui/react-dialog": "^1.0.2",
+    "@stitches/react": "^1.2.8"
+  },
   "devDependencies": {
     "@mysten/sui.js": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "tsup": "^6.2.2",
     "typescript": "^4.8.3"
-  },
-  "dependencies": {
-    "@emotion/react": "^11.10.5",
-    "@emotion/styled": "^11.10.5",
-    "@mui/icons-material": "^5.8.4",
-    "@mui/material": "^5.8.4"
   }
 }
