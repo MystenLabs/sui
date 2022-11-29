@@ -26,7 +26,7 @@ function NftsPage() {
                     </Alert>
                 ) : null}
                 {isNftsFound ? (
-                    <div className="grid grid-cols-2 gap-x-[15px] gap-y-[18px]">
+                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4">
                         {nfts.map((nft) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
@@ -38,9 +38,10 @@ function NftsPage() {
                                 <ErrorBoundary>
                                     <NFTdisplay
                                         nftobj={nft}
-                                        showlabel={true}
+                                        size="md"
+                                        showlabel
                                         animateHover
-                                        borderRadius="lg"
+                                        borderRadius="xl"
                                     />
                                 </ErrorBoundary>
                             </Link>

@@ -18,17 +18,17 @@ type CollapseProps = {
 export function Collapse({
     title,
     children,
-    initialIsOpen = true,
+    initialIsOpen = false,
 }: CollapseProps) {
     const [isOpen, setIsOpen] = useState(initialIsOpen);
     return (
         <div className="flex flex-nowrap flex-col items-stretch">
             <div
                 className={cl(
-                    `group cursor-pointer text-steel-darker hover:text-hero
-                     ease-ease-in-out-cubic duration-200
-                     border-0 border-b border-solid border-b-gray-45 hover:border-b-hero
-                     flex flex-nowrap flex-row pb-2`
+                    'group cursor-pointer text-steel-darker hover:text-hero',
+                    'ease-ease-in-out-cubic duration-200',
+                    'border-0 border-b border-solid border-b-gray-45 hover:border-b-hero',
+                    'flex flex-nowrap flex-row pb-2'
                 )}
                 onClick={() => setIsOpen(!isOpen)}
             >
@@ -38,8 +38,8 @@ export function Collapse({
                 <Icon
                     icon={SuiIcons.ArrowDown}
                     className={cl(
-                        `text-steel group-hover:text-hero text-[12px]
-                        ease-ease-in-out-cubic duration-200`,
+                        'text-steel group-hover:text-hero text-caption',
+                        'ease-ease-in-out-cubic duration-200',
                         !isOpen && '-rotate-90'
                     )}
                 />
@@ -47,7 +47,6 @@ export function Collapse({
             <AnimatePresence initial={false}>
                 {isOpen ? (
                     <motion.div
-                        style={{ height: 150 }}
                         initial={{ height: 0, opacity: 0 }}
                         animate={{
                             height: 'auto',

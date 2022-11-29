@@ -94,7 +94,8 @@ function NftTransferPage() {
                         <div className={st.content}>
                             <NFTDisplayCard
                                 nftobj={selectedNft}
-                                wideview={true}
+                                wideView
+                                size="sm"
                             />
 
                             <Formik

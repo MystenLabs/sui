@@ -1,38 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
+import { cva } from 'class-variance-authority';
 
-import Icon, { SuiIcons } from '_components/icon';
+import { NftImage, type NftImageProps } from './NftImage';
 import { useMiddleEllipsis, useNFTBasicData } from '_hooks';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
-
-import st from './NFTDisplay.module.scss';
+import type { VariantProps } from 'class-variance-authority';
 
 const OBJ_TYPE_MAX_LENGTH = 20;
 const OBJ_TYPE_MAX_PREFIX_LENGTH = 3;
 
-export type NFTsProps = {
+const containerStyles = cva('flex flex-nowrap items-center', {
+    variants: {
+        animateHover: {
+            true: 'group',
+        },
+        wideView: {
+            true: 'bg-gray-40 p-2.5 rounded-lg gap-2.5 flex-row-reverse justify-between',
+            false: 'flex-col',
+        },
+    },
+    defaultVariants: {
+        wideView: false,
+    },
+});
+
+const labelStyles = cva(
+    'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
+    {
+        variants: {
+            animateHover: {
+                true: 'group-hover:text-black duration-200 ease-ease-in-out-cubic',
+            },
+        },
+    }
+);
+
+export interface NFTsProps extends VariantProps<typeof containerStyles> {
     nftobj: SuiObjectType;
     showlabel?: boolean;
-    size?: 'small' | 'medium' | 'large';
-    wideview?: boolean;
-    animateHover?: boolean;
-    borderRadius?: 'md' | 'lg';
-};
+    size: NftImageProps['size'];
+    borderRadius?: NftImageProps['borderRadius'];
+}
 
 function NFTDisplayCard({
     nftobj,
     showlabel,
-    size = 'medium',
-    wideview,
+    size,
+    wideView,
     animateHover,
     borderRadius = 'md',
 }: NFTsProps) {
     const { filePath, nftObjectID, nftFields, fileExtensionType, objType } =
         useNFTBasicData(nftobj);
-
     const name = nftFields?.name || nftFields?.metadata?.fields?.name;
     const objIDShort = useMiddleEllipsis(nftObjectID);
     const nftTypeShort = useMiddleEllipsis(
@@ -41,79 +63,37 @@ function NFTDisplayCard({
         OBJ_TYPE_MAX_PREFIX_LENGTH
     );
     const displayTitle = name || objIDShort;
-    const wideviewSection = (
-        <div className={st.nftfields}>
-            <div className={st.nftName}>{displayTitle}</div>
-            <div className={st.nftType}>
-                {filePath ? (
-                    `${fileExtensionType.name} ${fileExtensionType.type}`
-                ) : (
-                    <span className={st.noMediaTextWideView}>NO MEDIA</span>
-                )}
-            </div>
-        </div>
-    );
-
-    const defaultSection =
-        showlabel && displayTitle ? (
-            <div
-                className={cl(
-                    'items-center mt-2 text-steel-dark',
-                    animateHover &&
-                        'group-hover:text-black duration-200 ease-ease-in-out-cubic'
-                )}
-            >
-                {displayTitle}
-            </div>
-        ) : null;
-
-    const borderRadiusCl = borderRadius === 'md' ? 'rounded' : 'rounded-[10px]';
-    const borderRadiusHoverCl =
-        borderRadius === 'md' ? 'rounded-sm' : 'rounded-[5px]';
-    const mediaContainerCls = animateHover
-        ? `ease-ease-out-cubic duration-[400ms] group-hover:shadow-steel/50 group-hover:shadow-[0_0_20px_0] ${borderRadiusCl} hover:${borderRadiusHoverCl}`
-        : '';
-    const mediaCls = animateHover
-        ? 'group-hover:scale-[115%] duration-500 ease-ease-out-cubic'
-        : '';
     return (
-        <div
-            className={cl(
-                st.nftimage,
-                wideview && st.wideview,
-                st[size],
-                'group'
-            )}
-        >
-            <div
-                className={cl(
-                    'flex flex-shrink-0 items-stretch flex-grow self-stretch overflow-hidden',
-                    mediaContainerCls
-                )}
-            >
-                {filePath ? (
-                    <img
-                        className={cl(st.img, 'rounded-none', mediaCls)}
-                        src={filePath}
-                        alt={fileExtensionType?.name || 'NFT'}
-                        title={nftTypeShort}
-                    />
-                ) : (
-                    <div
-                        className={cl(st.noMedia, 'rounded-none', mediaCls)}
-                        title={nftTypeShort}
-                    >
-                        <Icon
-                            className={st.noMediaIcon}
-                            icon={SuiIcons.NftTypeImage}
-                        />
-                        {wideview ? null : (
-                            <span className={st.noMediaText}>No media</span>
+        <div className={containerStyles({ animateHover, wideView })}>
+            <NftImage
+                src={filePath}
+                name={fileExtensionType.name}
+                title={nftTypeShort}
+                showLabel={!wideView}
+                animateHover={animateHover}
+                borderRadius={borderRadius}
+                size={size}
+            />
+            {wideView ? (
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                    <div className="capitalize text-gray-100 truncate font-semibold text-base ws-nowrap">
+                        {displayTitle}
+                    </div>
+                    <div className="text-gray-75 text-body font-medium">
+                        {filePath ? (
+                            `${fileExtensionType.name} ${fileExtensionType.type}`
+                        ) : (
+                            <span className="uppercase font-normal text-bodySmall">
+                                NO MEDIA
+                            </span>
                         )}
                     </div>
-                )}
-            </div>
-            {wideview ? wideviewSection : defaultSection}
+                </div>
+            ) : showlabel && displayTitle ? (
+                <div className={labelStyles({ animateHover })}>
+                    {displayTitle}
+                </div>
+            ) : null}
         </div>
     );
 }

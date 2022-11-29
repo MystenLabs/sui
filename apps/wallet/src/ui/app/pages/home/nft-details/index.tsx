@@ -92,7 +92,7 @@ function NFTDetailsPage() {
             typeof metaValues[idx] === 'object'
                 ? JSON.stringify(metaValues[idx])
                 : metaValues[idx],
-        key: `nft_attribute_${aKey}`,
+        key: aKey,
     }));
     return (
         <div
@@ -106,11 +106,11 @@ function NFTDetailsPage() {
                         <div className="flex">
                             <PageTitle backLink="/nfts" hideBackLabel={true} />
                         </div>
-                        <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-[30px]">
+                        <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
                             <div className="self-center gap-3 flex flex-col flex-nowrap items-center">
                                 <NFTDisplayCard
                                     nftobj={selectedNft}
-                                    size="large"
+                                    size="lg"
                                 />
                                 {nftId ? (
                                     <ExplorerLink
@@ -126,19 +126,19 @@ function NFTDetailsPage() {
                                         VIEW ON EXPLORER{' '}
                                         <Icon
                                             icon={SuiIcons.ArrowLeft}
-                                            className="rotate-[135deg] text-[10px]"
+                                            className="rotate-135 text-subtitleSmallExtra"
                                         />
                                     </ExplorerLink>
                                 ) : null}
                             </div>
                             <div className="flex-1">
-                                <Collapse title="Details">
+                                <Collapse title="Details" initialIsOpen>
                                     <LabelValueItems items={detailAttrs} />
                                 </Collapse>
                             </div>
                             {metaAttrs.length ? (
                                 <div className="flex-1">
-                                    <Collapse title="Attributes">
+                                    <Collapse title="Attributes" initialIsOpen>
                                         <LabelValueItems items={metaAttrs} />
                                     </Collapse>
                                 </div>
