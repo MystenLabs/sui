@@ -23,20 +23,25 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
-    (0..4)
-        .map(|i| {
-            let seed = format!("0x555555555555555{i}");
-            let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
-            let (sender, _) = test_account_keys().pop().unwrap();
-            Object::with_id_owner_for_testing(gas_object_id, sender)
-        })
-        .collect()
+    thread_local! {
+        static GAS_OBJECTS: Vec<Object> = (0..4)
+            .map(|_| {
+                let gas_object_id = ObjectID::random();
+                let (owner, _) = test_account_keys().pop().unwrap();
+                Object::with_id_owner_for_testing(gas_object_id, owner)
+            })
+            .collect();
+    }
+
+    GAS_OBJECTS.with(|v| v.clone())
 }
 
 /// Fixture: a a test shared object.
 pub fn test_shared_object() -> Object {
-    let seed = "0x6666666666666660";
-    let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
+    thread_local! {
+        static SHARED_OBJECT_ID: ObjectID = ObjectID::random();
+    };
+    let shared_object_id = SHARED_OBJECT_ID.with(|id| *id);
     let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
     let owner = Owner::Shared {
         initial_shared_version: obj.version(),
