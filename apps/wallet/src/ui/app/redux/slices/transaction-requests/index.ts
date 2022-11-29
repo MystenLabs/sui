@@ -108,7 +108,7 @@ const getEventsSummary = (
                 }
 
                 return {
-                    amount: AddressOwner ? amount : 0,
+                    amount: amount,
                     coinType: coinType,
                     coinObjectId: coinObjectId,
                     receiverAddress: AddressOwner,
