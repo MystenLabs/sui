@@ -236,27 +236,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-ed-on-bw6-761"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84bc0b435c59113643ff064a5c57a323d37e140b4908a72b071de8a6592a8ce6"
-dependencies = [
- "ark-ed-on-cp6-782",
-]
-
-[[package]]
-name = "ark-ed-on-cp6-782"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f87b9cf6c4100b6625d0b90b9a1f029759dd35be70681abdbca57e2fd9bebe1"
-dependencies = [
- "ark-bls12-377",
- "ark-ec",
- "ark-ff",
- "ark-std",
-]
-
-[[package]]
 name = "ark-ff"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -556,7 +535,7 @@ dependencies = [
  "http",
  "http-body",
  "hyper",
- "itoa 1.0.4",
+ "itoa",
  "matchit",
  "memchr",
  "mime",
@@ -829,17 +808,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blake2s_simd"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db539cc2b5f6003621f1cd9ef92d7ded8ea5232c7de0f9faa2de251cd98730d4"
-dependencies = [
- "arrayref",
- "arrayvec 0.7.2",
- "constant_time_eq 0.1.5",
-]
-
-[[package]]
 name = "blake3"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -849,7 +817,7 @@ dependencies = [
  "arrayvec 0.7.2",
  "cc",
  "cfg-if",
- "constant_time_eq 0.2.4",
+ "constant_time_eq",
  "digest 0.10.5",
 ]
 
@@ -888,32 +856,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bls-crypto"
-version = "0.2.0"
-source = "git+https://github.com/huitseeker/celo-bls-snark-rs?branch=updates-2-with-parallelism-toggle#78f379fe4b16348999a81f57c231102b0913224e"
-dependencies = [
- "ark-bls12-377",
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ed-on-bw6-761",
- "ark-ff",
- "ark-serialize",
- "ark-std",
- "blake2s_simd",
- "byteorder",
- "clap 3.2.22",
- "csv",
- "env_logger",
- "hex",
- "log",
- "lru",
- "once_cell",
- "rand 0.7.3",
- "rand_chacha 0.3.1",
- "thiserror",
-]
-
-[[package]]
 name = "blst"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -941,10 +883,7 @@ version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
- "lazy_static 1.4.0",
  "memchr",
- "regex-automata",
- "serde 1.0.147",
 ]
 
 [[package]]
@@ -1446,12 +1385,6 @@ checksum = "722e23542a15cea1f65d4a1419c4cfd7a26706c70871a13a04238ca3f40f1661"
 
 [[package]]
 name = "constant_time_eq"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
-
-[[package]]
-name = "constant_time_eq"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3ad85c1f65dc7b37604eb0e89748faf0b9653065f2a8ef69f96a687ec1e9279"
@@ -1739,28 +1672,6 @@ checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
 dependencies = [
  "generic-array",
  "subtle",
-]
-
-[[package]]
-name = "csv"
-version = "1.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
-dependencies = [
- "bstr",
- "csv-core",
- "itoa 0.4.8",
- "ryu",
- "serde 1.0.147",
-]
-
-[[package]]
-name = "csv-core"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -2107,7 +2018,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "diesel_derives",
- "itoa 1.0.4",
+ "itoa",
  "pq-sys",
  "serde_json",
 ]
@@ -2503,21 +2414,16 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto"
-version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbd69732ac8410a324c6b175229522590264202c#bbd69732ac8410a324c6b175229522590264202c"
+version = "0.1.4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=3ac9fa490f2d7eecd133c87a7c616328a217b66a#3ac9fa490f2d7eecd133c87a7c616328a217b66a"
 dependencies = [
  "aes",
  "aes-gcm",
- "ark-bls12-377",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-std",
  "base64ct",
  "blake2 0.10.5",
  "blake3",
- "bls-crypto",
  "blst",
+ "bs58",
  "bulletproofs",
  "cbc",
  "ctr",
@@ -2550,7 +2456,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbd69732ac8410a324c6b175229522590264202c#bbd69732ac8410a324c6b175229522590264202c"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=3ac9fa490f2d7eecd133c87a7c616328a217b66a#3ac9fa490f2d7eecd133c87a7c616328a217b66a"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -2560,7 +2466,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbd69732ac8410a324c6b175229522590264202c#bbd69732ac8410a324c6b175229522590264202c"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=3ac9fa490f2d7eecd133c87a7c616328a217b66a#3ac9fa490f2d7eecd133c87a7c616328a217b66a"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -3222,7 +3128,7 @@ checksum = "75f43d41e26995c17e71ee126451dd3941010b0514a81a9d11f3b341debc2399"
 dependencies = [
  "bytes",
  "fnv",
- "itoa 1.0.4",
+ "itoa",
 ]
 
 [[package]]
@@ -3281,7 +3187,7 @@ dependencies = [
  "http-body",
  "httparse",
  "httpdate",
- "itoa 1.0.4",
+ "itoa",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -3496,7 +3402,7 @@ dependencies = [
  "ahash",
  "atty",
  "indexmap",
- "itoa 1.0.4",
+ "itoa",
  "log",
  "num-format",
  "once_cell",
@@ -3579,12 +3485,6 @@ checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
 dependencies = [
  "either",
 ]
-
-[[package]]
-name = "itoa"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
 
 [[package]]
 name = "itoa"
@@ -3989,15 +3889,6 @@ checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
  "serde 1.0.147",
-]
-
-[[package]]
-name = "lru"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
-dependencies = [
- "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -5684,7 +5575,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54b862ff8df690cf089058c98b183676a7ed0f974cc08b426800093227cbff3b"
 dependencies = [
  "arrayvec 0.7.2",
- "itoa 1.0.4",
+ "itoa",
 ]
 
 [[package]]
@@ -7676,7 +7567,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e8b3801309262e8184d9687fb697586833e939767aea0dda89f5a8e650e8bd7"
 dependencies = [
  "indexmap",
- "itoa 1.0.4",
+ "itoa",
  "ryu",
  "serde 1.0.147",
 ]
@@ -7708,7 +7599,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
 dependencies = [
  "form_urlencoded",
- "itoa 1.0.4",
+ "itoa",
  "ryu",
  "serde 1.0.147",
 ]
@@ -8062,7 +7953,7 @@ dependencies = [
  "hashlink",
  "hex",
  "indexmap",
- "itoa 1.0.4",
+ "itoa",
  "libc",
  "libsqlite3-sys",
  "log",
@@ -9640,7 +9531,7 @@ version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d634a985c4d4238ec39cacaed2e7ae552fbd3c476b552c1deac3021b7d7eaf0c"
 dependencies = [
- "itoa 1.0.4",
+ "itoa",
  "libc",
  "num_threads",
  "serde 1.0.147",
@@ -10895,8 +10786,6 @@ dependencies = [
  "ark-bls12-381",
  "ark-crypto-primitives",
  "ark-ec",
- "ark-ed-on-bw6-761",
- "ark-ed-on-cp6-782",
  "ark-ff",
  "ark-ff-asm",
  "ark-ff-macros",
@@ -10949,13 +10838,11 @@ dependencies = [
  "bitvec 0.20.4",
  "blake2 0.10.5",
  "blake2 0.9.2",
- "blake2s_simd",
  "blake3",
  "block-buffer 0.10.3",
  "block-buffer 0.9.0",
  "block-padding 0.2.1",
  "block-padding 0.3.2",
- "bls-crypto",
  "blst",
  "bs58",
  "bstr",
@@ -11005,8 +10892,7 @@ dependencies = [
  "console-api",
  "console-subscriber",
  "const-oid",
- "constant_time_eq 0.1.5",
- "constant_time_eq 0.2.4",
+ "constant_time_eq",
  "convert_case",
  "core-foundation",
  "core-foundation-sys",
@@ -11033,8 +10919,6 @@ dependencies = [
  "crypto-bigint",
  "crypto-common",
  "crypto-mac",
- "csv",
- "csv-core",
  "ctor",
  "ctr",
  "curve25519-dalek",
@@ -11092,7 +10976,6 @@ dependencies = [
  "encoding_rs",
  "endian-type",
  "enum_dispatch",
- "env_logger",
  "errno",
  "error-code",
  "ethnum",
@@ -11198,8 +11081,7 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "itertools",
- "itoa 0.4.8",
- "itoa 1.0.4",
+ "itoa",
  "jemalloc-ctl",
  "jemalloc-sys",
  "jobserver",
@@ -11233,7 +11115,6 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
- "lru",
  "match_opt",
  "matchers",
  "matchit",
