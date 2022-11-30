@@ -889,7 +889,7 @@ impl AuthorityFixture {
         let keypair = KeyPair::generate(&mut rng);
         let network_keypair = NetworkKeyPair::generate(&mut rng);
         let host = "127.0.0.1";
-        let address: Multiaddr = format!("/ip4/{}/tcp/{}/http", host, get_port(host))
+        let address: Multiaddr = format!("/ip4/{}/udp/{}", host, get_port(host))
             .parse()
             .unwrap();
 
@@ -943,7 +943,7 @@ impl WorkerFixture {
         let keypair = NetworkKeyPair::generate(&mut StdRng::from_rng(rng).unwrap());
         let worker_name = keypair.public().clone();
         let host = "127.0.0.1";
-        let worker_address = format!("/ip4/{}/tcp/{}/http", host, get_port(host))
+        let worker_address = format!("/ip4/{}/udp/{}", host, get_port(host))
             .parse()
             .unwrap();
         let transactions = format!("/ip4/{}/tcp/{}/http", host, get_port(host))

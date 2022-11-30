@@ -36,8 +36,8 @@ def main():
         temp[k['name']] = {
             "network_key": nk['name'],
             "primary": {
-                "primary_to_primary": "/dns/primary_{:02d}/tcp/3000/http".format(i),
-                "worker_to_primary": "/dns/primary_{:02d}/tcp/3001/http".format(i)
+                "primary_to_primary": "/dns/primary_{:02d}/udp/3000".format(i),
+                "worker_to_primary": "/dns/primary_{:02d}/udp/3001".format(i)
             },
             "stake": 1,
         }

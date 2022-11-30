@@ -301,11 +301,11 @@ mod test {
                     delegation: 0,
                     gas_price: 1,
                     commission_rate: 0,
-                    network_address: utils::new_network_address(),
-                    narwhal_primary_address: utils::new_network_address(),
-                    narwhal_worker_address: utils::new_network_address(),
+                    network_address: utils::new_tcp_network_address(),
+                    narwhal_primary_address: utils::new_udp_network_address(),
+                    narwhal_worker_address: utils::new_udp_network_address(),
                     narwhal_internal_worker_address: None,
-                    narwhal_consensus_address: utils::new_network_address(),
+                    narwhal_consensus_address: utils::new_tcp_network_address(),
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();

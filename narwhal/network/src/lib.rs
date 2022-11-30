@@ -49,6 +49,7 @@ impl<T> std::future::Future for CancelOnDropHandler<T> {
     }
 }
 
+/// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into an anemo address
 pub fn multiaddr_to_address(
     multiaddr: &multiaddr::Multiaddr,
 ) -> anyhow::Result<anemo::types::Address> {
@@ -56,13 +57,9 @@ pub fn multiaddr_to_address(
     let mut iter = multiaddr.iter();
 
     match (iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Tcp(port) | Protocol::Udp(port))) => {
-            Ok((ipaddr, port).into())
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Tcp(port) | Protocol::Udp(port))) => {
-            Ok((ipaddr, port).into())
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Tcp(port) | Protocol::Udp(port))) => {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Ok((ipaddr, port).into()),
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Ok((ipaddr, port).into()),
+        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
             Ok((hostname.as_ref(), port).into())
         }
 
