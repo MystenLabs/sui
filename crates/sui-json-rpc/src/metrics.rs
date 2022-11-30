@@ -146,21 +146,24 @@ where
 
             // Record metrics if the request is a http RPC request.
             if let Some(name) = rpc_name {
-                let name = if whitelist.contains(&name) {
-                    name.as_str()
-                } else {
-                    SPAM_LABEL
-                };
-
-                metrics.requests_by_route.with_label_values(&[name]).inc();
                 let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
-                metrics
-                    .req_latency_by_route
-                    .with_label_values(&[name])
-                    .observe(req_latency_secs);
 
-                if !res.status().is_server_error() {
-                    metrics.errors_by_route.with_label_values(&[name]).inc();
+                if whitelist.contains(&name) {
+                    metrics.requests_by_route.with_label_values(&[&name]).inc();
+                    metrics
+                        .req_latency_by_route
+                        .with_label_values(&[&name])
+                        .observe(req_latency_secs);
+
+                    if !res.status().is_server_error() {
+                        metrics.errors_by_route.with_label_values(&[&name]).inc();
+                    }
+                } else {
+                    // Only record request count for spams
+                    metrics
+                        .requests_by_route
+                        .with_label_values(&[SPAM_LABEL])
+                        .inc();
                 }
             }
             Ok(res)
