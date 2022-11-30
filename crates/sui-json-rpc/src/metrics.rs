@@ -146,9 +146,8 @@ where
 
             // Record metrics if the request is a http RPC request.
             if let Some(name) = rpc_name {
-                let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
-
                 if whitelist.contains(&name) {
+                    let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
                     metrics.requests_by_route.with_label_values(&[&name]).inc();
                     metrics
                         .req_latency_by_route
