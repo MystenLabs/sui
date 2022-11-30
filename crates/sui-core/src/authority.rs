@@ -125,6 +125,8 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
+pub mod authority_per_epoch_store;
+
 pub mod authority_store_tables;
 
 pub mod authority_notifier;
@@ -792,7 +794,8 @@ impl AuthorityState {
 
         let shared_locks: HashMap<_, _> = self
             .database
-            .all_shared_locks(transaction_digest)?
+            .epoch_tables()
+            .get_all_shared_locks(transaction_digest)?
             .into_iter()
             .collect();
 
@@ -1575,7 +1578,9 @@ impl AuthorityState {
     pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         self.node_sync_store
             .batch_store_certs(certs.iter().cloned())?;
-        self.database.store_pending_certificates(&certs)?;
+        self.database
+            .epoch_tables()
+            .insert_pending_certificates(&certs)?;
         let mut transaction_manager = self.transaction_manager.lock().await;
         transaction_manager.enqueue(certs).await
     }

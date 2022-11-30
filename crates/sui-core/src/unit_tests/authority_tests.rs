@@ -2745,6 +2745,7 @@ async fn shared_object() {
 
     let shared_object_version = authority
         .db()
+        .epoch_tables()
         .get_assigned_object_versions(transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
@@ -2886,9 +2887,11 @@ async fn test_consensus_message_processed() {
     assert_eq!(
         authority1
             .database
+            .epoch_tables()
             .get_next_object_version(&shared_object_id),
         authority2
             .database
+            .epoch_tables()
             .get_next_object_version(&shared_object_id),
     );
 }
