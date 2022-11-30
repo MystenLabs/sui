@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
 use prometheus::Registry;
 
 use sui::config::SuiEnv;
@@ -31,8 +31,8 @@ pub struct FullNodeHandle {
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
-    pub ws_client: Option<WsClient>,
-    pub ws_url: Option<String>,
+    pub ws_client: WsClient,
+    pub ws_url: String,
 }
 
 pub struct GatewayHandle {
@@ -95,7 +95,6 @@ impl TestCluster {
 pub struct TestClusterBuilder {
     genesis_config: Option<GenesisConfig>,
     fullnode_rpc_port: Option<u16>,
-    fullnode_ws_port: Option<u16>,
     do_not_build_fullnode: bool,
     num_validators: Option<usize>,
 }
@@ -105,7 +104,6 @@ impl TestClusterBuilder {
         TestClusterBuilder {
             genesis_config: None,
             fullnode_rpc_port: None,
-            fullnode_ws_port: None,
             do_not_build_fullnode: false,
             num_validators: None,
         }
@@ -113,11 +111,6 @@ impl TestClusterBuilder {
 
     pub fn set_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
         self.fullnode_rpc_port = Some(rpc_port);
-        self
-    }
-
-    pub fn set_fullnode_ws_port(mut self, ws_port: u16) -> Self {
-        self.fullnode_ws_port = Some(ws_port);
         self
     }
 
@@ -169,17 +162,11 @@ impl TestClusterBuilder {
         let fullnode_handle = if self.do_not_build_fullnode {
             None
         } else {
-            let handle = start_a_fullnode_with_handle(
-                &swarm,
-                self.fullnode_rpc_port,
-                self.fullnode_ws_port,
-                false,
-            )
-            .await?;
+            let handle = start_a_fullnode_with_handle(&swarm, self.fullnode_rpc_port).await?;
             wallet_conf.envs.push(SuiEnv {
                 alias: "localnet".to_string(),
                 rpc: handle.rpc_url.clone(),
-                ws: handle.ws_url.clone(),
+                ws: Some(handle.ws_url.clone()),
             });
             wallet_conf.active_env = Some("localnet".to_string());
 
@@ -254,20 +241,14 @@ impl Default for TestClusterBuilder {
 /// simtest before it supports jsonrpc/ws. We should use `start_a_fullnode_with_handle`
 /// once the support is added.
 /// Start a fullnode for an existing Swarm and return FullNodeHandle
-pub async fn start_a_fullnode(swarm: &Swarm, disable_ws: bool) -> Result<SuiNode, anyhow::Error> {
+pub async fn start_a_fullnode(swarm: &Swarm) -> Result<SuiNode, anyhow::Error> {
     let jsonrpc_server_url = format!("127.0.0.1:{}", get_available_port());
     let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
     let mut config = swarm
         .config()
-        .generate_fullnode_config_with_random_dir_name(true, false);
+        .generate_fullnode_config_with_random_dir_name(true);
     config.json_rpc_address = jsonrpc_addr;
-
-    if !disable_ws {
-        let ws_server_url = format!("127.0.0.1:{}", get_available_port());
-        let ws_addr: SocketAddr = ws_server_url.parse().unwrap();
-        config.websocket_address = Some(ws_addr);
-    };
 
     SuiNode::start(&config, Registry::new()).await
 }
@@ -277,37 +258,25 @@ pub async fn start_a_fullnode(swarm: &Swarm, disable_ws: bool) -> Result<SuiNode
 pub async fn start_a_fullnode_with_handle(
     swarm: &Swarm,
     rpc_port: Option<u16>,
-    ws_port: Option<u16>,
-    disable_ws: bool,
 ) -> Result<FullNodeHandle, anyhow::Error> {
-    let jsonrpc_server_url = format!("127.0.0.1:{}", rpc_port.unwrap_or_else(get_available_port));
+    let rpc_port = rpc_port.unwrap_or_else(get_available_port);
+
+    let jsonrpc_server_url = format!("127.0.0.1:{}", rpc_port);
     let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
     let mut config = swarm
         .config()
-        .generate_fullnode_config_with_random_dir_name(true, false);
+        .generate_fullnode_config_with_random_dir_name(true);
     config.json_rpc_address = jsonrpc_addr;
-
-    let ws_url = if !disable_ws {
-        let ws_server_url = format!("127.0.0.1:{}", ws_port.unwrap_or_else(get_available_port));
-        let ws_addr: SocketAddr = ws_server_url.parse().unwrap();
-        config.websocket_address = Some(ws_addr);
-        Some(format!("ws://{}", ws_server_url))
-    } else {
-        None
-    };
 
     let sui_node = SuiNode::start(&config, Registry::new()).await?;
 
     let rpc_url = format!("http://{}", jsonrpc_server_url);
     let rpc_client = HttpClientBuilder::default().build(&rpc_url)?;
-    let sui_client = SuiClient::new(&rpc_url, ws_url.as_deref(), None).await?;
 
-    let ws_client = if let Some(ws_url) = &ws_url {
-        Some(WsClientBuilder::default().build(ws_url).await?)
-    } else {
-        None
-    };
+    let ws_url = format!("ws://{}", jsonrpc_server_url);
+    let ws_client = WsClientBuilder::default().build(&ws_url).await?;
+    let sui_client = SuiClient::new(&rpc_url, Some(&ws_url), None).await?;
 
     Ok(FullNodeHandle {
         sui_node,

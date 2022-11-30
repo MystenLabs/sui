@@ -23,6 +23,8 @@ aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 aliasable = { version = "0.1", features = ["alloc"] }
+alloc-no-stdlib = { version = "2", default-features = false }
+alloc-stdlib = { version = "0.2", default-features = false }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
 anes = { version = "0.1" }
@@ -44,6 +46,7 @@ arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
 asn1-rs = { version = "0.5", features = ["datetime", "std", "time"] }
+async-compression = { version = "0.3", features = ["brotli", "flate2", "gzip", "tokio", "zlib"] }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 atoi = { version = "1", default-features = false }
@@ -79,6 +82,8 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 blst = { version = "0.3" }
+brotli = { version = "3", default-features = false, features = ["alloc-stdlib", "std"] }
+brotli-decompressor = { version = "2", default-features = false, features = ["alloc-stdlib", "std"] }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", default-features = false, features = ["std"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
@@ -265,19 +270,19 @@ insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
+iri-string = { version = "0.4", features = ["alloc", "nom-std", "std"] }
 itertools = { version = "0.10", features = ["use_alloc", "use_std"] }
 itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
-jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
-jsonrpsee-client-transport = { version = "0.15", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
-jsonrpsee-core = { version = "0.15", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { version = "0.15", features = ["hyper-rustls", "tls"] }
-jsonrpsee-http-server = { version = "0.15", default-features = false }
-jsonrpsee-types = { version = "0.15", default-features = false }
-jsonrpsee-wasm-client = { version = "0.15", default-features = false }
-jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
-jsonrpsee-ws-server = { version = "0.15", default-features = false }
+jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["async-client", "async-wasm-client", "client", "client-core", "client-web-transport", "client-ws-transport", "full", "http-client", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-proc-macros", "jsonrpsee-server", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "macros", "server", "server-core", "tracing", "wasm-client", "ws-client"] }
+jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
+jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http-helpers", "hyper", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "wasm-bindgen-futures"] }
+jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["hyper-rustls", "tls"] }
+jsonrpsee-server = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-types = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-wasm-client = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-ws-client = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["tls"] }
 k256 = { version = "0.11", default-features = false, features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "keccak256", "sha2", "sha256", "sha3"] }
 keccak = { version = "0.1", default-features = false }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
@@ -300,6 +305,7 @@ memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
+mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.5", default-features = false }
 mintex = { version = "0.1", default-features = false }
@@ -510,7 +516,7 @@ slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false }
-soketto = { version = "0.7" }
+soketto = { version = "0.7", features = ["http"] }
 spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
 sqlformat = { version = "0.2", default-features = false }
@@ -562,7 +568,7 @@ tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
-tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
 toml_edit = { version = "0.14", features = ["easy", "serde"] }
 tonic-ca01ad9e24f5d932 = { package = "tonic", version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "tokio", "tower", "tracing-futures", "transport"] }
@@ -570,7 +576,7 @@ tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["asyn
 tonic-health-3b31131e45eafb45 = { package = "tonic-health", version = "0.6", features = ["transport"] }
 tonic-health-ca01ad9e24f5d932 = { package = "tonic-health", version = "0.7", features = ["transport"] }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
-tower-http = { version = "0.3", features = ["cors", "map-response-body", "propagate-header", "set-header", "tower", "trace", "tracing", "util"] }
+tower-http = { version = "0.3", features = ["add-extension", "async-compression", "auth", "base64", "catch-panic", "compression-br", "compression-deflate", "compression-full", "compression-gzip", "cors", "decompression-br", "decompression-deflate", "decompression-full", "decompression-gzip", "follow-redirect", "fs", "full", "httpdate", "iri-string", "limit", "map-request-body", "map-response-body", "metrics", "mime", "mime_guess", "percent-encoding", "propagate-header", "redirect", "request-id", "sensitive-headers", "set-header", "set-status", "timeout", "tokio", "tokio-util", "tower", "trace", "tracing", "util", "uuid"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["attributes", "log", "std", "tracing-attributes"] }
@@ -645,6 +651,8 @@ aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 aliasable = { version = "0.1", features = ["alloc"] }
+alloc-no-stdlib = { version = "2", default-features = false }
+alloc-stdlib = { version = "0.2", default-features = false }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb", default-features = false }
@@ -672,6 +680,7 @@ arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = 
 asn1-rs = { version = "0.5", features = ["datetime", "std", "time"] }
 asn1-rs-derive = { version = "0.4", default-features = false }
 asn1-rs-impl = { version = "0.1", default-features = false }
+async-compression = { version = "0.3", features = ["brotli", "flate2", "gzip", "tokio", "zlib"] }
 async-lock = { version = "2", default-features = false }
 async-recursion = { version = "1", default-features = false }
 async-stream = { version = "0.3", default-features = false }
@@ -713,6 +722,8 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 blst = { version = "0.3" }
+brotli = { version = "3", default-features = false, features = ["alloc-stdlib", "std"] }
+brotli-decompressor = { version = "2", default-features = false, features = ["alloc-stdlib", "std"] }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", default-features = false, features = ["std"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
@@ -928,21 +939,21 @@ insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
+iri-string = { version = "0.4", features = ["alloc", "nom-std", "std"] }
 itertools = { version = "0.10", features = ["use_alloc", "use_std"] }
 itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
-jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
-jsonrpsee-client-transport = { version = "0.15", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
-jsonrpsee-core = { version = "0.15", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { version = "0.15", features = ["hyper-rustls", "tls"] }
-jsonrpsee-http-server = { version = "0.15", default-features = false }
-jsonrpsee-proc-macros = { version = "0.15", default-features = false }
-jsonrpsee-types = { version = "0.15", default-features = false }
-jsonrpsee-wasm-client = { version = "0.15", default-features = false }
-jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
-jsonrpsee-ws-server = { version = "0.15", default-features = false }
+jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["async-client", "async-wasm-client", "client", "client-core", "client-web-transport", "client-ws-transport", "full", "http-client", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-proc-macros", "jsonrpsee-server", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "macros", "server", "server-core", "tracing", "wasm-client", "ws-client"] }
+jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
+jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http-helpers", "hyper", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "wasm-bindgen-futures"] }
+jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["hyper-rustls", "tls"] }
+jsonrpsee-proc-macros = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-server = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-types = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-wasm-client = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false }
+jsonrpsee-ws-client = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["tls"] }
 k256 = { version = "0.11", default-features = false, features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "keccak256", "sha2", "sha256", "sha3"] }
 keccak = { version = "0.1", default-features = false }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
@@ -967,6 +978,7 @@ memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
+mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.5", default-features = false }
 mintex = { version = "0.1", default-features = false }
@@ -1219,7 +1231,7 @@ slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false }
-soketto = { version = "0.7" }
+soketto = { version = "0.7", features = ["http"] }
 spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
 sqlformat = { version = "0.2", default-features = false }
@@ -1281,7 +1293,7 @@ tokio-macros = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
-tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
 toml_edit = { version = "0.14", features = ["easy", "serde"] }
 tonic-ca01ad9e24f5d932 = { package = "tonic", version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "tokio", "tower", "tracing-futures", "transport"] }
@@ -1292,7 +1304,7 @@ tonic-health-3b31131e45eafb45 = { package = "tonic-health", version = "0.6", fea
 tonic-health-ca01ad9e24f5d932 = { package = "tonic-health", version = "0.7", features = ["transport"] }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
-tower-http = { version = "0.3", features = ["cors", "map-response-body", "propagate-header", "set-header", "tower", "trace", "tracing", "util"] }
+tower-http = { version = "0.3", features = ["add-extension", "async-compression", "auth", "base64", "catch-panic", "compression-br", "compression-deflate", "compression-full", "compression-gzip", "cors", "decompression-br", "decompression-deflate", "decompression-full", "decompression-gzip", "follow-redirect", "fs", "full", "httpdate", "iri-string", "limit", "map-request-body", "map-response-body", "metrics", "mime", "mime_guess", "percent-encoding", "propagate-header", "redirect", "request-id", "sensitive-headers", "set-header", "set-status", "timeout", "tokio", "tokio-util", "tower", "trace", "tracing", "util", "uuid"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["attributes", "log", "std", "tracing-attributes"] }

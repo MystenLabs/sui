@@ -85,6 +85,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
+name = "alloc-no-stdlib"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
+
+[[package]]
+name = "alloc-stdlib"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94fb8275041c72129eb51b7d0322c29b8387a0386127718b096429201a5d6ece"
+dependencies = [
+ "alloc-no-stdlib",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -417,6 +432,20 @@ dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.104",
+]
+
+[[package]]
+name = "async-compression"
+version = "0.3.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "942c7cd7ae39e91bde4820d74132e9862e62c2f386c3aa90ccf55949f5bad63a"
+dependencies = [
+ "brotli",
+ "flate2",
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
@@ -866,6 +895,27 @@ dependencies = [
  "threadpool",
  "which",
  "zeroize",
+]
+
+[[package]]
+name = "brotli"
+version = "3.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1a0b1dbcc8ae29329621f8d4f0d835787c1c38bb1401979b49d13b0b305ff68"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "brotli-decompressor",
+]
+
+[[package]]
+name = "brotli-decompressor"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59ad2d4653bf5ca36ae797b1f4bb4dbddb60ce49ca4aed8a2ce4829f60425b80"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
 ]
 
 [[package]]
@@ -3478,6 +3528,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879d54834c8c76457ef4293a689b2a8c59b076067ad77b15efafbb05f92a592b"
 
 [[package]]
+name = "iri-string"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f0f7638c1e223529f1bfdc48c8b133b9e0b434094d1d28473161ee48b235f78"
+dependencies = [
+ "nom 7.1.1",
+]
+
+[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3540,27 +3599,24 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "jsonrpsee"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bd0d559d5e679b1ab2f869b486a11182923863b1b3ee8b421763cdd707b783a"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-http-client",
- "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
+ "jsonrpsee-server",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
- "jsonrpsee-ws-server",
  "tracing",
 ]
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8752740ecd374bcbf8b69f3e80b0327942df76f793f8d4e60d3355650c31fb74"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "anyhow",
  "futures-channel",
@@ -3583,9 +3639,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3dc3e9cf2ba50b7b1d7d76a667619f82846caa39e8e8daa8a4962d74acaddca"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.2",
@@ -3596,10 +3651,8 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "globset",
- "http",
  "hyper",
  "jsonrpsee-types",
- "lazy_static 1.4.0",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rustc-hash",
@@ -3609,16 +3662,13 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-futures",
- "unicase",
  "wasm-bindgen-futures",
 ]
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52f7c0e2333ab2115c302eeb4f137c8a4af5ab609762df68bbda8f06496677c9"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "async-trait",
  "hyper",
@@ -3631,33 +3681,14 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-futures",
-]
-
-[[package]]
-name = "jsonrpsee-http-server"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03802f0373a38c2420c70b5144742d800b509e2937edc4afb116434f07120117"
-dependencies = [
- "futures-channel",
- "futures-util",
- "hyper",
- "jsonrpsee-core",
- "jsonrpsee-types",
- "serde 1.0.147",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-futures",
 ]
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd67957d4280217247588ac86614ead007b301ca2fa9f19c19f880a536f029e3"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
+ "heck 0.4.0",
  "proc-macro-crate",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -3665,10 +3696,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-server"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "http",
+ "hyper",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "serde 1.0.147",
+ "serde_json",
+ "soketto",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tower",
+ "tracing",
+]
+
+[[package]]
 name = "jsonrpsee-types"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e290bba767401b646812f608c099b922d8142603c9e73a50fb192d3ac86f4a0d"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "anyhow",
  "beef",
@@ -3680,9 +3731,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-wasm-client"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "597b4eb94730e7695d0a2a429bc37a12e6e84d12680fdafb9b8f5f53652aab57"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -3691,34 +3741,13 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ee5feddd5188e62ac08fcf0e56478138e581509d4730f3f7be9b57dd402a4ff"
+version = "0.16.1"
+source = "git+https://github.com/patrickkuo/jsonrpsee.git?rev=adc19a124ed7045744442ca67f084ddfba4ba177#adc19a124ed7045744442ca67f084ddfba4ba177"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-types",
-]
-
-[[package]]
-name = "jsonrpsee-ws-server"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d488ba74fb369e5ab68926feb75a483458b88e768d44319f37e4ecad283c7325"
-dependencies = [
- "futures-channel",
- "futures-util",
- "http",
- "jsonrpsee-core",
- "jsonrpsee-types",
- "serde_json",
- "soketto",
- "tokio",
- "tokio-stream",
- "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing",
- "tracing-futures",
 ]
 
 [[package]]
@@ -3953,6 +3982,16 @@ name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "minimal-lexical"
@@ -7878,6 +7917,7 @@ dependencies = [
  "base64",
  "bytes",
  "futures",
+ "http",
  "httparse",
  "log",
  "rand 0.8.5",
@@ -8615,8 +8655,8 @@ dependencies = [
  "async-trait",
  "fastcrypto",
  "futures",
+ "hyper",
  "jsonrpsee",
- "jsonrpsee-core",
  "jsonrpsee-proc-macros",
  "move-binary-format",
  "move-bytecode-utils",
@@ -8635,6 +8675,8 @@ dependencies = [
  "sui-types",
  "tap",
  "tokio",
+ "tower",
+ "tower-http",
  "tracing",
  "workspace-hack",
 ]
@@ -9402,7 +9444,6 @@ dependencies = [
  "bcs",
  "futures",
  "jsonrpsee",
- "jsonrpsee-http-client",
  "move-core-types",
  "multiaddr 0.16.0",
  "mysten-network 0.2.0",
@@ -9908,6 +9949,8 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c530c8675c1dbf98facee631536fa116b5fb6382d7dd6dc1b118d970eafe3ba"
 dependencies = [
+ "async-compression",
+ "base64",
  "bitflags",
  "bytes",
  "futures-core",
@@ -9915,11 +9958,19 @@ dependencies = [
  "http",
  "http-body",
  "http-range-header",
+ "httpdate",
+ "iri-string",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
  "pin-project-lite",
+ "tokio",
+ "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tower-layer",
  "tower-service",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -10775,6 +10826,8 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "aliasable",
+ "alloc-no-stdlib",
+ "alloc-stdlib",
  "anemo",
  "anemo-build",
  "anemo-tower",
@@ -10802,6 +10855,7 @@ dependencies = [
  "asn1-rs",
  "asn1-rs-derive",
  "asn1-rs-impl",
+ "async-compression",
  "async-lock",
  "async-recursion",
  "async-stream",
@@ -10844,6 +10898,8 @@ dependencies = [
  "block-padding 0.2.1",
  "block-padding 0.3.2",
  "blst",
+ "brotli",
+ "brotli-decompressor",
  "bs58",
  "bstr",
  "bulletproofs",
@@ -11080,6 +11136,7 @@ dependencies = [
  "internment",
  "io-lifetimes",
  "ipnet",
+ "iri-string",
  "itertools",
  "itoa",
  "jemalloc-ctl",
@@ -11091,12 +11148,11 @@ dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-http-client",
- "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
+ "jsonrpsee-server",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
- "jsonrpsee-ws-server",
  "k256",
  "keccak",
  "lazy_static 0.2.11",
@@ -11123,6 +11179,7 @@ dependencies = [
  "memoffset",
  "merlin",
  "mime",
+ "mime_guess",
  "minimal-lexical",
  "miniz_oxide",
  "mintex",

@@ -51,8 +51,6 @@ pub struct NodeConfig {
     pub network_address: Multiaddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
-    #[serde(default = "default_websocket_address")]
-    pub websocket_address: Option<SocketAddr>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,

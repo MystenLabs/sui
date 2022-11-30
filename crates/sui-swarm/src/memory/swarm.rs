@@ -26,7 +26,6 @@ pub struct SwarmBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
-    websocket_rpc_addr: Option<SocketAddr>,
 }
 
 impl SwarmBuilder {
@@ -39,7 +38,6 @@ impl SwarmBuilder {
             initial_accounts_config: None,
             fullnode_count: 0,
             fullnode_rpc_addr: None,
-            websocket_rpc_addr: None,
         }
     }
 }
@@ -53,7 +51,6 @@ impl<R> SwarmBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
-            websocket_rpc_addr: self.websocket_rpc_addr,
         }
     }
 
@@ -94,11 +91,6 @@ impl<R> SwarmBuilder<R> {
         self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
         self
     }
-
-    pub fn with_websocket_rpc_addr(mut self, websocket_rpc_addr: SocketAddr) -> Self {
-        self.websocket_rpc_addr = Some(websocket_rpc_addr);
-        self
-    }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
@@ -132,12 +124,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
-                let mut config =
-                    network_config.generate_fullnode_config_with_random_dir_name(true, true);
+                let mut config = network_config.generate_fullnode_config_with_random_dir_name(true);
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }
-                config.websocket_address = self.websocket_rpc_addr;
                 fullnodes.insert(config.sui_address(), Node::new(config));
             });
         }
@@ -159,9 +149,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-            let mut config =
-                network_config.generate_fullnode_config_with_random_dir_name(true, true);
-            config.websocket_address = self.websocket_rpc_addr;
+            let mut config = network_config.generate_fullnode_config_with_random_dir_name(true);
             config.json_rpc_address = fullnode_rpc_addr;
             HashMap::from([(config.sui_address(), Node::new(config))])
         } else {

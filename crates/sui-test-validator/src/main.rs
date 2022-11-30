@@ -35,10 +35,6 @@ struct Args {
     #[clap(long, default_value = "9000")]
     fullnode_rpc_port: u16,
 
-    /// Port to start the fullnode websocket RPC server on
-    #[clap(long, default_value = "9001")]
-    websocket_rpc_port: u16,
-
     /// Port to start the Sui faucet on
     #[clap(long, default_value = "9123")]
     faucet_port: u16,
@@ -56,16 +52,11 @@ async fn main() -> Result<()> {
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
         fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
-        websocket_address: Some(format!("127.0.0.1:{}", args.websocket_rpc_port)),
         faucet_address: None,
     })
     .await?;
 
     println!("Fullnode RPC URL: {}", cluster.fullnode_url());
-    println!(
-        "Fullnode Websocket URL: {}",
-        cluster.websocket_url().unwrap()
-    );
 
     start_faucet(&cluster, args.faucet_port).await?;
 

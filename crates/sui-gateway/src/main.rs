@@ -61,20 +61,16 @@ async fn main() -> anyhow::Result<()> {
     let client = GatewayState::create_client(&gateway_config, Some(&prometheus_registry)).await?;
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
-    let mut server =
-        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), false, &prometheus_registry)?;
+    let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), &prometheus_registry)?;
     server.register_module(RpcGatewayImpl::new(client.clone()))?;
     server.register_module(GatewayReadApiImpl::new(client.clone()))?;
     server.register_module(TransactionBuilderImpl::new(client.clone()))?;
     server.register_module(BcsApiImpl::new_with_gateway(client.clone()))?;
     server.register_module(GatewayWalletSyncApiImpl::new(client))?;
 
-    let server_handle = server
-        .start(address)
-        .await?
-        .into_http_server_handle()
-        .expect("Expect a http server handle here");
+    let server_handle = server.start(address).await?;
 
-    server_handle.await;
+    server_handle.stopped().await;
+
     Ok(())
 }
