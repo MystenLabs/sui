@@ -27,7 +27,7 @@ pub struct MetricsLayer {
     method_whitelist: Arc<HashSet<String>>,
 }
 impl MetricsLayer {
-    pub fn new(registry: &prometheus::Registry, method_whitelist: &Vec<&str>) -> Self {
+    pub fn new(registry: &prometheus::Registry, method_whitelist: &[&str]) -> Self {
         let metrics = Arc::new(Metrics {
             requests_by_route: register_int_counter_vec_with_registry!(
                 "rpc_requests_by_route",
