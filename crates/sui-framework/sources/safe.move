@@ -1,172 +1,137 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// The Safe standard is a minimalistic shared wrapper around a coin. It provides a way for users to provide third-party dApps with
-/// the capability to transfer coins away from their wallets, if they are provided with the correct permission.
+/// Safe for collectibles.
+///
+/// - listing functionality
+/// - paying royalties to creators
+/// - no restrictions on transfers or taking / pulling an asset
 module sui::safe {
     use sui::object::{Self, ID, UID};
-    use sui::tx_context::{TxContext, sender};
-    use sui::transfer::Self;
-    use sui::balance::{Self, Balance};
+    use std::option::{Self, Option};
+    use sui::tx_context::{Self, TxContext};
+    use sui::dynamic_object_field as dof;
     use sui::coin::{Self, Coin};
-    use sui::vec_set::{Self, VecSet};
+    use sui::sui::SUI;
+    // use sui::dynamic_field as df;
 
-    const MAX_CAPABILITY_ISSUABLE: u64 = 1000;
+    /// Fee in basis points to pay to the creator.
+    const FEE: u64 = 100;
 
-    // Errors
-    const INVALID_TRANSFER_CAPABILITY: u64 = 0;
-    const INVALID_OWNER_CAPABILITY: u64 = 1;
-    const TRANSFER_CAPABILITY_REVOKED: u64 = 2;
-    const OVERDRAWN: u64 = 3;
-
-    //
-    /// Allows any holder of a capability to transfer a fixed amount of assets from the safe.
-    /// Useful in situations like an NFT marketplace where you wish to buy the NFTs at a specific price.
-    /// 
-    /// @ownership: Shared
-    /// 
-    struct Safe<phantom T> has key {
+    /// Safe is abstraction layer which separates and protects
+    /// collectibles or other types of assets which require royalties
+    /// or overall transfer safety.
+    struct Safe has key, store {
         id: UID,
-        balance: Balance<T>,
-        allowed_safes: VecSet<ID>,
+        owner: Option<address>,
+        whitelist: Option<vector<address>>,
     }
 
-    struct OwnerCapability<phantom T> has key, store {
-        id: UID,
-        safe_id: ID,
-    }
-
-    ///
-    /// Allows the owner of the capability to take `amount` of coins from the box.
-    ///
-    /// @ownership: Owned
-    ///
-    struct TransferCapability<phantom T> has store, key {
-        id: UID,
-        safe_id: ID,
-        // The amount that the user is able to transfer.
-        amount: u64,
-    }
-
-    //////////////////////////////////////////////////////
-    /// HELPER FUNCTIONS
-    //////////////////////////////////////////////////////
-    
-    /// Check that the capability has not yet been revoked by the owner.
-    fun check_capability_validity<T>(safe: &Safe<T>, capability: &TransferCapability<T>) {
-        // Check that the ids match
-        assert!(object::id(safe) == capability.safe_id, INVALID_TRANSFER_CAPABILITY);
-        // Check that it has not been cancelled
-        assert!(vec_set::contains(&safe.allowed_safes, &object::id(capability)), TRANSFER_CAPABILITY_REVOKED);
-    }
-
-    fun check_owner_capability_validity<T>(safe: &Safe<T>, capability: &OwnerCapability<T>) {
-        assert!(object::id(safe) == capability.safe_id, INVALID_OWNER_CAPABILITY);
-    }
-
-    /// Helper function to create a capability.
-    fun create_capability_<T>(safe: &mut Safe<T>, withdraw_amount: u64, ctx: &mut TxContext): TransferCapability<T> {
-        let cap_id = object::new(ctx);
-        vec_set::insert(&mut safe.allowed_safes, object::uid_to_inner(&cap_id));
-
-        let capability = TransferCapability {
-            id: cap_id,
-            safe_id: object::uid_to_inner(&safe.id),
-            amount: withdraw_amount,
-        };
-
-        capability
-    }
-
-    //////////////////////////////////////////////////////
-    /// PUBLIC FUNCTIONS
-    //////////////////////////////////////////////////////
-    
-    public fun balance<T>(safe: &Safe<T>): &Balance<T> {
-        &safe.balance
-    }
-
-    /// Wrap a coin around a safe.
-    /// a trusted party (or smart contract) to transfer the object out.
-    public fun create_<T>(balance: Balance<T>, ctx: &mut TxContext): OwnerCapability<T> {
-        let safe = Safe {
+    /// Free action of creating a new Safe. Owner and whitelisted (up to X)
+    /// safes can be specified to allow free transfers between them.
+    public fun create_safe(ctx: &mut TxContext): Safe {
+        Safe {
             id: object::new(ctx),
-            balance,
-            allowed_safes: vec_set::empty(),
-        };
-        let cap = OwnerCapability {
-            id: object::new(ctx),
-            safe_id: object::id(&safe),
-        };
-        transfer::share_object(safe);
-        cap
+            owner: option::some(tx_context::sender(ctx)),
+            whitelist: option::none()
+        }
     }
 
-    public entry fun create<T>(coin: Coin<T>, ctx: &mut TxContext) {
-        let balance = coin::into_balance(coin);
-        let cap = create_<T>(balance, ctx);
-        transfer::transfer(cap, sender(ctx));
+    /// Type linker. Which witness type matches royalty type.
+    // struct TypeLink<phantom R> has copy, store, drop {}
+
+    /// Add an Object to the safe effectively locking it from the outer world.
+    ///
+    /// When an Object is first added to the Safe, a witness parameter `S` is locked,
+    /// and will travel along the `T`, marking the proper `RoyaltyReceipt<S>` for `T`.
+    public fun put<T: key + store>(self: &mut Safe, item: T) {
+        // df::add(&mut self.id, TypeLink<T> {}, TypeLink<R> {});
+        dof::add(&mut self.id, object::id(&item), item)
+        // abort 0
     }
 
-    public entry fun create_empty<T>(ctx: &mut TxContext) {
-        let empty_balance = balance::zero<T>();
-        let cap = create_(empty_balance, ctx);
-        transfer::transfer(cap, sender(ctx));
+    struct Listing has copy, store, drop { price: u64, item_id: ID }
+
+    /// List an item for sale in a safe.
+    public fun list<T: key + store>(self: &mut Safe, item_id: ID, price: u64) {
+        let item = dof::remove<ID, T>(&mut self.id, item_id);
+        dof::add(&mut self.id, Listing { price, item_id }, item)
     }
 
-    /// Deposit funds to the safe
-    public fun deposit_<T>(safe: &mut Safe<T>, balance: Balance<T>) {
-        balance::join(&mut safe.balance, balance);
+    /// Purchase a listed item from a Safe by an item ID.
+    public fun purchase<T: key + store>(
+        self: &mut Safe, target: &mut Safe, item_id: ID, payment: Coin<SUI>, _ctx: &mut TxContext
+    ) {
+        let price = coin::value(&payment);
+        let item = dof::remove<Listing, T>(&mut self.id, Listing { price, item_id });
+
+        put(target, item);
+
+        // we need to do something with the payment
+        sui::transfer::transfer(payment, sui::tx_context::sender(_ctx))
     }
 
-    /// Deposit funds to the safe
-    public entry fun deposit<T>(safe: &mut Safe<T>, coin: Coin<T>) {
-        let balance = coin::into_balance(coin);
-        deposit_<T>(safe, balance);
+    /// Take an item from the Safe freeing it from the safe.
+    public fun take<T: key + store>(self: &mut Safe, item_id: ID): T {
+        dof::remove(&mut self.id, item_id)
     }
 
-    /// Withdraw coins from the safe as a `OwnerCapability` holder
-    public fun withdraw_<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, withdraw_amount: u64): Balance<T> {
-        // Ensures that only the owner can withdraw from the safe.
-        check_owner_capability_validity(safe, capability);
-        balance::split(&mut safe.balance, withdraw_amount)
+    /// Borrow an Object from the safe allowing read access. If additional constraints
+    /// are needed, Safe can be wrapped into an access-control wrapper.
+    public fun borrow<T: key + store>(self: &mut Safe, item_id: ID): &T {
+        dof::borrow(&self.id, item_id)
     }
 
-    /// Withdraw coins from the safe as a `OwnerCapability` holder
-    public entry fun withdraw<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, withdraw_amount: u64, ctx: &mut TxContext) {
-        let balance = withdraw_(safe, capability, withdraw_amount);
-        let coin = coin::from_balance(balance, ctx);
-        transfer::transfer(coin, sender(ctx));
+    /// Mutably borrow an Object from the safe allowing modifications. Access control can
+    /// be enforced on the higher level if needed.
+    public fun borrow_mut<T: key + store>(self: &mut Safe, item_id: ID): &mut T {
+        dof::borrow_mut(&mut self.id, item_id)
     }
 
-    /// Withdraw coins from the safe as a `TransferCapability` holder.
-    public fun debit<T>(safe: &mut Safe<T>, capability: &mut TransferCapability<T>, withdraw_amount: u64): Balance<T> {
-        // Check the validity of the capability
-        check_capability_validity(safe, capability);
+    // Listing / Purchases / Royalty
 
-        // Withdraw funds
-        assert!(capability.amount >= withdraw_amount, OVERDRAWN);
-        capability.amount = capability.amount - withdraw_amount;
-        balance::split(&mut safe.balance, withdraw_amount)
+    // In case there's a need to borrow full value for the transaction.
+    // If safe is not restricted, this function becomes a very fancy way of atomic swaps.
+    // Take it but with a Promise to put back. :wink:
+
+    struct Promise { expects: ID /* , safe: ID */ }
+
+    public fun take_with_promise<T: key + store>(self: &mut Safe, item_id: ID): (T, Promise) {
+        (dof::remove(&mut self.id, *&item_id), Promise { expects: item_id })
     }
 
-    /// Revoke a `TransferCapability` as an `OwnerCapability` holder
-    public entry fun revoke_transfer_capability<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, capability_id: ID) {
-        // Ensures that only the owner can withdraw from the safe.
-        check_owner_capability_validity(safe, capability);
-        vec_set::remove(&mut safe.allowed_safes, &capability_id);
+    public fun return_promise<T: key + store>(self: &mut Safe, item: T, promise: Promise) {
+        let Promise { expects } = promise;
+        assert!(object::id(&item) == expects, 0);
+        dof::add(&mut self.id, object::id(&item), item)
     }
 
-    /// Revoke a `TransferCapability` as its owner
-    public entry fun self_revoke_transfer_capability<T>(safe: &mut Safe<T>, capability: &TransferCapability<T>) {
-        check_capability_validity(safe, capability);
-        vec_set::remove(&mut safe.allowed_safes, &object::id(capability));
+    /// A very fancy way to prove that object was destroyed within the current transaction.
+    /// This way we ensure that the Object was unpacked. Yay!
+    ///
+    /// We can consider taking the responsibility of deleting the UID; most of the cleanups
+    /// and dynamic objects can be managed prior to this call (eg nothing is stopping us from it)
+    public fun prove_destruction(id: UID, promise: Promise) {
+        let Promise { expects } = promise;
+        assert!(object::uid_to_inner(&id) == expects, 0);
+        object::delete(id)
     }
+}
 
-    /// Create `TransferCapability` as an `OwnerCapability` holder
-    public fun create_transfer_capability<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, withdraw_amount: u64, ctx: &mut TxContext): TransferCapability<T> {
-        // Ensures that only the owner can withdraw from the safe.
-        check_owner_capability_validity(safe, capability);
-        create_capability_(safe, withdraw_amount, ctx)
+#[test_only]
+module sui::safe_tests {
+    use sui::test_scenario::{Self as ts};
+    use sui::safe;
+
+    fun people(): (address) { (@0x1) }
+
+    #[test]
+    public fun test() {
+        let (p1) = people();
+        let test = ts::begin(&p1);
+
+        // ...
+
+        ts::end(test);
     }
 }

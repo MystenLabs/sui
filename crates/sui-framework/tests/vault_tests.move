@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::safe_tests {
-    use sui::safe::{Self, Safe, TransferCapability, OwnerCapability};
+module sui::vault_tests {
+    use sui::vault::{Self, Safe, TransferCapability, OwnerCapability};
     use sui::test_scenario::{Self as ts, Scenario, ctx};
     use sui::coin;
     use sui::object::{Self, ID};
@@ -15,7 +15,7 @@ module sui::safe_tests {
         ts::next_tx(scenario, owner);
         {
             let coin = coin::mint_for_testing<SUI>(stored_amount, ctx(scenario));
-            safe::create(coin, ctx(scenario));
+            vault::create(coin, ctx(scenario));
         };
     }
 
@@ -25,7 +25,7 @@ module sui::safe_tests {
         ts::next_tx(scenario, owner);
         let safe = ts::take_shared<Safe<SUI>>(scenario);
         let cap = ts::take_from_sender<OwnerCapability<SUI>>(scenario);
-        let capability = safe::create_transfer_capability(&mut safe, &cap, delegate_amount, ctx(scenario));
+        let capability = vault::create_transfer_capability(&mut safe, &cap, delegate_amount, ctx(scenario));
         id = object::id(&capability);
         transfer::transfer(capability, delegate_to);
         ts::return_to_sender(scenario, cap);
@@ -37,7 +37,7 @@ module sui::safe_tests {
         ts::next_tx(scenario, delegatee);
         let safe = ts::take_shared<Safe<SUI>>(scenario);
         let capability = ts::take_from_sender<TransferCapability<SUI>>(scenario);
-        let balance = safe::debit(&mut safe, &mut capability, withdraw_amount);
+        let balance = vault::debit(&mut safe, &mut capability, withdraw_amount);
         balance::destroy_for_testing(balance);
 
         ts::return_to_sender(scenario, capability);
@@ -48,7 +48,7 @@ module sui::safe_tests {
         ts::next_tx(scenario, owner);
         let safe = ts::take_shared<Safe<SUI>>(scenario);
         let cap = ts::take_from_sender<OwnerCapability<SUI>>(scenario);
-        safe::revoke_transfer_capability(&mut safe, &cap, capability_id);
+        vault::revoke_transfer_capability(&mut safe, &cap, capability_id);
 
         ts::return_to_sender(scenario, cap);
         ts::return_shared(safe);
@@ -67,9 +67,9 @@ module sui::safe_tests {
         let safe = ts::take_shared<Safe<SUI>>(&mut scenario);
         let cap = ts::take_from_sender<OwnerCapability<SUI>>(&mut scenario);
 
-        let balance = safe::withdraw_(&mut safe, &cap, initial_funds);
+        let balance = vault::withdraw_(&mut safe, &cap, initial_funds);
         balance::destroy_for_testing(balance);
-        
+
         ts::return_to_sender(&mut scenario, cap);
         ts::return_shared(safe);
 
