@@ -597,7 +597,7 @@ pub async fn send_and_confirm_transaction_with_shared(
     let vote = response.signed_transaction.unwrap().into_inner();
 
     // Collect signatures from a quorum of authorities
-    let committee = authority.committee.load();
+    let committee = authority.committee();
     let certificate = CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -2463,7 +2463,7 @@ fn init_certified_transaction(
         authority_state.name,
         &*authority_state.secret,
     );
-    let committee = authority_state.committee.load();
+    let committee = authority_state.committee();
     CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -2660,7 +2660,7 @@ async fn make_test_transaction(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 
-    let committee = authorities[0].committee.load();
+    let committee = authorities[0].committee();
     let mut sigs = vec![];
 
     for authority in authorities {
