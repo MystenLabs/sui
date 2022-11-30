@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/component",
+    "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
@@ -26,7 +27,6 @@ members = [
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-macros",
-    "crates/sui-metrics",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",

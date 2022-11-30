@@ -26,7 +26,7 @@ use types::{
     WorkerToWorkerClient,
 };
 
-use sui_metrics::monitored_future;
+use mysten_metrics::monitored_future;
 
 use crate::TransactionValidator;
 

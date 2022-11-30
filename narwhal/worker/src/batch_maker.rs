@@ -17,8 +17,8 @@ use std::convert::TryInto;
 
 use futures::{Future, StreamExt};
 
+use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
-use sui_metrics::spawn_monitored_task;
 use tokio::{
     sync::watch,
     task::JoinHandle,

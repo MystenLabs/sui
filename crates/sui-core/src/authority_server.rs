@@ -29,7 +29,7 @@ use tap::TapFallible;
 use tokio::time::sleep;
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
-use sui_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 

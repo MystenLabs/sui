@@ -5,13 +5,13 @@ use config::Committee;
 use crypto::PublicKey;
 use dag::node_dag::{NodeDag, NodeDagError};
 use fastcrypto::hash::Hash;
+use mysten_metrics::spawn_monitored_task;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     ops::RangeInclusive,
     sync::{Arc, RwLock},
 };
-use sui_metrics::spawn_monitored_task;
 use thiserror::Error;
 use tokio::{
     sync::{

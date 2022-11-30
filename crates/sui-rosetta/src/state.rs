@@ -11,11 +11,11 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
+use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::QuorumDriver;
-use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };

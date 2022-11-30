@@ -4,10 +4,10 @@ use axum::{http::StatusCode, routing::get, Extension, Router};
 use config::WorkerId;
 use crypto::PublicKey;
 use multiaddr::Multiaddr;
+use mysten_metrics::spawn_monitored_task;
 use mysten_network::multiaddr::to_socket_addr;
 use prometheus::{Registry, TextEncoder};
 use std::collections::HashMap;
-use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 
 const METRICS_ROUTE: &str = "/metrics";

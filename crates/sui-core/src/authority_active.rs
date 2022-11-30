@@ -30,9 +30,9 @@
 */
 
 use arc_swap::ArcSwap;
+use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
-use sui_metrics::spawn_monitored_task;
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::{
     sync::{oneshot, Mutex, MutexGuard},

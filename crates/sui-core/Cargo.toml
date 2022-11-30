@@ -43,13 +43,13 @@ sui-storage = { path = "../sui-storage" }
 sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-metrics = { path = "../sui-metrics" }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-runtime.workspace = true
 
+mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-consensus = { path = "../../narwhal/consensus" }
 narwhal-executor = { path = "../../narwhal/executor" }

@@ -26,7 +26,7 @@ prometheus = "0.13.3"
 types = { path = "../types", package = "narwhal-types" }
 workspace-hack.workspace = true
 cfg-if = "1.0.0"
-sui-metrics = { path = "../../crates/sui-metrics" }
+mysten-metrics = { path = "../../crates/mysten-metrics" }
 mysten-util-mem.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
 telemetry-subscribers.workspace = true

@@ -5,6 +5,7 @@ use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+use mysten_metrics::{monitored_future, spawn_monitored_task};
 use network::{P2pNetwork, PrimaryToPrimaryRpc};
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{
@@ -13,7 +14,6 @@ use std::{
     time::Duration,
 };
 use storage::CertificateStore;
-use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinError, JoinHandle},
