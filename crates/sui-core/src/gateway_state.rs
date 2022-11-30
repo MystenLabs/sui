@@ -555,11 +555,12 @@ where
                 | TypeTag::Address
                 | TypeTag::Signer => (),
                 TypeTag::Vector(inner) => used_packages(packages, inner),
-                TypeTag::Struct(StructTag {
-                    address,
-                    type_params,
-                    ..
-                }) => {
+                TypeTag::Struct(st) => {
+                    let StructTag {
+                        address,
+                        type_params,
+                        ..
+                    } = &**st;
                     packages.push((*address).into());
                     for t in type_params {
                         used_packages(packages, t)

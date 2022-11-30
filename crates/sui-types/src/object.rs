@@ -221,7 +221,7 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        let type_ = TypeTag::Struct(struct_tag);
+        let type_ = TypeTag::Struct(Box::new(struct_tag));
         let layout = if format.include_types {
             TypeLayoutBuilder::build_with_types(&type_, resolver)
         } else {

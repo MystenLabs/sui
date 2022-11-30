@@ -4,6 +4,9 @@
 module sui::bulletproofs {
     use sui::elliptic_curve::{Self as ec, RistrettoPoint};
 
+    // TODO document this
+    const EBulletproofsVerificationFailed: u64 = 5;
+
     /// Only bit_length = 64, 32, 16, 8 will work.
     native fun native_verify_full_range_proof(proof: &vector<u8>, commitment: &vector<u8>, bit_length: u64);
 

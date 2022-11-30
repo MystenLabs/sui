@@ -340,7 +340,7 @@ module abc::tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = abc::abc::EAddressBanned)]
     fun test_address_banned_fail() {
         let scenario = scenario();
         test_address_banned_fail_(&mut scenario);
@@ -348,7 +348,7 @@ module abc::tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = abc::abc::EAddressBanned)]
     fun test_different_account_fail() {
         let scenario = scenario();
         test_different_account_fail_(&mut scenario);
@@ -356,7 +356,7 @@ module abc::tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = abc::abc::ENotOwner)]
     fun test_not_owned_balance_fail() {
         let scenario = scenario();
         test_not_owned_balance_fail_(&mut scenario);

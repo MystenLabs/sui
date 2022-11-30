@@ -18,6 +18,7 @@ use move_binary_format::{
         AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex,
         TypeParameterIndex,
     },
+    file_format_common::VERSION_6,
 };
 use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
@@ -29,6 +30,7 @@ use move_core_types::{
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
+    config::VMConfig,
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
     session::{SerializedReturnValues, Session},
@@ -65,14 +67,18 @@ macro_rules! assert_invariant {
 }
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
-    MoveVM::new_with_verifier_config(
+    MoveVM::new_with_config(
         natives,
-        VerifierConfig {
-            max_loop_depth: Some(5),
-            treat_friend_as_private: true,
-            max_generic_instantiation_length: Some(32),
-            max_function_parameters: Some(128),
-            max_basic_blocks: Some(1024),
+        VMConfig {
+            verifier: VerifierConfig {
+                max_loop_depth: Some(5),
+                treat_friend_as_private: true,
+                max_generic_instantiation_length: Some(32),
+                max_function_parameters: Some(128),
+                max_basic_blocks: Some(1024),
+            },
+            max_binary_format_version: VERSION_6,
+            paranoid_type_checks: false,
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -281,7 +287,7 @@ fn execute_internal<
         .into_iter()
         .map(|(id, (write_kind, owner, ty, tag, value))| {
             let abilities = session.get_type_abilities(&ty)?;
-            let layout = session.get_type_layout(&TypeTag::Struct(tag.clone()))?;
+            let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             Ok((id, (write_kind, owner, tag, abilities, bytes)))
         })
@@ -289,7 +295,7 @@ fn execute_internal<
     let user_events = user_events
         .into_iter()
         .map(|(_ty, tag, value)| {
-            let layout = session.get_type_layout(&TypeTag::Struct(tag.clone()))?;
+            let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             Ok((tag, bytes))
         })
@@ -1336,7 +1342,7 @@ fn struct_tag_equals_sig_token(
             struct_tag_equals_struct_inst(view, function_type_arguments, arg_type, *idx, args)
         }
         SignatureToken::TypeParameter(idx) => match &function_type_arguments[*idx as usize] {
-            TypeTag::Struct(s) => arg_type == s,
+            TypeTag::Struct(s) => arg_type == &**s,
             _ => false,
         },
         _ => false,

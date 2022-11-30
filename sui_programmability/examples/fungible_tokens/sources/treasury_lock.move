@@ -248,7 +248,7 @@ module fungible_tokens::treasury_lock_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = treasury_lock::EMintAmountTooLarge)]
     fun test_minting_over_limit_fails() {
         let scenario_ = user_with_mint_cap_scenario();
         let scenario = &mut scenario_;
@@ -321,7 +321,7 @@ module fungible_tokens::treasury_lock_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = treasury_lock::EMintCapBanned)]
     fun test_banned_cap_cannot_mint() {
         let scenario_ = user_with_mint_cap_scenario();
         let scenario = &mut scenario_;

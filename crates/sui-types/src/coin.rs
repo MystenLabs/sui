@@ -54,7 +54,7 @@ impl Coin {
             address: SUI_FRAMEWORK_ADDRESS,
             name: COIN_STRUCT_NAME.to_owned(),
             module: COIN_MODULE_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(type_param)],
+            type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
     }
 

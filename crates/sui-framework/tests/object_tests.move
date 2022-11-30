@@ -34,7 +34,7 @@ module sui::object_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = sui::object::EAddressParseError)]
     fun test_address_from_too_few_bytes() {
         let ctx = tx_context::dummy();
         let uid = object::new(&mut ctx);
@@ -43,12 +43,12 @@ module sui::object_tests {
         vector::pop_back(&mut bytes);
 
         let _ = object::address_from_bytes(bytes);
-        
+
         object::delete(uid);
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = sui::object::EAddressParseError)]
     fun test_address_from_too_many_bytes() {
         let ctx = tx_context::dummy();
         let uid = object::new(&mut ctx);
@@ -57,7 +57,7 @@ module sui::object_tests {
         vector::push_back(&mut bytes, 0x42);
 
         let _ = object::address_from_bytes(bytes);
-        
+
         object::delete(uid);
     }
 }

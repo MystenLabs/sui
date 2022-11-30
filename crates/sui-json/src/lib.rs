@@ -382,12 +382,13 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
         | TypeTag::U256
         | TypeTag::Address => true,
         TypeTag::Vector(inner) => is_primitive_type_tag(inner),
-        TypeTag::Struct(StructTag {
-            address,
-            module,
-            name,
-            type_params: type_args,
-        }) => {
+        TypeTag::Struct(st) => {
+            let StructTag {
+                address,
+                module,
+                name,
+                type_params: type_args,
+            } = &**st;
             let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
             // is id or..
             if resolved_struct == RESOLVED_SUI_ID {
