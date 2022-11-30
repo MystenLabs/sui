@@ -274,8 +274,7 @@ pub async fn start_a_fullnode_with_handle(
     let rpc_url = format!("http://{}", jsonrpc_server_url);
     let rpc_client = HttpClientBuilder::default().build(&rpc_url)?;
 
-    let ws_server_url = format!("127.0.0.1:{}", rpc_port);
-    let ws_url = format!("ws://{}", ws_server_url);
+    let ws_url = format!("ws://{}", jsonrpc_server_url);
     let ws_client = WsClientBuilder::default().build(&ws_url).await?;
     let sui_client = SuiClient::new(&rpc_url, Some(&ws_url), None).await?;
 
