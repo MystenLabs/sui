@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use narwhal_executor::ExecutionIndices;
+use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -16,6 +17,7 @@ use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
+use crate::epoch::reconfiguration::ReconfigState;
 use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -23,6 +25,8 @@ use typed_store_derive::DBMapUtils;
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
+
+const RECONFIG_STATE_INDEX: u64 = 0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
@@ -34,6 +38,8 @@ pub struct AuthorityPerEpochStore<S> {
     #[allow(dead_code)]
     epoch_id: EpochId,
     tables: AuthorityEpochTables<S>,
+    /// In-memory cache of the content from the reconfig_state db table.
+    reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
 }
 
@@ -94,6 +100,9 @@ pub struct AuthorityEpochTables<S> {
     /// consensus output index
     checkpoint_boundary: DBMap<u64, u64>,
 
+    /// This table contains current reconfiguration state for validator for current epoch
+    reconfig_state: DBMap<u64, ReconfigState>,
+
     /// Validators that have sent EndOfPublish message in this epoch
     end_of_publish: DBMap<AuthorityName, ()>,
 }
@@ -117,6 +126,14 @@ where
     pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {
         parent_path.join(format!("epoch_{}", epoch))
     }
+
+    fn load_reconfig_state(&self) -> SuiResult<ReconfigState> {
+        let state = self
+            .reconfig_state
+            .get(&RECONFIG_STATE_INDEX)?
+            .unwrap_or_default();
+        Ok(state)
+    }
 }
 
 impl<S> AuthorityPerEpochStore<S>
@@ -124,11 +141,23 @@ where
     S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
 {
     pub fn new(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
+        let tables = AuthorityEpochTables::open(epoch, parent_path, db_options);
+        let reconfig_state = tables
+            .load_reconfig_state()
+            .expect("Load reconfig state at initialization cannot fail");
         Self {
             epoch_id: epoch,
-            tables: AuthorityEpochTables::open(epoch, parent_path, db_options),
+            tables,
+            reconfig_state_mem: RwLock::new(reconfig_state),
             consensus_notify_read: NotifyRead::new(),
         }
+    }
+
+    pub fn store_reconfig_state(&self, new_state: &ReconfigState) -> SuiResult {
+        self.tables
+            .reconfig_state
+            .insert(&RECONFIG_STATE_INDEX, new_state)?;
+        Ok(())
     }
 
     pub fn insert_transaction(
@@ -434,6 +463,43 @@ where
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
+    }
+
+    pub fn get_reconfig_state_read_lock_guard(
+        &self,
+    ) -> parking_lot::RwLockReadGuard<ReconfigState> {
+        self.reconfig_state_mem.read()
+    }
+
+    pub fn get_reconfig_state_write_lock_guard(
+        &self,
+    ) -> parking_lot::RwLockWriteGuard<ReconfigState> {
+        self.reconfig_state_mem.write()
+    }
+
+    // This method can only be called from ConsensusAdapter::begin_reconfiguration
+    pub fn close_user_certs(
+        &self,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
+    ) {
+        lock_guard.close_user_certs();
+        self.store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+    }
+
+    pub fn close_all_certs(
+        &self,
+        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
+    ) {
+        lock_guard.close_all_certs();
+        self.store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+    }
+
+    pub fn open_all_certs(&self, mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
+        lock_guard.open_all_certs();
+        self.store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
     }
 }
 
