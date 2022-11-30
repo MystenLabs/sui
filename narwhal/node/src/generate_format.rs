@@ -53,9 +53,8 @@ fn get_registry() -> Result<Registry> {
             .enumerate()
             .map(|(i, (kp, network_key))| {
                 let id = kp.public();
-                let primary_address: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
-                    .parse()
-                    .unwrap();
+                let primary_address: Multiaddr =
+                    format!("/ip4/127.0.0.1/udp/{}", 100 + i).parse().unwrap();
                 (
                     id.clone(),
                     Authority {
@@ -99,9 +98,9 @@ fn get_registry() -> Result<Registry> {
             0,
             WorkerInfo {
                 name: worker_pk,
-                worker_address: "/ip4/127.0.0.1/tcp/500/http".to_string().parse().unwrap(),
+                worker_address: "/ip4/127.0.0.1/udp/500".to_string().parse().unwrap(),
                 internal_worker_address: Some(
-                    "/ip4/127.0.0.1/tcp/500/http".to_string().parse().unwrap(),
+                    "/ip4/127.0.0.1/udp/500".to_string().parse().unwrap(),
                 ),
                 transactions: "/ip4/127.0.0.1/tcp/400/http".to_string().parse().unwrap(),
             },
