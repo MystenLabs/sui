@@ -64,7 +64,7 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    /// Set the committe size (the number of validators in the validator set).
+    /// Set the committee size (the number of validators in the validator set).
     ///
     /// Defaults to 1.
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
@@ -328,11 +328,11 @@ mod test {
         swarm.launch().await.unwrap();
 
         for validator in swarm.validators() {
-            validator.health_check().await.unwrap();
+            validator.health_check(true).await.unwrap();
         }
 
         for fullnode in swarm.fullnodes() {
-            fullnode.health_check().await.unwrap();
+            fullnode.health_check(false).await.unwrap();
         }
     }
 }

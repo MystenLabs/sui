@@ -121,7 +121,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(store)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn reopen_epoch_db(&self, new_epoch: EpochId) {
         info!(?new_epoch, "re-opening AuthorityEpochTables for new epoch");
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(

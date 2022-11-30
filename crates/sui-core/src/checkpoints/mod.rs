@@ -893,16 +893,8 @@ mod tests {
         let store = Box::new(store);
 
         let (keypair, committee) = committee();
-        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = mpsc::channel(10);
         let state = Arc::new(
-            AuthorityState::new_for_testing(
-                committee.clone(),
-                &keypair,
-                None,
-                None,
-                tx_reconfigure_consensus,
-            )
-            .await,
+            AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await,
         );
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
