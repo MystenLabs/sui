@@ -14,7 +14,7 @@ use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelo
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
 };
-use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use byteorder::{BigEndian, ReadBytesExt};
@@ -1931,7 +1931,7 @@ impl InputObjectKind {
 
     pub fn version(&self) -> Option<SequenceNumber> {
         match self {
-            Self::MovePackage(..) => Some(OBJECT_START_VERSION),
+            Self::MovePackage(..) => Some(PACKAGE_VERSION),
             Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
             Self::SharedMoveObject { .. } => None,
         }

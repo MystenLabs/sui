@@ -754,6 +754,15 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 WriteKind::Mutate | WriteKind::Unwrap => prev_versions[&object.id()],
             };
 
+            if let Owner::Shared {
+                initial_shared_version,
+            } = &mut object.owner
+            {
+                if WriteKind::Create == kind {
+                    *initial_shared_version = SequenceNumber::new();
+                }
+            }
+
             if let Some(object) = object.data.try_as_move_mut() {
                 object.decrement_version_to(prev_version);
             }

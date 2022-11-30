@@ -176,7 +176,7 @@ impl<S> TemporaryStore<S> {
                     assert_eq!(
                         *initial_shared_version,
                         SequenceNumber::new(),
-                        "Initial version should be blank before this point",
+                        "Initial version should be blank before this point for {id:?}",
                     );
                     *initial_shared_version = self.lamport_timestamp;
                 }
