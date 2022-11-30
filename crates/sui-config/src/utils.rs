@@ -32,8 +32,14 @@ fn get_ephemeral_port() -> std::io::Result<u16> {
     Ok(addr.port())
 }
 
-pub fn new_network_address() -> multiaddr::Multiaddr {
+pub fn new_tcp_network_address() -> multiaddr::Multiaddr {
     format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
+        .parse()
+        .unwrap()
+}
+
+pub fn new_udp_network_address() -> multiaddr::Multiaddr {
+    format!("/ip4/127.0.0.1/udp/{}", get_available_port())
         .parse()
         .unwrap()
 }

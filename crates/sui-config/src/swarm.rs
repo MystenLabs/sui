@@ -96,7 +96,7 @@ impl NetworkConfig {
             FULL_NODE_DB_PATH.to_string()
         };
 
-        let network_address = utils::new_network_address();
+        let network_address = utils::new_tcp_network_address();
         let p2p_config = P2pConfig {
             listen_address: utils::available_local_socket_address(),
             ..Default::default()
