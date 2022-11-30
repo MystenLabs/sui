@@ -66,6 +66,24 @@ pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
 pub type EventPage = Page<SuiEventEnvelope, EventID>;
 
+pub type CoinPage = Page<Coin, ObjectID>;
+
+pub type BalancePage = Page<Balance, String>;
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct Balance {
+    coin_type: String,
+    object_count: usize,
+    total_balance: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct Coin {
+    coin_type: String,
+    coin_object_id: ObjectID,
+    balance: u64,
+}
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
     Copy,
