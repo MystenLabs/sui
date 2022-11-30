@@ -8,7 +8,7 @@ use std::{
 
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
 
@@ -80,15 +80,11 @@ impl TransactionManager {
             let missing = self
                 .authority_store
                 .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
-                .await
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
             if missing.is_empty() {
-                debug!(tx_digest = ?digest, "certificate ready");
                 self.certificate_ready(cert);
                 continue;
-            } else {
-                debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
             }
 
             for obj_key in missing {
@@ -146,10 +142,7 @@ impl TransactionManager {
                         continue;
                     }
                 };
-                debug!(tx_digest = ?digest, "certificate ready");
                 self.certificate_ready(cert);
-            } else {
-                debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
             }
         }
         self.metrics

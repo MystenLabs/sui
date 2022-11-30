@@ -124,7 +124,7 @@ where
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
                     // a bug. There would be nothing that can be done for permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                    warn!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
                     break;
