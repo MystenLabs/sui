@@ -87,6 +87,38 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         )
         .map_err(jsonrpsee::core::Error::from)
     }
+
+    async fn execute_transaction_serialized_sig(
+        &self,
+        tx_bytes: Base64,
+        signature: Base64,
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse> {
+        let data =
+            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
+            .map_err(|e| anyhow!(e))?;
+        let txn = Transaction::new(SenderSignedData::new(data, signature));
+        let txn_digest = *txn.digest();
+
+        let transaction_orchestrator = self.transaction_orchestrator.clone();
+        let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type,
+            }
+        ))
+        .await
+        .map_err(|e| anyhow!(e))? // for JoinError
+        .map_err(|e| anyhow!(e))?; // For Sui transaction execution error (SuiResult<ExecuteTransactionResponse>)
+
+        SuiExecuteTransactionResponse::from_execute_transaction_response(
+            response,
+            txn_digest,
+            self.module_cache.as_ref(),
+        )
+        .map_err(jsonrpsee::core::Error::from)
+    }
 }
 
 impl SuiRpcModule for FullNodeTransactionExecutionApi {

@@ -476,6 +476,7 @@ pub trait TransactionExecutionApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
+    // TODO(joyqvq): remove this and rename executeTransactionSerializedSig to executeTransaction
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
@@ -487,6 +488,17 @@ pub trait TransactionExecutionApi {
         signature: Base64,
         /// signer's public key, as base-64 encoded string
         pub_key: Base64,
+        /// The request type
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse>;
+
+    #[method(name = "executeTransactionSerializedSig")]
+    async fn execute_transaction_serialized_sig(
+        &self,
+        /// transaction data bytes, as base-64 encoded string
+        tx_bytes: Base64,
+        /// `flag || signature || pubkey` bytes, as base-64 encoded string
+        signature: Base64,
         /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
