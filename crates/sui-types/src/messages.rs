@@ -825,7 +825,7 @@ impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(sha3_hash(self))
+        TransactionDigest::new(sha3_hash(&self.data))
     }
 
     fn verify(&self) -> SuiResult {

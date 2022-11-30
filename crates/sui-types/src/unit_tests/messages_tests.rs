@@ -17,8 +17,6 @@ use crate::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
-use crate::messages_checkpoint::CheckpointContents;
-use crate::messages_checkpoint::CheckpointSummary;
 use crate::object::Owner;
 
 use super::*;
@@ -503,11 +501,24 @@ fn test_user_signature_committed_in_transactions() {
         random_object_ref(),
         10000,
     );
+
+    let mut tx_data_2 = tx_data.clone();
+    tx_data_2.gas_budget += 1;
+
     let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
     let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
+    let transaction_c = Transaction::from_data_and_signer(tx_data_2, &sender_sec2);
+
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
-    assert_ne!(tx_digest_a, tx_digest_b);
+    let tx_digest_c = transaction_c.digest();
+
+    // The digest is the same for the same TransactionData even though the signature is different.
+    assert_eq!(tx_digest_a, tx_digest_b);
+
+    // The digest is the different for different TransactionData even though the signer is the same.
+    assert_ne!(tx_digest_a, tx_digest_c);
+    assert_ne!(tx_digest_b, tx_digest_c);
 
     // Test hash non-equality
     let mut hasher = DefaultHasher::new();
@@ -560,7 +571,8 @@ fn test_user_signature_committed_in_signed_transactions() {
 
     let tx_digest_a = signed_tx_a.digest();
     let tx_digest_b = signed_tx_b.digest();
-    assert_ne!(tx_digest_a, tx_digest_b);
+    // digest is derived from the same transaction data, not including the signature.
+    assert_eq!(tx_digest_a, tx_digest_b);
 
     // Ensure that signed tx verifies against the transaction with a correct user signature.
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
@@ -586,66 +598,6 @@ fn test_user_signature_committed_in_signed_transactions() {
 
     // test equality
     assert_ne!(signed_tx_a, signed_tx_b)
-}
-
-#[test]
-fn test_user_signature_committed_in_checkpoints() {
-    let (a1, _sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
-
-    let tx_data = TransactionData::new_transfer(
-        a_sender2,
-        random_object_ref(),
-        a_sender,
-        random_object_ref(),
-        10000,
-    );
-
-    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
-
-    let tx_digest_a = transaction_a.digest();
-    let tx_digest_b = transaction_b.digest();
-
-    let effects_a = TransactionEffects {
-        transaction_digest: *tx_digest_a,
-        gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
-        ..Default::default()
-    };
-
-    let mut effects_b = effects_a.clone();
-    effects_b.transaction_digest = *tx_digest_b;
-
-    let execution_digest_a = ExecutionDigests::new(*tx_digest_a, effects_a.digest());
-
-    let execution_digest_b = ExecutionDigests::new(*tx_digest_b, effects_b.digest());
-
-    let checkpoint_summary_a = CheckpointSummary::new(
-        0,
-        1,
-        &CheckpointContents::new_with_causally_ordered_transactions(
-            [execution_digest_a].into_iter(),
-        ),
-        None,
-        effects_a.gas_used,
-        None,
-    );
-    let checkpoint_summary_b = CheckpointSummary::new(
-        0,
-        1,
-        &CheckpointContents::new_with_causally_ordered_transactions(
-            [execution_digest_b].into_iter(),
-        ),
-        None,
-        effects_b.gas_used,
-        None,
-    );
-
-    assert_ne!(checkpoint_summary_a.digest(), checkpoint_summary_b.digest());
-
-    // test non equality
-    assert_ne!(checkpoint_summary_a, checkpoint_summary_b);
 }
 
 #[test]
