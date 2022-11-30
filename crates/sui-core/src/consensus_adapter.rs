@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
+use futures::future::select;
+use futures::future::Either;
+use futures::FutureExt;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::Mutex;
@@ -14,11 +17,12 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use std::collections::HashSet;
+use std::future::Future;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, StakeUnit};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::ConsensusTransaction,
@@ -207,62 +211,76 @@ impl ConsensusAdapter {
         self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
-    fn should_submit(
+    fn await_submit_delay(
         committee: &Committee,
         ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
-    ) -> bool {
+    ) -> impl Future<Output = ()> {
+        tokio::time::sleep(Self::submit_delay(committee, ourselves, transaction))
+    }
+
+    fn submit_delay(
+        committee: &Committee,
+        ourselves: &AuthorityName,
+        transaction: &ConsensusTransaction,
+    ) -> Duration {
         if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
-            Self::should_submit_certificate(committee, ourselves, certificate.digest())
+            Self::submit_delay_certificate(committee, ourselves, certificate.digest())
         } else {
-            true
+            Duration::ZERO
         }
     }
 
-    /// Check if this authority should submit the certificate to consensus.
-    fn should_submit_certificate(
+    /// Check when this authority should submit the certificate to consensus.
+    fn submit_delay_certificate(
         committee: &Committee,
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
-    ) -> bool {
+    ) -> Duration {
+        let (nominator, denominator) =
+            Self::position_submit_certificate(committee, ourselves, tx_digest);
+        const MAX_DELAY_MS: u64 = 60_000;
+        // There is no overflow as long as total_stake < u64::MAX / MAX_DELAY_MS, which seem to be reasonable expectation
+        let duration_ms = MAX_DELAY_MS * nominator / denominator;
+        Duration::from_millis(duration_ms)
+    }
+
+    /// Returns a position of the current validator in ordered list of validator to submit transaction
+    /// You can think of this value as a float in range [0, 1)
+    /// Validators closer to 0 are submitting transaction sooner, and validators closer to 1 wait longer
+    ///
+    /// In practice, instead of returning float we return integer fraction here in form of (nominator, denominator)
+    /// If returned tuple (A, B) the value A is in range [0, B)
+    fn position_submit_certificate(
+        committee: &Committee,
+        ourselves: &AuthorityName,
+        tx_digest: &TransactionDigest,
+    ) -> (StakeUnit, StakeUnit) {
         // the 32 is as requirement of the deault StdRng::from_seed choice
-        let digest_bytes = if let Some(b) = tx_digest.to_bytes().get(0..32) {
-            if let Ok(bytes) = b.try_into() {
-                bytes
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        };
+        let digest_bytes = tx_digest.into_bytes();
 
         // permute the validators deterministically, based on the digest
         let mut rng = StdRng::from_seed(digest_bytes);
         let mut validators = committee.voting_rights.clone();
         validators.shuffle(&mut rng);
 
-        // the last (f+1) elements by weight are the submitters for this transaction
-        let mut total_weight = 0u64;
-        let mut found = false;
-        while total_weight < committee.validity_threshold() {
+        let mut our_position = 0u64;
+        loop {
             if let Some((name, weight)) = validators.pop() {
-                total_weight += weight;
                 if name == *ourselves {
-                    found = true;
                     break;
                 }
+                // note that our_position is 0 for first validator in the list
+                // our_position is strictly less then committee.total_votes for last validator
+                our_position += weight;
             } else {
                 unreachable!(
-                    "We should cross the validity threshold before running out of validators"
+                    "We should find ourselves in committee before running out of validators"
                 );
             }
         }
-        // Are we one of the submitters?
-        found
 
-        // TODO [issue #1647]: Right now every transaction is submitted to (f+1) authorities.
-        // We should bring this number down to one, and make sure the mapping to submitters is
-        // refreshed frequently enough to make sure this is Byzantine-resistant
+        (our_position, committee.total_votes)
     }
 
     /// This method is called externally to begin reconfiguration
@@ -318,28 +336,37 @@ impl ConsensusAdapter {
 
     fn submit_unchecked(self: &Arc<Self>, transaction: ConsensusTransaction) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
-        let async_stage = self.clone().submit_await(transaction);
+        let async_stage = self.clone().submit_and_wait(transaction);
         // Number of this tasks is limited by `sequencing_certificate_inflight` limit
         let join_handle = spawn_monitored_task!(async_stage);
         join_handle
     }
 
     #[allow(clippy::option_map_unit_fn)]
-    async fn submit_await(self: Arc<Self>, transaction: ConsensusTransaction) {
-        let should_submit = Self::should_submit(
+    async fn submit_and_wait(self: Arc<Self>, transaction: ConsensusTransaction) {
+        let _guard = InflightDropGuard::acquire(&self);
+        let processed_waiter = self
+            .authority
+            .consensus_message_processed_notify(transaction.key())
+            .boxed();
+        let await_submit = Self::await_submit_delay(
             &self.authority.committee.load(),
             &self.authority.name,
             &transaction,
-        );
-        let _inflight_guard = if should_submit {
-            Some(InflightDropGuard::acquire(&self))
-        } else {
-            None
+        )
+        .boxed();
+        // We need to wait for some delay until we submit transaction to the consensus
+        // However, if transaction is received by consensus while we wait, we don't need to wait
+        let processed_waiter = match select(processed_waiter, await_submit).await {
+            Either::Left((processed, _await_submit)) => {
+                processed.expect("Storage error when waiting for consensus message processed");
+                None
+            }
+            Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
-        let processed_waiter = self
-            .authority
-            .consensus_message_processed_notify(transaction.key());
-        if should_submit {
+        if let Some(processed_waiter) = processed_waiter {
+            // We enter this branch when in select above await_submit completed and processed_waiter is pending
+            // This means it is time for us to submit transaction to consensus
             let _timer = self
                 .opt_metrics
                 .as_ref()
@@ -358,10 +385,10 @@ impl ConsensusAdapter {
                 });
                 time::sleep(Duration::from_secs(10)).await;
             }
+            processed_waiter
+                .await
+                .expect("Storage error when waiting for consensus message processed");
         }
-        processed_waiter
-            .await
-            .expect("Storage error when waiting for consensus message processed");
         let send_end_of_publish =
             if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
                 let reconfig_guard = self.authority.get_reconfig_state_read_lock_guard();
@@ -457,7 +484,7 @@ mod adapter_tests {
     };
 
     #[test]
-    fn should_submit_selects_valid_submitters() {
+    fn test_position_submit_certificate() {
         // grab a random committee and a random stake distribution
         let mut rng = StdRng::from_seed([0; 32]);
         const COMMITTEE_SIZE: usize = 10; // 3 * 3 + 1;
@@ -483,16 +510,18 @@ mod adapter_tests {
             rng.fill_bytes(&mut tx_digest_bytes);
             let tx_digest = TransactionDigest::new(tx_digest_bytes);
 
-            let total_stake_this_committee = authorities.iter().map(|(_name, stake)| stake).sum();
-            // collect the stake of authorities which will be selected to submit the transaction
-            let mut submitters_total_stake = 0u64;
-            for (name, stake) in authorities.iter() {
-                if ConsensusAdapter::should_submit_certificate(&committee, name, &tx_digest) {
-                    submitters_total_stake += stake;
+            let mut zero_found = false;
+            for (name, _) in authorities.iter() {
+                let (f, total_votes) =
+                    ConsensusAdapter::position_submit_certificate(&committee, name, &tx_digest);
+                assert!(f < total_votes);
+                if f == 0 {
+                    // One and only one validator gets position 0
+                    assert!(!zero_found);
+                    zero_found = true;
                 }
             }
-            assert!(submitters_total_stake >= committee.validity_threshold());
-            assert!(submitters_total_stake < total_stake_this_committee);
+            assert!(zero_found);
         }
     }
 }
