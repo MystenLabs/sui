@@ -63,6 +63,9 @@ pub fn multiaddr_to_address(
             Ok((hostname.as_ref(), port).into())
         }
 
-        _ => Err(anyhow::anyhow!("invalid address")),
+        _ => {
+            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
+            Err(anyhow::anyhow!("invalid address"))
+        }
     }
 }

@@ -100,6 +100,7 @@ pub struct ValidatorGenesisInfo {
     #[serde_as(as = "KeyPairBase64")]
     pub network_key_pair: NetworkKeyPair,
     pub network_address: Multiaddr,
+    pub p2p_address: Multiaddr,
     pub stake: StakeUnit,
     pub gas_price: u64,
     pub commission_rate: u64,
@@ -122,6 +123,7 @@ impl ValidatorGenesisInfo {
             account_key_pair,
             network_key_pair,
             network_address: utils::new_tcp_network_address(),
+            p2p_address: utils::new_udp_network_address(),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
@@ -155,6 +157,7 @@ impl ValidatorGenesisInfo {
             account_key_pair,
             network_key_pair,
             network_address: make_tcp_addr(1000 + port_offset),
+            p2p_address: make_udp_addr(5000 + port_offset),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
