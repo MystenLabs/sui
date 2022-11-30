@@ -10,10 +10,7 @@ use std::time::Duration;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::{atomic::Ordering, Arc},
 };
 
 use anyhow::anyhow;
@@ -558,9 +555,6 @@ pub struct AuthorityState {
 
     // The Transaction notifier ticketing engine.
     pub(crate) batch_notifier: Arc<authority_notifier::TransactionNotifier>, // TODO: remove pub
-
-    /// Ensures there can only be a single consensus client is updating the state.
-    pub consensus_guardrail: AtomicUsize,
 
     pub metrics: Arc<AuthorityMetrics>,
 
@@ -1485,7 +1479,6 @@ impl AuthorityState {
                 authority_notifier::TransactionNotifier::new(store.clone(), prometheus_registry)
                     .expect("Notifier cannot start."),
             ),
-            consensus_guardrail: AtomicUsize::new(0),
             metrics,
             reconfig_state_mem: RwLock::new(
                 store
