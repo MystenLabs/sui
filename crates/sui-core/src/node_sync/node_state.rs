@@ -9,9 +9,9 @@ use crate::{
 
 use tokio_stream::{Stream, StreamExt};
 
+use mysten_metrics::monitored_future;
+use mysten_metrics::spawn_monitored_task;
 use std::collections::{hash_map, BTreeSet, HashMap};
-use sui_metrics::monitored_future;
-use sui_metrics::spawn_monitored_task;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{

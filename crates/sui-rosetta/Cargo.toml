@@ -33,7 +33,7 @@ sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
-sui-metrics = { path = "../sui-metrics" }
+mysten-metrics = { path = "../mysten-metrics" }
 
 move-core-types.workspace = true
 

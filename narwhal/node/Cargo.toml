@@ -41,11 +41,11 @@ types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
 eyre = "0.6.8"
 
+mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 
-sui-metrics = { path = "../../crates/sui-metrics" }
 workspace-hack.workspace = true
 
 anemo.workspace = true

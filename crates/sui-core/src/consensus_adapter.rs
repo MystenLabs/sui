@@ -33,7 +33,7 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use crate::authority::AuthorityState;
-use sui_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::Duration;

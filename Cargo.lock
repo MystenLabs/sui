@@ -4888,6 +4888,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
+name = "mysten-metrics"
+version = "0.7.0"
+dependencies = [
+ "once_cell",
+ "prometheus",
+ "scopeguard",
+ "tap",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mysten-network"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5013,6 +5026,7 @@ dependencies = [
  "futures",
  "indexmap",
  "match_opt",
+ "mysten-metrics",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
@@ -5025,7 +5039,6 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
- "sui-metrics",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
@@ -5109,6 +5122,7 @@ dependencies = [
  "match_opt",
  "mockall",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5121,7 +5135,6 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
- "sui-metrics",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",
@@ -5150,13 +5163,13 @@ dependencies = [
  "fastcrypto",
  "futures",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
- "sui-metrics",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5184,6 +5197,7 @@ dependencies = [
  "futures",
  "itertools",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
@@ -5203,7 +5217,6 @@ dependencies = [
  "serde-reflection",
  "serde_yaml",
  "structopt",
- "sui-metrics",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
@@ -5240,6 +5253,7 @@ dependencies = [
  "itertools",
  "mockall",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
@@ -5259,7 +5273,6 @@ dependencies = [
  "reqwest",
  "roaring",
  "serde 1.0.147",
- "sui-metrics",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -5399,6 +5412,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
@@ -5413,7 +5427,6 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "serde 1.0.147",
- "sui-metrics",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -8397,6 +8410,7 @@ dependencies = [
  "move-core-types",
  "move-vm-runtime",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-consensus",
@@ -8426,7 +8440,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-macros",
- "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8494,6 +8507,7 @@ dependencies = [
  "clap 3.2.22",
  "futures",
  "http",
+ "mysten-metrics",
  "prometheus",
  "scopeguard",
  "serde 1.0.147",
@@ -8501,7 +8515,6 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-metrics",
  "sui-node",
  "sui-types",
  "tap",
@@ -8662,6 +8675,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-metrics",
  "prometheus",
  "serde 1.0.147",
  "signature",
@@ -8669,7 +8683,6 @@ dependencies = [
  "sui-cost",
  "sui-json",
  "sui-json-rpc-types",
- "sui-metrics",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-transaction-builder",
@@ -8736,19 +8749,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-metrics"
-version = "0.7.0"
-dependencies = [
- "once_cell",
- "prometheus",
- "scopeguard",
- "tap",
- "tokio",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -8785,6 +8785,7 @@ dependencies = [
  "clap 3.2.22",
  "futures",
  "multiaddr 0.16.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-network",
  "narwhal-types",
@@ -8794,7 +8795,6 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
- "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8858,6 +8858,7 @@ dependencies = [
  "fastcrypto",
  "hyper",
  "move-core-types",
+ "mysten-metrics",
  "once_cell",
  "rand 0.8.5",
  "serde 1.0.147",
@@ -8871,7 +8872,6 @@ dependencies = [
  "sui-framework",
  "sui-framework-build",
  "sui-keys",
- "sui-metrics",
  "sui-node",
  "sui-sdk",
  "sui-types",
@@ -8973,6 +8973,7 @@ dependencies = [
  "futures",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-metrics",
  "num_cpus",
  "once_cell",
  "pretty_assertions",
@@ -8983,7 +8984,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-json-rpc-types",
- "sui-metrics",
  "sui-types",
  "tap",
  "telemetry-subscribers",
