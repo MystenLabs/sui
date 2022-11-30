@@ -278,6 +278,14 @@ impl Data {
         }
     }
 
+    pub fn try_into_move(self) -> Option<MoveObject> {
+        use Data::*;
+        match self {
+            Move(m) => Some(m),
+            Package(_) => None,
+        }
+    }
+
     pub fn try_as_package(&self) -> Option<&MovePackage> {
         use Data::*;
         match self {

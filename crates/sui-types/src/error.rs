@@ -510,6 +510,9 @@ pub enum SuiError {
     #[error("Failed to get supermajority's consensus on committee information for minimal epoch: {minimal_epoch}")]
     FailedToGetAgreedCommitteeFromMajority { minimal_epoch: EpochId },
 
+    #[error("Failed to get supermajority's consensus on object {object_id}'s state")]
+    FailedToGetAgreedObjectStateFromMajority { object_id: ObjectID },
+
     #[error("Empty input coins for Pay related transaction")]
     EmptyInputCoins,
 
