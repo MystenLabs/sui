@@ -8659,7 +8659,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-metrics",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-sdk",
