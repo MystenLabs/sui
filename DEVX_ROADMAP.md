@@ -1,44 +1,43 @@
-# Developer Experience Roadmap
-(last updated 10/12/2022, next update approximately ~11/14/2022 following a monthly cadence)
+# Sui Developer Experience Roadmap
 
-To keep Sui builders up to date with the latest happenings, we are maintaining the following list of developer-facing changes coming in the next ~30 days. While we strive to be accurate, the timing of the landing/release of these features is subject to change. More thorough documentation and references will be available as each feature is released to Devnet. Please continue to monitor Devnet release notes for the source of truth on what is currently deployed--this list is about what's next!
+Last updated: 11/29/2022
+Next update:  on or about 12/29/2022
 
-## Big picture
-* The gateway component will be deprecated soon and we'll give community sufficient heads up once the dates are finalized. With this deprecation, clients will now communicate directly with full nodes, and full nodes will act as quorum driver (i.e., accept transactions, form a certificate + certificate effects, return the effects to the client).
-* Dynamic child object support is still WIP. The features eliminates the need to explicitly pass child objects as transaction inputs, and enables rich new collection types (e.g., large hash maps with dynamic lookup).
-* We are adding new pay transaction types for generic payments [[NFT standard proposal](https://github.com/MystenLabs/sui/pull/4887)]. See below for more details.
+To keep Sui builders up-to-date with the latest happenings, we provide the following list of developer-facing changes planned in the next ~30 days. While we strive to be accurate, the timing to release the planned features is subject to change. We provide more thorough documentation and references for each feature release to Sui Devnet. Please continue to monitor Devnet release notes as the source of truth for features deployed to Devnet. This document informs you about the currently planned upcoming changes to Sui.
+
+## Highlights
+
+ * We plan to add the ability for developers to depend on packages from third-party package managers. More information in the following sections.
+ * We continue to make stability and performance improvements to our JSON RPC APIs.
+ * We intend to introduce signing support soon. 
+
 
 ## JSON RPC
-* Working on a Typescript migration guide to enable smooth transition from using Gateway to Full nodes [**Breaking Change**].
-* `getObject` and `getRawObject` will be merged, and `DataEncoding` arg will be used to choose between parsedJSON and BCS encoding types.
-* Adding `getCoin` and `getBalance` methods
-* Adding `pay`, which will take multiple coins, splits & merges them within the same transaction when needed, and transfers the resulting coins to multiple recipients. Deprecating `splitCoin`, `splitCoinEqual` and `mergeCoin` in that process, as they can all be done via the `pay` endpoint [**Breaking Change**].
-* Adding `PaySui` transaction type, which takes multiple coins and transfer them to a single recipient, while paying gas with the input coins. Deprecating `TransferSui` as `PaySui` is a generalized version of it [**Breaking Change**].
-* Adding `estimateTransactionComputationCost` for transaction cost estimation.
-* Adding `selectCoins` to select coins for gas payments, pay etc.
-* Standardizing the return type of u64 to string.
+
+ * Remove the requirement for a user signature from `sui_dryRunTransaction`. **Breaking Change**.
+ * Add RPC support for Dynamic Fields. [Issue](https://github.com/MystenLabs/sui/pull/5882).
+ * Fold `getRawObject` method into `getObject` method, and use the `DataEncoding` argument to choose between parsedJSON and BCS encoding types.
+ * Add new `getCoin` and `getBalance` methods.
+ * Standardize the return type of `u64`,`u128`, and `u256` values to `string`.
+ * Replace the `get_object_owned_by_object` method with the `get_dynamic_fields` method.
+ * Add the `object_type` field to `TransactionEffect` responses.
+ * Add the object version and digest field to `Publish` events schema.
+ * Remove the `merge_coin`, `split_coin_equal`, and `split_coin` RPC endpoints.
+ * Event API: Support using AND/OR operators to combine query criteria.
 
 ## SDK (Typescript, Rust)
 
-* Intent signing support which will include an intent struct to be serialized and signed in addition to the transaction data [[Issues](https://github.com/MystenLabs/fastcrypto/issues/26)].
-* [Rust SDK] Removing reliance on String and Json Values in Rust Transaction Builder, making it more Rust friendly
-* Adding denomination conversion functionality, which converts SUI to MIST.
-* [TypeScript] Adding support for deserializing transactions.
+ * Introduce intent signing support. This includes an `intent` struct to serialize and sign in addition to the transaction data. [Issue](https://github.com/MystenLabs/fastcrypto/issues/26).
+ * Add support to compute transaction digest.
 
 ## Sui Move
 
-* Crypto.move will be split into its individual modules organized by crypto primitives [[PR](https://github.com/MystenLabs/sui/pull/4653)].
-* Supporting dynamic child access requires additional time due to newer complexities discovered and we are actively working on enabling it on Devnet ASAP. 
-* Support for passing mutable coins instead of owned.
-* New autogenerated docs for the Sui Framework [[link](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs)].
-* Enable shared coins via Safe module [[PR](https://github.com/MystenLabs/sui/pull/4680)].
-* Support for type reflection [[PR](https://github.com/move-language/move/pull/566)].
-* Support for `_`'s in integer literals (e.g., `let one_million = 1_000_000`).
+ * Improve source discoverability.
+    * Add the ability for developers to verify source code dependencies against their on-chain counterparts when publishing packages.
+    * Enable third-party package managers like Movey to resolve dependencies in Sui Move packages. This enables library developers to distribute their packages under easy-to-identify names. This also removes the error-prone need for developers to remember the GitHub repository, revision, and subdirectories for all their dependencies.
+ * Better debug printing for structs (including field names + nice formatting).
+
 
 ## Sui CLI
-* Intent signing support: Same as in SDK. Also, making the Sui keystore ChainID aware as well as password protected.
-* Source verification for dependent packages enforced at publish time.
 
-## Faucet
-* As a precursor to integrating Faucet into Sui CLI/SDKs/Wallet, rate-limiting will be enforced on the faucet server to no more than 20 requests in 24 hours, originating from the same ip address.
-* Adding support for requesting Gas coins from the faucet.
+ * Improve error messaging.
