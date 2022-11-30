@@ -15,12 +15,12 @@ use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
+use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use storage::CertificateStore;
 use store::Store;
-use sui_metrics::spawn_monitored_task;
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinHandle, JoinSet},

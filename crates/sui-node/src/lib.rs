@@ -44,6 +44,7 @@ use tracing::{info, warn};
 use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
+use mysten_metrics::spawn_monitored_task;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
@@ -51,7 +52,6 @@ use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use sui_metrics::spawn_monitored_task;
 use sui_types::crypto::KeypairTraits;
 
 pub mod admin;
@@ -107,7 +107,7 @@ impl SuiNode {
 
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(&prometheus_registry);
-        sui_metrics::init_metrics(&prometheus_registry);
+        mysten_metrics::init_metrics(&prometheus_registry);
 
         let genesis = config.genesis()?;
 

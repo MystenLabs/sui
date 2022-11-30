@@ -28,7 +28,7 @@ sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
-sui-metrics = { path = "../sui-metrics" }
+mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
 prometheus-closure-metric = { path = "../prometheus-closure-metric" }

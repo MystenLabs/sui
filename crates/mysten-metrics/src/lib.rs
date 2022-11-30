@@ -59,11 +59,11 @@ macro_rules! monitored_future {
         const LOCATION: &str = concat!(file!(), ':', line!());
 
         async move {
-            let metrics = sui_metrics::get_metrics();
+            let metrics = mysten_metrics::get_metrics();
 
             let _guard = if let Some(m) = &metrics {
                 m.$metric.with_label_values(&[LOCATION]).inc();
-                Some(sui_metrics::scopeguard::guard(m, |metrics| {
+                Some(mysten_metrics::scopeguard::guard(m, |metrics| {
                     m.$metric.with_label_values(&[LOCATION]).dec();
                 }))
             } else {
@@ -78,6 +78,6 @@ macro_rules! monitored_future {
 #[macro_export]
 macro_rules! spawn_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn(sui_metrics::monitored_future!(tasks, $fut))
+        tokio::task::spawn(mysten_metrics::monitored_future!(tasks, $fut))
     };
 }

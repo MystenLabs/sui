@@ -16,11 +16,11 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::node_sync::{NodeSyncHandle, SyncStatus};
 use crate::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
+use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
-use sui_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,

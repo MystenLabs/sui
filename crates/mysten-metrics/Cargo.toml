@@ -1,5 +1,5 @@
 [package]
-name = "sui-metrics"
+name = "mysten-metrics"
 version = "0.7.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
