@@ -399,6 +399,11 @@ pub enum SuiError {
     StorageMissingFieldError(String),
     #[error("Corrupted fields/data in storage error: {0}")]
     StorageCorruptedFieldError(String),
+    #[error("Intended epoch ({intended_epoch:?}) doesn't match with the epoch of the per-epoch store tables ({store_epoch:?})")]
+    StoreAccessEpochMismatch {
+        intended_epoch: EpochId,
+        store_epoch: EpochId,
+    },
 
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,

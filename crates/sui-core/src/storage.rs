@@ -88,10 +88,9 @@ impl ReadStore for RocksDbStore {
         if let Some(transaction) = self
             .authority_store
             .epoch_tables()
-            .pending_certificates
-            .get(digest)?
+            .get_pending_certificate(digest)?
         {
-            return Ok(Some(transaction.into()));
+            return Ok(Some(transaction));
         }
 
         if let Some(transaction) = self
@@ -148,8 +147,7 @@ impl WriteStore for RocksDbStore {
     fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error> {
         self.authority_store
             .epoch_tables()
-            .pending_certificates
-            .insert(transaction.digest(), transaction.serializable_ref())
+            .insert_pending_certificates(&[transaction])
     }
 
     fn insert_transaction_effects(
