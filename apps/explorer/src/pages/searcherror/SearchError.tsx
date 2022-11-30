@@ -25,7 +25,7 @@ function SearchError() {
             break;
         case 'all':
             msg =
-                'Search terms currently supported are transaction IDs (32 byte base64), object IDs (20 byte hex), and addresses (20 byte hex)';
+                'Search terms currently supported are transaction IDs (32 byte base58/base64), object IDs (20 byte hex), and addresses (20 byte hex)';
             break;
         case 'missing':
             msg = 'Data on the following query could not be found';

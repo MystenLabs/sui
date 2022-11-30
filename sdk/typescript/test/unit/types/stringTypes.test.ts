@@ -14,39 +14,32 @@ describe('String type guards', () => {
   }
 
   describe('isValidTransactionDigest()', () => {
-    it('rejects non base64 strings', () => {
-      expectAll(
-        [
-          'MDpQc 1IIzkie1dJdj nfm85XmRCJmk KHVUU05Abg==',
-          'X09wJFxwQDdTU1tzMy5NJXdSTnknPCh9J0tNUCdmIw  ',
-        ],
-        isValidTransactionDigest,
-        false
-      );
+    it('rejects invalid base64', () => {
+      expect(isValidTransactionDigest('MDpQc 1IIzkie1dJdj nfm85XmRCJmk KHVUU05Abg==', 'base64')).toBe(false);
+      expect(isValidTransactionDigest('X09wJFxwQDdTU1tzMy5NJXdSTnknPCh9J0tNUCdmIw  ', 'base64')).toBe(false);
     });
 
-    it('rejects base64 strings of the wrong length', () => {
-      expectAll(
-        [
-          'ZVteaEsxe0Q6XU53UExxWEFjKy98UD5qfmM+',
-          'J3pwOz9GdS5JSEB8Lz9ILGxdJi9sXTxbdFU2OHpP',
-          'UUQmaXAmQiYxSERrQH5VWEJmQm8pMXMiYEQzJ2wpPnkuYg==',
-        ],
-        isValidTransactionDigest,
-        false
-      );
+    it('rejects base64 string of wrong length', () => {
+      expect(isValidTransactionDigest('c3Nz', 'base64')).toBe(false);
+      expect(isValidTransactionDigest('MTExMQ==', 'base64')).toBe(false);
     });
 
-    it('accepts base64 strings of the correct length', () => {
-      expectAll(
-        [
-          'UYKbz61ny/+E+r07JatGyrtrv/FyjNeqUEQisJJXPHM=',
-          'obGrcB0a+aMJXyRMGQ+7to5GaJ6a1Kfd6tS+sAM0d/8=',
-          'pMmQoBeSSErk96hKMtkilwCZub3FaOF3IIdii16/DBo=',
-        ],
-        isValidTransactionDigest,
-        true
-      );
+    it('accepts base64 strings of correct length', () => {
+      expect(isValidTransactionDigest('UYKbz61ny/+E+r07JatGyrtrv/FyjNeqUEQisJJXPHM=', 'base64')).toBe(true);
+      expect(isValidTransactionDigest('obGrcB0a+aMJXyRMGQ+7to5GaJ6a1Kfd6tS+sAM0d/8=', 'base64')).toBe(true);
+      expect(isValidTransactionDigest('pMmQoBeSSErk96hKMtkilwCZub3FaOF3IIdii16/DBo=', 'base64')).toBe(true);
+    });
+
+    it('rejects base58 strings of the wrong length', () => {
+      expect(isValidTransactionDigest('r', 'base58')).toBe(false);
+      expect(isValidTransactionDigest('HXLk', 'base58')).toBe(false);
+      expect(isValidTransactionDigest('3mJ6x8dSE2KLrk', 'base58')).toBe(false);
+    });
+
+    it('accepts base58 strings of the correct length', () => {
+      expect(isValidTransactionDigest('vQMG8nrGirX14JLfyzy15DrYD3gwRC1eUmBmBzYUsgh', 'base58')).toBe(true);
+      expect(isValidTransactionDigest('7msXn7aieHy73WkRxh3Xdqh9PEoPYBmJW59iE4TVvz62', 'base58')).toBe(true);
+      expect(isValidTransactionDigest('C6G8PsqwNpMqrK7ApwuQUvDgzkFcUaUy6Y5ycrAN2q3F', 'base58')).toBe(true);
     });
   });
 

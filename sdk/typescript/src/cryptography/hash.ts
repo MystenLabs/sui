@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromHEX } from '@mysten/bcs';
 import { sha3_256 } from 'js-sha3';
 
 /**
@@ -9,7 +10,7 @@ import { sha3_256 } from 'js-sha3';
  * @param typeTag type tag (e.g. TransactionData, SenderSignedData)
  * @param data data to hash
  */
-export function sha256Hash(typeTag: string, data: Uint8Array): string {
+export function sha256Hash(typeTag: string, data: Uint8Array): Uint8Array {
   const hash = sha3_256.create();
 
   const typeTagBytes = Array.from(`${typeTag}::`).map((e) => e.charCodeAt(0));
@@ -20,5 +21,5 @@ export function sha256Hash(typeTag: string, data: Uint8Array): string {
 
   hash.update(dataWithTag);
 
-  return Buffer.from(hash.hex(), 'hex').toString('base64');
+  return fromHEX(hash.hex());
 }

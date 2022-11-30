@@ -134,11 +134,14 @@ export abstract class SignerWithProvider implements Signer {
 
     const sig = await this.signData(txBytes);
     const data = deserializeTransactionBytesToTransactionData(txBytes);
+    let version = await this.provider.getRpcApiVersion();
+    
     return generateTransactionDigest(
       data,
       sig.signatureScheme,
       sig.signature,
-      sig.pubKey
+      sig.pubKey,
+      (version?.major == 0 && version?.minor < 18) ? 'base64' : 'base58'
     );
   }
 
