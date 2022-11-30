@@ -61,6 +61,8 @@ pub enum CeremonyCommand {
         #[clap(long)]
         network_address: Multiaddr,
         #[clap(long)]
+        p2p_address: Multiaddr,
+        #[clap(long)]
         narwhal_primary_address: Multiaddr,
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
@@ -110,6 +112,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             account_key_file,
             network_key_file,
             network_address,
+            p2p_address,
             narwhal_primary_address,
             narwhal_worker_address,
             narwhal_internal_worker_address,
@@ -133,6 +136,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     gas_price: 1,
                     commission_rate: 0,
                     network_address,
+                    p2p_address,
                     narwhal_primary_address,
                     narwhal_worker_address,
                     narwhal_internal_worker_address,
@@ -302,6 +306,7 @@ mod test {
                     gas_price: 1,
                     commission_rate: 0,
                     network_address: utils::new_tcp_network_address(),
+                    p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),
                     narwhal_worker_address: utils::new_udp_network_address(),
                     narwhal_internal_worker_address: None,
@@ -361,6 +366,7 @@ mod test {
                     network_key_file: network_key_file.into(),
                     account_key_file: account_key_file.into(),
                     network_address: validator.network_address().to_owned(),
+                    p2p_address: validator.p2p_address().to_owned(),
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
                     narwhal_internal_worker_address: validator

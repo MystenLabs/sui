@@ -642,6 +642,7 @@ mod test {
             gas_price: 1,
             commission_rate: 0,
             network_address: utils::new_tcp_network_address(),
+            p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
             narwhal_internal_worker_address: None,

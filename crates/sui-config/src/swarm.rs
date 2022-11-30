@@ -97,9 +97,13 @@ impl NetworkConfig {
         };
 
         let network_address = utils::new_tcp_network_address();
-        let p2p_config = P2pConfig {
-            listen_address: utils::available_local_socket_address(),
-            ..Default::default()
+        let p2p_config = {
+            let address = utils::available_local_socket_address();
+            P2pConfig {
+                listen_address: address,
+                external_address: Some(utils::socket_address_to_udp_multiaddr(address)),
+                ..Default::default()
+            }
         };
 
         NodeConfig {

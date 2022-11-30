@@ -49,3 +49,26 @@ pub fn available_local_socket_address() -> std::net::SocketAddr {
         .parse()
         .unwrap()
 }
+
+pub fn udp_multiaddr_to_socket_address(
+    multiaddr: &multiaddr::Multiaddr,
+) -> Option<std::net::SocketAddr> {
+    use multiaddr::Protocol;
+    let mut iter = multiaddr.iter();
+
+    match (iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
+
+        _ => None,
+    }
+}
+
+pub fn socket_address_to_udp_multiaddr(address: std::net::SocketAddr) -> multiaddr::Multiaddr {
+    match address {
+        std::net::SocketAddr::V4(v4) => format!("/ip4/{}/udp/{}", v4.ip(), v4.port()),
+        std::net::SocketAddr::V6(v6) => format!("/ip6/{}/udp/{}", v6.ip(), v6.port()),
+    }
+    .parse()
+    .unwrap()
+}
