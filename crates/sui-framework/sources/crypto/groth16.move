@@ -4,8 +4,8 @@
 module sui::groth16 {
     use std::vector;
 
-    // TODO document this
-    const EInvalidVerifyingKey: u64 = 7;
+    // Error for input is not a valid Arkwork representation of a verifying key.
+    const EInvalidVerifyingKey: u64 = 0;
 
     /// A `PreparedVerifyingKey` consisting of four components in serialized form.
     struct PreparedVerifyingKey has store, copy, drop {
