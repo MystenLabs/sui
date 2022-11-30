@@ -5,6 +5,7 @@
 
 
 
+-  [Constants](#@Constants_0)
 -  [Function `ecrecover`](#0x2_ecdsa_ecrecover)
 -  [Function `decompress_pubkey`](#0x2_ecdsa_decompress_pubkey)
 -  [Function `keccak256`](#0x2_ecdsa_keccak256)
@@ -12,6 +13,29 @@
 
 
 <pre><code></code></pre>
+
+
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_ecdsa_EFailToRecoverPubKey"></a>
+
+
+
+<pre><code><b>const</b> <a href="ecdsa.md#0x2_ecdsa_EFailToRecoverPubKey">EFailToRecoverPubKey</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_ecdsa_EInvalidSignature"></a>
+
+
+
+<pre><code><b>const</b> <a href="ecdsa.md#0x2_ecdsa_EInvalidSignature">EInvalidSignature</a>: u64 = 1;
+</code></pre>
 
 
 

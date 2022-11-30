@@ -122,7 +122,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    #[expected_failure(abort_code = ts::EEmptyInventory)]
     fun test_double_remove() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -426,7 +426,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_invalid_shared_usage() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -445,7 +445,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_invalid_immutable_usage() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -464,7 +464,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_modify_immutable() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -484,7 +484,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2 /* ECantReturnObject */)]
+    #[expected_failure(abort_code = ts::ECantReturnObject)]
     fun test_invalid_address_return() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -494,7 +494,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2 /* ECantReturnObject */)]
+    #[expected_failure(abort_code = ts::ECantReturnObject)]
     fun test_invalid_shared_return() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -504,7 +504,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2 /* ECantReturnObject */)]
+    #[expected_failure(abort_code = ts::ECantReturnObject)]
     fun test_invalid_immutable_return() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -514,7 +514,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    #[expected_failure(abort_code = ts::EEmptyInventory)]
     fun test_empty_inventory() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -523,7 +523,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    #[expected_failure(abort_code = ts::EEmptyInventory)]
     fun test_empty_inventory_shared() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -532,7 +532,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    #[expected_failure(abort_code = ts::EEmptyInventory)]
     fun test_empty_inventory_immutable() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -541,7 +541,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_object_not_found() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -552,7 +552,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_object_not_found_shared() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -563,7 +563,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_object_not_found_immutable() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -574,7 +574,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_wrong_object_type() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -586,7 +586,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_wrong_object_type_shared() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -598,7 +598,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_wrong_object_type_immutable() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -656,7 +656,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -675,7 +675,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_field_immutable_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -694,7 +694,7 @@ module sui::test_scenarioTests {
     }
 
         #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -712,7 +712,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_object_field_immutable_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);

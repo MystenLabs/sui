@@ -41,7 +41,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = sui_system::ENOT_VALIDATOR)]
     fun test_report_non_validator_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -52,7 +52,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3)]
+    #[expected_failure(abort_code = sui_system::ECANNOT_REPORT_ONESELF)]
     fun test_report_self_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -63,7 +63,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4)]
+    #[expected_failure(abort_code = sui_system::EREPORT_RECORD_NOT_FOUND)]
     fun test_undo_report_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -82,7 +82,7 @@ module sui::sui_system_tests {
             sui_system::undo_report_validator(&mut system_state, reported, ctx);
         } else {
             sui_system::report_validator(&mut system_state, reported, ctx);
-        }; 
+        };
         test_scenario::return_shared(system_state);
     }
 

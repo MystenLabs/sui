@@ -10,7 +10,6 @@ for external tools. The difference is otherwise not observable from within Move.
 
 
 -  [Struct `Wrapper`](#0x2_dynamic_object_field_Wrapper)
--  [Constants](#@Constants_0)
 -  [Function `add`](#0x2_dynamic_object_field_add)
 -  [Function `borrow`](#0x2_dynamic_object_field_borrow)
 -  [Function `borrow_mut`](#0x2_dynamic_object_field_borrow_mut)
@@ -54,58 +53,12 @@ for external tools. The difference is otherwise not observable from within Move.
 
 </details>
 
-<a name="@Constants_0"></a>
-
-## Constants
-
-
-<a name="0x2_dynamic_object_field_EBCSSerializationFailure"></a>
-
-Failed to serialize the field's name
-
-
-<pre><code><b>const</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="0x2_dynamic_object_field_EFieldAlreadyExists"></a>
-
-The object already has a dynamic field with this name (with the value and type specified)
-
-
-<pre><code><b>const</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldAlreadyExists">EFieldAlreadyExists</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="0x2_dynamic_object_field_EFieldDoesNotExist"></a>
-
-Cannot load dynamic field.
-The object does not have a dynamic field with this name (with the value and type specified)
-
-
-<pre><code><b>const</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="0x2_dynamic_object_field_EFieldTypeMismatch"></a>
-
-The object has a field with that name, but the value type does not match
-
-
-<pre><code><b>const</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldTypeMismatch">EFieldTypeMismatch</a>: u64 = 2;
-</code></pre>
-
-
-
 <a name="0x2_dynamic_object_field_add"></a>
 
 ## Function `add`
 
 Adds a dynamic object field to the object <code><a href="object.md#0x2_object">object</a>: &<b>mut</b> UID</code> at field specified by <code>name: Name</code>.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldAlreadyExists">EFieldAlreadyExists</a></code> if the object already has that field with that name.
+Aborts with <code>EFieldAlreadyExists</code> if the object already has that field with that name.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_add">add</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="object.md#0x2_object">object</a>: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, name: Name, value: Value)
@@ -140,8 +93,8 @@ Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFie
 ## Function `borrow`
 
 Immutably borrows the <code><a href="object.md#0x2_object">object</a></code>s dynamic object field with the name specified by <code>name: Name</code>.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value object does not have the
+Aborts with <code>EFieldDoesNotExist</code> if the object does not have a field with that name.
+Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value object does not have the
 specified type.
 
 
@@ -173,8 +126,8 @@ specified type.
 ## Function `borrow_mut`
 
 Mutably borrows the <code><a href="object.md#0x2_object">object</a></code>s dynamic object field with the name specified by <code>name: Name</code>.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value object does not have the
+Aborts with <code>EFieldDoesNotExist</code> if the object does not have a field with that name.
+Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value object does not have the
 specified type.
 
 
@@ -207,8 +160,8 @@ specified type.
 
 Removes the <code><a href="object.md#0x2_object">object</a></code>s dynamic object field with the name specified by <code>name: Name</code> and returns
 the bound object.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if the object does not have a field with that name.
-Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value object does not have the
+Aborts with <code>EFieldDoesNotExist</code> if the object does not have a field with that name.
+Aborts with <code>EFieldTypeMismatch</code> if the field exists, but the value object does not have the
 specified type.
 
 

@@ -61,7 +61,7 @@ module defi::shared_escrow_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = shared_escrow::EWrongOwner)]
     fun test_cancel_with_wrong_owner() {
         // Alice creates the escrow
         let (scenario_val, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
@@ -75,7 +75,7 @@ module defi::shared_escrow_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = shared_escrow::EWrongExchangeObject)]
     fun test_swap_wrong_objects() {
         // Alice creates the escrow in exchange for item b
         let (scenario_val, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
@@ -92,7 +92,7 @@ module defi::shared_escrow_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = shared_escrow::EWrongRecipient)]
     fun test_swap_wrong_recipient() {
          // Alice creates the escrow in exchange for item b
         let (scenario_val, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
@@ -105,7 +105,7 @@ module defi::shared_escrow_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3)]
+    #[expected_failure(abort_code = shared_escrow::EAlreadyExchangedOrCancelled)]
     fun test_cancel_twice() {
         // Alice creates the escrow
         let (scenario_val, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);

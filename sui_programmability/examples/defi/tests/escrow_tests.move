@@ -66,7 +66,7 @@ module defi::escrow_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = escrow::EMismatchedExchangeObject)]
     fun test_swap_wrong_objects() {
         // Both Alice and Bob send items to the third party except that Alice wants to exchange
         // for a different object than Bob's
@@ -76,7 +76,7 @@ module defi::escrow_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = escrow::EMismatchedSenderRecipient)]
     fun test_swap_wrong_recipient() {
         // Both Alice and Bob send items to the third party except that Alice put a different
         // recipient than Bob
