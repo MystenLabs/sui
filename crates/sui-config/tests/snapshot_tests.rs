@@ -78,6 +78,7 @@ fn populated_genesis_snapshot_matches() {
         gas_price: 1,
         commission_rate: 0,
         network_address: Multiaddr::empty(),
+        p2p_address: Multiaddr::empty(),
         narwhal_primary_address: Multiaddr::empty(),
         narwhal_worker_address: Multiaddr::empty(),
         narwhal_internal_worker_address: None,
@@ -116,6 +117,7 @@ fn network_config_snapshot_matches() {
         validator_config.json_rpc_address = fake_socket;
         validator_config.metrics_address = fake_socket;
         validator_config.p2p_config.listen_address = fake_socket;
+        validator_config.p2p_config.external_address = None;
         validator_config.admin_interface_port = 8888;
         let metrics_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
         let primary_network_admin_server_port = 5678;
