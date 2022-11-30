@@ -6,7 +6,6 @@ use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
-use anyhow::bail;
 use anyhow::Result;
 use futures::TryFutureExt;
 use mysten_network::server::ServerBuilder;
@@ -48,12 +47,10 @@ use crate::metrics::GrpcMetrics;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
-use sui_json_rpc::http_server::HttpServerHandle;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
-use sui_json_rpc::ws_server::WsServerHandle;
-use sui_json_rpc::JsonRpcServerBuilder;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_metrics::spawn_monitored_task;
 use sui_types::crypto::KeypairTraits;
 
@@ -66,8 +63,7 @@ use sui_core::checkpoints::CheckpointStore;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
-    _json_rpc_service: Option<HttpServerHandle>,
-    _ws_subscription_service: Option<WsServerHandle>,
+    _json_rpc_service: Option<ServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
@@ -148,9 +144,11 @@ impl SuiNode {
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
-        let transaction_streamer = config
-            .websocket_address
-            .map(|_| Arc::new(TransactionStreamer::new()));
+        let transaction_streamer = if is_full_node {
+            Some(Arc::new(TransactionStreamer::new()))
+        } else {
+            None
+        };
 
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
             config.db_path().join("node_sync_db"),
@@ -262,7 +260,7 @@ impl SuiNode {
             spawn_monitored_task!(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) = build_http_servers(
+        let json_rpc_service = build_server(
             state.clone(),
             &transaction_orchestrator.clone(),
             config,
@@ -273,7 +271,6 @@ impl SuiNode {
         let node = Self {
             grpc_server,
             _json_rpc_service: json_rpc_service,
-            _ws_subscription_service: ws_subscription_service,
             _gossip_handle: gossip_handle,
             _execute_driver_handle: execute_driver_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
@@ -397,26 +394,25 @@ impl SuiNode {
     }
 }
 
-pub async fn build_http_servers(
+pub async fn build_server(
     state: Arc<AuthorityState>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
-) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
+) -> Result<Option<ServerHandle>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
-        return Ok((None, None));
+        return Ok(None);
     }
 
     if cfg!(msim) {
         // jsonrpsee uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
         // can't yet run it in the simulator.
         warn!("disabling http servers in simulator");
-        return Ok((None, None));
+        return Ok(None);
     }
 
-    let mut server =
-        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), false, prometheus_registry)?;
+    let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
@@ -434,36 +430,15 @@ pub async fn build_http_servers(
         server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;
     }
 
-    let rpc_server_handle = server
-        .start(config.json_rpc_address)
-        .await?
-        .into_http_server_handle()
-        .expect("Expect a http server handle");
+    if let Some(tx_streamer) = state.transaction_streamer.clone() {
+        server.register_module(TransactionStreamingApiImpl::new(state.clone(), tx_streamer))?;
+    }
 
-    let ws_server_handle = match config.websocket_address {
-        Some(ws_addr) => {
-            let mut server =
-                JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), true, prometheus_registry)?;
-            if let Some(tx_streamer) = state.transaction_streamer.clone() {
-                server.register_module(TransactionStreamingApiImpl::new(
-                    state.clone(),
-                    tx_streamer,
-                ))?;
-            } else {
-                bail!("Expect State to have Some TransactionStreamer when websocket_address is present in node config");
-            }
-            if let Some(event_handler) = state.event_handler.clone() {
-                server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
-            }
-            Some(
-                server
-                    .start(ws_addr)
-                    .await?
-                    .into_ws_server_handle()
-                    .expect("Expect a websocket server handle"),
-            )
-        }
-        None => None,
-    };
-    Ok((Some(rpc_server_handle), ws_server_handle))
+    if let Some(event_handler) = state.event_handler.clone() {
+        server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+    }
+
+    let rpc_server_handle = server.start(config.json_rpc_address).await?;
+
+    Ok(Some(rpc_server_handle))
 }

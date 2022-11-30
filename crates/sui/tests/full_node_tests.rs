@@ -52,7 +52,7 @@ use tokio::time::{sleep, Duration};
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = start_a_fullnode(&test_cluster.swarm).await?;
 
     let context = &mut test_cluster.wallet;
 
@@ -84,7 +84,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = start_a_fullnode(&test_cluster.swarm).await?;
 
     let context = &mut test_cluster.wallet;
 
@@ -412,7 +412,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     // Start a new fullnode that is not on the write path
-    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -434,7 +434,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let context = test_cluster.wallet;
 
     // Start a new fullnode that is not on the write path
-    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     let mut futures = Vec::new();
 
@@ -521,10 +521,10 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     let context = &mut test_cluster.wallet;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false)
+    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None)
         .await
         .unwrap();
-    let ws_client = fullnode.ws_client.as_ref().unwrap();
+    let ws_client = fullnode.ws_client;
     let node = fullnode.sui_node;
 
     let mut sub: Subscription<SuiTransactionResponse> = ws_client
@@ -563,11 +563,6 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
             other
         ),
     }
-
-    // Node Config without websocket_address does not create a transaction streamer
-    let full_node = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, true).await?;
-    assert!(full_node.sui_node.state().transaction_streamer.is_none());
-
     Ok(())
 }
 
@@ -577,11 +572,11 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let context = &mut test_cluster.wallet;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false)
+    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None)
         .await
         .unwrap();
     let node = fullnode.sui_node;
-    let ws_client = fullnode.ws_client.as_ref().unwrap();
+    let ws_client = fullnode.ws_client;
 
     let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
@@ -896,7 +891,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = start_a_fullnode(&test_cluster.swarm).await?;
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = node
@@ -1210,7 +1205,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
     let context = &mut test_cluster.wallet;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(context).await?;

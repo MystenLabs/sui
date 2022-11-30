@@ -14,6 +14,7 @@ use futures::StreamExt;
 use futures_core::Stream;
 use jsonrpsee::core::client::{ClientT, Subscription};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 use rpc_types::{
@@ -123,7 +124,7 @@ impl RpcClient {
         ws: &Option<WsClient>,
     ) -> Result<ServerInfo, anyhow::Error> {
         let rpc_spec: Value = http
-            .request("rpc.discover", None)
+            .request("rpc.discover", rpc_params![])
             .await
             .map_err(|e| anyhow!("Fail to connect to the RPC server: {e}"))?;
         let version = rpc_spec
@@ -134,7 +135,7 @@ impl RpcClient {
 
         let subscriptions = if let Some(ws) = ws {
             let rpc_spec: Value = ws
-                .request("rpc.discover", None)
+                .request("rpc.discover", rpc_params![])
                 .await
                 .map_err(|e| anyhow!("Fail to connect to the Websocket server: {e}"))?;
             Self::parse_methods(&rpc_spec)?
