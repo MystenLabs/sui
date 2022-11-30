@@ -78,6 +78,7 @@ impl RpcExampleProvider {
             self.get_transaction(),
             self.get_transactions(),
             self.get_events(),
+            self.execute_transaction_serialized_sig_example(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -179,6 +180,27 @@ impl RpcExampleProvider {
                         "pub_key",
                         json!(Base64::from_bytes(signature.public_key_bytes())),
                     ),
+                    (
+                        "request_type",
+                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
+                    ),
+                ],
+                json!(result),
+            )],
+        )
+    }
+
+    fn execute_transaction_serialized_sig_example(&mut self) -> Examples {
+        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
+        let tx_bytes = TransactionBytes::from_data(data).unwrap();
+
+        Examples::new(
+            "sui_executeTransactionSerializedSig",
+            vec![ExamplePairing::new(
+                "Execute an transaction with serialized signature",
+                vec![
+                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
+                    ("signature", json!(Base64::from_bytes(signature.as_ref()))),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
