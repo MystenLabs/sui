@@ -11,6 +11,7 @@ use arc_swap::ArcSwap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use once_cell::sync::OnceCell;
+use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -1200,17 +1201,8 @@ impl AuthorityStore {
         let modified_object_keys = effects
             .modified_at_versions
             .iter()
-            .map(|(r, _)| r)
-            .chain(effects.deleted.iter())
-            .chain(effects.wrapped.iter())
-            .map(|(id, version, _)| {
-                ObjectKey(
-                    *id,
-                    version
-                        .decrement()
-                        .expect("version revert should never fail"),
-                )
-            });
+            .map(|(id, version)| ObjectKey(*id, *version));
+
         let (old_objects_and_locks, old_dynamic_fields): (Vec<_>, Vec<_>) = self
             .perpetual_tables
             .objects
@@ -1234,7 +1226,7 @@ impl AuthorityStore {
             })
             .unzip();
 
-        let (old_objects, old_locks): (Vec<_>, Vec<_>) =
+        let (old_modified_objects, old_locks): (Vec<_>, Vec<_>) =
             old_objects_and_locks.into_iter().flatten().unzip();
         let old_dynamic_fields = old_dynamic_fields
             .into_iter()

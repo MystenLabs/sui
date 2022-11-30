@@ -23,6 +23,7 @@ use sui_types::{
 
 use std::path::PathBuf;
 use std::{env, str::FromStr};
+use sui_types::object::Owner;
 
 const MAX_GAS: u64 = 10000;
 

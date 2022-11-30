@@ -39,7 +39,7 @@ pub struct AuthorityPerpetualTables {
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
-    /// This composite index allows an efficient iterator to list all objected currently owned
+    /// This composite index allows an efficient iterator to list all objects currently owned
     /// by a specific object, and their object reference.
     pub(crate) dynamic_field_index: DBMap<(ObjectID, ObjectID), DynamicFieldInfo>,
 

@@ -13,6 +13,9 @@ use sui_json_rpc_types::{
     Balance, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
     GetRawObjectDataResponse, MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata,
     SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
+    DynamicFieldPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
+    GetRawObjectDataResponse, MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata,
+    SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
     SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionFilter,
     SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
@@ -102,7 +105,7 @@ pub trait RpcReadApi {
     #[method(name = "getDynamicFields")]
     async fn get_dynamic_fields(
         &self,
-        /// the ID of the parent object
+        /// The ID of the parent object
         parent_object_id: ObjectID,
         /// Optional paging cursor
         cursor: Option<ObjectID>,
@@ -152,9 +155,9 @@ pub trait RpcReadApi {
     #[method(name = "getDynamicFieldObject")]
     async fn get_dynamic_field_object(
         &self,
-        /// the ID of the queried parent object
+        /// The ID of the queried parent object
         parent_object_id: ObjectID,
-        /// the Name of the dynamic field
+        /// The Name of the dynamic field
         name: String,
     ) -> RpcResult<GetObjectDataResponse>;
 }
