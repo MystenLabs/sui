@@ -14,8 +14,8 @@ use signature::Signature;
 use sui_core::gateway_state::GatewayClient;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTransactionResponse,
-    SuiTypeTag, TransactionBytes,
+    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo,
+    SuiTransactionAuthSignersResponse, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_types::batch::TxSequenceNumber;
@@ -165,6 +165,13 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         end: TxSequenceNumber,
     ) -> RpcResult<Vec<TransactionDigest>> {
         Ok(self.client.get_transactions_in_range(start, end)?)
+    }
+
+    async fn get_transaction_auth_signers(
+        &self,
+        _digest: TransactionDigest,
+    ) -> RpcResult<SuiTransactionAuthSignersResponse> {
+        todo!()
     }
 }
 
