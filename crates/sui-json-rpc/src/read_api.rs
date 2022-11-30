@@ -20,7 +20,8 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
     SuiCoinMetadata, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectInfo, SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiObjectInfo, SuiTransactionAuthSignersResponse, SuiTransactionEffects,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -133,6 +134,28 @@ impl RpcReadApiServer for ReadApi {
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
             parsed_data: None,
         })
+    }
+
+    async fn get_transaction_auth_signers(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiTransactionAuthSignersResponse> {
+        let (cert, _effects) = self
+            .state
+            .get_transaction(digest)
+            .await
+            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
+
+        let mut signers = Vec::new();
+        let committee = self.state.committee();
+        for authority_index in cert.auth_sig().signers_map.iter() {
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or_else(|| anyhow!("Failed to get authority"))?;
+            signers.push(*authority);
+        }
+
+        Ok(SuiTransactionAuthSignersResponse { signers })
     }
 }
 
