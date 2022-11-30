@@ -26,7 +26,7 @@ function AppsPlayGround() {
     const dispatch = useAppDispatch();
 
     useEffect(() => {
-        dispatch(getCuratedApps()).unwrap();
+        dispatch(getCuratedApps());
     }, [dispatch, mintStatus]);
 
     // Get connected apps
