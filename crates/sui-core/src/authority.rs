@@ -23,7 +23,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use parking_lot::RwLock;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
@@ -557,9 +556,6 @@ pub struct AuthorityState {
     pub(crate) batch_notifier: Arc<authority_notifier::TransactionNotifier>, // TODO: remove pub
 
     pub metrics: Arc<AuthorityMetrics>,
-
-    /// In-memory cache of the content from the reconfig_state db table.
-    reconfig_state_mem: RwLock<ReconfigState>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1480,11 +1476,6 @@ impl AuthorityState {
                     .expect("Notifier cannot start."),
             ),
             metrics,
-            reconfig_state_mem: RwLock::new(
-                store
-                    .load_reconfig_state()
-                    .expect("Load reconfig state at initialization cannot fail"),
-            ),
         };
 
         prometheus_registry
@@ -1636,47 +1627,16 @@ impl AuthorityState {
         self.committee().clone().deref().clone()
     }
 
-    pub fn get_reconfig_state_read_lock_guard(
-        &self,
-    ) -> parking_lot::RwLockReadGuard<ReconfigState> {
-        self.reconfig_state_mem.read()
-    }
-
-    pub fn get_reconfig_state_write_lock_guard(
-        &self,
-    ) -> parking_lot::RwLockWriteGuard<ReconfigState> {
-        self.reconfig_state_mem.write()
-    }
-
     // This method can only be called from ConsensusAdapter::begin_reconfiguration
-    pub fn close_user_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        lock_guard.close_user_certs();
-        self.database
-            .store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
+    pub fn close_user_certs(&self, lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
+        self.database.epoch_tables().close_user_certs(lock_guard)
     }
 
     pub async fn close_all_certs(
         &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
+        lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
     ) {
-        lock_guard.close_all_certs();
-        self.database
-            .store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
-    }
-
-    pub async fn open_all_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        lock_guard.open_all_certs();
-        self.database
-            .store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
+        self.database.epoch_tables().close_all_certs(lock_guard)
     }
 
     pub(crate) async fn get_object(
@@ -2300,6 +2260,8 @@ impl AuthorityState {
                 );
 
                 if !self
+                    .database
+                    .epoch_tables()
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
                 {
