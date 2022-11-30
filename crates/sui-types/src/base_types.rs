@@ -483,6 +483,10 @@ impl TransactionDigest {
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_vec()
     }
+
+    pub fn into_bytes(self) -> [u8; TRANSACTION_DIGEST_LENGTH] {
+        self.0
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
