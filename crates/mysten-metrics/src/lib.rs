@@ -13,6 +13,8 @@ pub use scopeguard;
 pub struct Metrics {
     pub tasks: IntGaugeVec,
     pub futures: IntGaugeVec,
+    pub scope_iterations: IntGaugeVec,
+    pub scope_duration_ns: IntGaugeVec,
 }
 
 impl Metrics {
@@ -29,6 +31,20 @@ impl Metrics {
                 "monitored_futures",
                 "Number of pending futures per callsite.",
                 &["callsite"],
+                registry,
+            )
+            .unwrap(),
+            scope_iterations: register_int_gauge_vec_with_registry!(
+                "monitored_scope_iterations",
+                "Total number of times where the monitored scope runs",
+                &["callsite", "name"],
+                registry,
+            )
+            .unwrap(),
+            scope_duration_ns: register_int_gauge_vec_with_registry!(
+                "monitored_scope_duration_ns",
+                "Total duration in nanosecs where the monitored scope is running",
+                &["callsite", "name"],
                 registry,
             )
             .unwrap(),
@@ -61,7 +77,7 @@ macro_rules! monitored_future {
         async move {
             let metrics = mysten_metrics::get_metrics();
 
-            let _guard = if let Some(m) = &metrics {
+            let _guard = if let Some(m) = metrics {
                 m.$metric.with_label_values(&[LOCATION]).inc();
                 Some(mysten_metrics::scopeguard::guard(m, |metrics| {
                     m.$metric.with_label_values(&[LOCATION]).dec();
@@ -80,4 +96,28 @@ macro_rules! spawn_monitored_task {
     ($fut: expr) => {
         tokio::task::spawn(mysten_metrics::monitored_future!(tasks, $fut))
     };
+}
+
+#[macro_export]
+macro_rules! monitored_scope {
+    ($name: expr) => {{
+        const LOCATION: &str = concat!(file!(), ':', line!());
+        let metrics = mysten_metrics::get_metrics();
+        if let Some(m) = metrics {
+            let timer = std::time::Instant::now();
+            m.scope_iterations
+                .with_label_values(&[LOCATION, $name])
+                .inc();
+            Some(mysten_metrics::scopeguard::guard(
+                (m, timer),
+                |(m, timer)| {
+                    m.scope_duration_ns
+                        .with_label_values(&[LOCATION, $name])
+                        .add(timer.elapsed().as_nanos() as i64);
+                },
+            ))
+        } else {
+            None
+        }
+    }};
 }
