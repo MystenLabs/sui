@@ -1255,17 +1255,13 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(context).await?;
-    sleep(Duration::from_secs(15)).await;
+    sleep(Duration::from_secs(1)).await;
 
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
 
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
 
-    // Transfer some SUI to recipient
-    transfer_coin(context)
-        .await
-        .expect("Failed to transfer coins to recipient");
     // Transfer the object from sender to recipient
     let gas_ref = get_gas_object_with_wallet_context(context, &sender)
         .await
@@ -1278,17 +1274,22 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         recipient,
     );
     context.execute_transaction(nft_transfer_tx).await.unwrap();
-    sleep(Duration::from_secs(15)).await;
+    sleep(Duration::from_secs(1)).await;
 
     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id, None).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
+
+    // Transfer some SUI to recipient
+    transfer_coin(context)
+        .await
+        .expect("Failed to transfer coins to recipient");
 
     // Delete the object
     let package_ref = node.state().get_framework_object_ref().await.unwrap();
     let (_tx_cert, effects) =
         delete_devnet_nft(context, &recipient, object_ref_v2, package_ref).await;
     assert_eq!(effects.status, SuiExecutionStatus::Success);
-    sleep(Duration::from_secs(15)).await;
+    sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read
     let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
