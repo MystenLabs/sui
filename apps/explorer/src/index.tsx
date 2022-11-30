@@ -16,6 +16,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
+import { growthbook } from './utils/growthbook';
 import { plausible } from './utils/plausible';
 import { reportWebVitals } from './utils/vitals';
 
@@ -29,7 +30,9 @@ if (import.meta.env.PROD) {
     Sentry.init({
         dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
         integrations: [new BrowserTracing()],
-        tracesSampleRate: 0.2,
+        tracesSampler: () => {
+            return growthbook.getFeatureValue('explorer-sentry-tracing', 0);
+        },
     });
 }
 
