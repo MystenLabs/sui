@@ -1252,11 +1252,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     }
 
     pub fn quorum_threshold(committee: &Committee) -> StakeUnit {
-        if STRONG_THRESHOLD {
-            committee.quorum_threshold()
-        } else {
-            committee.validity_threshold()
-        }
+        committee.threshold::<STRONG_THRESHOLD>()
     }
 
     pub fn len(&self) -> u64 {
