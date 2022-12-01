@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
@@ -20,10 +20,15 @@ use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthoritySt
 /// TODO: use TransactionManager for fullnode.
 pub(crate) struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
-    pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
+    inner: RwLock<Inner>,
+}
+
+#[derive(Default)]
+struct Inner {
+    missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
+    pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
 }
 
 impl TransactionManager {
@@ -34,11 +39,10 @@ impl TransactionManager {
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
-        let mut transaction_manager = TransactionManager {
+        let transaction_manager = TransactionManager {
             authority_store,
             metrics,
-            missing_inputs: BTreeMap::new(),
-            pending_certificates: BTreeMap::new(),
+            inner: Default::default(),
             tx_ready_certificates,
         };
         transaction_manager
@@ -63,7 +67,17 @@ impl TransactionManager {
     /// TODO: it may be less error prone to take shared object locks inside this function, or
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
-    pub(crate) async fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+    pub(crate) async fn enqueue(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+        // Skip processing of any certificates that are already enqueued.
+        let certs: Vec<_> = {
+            let inner = self.inner.read().unwrap();
+            certs
+                .into_iter()
+                .filter(|cert| !inner.pending_certificates.contains_key(cert.digest()))
+                .collect()
+        };
+
+        let mut missing_inputs = Vec::new();
         for cert in certs {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
@@ -71,10 +85,6 @@ impl TransactionManager {
             let epoch_store = self.authority_store.epoch_store();
             let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
-            // Skip processing if the certificate is already enqueued.
-            if self.pending_certificates.contains_key(&digest) {
-                continue;
-            }
             // skip txes that are executed already
             if self.authority_store.effects_exists(&digest)? {
                 continue;
@@ -94,76 +104,93 @@ impl TransactionManager {
             }
 
             for obj_key in missing {
-                // A missing input object in TransactionManager will definitely be notified via
-                // objects_committed(), when the object actually gets committed, because:
-                // 1. Assume rocksdb is strongly consistent, writing the object to the objects
-                // table must happen after not finding the object in get_missing_input_objects().
-                // 2. Notification via objects_committed() will happen after an object is written
-                // into the objects table.
-                // 3. TransactionManager is protected by a mutex. The notification via
-                // objects_committed() can only arrive after the current enqueue() call finishes.
-                // TODO: verify the key does not already exist.
-                self.missing_inputs.insert(obj_key, digest);
-                self.pending_certificates
-                    .entry(digest)
-                    .or_default()
-                    .insert(obj_key);
+                missing_inputs.push((obj_key, digest));
             }
         }
+
+        let inner = &mut self.inner.write().unwrap();
+        for (obj_key, digest) in missing_inputs.iter() {
+            // A missing input object in TransactionManager will definitely be notified via
+            // objects_committed(), when the object actually gets committed, because:
+            // 1. Assume rocksdb is strongly consistent, writing the object to the objects
+            // table must happen after not finding the object in get_missing_input_objects().
+            // 2. Notification via objects_committed() will happen after an object is written
+            // into the objects table.
+            // 3. TransactionManager is protected by a mutex. The notification via
+            // objects_committed() can only arrive after the current enqueue() call finishes.
+            // TODO: verify the key does not already exist.
+            inner.missing_inputs.insert(*obj_key, *digest);
+            inner
+                .pending_certificates
+                .entry(*digest)
+                .or_default()
+                .insert(*obj_key);
+        }
+
         self.metrics
             .transaction_manager_num_missing_objects
-            .set(self.missing_inputs.len() as i64);
+            .set(inner.missing_inputs.len() as i64);
         self.metrics
             .transaction_manager_num_pending_certificates
-            .set(self.pending_certificates.len() as i64);
+            .set(inner.pending_certificates.len() as i64);
         Ok(())
     }
 
     /// Notifies TransactionManager that the given objects have been committed.
-    pub(crate) fn objects_committed(&mut self, object_keys: Vec<ObjectKey>) {
-        for object_key in object_keys {
-            let Some(digest) =  self.missing_inputs.remove(&object_key) else {
-                continue;
-            };
-            let set = self.pending_certificates.entry(digest).or_default();
-            set.remove(&object_key);
-            // This certificate has no missing input. It is ready to execute.
-            if set.is_empty() {
-                self.pending_certificates.remove(&digest);
-                // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
-                // Otherwise, this has to crash.
-                let cert = match self
-                    .authority_store
-                    .epoch_store()
-                    .get_pending_certificate(&digest)
-                {
-                    Ok(Some(cert)) => cert,
-                    Ok(None) => {
-                        error!(tx_digest = ?digest,
-                            "Ready certificate not found in the pending table",
-                        );
-                        continue;
-                    }
-                    Err(e) => {
-                        error!(tx_digest = ?digest,
-                            "Failed to read pending table: {e}",
-                        );
+    pub(crate) fn objects_committed(&self, object_keys: Vec<ObjectKey>) {
+        let mut ready_digests = Vec::new();
 
-                        continue;
-                    }
+        {
+            let inner = &mut self.inner.write().unwrap();
+            for object_key in object_keys {
+                let Some(digest) = inner.missing_inputs.remove(&object_key) else {
+                    continue;
                 };
-                debug!(tx_digest = ?digest, "certificate ready");
-                self.certificate_ready(cert);
-            } else {
-                debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
+                let set = inner.pending_certificates.entry(digest).or_default();
+                set.remove(&object_key);
+                // This certificate has no missing input. It is ready to execute.
+                if set.is_empty() {
+                    debug!(tx_digest = ?digest, "certificate ready");
+                    inner.pending_certificates.remove(&digest);
+                    ready_digests.push(digest);
+                } else {
+                    debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
+                }
             }
+
+            self.metrics
+                .transaction_manager_num_missing_objects
+                .set(inner.missing_inputs.len() as i64);
+            self.metrics
+                .transaction_manager_num_pending_certificates
+                .set(inner.pending_certificates.len() as i64);
         }
-        self.metrics
-            .transaction_manager_num_missing_objects
-            .set(self.missing_inputs.len() as i64);
-        self.metrics
-            .transaction_manager_num_pending_certificates
-            .set(self.pending_certificates.len() as i64);
+
+        for digest in ready_digests.iter() {
+            // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
+            // Otherwise, this has to crash.
+            let cert = match self
+                .authority_store
+                .epoch_store()
+                .get_pending_certificate(digest)
+            {
+                Ok(Some(cert)) => cert,
+                Ok(None) => {
+                    error!(tx_digest = ?digest,
+                        "Ready certificate not found in the pending table",
+                    );
+                    continue;
+                }
+                Err(e) => {
+                    error!(tx_digest = ?digest,
+                        "Failed to read pending table: {e}",
+                    );
+
+                    continue;
+                }
+            };
+            self.certificate_ready(cert);
+        }
     }
 
     /// Marks the given certificate as ready to be executed.
