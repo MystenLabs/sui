@@ -297,6 +297,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         for kind in objects {
             match kind {
                 InputObjectKind::SharedMoveObject { id, .. } => {
+                    let _scope = monitored_scope("GetAndCheckSharedLocks");
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             self.epoch_tables()
@@ -305,6 +306,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                                 .collect(),
                         )
                     })?;
+                    let _scope = monitored_scope("CheckSharedLocks");
                     match shared_locks.get(id) {
                         Some(version) => {
                             if !self.object_version_exists(id, *version)? {
@@ -326,6 +328,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     }
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    let _scope = monitored_scope("CheckOwnedLocks");
                     if let Some(obj) = self.get_object_by_key(&objref.0, objref.1)? {
                         if !obj.is_immutable() {
                             probe_lock_exists.push(*objref);
