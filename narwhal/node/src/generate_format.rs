@@ -75,6 +75,7 @@ fn get_registry() -> Result<Registry> {
     let header = header_builder
         .author(kp.public().clone())
         .epoch(0)
+        .created_at(0)
         .round(1)
         .payload((0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect())
         .parents(certificates.iter().map(|x| x.digest()).collect())

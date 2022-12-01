@@ -168,9 +168,7 @@ async fn handle_clients_transactions() {
         .withf(move |request| {
             let message = request.body();
 
-            message.digest == batch_digest
-                && message.worker_id == worker_id
-                && message.metadata.created_at > 0
+            message.digest == batch_digest && message.worker_id == worker_id
         })
         .times(1)
         .returning(move |_| {

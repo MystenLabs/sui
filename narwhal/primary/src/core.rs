@@ -420,7 +420,7 @@ impl Core {
         // Broadcast the certificate.
         let epoch = certificate.epoch();
         let round = certificate.header.round;
-        let created_at = certificate.header.metadata.created_at;
+        let created_at = certificate.header.created_at;
         let network_keys = self
             .committee
             .others_primaries(&self.name)
