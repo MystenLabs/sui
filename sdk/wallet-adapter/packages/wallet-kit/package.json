@@ -26,11 +26,11 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@mysten/sui.js": "workspace:*",
     "react": "*",
     "react-dom": "*"
   },
   "dependencies": {
+    "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
     "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
@@ -38,7 +38,6 @@
     "@stitches/react": "^1.2.8"
   },
   "devDependencies": {
-    "@mysten/sui.js": "workspace:*",
     "tsup": "^6.2.2",
     "typescript": "^4.8.3"
   }
