@@ -397,7 +397,7 @@ impl ValidatorService {
 
         // 2) Verify cert signatures
         let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
-        let certificate = certificate.verify(&state.committee.load())?;
+        let certificate = certificate.verify(&state.committee())?;
         drop(cert_verif_metrics_guard);
 
         // 3) All certificates are sent to consensus (at least by some authorities)

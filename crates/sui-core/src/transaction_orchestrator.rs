@@ -136,7 +136,7 @@ where
             }
             QuorumDriverResponse::EffectsCert(result) => {
                 let (tx_cert, effects_cert) = *result;
-                let tx_cert = tx_cert.verify(&self.validator_state.committee.load())?;
+                let tx_cert = tx_cert.verify(&self.validator_state.committee())?;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         tx_cert.into(),
@@ -240,7 +240,7 @@ where
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
-                    let tx_cert = match tx_cert.verify(&validator_state.committee.load()) {
+                    let tx_cert = match tx_cert.verify(&validator_state.committee()) {
                         Err(err) => {
                             error!(
                                 "received certificate from quorum driver with bad signatures! {}",
@@ -304,13 +304,10 @@ where
                 Ok(())
             }
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
-                debug!(?tx_digest, "Orchestrator failed to executue transaction optimistically due to missing parents: {:?}", e);
+                debug!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
 
                 match node_sync_handle
-                    .handle_parents_request(
-                        state.committee.load().epoch,
-                        std::iter::once(*tx_digest),
-                    )
+                    .handle_parents_request(state.epoch(), std::iter::once(*tx_digest))
                     .await?
                     .next()
                     .instrument(tracing::debug_span!(

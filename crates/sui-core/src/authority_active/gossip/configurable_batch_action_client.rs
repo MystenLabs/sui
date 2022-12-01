@@ -95,7 +95,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        let certificate = certificate.verify(&self.state.committee.load()).unwrap();
+        let certificate = certificate.verify(&self.state.committee()).unwrap();
         state
             .handle_certificate(&certificate)
             .await

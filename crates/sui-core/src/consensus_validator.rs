@@ -39,7 +39,7 @@ impl TransactionValidator for ConsensusTxValidator {
 
     fn validate(&self, tx: &[u8]) -> Result<(), Self::Error> {
         let transaction = tx_from_bytes(tx)?;
-        let committee = self.state.committee.load();
+        let committee = self.state.committee();
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 certificate.verify_signature(&committee).tap_err(|err| {
@@ -62,7 +62,7 @@ impl TransactionValidator for ConsensusTxValidator {
             .iter()
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
-        let committee = self.state.committee.load();
+        let committee = self.state.committee();
 
         let mut obligation = VerificationObligation::default();
         for tx in txs.into_iter() {

@@ -354,7 +354,7 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction.key())
             .boxed();
         let await_submit = Self::await_submit_delay(
-            &self.authority.committee.load(),
+            &self.authority.committee(),
             &self.authority.name,
             &transaction,
         )
