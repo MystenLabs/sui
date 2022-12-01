@@ -553,7 +553,7 @@ export class JsonRpcProvider extends Provider {
     try {
       let resp;
       let version = await this.getRpcApiVersion();
-      if (version?.major === 0 && version?.minor < 19) {
+      if (version?.major === 0 && version?.minor < 18) {
         resp = await this.client.requestWithType(
           'sui_executeTransaction',
           [txnBytes.toString(), signatureScheme, signature.toString(), pubkey.toString(), requestType],
