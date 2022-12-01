@@ -949,6 +949,12 @@ impl VerifiedTransaction {
     }
 }
 
+impl From<VerifiedSignedTransaction> for VerifiedTransaction {
+    fn from(tx: VerifiedSignedTransaction) -> Self {
+        Self::new_from_verified(tx.into_inner().into_unsigned())
+    }
+}
+
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;

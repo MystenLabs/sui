@@ -1974,6 +1974,38 @@ where
         })
     }
 
+    /// Attempt to finish a transaction that is partially completed - some validators have already
+    /// locked it, and it is still possible to form a quorum.
+    pub async fn retry_locked_transaction(
+        &self,
+        digest: TransactionDigest,
+        timeout_total: Option<Duration>,
+    ) -> Result<(VerifiedCertificate, CertifiedTransactionEffects), anyhow::Error> {
+        let tx = self
+            .quorum_once_with_timeout(
+                None,
+                None,
+                |_, client| {
+                    Box::pin(async move {
+                        let tx = client
+                            .handle_transaction_info_request(digest.into())
+                            .await?;
+                        match tx.signed_transaction {
+                            Some(tx) => Ok(tx),
+                            None => Err(SuiError::TransactionNotFound { digest }),
+                        }
+                    })
+                },
+                self.timeouts.serial_authority_request_timeout,
+                timeout_total,
+                "retry_locked_transaction".to_string(),
+            )
+            .await?;
+        let tx: VerifiedTransaction = tx.into();
+
+        self.execute_transaction(&tx).await
+    }
+
     pub async fn execute_transaction(
         &self,
         transaction: &VerifiedTransaction,

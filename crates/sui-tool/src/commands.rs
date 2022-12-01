@@ -9,12 +9,14 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_network::default_mysten_network_config;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use sui_types::message_envelope::Message;
 use tokio::time::Instant;
 
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_core::authority_client::{
     AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
@@ -98,6 +100,16 @@ pub enum ToolCommand {
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
     },
+
+    #[clap(name = "retry-transaction")]
+    RetryTransaction {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+
+        #[clap(long, help = "The transaction ID to fetch")]
+        digest: TransactionDigest,
+    },
+
     /// Tool to read validator & gateway db.
     #[clap(name = "db-tool")]
     DbTool {
@@ -615,6 +627,16 @@ impl ToolCommand {
                         println!("{}", ConciseObjectOutput(output));
                     }
                 }
+            }
+            ToolCommand::RetryTransaction { genesis, digest } => {
+                let genesis = Genesis::load(genesis)?;
+                let agg = AuthorityAggregatorBuilder::from_genesis(&genesis)
+                    .build()?
+                    .0;
+
+                agg.retry_locked_transaction(digest, Some(Duration::from_secs(60)))
+                    .await?;
+                println!("Completed execution of {:?}", digest);
             }
             ToolCommand::FetchTransaction { genesis, digest } => {
                 let clients = make_clients(genesis)?;
