@@ -510,9 +510,22 @@ fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID
             }
             Ok(object_ids)
         }
+        JsonValue::String(s) if s.starts_with('[') && s.ends_with(']') => {
+            // Due to how escaping of square bracket works, we may be dealing with a JSON string
+            // representing a JSON array rather than with the array itself ("[0x42,0x7]" rather than
+            // [0x42,0x7]).
+            let mut object_ids = vec![];
+            for tok in s[1..s.len() - 1].to_string().split(',') {
+                let id = JsonValue::String(tok.to_string());
+                object_ids.push(resolve_object_arg(idx, &id)?);
+            }
+            Ok(object_ids)
+        }
         _ => bail!(
             "Unable to parse arg {:?} as vector of ObjectIDs at pos {}. \
-             Expected a vector of {:?}-byte hex strings prefixed with 0x.",
+             Expected a vector of {:?}-byte hex strings prefixed with 0x.\n\
+             Consider escaping your curly braces with a backslash (as in \\[0x42,0x7\\]) \
+             or enclosing the whole vector in single quotes (as in '[0x42,0x7]')",
             arg.to_json_value(),
             idx,
             ObjectID::LENGTH,
