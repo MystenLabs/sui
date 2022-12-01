@@ -6,8 +6,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use futures::{stream::FuturesUnordered, StreamExt};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
+use tokio::task::JoinHandle;
 use tracing::{debug, error};
 
 use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
@@ -23,6 +25,7 @@ pub(crate) struct TransactionManager {
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
+    enqueue_tasks: Mutex<FuturesUnordered<JoinHandle<()>>>,
 }
 
 #[derive(Default)]
@@ -30,6 +33,8 @@ struct Inner {
     missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
     pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
 }
+
+static MAX_PENDING_ENQUEUE_TASKS: usize = 64;
 
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending certificates and
@@ -42,19 +47,19 @@ impl TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
             metrics,
-            inner: Default::default(),
             tx_ready_certificates,
+            inner: Default::default(),
+            enqueue_tasks: Default::default(),
         };
         transaction_manager
-            .enqueue(
+            .enqueue_impl(
                 transaction_manager
                     .authority_store
                     .epoch_store()
                     .all_pending_certificates()
                     .unwrap(),
             )
-            .await
-            .expect("Initialize TransactionManager with pending certificates failed.");
+            .await;
         transaction_manager
     }
 
@@ -67,7 +72,17 @@ impl TransactionManager {
     /// TODO: it may be less error prone to take shared object locks inside this function, or
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
-    pub(crate) async fn enqueue(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+    pub(crate) async fn enqueue(self: Arc<Self>, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+        let this = self.clone();
+        let enqueue_tasks = &mut this.enqueue_tasks.lock().await;
+        while enqueue_tasks.len() >= MAX_PENDING_ENQUEUE_TASKS {
+            enqueue_tasks.next().await;
+        }
+        enqueue_tasks.push(tokio::spawn(async move { self.enqueue_impl(certs).await }));
+        Ok(())
+    }
+
+    async fn enqueue_impl(&self, certs: Vec<VerifiedCertificate>) {
         // Skip processing of any certificates that are already enqueued.
         let certs: Vec<_> = {
             let inner = self.inner.read().unwrap();
@@ -86,12 +101,19 @@ impl TransactionManager {
             let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
             // skip txes that are executed already
-            if self.authority_store.effects_exists(&digest)? {
+            if self
+                .authority_store
+                .effects_exists(&digest)
+                .expect("db op cannot fail")
+            {
                 continue;
             }
             let missing = self
                 .authority_store
-                .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
+                .get_missing_input_objects(
+                    &digest,
+                    &cert.data().data.input_objects().expect("db op cannot fail"),
+                )
                 .await
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
@@ -133,7 +155,6 @@ impl TransactionManager {
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(inner.pending_certificates.len() as i64);
-        Ok(())
     }
 
     /// Notifies TransactionManager that the given objects have been committed.

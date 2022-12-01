@@ -1559,7 +1559,7 @@ impl AuthorityState {
         self.database
             .epoch_store()
             .insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await
+        self.transaction_manager.clone().enqueue(certs).await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2268,7 +2268,10 @@ impl AuthorityState {
 
                 // The certificate was already inserted into pending_certificates by
                 // finish_consensus_message_process.
-                self.transaction_manager.enqueue(vec![certificate]).await
+                self.transaction_manager
+                    .clone()
+                    .enqueue(vec![certificate])
+                    .await
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
                 checkpoint_service.notify_checkpoint_signature(info)?;
