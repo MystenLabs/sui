@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use mysten_metrics::monitored_scope;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
@@ -65,7 +64,6 @@ impl TransactionManager {
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
     pub(crate) async fn enqueue(&mut self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
-        let _scope = monitored_scope!("TransactionManager::enqueue");
         for cert in certs {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we

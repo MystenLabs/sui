@@ -37,14 +37,14 @@ impl Metrics {
             scope_iterations: register_int_gauge_vec_with_registry!(
                 "monitored_scope_iterations",
                 "Total number of times where the monitored scope runs",
-                &["callsite", "name"],
+                &["name"],
                 registry,
             )
             .unwrap(),
             scope_duration_ns: register_int_gauge_vec_with_registry!(
                 "monitored_scope_duration_ns",
                 "Total duration in nanosecs where the monitored scope is running",
-                &["callsite", "name"],
+                &["name"],
                 registry,
             )
             .unwrap(),
@@ -98,21 +98,24 @@ macro_rules! spawn_monitored_task {
     };
 }
 
+/// This macro creates a named scoped object, that keeps track of
+/// - the total iterations where the scope is called in the `monitored_scope_iterations` metric.
+/// - and the total duration of the scope in the `monitored_scope_duration_ns` metric.
+///
+/// The monitored scope should be single threaded, e.g. a select loop or guarded by mutex. Then
+/// the rate of `monitored_scope_duration_ns` would be how full the scope has been running.
 #[macro_export]
 macro_rules! monitored_scope {
     ($name: expr) => {{
-        const LOCATION: &str = concat!(file!(), ':', line!());
         let metrics = mysten_metrics::get_metrics();
         if let Some(m) = metrics {
-            let timer = std::time::Instant::now();
-            m.scope_iterations
-                .with_label_values(&[LOCATION, $name])
-                .inc();
+            let timer = tokio::time::Instant::now();
+            m.scope_iterations.with_label_values(&[$name]).inc();
             Some(mysten_metrics::scopeguard::guard(
                 (m, timer),
                 |(m, timer)| {
                     m.scope_duration_ns
-                        .with_label_values(&[LOCATION, $name])
+                        .with_label_values(&[$name])
                         .add(timer.elapsed().as_nanos() as i64);
                 },
             ))
