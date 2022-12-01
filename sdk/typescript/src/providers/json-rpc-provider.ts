@@ -318,7 +318,7 @@ export class JsonRpcProvider extends Provider {
   // Objects
   async getObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
     try {
-      if (!isValidSuiAddress(normalizeSuiAddress(address)) || !address) {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
         throw new Error('Invalid Sui address');
       }
       return await this.client.requestWithType(
