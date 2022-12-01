@@ -14,7 +14,7 @@ use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelo
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
 };
-use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use byteorder::{BigEndian, ReadBytesExt};
@@ -1722,27 +1722,33 @@ impl From<InvalidSharedByValue> for ExecutionFailureStatus {
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffects {
-    // The status of the execution
+    /// The status of the execution
     pub status: ExecutionStatus,
     pub gas_used: GasCostSummary,
-    // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+    /// The version that every modified (mutated or deleted) object had before it was modified by
+    /// this transaction.
+    pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
+    /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     pub shared_objects: Vec<ObjectRef>,
-    // The transaction digest
+    /// The transaction digest
     pub transaction_digest: TransactionDigest,
-    // ObjectRef and owner of new objects created.
+
+    // TODO: All the SequenceNumbers in the ObjectRefs below equal the same value (the lamport
+    // timestamp of the transaction).  Consider factoring this out into one place in the effects.
+    /// ObjectRef and owner of new objects created.
     pub created: Vec<(ObjectRef, Owner)>,
-    // ObjectRef and owner of mutated objects, including gas object.
+    /// ObjectRef and owner of mutated objects, including gas object.
     pub mutated: Vec<(ObjectRef, Owner)>,
-    // ObjectRef and owner of objects that are unwrapped in this transaction.
-    // Unwrapped objects are objects that were wrapped into other objects in the past,
-    // and just got extracted out.
+    /// ObjectRef and owner of objects that are unwrapped in this transaction.
+    /// Unwrapped objects are objects that were wrapped into other objects in the past,
+    /// and just got extracted out.
     pub unwrapped: Vec<(ObjectRef, Owner)>,
-    // Object Refs of objects now deleted (the old refs).
+    /// Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
-    // Object refs of objects now wrapped in other objects.
+    /// Object refs of objects now wrapped in other objects.
     pub wrapped: Vec<ObjectRef>,
-    // The updated gas object reference. Have a dedicated field for convenient access.
-    // It's also included in mutated.
+    /// The updated gas object reference. Have a dedicated field for convenient access.
+    /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
@@ -1867,6 +1873,7 @@ impl Default for TransactionEffects {
                 storage_cost: 0,
                 storage_rebate: 0,
             },
+            modified_at_versions: Vec::new(),
             shared_objects: Vec::new(),
             transaction_digest: TransactionDigest::random(),
             created: Vec::new(),
@@ -1924,7 +1931,7 @@ impl InputObjectKind {
 
     pub fn version(&self) -> Option<SequenceNumber> {
         match self {
-            Self::MovePackage(..) => Some(OBJECT_START_VERSION),
+            Self::MovePackage(..) => Some(PACKAGE_VERSION),
             Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
             Self::SharedMoveObject { .. } => None,
         }
@@ -2017,6 +2024,17 @@ impl InputObjects {
                 InputObjectKind::SharedMoveObject { .. } => Some(object.compute_object_reference()),
             })
             .collect()
+    }
+
+    /// The version to set on objects created by the computation that `self` is input to.
+    /// Guaranteed to be strictly greater than the versions of all input objects.
+    pub fn lamport_timestamp(&self) -> SequenceNumber {
+        let input_versions = self
+            .objects
+            .iter()
+            .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version));
+
+        SequenceNumber::lamport_increment(input_versions)
     }
 
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {

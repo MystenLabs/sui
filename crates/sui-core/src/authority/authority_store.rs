@@ -735,15 +735,51 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
             TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
-        for (_, (object, kind)) in mutated_objects {
+
+        // TemporaryStore::into_inner will increment object versions, and requires that this
+        // operation is a true increment. Roll back modified objects' versions so that this remains
+        // the case.
+        let prev_versions: HashMap<ObjectID, SequenceNumber> = effects
+            .data()
+            .modified_at_versions
+            .iter()
+            .copied()
+            .collect();
+
+        for (_, (mut object, kind)) in mutated_objects {
+            let prev_version = match kind {
+                WriteKind::Create => SequenceNumber::new(),
+                WriteKind::Mutate | WriteKind::Unwrap => prev_versions[&object.id()],
+            };
+
+            if let Owner::Shared {
+                initial_shared_version,
+            } = &mut object.owner
+            {
+                if WriteKind::Create == kind {
+                    *initial_shared_version = SequenceNumber::new();
+                }
+            }
+
+            if let Some(object) = object.data.try_as_move_mut() {
+                object.decrement_version_to(prev_version);
+            }
+
             temporary_store.write_object(&ctx, object, kind);
         }
+
         for obj_ref in &effects.data().deleted {
-            temporary_store.delete_object(&ctx, &obj_ref.0, obj_ref.1, DeleteKind::Normal);
+            let mut v = obj_ref.1;
+            v.decrement_to(prev_versions[&obj_ref.0]);
+            temporary_store.delete_object(&ctx, &obj_ref.0, v, DeleteKind::Normal);
         }
+
         for obj_ref in &effects.data().wrapped {
-            temporary_store.delete_object(&ctx, &obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+            let mut v = obj_ref.1;
+            v.decrement_to(prev_versions[&obj_ref.0]);
+            temporary_store.delete_object(&ctx, &obj_ref.0, v, DeleteKind::Wrap);
         }
+
         let (inner_temporary_store, _events) = temporary_store.into_inner();
 
         let mut write_batch = self.perpetual_tables.certificates.batch();
@@ -999,6 +1035,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// 4. owner_index table change is reverted.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let effects = self.get_effects(tx_digest)?;
+
         let mut write_batch = self.perpetual_tables.certificates.batch();
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?;
@@ -1040,43 +1077,36 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map(|((id, _, _), owner)| (*owner, *id));
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.owner_index, owners_to_delete)?;
-        let mutated_objects = effects
-            .mutated
+
+        let modified_object_keys = effects
+            .modified_at_versions
             .iter()
-            .map(|(r, _)| r)
-            .chain(effects.deleted.iter())
-            .chain(effects.wrapped.iter())
-            .map(|(id, version, _)| {
-                ObjectKey(
-                    *id,
-                    version
-                        .decrement()
-                        .expect("version revert should never fail"),
-                )
-            });
-        let (old_objects, old_locks): (Vec<_>, Vec<_>) = self
+            .map(|(id, version)| ObjectKey(*id, *version));
+
+        let (old_modified_objects, old_locks): (Vec<_>, Vec<_>) = self
             .perpetual_tables
             .objects
-            .multi_get(mutated_objects)?
+            .multi_get(modified_object_keys)?
             .into_iter()
-            .map(|obj_opt| {
+            .filter_map(|obj_opt| {
                 let obj = obj_opt.expect("Older object version not found");
+
+                if obj.is_immutable() {
+                    return None;
+                }
+
                 let obj_ref = obj.compute_object_reference();
-                let lock = if obj.is_address_owned() {
-                    Some(obj_ref)
-                } else {
-                    None
-                };
-                (
+                Some((
                     ((obj.owner, obj.id()), ObjectInfo::new(&obj_ref, &obj)),
-                    lock,
-                )
+                    obj.is_address_owned().then_some(obj_ref),
+                ))
             })
             .unzip();
 
         let old_locks: Vec<_> = old_locks.into_iter().flatten().collect();
 
-        write_batch = write_batch.insert_batch(&self.perpetual_tables.owner_index, old_objects)?;
+        write_batch =
+            write_batch.insert_batch(&self.perpetual_tables.owner_index, old_modified_objects)?;
 
         write_batch.write()?;
 
@@ -1227,8 +1257,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let ids = certificate.shared_input_objects().map(|(id, _)| id);
         let versions = self.epoch_tables().multi_get_next_object_versions(ids)?;
 
+        let mut input_object_keys = certificate_input_object_keys(certificate)?;
         let mut sequenced_to_write = Vec::new();
-        let mut schedule_to_write = Vec::new();
         for ((id, initial_shared_version), v) in
             certificate.shared_input_objects().zip(versions.iter())
         {
@@ -1251,11 +1281,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                         .unwrap_or_default(),
                 ),
             };
-            let next_version = version.increment();
 
             sequenced_to_write.push(((transaction_digest, *id), version));
-            schedule_to_write.push((*id, next_version));
+            input_object_keys.push(ObjectKey(*id, version));
         }
+
+        let next_version =
+            SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
+
+        let schedule_to_write: Vec<_> = sequenced_to_write
+            .iter()
+            .map(|((_, id), _)| (*id, next_version))
+            .collect();
 
         trace!(tx_digest = ?transaction_digest,
                ?sequenced_to_write, ?schedule_to_write,
@@ -1556,4 +1593,22 @@ impl EffectsStore for Arc<AuthorityStore> {
             .map(|item| item.map(|x| x.into_data()))
             .collect())
     }
+}
+
+/// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
+/// and immutable objects as well as the gas objects, but not move packages or shared objects.
+fn certificate_input_object_keys(certificate: &VerifiedCertificate) -> SuiResult<Vec<ObjectKey>> {
+    Ok(certificate
+        .data()
+        .data
+        .input_objects()?
+        .into_iter()
+        .filter_map(|object| {
+            use InputObjectKind::*;
+            match object {
+                MovePackage(_) | SharedMoveObject { .. } => None,
+                ImmOrOwnedMoveObject(obj) => Some(obj.into()),
+            }
+        })
+        .collect())
 }

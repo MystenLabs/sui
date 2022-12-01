@@ -11,7 +11,6 @@ use tracing::info;
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiEvent;
-use sui_types::base_types::SequenceNumber;
 use sui_types::id::ID;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -79,22 +78,28 @@ impl TestCaseImpl for CallContractTest {
             events.len()
         );
 
-        events
+        let new_object_version = events
             .iter()
-            .find(|e| {
-                matches!(e, SuiEvent::NewObject {
+            .find_map(|e| match e {
+                SuiEvent::NewObject {
                     package_id,
                     transaction_module,
-                    sender, recipient, object_type, object_id, version
-                } if
-                    package_id == &SUI_FRAMEWORK_OBJECT_ID
+                    sender,
+                    recipient,
+                    object_type,
+                    object_id,
+                    version,
+                } if package_id == &SUI_FRAMEWORK_OBJECT_ID
                     && transaction_module == &String::from("devnet_nft")
                     && sender == &signer
                     && recipient == &Owner::AddressOwner(signer)
-                    && object_id == &nft_id
                     && object_type == "0x2::devnet_nft::DevNetNFT"
-                    && version == &SequenceNumber::from_u64(1)
-                )
+                    && object_id == &nft_id =>
+                {
+                    Some(*version)
+                }
+
+                _ => None,
             })
             .unwrap_or_else(|| panic!("Expect such a NewObject in events {:?}", events));
 
@@ -123,8 +128,7 @@ impl TestCaseImpl for CallContractTest {
             .await;
 
         assert_eq!(
-            object.reference.version,
-            SequenceNumber::from_u64(1),
+            object.reference.version, new_object_version,
             "Expect sequence number to be 1"
         );
 

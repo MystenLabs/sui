@@ -153,21 +153,8 @@ impl MoveObject {
         &self.contents[ID_END_INDEX..]
     }
 
-    /// Update the contents of this object and increment its version
-    pub fn update_contents_and_increment_version(
-        &mut self,
-        new_contents: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
-        self.update_contents_without_version_change(new_contents)?;
-        self.increment_version();
-        Ok(())
-    }
-
     /// Update the contents of this object but does not increment its version
-    pub fn update_contents_without_version_change(
-        &mut self,
-        new_contents: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
+    pub fn update_contents(&mut self, new_contents: Vec<u8>) -> Result<(), ExecutionError> {
         if new_contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
@@ -176,25 +163,25 @@ impl MoveObject {
                 },
             ));
         }
+
         #[cfg(debug_assertions)]
         let old_id = self.id();
-        #[cfg(debug_assertions)]
-        let old_version = self.version();
-
         self.contents = new_contents;
 
-        #[cfg(debug_assertions)]
-        {
-            // caller should never overwrite ID or version
-            debug_assert_eq!(self.id(), old_id);
-            debug_assert_eq!(self.version(), old_version);
-        }
+        // Update should not modify ID
+        debug_assert_eq!(self.id(), old_id);
+
         Ok(())
     }
 
-    /// Increase the version of this object by one
-    pub fn increment_version(&mut self) {
-        self.version = self.version.increment();
+    /// Sets the version of this object to a new value which is assumed to be higher (and checked to
+    /// be higher in debug).
+    pub fn increment_version_to(&mut self, next: SequenceNumber) {
+        self.version.increment_to(next);
+    }
+
+    pub fn decrement_version_to(&mut self, prev: SequenceNumber) {
+        self.version.decrement_to(prev);
     }
 
     pub fn contents(&self) -> &[u8] {
@@ -525,18 +512,9 @@ impl Object {
         meta_data_size + data_size
     }
 
-    /// Change the owner of `self` to `new_owner`. This function does not increase the version
-    /// number of the object.
-    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) {
+    /// Change the owner of `self` to `new_owner`.
+    pub fn transfer(&mut self, new_owner: SuiAddress) {
         self.owner = Owner::AddressOwner(new_owner);
-    }
-
-    /// Change the owner of `self` to `new_owner`. This function will increment the version
-    /// number of the object after transfer.
-    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) {
-        self.transfer_without_version_change(new_owner);
-        let data = self.data.try_as_move_mut().unwrap();
-        data.increment_version();
     }
 
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {

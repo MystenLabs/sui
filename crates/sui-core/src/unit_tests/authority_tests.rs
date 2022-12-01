@@ -422,6 +422,7 @@ async fn test_handle_transfer_transaction_ok() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -432,6 +433,13 @@ async fn test_handle_transfer_transaction_ok() {
         .await
         .unwrap()
         .unwrap();
+
+    let before_object_version = object.version();
+    let after_object_version =
+        SequenceNumber::lamport_increment([object.version(), gas_object.version()]);
+
+    assert!(before_object_version < after_object_version);
+
     let transfer_transaction = init_transfer_transaction(
         sender,
         &sender_key,
@@ -440,20 +448,14 @@ async fn test_handle_transfer_transaction_ok() {
         gas_object.compute_object_reference(),
     );
 
-    let test_object = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-
     // Check the initial state of the locks
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), test_object.digest()), 0)
+        .get_transaction_lock(&(object_id, before_object_version, object.digest()), 0)
         .await
         .unwrap()
         .is_none());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), test_object.digest()), 0)
+        .get_transaction_lock(&(object_id, after_object_version, object.digest()), 0)
         .await
         .is_err());
 
@@ -462,38 +464,26 @@ async fn test_handle_transfer_transaction_ok() {
         .await
         .unwrap();
 
-    let object = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
     let pending_confirmation = authority_state
         .get_transaction_lock(&object.compute_object_reference(), 0)
         .await
         .unwrap()
         .unwrap();
+
     assert_eq!(
         account_info.signed_transaction.unwrap(),
         pending_confirmation
     );
 
     // Check the final state of the locks
-    assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
-        .await
-        .unwrap()
-        .is_some());
-    assert_eq!(
-        authority_state
-            .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
-            .await
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .data()
-            .data,
-        transfer_transaction.data().data
-    );
+    let Some(envelope) = authority_state.get_transaction_lock(
+        &(object_id, before_object_version, object.digest()),
+        0,
+    ).await.unwrap() else {
+        panic!("No verified envelope for transaction");
+    };
+
+    assert_eq!(envelope.data().data, transfer_transaction.data().data);
 }
 
 #[tokio::test]
@@ -965,15 +955,12 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         .unwrap();
 
     // Record the old sequence number
-    let old_seq_num;
-    {
-        let old_account = authority_state
-            .get_object(&object_id)
-            .await
-            .unwrap()
-            .unwrap();
-        old_seq_num = old_account.version();
-    }
+    let old_seq_num = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
 
     let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
@@ -992,10 +979,8 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
             .unwrap()
             .unwrap();
         let o = sender_object.data.try_as_move_mut().unwrap();
-        let old_contents = o.contents().to_vec();
-        // update object contents, which will increment the sequence number
-        o.update_contents_and_increment_version(old_contents)
-            .unwrap();
+        // increment the sequence number
+        o.increment_version_to(SequenceNumber::lamport_increment([o.version()]));
         authority_state.insert_genesis_object(sender_object).await;
     }
 
@@ -1013,7 +998,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(old_seq_num.increment(), new_object.version());
+    assert_ne!(old_seq_num, new_object.version());
 
     // No recipient object was created.
     assert!(authority_state.get_object(&dbg_object_id(2)).await.is_err());
@@ -1082,6 +1067,9 @@ async fn test_handle_confirmation_transaction_ok() {
         .unwrap()
         .unwrap();
 
+    let next_sequence_number =
+        SequenceNumber::lamport_increment([object.version(), gas_object.version()]);
+
     let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
         &sender_key,
@@ -1096,8 +1084,6 @@ async fn test_handle_confirmation_transaction_ok() {
         .await
         .unwrap()
         .unwrap();
-    let mut next_sequence_number = old_account.version();
-    next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
         .handle_certificate(&certified_transfer_transaction.clone())
@@ -1363,6 +1349,15 @@ async fn test_move_call_mutable_object_not_mutated() {
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id2, seq2, _) = effects.created[0].0;
 
+    let gas_version = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
+
+    let next_object_version = SequenceNumber::lamport_increment([gas_version, seq1, seq2]);
+
     let effects = call_move(
         &authority_state,
         &gas_object_id,
@@ -1389,7 +1384,7 @@ async fn test_move_call_mutable_object_not_mutated() {
             .unwrap()
             .unwrap()
             .version(),
-        seq1.increment()
+        next_object_version
     );
     assert_eq!(
         authority_state
@@ -1398,7 +1393,7 @@ async fn test_move_call_mutable_object_not_mutated() {
             .unwrap()
             .unwrap()
             .version(),
-        seq2.increment()
+        next_object_version
     );
 }
 
@@ -1448,6 +1443,7 @@ async fn test_move_call_insufficient_gas() {
         .unwrap()
         .into_data();
     let gas_used = effects.gas_used.gas_used();
+
     let obj_ref = authority_state
         .get_object(&object_id)
         .await
@@ -1455,19 +1451,17 @@ async fn test_move_call_insufficient_gas() {
         .unwrap()
         .compute_object_reference();
 
+    let gas_ref = authority_state
+        .get_object(&gas_object_id2)
+        .await
+        .unwrap()
+        .unwrap()
+        .compute_object_reference();
+
+    let next_object_version = SequenceNumber::lamport_increment([obj_ref.1, gas_ref.1]);
+
     // Now we try to construct a transaction with a smaller gas budget than required.
-    let data = TransactionData::new_transfer(
-        sender,
-        obj_ref,
-        recipient,
-        authority_state
-            .get_object(&gas_object_id2)
-            .await
-            .unwrap()
-            .unwrap()
-            .compute_object_reference(),
-        gas_used - 5,
-    );
+    let data = TransactionData::new_transfer(sender, obj_ref, recipient, gas_ref, gas_used - 5);
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();
@@ -1482,7 +1476,7 @@ async fn test_move_call_insufficient_gas() {
         .unwrap()
         .unwrap();
     assert_eq!(obj.previous_transaction, tx_digest);
-    assert_eq!(obj.version(), obj_ref.1.increment());
+    assert_eq!(obj.version(), next_object_version);
     assert_eq!(obj.owner, recipient);
 }
 
@@ -1584,7 +1578,7 @@ async fn test_get_latest_parent_entry() {
     )
     .await
     .unwrap();
-    let (new_object_id1, _seq1, _) = effects.created[0].0;
+    let (new_object_id1, seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(
         &pkg_ref,
@@ -1595,7 +1589,9 @@ async fn test_get_latest_parent_entry() {
     )
     .await
     .unwrap();
-    let (new_object_id2, _seq2, _) = effects.created[0].0;
+    let (new_object_id2, seq2, _) = effects.created[0].0;
+
+    let update_version = SequenceNumber::lamport_increment([seq1, seq2, effects.gas_object.0 .1]);
 
     let effects = call_move(
         &authority_state,
@@ -1621,8 +1617,10 @@ async fn test_get_latest_parent_entry() {
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
-    assert_eq!(obj_ref.1, SequenceNumber::from(2));
+    assert_eq!(obj_ref.1, update_version);
     assert_eq!(effects.transaction_digest, tx);
+
+    let delete_version = SequenceNumber::lamport_increment([obj_ref.1, effects.gas_object.0 .1]);
 
     let effects = call_move(
         &authority_state,
@@ -1659,7 +1657,7 @@ async fn test_get_latest_parent_entry() {
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, gas_object_id);
-    assert_eq!(obj_ref.1, SequenceNumber::from(4));
+    assert_eq!(obj_ref.1, delete_version);
     assert_eq!(effects.transaction_digest, tx);
 
     // Check entry for deleted object is returned
@@ -1669,7 +1667,7 @@ async fn test_get_latest_parent_entry() {
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
-    assert_eq!(obj_ref.1, SequenceNumber::from(3));
+    assert_eq!(obj_ref.1, delete_version);
     assert_eq!(obj_ref.2, ObjectDigest::OBJECT_DIGEST_DELETED);
     assert_eq!(effects.transaction_digest, tx);
 }
@@ -1793,7 +1791,7 @@ async fn test_idempotent_reversed_confirmation() {
 }
 
 #[tokio::test]
-async fn test_genesis_sui_sysmtem_state_object() {
+async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
     let authority_state = init_state().await;
@@ -1817,13 +1815,8 @@ async fn test_transfer_sui_no_amount() {
     let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
 
-    let tx_data = TransactionData::new_transfer_sui(
-        recipient,
-        sender,
-        None,
-        gas_object.compute_object_reference(),
-        MAX_GAS,
-    );
+    let gas_ref = gas_object.compute_object_reference();
+    let tx_data = TransactionData::new_transfer_sui(recipient, sender, None, gas_ref, MAX_GAS);
 
     // Make sure transaction handling works as usual.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
@@ -1842,7 +1835,7 @@ async fn test_transfer_sui_no_amount() {
     // and got transferred. Also check on its version and new balance.
     assert!(effects.status.is_ok());
     assert!(effects.mutated_excluding_gas().next().is_none());
-    assert_eq!(effects.gas_object.0 .1, SequenceNumber::new().increment());
+    assert!(gas_ref.1 < effects.gas_object.0 .1);
     assert_eq!(effects.gas_object.1, Owner::AddressOwner(recipient));
     let new_balance = sui_types::gas::get_gas_balance(
         &authority_state
@@ -1867,13 +1860,8 @@ async fn test_transfer_sui_with_amount() {
     let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
 
-    let tx_data = TransactionData::new_transfer_sui(
-        recipient,
-        sender,
-        Some(500),
-        gas_object.compute_object_reference(),
-        MAX_GAS,
-    );
+    let gas_ref = gas_object.compute_object_reference();
+    let tx_data = TransactionData::new_transfer_sui(recipient, sender, Some(500), gas_ref, MAX_GAS);
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
@@ -1893,7 +1881,7 @@ async fn test_transfer_sui_with_amount() {
         .unwrap()
         .unwrap();
     assert_eq!(sui_types::gas::get_gas_balance(&new_gas).unwrap(), 500);
-    assert_eq!(effects.gas_object.0 .1, SequenceNumber::new().increment());
+    assert!(gas_ref.1 < effects.gas_object.0 .1);
     assert_eq!(effects.gas_object.1, Owner::AddressOwner(sender));
     let new_balance = sui_types::gas::get_gas_balance(
         &authority_state

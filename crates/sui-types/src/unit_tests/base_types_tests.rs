@@ -68,7 +68,7 @@ fn test_gas_coin_ser_deser_roundtrip() {
 }
 
 #[test]
-fn test_increment_version() {
+fn test_update_contents() {
     let id = ObjectID::random();
     let version = SequenceNumber::from(257);
     let value = 10;
@@ -79,20 +79,32 @@ fn test_increment_version() {
     let mut coin_obj = coin.to_object(version);
     assert_eq!(&coin_obj.id(), coin.id());
 
-    // update contents, which should increase sequence number, but leave
-    // everything else the same
+    // update contents should not touch the version number or ID.
     let old_contents = coin_obj.contents().to_vec();
     let old_type_specific_contents = coin_obj.type_specific_contents().to_vec();
-    coin_obj
-        .update_contents_and_increment_version(old_contents)
-        .unwrap();
-    assert_eq!(coin_obj.version(), version.increment());
+    coin_obj.update_contents(old_contents).unwrap();
     assert_eq!(&coin_obj.id(), coin.id());
     assert_eq!(
         coin_obj.type_specific_contents(),
         old_type_specific_contents
     );
     assert_eq!(GasCoin::try_from(&coin_obj).unwrap().value(), coin.value());
+}
+
+#[test]
+fn test_lamport_increment_version() {
+    let versions = [
+        SequenceNumber::from(1),
+        SequenceNumber::from(3),
+        SequenceNumber::from(257),
+        SequenceNumber::from(42),
+    ];
+
+    let incremented = SequenceNumber::lamport_increment(versions);
+
+    for version in versions {
+        assert!(version < incremented, "Expected: {version} < {incremented}");
+    }
 }
 
 #[test]

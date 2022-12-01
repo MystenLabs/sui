@@ -1215,34 +1215,29 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
 async fn get_obj_read_from_node(
     node: &SuiNode,
     object_id: ObjectID,
-    seq_num: Option<SequenceNumber>,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
-    match seq_num {
-        None => {
-            let object_read = node.state().get_object_read(&object_id).await?;
-            match object_read {
-                ObjectRead::Exists(obj_ref, object, layout) => Ok((obj_ref, object, layout)),
-                _ => {
-                    anyhow::bail!("Can't find object {object_id:?} on fullnode.")
-                }
-            }
-        }
-        Some(seq_num) => {
-            let object_read = node
-                .state()
-                .get_past_object_read(&object_id, seq_num)
-                .await?;
-            match object_read {
-                PastObjectRead::VersionFound(obj_ref, object, layout) => {
-                    Ok((obj_ref, object, layout))
-                }
-                _ => {
-                    anyhow::bail!(
-                        "Can't find object {object_id:?} with seq {seq_num:?} on fullnode."
-                    )
-                }
-            }
-        }
+    if let ObjectRead::Exists(obj_ref, object, layout) =
+        node.state().get_object_read(&object_id).await?
+    {
+        Ok((obj_ref, object, layout))
+    } else {
+        anyhow::bail!("Can't find object {object_id:?} on fullnode.")
+    }
+}
+
+async fn get_past_obj_read_from_node(
+    node: &SuiNode,
+    object_id: ObjectID,
+    seq_num: SequenceNumber,
+) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
+    if let PastObjectRead::VersionFound(obj_ref, object, layout) = node
+        .state()
+        .get_past_object_read(&object_id, seq_num)
+        .await?
+    {
+        Ok((obj_ref, object, layout))
+    } else {
+        anyhow::bail!("Can't find object {object_id:?} with seq {seq_num:?} on fullnode.")
     }
 }
 
@@ -1260,7 +1255,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
 
-    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
+    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
 
     // Transfer the object from sender to recipient
     let gas_ref = get_gas_object_with_wallet_context(context, &sender)
@@ -1276,7 +1271,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     context.execute_transaction(nft_transfer_tx).await.unwrap();
     sleep(Duration::from_secs(1)).await;
 
-    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id, None).await?;
+    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
 
     // Transfer some SUI to recipient
@@ -1297,30 +1292,33 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
 
-    let obj_ref_v3 = match node
+    let read_ref_v3 = match node
         .state()
-        .get_past_object_read(&object_id, SequenceNumber::from_u64(3))
+        .get_past_object_read(&object_id, object_ref_v3.1)
         .await?
     {
         PastObjectRead::ObjectDeleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
-    assert_eq!(object_ref_v3, obj_ref_v3);
+    assert_eq!(object_ref_v3, read_ref_v3);
 
-    let (obj_ref_v2, obj_v2, _) =
-        get_obj_read_from_node(&node, object_id, Some(SequenceNumber::from_u64(2))).await?;
-    assert_eq!(object_ref_v2, obj_ref_v2);
-    assert_eq!(object_v2, obj_v2);
-    assert_eq!(obj_v2.owner, Owner::AddressOwner(recipient));
-    let (obj_ref_v1, obj_v1, _) =
-        get_obj_read_from_node(&node, object_id, Some(SequenceNumber::from_u64(1))).await?;
-    assert_eq!(object_ref_v1, obj_ref_v1);
-    assert_eq!(object_v1, obj_v1);
-    assert_eq!(obj_v1.owner, Owner::AddressOwner(sender));
+    let (read_ref_v2, read_obj_v2, _) =
+        get_past_obj_read_from_node(&node, object_id, object_ref_v2.1).await?;
+    assert_eq!(read_ref_v2, object_ref_v2);
+    assert_eq!(read_obj_v2, object_v2);
+    assert_eq!(read_obj_v2.owner, Owner::AddressOwner(recipient));
+
+    let (read_ref_v1, read_obj_v1, _) =
+        get_past_obj_read_from_node(&node, object_id, object_ref_v1.1).await?;
+    assert_eq!(read_ref_v1, object_ref_v1);
+    assert_eq!(read_obj_v1, object_v1);
+    assert_eq!(read_obj_v1.owner, Owner::AddressOwner(sender));
+
+    let too_high_version = SequenceNumber::lamport_increment([object_ref_v3.1]);
 
     match node
         .state()
-        .get_past_object_read(&object_id, SequenceNumber::from_u64(4))
+        .get_past_object_read(&object_id, too_high_version)
         .await?
     {
         PastObjectRead::VersionTooHigh {
@@ -1329,8 +1327,8 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
             latest_version,
         } => {
             assert_eq!(obj_id, object_id);
-            assert_eq!(asked_version, SequenceNumber::from_u64(4));
-            assert_eq!(latest_version, SequenceNumber::from_u64(3));
+            assert_eq!(asked_version, too_high_version);
+            assert_eq!(latest_version, object_ref_v3.1);
         }
         other => anyhow::bail!(
             "Expect SequenceNumberTooHigh for object {object_id:?} but got {other:?}."
