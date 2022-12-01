@@ -25,6 +25,9 @@ use crate::{
     checkpoints::{CheckpointMetrics, CheckpointStore},
 };
 
+#[cfg(test)]
+pub(crate) mod tests;
+
 const TASKS_PER_CORE: usize = 1;
 
 pub struct CheckpointExecutor {
@@ -58,7 +61,6 @@ impl CheckpointExecutor {
     pub async fn run(mut self) {
         let mut finished: FuturesOrdered<JoinHandle<(u64, VerifiedCheckpoint)>> =
             FuturesOrdered::new();
-        // let limit = Arc::new(Semaphore::new(num_cpus::get()));
         let task_limit = TASKS_PER_CORE * num_cpus::get();
 
         loop {
@@ -77,23 +79,16 @@ impl CheckpointExecutor {
                         .update_highest_executed_checkpoint(&checkpoint)
                         .unwrap();
                 },
-                // Limits to `task_limit` worker tasks. If we are at capacity, we reloop and either
+                // Limits to `task_limit` worker tasks. If we are at capacity, reloop and either
                 // check again or attempt to process and consume the FuturesOrdered queue for
                 // finished tasks
                 received = self.mailbox.recv(), if finished.len() < task_limit => match received {
                     Ok(checkpoint) => {
+                        let last_to_exec = checkpoint.sequence_number() as u64;
                         let next_to_exec = self
                             .highest_executed_checkpoint
                             .map(|highest| highest + 1)
                             .unwrap_or(0);
-
-                        // We need to be careful here to not exceed our task capacity limit
-                        // in the case where we are lagging by a larger amount.
-                        let task_capacity_avail = task_limit - finished.len();
-                        let last_to_exec = std::cmp::min(
-                            next_to_exec + (task_capacity_avail as u64) - 1,
-                            checkpoint.sequence_number() as u64,
-                        );
 
                         for seq_num in next_to_exec..=last_to_exec {
                             let next_checkpoint = match self
@@ -147,6 +142,10 @@ impl CheckpointExecutor {
                                 // Unwrap ok because reconfig failure is unrecoverable
                                 self.reconfig(next_committee).await.unwrap();
                             }
+
+                            if finished.len() >= task_limit {
+                                break;
+                            }
                         }
                     }
                     // In this case, messages in the mailbox have been overwritten
@@ -182,7 +181,7 @@ impl CheckpointExecutor {
             .checkpoint_store
             .get_highest_synced_checkpoint_seq_number()?
             .unwrap_or(0);
-        // TODO may want to consider asserting >= 0
+
         let diff = highest_synced - highest_executed;
         self.metrics.checkpoint_exec_lag.set(diff as i64);
         Ok(())
@@ -215,9 +214,6 @@ async fn execute_and_verify_transactions(
     authority_state: Arc<AuthorityState>,
 ) -> SuiResult<Vec<TransactionEffects>> {
     let tx_digests: Vec<TransactionDigest> = transactions.iter().map(|tx| tx.transaction).collect();
-
-    // TODO Need to acquire shared object locks currently. Instead, replcae with call to transaction manager
-    // using transaction effects (which has object version numbers and therefore is already sequenced)
     let mut verified_certs = Vec::<VerifiedCertificate>::new();
     for digest in tx_digests.iter() {
         match authority_state.database.read_certificate(digest)? {
@@ -227,6 +223,10 @@ async fn execute_and_verify_transactions(
     }
 
     {
+        // TODO first extract effects and call `store_pending_certs_and_effects`
+        // after https://github.com/MystenLabs/sui/pull/6157 in order to write the
+        // transaction effects from consensus to authority store so that
+        // TransactionManager can read
         let mut tm_guard = authority_state.transaction_manager.lock().await;
         tm_guard.enqueue(verified_certs).await?;
     }
