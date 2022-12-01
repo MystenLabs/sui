@@ -11149,6 +11149,7 @@ dependencies = [
  "event-listener",
  "eyre",
  "fail 0.4.0",
+ "fail 0.5.1",
  "fastcrypto",
  "fastcrypto-derive",
  "fastcrypto-zkp",
