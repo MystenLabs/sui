@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::p2p::P2pConfig;
+use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
+use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -99,9 +100,19 @@ impl NetworkConfig {
         let network_address = utils::new_tcp_network_address();
         let p2p_config = {
             let address = utils::available_local_socket_address();
+            let seed_peers = self
+                .validator_configs()
+                .iter()
+                .map(|config| SeedPeer {
+                    peer_id: Some(anemo::PeerId(config.network_key_pair.public().0.to_bytes())),
+                    address: config.p2p_config.external_address.clone().unwrap(),
+                })
+                .collect();
+
             P2pConfig {
                 listen_address: address,
                 external_address: Some(utils::socket_address_to_udp_multiaddr(address)),
+                seed_peers,
                 ..Default::default()
             }
         };
