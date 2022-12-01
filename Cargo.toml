@@ -20,7 +20,6 @@ members = [
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
-    "crates/sui-gateway",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
