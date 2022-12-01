@@ -169,6 +169,7 @@ impl MoveObject {
         self.contents = new_contents;
 
         // Update should not modify ID
+        #[cfg(debug_assertions)]
         debug_assert_eq!(self.id(), old_id);
 
         Ok(())
