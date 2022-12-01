@@ -5,6 +5,7 @@ use once_cell::sync::OnceCell;
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
 use tap::TapFallible;
 
+use tokio::time::Instant;
 use tracing::warn;
 
 pub use scopeguard;
@@ -98,29 +99,39 @@ macro_rules! spawn_monitored_task {
     };
 }
 
-/// This macro creates a named scoped object, that keeps track of
+pub struct MonitoredScopeGuard {
+    metrics: &'static Metrics,
+    name: &'static str,
+    timer: Instant,
+}
+
+impl Drop for MonitoredScopeGuard {
+    fn drop(&mut self) {
+        self.metrics
+            .scope_duration_ns
+            .with_label_values(&[self.name])
+            .add(self.timer.elapsed().as_nanos() as i64);
+    }
+}
+
+/// This function creates a named scoped object, that keeps track of
 /// - the total iterations where the scope is called in the `monitored_scope_iterations` metric.
 /// - and the total duration of the scope in the `monitored_scope_duration_ns` metric.
 ///
-/// The monitored scope should be single threaded, e.g. a select loop or guarded by mutex. Then
-/// the rate of `monitored_scope_duration_ns` would be how full the scope has been running.
-#[macro_export]
-macro_rules! monitored_scope {
-    ($name: expr) => {{
-        let metrics = mysten_metrics::get_metrics();
-        if let Some(m) = metrics {
-            let timer = tokio::time::Instant::now();
-            m.scope_iterations.with_label_values(&[$name]).inc();
-            Some(mysten_metrics::scopeguard::guard(
-                (m, timer),
-                |(m, timer)| {
-                    m.scope_duration_ns
-                        .with_label_values(&[$name])
-                        .add(timer.elapsed().as_nanos() as i64);
-                },
-            ))
-        } else {
-            None
-        }
-    }};
+/// The monitored scope should be single threaded, e.g. the scoped object encompass the lifetime of
+/// a select loop or guarded by mutex.
+/// Then the rate of `monitored_scope_duration_ns`, converted to the unit of sec / sec, would be
+/// how full the single threaded scope is running.
+pub fn monitored_scope(name: &'static str) -> Option<MonitoredScopeGuard> {
+    let metrics = get_metrics();
+    if let Some(m) = metrics {
+        m.scope_iterations.with_label_values(&[name]).inc();
+        Some(MonitoredScopeGuard {
+            metrics: m,
+            name,
+            timer: tokio::time::Instant::now(),
+        })
+    } else {
+        None
+    }
 }

@@ -272,7 +272,7 @@ impl CertificateWaiter {
         );
         self.fetch_certificates_task.push(
             spawn_monitored_task!(async move {
-                let _scope = monitored_scope!("CertificatesFetching");
+                let _scope = monitored_scope("CertificatesFetching");
                 state
                     .metrics
                     .certificate_waiter_inflight_fetch

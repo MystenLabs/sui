@@ -2138,7 +2138,7 @@ impl AuthorityState {
         consensus_output: &ConsensusOutput,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
-        let _scope = monitored_scope!("VerifyConsensusTransaction");
+        let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
             .database
             .consensus_message_processed(&transaction.transaction.key())
@@ -2199,7 +2199,7 @@ impl AuthorityState {
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
-        let _scope = monitored_scope!("HandleConsensusTransaction");
+        let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             consensus_output: _consensus_output,
             consensus_index,

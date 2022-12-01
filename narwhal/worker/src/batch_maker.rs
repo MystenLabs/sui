@@ -110,7 +110,7 @@ impl BatchMaker {
         let mut batch_pipeline = FuturesOrdered::new();
 
         loop {
-            let _scope = monitored_scope!("NarwhalBatchMaker");
+            let _scope = monitored_scope("NarwhalBatchMaker");
 
             tokio::select! {
                 // Assemble client transactions into batches of preset size.

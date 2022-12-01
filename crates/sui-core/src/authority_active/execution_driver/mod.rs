@@ -80,7 +80,7 @@ where
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let _scope = monitored_scope!("ExecutionDriver");
+        let _scope = monitored_scope("ExecutionDriver");
 
         let certificate = if let Some(cert) = ready_certificates_stream.recv().await {
             cert

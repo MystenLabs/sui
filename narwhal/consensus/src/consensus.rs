@@ -311,7 +311,7 @@ where
     async fn run_inner(mut self) -> StoreResult<()> {
         // Listen to incoming certificates.
         loop {
-            let _scope = monitored_scope!("NarwhalConsensus");
+            let _scope = monitored_scope("NarwhalConsensus");
 
             tokio::select! {
                 Some(certificate) = self.rx_new_certificates.recv() => {

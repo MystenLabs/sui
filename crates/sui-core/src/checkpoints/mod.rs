@@ -283,7 +283,7 @@ impl CheckpointBuilder {
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<()> {
-        let _scope = monitored_scope!("MakeCheckpoint");
+        let _scope = monitored_scope("MakeCheckpoint");
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
@@ -517,7 +517,7 @@ impl CheckpointAggregator {
     }
 
     async fn run_inner(&mut self) -> SuiResult {
-        let _scope = monitored_scope!("CheckpointAggregator");
+        let _scope = monitored_scope("CheckpointAggregator");
         'outer: loop {
             let current = if let Some(current) = &mut self.current {
                 current

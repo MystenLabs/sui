@@ -671,7 +671,7 @@ impl Core {
     pub async fn run(mut self) {
         info!("Core on node {} has started successfully.", self.name);
         loop {
-            let _scope = monitored_scope!("NarwhalCore");
+            let _scope = monitored_scope("NarwhalCore");
 
             let result = tokio::select! {
                 Some((certificate, notify)) = self.rx_certificates.recv() => {
