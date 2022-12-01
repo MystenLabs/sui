@@ -1239,8 +1239,8 @@ async fn test_handle_certificate_interrupted_retry() {
         }
         interrupted_count += 1;
 
-        let g = authority_state
-            .database
+        let epoch_store = authority_state.database.epoch_store();
+        let g = epoch_store
             .acquire_tx_guard(&shared_object_cert)
             .await
             .unwrap();

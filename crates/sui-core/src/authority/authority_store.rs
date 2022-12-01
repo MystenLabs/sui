@@ -18,7 +18,6 @@ use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     lock_service::ObjectLockStatus,
     mutex_table::{LockGuard, MutexTable},
-    write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
 };
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
@@ -35,8 +34,6 @@ use typed_store::traits::Map;
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
-pub struct CertLockGuard(LockGuard);
-
 const NUM_SHARDS: usize = 4096;
 const SHARD_SIZE: usize = 128;
 
@@ -47,11 +44,6 @@ const SHARD_SIZE: usize = 128;
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct SuiDataStore<S> {
-    /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
-    /// crashes.
-    pub wal:
-        Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
-
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
 
@@ -123,11 +115,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let lock_service =
             LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
 
-        let wal_path = path.join("recovery_log");
-        let wal = Arc::new(DBWriteAheadLog::new(wal_path));
-
         let store = Self {
-            wal,
             lock_service,
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
@@ -162,26 +150,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore<S>>> {
         self.epoch_store.load()
-    }
-
-    pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
-        let digest = cert.digest();
-        let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
-
-        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
-            // If the tx has been retried too many times, it could be a poison pill, and we should
-            // prevent the client from continually retrying it.
-            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
-            debug!(?digest, "{}", err);
-            return Err(SuiError::ErrorWhileProcessingCertificate { err });
-        }
-
-        Ok(guard)
-    }
-
-    /// Acquire the lock for a tx without writing to the WAL.
-    pub async fn acquire_tx_lock(&self, digest: &TransactionDigest) -> CertLockGuard {
-        CertLockGuard(self.wal.acquire_lock(digest).await)
     }
 
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
@@ -1286,7 +1254,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects().map(|(id, _)| id);
-        let versions = self.epoch_store().multi_get_next_object_versions(ids)?;
+        let epoch_store = self.epoch_store();
+        let versions = epoch_store.multi_get_next_object_versions(ids)?;
 
         let mut input_object_keys = certificate_input_object_keys(certificate)?;
         let mut sequenced_to_write = Vec::new();
@@ -1337,12 +1306,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         //    and then deletes locks from assigned_object_versions
         // - we write to assigned_object versions, re-creating the locks that were just deleted
         // - now it's possible to run a new tx against old versions of the shared objects.
-        let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
+        let _tx_lock = epoch_store.acquire_tx_lock(&transaction_digest).await;
 
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
 
-        self.epoch_store().finish_assign_shared_object_versions(
+        epoch_store.finish_assign_shared_object_versions(
             transaction.key(),
             certificate,
             consensus_index,

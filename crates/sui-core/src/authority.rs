@@ -665,7 +665,8 @@ impl AuthorityState {
             }
         );
 
-        let tx_guard = self.database.acquire_tx_guard(certificate).await?;
+        let epoch_store = self.database.epoch_store();
+        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database.acquire_shared_locks_from_effects(
@@ -730,8 +731,8 @@ impl AuthorityState {
             ?tx_digest,
             tx_kind = certificate.data().data.kind_as_str()
         );
-        let tx_guard = self
-            .database
+        let epoch_store = self.database.epoch_store();
+        let tx_guard = epoch_store
             .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
@@ -823,9 +824,9 @@ impl AuthorityState {
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
-        if let Some((inner_temporary_storage, signed_effects)) = self
-            .database
-            .wal
+        let epoch_store = self.database.epoch_store();
+        if let Some((inner_temporary_storage, signed_effects)) = epoch_store
+            .wal()
             .get_execution_output(certificate.digest())?
         {
             return self
@@ -866,7 +867,7 @@ impl AuthorityState {
         // fail mid-write. We prefer this over making the write to permanent
         // storage atomic as this allows for sharding storage across nodes, which
         // would be more difficult in the alternative.
-        self.database.wal.write_execution_output(
+        epoch_store.wal().write_execution_output(
             &digest,
             (inner_temporary_store.clone(), signed_effects.clone()),
         )?;
@@ -1552,9 +1553,10 @@ impl AuthorityState {
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::MAX);
+        let epoch_store = self.database.epoch_store();
         while limit > 0 {
             limit -= 1;
-            if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
+            if let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
                 let digest = tx_guard.tx_id();
                 debug!(?digest, "replaying failed cert from log");
 
