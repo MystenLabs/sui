@@ -28,7 +28,7 @@ describe('End-to-end Tests', () => {
     });
 
     describe('Transaction Results', () => {
-        const successID = 'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=';
+        const successID = 'vQMG8nrGirX14JLfyzy15DrYD3gwRC1eUmBmBzYUsgh';
         it('can be searched', () => {
             cy.visit('/');
             searchText(successID);

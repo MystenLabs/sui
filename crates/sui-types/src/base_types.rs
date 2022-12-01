@@ -34,7 +34,7 @@ use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use crate::waypoint::IntoPoint;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
@@ -286,8 +286,8 @@ pub const OBJECT_DIGEST_LENGTH: usize = 32;
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 

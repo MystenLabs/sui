@@ -252,7 +252,7 @@
             "name": "Result",
             "value": {
               "certificate": {
-                "transactionDigest": "mWZpOe42hid/gGQ1t7lOY5ohuzIXEIuo1uemz/CT96s=",
+                "transactionDigest": "BKox8pahwcFV2D5VWGNPVfGHyDjiNZuK3ZXZLRKEbXt6",
                 "data": {
                   "transactions": [
                     {
@@ -299,7 +299,7 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "w05NXKj399+qCDscEa9LhE/5Sz++9uNrUY2jrUxYVvo=",
+                "transactionDigest": "E9PkcTxb6bdMCGcP5DP67UNkXaUhEzQSTehkYdEsYKJ1",
                 "mutated": [
                   {
                     "owner": {
@@ -416,7 +416,7 @@
             "name": "Result",
             "value": {
               "certificate": {
-                "transactionDigest": "487XHTDeDG0aik86o+C3y7WNZJlcYl5mtBx2M+CWD/c=",
+                "transactionDigest": "GLGUixzdipeZ6LEHAXSoHKYTycsAuNiiw9YyeWfzrF2E",
                 "data": {
                   "transactions": [
                     {
@@ -463,7 +463,7 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "68d3nEXj4UFVeTUsEotNGi9C/fvJxac6RBGT6Zq2zCo=",
+                "transactionDigest": "GsPDh3rJZzPJ8977gZEf9a5QZo2h7eup7v2ioNk9kvZX",
                 "mutated": [
                   {
                     "owner": {
@@ -627,7 +627,7 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "ewa++QvMPU1gkIJuz9F9r5RMGyAjOGZWB5+jBqkmDfg="
+                "Transaction": "9HF7ZAfdStA8d9eUuxfKBn4V2vWcvzT8tccs4CAVrFtj"
               }
             },
             {
@@ -652,7 +652,7 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "ewa++QvMPU1gkIJuz9F9r5RMGyAjOGZWB5+jBqkmDfg=",
+                  "txDigest": "9HF7ZAfdStA8d9eUuxfKBn4V2vWcvzT8tccs4CAVrFtj",
                   "id": {
                     "txSeq": 0,
                     "eventSeq": 0
@@ -914,7 +914,7 @@
                 "owner": {
                   "AddressOwner": "0x96d23087a0fd641e91e0e00df6c012cded9ef9ba"
                 },
-                "previousTransaction": "XlvwQkZLXKZIi4l8AFsuF/APwLyOftPyq1nWB7DjWGs=",
+                "previousTransaction": "7MLdoNgkZnWKQeAfdAAdJsoQX86VPDfvJFV7ERfZ2v7t",
                 "storageRebate": 100,
                 "reference": {
                   "objectId": "0x686464524a876b463d1297603568c40e814d9d53",
@@ -975,7 +975,7 @@
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previousTransaction": "X9sl3YQvc2q5c+h/U7SFeEJ4mh3VkWdimzxcq+R9v0g="
+                "previousTransaction": "7TBYiUPthxZ2LNvMk5kwtqHpw1e3casThSHZfqkKrXZh"
               },
               {
                 "objectId": "0x827ec0818e00de4b297f047c3beda43d6e9f9b1b",
@@ -985,7 +985,7 @@
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previousTransaction": "dVaHEgp8bfI4nDc8j74GvaemESBlJmjdVof+5z+seiw="
+                "previousTransaction": "8u3E7cQUSuo96NwJ9mYS4hMGCs48CEjreQPGrKGsVTMV"
               },
               {
                 "objectId": "0x564da689e9da76e1430d191fbc937d42f74104aa",
@@ -995,7 +995,7 @@
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previousTransaction": "EjMa3C7W9ALco5a/5t+jrIpX6giGCHD9UVz3ymr7iH0="
+                "previousTransaction": "2E3Y69NXfHQxMHoNupkwpv3RmADKQz4Lpka5fa6PjU2g"
               },
               {
                 "objectId": "0xd1e09be8e451cd3c364076623c0231898be0722c",
@@ -1005,7 +1005,7 @@
                 "owner": {
                   "AddressOwner": "0xd885442b44972526c4e8ce25a0416c3955d818bb"
                 },
-                "previousTransaction": "136J57/v1Pc62j0ZrIfUU1HwGWqIC5XD6iRN0GDStlM="
+                "previousTransaction": "FWCZrdzxmfk7zogPwBu3tZHForssh8VMqJXkixrLGQCr"
               }
             ]
           }
@@ -1060,7 +1060,7 @@
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previousTransaction": "wdRMavXi+s3thNA7U3NRTxbj1m4ACBBRZLtzoe1YssE="
+                "previousTransaction": "E3dSj5imFCTb5QUaaM2RKkmM2FUszD99qvfcNiUVqBBv"
               },
               {
                 "objectId": "0x8b0cbf377792e206e6b80d4d5eea64e2e70563b1",
@@ -1070,7 +1070,7 @@
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previousTransaction": "zyYQwUsuJ8Hu1WwztXkDQVDqRrzPdlPgC28ktjvQTaY="
+                "previousTransaction": "Ewd4QWcfAnZXdQ5MAnrRtkuDweHQQECrX6beY65yXHXj"
               },
               {
                 "objectId": "0x8bc160c74cd844f922623fa58cdd6ef2d0531ce3",
@@ -1080,7 +1080,7 @@
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previousTransaction": "2qHdP8SvMhjXbMeqa+GABOXjjLNcyvGLfxpOPcex5/8="
+                "previousTransaction": "FiT2qZx7vs4Gqy5o4hkiAdcLrX5dWgC2VBxse5gjwupS"
               },
               {
                 "objectId": "0xd3dbd682f600d1f62dc0921f7f7dbfca95055adc",
@@ -1090,7 +1090,7 @@
                 "owner": {
                   "ObjectOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9"
                 },
-                "previousTransaction": "ZY0hvOm4i9zu4SlBRO7EfPOTiLtoD2m3QmvFKSlpL9w="
+                "previousTransaction": "7qQzifR67pNVyi1MDvA4VMKS76fKwov222kg6vh2Gv27"
               }
             ]
           }
@@ -1146,7 +1146,7 @@
                 "owner": {
                   "AddressOwner": "0xff7c50772417586a93633829fcba6d6e0ccb13d3"
                 },
-                "previousTransaction": "2/52FLgep2slXl1DUDLNhZXzfrj8AP/NoAr8XqnjnLI=",
+                "previousTransaction": "FomLHyaFXekRw2wdCcQqn9EvUaQhruUv3sH4FQYZEVoo",
                 "storageRebate": 100,
                 "reference": {
                   "objectId": "0x7d2ff374c3f870f36fb728ab4187831206d15181",
@@ -1219,14 +1219,14 @@
           "params": [
             {
               "name": "digest",
-              "value": "6ufvFXow2DG/iI/8ApYbMxIWFKyDd+e8vpUf2gbfAAs="
+              "value": "GoyXSU8LurRa9Qae9SvYSrUMRrfhreioZtn9vFYbU7oG"
             }
           ],
           "result": {
             "name": "Result",
             "value": {
               "certificate": {
-                "transactionDigest": "6ufvFXow2DG/iI/8ApYbMxIWFKyDd+e8vpUf2gbfAAs=",
+                "transactionDigest": "GoyXSU8LurRa9Qae9SvYSrUMRrfhreioZtn9vFYbU7oG",
                 "data": {
                   "transactions": [
                     {
@@ -1273,7 +1273,7 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "sdpjc86U+dldylpA9OF2mRjuv5+64AvTjleHL0UiRGg=",
+                "transactionDigest": "CyGJmgvA8He9m1TNHdQYzZPKeQy9r8FVtJ5amhc88wnw",
                 "mutated": [
                   {
                     "owner": {
@@ -1360,7 +1360,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "spsGJA66Ra3IYxwGAmiF9bHPZVy1VGcZGDzGgEqwgTg="
+              "value": "D2Cg71vJhN8wceT9pBSBTMgtr4R858eFtFXphLE3Y3Ef"
             }
           ],
           "result": {
@@ -1436,7 +1436,7 @@
             },
             {
               "name": "cursor",
-              "value": "hdGRg97nx/+VVpf+K3BMlUCjhG6SmLddtyXB7jAnt4M="
+              "value": "A1NZtyS73EN5N4jBA8Q7fMcvmJ3voaGkUEuFnjyXA5HC"
             },
             {
               "name": "limit",
@@ -1451,11 +1451,11 @@
             "name": "Result",
             "value": {
               "data": [
-                "fnF89wjJNwYPBASHNuwz+xdG2Zml5YzVxnftgE+C8cg=",
-                "WHuY1kwAv7RsOEO9i/bM+nxlqGE4aYzR/crD3OjYx84=",
-                "hj8xPaPb2SqD7ybRKLiP5mvybg4NCc2vcn0dhMzKqXo="
+                "9WajtNQhL2AebUmv6oYdVHaBKNG8C3PtphwjRD6PaKRh",
+                "6xQBrrbMRvhvpM6UTwYZvxDsqmt2qq9vGBsWvJk7ZVpy",
+                "A33X7MrgZcuFULczA8RDiECvwKTG9bBCEDKjVM3iP5jf"
               ],
-              "nextCursor": "Asw6mAQWcOFgnbcU6YWMlunkaYVfHPO/35foZbEMAEY="
+              "nextCursor": "BvSKESccKJFyFXpY9yVZ3LSwGU2ckzjv8QuHr2crndK"
             }
           }
         }
@@ -2250,7 +2250,7 @@
                 "owner": {
                   "AddressOwner": "0xb99003d30a245ac74a02e26e45cb80ee1b9c00a9"
                 },
-                "previousTransaction": "M0XOXxK+qf/gR0jWaWwwYxc1GTrqlbj5CCwQYgwNbj8=",
+                "previousTransaction": "4T9XiCXVjtBsf5zLoYmHQMLF4G8ewKvBkLagbzApGBta",
                 "storageRebate": 100,
                 "reference": {
                   "objectId": "0x818dd7234e049913233eb918c11638af89d575be",
@@ -2303,6 +2303,9 @@
           "Pay",
           "Receive"
         ]
+      },
+      "Base58": {
+        "type": "string"
       },
       "Base64": {
         "description": "Base64 encoding.",
@@ -4681,7 +4684,7 @@
         "description": "A transaction will have a (unique) digest.",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         ]
       },

@@ -293,7 +293,7 @@ fn test_transaction_digest_serde_not_human_readable() {
 fn test_transaction_digest_serde_human_readable() {
     let digest = TransactionDigest::random();
     let serialized = serde_json::to_string(&digest).unwrap();
-    assert_eq!(format!("\"{}\"", Base64::encode(digest.0)), serialized);
+    assert_eq!(format!("\"{}\"", Base58::encode(digest.0)), serialized);
     let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }
