@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
@@ -18,12 +19,15 @@ use serde::Deserialize;
 use tokio::time::Instant;
 use tower::Layer;
 
+const SPAM_LABEL: &str = "SPAM";
+
 #[derive(Debug, Clone)]
 pub struct MetricsLayer {
     metrics: Arc<Metrics>,
+    method_whitelist: Arc<HashSet<String>>,
 }
 impl MetricsLayer {
-    pub fn new(registry: &prometheus::Registry) -> Self {
+    pub fn new(registry: &prometheus::Registry, method_whitelist: &[&str]) -> Self {
         let metrics = Arc::new(Metrics {
             requests_by_route: register_int_counter_vec_with_registry!(
                 "rpc_requests_by_route",
@@ -49,7 +53,10 @@ impl MetricsLayer {
             .unwrap(),
         });
 
-        Self { metrics }
+        Self {
+            metrics,
+            method_whitelist: Arc::new(method_whitelist.iter().map(|s| (*s).into()).collect()),
+        }
     }
 }
 
@@ -57,7 +64,7 @@ impl<S> Layer<S> for MetricsLayer {
     type Service = JsonRpcMetricService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        JsonRpcMetricService::new(inner, self.metrics.clone())
+        JsonRpcMetricService::new(inner, self.metrics.clone(), self.method_whitelist.clone())
     }
 }
 
@@ -65,6 +72,7 @@ impl<S> Layer<S> for MetricsLayer {
 pub struct JsonRpcMetricService<S> {
     inner: S,
     metrics: Arc<Metrics>,
+    method_whitelist: Arc<HashSet<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,8 +90,12 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 impl<S> JsonRpcMetricService<S> {
-    pub fn new(inner: S, metrics: Arc<Metrics>) -> Self {
-        Self { inner, metrics }
+    pub fn new(inner: S, metrics: Arc<Metrics>, method_whitelist: Arc<HashSet<String>>) -> Self {
+        Self {
+            inner,
+            metrics,
+            method_whitelist,
+        }
     }
 }
 
@@ -108,6 +120,7 @@ where
         let started_at = Instant::now();
         let metrics = self.metrics.clone();
         let mut inner = self.inner.clone();
+        let whitelist = self.method_whitelist.clone();
 
         let res_fut = async move {
             // Parse request to retrieve RPC method name.
@@ -133,15 +146,23 @@ where
 
             // Record metrics if the request is a http RPC request.
             if let Some(name) = rpc_name {
-                metrics.requests_by_route.with_label_values(&[&name]).inc();
-                let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
-                metrics
-                    .req_latency_by_route
-                    .with_label_values(&[&name])
-                    .observe(req_latency_secs);
+                if whitelist.contains(&name) {
+                    let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
+                    metrics.requests_by_route.with_label_values(&[&name]).inc();
+                    metrics
+                        .req_latency_by_route
+                        .with_label_values(&[&name])
+                        .observe(req_latency_secs);
 
-                if !res.status().is_server_error() {
-                    metrics.errors_by_route.with_label_values(&[&name]).inc();
+                    if !res.status().is_server_error() {
+                        metrics.errors_by_route.with_label_values(&[&name]).inc();
+                    }
+                } else {
+                    // Only record request count for spams
+                    metrics
+                        .requests_by_route
+                        .with_label_values(&[SPAM_LABEL])
+                        .inc();
                 }
             }
             Ok(res)

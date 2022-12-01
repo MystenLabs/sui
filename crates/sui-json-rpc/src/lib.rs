@@ -9,6 +9,7 @@ use hyper::Method;
 pub use jsonrpsee::server::ServerHandle;
 use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
+use prometheus::Registry;
 use tower::util::option_layer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::info;
@@ -30,7 +31,7 @@ pub mod transaction_execution_api;
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
     rpc_doc: Project,
-    metrics: Option<MetricsLayer>,
+    registry: Option<Registry>,
 }
 
 pub fn sui_rpc_doc(version: &str) -> Project {
@@ -47,12 +48,11 @@ pub fn sui_rpc_doc(version: &str) -> Project {
 }
 
 impl JsonRpcServerBuilder {
-    pub fn new(version: &str, prometheus_registry: &prometheus::Registry) -> anyhow::Result<Self> {
-        let metrics = MetricsLayer::new(prometheus_registry);
+    pub fn new(version: &str, prometheus_registry: &Registry) -> anyhow::Result<Self> {
         Ok(Self {
             module: RpcModule::new(()),
             rpc_doc: sui_rpc_doc(version),
-            metrics: Some(metrics),
+            registry: Some(prometheus_registry.clone()),
         })
     }
 
@@ -60,7 +60,7 @@ impl JsonRpcServerBuilder {
         Ok(Self {
             module: RpcModule::new(()),
             rpc_doc: sui_rpc_doc("0.0.0"),
-            metrics: None,
+            registry: None,
         })
     }
 
@@ -93,7 +93,13 @@ impl JsonRpcServerBuilder {
             .allow_origin(acl)
             .allow_headers([hyper::header::CONTENT_TYPE]);
 
-        let metrics_layer = option_layer(self.metrics);
+        self.module
+            .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
+        let methods_names = self.module.method_names().collect::<Vec<_>>();
+
+        let metrics_layer = option_layer(self.registry.map(|registry| {
+            MetricsLayer::new(&registry, &methods_names);
+        }));
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)
             .layer(metrics_layer);
@@ -103,10 +109,6 @@ impl JsonRpcServerBuilder {
             .set_middleware(middleware)
             .build(listen_address)
             .await?;
-
-        self.module
-            .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
-        let methods_names = self.module.method_names().collect::<Vec<_>>();
 
         let addr = server.local_addr()?;
         let handle = server.start(self.module)?;
