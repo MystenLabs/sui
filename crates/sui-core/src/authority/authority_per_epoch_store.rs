@@ -7,18 +7,20 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use sui_storage::default_db_options;
-use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{
+    AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest, TransactionEffectsDigest,
+};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, TrustedCertificate,
-    VerifiedCertificate,
+    ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, TransactionEffects,
+    TrustedCertificate, VerifiedCertificate,
 };
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::epoch::reconfiguration::ReconfigState;
-use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
+use sui_types::message_envelope::{Message, TrustedEnvelope, VerifiedEnvelope};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
 
@@ -67,6 +69,10 @@ pub struct AuthorityEpochTables<S> {
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
     pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
+
+    /// Effects downloaded as part of checkpoint sync. These are known to be finalized, and we need
+    /// them to execute the transaction locally.
+    state_sync_pending_effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_object_versions exactly once for each transaction we receive from
@@ -238,6 +244,13 @@ where
         Ok(self.tables.pending_certificates.contains_key(tx)?)
     }
 
+    pub fn get_state_sync_pending_effects(
+        &self,
+        digest: &TransactionEffectsDigest,
+    ) -> Result<Option<TransactionEffects>, TypedStoreError> {
+        self.tables.state_sync_pending_effects.get(digest)
+    }
+
     /// Deletes one pending certificate.
     pub fn remove_pending_certificate(&self, digest: &TransactionDigest) -> SuiResult<()> {
         self.tables.pending_certificates.remove(digest)?;
@@ -345,6 +358,15 @@ where
         )?;
         batch.write()?;
         Ok(())
+    }
+
+    pub fn insert_state_sync_pending_effects(
+        &self,
+        transaction_effects: &TransactionEffects,
+    ) -> Result<(), TypedStoreError> {
+        self.tables
+            .state_sync_pending_effects
+            .insert(&transaction_effects.digest(), transaction_effects)
     }
 
     pub fn is_consensus_message_processed(&self, key: &ConsensusTransactionKey) -> SuiResult<bool> {

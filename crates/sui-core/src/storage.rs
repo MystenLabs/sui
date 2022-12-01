@@ -7,7 +7,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::base_types::TransactionEffectsDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::message_envelope::Message;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages::VerifiedCertificate;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -109,7 +108,12 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionEffectsDigest,
     ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.authority_store.perpetual_tables.effects.get(digest)
+        self.authority_store
+            .epoch_tables()
+            .get_state_sync_pending_effects(digest)
+        // TODO: We should make the state_sync_pending_effects table keyed by tx digest,
+        // so that here we could look up both state_sync_pending_effects table and executed_effects
+        // table.
     }
 }
 
@@ -150,13 +154,12 @@ impl WriteStore for RocksDbStore {
             .insert_pending_certificates(&[transaction])
     }
 
-    fn insert_transaction_effects(
+    fn insert_state_sync_pending_effects(
         &self,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error> {
         self.authority_store
-            .perpetual_tables
-            .effects
-            .insert(&transaction_effects.digest(), &transaction_effects)
+            .epoch_tables()
+            .insert_state_sync_pending_effects(&transaction_effects)
     }
 }

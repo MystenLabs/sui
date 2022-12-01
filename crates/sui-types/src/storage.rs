@@ -264,7 +264,7 @@ pub trait WriteStore: ReadStore {
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error>;
 
     fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error>;
-    fn insert_transaction_effects(
+    fn insert_state_sync_pending_effects(
         &self,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error>;
@@ -294,11 +294,11 @@ impl<T: WriteStore> WriteStore for &T {
         WriteStore::insert_transaction(*self, transaction)
     }
 
-    fn insert_transaction_effects(
+    fn insert_state_sync_pending_effects(
         &self,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error> {
-        WriteStore::insert_transaction_effects(*self, transaction_effects)
+        WriteStore::insert_state_sync_pending_effects(*self, transaction_effects)
     }
 }
 
@@ -408,7 +408,7 @@ impl InMemoryStore {
         if self.epoch_to_committee.len() == epoch {
             self.epoch_to_committee.push(committee);
         } else {
-            panic!("committe was inserted into EpochCommitteeMap out of order");
+            panic!("committee was inserted into EpochCommitteeMap out of order");
         }
     }
 
@@ -544,7 +544,7 @@ impl WriteStore for SharedInMemoryStore {
         Ok(())
     }
 
-    fn insert_transaction_effects(
+    fn insert_state_sync_pending_effects(
         &self,
         transaction_effects: TransactionEffects,
     ) -> Result<(), Self::Error> {
