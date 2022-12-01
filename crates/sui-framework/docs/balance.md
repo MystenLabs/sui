@@ -211,7 +211,7 @@ Increase supply by <code>value</code> and create a new <code><a href="balance.md
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="balance.md#0x2_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;, value: u64): <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">value</a> &lt; (18446744073709551615u64 - self.value), <a href="balance.md#0x2_balance_EOverflow">EOverflow</a>);
+    <b>assert</b>!(<a href="balance.md#0x2_balance_value">value</a> &lt;= (18446744073709551615u64 - self.value), <a href="balance.md#0x2_balance_EOverflow">EOverflow</a>);
     self.value = self.value + value;
     <a href="balance.md#0x2_balance_Balance">Balance</a> { value }
 }

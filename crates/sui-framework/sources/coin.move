@@ -114,9 +114,26 @@ module sui::coin {
         }
     }
 
+    spec take {
+        let before_val = balance.value;
+        let post after_val = balance.value;
+        ensures after_val == before_val - value;
+
+        aborts_if value > before_val;
+        aborts_if ctx.ids_created + 1 > MAX_U64;
+    }
+
     /// Put a `Coin<T>` to the `Balance<T>`.
     public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
         balance::join(balance, into_balance(coin));
+    }
+
+    spec put {
+        let before_val = balance.value;
+        let post after_val = balance.value;
+        ensures after_val == before_val + coin.balance.value;
+
+        aborts_if before_val + coin.balance.value > MAX_U64;
     }
 
     // === Base Coin functionality ===
@@ -129,12 +146,29 @@ module sui::coin {
         balance::join(&mut self.balance, balance);
     }
 
+    spec join {
+        let before_val = self.balance.value;
+        let post after_val = self.balance.value;
+        ensures after_val == before_val + c.balance.value;
+
+        aborts_if before_val + c.balance.value > MAX_U64;
+    }
+
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public fun split<T>(
         self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext
     ): Coin<T> {
         take(&mut self.balance, split_amount, ctx)
+    }
+
+    spec split {
+        let before_val = self.balance.value;
+        let post after_val = self.balance.value;
+        ensures after_val == before_val - split_amount;
+
+        aborts_if split_amount > before_val;
+        aborts_if ctx.ids_created + 1 > MAX_U64;
     }
 
     /// Split coin `self` into `n - 1` coins with equal balances. The remainder is left in
@@ -148,11 +182,42 @@ module sui::coin {
         let vec = vector::empty<Coin<T>>();
         let i = 0;
         let split_amount = value(self) / n;
-        while (i < n - 1) {
+        while ({
+            spec {
+                invariant i <= n-1;
+//                invariant self.balance.value == old(self).balance.value - (i * split_amount);
+                invariant self.balance.value >= ((n - 1) - i) * split_amount;
+//                invariant ctx.ids_created == old(ctx).ids_created + i;
+            };
+            i < n - 1
+        }) {
             vector::push_back(&mut vec, split(self, split_amount, ctx));
             i = i + 1;
         };
+        spec {
+            assert i == n - 1;
+//            assert self.balance.value == old(self).balance.value - ((n - 1) * split_amount);
+        };
         vec
+    }
+
+    spec module {
+        fun spec_ids_overflow(n: u64, ids_created: u64): bool {
+            exists i: u64 where i >= 0 && i <= n - 1 : ids_created + i > MAX_U64
+        }
+    }
+
+    spec divide_into_n {
+        let before_val = self.balance.value;
+        let post after_val = self.balance.value;
+        let split_amount = before_val / n;
+//        ensures after_val == before_val - (n * split_amount);
+
+        pragma aborts_if_is_partial = true;
+        aborts_if n == 0;
+        aborts_if self.balance.value < n;
+//        aborts_if spec_ids_overflow(n, ctx.ids_created);
+//        aborts_if ctx.ids_created + n > MAX_U64;
     }
 
     /// Make any Coin with a zero value. Useful for placeholding
@@ -203,6 +268,15 @@ module sui::coin {
         }
     }
 
+    spec mint {
+        let before_supply = cap.total_supply.value;
+        let post after_supply = cap.total_supply.value;
+        ensures after_supply == before_supply + value;
+
+        aborts_if before_supply + value > MAX_U64;
+        aborts_if ctx.ids_created + 1 > MAX_U64;
+    }
+
     /// Mint some amount of T as a `Balance` and increase the total
     /// supply in `cap` accordingly.
     /// Aborts if `value` + `cap.total_supply` >= U64_MAX
@@ -212,12 +286,28 @@ module sui::coin {
         balance::increase_supply(&mut cap.total_supply, value)
     }
 
+    spec mint_balance {
+        let before_supply = cap.total_supply.value;
+        let post after_supply = cap.total_supply.value;
+        ensures after_supply == before_supply + value;
+
+        aborts_if before_supply + value > MAX_U64;
+    }
+
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
     public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
         object::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
+    }
+
+    spec burn {
+        let before_supply = cap.total_supply.value;
+        let post after_supply = cap.total_supply.value;
+        ensures after_supply == before_supply - c.balance.value;
+
+        aborts_if before_supply < c.balance.value;
     }
 
     // === Entrypoints ===
@@ -232,6 +322,14 @@ module sui::coin {
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
         burn(c, coin);
+    }
+
+    spec burn_ {
+        let before_supply = c.total_supply.value;
+        let post after_supply = c.total_supply.value;
+        ensures after_supply == before_supply - coin.balance.value;
+
+        aborts_if before_supply < coin.balance.value;
     }
 
     // === Test-only code ===

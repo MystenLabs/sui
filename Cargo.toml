@@ -96,25 +96,25 @@ opt-level = 1
 [workspace.dependencies]
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-bytecode-utils = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-bytecode-verifier = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-cli = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-compiler = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-core-types = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c", features = ["address20"] }
-move-disassembler = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-package = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-stdlib = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-vm-runtime = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-unit-test = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-vm-test-utils = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-vm-types = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-command-line-common = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-transactional-test-runner = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-ir-types = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-prover = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-prover-boogie-backend = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
-move-stackless-bytecode = { git = "https://github.com/awelc/move.git", rev = "ad04572968f1d4761be1ac15c1308efdff3ec80c" }
+move-binary-format = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-bytecode-utils = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-bytecode-verifier = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-cli = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-compiler = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-core-types = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914", features = ["address20"] }
+move-disassembler = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-package = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-stdlib = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-vm-runtime = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-unit-test = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-vm-test-utils = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-vm-types = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-command-line-common = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-transactional-test-runner = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-ir-types = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-prover = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-prover-boogie-backend = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
+move-stackless-bytecode = { git = "https://github.com/awelc/move.git", rev = "5ec4ffe417c15ea6b01e0abee639e2d688d52914" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7a248d1ed4c30dfd49f0fb0cb346c058c5e96983" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7a248d1ed4c30dfd49f0fb0cb346c058c5e96983", package = "fastcrypto-zkp" }

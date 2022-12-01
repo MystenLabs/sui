@@ -197,6 +197,18 @@ Generate a new, globally unique object ID with version 0
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>aborts_if</b> ctx.ids_created + 1 &gt; MAX_U64;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_tx_context_ids_created"></a>
 
 ## Function `ids_created`

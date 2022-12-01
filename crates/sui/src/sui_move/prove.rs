@@ -74,7 +74,6 @@ impl Prove {
                 "dynamic_field::borrow_child_object_mut".to_string(),
                 "GetDynField".to_string(),
                 "UpdateDynField".to_string(),
-                0,
             ));
 
         let prover_result = std::thread::spawn(move || {

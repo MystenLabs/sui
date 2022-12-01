@@ -57,6 +57,10 @@ module sui::tx_context {
         id
     }
 
+    spec new_object {
+        aborts_if ctx.ids_created + 1 > MAX_U64;
+    }
+
     /// Return the number of id's created by the current transaction.
     /// Hidden for now, but may expose later
     fun ids_created(self: &TxContext): u64 {
