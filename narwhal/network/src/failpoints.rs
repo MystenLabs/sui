@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use fail::fail_point;
 
