@@ -516,7 +516,7 @@ pub struct AuthorityState {
 
     // Epoch related information.
     /// Committee of this Sui instance.
-    pub committee: ArcSwap<Committee>,
+    committee: ArcSwap<Committee>,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -579,7 +579,7 @@ impl AuthorityState {
     }
 
     pub fn epoch(&self) -> EpochId {
-        self.committee.load().epoch
+        self.committee().epoch
     }
 
     pub fn committee_store(&self) -> &Arc<CommitteeStore> {
@@ -2147,7 +2147,7 @@ impl AuthorityState {
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
         // Check the certificate. Remember that Byzantine authorities may input anything into
         // consensus.
-        certificate.verify_signature(&self.committee.load())
+        certificate.verify_signature(&self.committee())
     }
 
     /// Verifies transaction signatures and other data
@@ -2193,7 +2193,7 @@ impl AuthorityState {
                     warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, consensus_output.certificate.origin() );
                     return Err(());
                 }
-                data.verify(&self.committee.load()).map_err(|err|{
+                data.verify(&self.committee()).map_err(|err|{
                     warn!(
                         "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
                         transaction.consensus_output.certificate.header.author, data.summary.summary.sequence_number, err

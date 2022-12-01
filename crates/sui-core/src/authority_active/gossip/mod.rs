@@ -14,7 +14,6 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::future::Future;
-use std::ops::Deref;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use sui_types::committee::StakeUnit;
 use sui_types::{
@@ -149,7 +148,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
 {
     // Make a clone of the active authority and committee, and keep using it until epoch changes.
     let mut local_active = Arc::new(active_authority.clone());
-    let mut committee = local_active.state.committee.load().deref().clone();
+    let mut committee = local_active.state.clone_committee();
 
     // Number of tasks at most "degree" and no more than committee - 1
     let mut target_num_tasks = usize::min(committee.num_members() - 1, degree);
@@ -169,7 +168,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
         .concurrent_followed_validators;
     let metrics_reconnect_interval_ms = &active_authority.gossip_metrics.reconnect_interval_ms;
     loop {
-        if active_authority.state.committee.load().epoch != committee.epoch {
+        if active_authority.state.epoch() != committee.epoch {
             // If epoch has changed, we need to make a new copy of the active authority,
             // and update all local variables.
             // We also need to remove any authority that's no longer a valid validator
@@ -177,7 +176,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             // It's ok to keep the existing gossip tasks running even for peers that are no longer
             // validators, and let them end naturally.
             local_active = Arc::new(active_authority.clone());
-            committee = local_active.state.committee.load().deref().clone();
+            committee = local_active.state.clone_committee();
             target_num_tasks = usize::min(committee.num_members() - 1, degree);
             peer_names.retain(|name| committee.authority_exists(name));
         }
@@ -277,9 +276,9 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.load().num_members();
+    let mut tries_remaining = active_authority.state.committee().num_members();
     while tries_remaining > 0 {
-        let name = *active_authority.state.committee.load().sample();
+        let name = *active_authority.state.committee().sample();
         if peer_names.contains(&name)
             || name == my_name
             || !active_authority.can_contact(name).await
