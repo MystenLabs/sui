@@ -59,7 +59,7 @@ pub struct SuiDataStore<S> {
     mutex_table: MutexTable<ObjectDigest>,
 
     pub(crate) perpetual_tables: AuthorityPerpetualTables<S>,
-    epoch_tables: ArcSwap<AuthorityPerEpochStore<S>>,
+    epoch_store: ArcSwap<AuthorityPerEpochStore<S>>,
 
     // needed for re-opening epoch db.
     path: PathBuf,
@@ -77,14 +77,45 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         genesis: &Genesis,
     ) -> SuiResult<Self> {
         let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
-
-        let epoch = if perpetual_tables.database_is_empty()? {
-            0
+        let committee = if perpetual_tables.database_is_empty()? {
+            genesis.committee()?
         } else {
-            perpetual_tables.get_epoch()?
+            perpetual_tables.get_committee()?
         };
+        Self::open_inner(path, db_options, genesis, perpetual_tables, committee).await
+    }
 
-        let epoch_tables = Arc::new(AuthorityPerEpochStore::new(epoch, path, db_options.clone()));
+    pub async fn open_with_committee(
+        path: &Path,
+        db_options: Option<Options>,
+        committee: &Committee,
+        genesis: &Genesis,
+    ) -> SuiResult<Self> {
+        let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
+        Self::open_inner(
+            path,
+            db_options,
+            genesis,
+            perpetual_tables,
+            committee.clone(),
+        )
+        .await
+    }
+
+    async fn open_inner(
+        path: &Path,
+        db_options: Option<Options>,
+        genesis: &Genesis,
+        perpetual_tables: AuthorityPerpetualTables<S>,
+        committee: Committee,
+    ) -> SuiResult<Self> {
+        let committee = Arc::new(committee);
+
+        let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
+            committee,
+            path,
+            db_options.clone(),
+        ));
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
@@ -100,7 +131,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             lock_service,
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
-            epoch_tables: epoch_tables.into(),
+            epoch_store: epoch_tables.into(),
             path: path.into(),
             db_options,
             effects_notify_read: NotifyRead::new(),
@@ -119,18 +150,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(store)
     }
 
-    pub(crate) fn reopen_epoch_db(&self, new_epoch: EpochId) {
-        info!(?new_epoch, "re-opening AuthorityEpochTables for new epoch");
+    pub(crate) fn reopen_epoch_db(&self, new_committee: Arc<Committee>) {
+        info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
-            new_epoch,
+            new_committee,
             &self.path,
             self.db_options.clone(),
         ));
-        self.epoch_tables.store(epoch_tables);
+        self.epoch_store.store(epoch_tables);
     }
 
-    pub fn epoch_tables(&self) -> Guard<Arc<AuthorityPerEpochStore<S>>> {
-        self.epoch_tables.load()
+    pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore<S>>> {
+        self.epoch_store.load()
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
@@ -299,7 +330,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            self.epoch_tables()
+                            self.epoch_store()
                                 .get_all_shared_locks(digest)?
                                 .into_iter()
                                 .collect(),
@@ -370,7 +401,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            self.epoch_tables()
+                            self.epoch_store()
                                 .get_all_shared_locks(digest)?
                                 .into_iter()
                                 .collect(),
@@ -638,7 +669,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // For now write transactions after because if we write before, there is a chance the lock can fail
         // and this can cause invalid transactions to be inserted in the table.
         // https://github.com/MystenLabs/sui/issues/1990
-        self.epoch_tables().insert_transaction(transaction)?;
+        self.epoch_store().insert_transaction(transaction)?;
 
         Ok(())
     }
@@ -1154,7 +1185,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 schedule_to_delete.push(*object_id);
             }
         }
-        self.epoch_tables()
+        self.epoch_store()
             .remove_shared_objects_locks(&sequenced_to_delete, &schedule_to_delete)
     }
 
@@ -1177,7 +1208,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .collect();
         debug!(?sequenced, "Shared object locks sequenced from effects");
 
-        self.epoch_tables()
+        self.epoch_store()
             .insert_assigned_shared_object_versions(sequenced)
     }
 
@@ -1185,14 +1216,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         key: &ConsensusTransactionKey,
     ) -> Result<bool, SuiError> {
-        self.epoch_tables().is_consensus_message_processed(key)
+        self.epoch_store().is_consensus_message_processed(key)
     }
 
     pub async fn consensus_message_processed_notify(
         &self,
         key: ConsensusTransactionKey,
     ) -> Result<(), SuiError> {
-        let epoch_tables = self.epoch_tables();
+        let epoch_tables = self.epoch_store();
         let registration = epoch_tables.register_consensus_message_notify(&key);
         if self.consensus_message_processed(&key)? {
             return Ok(());
@@ -1202,7 +1233,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     pub fn sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
-        self.epoch_tables().has_sent_end_of_publish(authority)
+        self.epoch_store().has_sent_end_of_publish(authority)
     }
 
     pub async fn record_end_of_publish(
@@ -1210,8 +1241,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         authority: AuthorityName,
         transaction: &ConsensusTransaction,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult {
-        self.epoch_tables()
+    ) -> SuiResult<bool> {
+        self.epoch_store()
             .record_end_of_publish(authority, transaction.key(), consensus_index)
     }
 
@@ -1223,7 +1254,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // user certificates need to use record_(shared|owned)_object_cert_from_consensus
         assert!(!transaction.is_user_certificate());
         let key = transaction.key();
-        self.epoch_tables()
+        self.epoch_store()
             .finish_consensus_transaction_process(key, consensus_index)
     }
 
@@ -1235,7 +1266,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         consensus_index: ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         let key = transaction.key();
-        self.epoch_tables()
+        self.epoch_store()
             .finish_consensus_certificate_process(key, certificate, consensus_index)
     }
 
@@ -1255,7 +1286,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects().map(|(id, _)| id);
-        let versions = self.epoch_tables().multi_get_next_object_versions(ids)?;
+        let versions = self.epoch_store().multi_get_next_object_versions(ids)?;
 
         let mut input_object_keys = certificate_input_object_keys(certificate)?;
         let mut sequenced_to_write = Vec::new();
@@ -1311,7 +1342,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
 
-        self.epoch_tables().finish_assign_shared_object_versions(
+        self.epoch_store().finish_assign_shared_object_versions(
             transaction.key(),
             certificate,
             consensus_index,
@@ -1328,7 +1359,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         to_height_included: u64,
     ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
-        let epoch_tables = self.epoch_tables();
+        let epoch_tables = self.epoch_store();
 
         let Some((index, from_height_excluded)) = epoch_tables.get_last_checkpoint_boundary() else {
             return Ok(None);
@@ -1353,7 +1384,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
-        let epoch_tables = self.epoch_tables();
+        let epoch_tables = self.epoch_store();
 
         if let Some((index, height)) = epoch_tables.get_last_checkpoint_boundary() {
             if height >= commit_round {
@@ -1391,14 +1422,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// Return the latest consensus index. It is used to bootstrap the consensus client.
     pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
-        self.epoch_tables().get_last_consensus_index()
+        self.epoch_store().get_last_consensus_index()
     }
 
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
-        self.epoch_tables().get_transaction(transaction_digest)
+        self.epoch_store().get_transaction(transaction_digest)
     }
 
     pub fn get_certified_transaction(
@@ -1438,7 +1469,7 @@ impl SuiDataStore<AuthoritySignInfo> {
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
         let tx: Option<VerifiedSignedTransaction> =
-            self.epoch_tables().get_transaction(transaction_digest)?;
+            self.epoch_store().get_transaction(transaction_digest)?;
         Ok(if let Some(signed_tx) = tx {
             signed_tx.epoch() == cur_epoch
         } else {

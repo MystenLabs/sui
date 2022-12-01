@@ -1712,9 +1712,14 @@ async fn test_authority_persist() {
 
     // Create an authority
     let store = Arc::new(
-        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-            .await
-            .unwrap(),
+        AuthorityStore::open_with_committee(
+            &path,
+            None,
+            &committee,
+            &Genesis::get_default_genesis(),
+        )
+        .await
+        .unwrap(),
     );
     let authority =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
@@ -1741,9 +1746,14 @@ async fn test_authority_persist() {
             &mut StdRng::from_seed(seed),
         );
     let store = Arc::new(
-        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-            .await
-            .unwrap(),
+        AuthorityStore::open_with_committee(
+            &path,
+            None,
+            &committee,
+            &Genesis::get_default_genesis(),
+        )
+        .await
+        .unwrap(),
     );
     let authority2 =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
@@ -2725,7 +2735,7 @@ async fn shared_object() {
 
     let shared_object_version = authority
         .db()
-        .epoch_tables()
+        .epoch_store()
         .get_assigned_object_versions(transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
@@ -2867,11 +2877,11 @@ async fn test_consensus_message_processed() {
     assert_eq!(
         authority1
             .database
-            .epoch_tables()
+            .epoch_store()
             .get_next_object_version(&shared_object_id),
         authority2
             .database
-            .epoch_tables()
+            .epoch_store()
             .get_next_object_version(&shared_object_id),
     );
 }
