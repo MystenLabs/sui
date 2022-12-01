@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../serialization/base64';
+import { Base58DataBuffer } from '../serialization/base58';
 import { ObjectId } from './objects';
 import { bcs, TransactionData } from './sui-bcs';
 import {
@@ -13,8 +13,8 @@ import {
 import { sha256Hash } from '../cryptography/hash';
 import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
+import { Base64DataBuffer } from '../serialization/base64';
 
-/** Base64 string representing the object digest */
 export type TransactionDigest = string;
 export type SuiAddress = string;
 export type ObjectOwner =
@@ -26,17 +26,22 @@ export type ObjectOwner =
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
 const TX_DIGEST_LENGTH = 32;
-// taken from https://rgxdb.com/r/1NUN74O6
-const VALID_BASE64_REGEX =
-  /^(?:[a-zA-Z0-9+\/]{4})*(?:|(?:[a-zA-Z0-9+\/]{3}=)|(?:[a-zA-Z0-9+\/]{2}==)|(?:[a-zA-Z0-9+\/]{1}===))$/;
 
+/** Returns whether the tx digest is valid based on the serialization format */
 export function isValidTransactionDigest(
-  value: string
+  value: string, serializationFmt: 'base64' | 'base58'
 ): value is TransactionDigest {
-  return (
-    new Base64DataBuffer(value).getLength() === TX_DIGEST_LENGTH &&
-    VALID_BASE64_REGEX.test(value)
-  );
+  let buffer;
+  try {
+    if (serializationFmt === 'base58') {
+      buffer = new Base58DataBuffer(value);
+    } else {
+      buffer = new Base64DataBuffer(value);
+    }
+    return buffer.getLength() === TX_DIGEST_LENGTH;
+  } catch (e) {
+    return false;
+  }
 }
 
 // TODO - can we automatically sync this with rust length definition?
@@ -95,7 +100,8 @@ export function generateTransactionDigest(
   data: TransactionData,
   signatureScheme: SignatureScheme,
   signature: string | Base64DataBuffer,
-  publicKey: PublicKeyInitData | PublicKey
+  publicKey: PublicKeyInitData | PublicKey,
+  serializationFmt: 'base64' | 'base58'
 ): string {
   const signatureBytes = (
     typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
@@ -134,7 +140,8 @@ export function generateTransactionDigest(
   const senderSignedDataBytes = bcs
     .ser('SenderSignedData', senderSignedData)
     .toBytes();
-  return sha256Hash('SenderSignedData', senderSignedDataBytes);
+  const hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
+  return serializationFmt === 'base58' ? new Base58DataBuffer(hash).toString() : new Base64DataBuffer(hash).toString();
 }
 
 function isHex(value: string): boolean {
