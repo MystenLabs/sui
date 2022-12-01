@@ -5,7 +5,6 @@ use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::SuiExecutionStatus;
-use sui_types::base_types::SequenceNumber;
 use sui_types::object::Owner;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tracing::info;
@@ -30,7 +29,7 @@ impl TestCaseImpl for SharedCounterTest {
 
         let wallet_context: &WalletContext = ctx.get_wallet();
         let address = ctx.get_wallet_address();
-        let (package_ref, (counter_id, counter_version, _)) =
+        let (package_ref, (counter_id, initial_counter_version, _)) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
         let (tx_cert, effects) =
             increment_counter(wallet_context, address, None, package_ref, counter_id).await;
@@ -40,11 +39,30 @@ impl TestCaseImpl for SharedCounterTest {
             "Increment counter txn failed: {:?}",
             effects.status
         );
+
         effects
             .shared_objects
             .iter()
             .find(|o| o.object_id == counter_id)
             .expect("Expect obj {counter_id} in shared_objects");
+
+        let counter_version = effects
+            .mutated
+            .iter()
+            .find_map(|obj| {
+                let Owner::Shared { initial_shared_version } = obj.owner else {
+                    return None
+                };
+
+                if obj.reference.object_id == counter_id
+                    && initial_shared_version == initial_counter_version
+                {
+                    Some(obj.reference.version)
+                } else {
+                    None
+                }
+            })
+            .expect("Expect obj {counter_id} in mutated");
 
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync(vec![tx_cert.transaction_digest], 5)
@@ -52,14 +70,13 @@ impl TestCaseImpl for SharedCounterTest {
 
         let counter_object = ObjectChecker::new(counter_id)
             .owner(Owner::Shared {
-                initial_shared_version: counter_version,
+                initial_shared_version: initial_counter_version,
             })
             .check_into_object(ctx.get_fullnode_client())
             .await;
 
         assert_eq!(
-            counter_object.reference.version,
-            SequenceNumber::from_u64(2),
+            counter_object.reference.version, counter_version,
             "Expect sequence number to be 2"
         );
 

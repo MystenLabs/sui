@@ -87,6 +87,8 @@ pub struct TemporaryStore<S> {
     store: S,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
+    /// The version to assign to all objects written by the transaction using this store.
+    lamport_timestamp: SequenceNumber,
     mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
@@ -104,11 +106,13 @@ impl<S> TemporaryStore<S> {
     /// initial objects.
     pub fn new(store: S, input_objects: InputObjects, tx_digest: TransactionDigest) -> Self {
         let mutable_inputs = input_objects.mutable_inputs();
+        let lamport_timestamp = input_objects.lamport_timestamp();
         let objects = input_objects.into_object_map();
         Self {
             store,
             tx_digest,
             input_objects: objects,
+            lamport_timestamp,
             mutable_input_refs: mutable_inputs,
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
@@ -154,7 +158,31 @@ impl<S> TemporaryStore<S> {
                 (None, 0)
             };
 
-        for (id, (ctx, obj, kind)) in self.written {
+        for (id, (ctx, mut obj, kind)) in self.written {
+            // Update the version for the written object, as long as it is a move object and not a
+            // package (whose versions are fixed to 1)
+            if let Some(obj) = obj.data.try_as_move_mut() {
+                obj.increment_version_to(self.lamport_timestamp);
+            }
+
+            // Record the version that the shared object was created at in its owner field.  Note,
+            // this only works because shared objects must be created as shared (not created as
+            // owned in one transaction and later converted to shared in another).
+            if let Owner::Shared {
+                initial_shared_version,
+            } = &mut obj.owner
+            {
+                if kind == WriteKind::Create {
+                    assert_eq!(
+                        *initial_shared_version,
+                        SequenceNumber::new(),
+                        "Initial version should be blank before this point for {id:?}",
+                    );
+                    *initial_shared_version = self.lamport_timestamp;
+                }
+            }
+
+            // Create events for writes
             let old_obj = self.input_objects.get(&id);
             let written_events =
                 Self::create_written_events(ctx, kind, id, &obj, old_obj, gas_id, gas_charged);
@@ -162,7 +190,10 @@ impl<S> TemporaryStore<S> {
             written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
 
-        for (id, (ctx, version, kind)) in self.deleted {
+        for (id, (ctx, mut version, kind)) in self.deleted {
+            // Update the version, post-delete.
+            version.increment_to(self.lamport_timestamp);
+
             // Create events for each deleted changes
             let deleted_obj = self.input_objects.get(&id);
             let balance = deleted_obj
@@ -370,13 +401,10 @@ impl<S> TemporaryStore<S> {
                 continue;
             }
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
-                let mut object = self.input_objects[id].clone();
-                // Active input object must be Move object.
-                object.data.try_as_move_mut().unwrap().increment_version();
-                // We cannot update here but have to push to `to_be_updated` and update latter
+                // We cannot update here but have to push to `to_be_updated` and update later
                 // because the for loop is holding a reference to `self`, and calling
                 // `self.write_object` requires a mutable reference to `self`.
-                to_be_updated.push(object);
+                to_be_updated.push(self.input_objects[id].clone());
             }
         }
         for object in to_be_updated {
@@ -455,7 +483,7 @@ impl<S> TemporaryStore<S> {
     }
 
     pub fn to_effects(
-        self,
+        mut self,
         shared_object_refs: Vec<ObjectRef>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
@@ -463,37 +491,44 @@ impl<S> TemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
     ) -> (InnerTemporaryStore, TransactionEffects) {
-        let written: BTreeMap<ObjectID, (ObjectRef, Owner, WriteKind)> = self
-            .written
-            .iter()
-            .map(|(id, (_, obj, write_kind))| {
-                let obj_ref = obj.compute_object_reference();
-                (*id, (obj_ref, obj.owner, *write_kind))
-            })
-            .collect();
+        let mut modified_at_versions = vec![];
+
+        // Remember the versions objects were updated from in case of rollback.
+        self.written.iter_mut().for_each(|(id, (_, obj, kind))| {
+            if *kind == WriteKind::Mutate {
+                modified_at_versions.push((*id, obj.version()))
+            }
+        });
+
+        self.deleted.iter_mut().for_each(|(id, (_, version, _))| {
+            modified_at_versions.push((*id, *version));
+        });
+
+        let (inner, events) = self.into_inner();
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
             (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
         } else {
-            let (obj_ref, owner, _kind) = written[&gas_object_ref.0];
-            (obj_ref, owner)
+            let (obj_ref, object, _kind) = &inner.written[&gas_object_ref.0];
+            (*obj_ref, object.owner)
         };
+
         let mut mutated = vec![];
         let mut created = vec![];
         let mut unwrapped = vec![];
-        for (_id, (object_ref, owner, kind)) in written {
+        for (object_ref, object, kind) in inner.written.values() {
             match kind {
-                WriteKind::Mutate => mutated.push((object_ref, owner)),
-                WriteKind::Create => created.push((object_ref, owner)),
-                WriteKind::Unwrap => unwrapped.push((object_ref, owner)),
+                WriteKind::Mutate => mutated.push((*object_ref, object.owner)),
+                WriteKind::Create => created.push((*object_ref, object.owner)),
+                WriteKind::Unwrap => unwrapped.push((*object_ref, object.owner)),
             }
         }
 
         let mut deleted = vec![];
         let mut wrapped = vec![];
-        for (id, (_, version, kind)) in &self.deleted {
+        for (id, (version, kind)) in &inner.deleted {
             match kind {
                 DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
                     deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
@@ -503,11 +538,11 @@ impl<S> TemporaryStore<S> {
                 }
             }
         }
-        let (inner, events) = self.into_inner();
 
         let effects = TransactionEffects {
             status,
             gas_used: gas_cost_summary,
+            modified_at_versions,
             shared_objects: shared_object_refs,
             transaction_digest: *transaction_digest,
             created,
@@ -576,6 +611,17 @@ impl<S> TemporaryStore<S> {
                 panic!("Internal invariant violation: Mutating a read-only object.")
             }
         }
+
+        // Created mutable objects' versions are set to the store's lamport timestamp when it is
+        // committed to effects. Creating an object at a non-zero version risks violating the
+        // lamport timestamp invariant (that a transaction's lamport timestamp is strictly greater
+        // than all versions witnessed by the transaction).
+        debug_assert!(
+            kind != WriteKind::Create
+                || object.is_immutable()
+                || object.version() == SequenceNumber::MIN,
+            "Created mutable objects should not have a version set",
+        );
 
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
@@ -654,10 +700,10 @@ impl<S> TemporaryStore<S> {
                 panic!("Internal invariant violation: Deleting a read-only object.")
             }
         }
-        // For object deletion, we increment their version so that they will
-        // eventually show up in the parent_sync table with an updated version.
-        self.deleted
-            .insert(*id, (ctx.clone(), version.increment(), kind));
+
+        // For object deletion, we will increment the version when converting the store to effects
+        // so the object will eventually show up in the parent_sync table with a new version.
+        self.deleted.insert(*id, (ctx.clone(), version, kind));
     }
 
     /// Resets any mutations and deletions recorded in the store.

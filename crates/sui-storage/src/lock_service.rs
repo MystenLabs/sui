@@ -988,7 +988,7 @@ mod tests {
         );
 
         // Initialize the object's entry to another version
-        let new_ref2 = (ref2.0, ref2.1.increment(), ref2.2);
+        let new_ref2 = (ref2.0, SequenceNumber::lamport_increment([ref2.1]), ref2.2);
         ls.initialize_locks(&[new_ref2], false /* is_force_reset */)
             .unwrap();
 

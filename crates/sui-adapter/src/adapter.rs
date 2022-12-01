@@ -563,7 +563,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents_and_increment_version(new_contents)?;
+            .update_contents(new_contents)?;
 
         changes.insert(
             obj_id,
@@ -572,7 +572,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     }
     let tx_digest = ctx.digest();
 
-    for (id, (write_kind, mut recipient, tag, abilities, contents)) in writes {
+    for (id, (write_kind, recipient, tag, abilities, contents)) in writes {
         let has_public_transfer = abilities.has_store();
         debug_assert_eq!(
             id,
@@ -590,71 +590,26 @@ fn process_successful_execution<S: Storage + ParentSync>(
             old_object_opt.is_none() || loaded_child_version_opt.is_none(),
             format!("Loaded {id} as a child, but that object was an input object")
         );
+
         let old_obj_ver = old_object_opt
             .map(|(_, version)| *version)
             .or_else(|| loaded_child_version_opt.copied());
-        let (write_kind, version) = match (write_kind, old_obj_ver) {
-            (_, Some(version)) => {
-                debug_assert!(write_kind == WriteKind::Mutate);
-                (WriteKind::Mutate, version)
-            }
-            // When an object was wrapped at version `v`, we added a record into `parent_sync`
-            // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-            // it will also have version `v+1`, leading to a violation of the invariant that any
-            // object_id and version pair must be unique. We use the version from parent_sync and
-            // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
-            (WriteKind::Unwrap, None) => match state_view.get_latest_parent_entry_ref(id) {
-                Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version),
-                // if the object is not in parent sync, it was wrapped before ever being stored into
-                // storage.
-                // we set is_unwrapped to false since the object has never been in storage
-                // and essentially is being created. Similarly, we add it to the newly_generated_ids
-                // set
-                Ok(None) => (WriteKind::Create, SequenceNumber::new()),
-                _ => {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::InvariantViolation,
-                        missing_unwrapped_msg(&id),
-                    ));
-                }
-            },
-            (_, None) => {
-                debug_assert!(write_kind == WriteKind::Create);
-                (WriteKind::Create, SequenceNumber::new())
-            }
-        };
+
+        debug_assert!((write_kind == WriteKind::Mutate) == old_obj_ver.is_some());
+
         // safe because `has_public_transfer` was properly determined from the abilities
-        let mut move_obj =
-            unsafe { MoveObject::new_from_execution(tag, has_public_transfer, version, contents)? };
+        let move_obj = unsafe {
+            MoveObject::new_from_execution(
+                tag,
+                has_public_transfer,
+                old_obj_ver.unwrap_or_else(SequenceNumber::new),
+                contents,
+            )?
+        };
 
         #[cfg(debug_assertions)]
         {
             check_transferred_object_invariants(&move_obj, &old_obj_ver)
-        }
-
-        // increment the object version. note that if the transferred object was
-        // freshly created, this means that its version will now be 1.
-        // thus, all objects in the global object pool have version > 0
-        move_obj.increment_version();
-
-        // Remember the version this object was shared at, if this write was the one that shared it.
-        if let Owner::Shared {
-            initial_shared_version,
-        } = &mut recipient
-        {
-            assert_invariant!(
-                old_obj_ver.is_none(),
-                "The object should be guaranteed to be new by \
-                sui::transfer::share_object, which aborts if it is not new"
-            );
-            // TODO Consider a distinct Recipient enum within ObjectRuntime to enforce this
-            // invariant at the type level.
-            assert_eq!(
-                *initial_shared_version,
-                SequenceNumber::new(),
-                "Initial version should be blank before this point",
-            );
-            *initial_shared_version = move_obj.version();
         }
 
         let obj = Object::new_move(move_obj, recipient, tx_digest);
