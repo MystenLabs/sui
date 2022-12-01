@@ -5,7 +5,7 @@ use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
-use mysten_metrics::{monitored_future, spawn_monitored_task};
+use mysten_metrics::{monitored_future, monitored_scope, spawn_monitored_task};
 use network::{P2pNetwork, PrimaryToPrimaryRpc};
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{
@@ -272,14 +272,10 @@ impl CertificateWaiter {
         );
         self.fetch_certificates_task.push(
             spawn_monitored_task!(async move {
+                let _scope = monitored_scope("CertificatesFetching");
                 state
                     .metrics
                     .certificate_waiter_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .inc();
-                state
-                    .metrics
-                    .certificate_waiter_fetch_attempts
                     .with_label_values(&[&committee.epoch.to_string()])
                     .inc();
 
@@ -298,11 +294,6 @@ impl CertificateWaiter {
                     }
                 };
 
-                state
-                    .metrics
-                    .certificate_waiter_op_latency
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .observe(now.elapsed().as_secs_f64());
                 state
                     .metrics
                     .certificate_waiter_inflight_fetch
