@@ -33,36 +33,6 @@ use sui_types::query::{EventQuery, TransactionQuery};
 /// for document purposes.
 pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 
-#[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
-#[rpc(server, client, namespace = "sui")]
-pub trait RpcGatewayApi {
-    /// Execute the transaction using the transaction data, signature and public key.
-    #[method(name = "executeTransaction")]
-    async fn execute_transaction(
-        &self,
-        /// transaction data bytes, as base-64 encoded string
-        tx_bytes: Base64,
-        /// Flag of the signature scheme that is used.
-        sig_scheme: SignatureScheme,
-        /// transaction signature, as base-64 encoded string
-        signature: Base64,
-        /// signer's public key, as base-64 encoded string
-        pub_key: Base64,
-    ) -> RpcResult<SuiTransactionResponse>;
-}
-
-#[open_rpc(namespace = "sui", tag = "Wallet Sync API")]
-#[rpc(server, client, namespace = "sui")]
-pub trait WalletSyncApi {
-    /// Synchronize client state with validators.
-    #[method(name = "syncAccountState")]
-    async fn sync_account_state(
-        &self,
-        /// the Sui address to be synchronized
-        address: SuiAddress,
-    ) -> RpcResult<()>;
-}
-
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcReadApi {

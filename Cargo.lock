@@ -8581,33 +8581,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-gateway"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "clap 3.2.22",
- "futures",
- "prometheus",
- "serde 1.0.147",
- "sui-config",
- "sui-core",
- "sui-framework-build",
- "sui-json",
- "sui-json-rpc",
- "sui-json-rpc-types",
- "sui-keys",
- "sui-node",
- "sui-sdk",
- "sui-types",
- "telemetry-subscribers",
- "test-utils",
- "tokio",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-indexer"
 version = "0.0.0"
 dependencies = [
@@ -8679,15 +8652,20 @@ dependencies = [
  "prometheus",
  "serde 1.0.147",
  "signature",
+ "sui-config",
  "sui-core",
  "sui-cost",
+ "sui-framework-build",
  "sui-json",
  "sui-json-rpc-types",
+ "sui-keys",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-sdk",
  "sui-transaction-builder",
  "sui-types",
  "tap",
+ "test-utils",
  "tokio",
  "tower",
  "tower-http",

@@ -21,12 +21,15 @@ pub mod api;
 pub mod bcs_api;
 pub mod estimator_api;
 pub mod event_api;
-pub mod gateway_api;
 mod metrics;
 pub mod read_api;
 pub mod streaming_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
+
+#[cfg(test)]
+#[path = "unit_tests/rpc_server_tests.rs"]
+mod rpc_server_test;
 
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,

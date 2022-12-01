@@ -37,3 +37,10 @@ sui-cost = { path = "../sui-cost" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
 mysten-metrics = { path = "../mysten-metrics" }
 workspace-hack.workspace = true
+
+[dev-dependencies]
+sui-config = { path = "../sui-config" }
+sui-framework-build = { path = "../sui-framework-build" }
+sui-keys = { path = "../sui-keys" }
+test-utils = { path = "../test-utils" }
+sui-sdk = { path = "../sui-sdk" }
