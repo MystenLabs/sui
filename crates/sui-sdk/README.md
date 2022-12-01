@@ -7,7 +7,7 @@ This directory contains examples of interacting with a Move language smart contr
 ### Demo quick start
 
 #### 1. Prepare the environment 
-   1. Install `sui` and `rpc-server` binaries following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#binaries) docs.
+   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#binaries) docs.
    1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/devnet.md).
    1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#adding-accounts-to-the-client) by using the `new-address` command to create new addresses:
       ```shell
