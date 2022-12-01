@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use std::env::{self, VarError};
 use tracing::{info, warn};
 
