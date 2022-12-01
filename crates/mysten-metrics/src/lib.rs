@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use once_cell::sync::OnceCell;
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
 use tap::TapFallible;
-
-use tokio::time::Instant;
 use tracing::warn;
 
 pub use scopeguard;
@@ -129,7 +129,7 @@ pub fn monitored_scope(name: &'static str) -> Option<MonitoredScopeGuard> {
         Some(MonitoredScopeGuard {
             metrics: m,
             name,
-            timer: tokio::time::Instant::now(),
+            timer: Instant::now(),
         })
     } else {
         None
