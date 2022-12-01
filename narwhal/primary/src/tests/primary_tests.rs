@@ -1252,5 +1252,5 @@ async fn test_request_vote_created_at_in_future() {
     assert!(response.body().vote.is_some());
 
     // We are now later
-    assert!(created_at < now() );
+    assert!(created_at < now());
 }
