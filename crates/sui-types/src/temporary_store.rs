@@ -254,17 +254,21 @@ impl<S> TemporaryStore<S> {
             (WriteKind::Mutate, Ok(Some(_)), Some(old_obj)) => {
                 Self::create_coin_mutate_events(&ctx, gas_id, obj, old_obj, gas_charged)
             }
-            // For all other coin change (unwrap/create), we emit full balance transfer event to the new owner.
+            // For all other coin change (unwrap/create), we emit full balance transfer event to the new address owner.
             (_, Ok(Some(balance)), _) => {
-                vec![Event::balance_change(
-                    &ctx,
-                    BalanceChangeType::Receive,
-                    obj.owner,
-                    obj.id(),
-                    obj.version(),
-                    obj.type_().unwrap(),
-                    balance as i128,
-                )]
+                if let Owner::AddressOwner(_) = obj.owner {
+                    vec![Event::balance_change(
+                        &ctx,
+                        BalanceChangeType::Receive,
+                        obj.owner,
+                        obj.id(),
+                        obj.version(),
+                        obj.type_().unwrap(),
+                        balance as i128,
+                    )]
+                } else {
+                    vec![]
+                }
             }
             // For non-coin mutation
             (WriteKind::Mutate, Ok(None), old_obj) | (WriteKind::Unwrap, Ok(None), old_obj) => {
