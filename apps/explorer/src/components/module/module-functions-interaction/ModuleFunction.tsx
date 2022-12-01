@@ -5,13 +5,13 @@ import {
     getExecutionStatusType,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import { useWallet } from '@mysten/wallet-adapter-react';
-import { WalletWrapper } from '@mysten/wallet-adapter-react-ui';
+import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
-import clsx from 'clsx';
+import { cva } from 'class-variance-authority';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
+import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 
 import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
@@ -23,6 +23,15 @@ import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
     params: z.array(z.object({ value: z.string().trim().min(1) })),
+});
+
+const connectButtonStyles = cva('!text-bodySmall !rounded-md', {
+    variants: {
+        connected: {
+            true: '!font-mono !text-hero-dark !border-solid !border !border-steel !shadow-sm !shadow-ebony/5',
+            false: '!font-sans !flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !text-sui-light !hover:text-white !hover:bg-sui-dark',
+        },
+    },
 });
 
 export type ModuleFunctionProps = {
@@ -101,7 +110,7 @@ export function ModuleFunction({
                         />
                     );
                 })}
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-stretch justify-end gap-1.5">
                     <Button
                         variant="primary"
                         type="submit"
@@ -109,9 +118,20 @@ export function ModuleFunction({
                     >
                         Execute
                     </Button>
-                    <div className={clsx('temp-ui-override', { connected })}>
-                        <WalletWrapper />
-                    </div>
+                    <ConnectButton
+                        connectText={
+                            <>
+                                Connect Wallet
+                                <ArrowRight
+                                    fill="currentColor"
+                                    className="-rotate-45"
+                                />
+                            </>
+                        }
+                        size="md"
+                        className={connectButtonStyles({ connected })}
+                        type="button"
+                    />
                 </div>
             </form>
         </DisclosureBox>

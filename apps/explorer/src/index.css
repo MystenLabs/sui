@@ -41,24 +41,3 @@ select:focus {
         text-size-adjust: none;
     }
 }
-
-/* TODO: remove once we start using Wallet Kit */
-
-/* ==================> */
-
-/* This rule overrides styling of the wallet-adaptor UI button */
-/* stylelint-disable selector-class-pattern */
-.temp-ui-override > button.MuiButtonBase-root {
-    @apply rounded-md bg-sui-dark py-2 px-3 font-sans text-bodySmall font-semibold capitalize shadow-none !important;
-}
-
-.temp-ui-override.connected > button.MuiButtonBase-root {
-    @apply border border-solid border-steel bg-white text-steel-dark !important;
-}
-
-.temp-ui-override > button > .MuiSvgIcon-root {
-    @apply text-bodySmall !important;
-}
-/* stylelint-enable selector-class-pattern */
-
-/* <================== */
