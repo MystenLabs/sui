@@ -54,29 +54,25 @@ impl Timestamp for TimestampMs {
 }
 // Returns the current time expressed as UNIX
 // timestamp in milliseconds
-fn now() -> TimestampMs {
+pub fn now() -> TimestampMs {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(n) => n.as_millis() as TimestampMs,
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
 }
 
-// Additional metadata information for an entity. Those data
+// Additional metadata information for an entity.
+//
+// The structure as a whole is not signed. As a result this data
 // should not be treated as trustworthy data and should be used
 // for NON CRITICAL purposes only. For example should not be used
 // for any processes that are part of our protocol that can affect
 // safety or liveness.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
     pub created_at: TimestampMs,
-}
-
-impl Default for Metadata {
-    fn default() -> Self {
-        Metadata { created_at: now() }
-    }
 }
 
 pub type Transaction = Vec<u8>;
@@ -90,7 +86,7 @@ impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Batch {
             transactions,
-            metadata: Metadata::default(),
+            metadata: Metadata { created_at: now() },
         }
     }
 }
@@ -155,13 +151,13 @@ pub struct Header {
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
+    pub created_at: TimestampMs,
     #[serde(with = "indexmap::serde_seq")]
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
     pub signature: Signature,
-    pub metadata: Metadata,
 }
 
 impl HeaderBuilder {
@@ -173,11 +169,11 @@ impl HeaderBuilder {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
             epoch: self.epoch.unwrap(),
+            created_at: self.created_at.unwrap_or(0),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
 
@@ -215,11 +211,11 @@ impl Header {
             author,
             round,
             epoch,
+            created_at: now(),
             payload,
             parents,
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata::default(),
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
@@ -319,6 +315,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
         hasher.update(&self.author);
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
+        hasher.update(self.created_at.to_le_bytes());
         for (x, y) in self.payload.iter() {
             hasher.update(Digest::from(*x));
             hasher.update(y.to_le_bytes());

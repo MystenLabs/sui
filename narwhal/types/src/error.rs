@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{HeaderDigest, Round, VoteDigest};
+use crate::{HeaderDigest, Round, TimestampMs, VoteDigest};
 use config::Epoch;
 use fastcrypto::hash::Digest;
 use store::StoreError;
@@ -90,6 +90,12 @@ pub enum DagError {
 
     #[error("Invalid round (expected {expected}, received {received})")]
     InvalidRound { expected: Round, received: Round },
+
+    #[error("Invalid timestamp (created at {created_time}, received at {local_time})")]
+    InvalidTimestamp {
+        created_time: TimestampMs,
+        local_time: TimestampMs,
+    },
 
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),

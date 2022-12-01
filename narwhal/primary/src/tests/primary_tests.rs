@@ -36,7 +36,7 @@ use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
 use types::{
-    error::DagError, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    error::DagError, now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     MockPrimaryToWorker, PayloadAvailabilityRequest, PrimaryToPrimary, PrimaryToWorkerServer,
     ReconfigureNotification, RequestVoteRequest, Round,
 };
@@ -1106,4 +1106,151 @@ async fn test_process_payload_availability_when_failures() {
     });
     let result = handler.get_payload_availability(request).await;
     assert!(result.is_err(), "expected error reading certificates");
+}
+
+#[tokio::test]
+async fn test_request_vote_created_at_in_future() {
+    telemetry_subscribers::init_for_testing();
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let name = primary.public_key();
+    let author = fixture.authorities().nth(2).unwrap();
+    let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+
+    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+
+    let synchronizer = Arc::new(Synchronizer::new(
+        name.clone(),
+        fixture.committee().into(),
+        worker_cache.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_waiter,
+        rx_consensus_round_updates,
+        None,
+    ));
+    let handler = PrimaryReceiverHandler {
+        name: name.clone(),
+        committee: fixture.committee().into(),
+        worker_cache: worker_cache.clone(),
+        synchronizer: synchronizer.clone(),
+        signature_service,
+        tx_certificates,
+        header_store: header_store.clone(),
+        certificate_store: certificate_store.clone(),
+        payload_store: payload_store.clone(),
+        vote_digest_store: crate::common::create_test_vote_store(),
+        rx_narwhal_round_updates,
+        metrics: metrics.clone(),
+        request_vote_inflight: Arc::new(DashSet::new()),
+    };
+
+    // Make some mock certificates that are parents of our new header.
+    let mut certificates = HashMap::new();
+    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+        let header = primary
+            .header_builder(&fixture.committee())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .build(primary.keypair())
+            .unwrap();
+
+        let certificate = fixture.certificate(&header);
+        let digest = certificate.clone().digest();
+
+        certificates.insert(digest, certificate.clone());
+        certificate_store.write(certificate.clone()).unwrap();
+        for payload in certificate.header.payload {
+            payload_store.async_write(payload, 1).await;
+        }
+    }
+
+    // Set up mock worker.
+    let worker = primary.worker(1);
+    let worker_address = &worker.info().worker_address;
+    let mut mock_server = MockPrimaryToWorker::new();
+    // Always Synchronize successfully.
+    mock_server
+        .expect_synchronize()
+        .returning(|_| Ok(anemo::Response::new(())));
+    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+    let _worker_network = worker.new_network(routes);
+    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
+    network
+        .connect_with_peer_id(address, peer_id)
+        .await
+        .unwrap();
+
+    // Verify Handler generates a Vote.
+
+    // Set the creation time to be deep in the future (an hour)
+    let created_at = now() + 60 * 60 * 1000;
+
+    let test_header = author
+        .header_builder(&fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .created_at(created_at)
+        .build(author.keypair())
+        .unwrap();
+
+    let mut request = anemo::Request::new(RequestVoteRequest {
+        header: test_header.clone(),
+        parents: Vec::new(),
+    });
+    assert!(request
+        .extensions_mut()
+        .insert(network.downgrade())
+        .is_none());
+    assert!(request
+        .extensions_mut()
+        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
+        .is_none());
+
+    // For such a future header we get back an error
+    assert!(handler.request_vote(request).await.is_err());
+
+    // Verify Handler generates a Vote.
+
+    // Set the creation time to be a bit in the future (a second)
+    let created_at = now() + 1000;
+
+    let test_header = author
+        .header_builder(&fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .created_at(created_at)
+        .build(author.keypair())
+        .unwrap();
+
+    let mut request = anemo::Request::new(RequestVoteRequest {
+        header: test_header.clone(),
+        parents: Vec::new(),
+    });
+    assert!(request
+        .extensions_mut()
+        .insert(network.downgrade())
+        .is_none());
+    assert!(request
+        .extensions_mut()
+        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
+        .is_none());
+
+    let response = handler.request_vote(request).await.unwrap();
+    assert!(response.body().vote.is_some());
+
+    // We are now later
+    assert!(created_at < now());
 }
