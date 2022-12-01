@@ -48,8 +48,7 @@ pub struct ExecutionIndicesWithHash {
 }
 
 pub struct AuthorityPerEpochStore<S> {
-    #[allow(dead_code)]
-    epoch_id: EpochId,
+    committee: Committee,
     tables: AuthorityEpochTables<S>,
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
@@ -169,10 +168,11 @@ impl<S> AuthorityPerEpochStore<S>
 where
     S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    pub fn new(committee: Arc<Committee>, parent_path: &Path, db_options: Option<Options>) -> Self {
+    pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Self {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options);
-        let end_of_publish = StakeAggregator::from_iter(committee, tables.end_of_publish.iter());
+        let end_of_publish =
+            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
@@ -180,7 +180,7 @@ where
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
         let epoch_alive = NotifyOnce::new();
         Self {
-            epoch_id,
+            committee,
             tables,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive,
@@ -195,6 +195,14 @@ where
     ) -> &Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>
     {
         &self.wal
+    }
+
+    pub fn committee(&self) -> &Committee {
+        &self.committee
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.committee.epoch
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {

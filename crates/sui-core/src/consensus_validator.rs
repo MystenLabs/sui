@@ -51,7 +51,7 @@ impl TransactionValidator for SuiTxValidator {
             .iter()
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
-        let committee = self.state.committee();
+        let epoch_store = self.state.epoch_store();
 
         let mut obligation = VerificationObligation::default();
         for tx in txs.into_iter() {
@@ -61,7 +61,7 @@ impl TransactionValidator for SuiTxValidator {
                     // todo - verify user signature when we pin signature in certificate
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
                     certificate.auth_sig().add_to_verification_obligation(
-                        &committee,
+                        epoch_store.committee(),
                         &mut obligation,
                         idx,
                     )?;
@@ -73,7 +73,11 @@ impl TransactionValidator for SuiTxValidator {
                     signature
                         .summary
                         .auth_signature
-                        .add_to_verification_obligation(&committee, &mut obligation, idx)?;
+                        .add_to_verification_obligation(
+                            epoch_store.committee(),
+                            &mut obligation,
+                            idx,
+                        )?;
                 }
                 ConsensusTransactionKind::EndOfPublish(_) => {}
             }

@@ -162,7 +162,7 @@ impl ConsensusAdapter {
 
     fn submit_recovered(self: Arc<Self>) {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
-        let epoch_store = self.authority.database.epoch_store().clone();
+        let epoch_store = self.authority.epoch_store().clone();
         let mut recovered = epoch_store.get_all_pending_consensus_transactions();
         let pending_certificates = recovered
             .iter()
@@ -270,7 +270,7 @@ impl ConsensusAdapter {
     /// It transition reconfig state to reject new certificates from user
     /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
     pub fn close_epoch(self: &Arc<Self>) -> SuiResult {
-        let epoch_store = self.authority.database.epoch_store();
+        let epoch_store = self.authority.epoch_store();
         let send_end_of_publish = {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             let pending_certificates = self.pending_certificates.lock();
@@ -297,7 +297,7 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
     ) -> SuiResult<JoinHandle<()>> {
-        let epoch_store = self.authority.database.epoch_store().clone();
+        let epoch_store = self.authority.epoch_store().clone();
         let _lock = if transaction.is_user_certificate() {
             let lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !lock.should_accept_user_certs() {
@@ -354,12 +354,11 @@ impl ConsensusAdapter {
         let processed_waiter = epoch_store
             .consensus_message_processed_notify(transaction.key())
             .boxed();
-        let await_submit = Self::await_submit_delay(
-            &self.authority.committee(),
-            &self.authority.name,
-            &transaction,
-        )
-        .boxed();
+        let await_submit = {
+            let epoch_store = self.authority.epoch_store();
+            Self::await_submit_delay(epoch_store.committee(), &self.authority.name, &transaction)
+                .boxed()
+        };
         // We need to wait for some delay until we submit transaction to the consensus
         // However, if transaction is received by consensus while we wait, we don't need to wait
         let processed_waiter = match select(processed_waiter, await_submit).await {
