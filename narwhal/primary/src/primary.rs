@@ -116,6 +116,9 @@ impl Primary {
             name.encode_base64()
         );
 
+        // Only enabled if failpoints feature flag is set
+        types::initialize_failpoints();
+
         // Initialize the metrics
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();

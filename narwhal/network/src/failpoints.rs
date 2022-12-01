@@ -1,24 +1,5 @@
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use fail::fail_point;
-use std::collections::HashMap;
-use tracing::warn;
-
-pub fn initialise_network_failpoints() {
-    let mut failpoints: HashMap<String, String> = HashMap::new();
-    // failpoints.insert(String::from("rpc-delay"), String::from(".5%sleep(60000)"));
-    // failpoints.insert(String::from("request-batch"), String::from("5%return"));
-    // failpoints.insert(String::from("report-our-batch"), String::from("5%return"));
-    // failpoints.insert(String::from("request-vote"), String::from("5%return"));
-
-    if fail::has_failpoints() {
-        warn!("Failpoints are enabled");
-        for (point, actions) in failpoints {
-            fail::cfg(point, &actions).expect("failed to set actions for network failpoints");
-        }
-    } else {
-        warn!("Network failpoints are not enabled");
-    }
-}
 
 #[derive(Clone)]
 pub struct FailpointsMakeCallbackHandler {}

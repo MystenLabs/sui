@@ -59,8 +59,8 @@ impl CertificateStore {
 
     /// Inserts a certificate to the store
     pub fn write(&self, certificate: Certificate) -> StoreResult<()> {
-        fail::fail_point!("certificate-store", |_| {
-            Err(TypedStoreError::RocksDBError(format!(
+        fail::fail_point!("certificate-store-panic", |_| {
+            Err(RocksDBError(format!(
                 "Injected error in certificate store write"
             )))
         });
@@ -103,7 +103,7 @@ impl CertificateStore {
         certificates: impl IntoIterator<Item = Certificate>,
     ) -> StoreResult<()> {
         fail::fail_point!("certificate-store", |_| {
-            Err(TypedStoreError::RocksDBError(format!(
+            Err(RocksDBError(format!(
                 "Injected error in certificate store write all"
             )))
         });
@@ -149,8 +149,8 @@ impl CertificateStore {
     /// Retrieves a certificate from the store. If not found
     /// then None is returned as result.
     pub fn read(&self, id: CertificateDigest) -> StoreResult<Option<Certificate>> {
-        fail::fail_point!("certificate-store", |_| {
-            Err(TypedStoreError::RocksDBError(format!(
+        fail::fail_point!("certificate-store-panic", |_| {
+            Err(RocksDBError(format!(
                 "Injected error in certificate store read"
             )))
         });
@@ -166,7 +166,7 @@ impl CertificateStore {
         round: Round,
     ) -> StoreResult<Option<Certificate>> {
         fail::fail_point!("certificate-store", |_| {
-            Err(TypedStoreError::RocksDBError(format!(
+            Err(RocksDBError(format!(
                 "Injected error in certificate store read by index"
             )))
         });
@@ -184,7 +184,7 @@ impl CertificateStore {
         ids: impl IntoIterator<Item = CertificateDigest>,
     ) -> StoreResult<Vec<Option<Certificate>>> {
         fail::fail_point!("certificate-store", |_| {
-            Err(TypedStoreError::RocksDBError(format!(
+            Err(RocksDBError(format!(
                 "Injected error in certificate store read all"
             )))
         });

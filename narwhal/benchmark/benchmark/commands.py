@@ -17,8 +17,14 @@ class CommandMaker:
         return f'rm -r {PathMaker.logs_path()} ; mkdir -p {PathMaker.logs_path()}'
 
     @staticmethod
-    def compile():
-        return ["cargo", "build", "--quiet", "--release", "--features", "benchmark"]
+    def compile(mem_profiling, failpoints=False):
+        cmd = ["cargo", "build", "--quiet",
+               "--release", "--features", "benchmark"]
+
+        if failpoints:
+            cmd = cmd + [cmd.pop(-1) + " fail/failpoints"]
+
+        return cmd
 
     @staticmethod
     def generate_key(filename):

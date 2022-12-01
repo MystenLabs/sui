@@ -7,6 +7,9 @@
 #[macro_use]
 pub mod error;
 
+mod failpoints;
+pub use failpoints::*;
+
 mod consensus;
 pub use consensus::*;
 
