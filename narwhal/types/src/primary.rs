@@ -169,7 +169,7 @@ impl HeaderBuilder {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
             epoch: self.epoch.unwrap(),
-            created_at: 0,
+            created_at: self.created_at.unwrap_or(0),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
