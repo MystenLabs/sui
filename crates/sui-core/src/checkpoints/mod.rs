@@ -12,12 +12,11 @@ pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
-use crate::metrics::TaskUtilizationExt;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -284,7 +283,7 @@ impl CheckpointBuilder {
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<()> {
-        let _timer = self.metrics.builder_utilization.utilization_timer();
+        let _scope = monitored_scope("MakeCheckpoint");
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
@@ -518,7 +517,7 @@ impl CheckpointAggregator {
     }
 
     async fn run_inner(&mut self) -> SuiResult {
-        let _timer = self.metrics.aggregator_utilization.utilization_timer();
+        let _scope = monitored_scope("CheckpointAggregator");
         'outer: loop {
             let current = if let Some(current) = &mut self.current {
                 current

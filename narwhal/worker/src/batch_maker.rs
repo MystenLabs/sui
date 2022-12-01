@@ -17,7 +17,7 @@ use std::convert::TryInto;
 
 use futures::{Future, StreamExt};
 
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use std::sync::Arc;
 use tokio::{
     sync::watch,
@@ -110,6 +110,8 @@ impl BatchMaker {
         let mut batch_pipeline = FuturesOrdered::new();
 
         loop {
+            let _scope = monitored_scope("NarwhalBatchMaker");
+
             tokio::select! {
                 // Assemble client transactions into batches of preset size.
                 // Note that transactions are only consumed when the number of batches

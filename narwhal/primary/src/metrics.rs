@@ -337,12 +337,8 @@ pub struct PrimaryMetrics {
     pub highest_processed_round: IntGaugeVec,
     /// 0 if there is no inflight certificates fetching, 1 otherwise.
     pub certificate_waiter_inflight_fetch: IntGaugeVec,
-    /// Number of attempts to fetch certificates in certificate waiter.
-    pub certificate_waiter_fetch_attempts: IntGaugeVec,
     /// Number of fetched certificates successfully processed by core.
     pub certificate_waiter_num_certificates_processed: IntGaugeVec,
-    /// Latency per iteration of fetching and processing certificates.
-    pub certificate_waiter_op_latency: HistogramVec,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounterVec,
     /// Number of pending batches in proposer
@@ -450,25 +446,10 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
-            certificate_waiter_fetch_attempts: register_int_gauge_vec_with_registry!(
-                "certificate_waiter_fetch_attempts",
-                "Number of attempts to fetch certificates in certificate waiter.",
-                &["epoch"],
-                registry
-            )
-            .unwrap(),
             certificate_waiter_num_certificates_processed: register_int_gauge_vec_with_registry!(
                 "certificate_waiter_num_certificates_processed",
                 "Number of fetched certificates successfully processed by core.",
                 &["epoch"],
-                registry
-            )
-            .unwrap(),
-            certificate_waiter_op_latency: register_histogram_vec_with_registry!(
-                "certificate_waiter_op_latency",
-                "Latency per iteration of fetching and processing certificates",
-                &["epoch"],
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

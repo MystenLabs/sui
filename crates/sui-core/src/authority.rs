@@ -23,6 +23,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use mysten_metrics::monitored_scope;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
@@ -87,7 +88,6 @@ use crate::consensus_handler::{
 };
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
-use crate::metrics::TaskUtilizationExt;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::scoped_counter;
 use crate::{
@@ -166,10 +166,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
     pub(crate) transaction_manager_num_ready: IntGauge,
 
-    total_consensus_txns: IntCounter,
     skipped_consensus_txns: IntCounter,
-    handle_consensus_duration_mcs: IntCounter,
-    verify_narwhal_transaction_duration_mcs: IntCounter,
 
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
@@ -332,27 +329,9 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            total_consensus_txns: register_int_counter_with_registry!(
-                "total_consensus_txns",
-                "Total number of consensus transactions received from narwhal",
-                registry,
-            )
-            .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
-                registry,
-            )
-            .unwrap(),
-            handle_consensus_duration_mcs: register_int_counter_with_registry!(
-                "handle_consensus_duration_mcs",
-                "Total duration of handle_consensus_transaction",
-                registry,
-            )
-            .unwrap(),
-            verify_narwhal_transaction_duration_mcs: register_int_counter_with_registry!(
-                "verify_narwhal_transaction_duration_mcs",
-                "Total duration of verify_narwhal_transaction",
                 registry,
             )
             .unwrap(),
@@ -2159,10 +2138,7 @@ impl AuthorityState {
         consensus_output: &ConsensusOutput,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
-        let _timer = self
-            .metrics
-            .verify_narwhal_transaction_duration_mcs
-            .utilization_timer();
+        let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
             .database
             .consensus_message_processed(&transaction.transaction.key())
@@ -2223,16 +2199,12 @@ impl AuthorityState {
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
+        let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             consensus_output: _consensus_output,
             consensus_index,
             transaction,
         }) = transaction;
-        self.metrics.total_consensus_txns.inc();
-        let _timer = self
-            .metrics
-            .handle_consensus_duration_mcs
-            .utilization_timer();
         let tracking_id = transaction.get_tracking_id();
         // TODO: Somewhere here we check if we have seen 2f+1 EndOfPublish message, and if so,
         // we call self.get_reconfig_state_write_lock_guard to get a guard, and then call
