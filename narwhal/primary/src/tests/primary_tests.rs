@@ -1250,4 +1250,7 @@ async fn test_request_vote_created_at_in_future() {
 
     let response = handler.request_vote(request).await.unwrap();
     assert!(response.body().vote.is_some());
+
+    // We are now later
+    assert!(created_at < now() );
 }
