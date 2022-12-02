@@ -79,7 +79,9 @@ impl Operation {
 
         // We will need to subtract the PaySui operation amounts from the actual balance
         // change amount extracted from event to prevent double counting.
-        let pay_sui_balance_to_subtract = ops
+        let mut pay_sui_balance_to_subtract = HashMap::new();
+
+        let pay_sui_ops = ops
             .iter()
             .filter_map(|op| match (op.type_, &op.account, &op.amount) {
                 (OperationType::PaySui, Some(acc), Some(amount)) => {
@@ -92,8 +94,11 @@ impl Operation {
                     Some((acc.address, amount))
                 }
                 _ => None,
-            })
-            .collect::<HashMap<_, _>>();
+            });
+
+        for (addr, amount) in pay_sui_ops {
+            *pay_sui_balance_to_subtract.entry(addr).or_default() += amount
+        }
 
         // Extract coin change operations from events
         let coin_change_operations = Operation::get_coin_operation_from_events(
