@@ -208,11 +208,6 @@ pub fn all_natives(
             make_native!(tx_context::derive_id),
         ),
         (
-            "tx_context",
-            "new_signer_from_address",
-            make_native!(tx_context::new_signer_from_address),
-        ),
-        (
             "types",
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
