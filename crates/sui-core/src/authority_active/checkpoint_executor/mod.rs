@@ -99,8 +99,7 @@ impl CheckpointExecutor {
                         // messsage with checkpoints tasks scheduled, then the in-memory watermark
                         // will be greater, and hence we start from there.
                         let next_to_exec = std::cmp::max(
-                            self
-                                .highest_executed_checkpoint
+                            self.highest_executed_checkpoint
                                 .map(|highest| highest + 1)
                                 .unwrap_or(0),
                             highest_scheduled_checkpoint

@@ -21,46 +21,88 @@ use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
 #[tokio::test]
 pub async fn checkpoint_executor_test() {
     let buffer_size = num_cpus::get() * TASKS_PER_CORE * 2;
-    let (executor, checkpoint_sender, committee, checkpoint_store): (
-        CheckpointExecutor,
-        Sender<VerifiedCheckpoint>,
-        CommitteeFixture,
-        Arc<CheckpointStore>,
-    ) = init_executor_test(buffer_size).await;
+    let tempdir = tempdir().unwrap();
+    let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    assert!(matches!(
-        checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap(),
-        None,
-    ));
-    sync_new_checkpoints(
-        &checkpoint_store,
-        &checkpoint_sender,
-        2 * buffer_size,
-        None,
-        &committee,
-    );
-    let _handle = spawn_monitored_task!(async move { executor.run().await });
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    // dropping the channel will cause the checkpoint executor process to exit (gracefully)
-    drop(checkpoint_sender);
+    // new Node (syncing from checkpoint 0)
+    let cold_start_checkpoints = {
+        let (executor, checkpoint_sender, committee): (
+            CheckpointExecutor,
+            Sender<VerifiedCheckpoint>,
+            CommitteeFixture,
+        ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
 
-    assert!(matches!(
-        checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
-        Some(highest) if highest == 2 * (buffer_size as u64) - 1,
-    ));
+        assert!(matches!(
+            checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .unwrap(),
+            None,
+        ));
+        let checkpoints = sync_new_checkpoints(
+            &checkpoint_store,
+            &checkpoint_sender,
+            2 * buffer_size,
+            None,
+            &committee,
+        );
+        let _handle = spawn_monitored_task!(async move { executor.run().await });
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        // dropping the channel will cause the checkpoint executor process to exit (gracefully)
+        drop(checkpoint_sender);
+
+        assert!(matches!(
+            checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
+            Some(highest) if highest == 2 * (buffer_size as u64) - 1,
+        ));
+
+        checkpoints
+    };
+
+    // Node shutdown, syncing from checkpoint > 0
+    {
+        let last_executed_checkpoint = cold_start_checkpoints.last().cloned().unwrap();
+
+        let (executor, checkpoint_sender, committee): (
+            CheckpointExecutor,
+            Sender<VerifiedCheckpoint>,
+            CommitteeFixture,
+        ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
+
+        assert!(matches!(
+            checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .unwrap(),
+            Some(seq_num) if seq_num == last_executed_checkpoint.sequence_number(),
+        ));
+        // Start syncing new checkpoints from the last checkpoint before
+        // previous shutdown
+        let _ = sync_new_checkpoints(
+            &checkpoint_store,
+            &checkpoint_sender,
+            2 * buffer_size,
+            Some(last_executed_checkpoint),
+            &committee,
+        );
+        let _handle = spawn_monitored_task!(async move { executor.run().await });
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        // dropping the channel will cause the checkpoint executor process to exit (gracefully)
+        drop(checkpoint_sender);
+
+        assert!(matches!(
+            checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
+            Some(highest) if highest == 4 * (buffer_size as u64) - 1,
+        ));
+    }
 }
 
 async fn init_executor_test(
     buffer_size: usize,
+    store: Arc<CheckpointStore>,
 ) -> (
     CheckpointExecutor,
     Sender<VerifiedCheckpoint>,
     CommitteeFixture,
-    Arc<CheckpointStore>,
 ) {
-    let tempdir = tempdir().unwrap();
     let (keypair, committee) = committee();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = mpsc::channel(10);
     let state = Arc::new(
@@ -74,7 +116,6 @@ async fn init_executor_test(
         .await,
     );
 
-    let store = CheckpointStore::new(tempdir.path());
     let metrics = CheckpointMetrics::new_for_tests();
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
@@ -82,24 +123,24 @@ async fn init_executor_test(
         CheckpointExecutor::new(checkpoint_sender.subscribe(), store.clone(), state, metrics)
             .unwrap();
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
-    (executor, checkpoint_sender, committee, store)
+    (executor, checkpoint_sender, committee)
 }
 
 // Creates and simulates syncing of a new checkpoint by StateSync, i.e. new
 // checkpoint is persisted, along with its contents, highest synced checkpoint
 // watermark is udpated, and message is broadcasted notifying of the newly synced
-// checkpoint
+// checkpoint. Returns created checkpoints
 fn sync_new_checkpoints(
     checkpoint_store: &CheckpointStore,
     sender: &Sender<VerifiedCheckpoint>,
     number_of_checkpoints: usize,
     previous_checkpoint: Option<VerifiedCheckpoint>,
     committee: &CommitteeFixture,
-) {
+) -> Vec<VerifiedCheckpoint> {
     let (ordered_checkpoints, _sequence_number_to_digest, _checkpoints) =
         committee.make_checkpoints(number_of_checkpoints, previous_checkpoint);
 
-    for checkpoint in ordered_checkpoints {
+    for checkpoint in ordered_checkpoints.iter() {
         checkpoint_store
             .insert_verified_checkpoint(checkpoint.clone())
             .unwrap();
@@ -107,10 +148,12 @@ fn sync_new_checkpoints(
             .insert_checkpoint_contents(empty_contents())
             .unwrap();
         checkpoint_store
-            .update_highest_synced_checkpoint(&checkpoint)
+            .update_highest_synced_checkpoint(checkpoint)
             .unwrap();
-        sender.send(checkpoint).unwrap();
+        sender.send(checkpoint.clone()).unwrap();
     }
+
+    ordered_checkpoints
 }
 
 fn committee() -> (AuthorityKeyPair, Committee) {
