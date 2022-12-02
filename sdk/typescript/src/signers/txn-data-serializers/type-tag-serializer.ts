@@ -15,8 +15,16 @@ export class TypeTagSerializer {
       return { bool: null };
     } else if (str === 'u8') {
       return { u8: null };
+    } else if (str === 'u16') {
+      return { u16: null };
+    } else if (str === 'u32') {
+      return { u32: null };
     } else if (str === 'u64') {
       return { u64: null };
+    } else if (str === 'u128') {
+      return { u128: null };
+    } else if (str === 'u256') {
+      return { u256: null };
     } else if (str === 'signer') {
       return { signer: null };
     }
