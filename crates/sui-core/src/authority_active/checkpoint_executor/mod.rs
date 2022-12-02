@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use core::panic;
 use std::{sync::Arc, time::Duration};
 
+use broadcast::Receiver;
 use futures::stream::FuturesOrdered;
 use sui_metrics::spawn_monitored_task;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
     committee::StakeUnit,
     error::{SuiError, SuiResult},
-    messages::{TransactionEffects, VerifiedCertificate},
+    messages::TransactionEffects,
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use tokio::{
@@ -31,7 +33,7 @@ pub(crate) mod tests;
 const TASKS_PER_CORE: usize = 1;
 
 pub struct CheckpointExecutor {
-    mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+    mailbox: Receiver<VerifiedCheckpoint>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_state: Arc<AuthorityState>,
     highest_executed_checkpoint: Option<CheckpointSequenceNumber>,
@@ -40,12 +42,11 @@ pub struct CheckpointExecutor {
 
 impl CheckpointExecutor {
     pub fn new(
-        state_sync_handle: &sui_network::state_sync::Handle,
+        mailbox: Receiver<VerifiedCheckpoint>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Result<Self, TypedStoreError> {
-        let mailbox = state_sync_handle.subscribe_to_synced_checkpoints();
         let highest_executed_checkpoint =
             checkpoint_store.get_highest_executed_checkpoint_seq_number()?;
 
@@ -62,6 +63,12 @@ impl CheckpointExecutor {
         let mut finished: FuturesOrdered<JoinHandle<(u64, VerifiedCheckpoint)>> =
             FuturesOrdered::new();
         let task_limit = TASKS_PER_CORE * num_cpus::get();
+
+        // In memory only "watermark" to keep track of the highest checkpoint for which we've
+        // spun up an execution task. This is to prevent us from rescheduling the same checkpoints
+        // in the case where we receive a synced checkpoint message before scheduled checkpoints have
+        // completed, and hence have had the chance to update the on-disk watermark `highest_executed_checkpoint`.
+        let mut highest_scheduled_checkpoint: Option<u64> = None;
 
         loop {
             tokio::select! {
@@ -85,10 +92,21 @@ impl CheckpointExecutor {
                 received = self.mailbox.recv(), if finished.len() < task_limit => match received {
                     Ok(checkpoint) => {
                         let last_to_exec = checkpoint.sequence_number() as u64;
-                        let next_to_exec = self
-                            .highest_executed_checkpoint
-                            .map(|highest| highest + 1)
-                            .unwrap_or(0);
+
+                        // Note that either of these can be higher. If the node crashes with many
+                        // scheduled tasks, then the in-memory watermark starts as None, but the
+                        // persistent watermark is set, hence we start there. If we get a new
+                        // messsage with checkpoints tasks scheduled, then the in-memory watermark
+                        // will be greater, and hence we start from there.
+                        let next_to_exec = std::cmp::max(
+                            self
+                                .highest_executed_checkpoint
+                                .map(|highest| highest + 1)
+                                .unwrap_or(0),
+                            highest_scheduled_checkpoint
+                                .map(|highest| highest + 1)
+                                .unwrap_or(0),
+                        );
 
                         for seq_num in next_to_exec..=last_to_exec {
                             let next_checkpoint = match self
@@ -97,12 +115,11 @@ impl CheckpointExecutor {
                             {
                                 Ok(Some(new_checkpoint)) => new_checkpoint,
                                 Ok(None) => {
-                                    error!(
+                                    self.metrics.checkpoint_exec_errors.inc();
+                                    panic!(
                                         "Checkpoint {:?} does not exist in checkpoint store",
                                         seq_num,
                                     );
-                                    self.metrics.checkpoint_exec_errors.inc();
-                                    continue;
                                 }
                                 Err(err) => {
                                     error!("Failed to fetch checkpoint {:?}: {:?}", seq_num, err);
@@ -120,6 +137,8 @@ impl CheckpointExecutor {
                             let store = self.checkpoint_store.clone();
                             let next_checkpoint_clone = next_checkpoint.clone();
                             let metrics = self.metrics.clone();
+                            highest_scheduled_checkpoint = Some(seq_num);
+
                             finished.push_back(spawn_monitored_task!(async move {
                                 while let Err(err) = execute_checkpoint(
                                     next_checkpoint_clone.clone(),
@@ -193,19 +212,18 @@ pub async fn execute_checkpoint(
     authority_state: Arc<AuthorityState>,
     checkpoint_store: Arc<CheckpointStore>,
 ) -> SuiResult<Vec<TransactionEffects>> {
-    let effects = if let Some(checkpoint_contents) = checkpoint_store
+    let txes = checkpoint_store
         .get_checkpoint_contents(&checkpoint.content_digest())
         .map_err(SuiError::from)?
-    {
-        let txes = checkpoint_contents.into_inner();
-        execute_and_verify_transactions(txes, authority_state).await?
-    } else {
-        warn!(
-            "Checkpoint contents empty: {:?}",
-            checkpoint.content_digest()
-        );
-        Vec::new()
-    };
+        .unwrap_or_else(|| {
+            panic!(
+                "Checkpoint contents for digest {:?} does not exist",
+                checkpoint.content_digest()
+            )
+        })
+        .into_inner();
+
+    let effects = execute_and_verify_transactions(txes, authority_state).await?;
     Ok(effects)
 }
 
@@ -214,21 +232,20 @@ async fn execute_and_verify_transactions(
     authority_state: Arc<AuthorityState>,
 ) -> SuiResult<Vec<TransactionEffects>> {
     let tx_digests: Vec<TransactionDigest> = transactions.iter().map(|tx| tx.transaction).collect();
-    let mut verified_certs = Vec::<VerifiedCertificate>::new();
-    for digest in tx_digests.iter() {
-        match authority_state.database.read_certificate(digest)? {
-            Some(cert) => verified_certs.push(cert),
-            None => return Err(SuiError::TransactionNotFound { digest: *digest }),
-        }
-    }
+    let txns = authority_state
+        .database
+        .multi_get_pending_certificate(&tx_digests)?
+        .into_iter()
+        .map(|tx| tx.unwrap())
+        .collect();
 
+    // TODO once https://github.com/MystenLabs/sui/pull/6157 is landed,
+    // replace with call to `authority_state.add_pending_certs_and_effects`,
+    // which handles reading effects for shared object version numbers
+    // and enqueing transactions with TransactionManager.
     {
-        // TODO first extract effects and call `store_pending_certs_and_effects`
-        // after https://github.com/MystenLabs/sui/pull/6157 in order to write the
-        // transaction effects from consensus to authority store so that
-        // TransactionManager can read
         let mut tm_guard = authority_state.transaction_manager.lock().await;
-        tm_guard.enqueue(verified_certs).await?;
+        tm_guard.enqueue(txns).await?;
     }
 
     let actual_fx = authority_state.database.notify_read(tx_digests).await?;

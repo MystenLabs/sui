@@ -85,6 +85,7 @@ mod generated {
 mod builder;
 mod metrics;
 mod server;
+pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
@@ -126,6 +127,10 @@ impl Handle {
     /// Subscribe to the stream of checkpoints that have been fully synchronized and downloaded.
     pub fn subscribe_to_synced_checkpoints(&self) -> broadcast::Receiver<VerifiedCheckpoint> {
         self.checkpoint_event_sender.subscribe()
+    }
+
+    pub fn get_sender(&self) -> &broadcast::Sender<VerifiedCheckpoint> {
+        &self.checkpoint_event_sender
     }
 }
 

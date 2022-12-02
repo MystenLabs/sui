@@ -188,7 +188,7 @@ impl SuiNode {
 
         let checkpoint_executor_handle = {
             let executor = CheckpointExecutor::new(
-                &state_sync_handle,
+                state_sync_handle.subscribe_to_synced_checkpoints(),
                 checkpoint_store.clone(),
                 state.clone(),
                 CheckpointMetrics::new(&prometheus_registry),
