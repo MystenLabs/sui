@@ -696,7 +696,8 @@ impl Certificate {
     Ord,
     Arbitrary,
 )]
-pub struct CertificateDigest(pub(crate) [u8; crypto::DIGEST_LENGTH]);
+
+pub struct CertificateDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl CertificateDigest {
     pub fn new(digest: [u8; crypto::DIGEST_LENGTH]) -> CertificateDigest {

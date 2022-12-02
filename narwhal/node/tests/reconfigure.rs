@@ -7,7 +7,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{ExecutionIndices, ExecutionState};
+use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
 use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
@@ -23,7 +23,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::{ConsensusOutput, Transaction};
+use types::{ConsensusOutput, Round, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
 
@@ -90,8 +90,8 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        ExecutionIndices::default()
+    async fn last_committed_round(&self) -> Round {
+        Round::default()
     }
 }
 
@@ -278,6 +278,7 @@ async fn restart() {
         .expect("No error should occurred");
 }
 
+#[ignore]
 #[tokio::test]
 async fn epoch_change() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();

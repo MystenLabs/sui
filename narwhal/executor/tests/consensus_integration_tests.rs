@@ -5,8 +5,8 @@ use consensus::bullshark::Bullshark;
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
+use narwhal_executor::get_restored_consensus_output;
 use narwhal_executor::MockExecutionState;
-use narwhal_executor::{get_restored_consensus_output, ExecutionIndices};
 use prometheus::Registry;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -112,13 +112,9 @@ async fn test_recovery() {
     for last_executed_certificate_index in 0..consensus_index_counter {
         let mut execution_state = MockExecutionState::new();
         execution_state
-            .expect_load_execution_indices()
+            .expect_last_committed_round()
             .times(1)
-            .returning(move || ExecutionIndices {
-                last_committed_round: leader_round,
-                sub_dag_index: 0,
-                transaction_index: 0,
-            });
+            .returning(move || leader_round);
 
         let consensus_output = get_restored_consensus_output(
             consensus_store.clone(),

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
-use executor::{ExecutionIndices, ExecutionState};
+use executor::ExecutionState;
 use tokio::sync::mpsc::Sender;
-use types::ConsensusOutput;
+use types::{ConsensusOutput, Round};
 
 /// A simple/dumb execution engine.
 pub struct SimpleExecutionState {
@@ -32,7 +32,7 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        ExecutionIndices::default()
+    async fn last_committed_round(&self) -> Round {
+        0
     }
 }
