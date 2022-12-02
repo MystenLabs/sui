@@ -36,10 +36,11 @@ describe('Test common functions', () => {
         'ED25519',
         signature,
         publicKey,
-        "base58"
+        "base58",
+        true
       );
       expect(transactionDigest).toEqual(
-        'ou26yX4RYgoZeEPuhk8SAwvB6anjC3hLHFfZJdXLJ4f'
+        'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ'
       );
 
       const legacyTransactionDigest = generateTransactionDigest(
@@ -47,7 +48,8 @@ describe('Test common functions', () => {
         'ED25519',
         signature,
         publicKey,
-        "base64"
+        "base64",
+        false
       );
       expect(legacyTransactionDigest).toEqual(
         'DAOJCfCACatIaLpFEWuK90dJSPkbM48nRUOkGcbKZ9A='
