@@ -101,7 +101,8 @@ export function generateTransactionDigest(
   signatureScheme: SignatureScheme,
   signature: string | Base64DataBuffer,
   publicKey: PublicKeyInitData | PublicKey,
-  serializationFmt: 'base64' | 'base58'
+  serializationFmt: 'base64' | 'base58',
+  excludeSig: boolean = false
 ): string {
   const signatureBytes = (
     typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
@@ -140,7 +141,15 @@ export function generateTransactionDigest(
   const senderSignedDataBytes = bcs
     .ser('SenderSignedData', senderSignedData)
     .toBytes();
-  const hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
+
+  let hash;
+  if (excludeSig) {
+    const txBytes = bcs.ser('TransactionData', data).toBytes();
+    hash = sha256Hash('TransactionData', txBytes);
+  } else {
+    hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
+  }
+
   return serializationFmt === 'base58' ? new Base58DataBuffer(hash).toString() : new Base64DataBuffer(hash).toString();
 }
 
