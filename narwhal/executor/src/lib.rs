@@ -27,7 +27,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore,
-    ReconfigureNotification,
+    ReconfigureNotification, Round,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -43,18 +43,8 @@ pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput);
 
-    /// Notifies executor that narwhal commit boundary was reached
-    /// Consumers can use this boundary as an approximate signal that it might take some
-    /// time before more transactions will arrive
-    /// Consumers can use this boundary, for example, to form checkpoints
-    ///
-    /// Current implementation sends this notification at the end of narwhal certificate
-    ///
-    /// In the future this will be triggered on the actual commit boundary, once per narwhal commit
-    async fn notify_commit_boundary(&self, _committed_dag: &Arc<CommittedSubDag>) {}
-
-    /// Load the last consensus index from storage.
-    async fn load_execution_indices(&self) -> ExecutionIndices;
+    /// Load the last committed round from storage.
+    async fn last_committed_round(&self) -> Round;
 }
 
 /// A client subscribing to the consensus output and executing every transaction.
@@ -110,10 +100,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     // whether the execution has been interrupted and there are still batches/transactions
     // that need to be send for execution.
 
-    let last_committed_leader = execution_state
-        .load_execution_indices()
-        .await
-        .last_committed_round;
+    let last_committed_leader = execution_state.last_committed_round().await;
 
     let compressed_sub_dags =
         consensus_store.read_committed_sub_dags_from(&last_committed_leader)?;
@@ -149,11 +136,7 @@ impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
             .await
     }
 
-    async fn notify_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) {
-        self.as_ref().notify_commit_boundary(committed_dag).await
-    }
-
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        self.as_ref().load_execution_indices().await
+    async fn last_committed_round(&self) -> Round {
+        self.as_ref().last_committed_round().await
     }
 }

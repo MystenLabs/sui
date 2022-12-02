@@ -4,9 +4,11 @@
 use crate::authority::authority_per_epoch_store::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
+use crate::metrics::start_timer;
 use async_trait::async_trait;
+use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{CommittedSubDag, ConsensusOutput};
+use narwhal_types::{ConsensusOutput, Round};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -68,6 +70,7 @@ impl ExecutionState for ConsensusHandler {
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         consensus_output: ConsensusOutput,
     ) {
+        let _scope = monitored_scope("HandleConsensusOutputFull");
         let mut sequenced_transactions = Vec::new();
         let mut seq = 0;
 
@@ -131,10 +134,13 @@ impl ExecutionState for ConsensusHandler {
                 .await
                 .expect("Unrecoverable error in consensus handler");
         }
+
+        self.state
+            .handle_commit_boundary(&consensus_output.sub_dag, &self.checkpoint_service)
+            .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 
-    #[instrument(level = "debug", skip_all, fields(result))]
-    async fn load_execution_indices(&self) -> ExecutionIndices {
+    async fn last_committed_round(&self) -> Round {
         let index_with_hash = self
             .state
             .database
@@ -145,14 +151,7 @@ impl ExecutionState for ConsensusHandler {
             .try_lock()
             .expect("Should not have contention on ExecutionState::load_execution_indices") =
             index_with_hash.clone();
-        index_with_hash.index
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn notify_commit_boundary(&self, committed_dag: &Arc<CommittedSubDag>) {
-        self.state
-            .handle_commit_boundary(committed_dag, &self.checkpoint_service)
-            .expect("Unrecoverable error in consensus handler when processing commit boundary")
+        index_with_hash.index.last_committed_round
     }
 }
 

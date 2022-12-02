@@ -25,10 +25,7 @@ use std::time::Duration;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::{atomic::Ordering, Arc},
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;

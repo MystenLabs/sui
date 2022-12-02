@@ -18,10 +18,9 @@ use std::{sync::Arc, time::Duration, vec};
 
 use async_trait::async_trait;
 use fastcrypto::hash::Hash;
-use mysten_metrics::{monitored_future, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
-use sui_metrics::spawn_monitored_task;
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},
@@ -73,32 +72,65 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
         metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
 
     vec![
-        spawn_monitored_task!(async move { run_notify(state, rx_notifier).await }),
-        spawn_monitored_task!(async move {
-            let network = network.await.expect("Failed to receive network");
-            info!("Starting subscriber");
-            let network = SubscriberNetworkImpl {
-                name,
-                worker_cache,
-                committee,
-                network,
-            };
-            let fetcher = Fetcher {
-                network,
-                metrics: metrics.clone(),
-            };
-            let subscriber = Subscriber {
-                rx_reconfigure,
-                rx_sequence,
-                metrics,
-                fetcher,
-            };
-            subscriber
-                .run(restored_consensus_output, tx_notifier)
-                .await
-                .expect("Failed to run subscriber")
-        }),
+        spawn_monitored_task!(run_notify(state, rx_notifier)),
+        spawn_monitored_task!(create_and_run_subscriber(
+            name,
+            network,
+            worker_cache,
+            committee,
+            rx_reconfigure,
+            rx_sequence,
+            metrics,
+            restored_consensus_output,
+            tx_notifier,
+        )),
     ]
+}
+
+async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
+    state: State,
+    mut tr_notify: metered_channel::Receiver<ConsensusOutput>,
+) {
+    loop {
+        while let Some(message) = tr_notify.recv().await {
+            state.handle_consensus_output(message).await;
+        }
+    }
+}
+
+async fn create_and_run_subscriber(
+    name: PublicKey,
+    network: oneshot::Receiver<P2pNetwork>,
+    worker_cache: SharedWorkerCache,
+    committee: Committee,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_sequence: metered_channel::Receiver<CommittedSubDag>,
+    metrics: Arc<ExecutorMetrics>,
+    restored_consensus_output: Vec<CommittedSubDag>,
+    tx_notifier: metered_channel::Sender<ConsensusOutput>,
+) {
+    let network = network.await.expect("Failed to receive network");
+    info!("Starting subscriber");
+    let network = SubscriberNetworkImpl {
+        name,
+        worker_cache,
+        committee,
+        network,
+    };
+    let fetcher = Fetcher {
+        network,
+        metrics: metrics.clone(),
+    };
+    let subscriber = Subscriber {
+        rx_reconfigure,
+        rx_sequence,
+        metrics,
+        fetcher,
+    };
+    subscriber
+        .run(restored_consensus_output, tx_notifier)
+        .await
+        .expect("Failed to run subscriber")
 }
 
 impl<Network: SubscriberNetwork> Subscriber<Network> {
@@ -161,19 +193,6 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
             self.metrics
                 .waiting_elements_subscriber
                 .set(waiting.len() as i64);
-        }
-    }
-}
-
-async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
-    state: State,
-    mut tr_notify: metered_channel::Receiver<ConsensusOutput>,
-) {
-    loop {
-        while let Some(message) = tr_notify.recv().await {
-            let sub_dag = message.sub_dag.clone();
-            state.notify_commit_boundary(&sub_dag).await;
-            state.handle_consensus_output(message).await;
         }
     }
 }
