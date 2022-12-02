@@ -71,8 +71,7 @@ Yes, you can add to or withdraw your stake from a validator. Use the following m
 
 Use the [`request_add_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation) and [`request_add_delegation_with_locked_coin`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation_with_locked_coin) methods to add to the staked amount.
  
-Use the [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_delegation) method to withdraw from the staked amount.
-Use the [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_delegation) method to partially withdraw from a delegation.
+Use the [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_delegation) method to withdraw all or part of the delegation.
 
 ### Can I change the validator while a coin is actively staked?
     
