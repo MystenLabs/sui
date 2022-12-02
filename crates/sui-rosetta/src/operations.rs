@@ -295,17 +295,22 @@ fn parse_operations(
     status: Option<OperationStatus>,
 ) -> Result<Vec<Operation>, anyhow::Error> {
     let operations = if let SingleTransactionKind::PaySui(tx) = tx {
-        let mut pay_operations = tx
-            .recipients
-            .iter()
-            .zip(&tx.amounts)
+        let recipients = tx.recipients.iter().zip(&tx.amounts);
+        let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
+
+        for (recipient, amount) in recipients {
+            *aggregated_recipients.entry(*recipient).or_default() += *amount
+        }
+
+        let mut pay_operations = aggregated_recipients
+            .into_iter()
             .map(|(recipient, amount)| Operation {
                 operation_identifier: counter.next_idx().into(),
                 related_operations: vec![],
                 type_: OperationType::PaySui,
                 status,
-                account: Some((*recipient).into()),
-                amount: Some(Amount::new((*amount).into())),
+                account: Some(recipient.into()),
+                amount: Some(Amount::new(amount.into())),
                 coin_change: None,
                 metadata: None,
             })
