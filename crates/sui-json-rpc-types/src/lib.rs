@@ -67,6 +67,7 @@ pub type EventPage = Page<SuiEventEnvelope, EventID>;
 pub type CoinPage = Page<Coin, ObjectID>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Balance {
     pub coin_type: String,
     pub coin_object_count: usize,
@@ -74,6 +75,7 @@ pub struct Balance {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Coin {
     pub coin_type: String,
     pub coin_object_id: ObjectID,

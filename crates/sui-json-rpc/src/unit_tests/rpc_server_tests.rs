@@ -14,7 +14,8 @@ use sui_core::test_utils::to_sender_signed_transaction;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiExecuteTransactionResponse, SuiTransactionResponse, TransactionBytes,
+    Balance, CoinPage, GetObjectDataResponse, SuiExecuteTransactionResponse,
+    SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::ObjectID;
@@ -25,6 +26,10 @@ use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::TestClusterBuilder;
+
+use crate::api::CoinReadApiClient;
+use crate::api::TransactionExecutionApiClient;
+use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 
 use sui_macros::sim_test;
 
@@ -198,6 +203,71 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
             matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_coins() -> Result<(), anyhow::Error> {
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
+
+    let result: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(5, result.data.len());
+    assert_eq!(None, result.next_cursor);
+
+    let result: CoinPage = http_client
+        .get_coins(*address, Some("0x2::sui::TestCoin".into()), None, None)
+        .await?;
+    assert_eq!(0, result.data.len());
+
+    let result: CoinPage = http_client
+        .get_coins(*address, Some("0x2::sui::SUI".into()), None, None)
+        .await?;
+    assert_eq!(5, result.data.len());
+    assert_eq!(None, result.next_cursor);
+
+    // Test paging
+    let result: CoinPage = http_client
+        .get_coins(*address, Some("0x2::sui::SUI".into()), None, Some(3))
+        .await?;
+    assert_eq!(3, result.data.len());
+    assert!(result.next_cursor.is_some());
+
+    let result: CoinPage = http_client
+        .get_coins(
+            *address,
+            Some("0x2::sui::SUI".into()),
+            result.next_cursor,
+            Some(3),
+        )
+        .await?;
+    assert_eq!(2, result.data.len());
+    assert!(result.next_cursor.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_balances() -> Result<(), anyhow::Error> {
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
+
+    let result: Vec<Balance> = http_client.get_balances(*address, None).await?;
+    assert_eq!(1, result.len());
+    assert_eq!("0x2::sui::SUI", result[0].coin_type);
+    assert_eq!(500000000000000, result[0].total_balance);
+    assert_eq!(5, result[0].coin_object_count);
+
     Ok(())
 }
 

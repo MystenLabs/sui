@@ -36,19 +36,27 @@ pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 #[open_rpc(namespace = "sui", tag = "Coin Query API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait CoinReadApi {
+    /// Return the list of Coin objects owned by an address.
     #[method(name = "getCoins")]
     async fn get_coins(
         &self,
+        /// the owner's Sui address
         owner: SuiAddress,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: Option<String>,
+        /// optional paging cursor
         cursor: Option<ObjectID>,
+        /// maximum number of items per page
         limit: Option<usize>,
     ) -> RpcResult<CoinPage>;
 
+    /// Return the total coin balance for each coin type.
     #[method(name = "getBalance")]
     async fn get_balances(
         &self,
+        /// the owner's Sui address
         owner: SuiAddress,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: Option<String>,
     ) -> RpcResult<Vec<Balance>>;
 

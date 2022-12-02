@@ -61,7 +61,7 @@ impl CoinReadApi {
         Ok(self
             .state
             .get_owner_objects_iterator(Owner::AddressOwner(owner))?
-            .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, &coin_type)))
+            .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
             .map(|info|info.object_id))
     }
 }
