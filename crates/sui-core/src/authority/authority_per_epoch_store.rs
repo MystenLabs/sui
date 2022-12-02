@@ -211,9 +211,11 @@ where
         from_height_excluded: u64,
         to_height_included: u64,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let iter = self.tables.consensus_message_order.iter();
         let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
-        let iter = iter.skip_to(&last_previous)?;
+        let iter = self
+            .tables
+            .consensus_message_order
+            .iter_from(&last_previous)?;
         // skip_to lands to key the last_key or key after it
         // technically here we need to check if first item in stream has a key equal to last_previous
         // however in practice this can not happen because number of batches in certificate is
@@ -270,8 +272,7 @@ where
         Ok(self
             .tables
             .assigned_object_versions
-            .iter()
-            .skip_to(&(*transaction_digest, ObjectID::ZERO))?
+            .iter_from(&(*transaction_digest, ObjectID::ZERO))?
             .take_while(|((tx, _objid), _ver)| tx == transaction_digest)
             .map(|((_tx, objid), ver)| (objid, ver))
             .collect())

@@ -756,6 +756,34 @@ where
         )
     }
 
+    fn iter_from(&'a self, key: &K) -> Result<Self::Iterator, TypedStoreError> {
+        let report_metrics = if self.iter_latency_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .op_metrics
+                .rocksdb_iter_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some((timer, RocksDBPerfContext::default()))
+        } else {
+            None
+        };
+        let mut db_iter = self.rocksdb.raw_iterator_cf(&self.cf());
+        db_iter.seek(be_fix_int_ser(key)?);
+        if let Some((timer, _perf_ctx)) = report_metrics {
+            timer.stop_and_record();
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        Ok(Iter::<K, V>::new(
+            db_iter,
+            self.cf.clone(),
+            &self.db_metrics,
+            &self.iter_bytes_sample_interval,
+        ))
+    }
+
     fn keys(&'a self) -> Self::Keys {
         let mut db_iter = self.rocksdb.raw_iterator_cf(&self.cf());
         db_iter.seek_to_first();

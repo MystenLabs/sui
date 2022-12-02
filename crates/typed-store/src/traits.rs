@@ -3,6 +3,8 @@
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
+use crate::rocks::TypedStoreError;
+
 pub trait Map<'a, K, V>
 where
     K: Serialize + DeserializeOwned + ?Sized,
@@ -51,8 +53,12 @@ where
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
 
-    /// Returns an iterator visiting each key-value pair in the map.
+    /// Returns an iterator visiting each key-value pair in the map, starting from the smallest key.
     fn iter(&'a self) -> Self::Iterator;
+
+    /// Returns an iterator visiting each key-value pair in the map, starting from the specified
+    /// key or the first following key if it does not exist.
+    fn iter_from(&'a self, key: &K) -> Result<Self::Iterator, TypedStoreError>;
 
     /// Returns an iterator over each key in the map.
     fn keys(&'a self) -> Self::Keys;
