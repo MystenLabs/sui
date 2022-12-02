@@ -267,7 +267,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 let p2p_config = P2pConfig {
-                    listen_address: utils::udp_multiaddr_to_socket_address(&validator.p2p_address)
+                    listen_address: utils::udp_multiaddr_to_listen_address(&validator.p2p_address)
                         .unwrap(),
                     external_address: Some(validator.p2p_address),
                     ..Default::default()
