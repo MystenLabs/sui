@@ -77,7 +77,7 @@ impl Executor {
             network,
             worker_cache,
             committee,
-            tx_reconfigure.subscribe(),
+            tx_reconfigure,
             rx_sequence,
             arc_metrics,
             restored_consensus_output,

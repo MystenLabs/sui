@@ -4,7 +4,6 @@
 use crate::authority::authority_per_epoch_store::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
-use crate::metrics::start_timer;
 use async_trait::async_trait;
 use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};

@@ -544,7 +544,7 @@ where
         let transaction_digest = *certificate.digest();
         let batch = batch.insert_batch(
             &self.tables.consensus_message_order,
-            [(consensus_index.index.clone(), transaction_digest)],
+            [(consensus_index.index, transaction_digest)],
         )?;
         let batch = batch.insert_batch(
             &self.tables.pending_certificates,
