@@ -50,7 +50,7 @@ pub fn available_local_socket_address() -> std::net::SocketAddr {
         .unwrap()
 }
 
-pub fn udp_multiaddr_to_socket_address(
+pub fn udp_multiaddr_to_listen_address(
     multiaddr: &multiaddr::Multiaddr,
 ) -> Option<std::net::SocketAddr> {
     use multiaddr::Protocol;
@@ -59,6 +59,10 @@ pub fn udp_multiaddr_to_socket_address(
     match (iter.next(), iter.next()) {
         (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
         (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
+
+        (Some(Protocol::Dns(_)), Some(Protocol::Udp(port))) => {
+            Some((std::net::Ipv4Addr::UNSPECIFIED, port).into())
+        }
 
         _ => None,
     }
