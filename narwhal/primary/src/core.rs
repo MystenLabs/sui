@@ -306,6 +306,15 @@ impl Core {
             });
         }
 
+        // If we already have a certificate for this round, no need to
+        // re-create the certificate, we read and return it.
+        if let Some(certificate) = certificate_store.read_by_index(name.clone(), header.round)? {
+            // In case change of epoch we may have different headers for the same round.
+            if certificate.header == header {
+                return Ok(certificate);
+            }
+        }
+
         // Process the header.
         header_store
             .async_write(header.digest(), header.clone())
@@ -318,15 +327,6 @@ impl Core {
             .proposed_header_round
             .with_label_values(&[&header.epoch.to_string()])
             .set(header.round as i64);
-
-        // If we already have a certificate for this round, no need to
-        // re-create the certificate, we read and return it.
-        if let Some(certificate) = certificate_store.read_by_index(name.clone(), header.round)? {
-            // In case change of epoch we may have different headers for the same round.
-            if certificate.header == header {
-                return Ok(certificate);
-            }
-        }
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
@@ -425,9 +425,6 @@ impl Core {
             result @ Err(DagError::ShuttingDown) => result,
             _ => panic!("Failed to process locally-created certificate"),
         }?;
-
-        // Broadcast the certificate.
-        debug!("Broadcast certificate {:?}", certificate);
 
         let epoch = certificate.epoch();
         let round = certificate.header.round;
