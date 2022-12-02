@@ -12,7 +12,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
     MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
+    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
     SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionFilter,
     SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
@@ -481,25 +481,6 @@ pub trait TransactionExecutionApi {
         /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
-}
-
-#[open_rpc(
-    namespace = "sui",
-    tag = "Estimator API to estimate gas quantities for a transactions."
-)]
-#[rpc(server, client, namespace = "sui")]
-pub trait EstimatorApi {
-    /// Execute the transaction and wait for results if desired
-    #[method(name = "estimateTransactionComputationCost")]
-    async fn estimate_transaction_computation_cost(
-        &self,
-        /// transaction data bytes, as base-64 encoded string
-        tx_bytes: Base64,
-        computation_gas_unit_price: Option<u64>,
-        storage_gas_unit_price: Option<u64>,
-        mutated_object_sizes_after: Option<usize>,
-        storage_rebate: Option<u64>,
-    ) -> RpcResult<SuiGasCostSummary>;
 }
 
 pub fn cap_page_limit(limit: Option<usize>) -> Result<usize, anyhow::Error> {
