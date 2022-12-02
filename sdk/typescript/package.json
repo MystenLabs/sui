@@ -99,6 +99,7 @@
     "js-sha3": "^0.8.0",
     "lossless-json": "^1.0.5",
     "rpc-websockets": "^7.5.0",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "yarn": "^1.22.19"
   }
 }
