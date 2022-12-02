@@ -1,5 +1,5 @@
 {
-  "name": "@mysten/wallet-kit",
+  "name": "@mysten/wallet-kit-core",
   "version": "0.0.1",
   "description": "TODO: Write description",
   "license": "Apache-2.0",
@@ -25,22 +25,12 @@
     "build:types": "tsc --build",
     "prepublishOnly": "pnpm build"
   },
-  "peerDependencies": {
-    "@mysten/sui.js": "workspace:*",
-    "react": "*",
-    "react-dom": "*"
-  },
   "dependencies": {
+    "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
-    "@mysten/wallet-adapter-wallet-standard": "workspace:*",
-    "@mysten/wallet-kit-core": "workspace:*",
-    "@radix-ui/react-dialog": "^1.0.2",
-    "@stitches/react": "^1.2.8"
+    "@mysten/wallet-adapter-wallet-standard": "workspace:*"
   },
   "devDependencies": {
-    "@mysten/sui.js": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "tsup": "^6.2.2",
     "typescript": "^4.8.3"
   }

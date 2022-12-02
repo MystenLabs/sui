@@ -6,6 +6,7 @@
       "@mysten/bcs": ["../bcs/src"],
       "@mysten/sui.js": ["../typescript/src"],
       "@mysten/wallet-kit": ["./packages/wallet-kit/src"],
+      "@mysten/wallet-kit-core": ["./packages/wallet-kit-core/src"],
       "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
       "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
       "@mysten/wallet-adapter-all-wallets": [

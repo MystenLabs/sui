@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWallet } from "@mysten/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useWalletKit, useWalletKitState } from "./WalletKitContext";
 import { styled } from "./stitches";
 import { Content, Overlay, Body, CloseButton } from "./utils/Dialog";
 import { Button } from "./utils/ui";
 
 interface AccountModalProps {
-  account: string;
   open: boolean;
   onClose(): void;
 }
@@ -27,8 +26,10 @@ const ButtonGroup = styled("div", {
   width: "100%",
 });
 
-export function AccountModal({ account, open, onClose }: AccountModalProps) {
-  const { disconnect } = useWallet();
+export function AccountModal({ open, onClose }: AccountModalProps) {
+  const { disconnect } = useWalletKit();
+  const { currentAccount } = useWalletKitState();
+  const account = currentAccount || "";
 
   return (
     <Dialog.Root

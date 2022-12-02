@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWallet } from "@mysten/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
@@ -11,6 +10,7 @@ import { WhatIsAWallet } from "./WhatIsAWallet";
 import { Body, CloseButton, Content, Overlay, Title } from "./utils/Dialog";
 import { SELECTED_GETTING_STARTED, WalletList } from "./WalletList";
 import { GettingStarted } from "./GettingStarted";
+import { useWalletKit, useWalletKitState } from "./WalletKitContext";
 
 export interface ConnectModalProps {
   open: boolean;
@@ -129,7 +129,8 @@ const MobileInfoButton = styled("button", {
 const SELECTED_INFO = "@@internal/what-is-wallet";
 
 export function ConnectModal({ open, onClose }: ConnectModalProps) {
-  const { select, wallet, connected, isError } = useWallet();
+  const { connect } = useWalletKit();
+  const { currentWallet, isConnected, isError } = useWalletKitState();
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,10 +140,10 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
   }, [open]);
 
   useEffect(() => {
-    if (connected && wallet?.name === selected) {
+    if (isConnected && currentWallet?.name === selected) {
       onClose();
     }
-  }, [wallet, selected, connected]);
+  }, [currentWallet, selected, isConnected]);
 
   return (
     <Dialog.Root
@@ -158,7 +159,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
                 selected={selected}
                 onChange={(walletName) => {
                   setSelected(walletName);
-                  select(walletName);
+                  connect(walletName);
                 }}
               />
               <MobileInfoButton onClick={() => setSelected(SELECTED_INFO)}>
@@ -181,7 +182,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
                 </>
               ) : selected && selected !== SELECTED_GETTING_STARTED ? (
                 <BodyCopy>
-                  <SelectedWalletIcon src={wallet?.icon} />
+                  <SelectedWalletIcon src={currentWallet?.icon} />
                   <OpeningWalletTitle>Opening {selected}</OpeningWalletTitle>
                   <ConnectionText isError={isError}>
                     {isError
@@ -193,7 +194,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
                     <ButtonContainer>
                       <Button
                         color="secondary"
-                        onClick={() => select(selected)}
+                        onClick={() => connect(selected)}
                       >
                         Retry Connection
                       </Button>
