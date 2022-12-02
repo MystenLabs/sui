@@ -765,7 +765,7 @@ impl AuthorityState {
         let shared_locks: HashMap<_, _> = self
             .database
             .epoch_store()
-            .get_all_shared_locks(transaction_digest)?
+            .get_shared_locks(transaction_digest)?
             .into_iter()
             .collect();
 

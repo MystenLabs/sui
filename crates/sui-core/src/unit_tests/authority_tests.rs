@@ -2736,7 +2736,7 @@ async fn shared_object() {
     let shared_object_version = authority
         .db()
         .epoch_store()
-        .get_assigned_object_versions(transaction_digest, [shared_object_id].iter())
+        .get_assigned_shared_object_versions(transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
