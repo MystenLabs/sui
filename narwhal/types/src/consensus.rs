@@ -157,7 +157,7 @@ impl ConsensusStore {
 
     /// Load the last committed round of each validator.
     pub fn read_last_committed(&self) -> HashMap<PublicKey, Round> {
-        self.last_committed.iter().collect()
+        self.last_committed.iter_at_start().collect()
     }
 
     /// Load the last committed round of a validator.
@@ -178,7 +178,7 @@ impl ConsensusStore {
         &self,
         from: &SequenceNumber,
     ) -> StoreResult<Vec<(SequenceNumber, CertificateDigest)>> {
-        Ok(self.sequence.iter().skip_to(from)?.collect())
+        Ok(self.sequence.iter_none().skip_to(from)?.collect())
     }
 
     /// Load the last (ie. the highest) consensus index associated to a certificate.
@@ -198,7 +198,7 @@ impl ConsensusStore {
     ) -> StoreResult<Vec<CommittedSubDagShell>> {
         Ok(self
             .committed_sub_dags
-            .iter()
+            .iter_none()
             .skip_to(from)?
             .map(|(_, sub_dag)| sub_dag)
             .collect())

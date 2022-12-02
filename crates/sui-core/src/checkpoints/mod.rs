@@ -255,7 +255,7 @@ impl CheckpointBuilder {
     async fn run(mut self) {
         loop {
             for (height, (roots, last_checkpoint_of_epoch)) in
-                self.tables.pending_checkpoints.iter()
+                self.tables.pending_checkpoints.iter_at_start()
             {
                 if let Err(e) = self
                     .make_checkpoint(height, roots, last_checkpoint_of_epoch)
@@ -342,7 +342,12 @@ impl CheckpointBuilder {
         mut effects: Vec<TransactionEffects>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<Option<(CheckpointSummary, CheckpointContents)>> {
-        let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
+        let last_checkpoint = self
+            .tables
+            .checkpoint_summary
+            .iter_none()
+            .skip_to_last()
+            .next();
         let epoch_rolling_gas_cost_summary = Self::get_epoch_total_gas_cost(
             last_checkpoint.as_ref().map(|(_, c)| c),
             &effects,
@@ -533,7 +538,7 @@ impl CheckpointAggregator {
                 self.current.as_mut().unwrap()
             };
             let key = (current.summary.sequence_number, current.next_index);
-            let iter = self.tables.pending_signatures.iter().skip_to(&key)?;
+            let iter = self.tables.pending_signatures.iter_none().skip_to(&key)?;
             debug!("Scanning pending checkpoint signatures from {:?}", key);
             for ((seq, index), data) in iter {
                 if seq != current.summary.sequence_number {
@@ -580,7 +585,7 @@ impl CheckpointAggregator {
     fn next_checkpoint_to_certify(&self) -> CheckpointSequenceNumber {
         self.tables
             .certified_checkpoints
-            .iter()
+            .iter_none()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq + 1)
@@ -696,7 +701,7 @@ impl CheckpointService {
 
         let last_signature_index = checkpoint_store
             .pending_signatures
-            .iter()
+            .iter_none()
             .skip_to_last()
             .next()
             .map(|((_, index), _)| index)
@@ -738,7 +743,7 @@ impl CheckpointServiceNotify for CheckpointService {
         if let Some((last_certified, _)) = self
             .tables
             .certified_checkpoints
-            .iter()
+            .iter_none()
             .skip_to_last()
             .next()
         {

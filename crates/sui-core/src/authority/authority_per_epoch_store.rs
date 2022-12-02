@@ -195,7 +195,11 @@ where
     }
 
     pub fn get_last_checkpoint_boundary(&self) -> Option<(u64, u64)> {
-        self.tables.checkpoint_boundary.iter().skip_to_last().next()
+        self.tables
+            .checkpoint_boundary
+            .iter_none()
+            .skip_to_last()
+            .next()
     }
 
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
@@ -240,7 +244,7 @@ where
         Ok(self
             .tables
             .pending_certificates
-            .iter()
+            .iter_at_start()
             .map(|(_, cert)| cert.into())
             .collect())
     }
@@ -259,7 +263,7 @@ where
     pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
         self.tables
             .pending_consensus_transactions
-            .iter()
+            .iter_at_start()
             .map(|(_k, v)| v)
             .collect()
     }

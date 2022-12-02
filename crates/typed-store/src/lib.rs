@@ -141,10 +141,10 @@ where
                     }
                     StoreCommand::Iter(predicate, sender) => {
                         let response = if let Some(func) = predicate {
-                            keyed_db.iter().filter(func).collect()
+                            keyed_db.iter_at_start().filter(func).collect()
                         } else {
                             // Beware, we may overload the memory with a large table!
-                            keyed_db.iter().collect()
+                            keyed_db.iter_at_start().collect()
                         };
 
                         let _ = sender.send(response);

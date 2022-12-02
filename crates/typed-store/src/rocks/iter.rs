@@ -79,6 +79,12 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
 }
 
 impl<'a, K: Serialize, V> Iter<'a, K, V> {
+    /// Seeks to the first key in the database (at this column family).
+    pub fn seek_to_first(mut self) -> Self {
+        self.db_iter.seek_to_first();
+        self
+    }
+
     /// Skips all the elements that are smaller than the given key,
     /// and either lands on the key or the first one greater than
     /// the key.

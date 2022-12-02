@@ -230,7 +230,7 @@ where
         //
         // If, however, we were hitting repeated errors while trying to store txes, we could have
         // accumulated many txes in this list.
-        let recoverable_txes: Vec<_> = tables.log.iter().map(|(tx, _)| tx).collect();
+        let recoverable_txes: Vec<_> = tables.log.iter_at_start().map(|(tx, _)| tx).collect();
 
         Self {
             tables,

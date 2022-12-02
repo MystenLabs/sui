@@ -53,8 +53,11 @@ where
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
 
-    /// Returns an iterator visiting each key-value pair in the map, starting from the smallest key.
-    fn iter(&'a self) -> Self::Iterator;
+    /// Returns an itåerator visiting each key-value pair in the map, starting from the smallest key.
+    fn iter_at_start(&'a self) -> Self::Iterator;
+
+    /// Returns an iterator not pointing to any key. It must seek to a key before it can be read.
+    fn iter_none(&'a self) -> Self::Iterator;
 
     /// Returns an iterator visiting each key-value pair in the map, starting from the specified
     /// key or the first following key if it does not exist.

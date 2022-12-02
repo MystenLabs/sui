@@ -157,7 +157,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         Ok(if reverse {
             let iter = index
-                .iter()
+                .iter_none()
                 .skip_prior_to(&(key.clone(), cursor))?
                 .reverse()
                 .take_while(|((id, _), _)| *id == key)
@@ -169,7 +169,7 @@ impl IndexStore {
             }
         } else {
             let iter = index
-                .iter()
+                .iter_none()
                 .skip_to(&(key.clone(), cursor))?
                 .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
@@ -244,7 +244,7 @@ impl IndexStore {
             function.clone().unwrap_or_default(),
             cursor,
         );
-        let iter = self.transactions_by_move_function.iter();
+        let iter = self.transactions_by_move_function.iter_none();
         Ok(if reverse {
             let iter = iter
                 .skip_prior_to(&key)?

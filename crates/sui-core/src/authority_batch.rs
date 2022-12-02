@@ -63,7 +63,7 @@ impl crate::authority::AuthorityState {
             .db()
             .perpetual_tables
             .batches
-            .iter()
+            .iter_none()
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
             .map(|(_, batch)| batch);
@@ -82,7 +82,7 @@ impl crate::authority::AuthorityState {
             .db()
             .perpetual_tables
             .batches
-            .iter()
+            .iter_none()
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
         {
@@ -105,7 +105,7 @@ impl crate::authority::AuthorityState {
             .db()
             .perpetual_tables
             .executed_sequence
-            .iter()
+            .iter_none()
             .skip_to(&last_batch.next_sequence_number)?
             .collect();
 
@@ -155,7 +155,7 @@ impl crate::authority::AuthorityState {
             .db()
             .perpetual_tables
             .batches
-            .iter()
+            .iter_none()
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
             .unwrap();
@@ -291,7 +291,7 @@ impl crate::authority::AuthorityState {
             .db()
             .perpetual_tables
             .batches
-            .iter()
+            .iter_none()
             .skip_prior_to(&start)
             .map(|mut o| o.next())
             .unwrap_or_default();
@@ -374,7 +374,7 @@ impl crate::authority::AuthorityState {
                         .db
                         .perpetual_tables
                         .batches
-                        .iter()
+                        .iter_none()
                         .skip_to(&local_state.next_batch_seq)
                         .map(|mut o| o.next())
                         .unwrap_or_default();
@@ -386,7 +386,7 @@ impl crate::authority::AuthorityState {
                             .db
                             .perpetual_tables
                             .executed_sequence
-                            .iter()
+                            .iter_none()
                             .skip_to(&initial_seq_num)
                         {
                             local_state.txns =

@@ -476,7 +476,7 @@ impl LockServiceImpl {
     pub fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
         let mut iterator = self
             .transaction_lock
-            .iter()
+            .iter_none()
             // Make the max possible entry for this object ID.
             .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
         Ok(iterator

@@ -539,7 +539,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     #(
                         stringify!(#field_names) => {
                             typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
-                            typed_store::traits::Map::iter(&self.#field_names)
+                            typed_store::traits::Map::iter_at_start(&self.#field_names)
                                 .skip((page_number * (page_size) as usize))
                                 .take(page_size as usize)
                                 .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
@@ -558,7 +558,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     #(
                         stringify!(#field_names) => {
                             typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
-                            typed_store::traits::Map::iter(&self.#field_names).count()
+                            typed_store::traits::Map::iter_at_start(&self.#field_names).count()
                         }
                     )*
 

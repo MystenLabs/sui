@@ -134,7 +134,7 @@ async fn test_skip() {
         .expect("Failed to insert");
 
     // Skip all smaller
-    let key_vals: Vec<_> = db.iter().skip_to(&456).expect("Seek failed").collect();
+    let key_vals: Vec<_> = db.iter_none().skip_to(&456).expect("Seek failed").collect();
     assert_eq!(key_vals.len(), 2);
     assert_eq!(key_vals[0], (456, "456".to_string()));
     assert_eq!(key_vals[1], (789, "789".to_string()));
@@ -146,20 +146,26 @@ async fn test_skip() {
     assert_eq!(keys[1], (789));
 
     // Skip to the end
-    assert_eq!(db.iter().skip_to(&999).expect("Seek failed").count(), 0);
+    assert_eq!(
+        db.iter_none().skip_to(&999).expect("Seek failed").count(),
+        0
+    );
     // same for the keys
     assert_eq!(db.keys().skip_to(&999).expect("Seek failed").count(), 0);
 
     // Skip to last
     assert_eq!(
-        db.iter().skip_to_last().next(),
+        db.iter_none().skip_to_last().next(),
         Some((789, "789".to_string()))
     );
     // same for the keys
     assert_eq!(db.keys().skip_to_last().next(), Some(789));
 
     // Skip to successor of first value
-    assert_eq!(db.iter().skip_to(&000).expect("Skip failed").count(), 3);
+    assert_eq!(
+        db.iter_none().skip_to(&000).expect("Skip failed").count(),
+        3
+    );
     assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
 }
 
@@ -176,7 +182,7 @@ async fn test_skip_to_previous_simple() {
 
     // Skip to the one before the end
     let key_vals: Vec<_> = db
-        .iter()
+        .iter_none()
         .skip_prior_to(&999)
         .expect("Seek failed")
         .collect();
@@ -194,7 +200,10 @@ async fn test_skip_to_previous_simple() {
     // Skip to prior of first value
     // Note: returns an empty iterator!
     assert_eq!(
-        db.iter().skip_prior_to(&000).expect("Seek failed").count(),
+        db.iter_none()
+            .skip_prior_to(&000)
+            .expect("Seek failed")
+            .count(),
         0
     );
     // Same for the keys iterator
@@ -214,7 +223,7 @@ async fn test_iter_skip_to_previous_gap() {
     }
 
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db.iter().skip_prior_to(&50).unwrap();
+    let db_iter = db.iter_none().skip_prior_to(&50).unwrap();
 
     assert_eq!(
         (49..50)
@@ -251,7 +260,7 @@ async fn test_iter() {
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
 
-    let mut iter = db.iter();
+    let mut iter = db.iter_at_start();
     assert_eq!(Some((123456789, "123456789".to_string())), iter.next());
     assert_eq!(None, iter.next());
 }
@@ -264,13 +273,13 @@ async fn test_iter_reverse() {
     db.insert(&2, &"2".to_string()).expect("Failed to insert");
     db.insert(&3, &"3".to_string()).expect("Failed to insert");
 
-    let mut iter = db.iter().skip_to_last().reverse();
+    let mut iter = db.iter_none().skip_to_last().reverse();
     assert_eq!(Some((3, "3".to_string())), iter.next());
     assert_eq!(Some((2, "2".to_string())), iter.next());
     assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(None, iter.next());
 
-    let mut iter = db.iter().skip_to(&2).unwrap().reverse();
+    let mut iter = db.iter_none().skip_to(&2).unwrap().reverse();
     assert_eq!(Some((2, "2".to_string())), iter.next());
     assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(None, iter.next());
@@ -459,17 +468,17 @@ async fn test_clear() {
     insert_batch.write().expect("Failed to execute batch");
 
     // Check we have multiple entries
-    assert!(db.iter().count() > 1);
+    assert!(db.iter_at_start().count() > 1);
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.iter_at_start().count(), 0);
     // Clear again to ensure safety when clearing empty map
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.iter_at_start().count(), 0);
     // Clear with one item
     let _ = db.insert(&1, &"e".to_string());
-    assert_eq!(db.iter().count(), 1);
+    assert_eq!(db.iter_at_start().count(), 1);
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.iter_at_start().count(), 0);
 }
 
 #[tokio::test]
@@ -491,12 +500,12 @@ async fn test_is_empty() {
     insert_batch.write().expect("Failed to execute batch");
 
     // Check we have multiple entries and not empty
-    assert!(db.iter().count() > 1);
+    assert!(db.iter_at_start().count() > 1);
     assert!(!db.is_empty());
 
     // Clear again to ensure empty works after clearing
     let _ = db.clear();
-    assert_eq!(db.iter().count(), 0);
+    assert_eq!(db.iter_at_start().count(), 0);
     assert!(db.is_empty());
 }
 
@@ -537,7 +546,7 @@ async fn test_multi_remove() {
     // Remove 50 items
     db.multi_remove(keys_vals.clone().map(|kv| kv.0).take(50))
         .expect("Failed to multi-remove");
-    assert_eq!(db.iter().count(), 101 - 50);
+    assert_eq!(db.iter_at_start().count(), 101 - 50);
 
     // Check that the remaining are present
     for (k, v) in keys_vals.skip(50) {

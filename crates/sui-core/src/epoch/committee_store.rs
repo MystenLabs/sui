@@ -70,7 +70,7 @@ impl CommitteeStore {
 
     pub fn get_latest_committee(&self) -> Committee {
         self.committee_map
-            .iter()
+            .iter_none()
             .skip_to_last()
             .next()
             // unwrap safe because we guarantee there is at least a genesis epoch
@@ -80,6 +80,6 @@ impl CommitteeStore {
     }
 
     fn database_is_empty(&self) -> bool {
-        self.committee_map.iter().next().is_none()
+        self.committee_map.iter_at_start().next().is_none()
     }
 }

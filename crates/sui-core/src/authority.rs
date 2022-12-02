@@ -1813,7 +1813,7 @@ impl AuthorityState {
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit, reverse)?,
             TransactionQuery::All => {
-                let iter = self.database.perpetual_tables.executed_sequence.iter();
+                let iter = self.database.perpetual_tables.executed_sequence.iter_none();
                 if reverse {
                     let iter = iter
                         .skip_prior_to(&cursor)?

@@ -725,10 +725,11 @@ where
     }
 
     fn is_empty(&self) -> bool {
-        self.iter().next().is_none()
+        self.iter_at_start().next().is_none()
     }
 
-    fn iter(&'a self) -> Self::Iterator {
+    fn iter_at_start(&'a self) -> Self::Iterator {
+        let mut iter = self.iter_none();
         let report_metrics = if self.iter_latency_sample_interval.sample() {
             let timer = self
                 .db_metrics
@@ -740,16 +741,19 @@ where
         } else {
             None
         };
-        let mut db_iter = self.rocksdb.raw_iterator_cf(&self.cf());
-        db_iter.seek_to_first();
+        iter = iter.seek_to_first();
         if let Some((timer, _perf_ctx)) = report_metrics {
             timer.stop_and_record();
             self.db_metrics
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
+        iter
+    }
+
+    fn iter_none(&'a self) -> Self::Iterator {
         Iter::new(
-            db_iter,
+            self.rocksdb.raw_iterator_cf(&self.cf()),
             self.cf.clone(),
             &self.db_metrics,
             &self.iter_bytes_sample_interval,

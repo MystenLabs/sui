@@ -173,7 +173,7 @@ impl TransactionNotifier {
                         .state
                         .perpetual_tables
                         .executed_sequence
-                        .iter()
+                        .iter_none()
                         .skip_to(&next_seq)
                     {
                         // ... continued here with take_while. And expand the buffer with the new items.

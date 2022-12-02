@@ -184,7 +184,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(self
             .perpetual_tables
             .executed_sequence
-            .iter()
+            .iter_none()
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
             .map(|(v, _)| v + 1u64)
@@ -212,7 +212,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(self
             .perpetual_tables
             .owner_index
-            .iter()
+            .iter_none()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, ObjectID::ZERO))?
             .take_while(|((object_owner, _), _)| (object_owner == &owner))
@@ -518,7 +518,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(self
             .perpetual_tables
             .parent_sync
-            .iter()
+            .iter_none()
             // The object id [0; 16] is the smallest possible
             .skip_to(&(object_id, seq_inner, obj_dig_inner))?
             .take_while(move |((id, iseq, _digest), _txd)| {
@@ -1394,7 +1394,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(self
             .perpetual_tables
             .executed_sequence
-            .iter()
+            .iter_none()
             .skip_to(&start)?
             .take_while(|(seq, _tx)| *seq < end)
             .collect())

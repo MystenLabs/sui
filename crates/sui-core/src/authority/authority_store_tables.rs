@@ -101,7 +101,7 @@ where
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects
-            .iter()
+            .iter_none()
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
             .next();
 
@@ -141,7 +141,7 @@ where
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         let mut iterator = self
             .parent_sync
-            .iter()
+            .iter_none()
             // Make the max possible entry for this object ID.
             .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
 
@@ -174,7 +174,7 @@ where
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
-            .iter()
+            .iter_none()
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())

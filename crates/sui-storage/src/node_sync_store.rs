@@ -162,7 +162,7 @@ impl NodeSyncStore {
     ) -> SuiResult<impl Iterator<Item = (TxSequenceNumber, ExecutionDigests)> + 'a> {
         Ok(self
             .batch_streams
-            .iter()
+            .iter_none()
             .skip_to(&(epoch_id, *peer, 0))?
             .take_while(move |((e, name, _), _)| *e == epoch_id && *name == *peer)
             .map(|((_, _, seq), digests)| (seq, digests)))
@@ -214,7 +214,7 @@ impl NodeSyncStore {
     > {
         Ok(self
             .effects_votes
-            .iter()
+            .iter_none()
             .skip_to(&(epoch_id, digest, effects_digest, AuthorityName::ZERO))?
             .take_while(move |((e, tx, fx, _), _)| {
                 *e == epoch_id && *tx == digest && *fx == effects_digest
@@ -250,7 +250,7 @@ impl NodeSyncStore {
         trace!(effects_digest = ?digest, "clearing votes");
         Ok(self.effects_votes.multi_remove(
             self.effects_votes
-                .iter()
+                .iter_none()
                 .skip_to(&(
                     epoch_id,
                     digest,
