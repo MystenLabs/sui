@@ -47,14 +47,16 @@ pub struct AuthorityPerEpochStore<S> {
 #[derive(DBMapUtils)]
 pub struct AuthorityEpochTables<S> {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    #[default_options_override_fn = "transactions_table_default_config"]
+    #[default_options_override_fn = "table_default_config"]
     transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, S>>,
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
     /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
     /// TODO: These two maps should be merged into a single one (no reason to have two).
+    #[default_options_override_fn = "table_default_config"]
     assigned_object_versions: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
+    #[default_options_override_fn = "table_default_config"]
     next_object_versions: DBMap<ObjectID, SequenceNumber>,
 
     /// Certificates that have been received from clients or received from consensus, but not yet
@@ -66,6 +68,7 @@ pub struct AuthorityEpochTables<S> {
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
+    #[default_options_override_fn = "table_default_config"]
     pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
@@ -76,9 +79,11 @@ pub struct AuthorityEpochTables<S> {
     /// Entries in this table can be garbage collected whenever we can prove that we won't receive
     /// another handle_consensus_transaction call for the given digest. This probably means at
     /// epoch change.
+    #[default_options_override_fn = "table_default_config"]
     consensus_message_processed: DBMap<ConsensusTransactionKey, bool>,
 
     /// Map stores pending transactions that this authority submitted to consensus
+    #[default_options_override_fn = "table_default_config"]
     pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
     /// This is an inverse index for consensus_message_processed - it allows to select
@@ -86,24 +91,29 @@ pub struct AuthorityEpochTables<S> {
     ///
     /// The consensus position for the transaction is defined as first position at which valid
     /// certificate for this transaction is seen in consensus
+    #[default_options_override_fn = "table_default_config"]
     consensus_message_order: DBMap<ExecutionIndices, TransactionDigest>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
+    #[default_options_override_fn = "table_default_config"]
     last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
 
     /// This table lists all checkpoint boundaries in the consensus sequence
     ///
     /// The key in this table is incremental index and value is corresponding narwhal
     /// consensus output index
+    #[default_options_override_fn = "table_default_config"]
     checkpoint_boundary: DBMap<u64, u64>,
 
     /// This table contains current reconfiguration state for validator for current epoch
+    #[default_options_override_fn = "table_default_config"]
     reconfig_state: DBMap<u64, ReconfigState>,
 
     /// Validators that have sent EndOfPublish message in this epoch
+    #[default_options_override_fn = "table_default_config"]
     end_of_publish: DBMap<AuthorityName, ()>,
 }
 
@@ -503,6 +513,6 @@ where
     }
 }
 
-fn transactions_table_default_config() -> DBOptions {
+fn table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
