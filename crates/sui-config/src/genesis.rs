@@ -16,8 +16,8 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
-use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
+use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{AuthorityPublicKey, ToFromBytes};
@@ -565,7 +565,7 @@ pub fn generate_genesis_system_object(
         commission_rates.push(validator.commission_rate());
     }
 
-    adapter::execute(
+    adapter::execute::<execution_mode::Normal, _, _>(
         move_vm,
         &mut temporary_store,
         ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),

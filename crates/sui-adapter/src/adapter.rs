@@ -55,16 +55,7 @@ use sui_verifier::{
 };
 use tracing::instrument;
 
-macro_rules! assert_invariant {
-    ($cond:expr, $msg:expr) => {
-        if !$cond {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::InvariantViolation,
-                $msg,
-            ));
-        }
-    };
-}
+use crate::execution_mode::{self, ExecutionMode};
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new_with_config(
@@ -111,6 +102,7 @@ pub fn new_session<
 #[allow(clippy::too_many_arguments)]
 #[instrument(name = "adapter_execute", level = "trace", skip_all)]
 pub fn execute<
+    Mode: ExecutionMode,
     E: Debug,
     S: ResourceResolver<Error = E>
         + ModuleResolver<Error = E>
@@ -126,33 +118,35 @@ pub fn execute<
     args: Vec<CallArg>,
     gas_status: &mut GasStatus,
     ctx: &mut TxContext,
-) -> Result<(), ExecutionError> {
-    let objects = args
-        .iter()
-        .filter_map(|arg| match arg {
-            CallArg::Pure(_) => None,
+) -> Result<Mode::ExecutionResult, ExecutionError> {
+    let mut objects: BTreeMap<ObjectID, &Object> = BTreeMap::new();
+    for arg in &args {
+        match arg {
+            CallArg::Pure(_) => continue,
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
             | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                Some(vec![(*id, state_view.read_object(id)?)])
+                let obj = state_view.read_object(id);
+                assert_invariant!(obj.is_some(), format!("Object {} does not exist yet", id));
+                objects.insert(*id, obj.unwrap());
             }
-            CallArg::ObjVec(vec) => {
-                if vec.is_empty() {
-                    return None;
+            CallArg::ObjVec(obj_args) => {
+                for obj_arg in obj_args {
+                    match obj_arg {
+                        ObjectArg::ImmOrOwnedObject((id, _, _))
+                        | ObjectArg::SharedObject { id, .. } => {
+                            let obj = state_view.read_object(id);
+                            assert_invariant!(
+                                obj.is_some(),
+                                format!("Object {} does not exist yet", id)
+                            );
+                            objects.insert(*id, obj.unwrap());
+                        }
+                    }
                 }
-                Some(
-                    vec.iter()
-                        .filter_map(|obj_arg| match obj_arg {
-                            ObjectArg::ImmOrOwnedObject((id, _, _))
-                            | ObjectArg::SharedObject { id, .. } => {
-                                Some((*id, state_view.read_object(id)?))
-                            }
-                        })
-                        .collect(),
-                )
             }
-        })
-        .flatten()
-        .collect();
+        }
+    }
+
     let module = vm.load_module(&module_id, state_view)?;
     let is_genesis = ctx.digest() == TransactionDigest::genesis();
     let TypeCheckSuccess {
@@ -162,12 +156,20 @@ pub fn execute<
         by_value_objects,
         mutable_ref_objects,
         has_ctx_arg,
-    } = resolve_and_type_check(&objects, &module, function, &type_args, args, is_genesis)?;
+    } = resolve_and_type_check(
+        &objects,
+        &module,
+        function,
+        &type_args,
+        args,
+        is_genesis,
+        Mode::allow_arbitrary_function_calls(),
+    )?;
 
     if has_ctx_arg {
         args.push(ctx.to_vec());
     }
-    execute_internal(
+    execute_internal::<Mode, _, _>(
         vm,
         state_view,
         &module_id,
@@ -187,6 +189,7 @@ pub fn execute<
 /// call.
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
+    Mode: ExecutionMode,
     E: Debug,
     S: ResourceResolver<Error = E>
         + ModuleResolver<Error = E>
@@ -206,7 +209,7 @@ fn execute_internal<
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut GasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
-) -> Result<(), ExecutionError> {
+) -> Result<Mode::ExecutionResult, ExecutionError> {
     let input_objects = object_data
         .iter()
         .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
@@ -219,16 +222,14 @@ fn execute_internal<
             .map_err(|e| convert_type_argument_error(idx, e))?;
     }
     // script visibility checked manually for entry points
-    let (
-        SerializedReturnValues {
-            mut mutable_reference_outputs,
-            return_values,
-        },
-        (change_set, events, mut native_context_extensions),
-    ) = session
+    let (result, (change_set, events, mut native_context_extensions)) = session
         .execute_function_bypass_visibility(module_id, function, type_args, args, gas_status)
         .and_then(|ret| Ok((ret, session.finish_with_extensions()?)))?;
-    assert_invariant!(return_values.is_empty(), "Return values must be empty");
+    let mode_result = Mode::make_result(&result)?;
+    let SerializedReturnValues {
+        mut mutable_reference_outputs,
+        ..
+    } = result;
     let object_runtime: ObjectRuntime = native_context_extensions.remove();
     std::mem::drop(native_context_extensions);
 
@@ -314,8 +315,7 @@ fn execute_internal<
         user_events,
         ctx,
     )?;
-
-    Ok(())
+    Ok(mode_result)
 }
 
 #[instrument(name = "adapter_publish", level = "trace", skip_all)]
@@ -428,8 +428,7 @@ fn init_modules<
         }
         args.push(ctx.to_vec());
         let has_ctx_arg = true;
-
-        execute_internal(
+        execute_internal::<execution_mode::Normal, _, _>(
             vm,
             state_view,
             &module_id,
@@ -695,6 +694,7 @@ pub fn resolve_and_type_check(
     type_args: &[TypeTag],
     args: Vec<CallArg>,
     is_genesis: bool,
+    allow_arbitrary_function_calls: bool,
 ) -> Result<TypeCheckSuccess, ExecutionError> {
     // Resolve the function we are calling
     let view = &BinaryIndexedView::Module(module);
@@ -715,12 +715,15 @@ pub fn resolve_and_type_check(
             ));
         }
     };
-    // Check for entry modifier, but ignore for genesis.
+    // Check for entry modifier, but ignore for genesis or dev-inspect.
     // Genesis calls non-entry, private functions, and bypasses this rule. This is helpful for
     // ensuring the functions are not called again later.
     // In other words, this is an implementation detail that we are using `execute` for genesis
     // functions, and as such need to bypass this check.
-    if !fdef.is_entry && !is_genesis {
+    // Similarly, we will bypass this check for dev-inspect, as the mode does not make state changes
+    // and is just for developers to check the result of Move functions. This mode is flagged by
+    // allow_arbitrary_function_calls
+    if !fdef.is_entry && !is_genesis && !allow_arbitrary_function_calls {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::NonEntryFunctionInvoked,
             "Can only call `entry` functions",
@@ -779,6 +782,9 @@ pub fn resolve_and_type_check(
             let param_type = &parameters[idx];
             let idx = idx as LocalIndex;
             let object_arg = match arg {
+                // dev-inspect does not make state changes and just a developer aid, so let through
+                // any BCS bytes (they will be checked later by the VM)
+                CallArg::Pure(arg) if allow_arbitrary_function_calls => return Ok(arg),
                 CallArg::Pure(arg) => {
                     let (is_primitive, type_layout_opt) =
                         primitive_type(view, type_args, param_type);

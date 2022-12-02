@@ -38,7 +38,7 @@ use sui_types::base_types::{
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
-use sui_types::error::SuiError;
+use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::{EventFilter, TransactionFilter};
@@ -1868,6 +1868,30 @@ pub struct SuiTransactionEffects {
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<TransactionDigest>,
+}
+
+/// The response from processing a dev inspect transaction
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "DevInspectResults", rename_all = "camelCase")]
+pub struct DevInspectResults {
+    /// Summary of effects that likely would be generated if the transaction is actually run.
+    /// Note however, that not all dev-inspect transactions are actually usable as transactions so
+    /// it might not be possible actually generate these effects from a normal transaction.
+    effects: SuiTransactionEffects,
+    /// Execution results (including return values) from executing the transactions
+    /// Currently contains only return values from Move calls
+    results: Result<Vec<(usize, ExecutionResult)>, String>,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ExecutionResult {
+    /// The value of any arguments that were mutably borrowed.
+    /// Non-mut borrowed values are not included
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mutable_reference_outputs: Vec<(u8, Vec<u8>, MoveTypeLayout)>,
+    /// The return values from the function
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub return_values: Vec<(Vec<u8>, MoveTypeLayout)>,
 }
 
 impl SuiTransactionEffects {

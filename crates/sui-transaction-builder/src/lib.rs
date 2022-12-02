@@ -356,6 +356,8 @@ impl TransactionBuilder {
             type_args,
             args.clone(),
             false,
+            // TODO this needs to be set from outside?
+            false,
         )?;
 
         Ok(args)

@@ -1278,6 +1278,7 @@ where
 
         // Pass in the objects for a deeper check
         let is_genesis = false;
+        let allow_arbitrary_function_calls = false;
         let type_arguments = type_arguments
             .into_iter()
             .map(|arg| arg.try_into())
@@ -1294,6 +1295,7 @@ where
             &type_arguments,
             args.clone(),
             is_genesis,
+            allow_arbitrary_function_calls,
         )?;
         used_object_ids.extend(objects.keys());
 
