@@ -17,6 +17,7 @@ export const Overlay = styled(Dialog.Overlay, {
   backgroundColor: "$backdrop",
   position: "fixed",
   inset: 0,
+  zIndex: 100,
 });
 
 export const Content = styled(Dialog.Content, {
@@ -30,6 +31,7 @@ export const Content = styled(Dialog.Content, {
   alignItems: "flex-end",
   padding: "$4",
   boxSizing: "border-box",
+  pointerEvents: "none!important",
 
   "@md": {
     alignItems: "center",
@@ -44,6 +46,7 @@ export const Body = styled("div", {
   boxShadow: "$modal",
   display: "flex",
   flexDirection: "column",
+  pointerEvents: "auto",
 
   variants: {
     connect: {

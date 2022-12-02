@@ -3,3 +3,4 @@
 ---
 
 Prevent AccountModal from appearing for a second after connecting
+Dialog backdrop make it visible and clickable
