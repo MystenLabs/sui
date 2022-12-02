@@ -23,16 +23,16 @@ use crate::metrics::MetricsLayer;
 pub mod api;
 pub mod bcs_api;
 pub mod coin_api;
+pub mod error;
 pub mod event_api;
 mod metrics;
 pub mod read_api;
-pub mod streaming_api;
-pub mod transaction_builder_api;
-pub mod transaction_execution_api;
-
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
 mod rpc_server_test;
+pub mod streaming_api;
+pub mod transaction_builder_api;
+pub mod transaction_execution_api;
 
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,

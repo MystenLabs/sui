@@ -10,7 +10,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BalancePage, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
+    Balance, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
     GetRawObjectDataResponse, MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata,
     SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
@@ -50,9 +50,7 @@ pub trait CoinReadApi {
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-        cursor: Option<String>,
-        limit: Option<usize>,
-    ) -> RpcResult<BalancePage>;
+    ) -> RpcResult<Vec<Balance>>;
 
     /// Return metadata(e.g., symbol, decimals) for a coin
     #[method(name = "getCoinMetadata")]
