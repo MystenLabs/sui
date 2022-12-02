@@ -1255,6 +1255,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
+        // Skip txes that are executed already
+        if self.effects_exists(&transaction_digest)? {
+            return Ok(());
+        }
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects().map(|(id, _)| id);
@@ -1310,6 +1314,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // - we write to assigned_object versions, re-creating the locks that were just deleted
         // - now it's possible to run a new tx against old versions of the shared objects.
         let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
+        // Skip txes that are executed already
+        if self.effects_exists(&transaction_digest)? {
+            return Ok(());
+        }
 
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
