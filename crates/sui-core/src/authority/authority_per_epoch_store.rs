@@ -2,22 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use narwhal_executor::ExecutionIndices;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use sui_storage::default_db_options;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, TrustedCertificate,
     VerifiedCertificate,
 };
+use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::stake_aggregator::StakeAggregator;
 use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -41,6 +46,7 @@ pub struct AuthorityPerEpochStore<S> {
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
+    end_of_publish: Mutex<StakeAggregator<(), true>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -140,16 +146,19 @@ impl<S> AuthorityPerEpochStore<S>
 where
     S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    pub fn new(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        let tables = AuthorityEpochTables::open(epoch, parent_path, db_options);
+    pub fn new(committee: Arc<Committee>, parent_path: &Path, db_options: Option<Options>) -> Self {
+        let epoch_id = committee.epoch;
+        let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options);
+        let end_of_publish = StakeAggregator::from_iter(committee, tables.end_of_publish.iter());
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
         Self {
-            epoch_id: epoch,
+            epoch_id,
             tables,
             reconfig_state_mem: RwLock::new(reconfig_state),
             consensus_notify_read: NotifyRead::new(),
+            end_of_publish: Mutex::new(end_of_publish),
         }
     }
 
@@ -158,6 +167,17 @@ where
             .reconfig_state
             .insert(&RECONFIG_STATE_INDEX, new_state)?;
         Ok(())
+    }
+
+    fn store_reconfig_state_batch(
+        &self,
+        new_state: &ReconfigState,
+        batch: DBBatch,
+    ) -> SuiResult<DBBatch> {
+        Ok(batch.insert_batch(
+            &self.tables.reconfig_state,
+            [(&RECONFIG_STATE_INDEX, new_state)],
+        )?)
     }
 
     pub fn insert_transaction(
@@ -352,7 +372,11 @@ where
     }
 
     pub fn has_sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
-        Ok(self.tables.end_of_publish.contains_key(authority)?)
+        Ok(self
+            .end_of_publish
+            .try_lock()
+            .expect("No contention on end_of_publish lock")
+            .contains_key(authority))
     }
 
     pub fn register_consensus_message_notify(
@@ -362,16 +386,49 @@ where
         self.consensus_notify_read.register_one(key)
     }
 
+    /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
     pub fn record_end_of_publish(
         &self,
         authority: AuthorityName,
         key: ConsensusTransactionKey,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult {
-        let write_batch = self.tables.last_consensus_index.batch();
-        let write_batch =
-            write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
-        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
+    ) -> SuiResult<bool> {
+        let mut write_batch = self.tables.last_consensus_index.batch();
+        // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
+        // And this function itself is always executed from consensus task
+        let collected_end_of_publish = if self
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_consensus_certs()
+        {
+            write_batch =
+                write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
+            self.end_of_publish.try_lock()
+                .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
+                .insert(authority, ()).is_success()
+        } else {
+            // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
+            debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
+            false
+        };
+        let _lock = if collected_end_of_publish {
+            debug!(
+                "Collected enough end_of_publish messages with last message from validator {:?}",
+                authority.concise()
+            );
+            let mut lock = self.get_reconfig_state_write_lock_guard();
+            lock.close_all_certs();
+            // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
+            write_batch = self.store_reconfig_state_batch(&lock, write_batch)?;
+            // Holding this lock until end of this function where we write batch to DB
+            Some(lock)
+        } else {
+            None
+        };
+        // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
+        // If some day we won't panic in ConsensusHandler on error we need to figure out here how
+        // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
+        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)?;
+        Ok(collected_end_of_publish)
     }
 
     pub fn finish_consensus_transaction_process(
@@ -483,21 +540,6 @@ where
         mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
     ) {
         lock_guard.close_user_certs();
-        self.store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
-    }
-
-    pub fn close_all_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        lock_guard.close_all_certs();
-        self.store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
-    }
-
-    pub fn open_all_certs(&self, mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
-        lock_guard.open_all_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
     }

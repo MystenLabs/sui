@@ -171,6 +171,13 @@ where
         Ok(self.get_sui_system_state_object()?.epoch)
     }
 
+    pub fn get_committee(&self) -> SuiResult<Committee> {
+        Ok(self
+            .get_sui_system_state_object()?
+            .get_current_epoch_committee()
+            .committee)
+    }
+
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects

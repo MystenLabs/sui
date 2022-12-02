@@ -45,7 +45,7 @@ impl TransactionManager {
             .enqueue(
                 transaction_manager
                     .authority_store
-                    .epoch_tables()
+                    .epoch_store()
                     .all_pending_certificates()
                     .unwrap(),
             )
@@ -133,7 +133,7 @@ impl TransactionManager {
                 // Otherwise, this has to crash.
                 let cert = match self
                     .authority_store
-                    .epoch_tables()
+                    .epoch_store()
                     .get_pending_certificate(&digest)
                 {
                     Ok(Some(cert)) => cert,

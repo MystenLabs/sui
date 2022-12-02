@@ -137,7 +137,7 @@ where
             let _ = authority
                 .state
                 .database
-                .epoch_tables()
+                .epoch_store()
                 .remove_pending_certificate(&digest);
 
             authority

@@ -104,9 +104,14 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-                .await
-                .unwrap(),
+            AuthorityStore::open_with_committee(
+                &path,
+                None,
+                &committee,
+                &Genesis::get_default_genesis(),
+            )
+            .await
+            .unwrap(),
         );
         let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
@@ -139,9 +144,14 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-                .await
-                .unwrap(),
+            AuthorityStore::open_with_committee(
+                &path,
+                None,
+                &committee,
+                &Genesis::get_default_genesis(),
+            )
+            .await
+            .unwrap(),
         );
         let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
@@ -170,9 +180,14 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-                .await
-                .unwrap(),
+            AuthorityStore::open_with_committee(
+                &path,
+                None,
+                &committee,
+                &Genesis::get_default_genesis(),
+            )
+            .await
+            .unwrap(),
         );
         let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
@@ -195,16 +210,21 @@ async fn test_batch_manager_happy_path() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(
-        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-            .await
-            .unwrap(),
-    );
-
-    // Make a test key pair
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let store = Arc::new(
+        AuthorityStore::open_with_committee(
+            &path,
+            None,
+            &committee,
+            &Genesis::get_default_genesis(),
+        )
+        .await
+        .unwrap(),
+    );
+
+    // Make a test key pair
     let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
 
     let inner_state = authority_state.clone();
@@ -273,16 +293,19 @@ async fn test_batch_manager_out_of_order() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(
-        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-            .await
-            .unwrap(),
-    );
-
-    // Make a test key pair
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let store = Arc::new(
+        AuthorityStore::open_with_committee(
+            &path,
+            None,
+            &committee,
+            &Genesis::get_default_genesis(),
+        )
+        .await
+        .unwrap(),
+    );
     let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
 
     let inner_state = authority_state.clone();
@@ -347,16 +370,19 @@ async fn test_batch_manager_drop_out_of_order() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(
-        AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-            .await
-            .unwrap(),
-    );
-
-    // Make a test key pair
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let store = Arc::new(
+        AuthorityStore::open_with_committee(
+            &path,
+            None,
+            &committee,
+            &Genesis::get_default_genesis(),
+        )
+        .await
+        .unwrap(),
+    );
     let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
 
     let inner_state = authority_state.clone();
@@ -725,11 +751,15 @@ async fn test_safe_batch_stream() {
 
     authorities.insert(public_key_bytes, 1);
     let committee = Committee::new(0, authorities).unwrap();
-    // Create an authority
     let store = Arc::new(
-        AuthorityStore::open(&path.join("store"), None, &Genesis::get_default_genesis())
-            .await
-            .unwrap(),
+        AuthorityStore::open_with_committee(
+            &path.join("store"),
+            None,
+            &committee,
+            &Genesis::get_default_genesis(),
+        )
+        .await
+        .unwrap(),
     );
     let state = init_state(committee.clone(), authority_key, store).await;
     let committee_store = state.committee_store().clone();
