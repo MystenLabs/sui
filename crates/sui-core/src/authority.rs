@@ -763,7 +763,7 @@ impl AuthorityState {
 
         let shared_locks: HashMap<_, _> = self
             .database
-            .epoch_tables()
+            .epoch_store()
             .get_all_shared_locks(transaction_digest)?
             .into_iter()
             .collect();
@@ -1500,9 +1500,14 @@ impl AuthorityState {
 
         // unwrap ok - for testing only.
         let store = Arc::new(
-            AuthorityStore::open(&path.join("store"), None, genesis)
-                .await
-                .unwrap(),
+            AuthorityStore::open_with_committee(
+                &path.join("store"),
+                None,
+                &genesis_committee,
+                genesis,
+            )
+            .await
+            .unwrap(),
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1538,7 +1543,7 @@ impl AuthorityState {
         self.node_sync_store
             .batch_store_certs(certs.iter().cloned())?;
         self.database
-            .epoch_tables()
+            .epoch_store()
             .insert_pending_certificates(&certs)?;
         let mut transaction_manager = self.transaction_manager.lock().await;
         transaction_manager.enqueue(certs).await
@@ -1589,8 +1594,9 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        self.committee.swap(Arc::new(new_committee));
-        self.db().reopen_epoch_db(self.epoch());
+        let new_committee = Arc::new(new_committee);
+        self.committee.swap(new_committee.clone());
+        self.db().reopen_epoch_db(new_committee);
         Ok(())
     }
 
@@ -1608,14 +1614,7 @@ impl AuthorityState {
 
     // This method can only be called from ConsensusAdapter::begin_reconfiguration
     pub fn close_user_certs(&self, lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
-        self.database.epoch_tables().close_user_certs(lock_guard)
-    }
-
-    pub async fn close_all_certs(
-        &self,
-        lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        self.database.epoch_tables().close_all_certs(lock_guard)
+        self.database.epoch_store().close_user_certs(lock_guard)
     }
 
     pub(crate) async fn get_object(
@@ -2206,9 +2205,6 @@ impl AuthorityState {
             transaction,
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
-        // TODO: Somewhere here we check if we have seen 2f+1 EndOfPublish message, and if so,
-        // we call self.get_reconfig_state_write_lock_guard to get a guard, and then call
-        // self.close_all_certs() to close it.
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let authority = (&consensus_output.certificate.header.author).into();
@@ -2233,7 +2229,7 @@ impl AuthorityState {
 
                 if !self
                     .database
-                    .epoch_tables()
+                    .epoch_store()
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
                 {
@@ -2272,11 +2268,12 @@ impl AuthorityState {
                     .await
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
-                // todo - track authority stake and generate last checkpoint when 2f+1 EndOfPublish received
                 debug!("Received EndOfPublish from {:?}", authority.concise());
+                // todo use return value to signal last checkpoint
                 self.database
                     .record_end_of_publish(*authority, &transaction, consensus_index)
-                    .await
+                    .await?;
+                Ok(())
             }
         }
     }

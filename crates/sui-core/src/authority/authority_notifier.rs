@@ -253,6 +253,8 @@ mod tests {
     use std::env;
     use std::fs;
 
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
     use std::time::Duration;
     use tokio::time::timeout;
 
@@ -262,10 +264,21 @@ mod tests {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
+        let seed = [1u8; 32];
+        let (committee, _, _authority_key) =
+            crate::authority_batch::batch_tests::init_state_parameters_from_rng(
+                &mut StdRng::from_seed(seed),
+            );
+
         let store = Arc::new(
-            AuthorityStore::open(&path, None, &Genesis::get_default_genesis())
-                .await
-                .unwrap(),
+            AuthorityStore::open_with_committee(
+                &path,
+                None,
+                &committee,
+                &Genesis::get_default_genesis(),
+            )
+            .await
+            .unwrap(),
         );
 
         let notifier = Arc::new(

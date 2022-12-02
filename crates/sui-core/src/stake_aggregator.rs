@@ -22,6 +22,17 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
         }
     }
 
+    pub fn from_iter<I: Iterator<Item = (AuthorityName, V)>>(
+        committee: Arc<Committee>,
+        data: I,
+    ) -> Self {
+        let mut this = Self::new(committee);
+        for (authority, v) in data {
+            this.insert(authority, v);
+        }
+        this
+    }
+
     pub fn insert(&mut self, authority: AuthorityName, v: V) -> InsertResult<V> {
         match self.data.entry(authority) {
             Entry::Occupied(oc) => {
@@ -42,7 +53,6 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn contains_key(&self, authority: &AuthorityName) -> bool {
         self.data.contains_key(authority)
     }
@@ -59,7 +69,6 @@ pub enum InsertResult<'a, V> {
 }
 
 impl<'a, V> InsertResult<'a, V> {
-    #[allow(dead_code)]
     pub fn is_success(&self) -> bool {
         matches!(self, InsertResult::Success(_))
     }

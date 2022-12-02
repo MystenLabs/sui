@@ -52,10 +52,6 @@ impl ReconfigState {
         self.status = ReconfigCertStatus::RejectAllCerts;
     }
 
-    pub fn open_all_certs(&mut self) {
-        self.status = ReconfigCertStatus::AcceptAllCerts;
-    }
-
     pub fn should_accept_user_certs(&self) -> bool {
         matches!(self.status, ReconfigCertStatus::AcceptAllCerts)
     }

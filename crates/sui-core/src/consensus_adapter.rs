@@ -164,7 +164,7 @@ impl ConsensusAdapter {
         let mut recovered = self
             .authority
             .database
-            .epoch_tables()
+            .epoch_store()
             .get_all_pending_consensus_transactions();
         let pending_certificates = recovered
             .iter()
@@ -189,7 +189,7 @@ impl ConsensusAdapter {
         if self
             .authority
             .database
-            .epoch_tables()
+            .epoch_store()
             .get_reconfig_state_read_lock_guard()
             .is_reject_user_certs()
         {
@@ -289,9 +289,9 @@ impl ConsensusAdapter {
     /// It transition reconfig state to reject new certificates from user
     /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
     pub fn close_epoch(self: &Arc<Self>) -> SuiResult {
-        let epoch_tables = self.authority.database.epoch_tables();
+        let epoch_store = self.authority.database.epoch_store();
         let send_end_of_publish = {
-            let reconfig_guard = epoch_tables.get_reconfig_state_write_lock_guard();
+            let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             let pending_certificates = self.pending_certificates.lock();
             let send_end_of_publish = pending_certificates.is_empty();
             self.authority.close_user_certs(reconfig_guard);
@@ -316,9 +316,9 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
     ) -> SuiResult<JoinHandle<()>> {
-        let epoch_tables = self.authority.database.epoch_tables();
+        let epoch_store = self.authority.database.epoch_store();
         let _lock = if transaction.is_user_certificate() {
-            let lock = epoch_tables.get_reconfig_state_read_lock_guard();
+            let lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !lock.should_accept_user_certs() {
                 return Err(SuiError::ValidatorHaltedAtEpochEnd);
             }
@@ -328,7 +328,7 @@ impl ConsensusAdapter {
         };
         self.authority
             .database
-            .epoch_tables()
+            .epoch_store()
             .insert_pending_consensus_transactions(&transaction)?;
         if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
             self.pending_certificates
@@ -395,8 +395,8 @@ impl ConsensusAdapter {
         }
         let send_end_of_publish =
             if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
-                let epoch_tables = self.authority.database.epoch_tables();
-                let reconfig_guard = epoch_tables.get_reconfig_state_read_lock_guard();
+                let epoch_store = self.authority.database.epoch_store();
+                let reconfig_guard = epoch_store.get_reconfig_state_read_lock_guard();
                 // note that pending_certificates lock is always acquired *after* reconfiguration lock
                 // acquiring locks in different order might lead to deadlocks
                 let mut pending_certificates = self.pending_certificates.lock();
@@ -426,7 +426,7 @@ impl ConsensusAdapter {
         // Doing it in different order won't be restart safe
         self.authority
             .database
-            .epoch_tables()
+            .epoch_store()
             .remove_pending_consensus_transaction(&transaction.key())
             .expect("Storage error when removing consensus transaction");
         self.opt_metrics.as_ref().map(|metrics| {
