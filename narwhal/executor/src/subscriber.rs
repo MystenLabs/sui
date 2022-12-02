@@ -57,7 +57,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     network: oneshot::Receiver<P2pNetwork>,
     worker_cache: SharedWorkerCache,
     committee: Committee,
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    tx_reconfigure: &watch::Sender<ReconfigureNotification>,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
@@ -71,14 +71,17 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     let (tx_notifier, rx_notifier) =
         metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
 
+    let rx_reconfigure_notify = tx_reconfigure.subscribe();
+    let rx_reconfigure_subscriber = tx_reconfigure.subscribe();
+
     vec![
-        spawn_monitored_task!(run_notify(state, rx_notifier)),
+        spawn_monitored_task!(run_notify(state, rx_notifier, rx_reconfigure_notify)),
         spawn_monitored_task!(create_and_run_subscriber(
             name,
             network,
             worker_cache,
             committee,
-            rx_reconfigure,
+            rx_reconfigure_subscriber,
             rx_sequence,
             metrics,
             restored_consensus_output,
@@ -90,10 +93,22 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
 async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
     state: State,
     mut tr_notify: metered_channel::Receiver<ConsensusOutput>,
+    mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 ) {
     loop {
-        while let Some(message) = tr_notify.recv().await {
-            state.handle_consensus_output(message).await;
+        tokio::select! {
+            Some(message) = tr_notify.recv() => {
+                state.handle_consensus_output(message).await;
+            }
+
+            // Check for reconfiguration.
+            result = rx_reconfigure.changed() => {
+                result.expect("Committee channel dropped");
+                let message = rx_reconfigure.borrow().clone();
+                if let ReconfigureNotification::Shutdown = message {
+                    return
+                }
+            }
         }
     }
 }
@@ -180,7 +195,7 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
 
                 },
 
-                // Check whether the committee changed.
+                // Check for reconfiguration.
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
