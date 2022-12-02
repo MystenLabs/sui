@@ -319,7 +319,7 @@ $ sui client merge-coin --primary-coin 0x1e90389f5d70d7fa6ce973155460e1c04deae19
 ### Split coins
 
 ```shell
-    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> <--amounts <AMOUNTS>...|--count <COUNT>>
+    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> (--amounts <AMOUNTS>... | --count <COUNT>)
 
 OPTIONS:
         --amounts <AMOUNTS>...       Specific amounts to split out from the coin
