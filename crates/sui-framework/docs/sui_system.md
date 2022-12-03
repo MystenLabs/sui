@@ -800,17 +800,19 @@ gas coins.
 
     <b>let</b> delegation_stake = <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators);
     <b>let</b> validator_stake = <a href="validator_set.md#0x2_validator_set_total_validator_stake">validator_set::total_validator_stake</a>(&self.validators);
-    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund);
-    <b>let</b> total_stake = delegation_stake + validator_stake + storage_fund;
+    <b>let</b> storage_fund_balance = <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund);
+    <b>let</b> total_stake = delegation_stake + validator_stake + storage_fund_balance;
+    <b>let</b> total_stake_u128 = (total_stake <b>as</b> u128);
+    <b>let</b> computation_charge_u128 = (computation_charge <b>as</b> u128);
 
-    <b>let</b> delegator_reward_amount = delegation_stake * computation_charge / total_stake;
-    <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, delegator_reward_amount);
+    <b>let</b> delegator_reward_amount = (delegation_stake <b>as</b> u128) * computation_charge_u128 / total_stake_u128;
+    <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, (delegator_reward_amount <b>as</b> u64));
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_reward);
 
-    <b>let</b> storage_fund_reward_amount = storage_fund * computation_charge / total_stake;
-    <b>let</b> storage_fund_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, storage_fund_reward_amount);
+    <b>let</b> storage_fund_reward_amount = (storage_fund_balance <b>as</b> u128) * computation_charge_u128 / total_stake_u128;
+    <b>let</b> storage_fund_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, (storage_fund_reward_amount <b>as</b> u64));
     <b>let</b> storage_fund_reinvestment_amount =
-        (storage_fund_reward_amount <b>as</b> u128) * (storage_fund_reinvest_rate <b>as</b> u128) / <a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        storage_fund_reward_amount * (storage_fund_reinvest_rate <b>as</b> u128) / <a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
     <b>let</b> storage_fund_reinvestment = <a href="balance.md#0x2_balance_split">balance::split</a>(
         &<b>mut</b> storage_fund_reward,
         (storage_fund_reinvestment_amount <b>as</b> u64),
