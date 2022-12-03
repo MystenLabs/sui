@@ -97,7 +97,6 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
         <>
             <div
                 tabIndex={0}
-                // TODO: Remove this:
                 className="w-fit"
                 {...getReferenceProps({ ref: reference })}
             >
