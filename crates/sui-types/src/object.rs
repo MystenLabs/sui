@@ -27,16 +27,10 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use sui_protocol_constants::*;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
-
-/// Maximum size of the `contents` part of an object, in bytes
-pub const MAX_MOVE_OBJECT_SIZE: u64 = 250 * 1024; // 250 KB
-
-// TODO: increase to 500 KB. currently, publishing a package > 500 KB exceeds the max computation gas cost
-/// Maximum size of a Move package object, in bytes
-pub const MAX_MOVE_PACKAGE_SIZE: u64 = 100 * 1024; // 100 KB
 
 /// Packages are immutable, version is always 1
 pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;

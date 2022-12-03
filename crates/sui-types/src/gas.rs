@@ -23,12 +23,9 @@ use std::{
 };
 use sui_cost_tables::{
     bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE},
-    non_execution_tables::{
-        BASE_TX_COST_FIXED, CONSENSUS_COST, MAXIMUM_TX_GAS, OBJ_ACCESS_COST_MUTATE_PER_BYTE,
-        OBJ_ACCESS_COST_READ_PER_BYTE, OBJ_DATA_COST_REFUNDABLE, PACKAGE_PUBLISH_COST_PER_BYTE,
-    },
     units_types::GasUnit,
 };
+use sui_protocol_constants::*;
 
 pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}
@@ -189,7 +186,8 @@ pub static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
-pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| u64::from(to_external(MAXIMUM_TX_GAS)));
+pub static MAX_GAS_BUDGET: Lazy<u64> =
+    Lazy::new(|| u64::from(to_external(InternalGas::new(MAX_TX_GAS))));
 
 pub static MIN_GAS_BUDGET: Lazy<u64> =
     Lazy::new(|| to_external(*INIT_SUI_COST_TABLE.min_transaction_cost).into());

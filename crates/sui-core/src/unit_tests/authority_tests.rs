@@ -31,12 +31,13 @@ use std::task::{Context, Poll};
 
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
+use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::VerifiedTransaction,
-    object::{Owner, GAS_VALUE_FOR_TESTING, MAX_MOVE_PACKAGE_SIZE, OBJECT_START_VERSION},
+    object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
