@@ -9,21 +9,25 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_storage::default_db_options;
+use sui_storage::mutex_table::LockGuard;
+use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, TrustedCertificate,
-    VerifiedCertificate,
+    ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, SignedTransactionEffects,
+    TrustedCertificate, VerifiedCertificate,
 };
 use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
+use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::stake_aggregator::StakeAggregator;
 use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
+use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
 
@@ -32,6 +36,8 @@ use typed_store_derive::DBMapUtils;
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 
 const RECONFIG_STATE_INDEX: u64 = 0;
+
+pub struct CertLockGuard(LockGuard);
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
@@ -47,6 +53,9 @@ pub struct AuthorityPerEpochStore<S> {
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
     end_of_publish: Mutex<StakeAggregator<(), true>>,
+    /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
+    /// crashes.
+    wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -153,13 +162,43 @@ where
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
+        let wal_path = parent_path.join("recovery_log");
+        let wal = Arc::new(DBWriteAheadLog::new(wal_path));
         Self {
             epoch_id,
             tables,
             reconfig_state_mem: RwLock::new(reconfig_state),
             consensus_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
+            wal,
         }
+    }
+
+    pub fn wal(
+        &self,
+    ) -> &Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>
+    {
+        &self.wal
+    }
+
+    pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
+        let digest = cert.digest();
+        let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
+
+        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
+            // If the tx has been retried too many times, it could be a poison pill, and we should
+            // prevent the client from continually retrying it.
+            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
+            debug!(?digest, "{}", err);
+            return Err(SuiError::ErrorWhileProcessingCertificate { err });
+        }
+
+        Ok(guard)
+    }
+
+    /// Acquire the lock for a tx without writing to the WAL.
+    pub async fn acquire_tx_lock(&self, digest: &TransactionDigest) -> CertLockGuard {
+        CertLockGuard(self.wal.acquire_lock(digest).await)
     }
 
     pub fn store_reconfig_state(&self, new_state: &ReconfigState) -> SuiResult {
