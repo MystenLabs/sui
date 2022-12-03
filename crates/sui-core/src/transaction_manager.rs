@@ -68,7 +68,8 @@ impl TransactionManager {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
             // don't race with a concurrent execution of this tx.
-            let _tx_lock = self.authority_store.acquire_tx_lock(&digest);
+            let epoch_store = self.authority_store.epoch_store();
+            let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
             // Skip processing if the certificate is already enqueued.
             if self.pending_certificates.contains_key(&digest) {
