@@ -39,8 +39,7 @@ impl NodeStorage {
     const PAYLOAD_CF: &'static str = "payload";
     const BATCHES_CF: &'static str = "batches";
     const LAST_COMMITTED_CF: &'static str = "last_committed";
-    const SEQUENCE_CF: &'static str = "sequence";
-    const SUB_DAG_CF: &'static str = "sub_dag";
+    const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
     const TEMP_BATCH_CF: &'static str = "temp_batches";
 
     /// Open or reopen all the storage of the node.
@@ -58,8 +57,7 @@ impl NodeStorage {
                 Self::PAYLOAD_CF,
                 Self::BATCHES_CF,
                 Self::LAST_COMMITTED_CF,
-                Self::SEQUENCE_CF,
-                Self::SUB_DAG_CF,
+                Self::SUB_DAG_INDEX_CF,
                 Self::TEMP_BATCH_CF,
             ],
         )
@@ -75,8 +73,7 @@ impl NodeStorage {
             payload_map,
             batch_map,
             last_committed_map,
-            sequence_map,
-            sub_dag_map,
+            sub_dag_index_map,
             temp_batch_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
@@ -88,8 +85,7 @@ impl NodeStorage {
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
-            Self::SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>,
-            Self::SUB_DAG_CF;<Round, CommittedSubDagShell>,
+            Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 
@@ -103,11 +99,7 @@ impl NodeStorage {
         );
         let payload_store = Store::new(payload_map);
         let batch_store = Store::new(batch_map);
-        let consensus_store = Arc::new(ConsensusStore::new(
-            last_committed_map,
-            sequence_map,
-            sub_dag_map,
-        ));
+        let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sub_dag_index_map));
         let temp_batch_store = Store::new(temp_batch_map);
 
         Self {

@@ -70,7 +70,7 @@ pub struct CommittedSubDagShell {
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
     /// Sequence number of the CommittedSubDag
-    pub consensus_index: SequenceNumber,
+    pub sub_dag_index: SequenceNumber,
 }
 
 impl CommittedSubDagShell {
@@ -78,7 +78,7 @@ impl CommittedSubDagShell {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
-            consensus_index: sub_dag.sub_dag_index,
+            sub_dag_index: sub_dag.sub_dag_index,
         }
     }
 }
@@ -94,10 +94,7 @@ pub struct ConsensusStore {
     /// The latest committed round of each validator.
     last_committed: DBMap<PublicKey, Round>,
     /// The global consensus sequence.
-    sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
-    // todo: (Laura) the below field might no longer be needed
-    /// All committed sub-dags, indexed by the round number of the leader committing it.
-    committed_sub_dags: DBMap<Round, CommittedSubDagShell>,
+    committed_sub_dags_by_index: DBMap<SequenceNumber, CommittedSubDagShell>,
 }
 
 impl ConsensusStore {
@@ -105,19 +102,17 @@ impl ConsensusStore {
     pub fn new(
         last_committed: DBMap<PublicKey, Round>,
         sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
-        committed_sub_dags: DBMap<Round, CommittedSubDagShell>,
     ) -> Self {
         Self {
             last_committed,
-            sequence,
-            committed_sub_dags,
+            committed_sub_dags_by_index: sequence,
         }
     }
 
     /// Clear the store.
     pub fn clear(&self) -> StoreResult<()> {
         self.last_committed.clear()?;
-        self.sequence.clear()?;
+        self.committed_sub_dags_by_index.clear()?;
         Ok(())
     }
 
@@ -125,35 +120,15 @@ impl ConsensusStore {
     pub fn write_consensus_state(
         &self,
         last_committed: &HashMap<PublicKey, Round>,
-        consensus_index: &SequenceNumber,
         sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
         let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
 
-        let mut write_batch = self.last_committed.batch();
-        write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
-        write_batch =
-            write_batch.insert_batch(&self.sequence, std::iter::once((consensus_index, shell)))?;
-        write_batch.write()
-    }
-
-    /// Persist a committed sub dag.
-    /// todo (Laura) is this needed?
-    #[tracing::instrument(level = "trace", skip_all)]
-    pub fn write_committed_sub_dag(
-        &self,
-        last_committed: &HashMap<PublicKey, Round>,
-        sub_dag: &CommittedSubDag,
-    ) -> Result<(), TypedStoreError> {
-        // Compress the sub-dag to not write the entire certificates.
-        let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
-
-        // Atomically persist the sub-dag and the last committed certificates.
         let mut write_batch = self.last_committed.batch();
         write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
         write_batch = write_batch.insert_batch(
-            &self.committed_sub_dags,
-            std::iter::once((sub_dag.leader.round(), shell)),
+            &self.committed_sub_dags_by_index,
+            std::iter::once((sub_dag.sub_dag_index, shell)),
         )?;
         write_batch.write()
     }
@@ -163,31 +138,25 @@ impl ConsensusStore {
         self.last_committed.iter().collect()
     }
 
-    /// Load the last committed round of a validator.
-    pub fn read_last_committed_round(
-        &self,
-        validator: &PublicKey,
-    ) -> Result<Option<Round>, TypedStoreError> {
-        self.last_committed.get(validator)
-    }
-
-    /// Load the last (ie. the highest) consensus index associated to a certificate.
-    pub fn read_last_consensus_index(&self) -> StoreResult<SequenceNumber> {
-        Ok(self
-            .sequence
-            .keys()
-            .skip_prior_to(&SequenceNumber::MAX)?
+    /// Gets the latest sub dag index from the store
+    pub fn get_latest_sub_dag_index(&self) -> SequenceNumber {
+        let s = self
+            .committed_sub_dags_by_index
+            .iter()
+            .skip_to_last()
             .next()
-            .unwrap_or_default())
+            .map(|(seq, _)| seq)
+            .unwrap_or_default();
+        s
     }
 
-    /// Load all the sub dags committed by a leader with round number of at least `from`.
+    /// Load all the sub dags committed with sequence number of at least `from`.
     pub fn read_committed_sub_dags_from(
         &self,
-        from: &Round,
+        from: &SequenceNumber,
     ) -> StoreResult<Vec<CommittedSubDagShell>> {
         Ok(self
-            .committed_sub_dags
+            .committed_sub_dags_by_index
             .iter()
             .skip_to(from)?
             .map(|(_, sub_dag)| sub_dag)

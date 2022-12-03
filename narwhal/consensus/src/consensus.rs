@@ -33,9 +33,11 @@ pub type Dag = HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate
 pub struct ConsensusState {
     /// The last committed round.
     pub last_committed_round: Round,
-    // Keeps the last committed round for each authority. This map is used to clean up the dag and
-    // ensure we don't commit twice the same certificate.
+    /// Keeps the last committed round for each authority. This map is used to clean up the dag and
+    /// ensure we don't commit twice the same certificate.
     pub last_committed: HashMap<PublicKey, Round>,
+    /// Used to populate the index in the sub-dag construction.
+    pub latest_sub_dag_index: SequenceNumber,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -56,6 +58,7 @@ impl ConsensusState {
                 .iter()
                 .map(|(x, (_, y))| (x.clone(), y.round()))
                 .collect(),
+            latest_sub_dag_index: 0,
             dag: [(0, genesis)]
                 .iter()
                 .cloned()
@@ -68,6 +71,7 @@ impl ConsensusState {
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
+        latest_sub_dag_index: SequenceNumber,
         cert_store: CertificateStore,
         gc_depth: Round,
     ) -> Self {
@@ -92,6 +96,7 @@ impl ConsensusState {
         Self {
             last_committed_round,
             last_committed: recover_last_committed,
+            latest_sub_dag_index,
             dag,
             metrics,
         }
@@ -202,8 +207,6 @@ pub trait ConsensusProtocol {
         &mut self,
         // The state of the consensus protocol.
         state: &mut ConsensusState,
-        // The latest consensus index.
-        consensus_index: SequenceNumber,
         // The new certificate.
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>>;
@@ -226,10 +229,6 @@ pub struct Consensus<ConsensusProtocol> {
     tx_consensus_round_updates: watch::Sender<Round>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
-
-    /// The (global) consensus index. We assign one index to each sequenced certificate. this is
-    /// helpful for clients.
-    consensus_index: SequenceNumber,
 
     /// The consensus protocol to run.
     protocol: ConsensusProtocol,
@@ -262,19 +261,18 @@ where
         // The consensus state (everything else is immutable).
         let genesis = Certificate::genesis(&committee);
         let recovered_last_committed = store.read_last_committed();
+        let latest_sub_dag_index = store.get_latest_sub_dag_index();
         let state = ConsensusState::new_from_store(
             genesis,
             metrics.clone(),
             recovered_last_committed,
+            latest_sub_dag_index,
             cert_store,
             gc_depth,
         );
         tx_consensus_round_updates
             .send(state.last_committed_round)
             .expect("Failed to send last_committed_round on initialization!");
-        let consensus_index = store
-            .read_last_consensus_index()
-            .expect("Failed to load consensus index from store");
 
         let s = Self {
             committee,
@@ -283,7 +281,6 @@ where
             tx_committed_certificates,
             tx_consensus_round_updates,
             tx_sequence,
-            consensus_index,
             protocol,
             metrics,
             state,
@@ -295,7 +292,6 @@ where
     fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
         self.committee = new_committee.clone();
         self.protocol.update_committee(new_committee)?;
-        self.consensus_index = 0;
         self.tx_consensus_round_updates
             .send(0)
             .expect("Failed to reset last_committed_round!");
@@ -342,11 +338,8 @@ where
                     // Process the certificate using the selected consensus protocol.
                     let committed_sub_dags =
                         self.protocol
-                            .process_certificate(&mut self.state, self.consensus_index, certificate)?;
+                            .process_certificate(&mut self.state, certificate)?;
 
-                    // Update the consensus index.
-                    let total_commits: usize = committed_sub_dags.len();
-                    self.consensus_index += total_commits as u64;
 
                     // We extract a list of headers from this specific validator that
                     // have been agreed upon, and signal this back to the narwhal sub-system

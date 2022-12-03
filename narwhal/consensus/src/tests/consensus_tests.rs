@@ -98,7 +98,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // * 1 certificate from round 4 (the leader of last round)
     //
     // In total we should see 13 certificates committed
-    let mut consensus_index_counter = 0;
+    let mut consensus_index_counter = 1;
 
     // hold all the certificates that get committed when consensus runs
     // without any crash.
@@ -190,7 +190,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // So in total we expect to have committed certificates:
     // * 4 certificates of round 1
     // * 1 certificate of round 2 (the leader)
-    let mut consensus_index_counter = 0;
+    let mut consensus_index_counter = 1;
     let mut committed_output_before_crash: Vec<Certificate> = Vec::new();
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
