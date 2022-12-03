@@ -12,8 +12,8 @@ export interface DescriptionItemProps {
 
 export function DescriptionItem({ title, children }: DescriptionItemProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <dt>
+        <div className="flex flex-col md:flex-row items-start gap-2 md:gap-10">
+            <dt className="w-full md:w-48">
                 {typeof title === 'string' ? (
                     <Text variant="body" weight="medium" color="steel-darker">
                         {title}
@@ -22,7 +22,7 @@ export function DescriptionItem({ title, children }: DescriptionItemProps) {
                     title
                 )}
             </dt>
-            <dd className="ml-0 col-span-2 flex">{children}</dd>
+            <dd className="ml-0 flex flex-1">{children}</dd>
         </div>
     );
 }
