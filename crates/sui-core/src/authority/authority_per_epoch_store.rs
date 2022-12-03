@@ -347,7 +347,7 @@ where
         Ok(object_ids.map(|id| object_keys.get(id).cloned()).collect())
     }
 
-    pub fn remove_shared_objects_locks(
+    pub fn delete_shared_object_versions(
         &self,
         executed_transaction: &TransactionDigest,
         deleted_objects: &[ObjectID],

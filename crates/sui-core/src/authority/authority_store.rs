@@ -692,10 +692,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.effects_notify_read
             .notify(transaction_digest, effects.data());
 
-        // Cleanup the lock of the shared objects. This must be done after we write effects, as
-        // effects_exists is used as the guard to avoid re-locking objects for a previously
-        // executed tx. remove_shared_objects_locks.
-        self.remove_shared_objects_locks(certificate)?;
+        // Clean up the locks of hared objects. This should be done after we write effects, as
+        // effects_exists is used as the guard to avoid re-writing locks for a previously
+        // executed transaction. Otherwise, there can be left-over locks in the tables.
+        // However, the issue is benign because epoch tables are cleaned up for each epoch.
+        let mut deleted_objects = Vec::new();
+        for (object_id, _) in certificate.shared_input_objects() {
+            if !self.object_exists(*object_id)? {
+                deleted_objects.push(*object_id);
+            }
+        }
+        self.epoch_store()
+            .delete_shared_object_versions(certificate.digest(), &deleted_objects)?;
 
         Ok(seq)
     }
@@ -1136,18 +1144,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             None => Ok(false),
             Some(entry) => Ok(entry.0 .2.is_alive()),
         }
-    }
-
-    /// Remove the shared objects locks.
-    pub fn remove_shared_objects_locks(&self, transaction: &VerifiedCertificate) -> SuiResult {
-        let mut deleted_objects = Vec::new();
-        for (object_id, _) in transaction.shared_input_objects() {
-            if !self.object_exists(*object_id)? {
-                deleted_objects.push(*object_id);
-            }
-        }
-        self.epoch_store()
-            .remove_shared_objects_locks(transaction.digest(), &deleted_objects)
     }
 
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
