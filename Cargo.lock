@@ -8232,6 +8232,7 @@ dependencies = [
  "sui-cost-tables",
  "sui-framework",
  "sui-json",
+ "sui-protocol-constants",
  "sui-types",
  "sui-verifier",
  "tracing",
@@ -8417,6 +8418,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-macros",
  "sui-network",
+ "sui-protocol-constants",
  "sui-simulator",
  "sui-storage",
  "sui-types",
@@ -8470,6 +8472,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "serde 1.0.147",
+ "sui-protocol-constants",
  "workspace-hack",
 ]
 
@@ -8800,6 +8803,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-protocol-constants"
+version = "0.1.0"
+dependencies = [
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-rosetta"
 version = "0.1.0"
 dependencies = [
@@ -9115,6 +9125,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
+ "sui-protocol-constants",
  "tap",
  "test-utils",
  "thiserror",

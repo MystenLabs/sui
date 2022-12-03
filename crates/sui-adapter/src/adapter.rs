@@ -18,7 +18,6 @@ use move_binary_format::{
         AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex,
         TypeParameterIndex,
     },
-    file_format_common::VERSION_6,
 };
 use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
@@ -39,6 +38,7 @@ use move_vm_runtime::{
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
+use sui_protocol_constants::*;
 use sui_types::storage::SingleTxContext;
 use sui_types::{
     base_types::*,
@@ -71,13 +71,13 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
         natives,
         VMConfig {
             verifier: VerifierConfig {
-                max_loop_depth: Some(5),
+                max_loop_depth: Some(MAX_LOOP_DEPTH),
                 treat_friend_as_private: true,
-                max_generic_instantiation_length: Some(32),
-                max_function_parameters: Some(128),
-                max_basic_blocks: Some(1024),
+                max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
+                max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
+                max_basic_blocks: Some(MAX_BASIC_BLOCKS),
             },
-            max_binary_format_version: VERSION_6,
+            max_binary_format_version: MOVE_BINARY_FORMAT_VERSION,
             paranoid_type_checks: false,
         },
     )

@@ -46,10 +46,13 @@ move-ir-types.workspace = true
 move-vm-types.workspace = true
 
 narwhal-executor = { path = "../../narwhal/executor" }
+sui-cost-tables = { path = "../sui-cost-tables"}
+sui-protocol-constants = { path = "../sui-protocol-constants" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
-sui-cost-tables = { path = "../sui-cost-tables"}
+
+
 typed-store.workspace = true
 
 workspace-hack.workspace = true
