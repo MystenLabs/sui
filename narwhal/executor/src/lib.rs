@@ -27,7 +27,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore,
-    ReconfigureNotification, Round,
+    ReconfigureNotification,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -43,8 +43,8 @@ pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput);
 
-    /// Load the last committed round from storage.
-    async fn last_committed_round(&self) -> Round;
+    /// Load the last executed sub-dag index from storage
+    async fn last_executed_sub_dag_index(&self) -> u64;
 }
 
 /// A client subscribing to the consensus output and executing every transaction.
@@ -96,18 +96,18 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     certificate_store: CertificateStore,
     execution_state: &State,
 ) -> Result<Vec<CommittedSubDag>, SubscriberError> {
-    // We always want to recover at least the last committed certificate since we can't know
+    // We always want to recover at least the last committed sub-dag since we can't know
     // whether the execution has been interrupted and there are still batches/transactions
-    // that need to be send for execution.
+    // that need to be sent for execution.
 
-    let last_committed_leader = execution_state.last_committed_round().await;
+    let last_executed_sub_dag_index = execution_state.last_executed_sub_dag_index().await;
 
     let compressed_sub_dags =
-        consensus_store.read_committed_sub_dags_from(&last_committed_leader)?;
+        consensus_store.read_committed_sub_dags_from(&last_executed_sub_dag_index)?;
 
     let mut sub_dags = Vec::new();
     for compressed_sub_dag in compressed_sub_dags {
-        let consensus_index = compressed_sub_dag.consensus_index;
+        let sub_dag_index = compressed_sub_dag.sub_dag_index;
         let certificate_digests: Vec<CertificateDigest> = compressed_sub_dag.certificates;
 
         let certificates = certificate_store
@@ -121,7 +121,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         sub_dags.push(CommittedSubDag {
             certificates,
             leader,
-            sub_dag_index: consensus_index,
+            sub_dag_index,
         });
     }
 
@@ -136,7 +136,7 @@ impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
             .await
     }
 
-    async fn last_committed_round(&self) -> Round {
-        self.as_ref().last_committed_round().await
+    async fn last_executed_sub_dag_index(&self) -> u64 {
+        self.as_ref().last_executed_sub_dag_index().await
     }
 }

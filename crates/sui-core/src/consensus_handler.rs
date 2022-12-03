@@ -7,7 +7,7 @@ use crate::checkpoints::CheckpointService;
 use async_trait::async_trait;
 use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{ConsensusOutput, Round};
+use narwhal_types::ConsensusOutput;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -139,18 +139,14 @@ impl ExecutionState for ConsensusHandler {
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 
-    async fn last_committed_round(&self) -> Round {
+    async fn last_executed_sub_dag_index(&self) -> u64 {
         let index_with_hash = self
             .state
             .database
             .last_consensus_index()
             .expect("Failed to load consensus indices");
-        *self
-            .last_seen
-            .try_lock()
-            .expect("Should not have contention on ExecutionState::load_execution_indices") =
-            index_with_hash.clone();
-        index_with_hash.index.last_committed_round
+
+        index_with_hash.index.sub_dag_index
     }
 }
 

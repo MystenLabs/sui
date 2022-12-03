@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use executor::ExecutionState;
 use tokio::sync::mpsc::Sender;
-use types::{ConsensusOutput, Round};
+use types::ConsensusOutput;
 
 /// A simple/dumb execution engine.
 pub struct SimpleExecutionState {
@@ -32,7 +32,7 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
-    async fn last_committed_round(&self) -> Round {
+    async fn last_executed_sub_dag_index(&self) -> u64 {
         0
     }
 }

@@ -23,7 +23,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::{ConsensusOutput, Round, Transaction};
+use types::{ConsensusOutput, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
 
@@ -90,8 +90,8 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
-    async fn last_committed_round(&self) -> Round {
-        Round::default()
+    async fn last_executed_sub_dag_index(&self) -> u64 {
+        0
     }
 }
 

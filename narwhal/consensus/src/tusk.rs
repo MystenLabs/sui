@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, SequenceNumber,
+    utils,
 };
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
@@ -28,12 +28,10 @@ impl ConsensusProtocol for Tusk {
     fn process_certificate(
         &mut self,
         state: &mut ConsensusState,
-        consensus_index: SequenceNumber,
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
-        let mut consensus_index = consensus_index;
 
         // Add the new certificate to the local storage.
         state
@@ -99,19 +97,21 @@ impl ConsensusProtocol for Tusk {
                 // Add the certificate to the sequence.
                 sequence.push(x);
             }
+
+            let next_sub_dag_index = state.latest_sub_dag_index + 1;
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-                sub_dag_index: consensus_index,
+                sub_dag_index: next_sub_dag_index,
             };
 
             // Increase the global consensus index.
-            consensus_index += 1;
+            state.latest_sub_dag_index = next_sub_dag_index;
 
             // Persist the update.
             // TODO [issue #116]: Ensure this is not a performance bottleneck.
             self.store
-                .write_consensus_state(&state.last_committed, &consensus_index, &sub_dag)?;
+                .write_consensus_state(&state.last_committed, &sub_dag)?;
 
             committed_sub_dags.push(sub_dag);
         }
@@ -203,12 +203,10 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let consensus_index = 0;
         let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
-            tusk.process_certificate(&mut state, consensus_index, certificate)
-                .unwrap();
+            tusk.process_certificate(&mut state, certificate).unwrap();
         }
         // with "optimal" certificates (see `make_optimal_certificates`), and a round-robin between leaders,
         // we need at most 6 rounds lookbehind: we elect a leader at most at round r-2, and its round is
@@ -250,12 +248,10 @@ mod tests {
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
-        let consensus_index = 0;
         let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {
-            tusk.process_certificate(&mut state, consensus_index, certificate)
-                .unwrap();
+            tusk.process_certificate(&mut state, certificate).unwrap();
         }
 
         // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind

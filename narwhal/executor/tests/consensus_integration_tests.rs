@@ -94,7 +94,6 @@ async fn test_recovery() {
     let num_of_committed_certificates = 5;
 
     let committed_sub_dag = rx_output.recv().await.unwrap();
-    let leader_round = committed_sub_dag.leader.round();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for i in 1..=num_of_committed_certificates {
         let output = sequence.next().unwrap();
@@ -112,9 +111,9 @@ async fn test_recovery() {
     for last_executed_certificate_index in 0..consensus_index_counter {
         let mut execution_state = MockExecutionState::new();
         execution_state
-            .expect_last_committed_round()
+            .expect_last_executed_sub_dag_index()
             .times(1)
-            .returning(move || leader_round);
+            .returning(|| 1);
 
         let consensus_output = get_restored_consensus_output(
             consensus_store.clone(),
