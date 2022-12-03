@@ -27,7 +27,8 @@ written: object(106), object(113)
 
 task 7 'run'. lines 79-79:
 created: object(115)
-written: object(106), object(108), object(110), object(111), object(114)
+written: object(106), object(108), object(110), object(114)
+deleted: object(111)
 
 task 8 'run'. lines 81-81:
 written: object(108), object(110), object(116)
@@ -36,5 +37,5 @@ task 9 'run'. lines 83-83:
 written: object(108), object(117)
 
 task 10 'run'. lines 85-85:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field in function definition 8 at offset 19, Abort Code: 1
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 8, instruction: 19 }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::dynamic_field::field_info_mut at offset 19"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: sui, name: Identifier("dynamic_object_field") }), FunctionDefinitionIndex(2), 5), (Some(ModuleId { address: a, name: Identifier("m") }), FunctionDefinitionIndex(7), 3)] }), location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 19)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field in function definition 4 at offset 0, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 4, instruction: 0 }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 0)] }) } }

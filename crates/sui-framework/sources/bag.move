@@ -82,8 +82,13 @@ public fun remove<K: copy + drop + store, V: store>(bag: &mut Bag, k: K): V {
     v
 }
 
-// TODO implement contains (without the V type) once we have lamport timestamps
-/// Returns true iff there is an value associated with the key `k: K` in bag `bag: &Bag`
+/// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &Bag`
+public fun contains<K: copy + drop + store>(bag: &Bag, k: K): bool {
+    field::exists_<K>(&bag.id, k)
+}
+
+/// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &Bag`
+/// with an assigned value of type `V`
 public fun contains_with_type<K: copy + drop + store, V: store>(bag: &Bag, k: K): bool {
     field::exists_with_type<K, V>(&bag.id, k)
 }

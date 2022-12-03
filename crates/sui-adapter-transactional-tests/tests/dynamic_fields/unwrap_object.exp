@@ -13,7 +13,8 @@ written: object(105)
 
 task 3 'run'. lines 45-45:
 created: object(110)
-written: object(106), object(107), object(108), object(109)
+written: object(106), object(108), object(109)
+deleted: object(107)
 
 task 4 'view-object'. lines 47-47:
 Owner: Object ID: ( fake(110) )
@@ -25,15 +26,16 @@ created: object(112), object(113)
 written: object(111)
 
 task 6 'run'. lines 52-52:
-written: object(112), object(113), object(114)
-deleted: object(_)
+written: object(112), object(114)
+deleted: object(_), object(113)
 
 task 7 'run'. lines 55-55:
 created: object(116), object(117)
 written: object(115)
 
 task 8 'run'. lines 58-58:
-written: object(116), object(117), object(118), object(119)
+written: object(116), object(118), object(119)
+deleted: object(117)
 
 task 9 'view-object'. lines 60-60:
 Owner: Account Address ( A )
