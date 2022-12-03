@@ -360,17 +360,19 @@ module sui::sui_system {
 
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
-        let storage_fund = balance::value(&self.storage_fund);
-        let total_stake = delegation_stake + validator_stake + storage_fund;
+        let storage_fund_balance = balance::value(&self.storage_fund);
+        let total_stake = delegation_stake + validator_stake + storage_fund_balance;
+        let total_stake_u128 = (total_stake as u128);
+        let computation_charge_u128 = (computation_charge as u128);
 
-        let delegator_reward_amount = delegation_stake * computation_charge / total_stake;
-        let delegator_reward = balance::split(&mut computation_reward, delegator_reward_amount);
+        let delegator_reward_amount = (delegation_stake as u128) * computation_charge_u128 / total_stake_u128;
+        let delegator_reward = balance::split(&mut computation_reward, (delegator_reward_amount as u64));
         balance::join(&mut self.storage_fund, storage_reward);
 
-        let storage_fund_reward_amount = storage_fund * computation_charge / total_stake;
-        let storage_fund_reward = balance::split(&mut computation_reward, storage_fund_reward_amount);
+        let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
+        let storage_fund_reward = balance::split(&mut computation_reward, (storage_fund_reward_amount as u64));
         let storage_fund_reinvestment_amount = 
-            (storage_fund_reward_amount as u128) * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
+            storage_fund_reward_amount * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
         let storage_fund_reinvestment = balance::split(
             &mut storage_fund_reward,
             (storage_fund_reinvestment_amount as u64),
