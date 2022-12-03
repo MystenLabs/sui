@@ -35,6 +35,8 @@ $ pnpm install
 $ pnpm sdk build
 ```
 
+> All `pnpm` commands are intended to be run in the root of the Sui repo. You can also run them within the `sdk/typescript` directory, and remove change `pnpm sdk` to just `pnpm` when running commands.
+
 ## Type Doc
 
 You can view the generated [Type Doc](https://typedoc.org/) for the [current release of the SDK](https://www.npmjs.com/package/@mysten/sui.js) at http://typescript-sdk-docs.s3-website-us-east-1.amazonaws.com/.
@@ -46,23 +48,20 @@ For the latest docs for the `main` branch, run `pnpm doc` and open the [doc/inde
 To run unit tests
 
 ```
-cd sdk/typescript
-pnpm run test:unit
+pnpm sdk test:unit
 ```
 
 To run E2E tests against local network
 
 ```
-cd sdk/typescript
-pnpm run prepare:e2e
-pnpm run test:e2e
+pnpm sdk prepare:e2e
+pnpm sdk test:e2e
 ```
 
 To run E2E tests against DevNet
 
 ```
-cd sdk/typescript
-VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' vitest e2e
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm sdk exec vitest e2e
 ```
 
 ## Connecting to Sui Network

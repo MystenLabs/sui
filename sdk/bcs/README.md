@@ -24,14 +24,15 @@ At the high level, BCS gives a set of handy abstractions to (de)serialize data.
 
 In BCS structs are merely sequences of fields, they contain no type information but the order in
 which fields are defined. It also means that you can use any field names - they won't affect serialization!
-```
+
+```ts
 bcs.registerStructType(<TYPE>, {
     [<FIELD>]: <FIELD_TYPE>,
     ...
 })
 ```
 
-```js
+```ts
 import { bcs } from "@mysten/bcs";
 
 // MyAddr is an address of 20 bytes; encoded and decoded as HEX
@@ -59,7 +60,7 @@ Vector generics are not supported by default. To use a vector type, add it first
 bcs.registerVectorType(<TYPE>, <ELEMENT_TYPE>);
 ```
 
-```js
+```ts
 import { bcs } from "@mysten/bcs";
 
 bcs.registerVectorType('vector<u8>', 'u8');
@@ -73,11 +74,12 @@ console.assert(again === '06010203040506', 'Whoopsie!');
 
 Even though the way of serializing Move addresses stays the same, the length of the address
 varies depending on the network. To register an address type use:
-```
+
+```ts
 bcs.registerAddressType(<TYPE>, <LENGTH>);
 ```
 
-```js
+```ts
 import { bcs } from "@mysten/bcs";
 
 bcs.registerAddressType('FiveByte', 5);
@@ -94,7 +96,7 @@ console.assert(ser === '9c88e852aa66b346860ada31aa75c6c27695ae4b', 'Long address
 
 To deserialize data, use a `BCS.de(type: string, data: Uint8Array)`. Type parameter is a name of the type; data is a BCS encoded as hex.
 
-```js
+```ts
 import { bcs } from '@mysten/bcs';
 
 // BCS has a set of built ins:
@@ -118,7 +120,7 @@ console.log(str);
 
 To serialize any type, use `bcs.ser(type: string, data: any)`. Type parameter is a name of the type to serialize, data is any data, depending on the type (can be object for structs or string for big integers - such as `u128`).
 
-```js
+```ts
 import { bcs } from '@mysten/bcs';
 
 let bcs_u8 = bcs.ser('u8', 255).toString('hex'); // uint Array
@@ -130,7 +132,7 @@ console.assert(bcs_ascii === '0a68656c6c6f5f6d6f7665');
 
 ### Working with Move structs
 
-```js
+```ts
 import { bcs } from '@mysten/bcs';
 
 // Move / Rust struct
