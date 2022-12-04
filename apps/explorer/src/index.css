@@ -14,7 +14,7 @@
 }
 
 body {
-    @apply m-0 text-offblack font-sans;
+    @apply m-0 text-offblack font-sans antialiased;
 }
 
 /*
