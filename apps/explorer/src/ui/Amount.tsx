@@ -37,7 +37,7 @@ export function Amount({ amount, symbol, size = 'md', format }: AmountProps) {
                 {formattedAmount}
             </Heading>
             {symbol && (
-                <div className="text-steel-dark text-bodySmall font-medium leading-4">
+                <div className="text-bodySmall font-medium leading-4 text-steel-dark">
                     {isLarge ? (
                         <sup className="text-bodySmall">{symbol}</sup>
                     ) : (

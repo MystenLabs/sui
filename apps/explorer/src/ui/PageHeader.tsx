@@ -60,7 +60,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
     return (
         <div data-testid="pageheader">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="mb-3 flex items-center gap-2">
                 <Icon className="text-steel" />
                 <Heading
                     variant="heading4"
@@ -70,9 +70,9 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                     {type}
                 </Heading>
             </div>
-            <div className="flex flex-col lg:flex-row gap-2">
-                <div className="flex items-start gap-2 min-w-0">
-                    <div className="break-words min-w-0">
+            <div className="flex flex-col gap-2 lg:flex-row">
+                <div className="flex min-w-0 items-start gap-2">
+                    <div className="min-w-0 break-words">
                         <Heading
                             as="h2"
                             variant="heading2"
@@ -89,7 +89,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                             navigator.clipboard.writeText(title);
                             toast.success('Copied!');
                         }}
-                        className="bg-transparent border-none cursor-pointer p-0 m-0 text-steel flex justify-center items-center -mt-0.5"
+                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-steel"
                     >
                         <span className="sr-only">Copy</span>
                         <CopyIcon aria-hidden="true" />

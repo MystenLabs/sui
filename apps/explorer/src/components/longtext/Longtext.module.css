@@ -1,7 +1,7 @@
 .extra,
 .copy16,
 .copy24 {
-    @apply cursor-pointer stroke-gray-60 self-start sm:self-end leading-[100%] hover:stroke-steel text-gray-60 hover:text-steel;
+    @apply cursor-pointer self-start stroke-gray-60 leading-[100%] text-gray-60 hover:stroke-steel hover:text-steel sm:self-end;
 }
 
 .copy16 {
@@ -9,18 +9,18 @@
 }
 
 .copied {
-    @apply text-success-dark text-sm self-start sm:self-center;
+    @apply self-start text-sm text-success-dark sm:self-center;
 }
 
 .copied span {
-    @apply block sm:inline w-[20vw] text-center;
+    @apply block w-[20vw] text-center sm:inline;
 }
 
 .longtext,
 .longtext > a {
-    @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline;
+    @apply inline cursor-pointer break-all text-sui-dark no-underline hover:text-[#1F6493];
 }
 
 .longtextwrapper {
-    @apply flex items-center gap-[6px] min-w-fit;
+    @apply flex min-w-fit items-center gap-[6px];
 }

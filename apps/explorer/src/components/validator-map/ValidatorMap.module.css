@@ -1,9 +1,9 @@
 .card {
-    @apply rounded-lg bg-gray-45 flex flex-col justify-end min-h-[320px] antialiased relative;
+    @apply relative flex min-h-[320px] flex-col justify-end rounded-lg bg-gray-45 antialiased;
 }
 
 .container {
-    @apply p-6 flex flex-col items-start sm:items-end sm:flex-row md:flex-col md:items-start justify-between gap-8 relative z-10 pointer-events-none;
+    @apply pointer-events-none relative z-10 flex flex-col items-start justify-between gap-8 p-6 sm:flex-row sm:items-end md:flex-col md:items-start;
 }
 
 .contents {
@@ -11,15 +11,15 @@
 }
 
 .title {
-    @apply uppercase text-xs font-semibold text-gray-65;
+    @apply text-xs font-semibold uppercase text-gray-65;
 }
 
 .stat {
-    @apply font-semibold text-2xl text-gray-90;
+    @apply text-2xl font-semibold text-gray-90;
 }
 
 .button {
-    @apply p-2 text-gray-80 border border-solid border-gray-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-auto whitespace-nowrap;
+    @apply pointer-events-auto inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-solid border-gray-55 p-2 text-sm font-semibold text-gray-80 no-underline;
 }
 
 .mapcontainer {
@@ -27,7 +27,7 @@
 }
 
 .map {
-    @apply absolute inset-0 pointer-events-none md:pointer-events-auto;
+    @apply pointer-events-none absolute inset-0 md:pointer-events-auto;
 }
 
 .map svg {
@@ -35,11 +35,11 @@
 }
 
 .tooltip {
-    @apply bg-gray-100 text-white p-2 absolute z-20 text-xs font-sans rounded-md min-w-[100px] hidden md:block z-40;
+    @apply absolute z-20 z-40 hidden min-w-[100px] rounded-md bg-gray-100 p-2 font-sans text-xs text-white md:block;
 }
 
 .tipitem {
-    @apply uppercase flex items-center justify-between font-semibold;
+    @apply flex items-center justify-between font-semibold uppercase;
 }
 
 .tipdivider {

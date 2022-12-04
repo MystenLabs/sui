@@ -19,7 +19,7 @@ export function Label(props: LabelProps) {
 }
 
 export function Value({ children }: ValueProps) {
-    return <dd className="ml-0 col-span-2">{children}</dd>;
+    return <dd className="col-span-2 ml-0">{children}</dd>;
 }
 
 export type DescriptionListProps = {
@@ -28,6 +28,6 @@ export type DescriptionListProps = {
 
 export function DescriptionList({ children }: DescriptionListProps) {
     return (
-        <dl className="grid grid-cols-1 md:grid-cols-3 gap-2">{children}</dl>
+        <dl className="grid grid-cols-1 gap-2 md:grid-cols-3">{children}</dl>
     );
 }
