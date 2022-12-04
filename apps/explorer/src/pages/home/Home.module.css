@@ -3,7 +3,7 @@ div.home {
 }
 
 div.container {
-    @apply mx-auto grid md:grid-cols-2 grid-cols-1;
+    @apply mx-auto grid grid-cols-1 md:grid-cols-2;
 
     column-gap: 2%;
 }

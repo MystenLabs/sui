@@ -1,5 +1,5 @@
 .layout {
-    @apply flex flex-wrap mt-0;
+    @apply mt-0 flex flex-wrap;
 }
 
 .layout > div {
@@ -8,19 +8,19 @@
 
 .previewimage > div,
 .previewimage > div > img {
-    @apply h-[60px] w-[60px] mr-[20px];
+    @apply mr-[20px] h-[60px] w-[60px];
 }
 
 .layout > div:first-child {
-    @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-gray-45;
+    @apply sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-gray-45 sm:pr-[4vw];
 }
 
 .ownedobjects {
-    @apply w-[100%] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
+    @apply w-[100%] lg:flex lg:min-h-[240px] lg:flex-wrap lg:justify-between;
 }
 
 .objectbox {
-    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] h-fit min-h-[72px] flex items-center;
+    @apply my-[5vh] flex h-fit min-h-[72px] items-center break-all sm:my-[1vh] lg:w-[50%];
 }
 
 .objectbox a {
@@ -40,7 +40,7 @@
 }
 
 .typevalue {
-    @apply text-gray-80 overflow-hidden;
+    @apply overflow-hidden text-gray-80;
 
     display: block;
     display: -webkit-box; /* stylelint-disable-line value-no-vendor-prefix */
@@ -54,9 +54,9 @@
 }
 
 .fail {
-    @apply text-issue-dark font-sans font-semibold mt-2;
+    @apply mt-2 font-sans font-semibold text-issue-dark;
 }
 
 .name {
-    @apply text-gray-90 font-medium text-[13px] leading-[130%];
+    @apply text-[13px] font-medium leading-[130%] text-gray-90;
 }

@@ -92,6 +92,7 @@
         "onchange": "^7.1.0",
         "postcss": "^8.4.6",
         "prettier": "2.5.1",
+        "prettier-plugin-tailwindcss": "^0.2.0",
         "start-server-and-test": "^1.14.0",
         "storybook": "7.0.0-alpha.38",
         "stylelint": "^14.5.0",

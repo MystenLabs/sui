@@ -74,11 +74,11 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
     return (
         <div
             className={clsx(
-                'w-full overflow-x-auto border-solid border-0 border-gray-45 border-b pb-4',
+                'w-full overflow-x-auto border-0 border-b border-solid border-gray-45 pb-4',
                 refetching && 'opacity-50'
             )}
         >
-            <table className="text-left min-w-max border-collapse w-full border-0">
+            <table className="w-full min-w-max border-collapse border-0 text-left">
                 <thead>
                     {table.getHeaderGroups().map((headerGroup: any) => (
                         <tr key={headerGroup.id}>
@@ -87,7 +87,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
-                                    className="text-steel-dark h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
+                                    className="h-[30px] px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
                                 >
                                     {header.isPlaceholder
                                         ? null
@@ -106,7 +106,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                             {row.getVisibleCells().map((cell: any) => (
                                 <td
                                     key={cell.id}
-                                    className="text-gray-75 h-[30px] px-1 group-hover:text-gray-90 group-hover:bg-gray-40 text-body group-hover:first:rounded-l group-hover:last:rounded-r"
+                                    className="h-[30px] px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
                                 >
                                     {flexRender(
                                         cell.column.columnDef.cell,

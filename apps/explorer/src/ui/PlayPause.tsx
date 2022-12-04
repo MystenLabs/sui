@@ -16,7 +16,7 @@ export function PlayPause({ paused, onChange }: PlayPauseProps) {
             type="button"
             aria-label={paused ? 'Paused' : 'Playing'}
             onClick={onChange}
-            className="border-none bg-transparent cursor-pointer text-steel hover:text-steel-darker"
+            className="cursor-pointer border-none bg-transparent text-steel hover:text-steel-darker"
         >
             {paused ? <PlayIcon /> : <PauseIcon />}
         </button>
