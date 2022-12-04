@@ -14,7 +14,7 @@
 }
 
 body {
-    @apply m-0 text-offblack font-sans antialiased;
+    @apply m-0 font-sans text-offblack antialiased;
 }
 
 /*
@@ -49,11 +49,11 @@ select:focus {
 /* This rule overrides styling of the wallet-adaptor UI button */
 /* stylelint-disable selector-class-pattern */
 .temp-ui-override > button.MuiButtonBase-root {
-    @apply bg-sui-dark py-2 px-3 rounded-md shadow-none text-bodySmall font-semibold font-sans capitalize !important;
+    @apply rounded-md bg-sui-dark py-2 px-3 font-sans text-bodySmall font-semibold capitalize shadow-none !important;
 }
 
 .temp-ui-override.connected > button.MuiButtonBase-root {
-    @apply text-steel-dark bg-white border-steel border border-solid !important;
+    @apply border border-solid border-steel bg-white text-steel-dark !important;
 }
 
 .temp-ui-override > button > .MuiSvgIcon-root {

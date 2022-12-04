@@ -23,12 +23,12 @@ export function DisclosureBox({
             <Disclosure defaultOpen={defaultOpen}>
                 <Disclosure.Button
                     as="div"
-                    className="flex flex-nowrap cursor-pointer items-center py-3.75 px-5"
+                    className="flex cursor-pointer flex-nowrap items-center py-3.75 px-5"
                 >
                     <div className="flex-1 text-body font-semibold text-gray-90">
                         {title}
                     </div>
-                    <ChevronDownIcon className="-rotate-90 ui-open:rotate-0 text-gray-75" />
+                    <ChevronDownIcon className="-rotate-90 text-gray-75 ui-open:rotate-0" />
                 </Disclosure.Button>
                 <Disclosure.Panel className="px-5 pb-5">
                     {children}

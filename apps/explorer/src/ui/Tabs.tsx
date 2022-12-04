@@ -72,7 +72,7 @@ export function TabList({
     return (
         <HeadlessTab.List
             className={clsx(
-                'flex gap-6 border-gray-45 border-solid border-0',
+                'flex gap-6 border-0 border-solid border-gray-45',
                 fullWidth && 'flex-1',
                 !disableBottomBorder && 'border-b'
             )}

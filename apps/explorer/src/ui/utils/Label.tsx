@@ -18,7 +18,7 @@ export const Label = forwardRef<HTMLLabelElement, LabelProps>(
                 {...labelProps}
                 className="flex flex-col flex-nowrap items-stretch gap-2.5"
             >
-                <div className="text-bodySmall font-medium text-steel-darker ml-2.5">
+                <div className="ml-2.5 text-bodySmall font-medium text-steel-darker">
                     {label}
                 </div>
                 {children ? (
