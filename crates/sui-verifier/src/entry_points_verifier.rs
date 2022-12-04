@@ -16,6 +16,7 @@ use sui_types::{
     },
     error::ExecutionError,
     id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
+    move_package::{FnInfoKey, FnInfoMap},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -37,12 +38,27 @@ use crate::{format_signature_token, resolve_struct, verification_failure, INIT_F
 /// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
-pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
+pub fn verify_module(
+    module: &CompiledModule,
+    fn_info_map: &FnInfoMap,
+) -> Result<(), ExecutionError> {
     for func_def in &module.function_defs {
-        verify_init_not_called(module, func_def).map_err(verification_failure)?;
-
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
+        let fn_name = name.to_string();
+        let mod_handle = module.self_handle();
+        let mod_addr = *module.address_identifier_at(mod_handle.address);
+        let fn_info_key = FnInfoKey { fn_name, mod_addr };
+        let is_test = match fn_info_map.get(&fn_info_key) {
+            Some(fn_info) => fn_info.is_test,
+            None => false,
+        };
+
+        // allow calling init function in the test code
+        if !is_test {
+            verify_init_not_called(module, func_def).map_err(verification_failure)?;
+        }
+
         if name == INIT_FN_NAME {
             verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
