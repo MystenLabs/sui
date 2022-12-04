@@ -149,7 +149,7 @@ export function LatestTxCard({
                 p: newPage.toString(),
             });
         },
-        [searchParams, setSearchParams]
+        [setSearchParams]
     );
 
     const countQuery = useQuery(

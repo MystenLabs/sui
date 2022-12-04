@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
 
 import Pagination from '../../components/pagination/Pagination';
 import ModuleView from './ModuleView';
 
 import styles from './ModuleView.module.css';
+
+import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
 type Modules = {
     title: string;
@@ -22,7 +23,7 @@ interface Props {
 const MODULES_PER_PAGE = 3;
 // TODO: Include Pagination for now use viewMore and viewLess
 function ModuleViewWrapper({ id, data }: Props) {
-    const [searchParams] = useSearchParams();
+    const [searchParams] = useSearchParamsMerged();
     const [modulesPageNumber, setModulesPageNumber] = useState(1);
     const totalModulesCount = data.content.length;
     const numOfMudulesToShow = MODULES_PER_PAGE;

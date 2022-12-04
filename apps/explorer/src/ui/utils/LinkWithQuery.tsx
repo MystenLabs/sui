@@ -17,6 +17,10 @@ import {
 
 export { LinkProps };
 
+// TODO: Once we have a new router configuration based on the new react router configuration,
+// we should just move these components there so that we import the link from the router.
+// This also will align closer to how TanStack Router works.
+
 export function useNavigateWithQuery() {
     const navigate = useNavigate();
     const { search } = useLocation();
