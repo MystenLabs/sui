@@ -3,7 +3,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
@@ -80,8 +80,6 @@ where
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let _scope = monitored_scope("ExecutionDriver");
-
         let certificate = if let Some(cert) = ready_certificates_stream.recv().await {
             cert
         } else {
