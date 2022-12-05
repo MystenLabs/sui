@@ -23,6 +23,10 @@ export default function initSentry() {
         tracesSampler: () => {
             return growthbook.getFeatureValue('wallet-sentry-tracing', 0);
         },
+        allowUrls: [
+            'ehndjpedolgphielnhnpnkomdhgpaaei', // chrome beta
+            'opcgpfmipidbgpenhmajoajpbobppdil', // chrome prod
+        ],
     });
 }
 

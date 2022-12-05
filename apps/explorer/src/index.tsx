@@ -34,6 +34,11 @@ if (import.meta.env.PROD) {
         tracesSampler: () => {
             return growthbook.getFeatureValue('explorer-sentry-tracing', 0);
         },
+        allowUrls: [
+            /.*\.sui\.io/i,
+            /.*-mysten-labs\.vercel\.app/i,
+            'explorer-topaz.vercel.app',
+        ],
     });
 }
 
