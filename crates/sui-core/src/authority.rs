@@ -516,7 +516,7 @@ pub struct AuthorityState {
     committee_store: Arc<CommitteeStore>,
 
     /// Manages pending certificates and their missing input objects.
-    pub(crate) transaction_manager: Arc<tokio::sync::Mutex<TransactionManager>>,
+    pub(crate) transaction_manager: Arc<TransactionManager>,
 
     /// The contained receiver will stream out certificates that have all inputs available locally,
     /// and are ready to be executed.
@@ -962,10 +962,7 @@ impl AuthorityState {
         //
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
-        {
-            let mut transaction_manager = self.transaction_manager.lock().await;
-            transaction_manager.objects_committed(output_keys);
-        }
+        self.transaction_manager.objects_committed(output_keys);
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1429,9 +1426,9 @@ impl AuthorityState {
         });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let transaction_manager = Arc::new(tokio::sync::Mutex::new(
+        let transaction_manager = Arc::new(
             TransactionManager::new(store.clone(), tx_ready_certificates, metrics.clone()).await,
-        ));
+        );
 
         let mut state = AuthorityState {
             name,
@@ -1546,8 +1543,7 @@ impl AuthorityState {
         self.database
             .epoch_store()
             .insert_pending_certificates(&certs)?;
-        let mut transaction_manager = self.transaction_manager.lock().await;
-        transaction_manager.enqueue(certs).await
+        self.transaction_manager.enqueue(certs).await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2260,8 +2256,7 @@ impl AuthorityState {
 
                 // The certificate was already inserted into pending_certificates by
                 // finish_consensus_message_process.
-                let mut transaction_manager = self.transaction_manager.lock().await;
-                transaction_manager.enqueue(vec![certificate]).await
+                self.transaction_manager.enqueue(vec![certificate]).await
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
                 checkpoint_service.notify_checkpoint_signature(info)?;
