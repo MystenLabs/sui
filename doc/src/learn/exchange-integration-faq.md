@@ -75,7 +75,7 @@ Use the [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/5
 
 ### Can I change the validator while a coin is actively staked?
     
-Yes, use the request_switch_delegation method to change the validator while a coin is staked. Examples coming soon.
+Yes, use the `request_switch_delegation` method to change the validator while a coin is staked. Examples coming soon.
     
 ### Does Sui require a bonding / warm-up period?
     
