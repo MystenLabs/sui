@@ -164,9 +164,7 @@ describe('End-to-end Tests', () => {
 
             cy.get(`${rowCSSSelector(1)} ${label}`).contains('USD');
             cy.get(`${rowCSSSelector(1)} ${count}`).contains('2');
-            cy.get(`${rowCSSSelector(1)} ${balance}`).contains(
-                '9,007,199,254,740,993'
-            );
+            cy.get(`${rowCSSSelector(1)} ${balance}`).contains('9,007,199.254');
 
             cy.get(`${rowCSSSelector(2)} ${label}`).contains('SUI');
             cy.get(`${rowCSSSelector(2)} ${count}`).contains('2');
