@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
+use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
 use move_package::BuildConfig;
 use serde_json::json;
+use tokio::time::sleep;
 
 use sui::client_commands::SwitchResponse;
 use sui::{
@@ -137,13 +138,60 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?
     .print(true);
-
-    let _object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let _object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
+    Ok(())
+}
+
+// fixing issue https://github.com/MystenLabs/sui/issues/6546
+#[tokio::test]
+async fn test_regression_6546() -> Result<(), anyhow::Error> {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
+        address: Some(address),
+    }
+        .execute(context)
+        .await? else{
+        panic!()
+    };
+
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+
+    // test cluster will not response if this call is in the same thread
+    let out = thread::spawn(move || {
+        cmd.args([
+            "client",
+            "--client.config",
+            config_path.to_str().unwrap(),
+            "call",
+            "--package",
+            "0x2",
+            "--module",
+            "sui",
+            "--function",
+            "transfer",
+            "--args",
+            &coins.first().unwrap().object_id.to_string(),
+            &test_cluster.get_address_1().to_string(),
+            "--gas-budget",
+            "10000",
+        ])
+        .assert()
+    });
+
+    while !out.is_finished() {
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    out.join().unwrap().success();
     Ok(())
 }
 
@@ -222,9 +270,9 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -246,8 +294,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -294,9 +342,9 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let address2 = SuiAddress::random_for_testing_only();
 
+    let client = context.get_client().await?;
     // publish the object basics package
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
@@ -328,9 +376,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
@@ -460,8 +507,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -513,9 +560,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let recipient = SuiAddress::random_for_testing_only();
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -583,8 +629,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     assert_eq!(gas.owner.get_owner_address().unwrap(), address);
     assert_eq!(obj.owner.get_owner_address().unwrap(), recipient);
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -652,8 +697,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     };
 
     // Check that we indeed fetched for addr1
-    let mut actual_objs = context
-        .client
+    let client = context.get_client().await?;
+    let mut actual_objs = client
         .read_api()
         .get_objects_owned_by_address(addr1)
         .await
@@ -803,12 +848,8 @@ fn get_gas_value(o: &SuiParsedObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiParsedObject> {
-    let response = context
-        .client
-        .read_api()
-        .get_parsed_object(id)
-        .await
-        .unwrap();
+    let client = context.get_client().await.unwrap();
+    let response = client.read_api().get_parsed_object(id).await.unwrap();
     if let GetObjectDataResponse::Exists(o) = response {
         Some(o)
     } else {
@@ -831,9 +872,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -874,8 +914,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     // Check that old coin is deleted
     assert_eq!(get_object(coin_to_merge, context).await, None);
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -924,9 +963,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -973,9 +1011,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert_eq!(get_gas_value(&updated_coin) + 1000 + 10, orig_value);
     assert!((get_gas_value(&new_coins[0]) == 1000) || (get_gas_value(&new_coins[0]) == 10));
     assert!((get_gas_value(&new_coins[1]) == 1000) || (get_gas_value(&new_coins[1]) == 10));
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -1028,8 +1065,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert_eq!(get_gas_value(&new_coins[0]), orig_value / 3);
     assert_eq!(get_gas_value(&new_coins[1]), orig_value / 3);
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -1124,9 +1160,8 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;

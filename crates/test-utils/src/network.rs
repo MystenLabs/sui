@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
@@ -134,7 +134,8 @@ impl TestClusterBuilder {
         #[cfg(msim)]
         cluster
             .wallet
-            .client
+            .get_client()
+            .await?
             .wallet_sync_api()
             .sync_account_state(cluster.get_address_0())
             .await?;

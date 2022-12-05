@@ -1015,7 +1015,8 @@ impl FromStr for ObjectID {
     type Err = ObjectIDParseError;
 
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
-        decode_bytes_hex(s).map_err(|_| ObjectIDParseError::TryFromSliceError)
+        // Try to match both the literal (0xABC..) and the normal (ABC)
+        decode_bytes_hex(s).or_else(|_| Self::from_hex_literal(s))
     }
 }
 

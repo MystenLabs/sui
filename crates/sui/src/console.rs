@@ -49,37 +49,33 @@ pub async fn start_console(
     writeln!(out)?;
     writeln!(out, "{}", context.config.deref())?;
 
+    let client = context.get_client().await?;
     writeln!(
         out,
         "Connecting to Sui full node. API version {}",
-        context.client.api_version()
+        client.api_version()
     )?;
 
-    if !context.client.available_rpc_methods().is_empty() {
+    if !client.available_rpc_methods().is_empty() {
         writeln!(out)?;
         writeln!(
             out,
             "Available RPC methods: {:?}",
-            context.client.available_rpc_methods()
+            client.available_rpc_methods()
         )?;
     }
-    if !context.client.available_subscriptions().is_empty() {
+    if !client.available_subscriptions().is_empty() {
         writeln!(out)?;
         writeln!(
             out,
             "Available Subscriptions: {:?}",
-            context.client.available_subscriptions()
+            client.available_subscriptions()
         )?;
     }
 
     writeln!(out)?;
     writeln!(out, "Welcome to the Sui interactive console.")?;
     writeln!(out)?;
-
-    if let Err(e) = context.client.check_api_version() {
-        writeln!(out, "{}", format!("[warn] {e}").yellow().bold())?;
-        writeln!(out)?;
-    };
 
     let mut shell = Shell::new(
         "sui>-$ ",

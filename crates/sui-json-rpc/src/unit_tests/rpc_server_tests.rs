@@ -407,7 +407,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .build()
         .await
         .unwrap();
-    let client = cluster.wallet.client;
+    let client = cluster.wallet.get_client().await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();

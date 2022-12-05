@@ -46,6 +46,7 @@ arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
 asn1-rs = { version = "0.5", features = ["datetime", "std", "time"] }
+assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "flate2", "gzip", "tokio", "zlib"] }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
@@ -85,7 +86,8 @@ blst = { version = "0.3" }
 brotli = { version = "3", default-features = false, features = ["alloc-stdlib", "std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["alloc-stdlib", "std"] }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
-bstr = { version = "0.2", default-features = false, features = ["std"] }
+bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", default-features = false, features = ["std"] }
+bstr-dff4ba8e3ae991db = { package = "bstr", version = "1", features = ["alloc", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 byte-slice-cast = { version = "1", features = ["std"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7", features = ["fiat"] }
@@ -172,6 +174,7 @@ dirs-next = { version = "2", default-features = false }
 dirs-sys = { version = "0.3", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
+doc-comment = { version = "0.3", default-features = false }
 dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 duration-str = { version = "0.4", features = ["chrono", "serde", "time"] }
@@ -676,6 +679,7 @@ arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = 
 asn1-rs = { version = "0.5", features = ["datetime", "std", "time"] }
 asn1-rs-derive = { version = "0.4", default-features = false }
 asn1-rs-impl = { version = "0.1", default-features = false }
+assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "flate2", "gzip", "tokio", "zlib"] }
 async-lock = { version = "2", default-features = false }
 async-recursion = { version = "1", default-features = false }
@@ -721,7 +725,8 @@ blst = { version = "0.3" }
 brotli = { version = "3", default-features = false, features = ["alloc-stdlib", "std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["alloc-stdlib", "std"] }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
-bstr = { version = "0.2", default-features = false, features = ["std"] }
+bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", default-features = false, features = ["std"] }
+bstr-dff4ba8e3ae991db = { package = "bstr", version = "1", features = ["alloc", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
 byte-slice-cast = { version = "1", features = ["std"] }
@@ -827,6 +832,7 @@ dirs-sys = { version = "0.3", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 displaydoc = { version = "0.2", features = ["std"] }
 dissimilar = { version = "1", default-features = false }
+doc-comment = { version = "0.3", default-features = false }
 dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 duration-str = { version = "0.4", features = ["chrono", "serde", "time"] }

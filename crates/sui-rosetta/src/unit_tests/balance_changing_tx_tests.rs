@@ -43,7 +43,7 @@ async fn test_transfer_sui() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Transfer Sui
