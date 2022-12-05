@@ -82,22 +82,6 @@ class Keyring {
         return this.#keypair;
     }
 
-    public get entropy() {
-        return this.#vault?.entropy;
-    }
-
-    // sui address always prefixed with 0x
-    public get address() {
-        if (this.#keypair) {
-            let address = this.#keypair.getPublicKey().toSuiAddress();
-            if (!address.startsWith('0x')) {
-                address = `0x${address}`;
-            }
-            return address;
-        }
-        return null;
-    }
-
     public on = this.#events.on;
 
     public off = this.#events.off;
@@ -112,7 +96,7 @@ class Keyring {
                 const { password, importedEntropy } = payload.args;
                 await this.createVault(password, importedEntropy);
                 await this.unlock(password);
-                if (!this.#vault?.entropy) {
+                if (!this.#keypair) {
                     throw new Error('Error created vault is empty');
                 }
                 uiConnection.send(
@@ -121,9 +105,7 @@ class Keyring {
                             type: 'keyring',
                             method: 'create',
                             return: {
-                                entropy: entropyToSerialized(
-                                    this.#vault.entropy
-                                ),
+                                keypair: this.#keypair.export(),
                             },
                         },
                         id
@@ -161,9 +143,7 @@ class Keyring {
                             return: {
                                 isLocked: this.isLocked,
                                 isInitialized: await this.isWalletInitialized(),
-                                entropy: this.#vault?.entropy
-                                    ? entropyToSerialized(this.#vault.entropy)
-                                    : undefined,
+                                activeAccount: this.#keypair?.export(),
                             },
                         },
                         id
