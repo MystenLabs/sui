@@ -12,7 +12,7 @@ The Sui blockchain is still in its development stages, therefore many of the sol
 
 ## When do you expect to launch Mainnet?
 
-Between late Q1 2023 and early Q2 2023
+Mainnet is set to launch in late Q1 2023 or early Q2 2023.
 
 ## When will Testnet be live?
 
