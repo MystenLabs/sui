@@ -271,14 +271,6 @@ function GasAmount({
                 <Text variant="subtitleSmall">{symbol}</Text>
             </div>
 
-            {expandable && (
-                <ChevronDownIcon
-                    height={12}
-                    width={12}
-                    className={clsx('text-steel', expanded && 'rotate-180')}
-                />
-            )}
-
             <Text variant="bodySmall">
                 <div className="flex items-center text-gray-65">
                     (
@@ -289,6 +281,14 @@ function GasAmount({
                     )
                 </div>
             </Text>
+
+            {expandable && (
+                <ChevronDownIcon
+                    height={12}
+                    width={12}
+                    className={clsx('text-steel', expanded && 'rotate-180')}
+                />
+            )}
         </div>
     );
 }

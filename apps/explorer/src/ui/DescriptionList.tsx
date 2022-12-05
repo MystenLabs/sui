@@ -3,8 +3,6 @@
 
 import type { ReactNode } from 'react';
 
-import { Text } from '~/ui/Text';
-
 export interface DescriptionItemProps {
     title: string | ReactNode;
     children: ReactNode;
@@ -13,16 +11,10 @@ export interface DescriptionItemProps {
 export function DescriptionItem({ title, children }: DescriptionItemProps) {
     return (
         <div className="flex flex-col md:flex-row items-start gap-2 md:gap-10">
-            <dt className="w-full md:w-48">
-                {typeof title === 'string' ? (
-                    <Text variant="body" weight="medium" color="steel-darker">
-                        {title}
-                    </Text>
-                ) : (
-                    title
-                )}
+            <dt className="w-full md:w-50 text-steel-darker font-medium text-p1">
+                {title}
             </dt>
-            <dd className="ml-0 flex flex-1">{children}</dd>
+            <dd className="ml-0 flex-1 leading-none">{children}</dd>
         </div>
     );
 }
