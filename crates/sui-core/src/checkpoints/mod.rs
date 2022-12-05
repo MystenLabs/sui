@@ -615,7 +615,7 @@ impl SignatureAggregator {
                 }
                 Err(())
             }
-            InsertResult::Success(values) => {
+            InsertResult::QuorumReached(values) => {
                 let signatures = values.values().cloned().collect();
                 match AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
                     signatures,
