@@ -290,6 +290,7 @@ module sui::validator {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
             || self.metadata.net_address == other.metadata.net_address
+            || self.metadata.pubkey_bytes == other.metadata.pubkey_bytes
     }
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
