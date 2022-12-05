@@ -89,7 +89,7 @@ The current un-bonding period is one week, this may change prior to Mainnet laun
     
 Yes, Sui uses a staking pool approach inspired by liquidity pools. Rewards are added to the pool and auto-compounded through the appreciation of pool token value relative to SUI tokens. 
 
-### Do rewards appear as inbound / outbound on-chain transaction?
+### Do rewards appear as inbound/outbound on-chain transactions?
     
 Yes, rewards are added to the staking pool through a special system transaction at epoch boundaries.
 
