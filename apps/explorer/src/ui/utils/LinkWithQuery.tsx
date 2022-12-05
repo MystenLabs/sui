@@ -17,6 +17,9 @@ import {
 
 export { LinkProps };
 
+/** Query params that we want to be preserved between all pages. */
+export const PRESERVE_QUERY = ['network'];
+
 // TODO: Once we have a new router configuration based on the new react router configuration,
 // we should just move these components there so that we import the link from the router.
 // This also will align closer to how TanStack Router works.
@@ -40,15 +43,13 @@ export function useSearchParamsMerged() {
 
     const setSearchParamsMerged = useCallback(
         (
-            params: Record<string, any>,
+            params: Record<string, string>,
             navigateOptions?: Parameters<typeof setSearchParams>[1]
         ) => {
-            const nextParams = new URLSearchParams(searchParams);
-            Object.entries(params).forEach(([key, value]) => {
-                if (typeof value === 'undefined' || value === null) {
-                    nextParams.delete(key);
-                } else {
-                    nextParams.set(key, value);
+            const nextParams = new URLSearchParams(params);
+            PRESERVE_QUERY.forEach((param) => {
+                if (searchParams.has(param)) {
+                    nextParams.set(param, searchParams.get(param)!);
                 }
             });
             setSearchParams(nextParams, navigateOptions);
@@ -66,10 +67,13 @@ export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
         const [toBaseURL, toSearchParamString] = href.split('?');
 
         const mergedSearchParams = useMemo(() => {
-            return new URLSearchParams({
-                ...Object.fromEntries(searchParams),
-                ...Object.fromEntries(new URLSearchParams(toSearchParamString)),
-            }).toString();
+            const nextParams = new URLSearchParams(toSearchParamString);
+            PRESERVE_QUERY.forEach((param) => {
+                if (searchParams.has(param)) {
+                    nextParams.set(param, searchParams.get(param)!);
+                }
+            });
+            return nextParams.toString();
         }, [toSearchParamString, searchParams]);
 
         return (

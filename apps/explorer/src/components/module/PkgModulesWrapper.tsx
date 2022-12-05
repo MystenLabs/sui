@@ -61,10 +61,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     // If module in URL exists but is not in module list, then delete module from URL
     useEffect(() => {
         if (
-            searchParams.get('module') &&
+            searchParams.has('module') &&
             !modulenames.includes(searchParams.get('module')!)
         ) {
-            setSearchParams({ module: undefined }, { replace: true });
+            setSearchParams({}, { replace: true });
         }
     }, [searchParams, setSearchParams, modulenames]);
 
