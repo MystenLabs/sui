@@ -8,8 +8,6 @@ import {
 import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { useEffect } from 'react';
-import { useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
 import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -22,7 +20,6 @@ import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const argsSchema = z.object({
     params: z.optional(z.array(z.object({ value: z.string().trim().min(1) }))),
@@ -45,7 +42,7 @@ export function ModuleFunction({
 }: ModuleFunctionProps) {
     const { connected, signAndExecuteTransaction } = useWallet();
     const paramsDetails = useFunctionParamsDetails(functionDetails.parameters);
-    const { handleSubmit, formState, register, control, reset } = useZodForm({
+    const { handleSubmit, formState, register, reset } = useZodForm({
         schema: argsSchema,
     });
     const execute = useMutation({
@@ -69,14 +66,6 @@ export function ModuleFunction({
             return result;
         },
     });
-    const executeFunctionError = execute.error
-        ? (execute.error as Error).message
-        : false;
-    const allValues = useWatch({ control });
-    const mutationReset = execute.reset;
-    useEffect(() => {
-        mutationReset();
-    }, [allValues, mutationReset]);
     const isExecuteDisabled =
         formState.isValidating ||
         !formState.isValid ||
@@ -99,15 +88,17 @@ export function ModuleFunction({
                         label={`Arg${index}`}
                         {...register(`params.${index}.value` as const)}
                         placeholder={paramTypeText}
+                        disabled={formState.isSubmitting}
                     />
                 ))}
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-stretch justify-end gap-1.5">
                     <Button
                         variant="primary"
                         type="submit"
                         disabled={isExecuteDisabled}
+                        loading={execute.isLoading}
                     >
-                        {execute.isLoading ? <LoadingSpinner /> : 'Execute'}
+                        Execute
                     </Button>
                     <ConnectButton
                         connectText={
@@ -128,9 +119,13 @@ export function ModuleFunction({
                         )}
                     />
                 </div>
-                {executeFunctionError || execute.data ? (
+                {execute.error || execute.data ? (
                     <FunctionExecutionResult
-                        error={executeFunctionError}
+                        error={
+                            execute.error
+                                ? (execute.error as Error).message || 'Error'
+                                : false
+                        }
                         result={execute.data || null}
                         onClear={() => {
                             execute.reset();

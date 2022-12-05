@@ -56,7 +56,17 @@ export const Outline: StoryObj<ButtonProps> = {
     args: { variant: 'outline' },
 };
 
-export const Txt: StoryObj<ButtonProps> = {
+export const PrimaryLoading: StoryObj<ButtonProps> = {
     ...Primary,
-    args: { variant: 'txt' },
+    args: { ...Primary.args, loading: true },
+};
+
+export const SecondaryLoading: StoryObj<ButtonProps> = {
+    ...Secondary,
+    args: { ...Secondary.args, loading: true },
+};
+
+export const OutlineLoading: StoryObj<ButtonProps> = {
+    ...Outline,
+    args: { ...Outline.args, loading: true },
 };
