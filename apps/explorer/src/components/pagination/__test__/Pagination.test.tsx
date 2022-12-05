@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { render } from '@testing-library/react';
-import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi  } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi } from 'vitest';
 
 import Pagination from '../Pagination';
-
 
 describe('Pagination test', () => {
     it('check pagination buttons exist and check disabled behavior for the nextBtn and prevBtn', () => {
@@ -49,7 +48,7 @@ describe('Pagination test', () => {
         const { container } = render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} />
         );
-        
+
         // Handle multiple elements with the same test id:
         const firstBtn = container.querySelector(
             'button[data-testid="firstBtn"]:not([style*="display:none"])'
@@ -66,28 +65,33 @@ describe('Pagination test', () => {
     });
 
     it('onPageChangeFn should match clicked button page number', async () => {
- 
-        const setPageNumChange = vi.fn((number) => number)
+        const setPageNumChange = vi.fn((number) => number);
 
-        const {  getByTestId } = render(
-            <Pagination totalItems={105} itemsPerPage={10} currentPage={1} onPagiChangeFn={setPageNumChange} />
+        const { getByTestId } = render(
+            <Pagination
+                totalItems={105}
+                itemsPerPage={10}
+                currentPage={1}
+                onPagiChangeFn={setPageNumChange}
+            />
         );
-            
+
         const secondBtn = getByTestId('secondBtn');
         const secondBtnPageNum = parseInt(secondBtn.textContent || '0', 10);
         const secondLastBtn = getByTestId('secondLastBtn');
-        const secondLastBtnNumber = parseInt(secondLastBtn?.textContent || '0', 10);
-       //  const lastBtnNum = parseInt(lastBtn. || '0', 10);
+        const secondLastBtnNumber = parseInt(
+            secondLastBtn?.textContent || '0',
+            10
+        );
+        //  const lastBtnNum = parseInt(lastBtn. || '0', 10);
 
-
-        await userEvent.click(secondBtn)
+        await userEvent.click(secondBtn);
         expect(setPageNumChange).toHaveReturnedWith(2);
 
         await userEvent.click(secondBtn);
         expect(setPageNumChange).toHaveReturnedWith(secondBtnPageNum);
 
-        await userEvent.click(secondLastBtn)
+        await userEvent.click(secondLastBtn);
         expect(setPageNumChange).toHaveReturnedWith(secondLastBtnNumber);
     });
- 
 });

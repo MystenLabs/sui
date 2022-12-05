@@ -74,7 +74,6 @@ describe('End-to-end Tests', () => {
         });
     });
 
-
     describe('Group View', () => {
         it('evaluates balance', () => {
             const address = 'ownsAllAddress';
