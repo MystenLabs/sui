@@ -13,7 +13,7 @@ path = "src/demo_client.rs"
 [dependencies]
 base64 = "0.13.0"
 clap = "2.34"
-prost = "0.11.0"
+prost = "0.11.3"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tonic = "0.8.2"
 workspace-hack.workspace = true
