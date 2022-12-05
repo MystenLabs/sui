@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { forwardRef, useCallback } from 'react';
+import { forwardRef, useCallback, useMemo } from 'react';
 import {
     // eslint-disable-next-line no-restricted-imports
     Link,
-    useSearchParams,
+    useHref,
     useLocation,
+    // eslint-disable-next-line no-restricted-imports
+    useSearchParams,
     // eslint-disable-next-line no-restricted-imports
     useNavigate,
     type NavigateOptions,
@@ -14,6 +16,13 @@ import {
 } from 'react-router-dom';
 
 export { LinkProps };
+
+/** Query params that we want to be preserved between all pages. */
+export const PRESERVE_QUERY = ['network'];
+
+// TODO: Once we have a new router configuration based on the new react router configuration,
+// we should just move these components there so that we import the link from the router.
+// This also will align closer to how TanStack Router works.
 
 export function useNavigateWithQuery() {
     const navigate = useNavigate();
@@ -29,22 +38,50 @@ export function useNavigateWithQuery() {
     return navigateWithQuery;
 }
 
+export function useSearchParamsMerged() {
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const setSearchParamsMerged = useCallback(
+        (
+            params: Record<string, string>,
+            navigateOptions?: Parameters<typeof setSearchParams>[1]
+        ) => {
+            const nextParams = new URLSearchParams(params);
+            PRESERVE_QUERY.forEach((param) => {
+                if (searchParams.has(param)) {
+                    nextParams.set(param, searchParams.get(param)!);
+                }
+            });
+            setSearchParams(nextParams, navigateOptions);
+        },
+        [searchParams, setSearchParams]
+    );
+
+    return [searchParams, setSearchParamsMerged] as const;
+}
+
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
     ({ to, ...props }) => {
-        const [toBaseURL, toSearchParamString] = (to as string).split('?');
-
-        const toURLSearchParams = new URLSearchParams(toSearchParamString);
-
+        const href = useHref(to);
         const [searchParams] = useSearchParams();
+        const [toBaseURL, toSearchParamString] = href.split('?');
 
-        const newParams = new URLSearchParams({
-            ...Object.fromEntries(searchParams),
-            ...Object.fromEntries(toURLSearchParams),
-        });
+        const mergedSearchParams = useMemo(() => {
+            const nextParams = new URLSearchParams(toSearchParamString);
+            PRESERVE_QUERY.forEach((param) => {
+                if (searchParams.has(param)) {
+                    nextParams.set(param, searchParams.get(param)!);
+                }
+            });
+            return nextParams.toString();
+        }, [toSearchParamString, searchParams]);
 
         return (
             <Link
-                to={{ pathname: toBaseURL, search: newParams.toString() }}
+                to={{
+                    pathname: toBaseURL,
+                    search: mergedSearchParams,
+                }}
                 {...props}
             />
         );

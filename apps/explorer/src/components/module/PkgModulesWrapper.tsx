@@ -5,7 +5,6 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
@@ -13,6 +12,7 @@ import { ModuleFunctionsInteraction } from './module-functions-interaction';
 import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
+import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 type ModuleType = [moduleName: string, code: string];
@@ -48,7 +48,7 @@ function ModuleViewWrapper({
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
     const modulenames = modules.map(([name]) => name);
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParamsMerged();
     const [query, setQuery] = useState('');
 
     // Extract module in URL or default to first module in list
@@ -61,12 +61,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     // If module in URL exists but is not in module list, then delete module from URL
     useEffect(() => {
         if (
-            searchParams.get('module') &&
+            searchParams.has('module') &&
             !modulenames.includes(searchParams.get('module')!)
         ) {
-            const newSearchParams = new URLSearchParams(searchParams);
-            newSearchParams.delete('module');
-            setSearchParams(newSearchParams, { replace: true });
+            setSearchParams({}, { replace: true });
         }
     }, [searchParams, setSearchParams, modulenames]);
 
@@ -81,16 +79,16 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
 
     const submitSearch = useCallback(() => {
         if (filteredModules.length === 1) {
-            const convertedSearchParams = new URLSearchParams(searchParams);
-            convertedSearchParams.set('module', filteredModules[0]);
-            setSearchParams(convertedSearchParams);
+            setSearchParams({
+                module: filteredModules[0],
+            });
         }
-    }, [filteredModules, setSearchParams, searchParams]);
+    }, [filteredModules, setSearchParams]);
 
     const onChangeModule = (newModule: string) => {
-        const convertedSearchParams = new URLSearchParams(searchParams);
-        convertedSearchParams.set('module', newModule);
-        setSearchParams(convertedSearchParams);
+        setSearchParams({
+            module: newModule,
+        });
     };
 
     const isModuleFnExecEnabled = useFeature(
