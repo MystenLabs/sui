@@ -810,8 +810,8 @@ der-parser = { version = "8", features = ["bigint", "num-bigint", "std"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
 derive_builder = { version = "0.12", features = ["std"] }
-derive_builder_core = { version = "0.11", default-features = false }
-derive_builder_macro = { version = "0.11", default-features = false }
+derive_builder_core = { version = "0.12", default-features = false }
+derive_builder_macro = { version = "0.12", default-features = false }
 derive_more = { version = "0.99", features = ["add", "add_assign", "as_mut", "as_ref", "constructor", "convert_case", "deref", "deref_mut", "display", "error", "from", "from_str", "index", "index_mut", "into", "into_iterator", "is_variant", "iterator", "mul", "mul_assign", "not", "rustc_version", "sum", "try_into", "unwrap"] }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
