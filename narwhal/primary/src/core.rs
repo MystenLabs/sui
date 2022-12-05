@@ -15,7 +15,7 @@ use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
@@ -671,8 +671,6 @@ impl Core {
     pub async fn run(mut self) {
         info!("Core on node {} has started successfully.", self.name);
         loop {
-            let _scope = monitored_scope("NarwhalCore");
-
             let result = tokio::select! {
                 Some((certificate, notify)) = self.rx_certificates.recv() => {
                     match self.sanitize_certificate(&certificate).await {
