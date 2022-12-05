@@ -7,8 +7,8 @@
         "link": "doc-updates"
       },
       {
-        "label": "Sui Framework Reference",
-        "link": "reference/framework"
+        "label": "Sui Exchange Integration FAQ",
+        "link": "learn/exchange-integration-faq"
       },
       {
         "label": "Sui by Example",
@@ -100,7 +100,11 @@
             "external": true
           }
         ]
-      }
+      },
+      {
+        "label": "Sui Exchange Integration FAQ",
+        "fileName": "learn/exchange-integration-faq"
+      }      
     ],
     "build": [
       {
