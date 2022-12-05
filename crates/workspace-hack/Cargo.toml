@@ -109,7 +109,7 @@ ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["alloc", "block-padding", "std"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
-clap_lex = { version = "0.3", default-features = false }
+clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 coarsetime = { version = "0.1", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
@@ -755,7 +755,7 @@ clang-sys = { version = "1", default-features = false, features = ["clang_3_5", 
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 clap_derive = { version = "3" }
-clap_lex = { version = "0.3", default-features = false }
+clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 cmake = { version = "0.1", default-features = false }
 coarsetime = { version = "0.1", default-features = false }
