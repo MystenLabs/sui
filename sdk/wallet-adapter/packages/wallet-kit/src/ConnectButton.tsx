@@ -42,6 +42,7 @@ export function ConnectButton({
           color="connected"
           size="lg"
           onClick={() => setAccountModalOpen(true)}
+          type="button"
           {...props}
         >
           {`${account.slice(0, 4)}...${account.slice(-4)}`}
@@ -51,6 +52,7 @@ export function ConnectButton({
           color="primary"
           size="lg"
           onClick={() => setConnectModalOpen(true)}
+          type="button"
           {...props}
         >
           {connectText}
