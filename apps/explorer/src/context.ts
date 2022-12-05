@@ -3,6 +3,7 @@
 
 import * as Sentry from '@sentry/react';
 import { createContext, useLayoutEffect, useMemo } from 'react';
+// eslint-disable-next-line no-restricted-imports
 import { useSearchParams } from 'react-router-dom';
 
 import { Network } from './utils/api/DefaultRpcClient';
