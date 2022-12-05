@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    certificate_waiter::CertificateWaiter, core::Core, metrics::PrimaryMetrics,
+    certificate_fetcher::CertificateFetcher, core::Core, metrics::PrimaryMetrics,
     synchronizer::Synchronizer,
 };
 use anemo::async_trait;
@@ -149,11 +149,11 @@ async fn fetch_certificates_basic() {
     // kept empty
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(fixture.committee()));
-    // synchronizer to certificate waiter
-    let (tx_certificate_waiter, rx_certificate_waiter) = test_utils::test_channel!(1000);
+    // synchronizer to certificate fetcher
+    let (tx_certificate_fetcher, rx_certificate_fetcher) = test_utils::test_channel!(1000);
     // certificates
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(1000);
-    // certificate waiter to primary
+    // certificate fetcher to primary
     let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1000);
     // proposer back to the core
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1000);
@@ -182,7 +182,7 @@ async fn fetch_certificates_basic() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -207,8 +207,8 @@ async fn fetch_certificates_basic() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let gc_depth: Round = 50;
 
-    // Make a certificate waiter
-    let _certificate_waiter_handle = CertificateWaiter::spawn(
+    // Make a certificate fetcher
+    let _certificate_fetcher_handle = CertificateFetcher::spawn(
         name.clone(),
         fixture.committee(),
         P2pNetwork::new(client_network.clone()),
@@ -216,7 +216,7 @@ async fn fetch_certificates_basic() {
         rx_consensus_round_updates.clone(),
         gc_depth,
         rx_reconfigure.clone(),
-        rx_certificate_waiter,
+        rx_certificate_fetcher,
         tx_certificates_loopback,
         metrics.clone(),
     );
@@ -320,7 +320,7 @@ async fn fetch_certificates_basic() {
     .await;
     num_written += first_batch_len;
 
-    // The certificate waiter should send out another fetch request, because it has not received certificate 123.
+    // The certificate fetcher should send out another fetch request, because it has not received certificate 123.
     loop {
         match rx_fetch_req.recv().await {
             Some(r) => {

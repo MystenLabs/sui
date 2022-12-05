@@ -12,7 +12,7 @@ mod aggregators;
 mod block_remover;
 pub mod block_synchronizer;
 mod block_waiter;
-mod certificate_waiter;
+mod certificate_fetcher;
 mod core;
 mod grpc_server;
 mod primary;

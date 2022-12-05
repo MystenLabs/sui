@@ -36,8 +36,8 @@ pub struct Synchronizer {
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    /// Send commands to the `CertificateWaiter`.
-    tx_certificate_waiter: Sender<Certificate>,
+    /// Send commands to the `CertificateFetcher`.
+    tx_certificate_fetcher: Sender<Certificate>,
     /// Get a signal when the round changes.
     rx_consensus_round_updates: watch::Receiver<Round>,
     /// The genesis and its digests.
@@ -53,7 +53,7 @@ impl Synchronizer {
         worker_cache: SharedWorkerCache,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        tx_certificate_waiter: Sender<Certificate>,
+        tx_certificate_fetcher: Sender<Certificate>,
         rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
     ) -> Self {
@@ -64,7 +64,7 @@ impl Synchronizer {
             worker_cache,
             certificate_store,
             payload_store,
-            tx_certificate_waiter,
+            tx_certificate_fetcher,
             rx_consensus_round_updates,
             genesis: Arc::new(ArcSwap::from_pointee(genesis)),
             dag,
@@ -264,7 +264,7 @@ impl Synchronizer {
     }
 
     /// Checks whether we have seen all the ancestors of the certificate. If we don't, send the
-    /// certificate to the `CertificateWaiter` which will trigger range fetching of missing
+    /// certificate to the `CertificateFetcher` which will trigger range fetching of missing
     /// certificates.
     pub async fn check_parents(&self, certificate: &Certificate) -> DagResult<bool> {
         let genesis = self.genesis_for_epoch(certificate.epoch())?;
@@ -274,7 +274,7 @@ impl Synchronizer {
             }
 
             if !self.has_processed_certificate(*digest).await? {
-                self.tx_certificate_waiter
+                self.tx_certificate_fetcher
                     .send(certificate.clone())
                     .await
                     .expect("Failed to send sync certificate request");

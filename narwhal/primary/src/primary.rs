@@ -4,7 +4,7 @@
 use crate::{
     block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::BlockWaiter,
-    certificate_waiter::CertificateWaiter,
+    certificate_fetcher::CertificateFetcher,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
     metrics::{initialise_metrics, PrimaryMetrics},
@@ -141,10 +141,10 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
-        let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
+        let (tx_certificate_fetcher, rx_certificate_fetcher) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_certificate_waiter,
-            &primary_channel_metrics.tx_certificate_waiter_total,
+            &primary_channel_metrics.tx_certificate_fetcher,
+            &primary_channel_metrics.tx_certificate_fetcher_total,
         );
         let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
             1, // Only one inflight item is possible.
@@ -192,7 +192,7 @@ impl Primary {
             worker_cache.clone(),
             certificate_store.clone(),
             payload_store.clone(),
-            tx_certificate_waiter,
+            tx_certificate_fetcher,
             rx_consensus_round_updates.clone(),
             dag.clone(),
         ));
@@ -428,9 +428,9 @@ impl Primary {
             parameters.clone(),
         );
 
-        // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
+        // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
-        let certificate_waiter_handle = CertificateWaiter::spawn(
+        let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             (**committee.load()).clone(),
             P2pNetwork::new(network.clone()),
@@ -438,7 +438,7 @@ impl Primary {
             rx_consensus_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            rx_certificate_waiter,
+            rx_certificate_fetcher,
             tx_certificates_loopback,
             node_metrics.clone(),
         );
@@ -530,7 +530,7 @@ impl Primary {
         let mut handles = vec![
             core_handle,
             block_synchronizer_handle,
-            certificate_waiter_handle,
+            certificate_fetcher_handle,
             proposer_handle,
             state_handler_handle,
             connection_monitor_handle,
