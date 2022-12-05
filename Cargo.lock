@@ -1397,7 +1397,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-types 0.11.1",
  "tonic 0.8.2",
  "tracing-core",
@@ -5098,7 +5098,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "clap 2.34.0",
- "prost 0.11.0",
+ "prost 0.11.3",
  "protobuf-src",
  "tokio",
  "tonic 0.8.2",
@@ -5268,7 +5268,7 @@ dependencies = [
  "once_cell",
  "prometheus",
  "proptest",
- "prost 0.10.4",
+ "prost 0.11.3",
  "rand 0.8.5",
  "reqwest",
  "roaring",
@@ -5376,7 +5376,7 @@ dependencies = [
  "prometheus",
  "proptest",
  "proptest-derive",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-build 0.11.2",
  "protobuf-src",
  "rand 0.8.5",
@@ -6553,9 +6553,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.0"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
+checksum = "c0b18e655c21ff5ac2084a5ad0611e827b3f92badf79f4910b5a5c58f4d87ff0"
 dependencies = [
  "bytes",
  "prost-derive 0.11.0",
@@ -6597,7 +6597,7 @@ dependencies = [
  "multimap",
  "petgraph 0.6.2",
  "prettyplease",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-types 0.11.1",
  "regex",
  "syn 1.0.104",
@@ -6648,7 +6648,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
 dependencies = [
  "bytes",
- "prost 0.11.0",
+ "prost 0.11.3",
 ]
 
 [[package]]
@@ -9819,7 +9819,7 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-derive 0.11.0",
  "rustls-pemfile",
  "tokio",
@@ -9882,7 +9882,7 @@ checksum = "632faf60b81a5b5f439d9635102b2b2921ee39171faf14f3e0008d99f98689f1"
 dependencies = [
  "async-stream",
  "bytes",
- "prost 0.11.0",
+ "prost 0.11.3",
  "tokio",
  "tokio-stream",
  "tonic 0.8.2",
@@ -11313,7 +11313,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "prost 0.10.4",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-build 0.10.4",
  "prost-build 0.11.2",
  "prost-derive 0.10.1",
