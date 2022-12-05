@@ -22,7 +22,7 @@ import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
-    params: z.array(z.object({ value: z.string().trim().min(1) })),
+    params: z.optional(z.array(z.object({ value: z.string().trim().min(1) }))),
 });
 
 export type ModuleFunctionProps = {
@@ -78,7 +78,7 @@ export function ModuleFunction({
                     toast
                         .promise(
                             execute.mutateAsync(
-                                params.map(({ value }) => value)
+                                (params || []).map(({ value }) => value)
                             ),
                             {
                                 loading: 'Executing...',
