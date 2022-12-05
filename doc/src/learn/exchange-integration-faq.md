@@ -141,7 +141,7 @@ Use the `BalanceChangeEvent` using the event query API. `BalanceChangeEvent` was
 
 ### How do I track block generation?
     
-Sui uses checkpoints. This is still under development, but Sui will implement checkpoints. Checkpoints are like blocks that are created periodically (likely every few minutes), but generated asynchronously instead of on the critical path for execution. Each checkpoint contain all of the confirmed transactions since the previous checkpoint.
+Sui uses checkpoints, but this is still under development. Checkpoints are like blocks that are created periodically (likely every few minutes), but generated asynchronously instead of on the critical path for execution. Each checkpoint contains all of the confirmed transactions since the previous checkpoint.
     
 A significant amount of the performance benefits of Sui comes from carefully separating the work required to actually finalize a transaction from bookkeeping work like checkpoint construction. We're experimenting with a number of different generation intervals, and this may change over time as we better understand the traffic patterns.
     
