@@ -1,9 +1,9 @@
 div > div.problemrow > div:first-child {
-    @apply w-auto text-left mb-[1vh] text-issue-dark block;
+    @apply mb-[1vh] block w-auto text-left text-issue-dark;
 }
 
 div > div.problemrow > div:nth-child(2) {
-    @apply w-[30vw] block ml-[10vw];
+    @apply ml-[10vw] block w-[30vw];
 }
 
 div > div.problemrow {

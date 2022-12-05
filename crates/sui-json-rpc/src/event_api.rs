@@ -6,8 +6,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee_core::server::rpc_module::RpcModule;
-use jsonrpsee_core::server::rpc_module::SubscriptionSink;
+use jsonrpsee::{RpcModule, SubscriptionSink};
 use tracing::warn;
 
 use sui_core::authority::AuthorityState;
@@ -46,7 +45,7 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
         let filter = match filter.try_into() {
             Ok(filter) => filter,
             Err(e) => {
-                let e = jsonrpsee_core::Error::from(e);
+                let e = jsonrpsee::core::Error::from(e);
                 warn!(error = ?e, "Rejecting subscription request.");
                 return Ok(sink.reject(e)?);
             }

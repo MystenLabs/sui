@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    UnsafeBurnerWalletAdapter,
     WalletStandardAdapterProvider,
+    UnsafeBurnerWalletAdapter,
 } from '@mysten/wallet-adapter-all-wallets';
-import {
-    WalletProvider,
-    type WalletProviderProps,
-} from '@mysten/wallet-adapter-react';
+import { WalletProvider, type WalletProviderProps } from '@mysten/wallet-kit';
 import * as Sentry from '@sentry/react';
 import { BrowserTracing } from '@sentry/tracing';
 import React from 'react';
@@ -16,6 +13,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
+import { growthbook } from './utils/growthbook';
 import { plausible } from './utils/plausible';
 import { reportWebVitals } from './utils/vitals';
 
@@ -28,8 +26,16 @@ plausible.enableAutoPageviews();
 if (import.meta.env.PROD) {
     Sentry.init({
         dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
+        environment: import.meta.env.VITE_VERCEL_ENV,
         integrations: [new BrowserTracing()],
-        tracesSampleRate: 0.2,
+        tracesSampler: () => {
+            return growthbook.getFeatureValue('explorer-sentry-tracing', 0);
+        },
+        allowUrls: [
+            /.*\.sui\.io/i,
+            /.*-mysten-labs\.vercel\.app/i,
+            'explorer-topaz.vercel.app',
+        ],
     });
 }
 

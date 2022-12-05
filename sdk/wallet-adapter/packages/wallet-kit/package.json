@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-kit",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "TODO: Write description",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -26,11 +26,11 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@mysten/sui.js": "workspace:*",
     "react": "*",
     "react-dom": "*"
   },
   "dependencies": {
+    "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
     "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
@@ -38,7 +38,6 @@
     "@stitches/react": "^1.2.8"
   },
   "devDependencies": {
-    "@mysten/sui.js": "workspace:*",
     "tsup": "^6.2.2",
     "typescript": "^4.8.3"
   }

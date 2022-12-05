@@ -69,7 +69,7 @@ module sui::safe_tests {
 
         let balance = safe::withdraw_(&mut safe, &cap, initial_funds);
         balance::destroy_for_testing(balance);
-        
+
         ts::return_to_sender(&mut scenario, cap);
         ts::return_shared(safe);
 
@@ -94,7 +94,7 @@ module sui::safe_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3)]
+    #[expected_failure(abort_code = safe::OVERDRAWN)]
     /// Ensure that funds cannot be over withdrawn
     fun test_safe_attempt_to_over_withdraw() {
         let owner = @0x1337;
@@ -116,7 +116,7 @@ module sui::safe_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = safe::TRANSFER_CAPABILITY_REVOKED)]
     /// Ensure that funds cannot be over withdrawn
     fun test_safe_withdraw_revoked() {
         let owner = @0x1337;

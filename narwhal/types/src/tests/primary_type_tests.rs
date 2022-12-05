@@ -12,7 +12,7 @@ use proptest::{collection, prelude::*, strategy::Strategy};
 use rand::{rngs::StdRng, SeedableRng};
 use signature::Signer;
 
-use crate::{BatchDigest, CertificateDigest, Header, HeaderDigest, Metadata};
+use crate::{BatchDigest, CertificateDigest, Header, HeaderDigest};
 
 fn arb_keypair() -> impl Strategy<Value = KeyPair> {
     (any::<[u8; 32]>())
@@ -42,11 +42,11 @@ fn clean_signed_header(kp: KeyPair) -> impl Strategy<Value = Header> {
                 author: kp.public().clone(),
                 round,
                 epoch,
+                created_at: 0,
                 payload,
                 parents,
                 digest: OnceCell::default(),
                 signature: Signature::default(),
-                metadata: Metadata::default(),
             };
             Header {
                 digest: OnceCell::with_value(Hash::digest(&header)),

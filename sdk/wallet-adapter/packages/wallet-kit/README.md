@@ -9,7 +9,7 @@ Sui Wallet Kit is a library that makes it easy to connect your dApp to Sui walle
 To get started in a React application, you can install the following packages:
 
 ```bash
-npm install @mysten/wallet-kit @mysten/sui.js
+npm install @mysten/wallet-kit
 ```
 
 At the root of your application, you can then set up the wallet kit provider:

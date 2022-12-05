@@ -204,6 +204,15 @@ impl Committee {
         (self.total_votes + 2) / 3
     }
 
+    #[inline]
+    pub fn threshold<const STRENGTH: bool>(&self) -> StakeUnit {
+        if STRENGTH {
+            self.quorum_threshold()
+        } else {
+            self.validity_threshold()
+        }
+    }
+
     /// Given a sequence of (AuthorityName, value) for values, provide the
     /// value at the particular threshold by stake. This orders all provided values
     /// in ascending order and pick the appropriate value that has under it threshold

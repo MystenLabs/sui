@@ -147,8 +147,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
 
-    let fullnode_handle =
-        start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false).await?;
+    let fullnode_handle = start_a_fullnode_with_handle(&test_cluster.swarm, None).await?;
     // Note this node is different from the one connected with WalletContext
     let node = &fullnode_handle.sui_node;
     let wallet_context_node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;

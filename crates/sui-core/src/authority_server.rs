@@ -29,7 +29,7 @@ use tap::TapFallible;
 use tokio::time::sleep;
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
-use sui_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
@@ -47,10 +47,6 @@ mod server_tests;
 
 const MIN_BATCH_SIZE: u64 = 1000;
 const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
-
-// Assuming 200 consensus tps * 5 sec consensus latency = 1000 inflight consensus txns.
-// Leaving a bit more headroom to cap the max inflight consensus txns to 1000*2 = 2000.
-const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 2000;
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -280,8 +276,13 @@ impl ValidatorService {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
 
+        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
+        // The consensus adapter allows the authority to send user certificates through consensus.
+        let consensus_adapter =
+            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
+
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
-            sender: consensus_client.clone(),
+            sender: consensus_adapter.clone(),
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
         });
@@ -321,12 +322,6 @@ impl ValidatorService {
             rx_reconfigure_consensus,
             &registry,
         ));
-
-        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
-
-        // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter =
-            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
 
         Ok(Self {
             state,
@@ -398,7 +393,7 @@ impl ValidatorService {
 
         // 2) Verify cert signatures
         let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
-        let certificate = certificate.verify(&state.committee.load())?;
+        let certificate = certificate.verify(&state.committee())?;
         drop(cert_verif_metrics_guard);
 
         // 3) All certificates are sent to consensus (at least by some authorities)
@@ -406,12 +401,6 @@ impl ValidatorService {
         // For owned objects this will return without waiting for certificate to be sequenced
         // First do quick dirty non-async check
         if !state.consensus_message_processed(&certificate)? {
-            // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
-            // This backpressure should not affect system transactions, e.g. for checkpointing.
-            if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
-                return Err(tonic::Status::resource_exhausted("Reached {MAX_PENDING_CONSENSUS_TRANSACTIONS} concurrent consensus transactions",
-                ));
-            }
             let _metrics_guard = if shared_object_tx {
                 Some(metrics.consensus_latency.start_timer())
             } else {

@@ -3,8 +3,8 @@
 
 use crate::metrics::NetworkConnectionMetrics;
 use anemo::PeerId;
+use mysten_metrics::spawn_monitored_task;
 use std::collections::HashMap;
-use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 
 const PEER_TYPE_NONE: &str = "";

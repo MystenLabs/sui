@@ -68,7 +68,7 @@ fun simple_all_functions() {
 }
 
 #[test]
-#[expected_failure(abort_code = 0)]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun add_duplicate() {
     let sender = @0x0;
     let scenario = ts::begin(sender);
@@ -81,7 +81,7 @@ fun add_duplicate() {
 }
 
 #[test]
-#[expected_failure(abort_code = 1)]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_missing() {
     let sender = @0x0;
     let scenario = ts::begin(sender);
@@ -91,7 +91,7 @@ fun borrow_missing() {
 }
 
 #[test]
-#[expected_failure(abort_code = 1)]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_mut_missing() {
     let sender = @0x0;
     let scenario = ts::begin(sender);
@@ -101,7 +101,7 @@ fun borrow_mut_missing() {
 }
 
 #[test]
-#[expected_failure(abort_code = 1)]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun remove_missing() {
     let sender = @0x0;
     let scenario = ts::begin(sender);
@@ -111,7 +111,7 @@ fun remove_missing() {
 }
 
 #[test]
-#[expected_failure(abort_code = 0)]
+#[expected_failure(abort_code = sui::object_bag::EBagNotEmpty)]
 fun destroy_non_empty() {
     let sender = @0x0;
     let scenario = ts::begin(sender);

@@ -51,16 +51,16 @@ impl Node {
     /// up.
     pub fn spawn(&mut self) -> Result<tokio::sync::oneshot::Receiver<()>> {
         trace!(name =% self.name(), "starting in-memory node");
-        let (startup_reciever, node_handle) =
+        let (startup_receiver, node_handle) =
             Container::spawn(self.config.clone(), self.runtime_type);
         self.thread = Some(node_handle);
-        Ok(startup_reciever)
+        Ok(startup_receiver)
     }
 
     /// Start this Node, waiting until its completely started up.
     pub async fn start(&mut self) -> Result<()> {
-        let startup_reciever = self.spawn()?;
-        startup_reciever.await?;
+        let startup_receiver = self.spawn()?;
+        startup_receiver.await?;
         Ok(())
     }
 
@@ -72,24 +72,27 @@ impl Node {
 
     /// Perform a health check on this Node by:
     /// * Checking that the node is running
-    /// * Calling the Node's gRPC Health service
-    pub async fn health_check(&self) -> Result<(), HealthCheckError> {
+    /// * Calling the Node's gRPC Health service if it's a validator.
+    pub async fn health_check(&self, is_validator: bool) -> Result<(), HealthCheckError> {
         let thread = self.thread.as_ref().ok_or(HealthCheckError::NotRunning)?;
         if !thread.is_alive() {
             return Err(HealthCheckError::NotRunning);
         }
 
-        let channel = mysten_network::client::connect(self.config.network_address())
-            .await
-            .map_err(|err| anyhow!(err.to_string()))
-            .map_err(HealthCheckError::Failure)
-            .tap_err(|e| error!("error connecting to {}: {e}", self.name()))?;
-        let mut client = tonic_health::proto::health_client::HealthClient::new(channel);
-        client
-            .check(tonic_health::proto::HealthCheckRequest::default())
-            .await
-            .map_err(|e| HealthCheckError::Failure(e.into()))
-            .tap_err(|e| error!("error performing health check on {}: {e}", self.name()))?;
+        if is_validator {
+            let channel = mysten_network::client::connect(self.config.network_address())
+                .await
+                .map_err(|err| anyhow!(err.to_string()))
+                .map_err(HealthCheckError::Failure)
+                .tap_err(|e| error!("error connecting to {}: {e}", self.name()))?;
+
+            let mut client = tonic_health::proto::health_client::HealthClient::new(channel);
+            client
+                .check(tonic_health::proto::HealthCheckRequest::default())
+                .await
+                .map_err(|e| HealthCheckError::Failure(e.into()))
+                .tap_err(|e| error!("error performing health check on {}: {e}", self.name()))?;
+        }
 
         Ok(())
     }
@@ -129,11 +132,11 @@ mod test {
         let validator = swarm.validators_mut().next().unwrap();
 
         validator.start().await.unwrap();
-        validator.health_check().await.unwrap();
+        validator.health_check(true).await.unwrap();
         validator.stop();
-        validator.health_check().await.unwrap_err();
+        validator.health_check(true).await.unwrap_err();
 
         validator.start().await.unwrap();
-        validator.health_check().await.unwrap();
+        validator.health_check(true).await.unwrap();
     }
 }

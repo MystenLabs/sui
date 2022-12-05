@@ -67,7 +67,7 @@ function SelectableNetwork({
             className={clsx(
                 // CSS Reset:
                 'cursor-pointer border-0 bg-transparent text-left',
-                'flex items-start gap-4 px-2 py-3 text-body font-semibold rounded-md hover:text-gray-90 ui-active:text-gray-90 hover:bg-gray-40 ui-active:bg-gray-40',
+                'flex items-start gap-4 rounded-md px-2 py-3 text-body font-semibold hover:bg-gray-40 hover:text-gray-90 ui-active:bg-gray-40 ui-active:text-gray-90',
                 state !== NetworkState.UNSELECTED
                     ? 'text-gray-90'
                     : 'text-gray-75'
@@ -116,7 +116,7 @@ function CustomRPCInput({
                 {...register('url')}
                 type="text"
                 className={clsx(
-                    'block w-full rounded-md border border-solid shadow-sm outline-none p-3 pr-16',
+                    'block w-full rounded-md border border-solid p-3 pr-16 shadow-sm outline-none',
                     formState.errors.url
                         ? 'border-issue-dark text-issue-dark'
                         : 'border-gray-65 text-gray-90'
@@ -127,7 +127,7 @@ function CustomRPCInput({
                 <button
                     disabled={!formState.isDirty || !formState.isValid}
                     type="submit"
-                    className="text-white uppercase text-captionSmall font-semibold rounded-full px-2 py-1 bg-gray-90 flex items-center justify-center border-0 transition disabled:bg-gray-45 disabled:text-gray-65"
+                    className="flex items-center justify-center rounded-full border-0 bg-gray-90 px-2 py-1 text-captionSmall font-semibold uppercase text-white transition disabled:bg-gray-45 disabled:text-gray-65"
                 >
                     Save
                 </button>
@@ -241,7 +241,7 @@ export function NetworkSelect({
                                         scale: 0.95,
                                     }}
                                     transition={{ duration: 0.15 }}
-                                    className="z-10 gap-3 flex flex-col w-64 rounded-lg bg-white shadow-lg focus:outline-none p-4"
+                                    className="z-10 flex w-64 flex-col gap-3 rounded-lg bg-white p-4 shadow-lg focus:outline-none"
                                     style={{
                                         position: strategy,
                                         top: y ?? 0,

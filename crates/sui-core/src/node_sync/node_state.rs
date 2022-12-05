@@ -9,9 +9,9 @@ use crate::{
 
 use tokio_stream::{Stream, StreamExt};
 
+use mysten_metrics::monitored_future;
+use mysten_metrics::spawn_monitored_task;
 use std::collections::{hash_map, BTreeSet, HashMap};
-use sui_metrics::monitored_future;
-use sui_metrics::spawn_monitored_task;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{
@@ -357,7 +357,7 @@ where
         epoch_id: EpochId,
     ) -> SuiResult<bool> {
         // Check if the tx is final.
-        let committee = self.state().committee.load();
+        let committee = self.state().committee();
         check_epoch!(committee.epoch, epoch_id);
         let stake = committee.weight(peer);
         let quorum_threshold = committee.quorum_threshold();

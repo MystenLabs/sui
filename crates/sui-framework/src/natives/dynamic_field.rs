@@ -133,7 +133,7 @@ pub fn add_child_object(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    object_runtime.add_child_object(parent, child_id, &child_ty, tag, child)?;
+    object_runtime.add_child_object(parent, child_id, &child_ty, *tag, child)?;
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![]))
 }
 
@@ -237,7 +237,7 @@ pub fn has_child_object_with_ty(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let has_child = object_runtime.child_object_exists_and_has_type(parent, child_id, tag)?;
+    let has_child = object_runtime.child_object_exists_and_has_type(parent, child_id, *tag)?;
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::bool(has_child)],
@@ -261,5 +261,5 @@ fn get_tag_and_layout(
             )
         }
     };
-    Ok(Some((layout, tag)))
+    Ok(Some((layout, *tag)))
 }

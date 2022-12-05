@@ -35,7 +35,7 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
-sui-metrics = { path = "../../crates/sui-metrics" }
+mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 anemo.workspace = true
 anemo-tower.workspace = true
@@ -49,7 +49,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
-reqwest = { version = "0.11.12", features = ["json"] }
+reqwest = { version = "0.11.13", features = ["json"] }
 node = { path = "../node", package = "narwhal-node" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }

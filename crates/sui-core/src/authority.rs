@@ -10,10 +10,7 @@ use std::time::Duration;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::{atomic::Ordering, Arc},
 };
 
 use anyhow::anyhow;
@@ -26,14 +23,14 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use parking_lot::RwLock;
+use mysten_metrics::monitored_scope;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use tap::TapFallible;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use tokio::sync::{broadcast::error::RecvError, mpsc};
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -91,7 +88,6 @@ use crate::consensus_handler::{
 };
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
-use crate::metrics::TaskUtilizationExt;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::scoped_counter;
 use crate::{
@@ -124,6 +120,8 @@ pub mod move_integration_tests;
 #[cfg(test)]
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
+
+pub mod authority_per_epoch_store;
 
 pub mod authority_store_tables;
 
@@ -168,10 +166,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
     pub(crate) transaction_manager_num_ready: IntGauge,
 
-    total_consensus_txns: IntCounter,
     skipped_consensus_txns: IntCounter,
-    handle_consensus_duration_mcs: IntCounter,
-    verify_narwhal_transaction_duration_mcs: IntCounter,
 
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
@@ -334,27 +329,9 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            total_consensus_txns: register_int_counter_with_registry!(
-                "total_consensus_txns",
-                "Total number of consensus transactions received from narwhal",
-                registry,
-            )
-            .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
-                registry,
-            )
-            .unwrap(),
-            handle_consensus_duration_mcs: register_int_counter_with_registry!(
-                "handle_consensus_duration_mcs",
-                "Total duration of handle_consensus_transaction",
-                registry,
-            )
-            .unwrap(),
-            verify_narwhal_transaction_duration_mcs: register_int_counter_with_registry!(
-                "verify_narwhal_transaction_duration_mcs",
-                "Total duration of verify_narwhal_transaction",
                 registry,
             )
             .unwrap(),
@@ -518,7 +495,7 @@ pub struct AuthorityState {
 
     // Epoch related information.
     /// Committee of this Sui instance.
-    pub committee: ArcSwap<Committee>,
+    committee: ArcSwap<Committee>,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -539,7 +516,7 @@ pub struct AuthorityState {
     committee_store: Arc<CommitteeStore>,
 
     /// Manages pending certificates and their missing input objects.
-    pub(crate) transaction_manager: Arc<tokio::sync::Mutex<TransactionManager>>,
+    pub(crate) transaction_manager: Arc<TransactionManager>,
 
     /// The contained receiver will stream out certificates that have all inputs available locally,
     /// and are ready to be executed.
@@ -557,17 +534,7 @@ pub struct AuthorityState {
     // The Transaction notifier ticketing engine.
     pub(crate) batch_notifier: Arc<authority_notifier::TransactionNotifier>, // TODO: remove pub
 
-    /// Ensures there can only be a single consensus client is updating the state.
-    pub consensus_guardrail: AtomicUsize,
-
     pub metrics: Arc<AuthorityMetrics>,
-
-    /// In-memory cache of the content from the reconfig_state db table.
-    reconfig_state_mem: RwLock<ReconfigState>,
-
-    /// A channel to tell consensus to reconfigure.
-    /// TODO: This does not really belong to AuthorityState. We should move it out.
-    _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -577,8 +544,12 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    pub fn is_validator(&self) -> bool {
+        self.committee.load().authority_exists(&self.name)
+    }
+
     pub fn is_fullnode(&self) -> bool {
-        !self.committee.load().authority_exists(&self.name)
+        !self.is_validator()
     }
 
     /// Get a broadcast receiver for updates
@@ -587,7 +558,7 @@ impl AuthorityState {
     }
 
     pub fn epoch(&self) -> EpochId {
-        self.committee.load().epoch
+        self.committee().epoch
     }
 
     pub fn committee_store(&self) -> &Arc<CommitteeStore> {
@@ -694,7 +665,8 @@ impl AuthorityState {
             }
         );
 
-        let tx_guard = self.database.acquire_tx_guard(certificate).await?;
+        let epoch_store = self.database.epoch_store();
+        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database.acquire_shared_locks_from_effects(
@@ -759,8 +731,8 @@ impl AuthorityState {
             ?tx_digest,
             tx_kind = certificate.data().data.kind_as_str()
         );
-        let tx_guard = self
-            .database
+        let epoch_store = self.database.epoch_store();
+        let tx_guard = epoch_store
             .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
@@ -792,7 +764,8 @@ impl AuthorityState {
 
         let shared_locks: HashMap<_, _> = self
             .database
-            .all_shared_locks(transaction_digest)?
+            .epoch_store()
+            .get_shared_locks(transaction_digest)?
             .into_iter()
             .collect();
 
@@ -851,9 +824,9 @@ impl AuthorityState {
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
-        if let Some((inner_temporary_storage, signed_effects)) = self
-            .database
-            .wal
+        let epoch_store = self.database.epoch_store();
+        if let Some((inner_temporary_storage, signed_effects)) = epoch_store
+            .wal()
             .get_execution_output(certificate.digest())?
         {
             return self
@@ -894,7 +867,7 @@ impl AuthorityState {
         // fail mid-write. We prefer this over making the write to permanent
         // storage atomic as this allows for sharding storage across nodes, which
         // would be more difficult in the alternative.
-        self.database.wal.write_execution_output(
+        epoch_store.wal().write_execution_output(
             &digest,
             (inner_temporary_store.clone(), signed_effects.clone()),
         )?;
@@ -989,10 +962,7 @@ impl AuthorityState {
         //
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
-        {
-            let mut transaction_manager = self.transaction_manager.lock().await;
-            transaction_manager.objects_committed(output_keys);
-        }
+        self.transaction_manager.objects_committed(output_keys);
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1438,8 +1408,7 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        prometheus_registry: &prometheus::Registry,
-        _tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+        prometheus_registry: &Registry,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1457,9 +1426,9 @@ impl AuthorityState {
         });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let transaction_manager = Arc::new(tokio::sync::Mutex::new(
+        let transaction_manager = Arc::new(
             TransactionManager::new(store.clone(), tx_ready_certificates, metrics.clone()).await,
-        ));
+        );
 
         let mut state = AuthorityState {
             name,
@@ -1483,14 +1452,7 @@ impl AuthorityState {
                 authority_notifier::TransactionNotifier::new(store.clone(), prometheus_registry)
                     .expect("Notifier cannot start."),
             ),
-            consensus_guardrail: AtomicUsize::new(0),
             metrics,
-            reconfig_state_mem: RwLock::new(
-                store
-                    .load_reconfig_state()
-                    .expect("Load reconfig state at initialization cannot fail"),
-            ),
-            _tx_reconfigure_consensus,
         };
 
         prometheus_registry
@@ -1517,7 +1479,6 @@ impl AuthorityState {
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
-        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1537,9 +1498,14 @@ impl AuthorityState {
 
         // unwrap ok - for testing only.
         let store = Arc::new(
-            AuthorityStore::open(&path.join("store"), None, genesis)
-                .await
-                .unwrap(),
+            AuthorityStore::open_with_committee(
+                &path.join("store"),
+                None,
+                &genesis_committee,
+                genesis,
+            )
+            .await
+            .unwrap(),
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1564,8 +1530,7 @@ impl AuthorityState {
             None,
             None,
             None,
-            &prometheus::Registry::new(),
-            tx_reconfigure_consensus,
+            &Registry::new(),
         )
         .await
     }
@@ -1575,17 +1540,19 @@ impl AuthorityState {
     pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         self.node_sync_store
             .batch_store_certs(certs.iter().cloned())?;
-        self.database.store_pending_certificates(&certs)?;
-        let mut transaction_manager = self.transaction_manager.lock().await;
-        transaction_manager.enqueue(certs).await
+        self.database
+            .epoch_store()
+            .insert_pending_certificates(&certs)?;
+        self.transaction_manager.enqueue(certs).await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::MAX);
+        let epoch_store = self.database.epoch_store();
         while limit > 0 {
             limit -= 1;
-            if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
+            if let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
                 let digest = tx_guard.tx_id();
                 debug!(?digest, "replaying failed cert from log");
 
@@ -1616,18 +1583,18 @@ impl AuthorityState {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn update_committee(&self, new_committee: Committee) -> SuiResult {
-        // TODO: It's likely safer to do the following operations atomically, in case this function
-        // gets called from different threads. It cannot happen today, but worth the caution.
+    pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {
+        // TODO: We should move the committee into epoch db store, so that the operation below
+        // can become atomic.
         fp_ensure!(
             self.epoch() + 1 == new_committee.epoch,
             SuiError::from("Invalid new epoch to sign and update")
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        // TODO: Do we want to make it possible to subscribe to committee changes?
-        self.committee.swap(Arc::new(new_committee));
+        let new_committee = Arc::new(new_committee);
+        self.committee.swap(new_committee.clone());
+        self.db().reopen_epoch_db(new_committee);
         Ok(())
     }
 
@@ -1643,47 +1610,9 @@ impl AuthorityState {
         self.committee().clone().deref().clone()
     }
 
-    pub fn get_reconfig_state_read_lock_guard(
-        &self,
-    ) -> parking_lot::RwLockReadGuard<ReconfigState> {
-        self.reconfig_state_mem.read()
-    }
-
-    pub fn get_reconfig_state_write_lock_guard(
-        &self,
-    ) -> parking_lot::RwLockWriteGuard<ReconfigState> {
-        self.reconfig_state_mem.write()
-    }
-
     // This method can only be called from ConsensusAdapter::begin_reconfiguration
-    pub fn close_user_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        lock_guard.close_user_certs();
-        self.database
-            .store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
-    }
-
-    pub async fn close_all_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        lock_guard.close_all_certs();
-        self.database
-            .store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
-    }
-
-    pub async fn open_all_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
-        lock_guard.open_all_certs();
-        self.database
-            .store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
+    pub fn close_user_certs(&self, lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
+        self.database.epoch_store().close_user_certs(lock_guard)
     }
 
     pub(crate) async fn get_object(
@@ -2194,7 +2123,7 @@ impl AuthorityState {
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
         // Check the certificate. Remember that Byzantine authorities may input anything into
         // consensus.
-        certificate.verify_signature(&self.committee.load())
+        certificate.verify_signature(&self.committee())
     }
 
     /// Verifies transaction signatures and other data
@@ -2206,10 +2135,7 @@ impl AuthorityState {
         consensus_output: &ConsensusOutput,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
-        let _timer = self
-            .metrics
-            .verify_narwhal_transaction_duration_mcs
-            .utilization_timer();
+        let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
             .database
             .consensus_message_processed(&transaction.transaction.key())
@@ -2240,7 +2166,7 @@ impl AuthorityState {
                     warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, consensus_output.certificate.origin() );
                     return Err(());
                 }
-                data.verify(&self.committee.load()).map_err(|err|{
+                data.verify(&self.committee()).map_err(|err|{
                     warn!(
                         "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
                         transaction.consensus_output.certificate.header.author, data.summary.summary.sequence_number, err
@@ -2270,20 +2196,13 @@ impl AuthorityState {
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
+        let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             consensus_output: _consensus_output,
             consensus_index,
             transaction,
         }) = transaction;
-        self.metrics.total_consensus_txns.inc();
-        let _timer = self
-            .metrics
-            .handle_consensus_duration_mcs
-            .utilization_timer();
         let tracking_id = transaction.get_tracking_id();
-        // TODO: Somewhere here we check if we have seen 2f+1 EndOfPublish message, and if so,
-        // we call self.get_reconfig_state_write_lock_guard to get a guard, and then call
-        // self.close_all_certs() to close it.
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let authority = (&consensus_output.certificate.header.author).into();
@@ -2307,6 +2226,8 @@ impl AuthorityState {
                 );
 
                 if !self
+                    .database
+                    .epoch_store()
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
                 {
@@ -2335,8 +2256,7 @@ impl AuthorityState {
 
                 // The certificate was already inserted into pending_certificates by
                 // finish_consensus_message_process.
-                let mut transaction_manager = self.transaction_manager.lock().await;
-                transaction_manager.enqueue(vec![certificate]).await
+                self.transaction_manager.enqueue(vec![certificate]).await
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
                 checkpoint_service.notify_checkpoint_signature(info)?;
@@ -2345,11 +2265,12 @@ impl AuthorityState {
                     .await
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
-                // todo - track authority stake and generate last checkpoint when 2f+1 EndOfPublish received
                 debug!("Received EndOfPublish from {:?}", authority.concise());
+                // todo use return value to signal last checkpoint
                 self.database
                     .record_end_of_publish(*authority, &transaction, consensus_index)
-                    .await
+                    .await?;
+                Ok(())
             }
         }
     }

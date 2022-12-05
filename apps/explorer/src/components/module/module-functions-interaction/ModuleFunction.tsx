@@ -5,13 +5,13 @@ import {
     getExecutionStatusType,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import { useWallet } from '@mysten/wallet-adapter-react';
-import { WalletWrapper } from '@mysten/wallet-adapter-react-ui';
+import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
+import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 
 import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
@@ -22,7 +22,7 @@ import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
-    params: z.array(z.object({ value: z.string().trim().min(1) })),
+    params: z.optional(z.array(z.object({ value: z.string().trim().min(1) }))),
 });
 
 export type ModuleFunctionProps = {
@@ -78,7 +78,7 @@ export function ModuleFunction({
                     toast
                         .promise(
                             execute.mutateAsync(
-                                params.map(({ value }) => value)
+                                (params || []).map(({ value }) => value)
                             ),
                             {
                                 loading: 'Executing...',
@@ -101,7 +101,7 @@ export function ModuleFunction({
                         />
                     );
                 })}
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-stretch justify-end gap-1.5">
                     <Button
                         variant="primary"
                         type="submit"
@@ -109,9 +109,24 @@ export function ModuleFunction({
                     >
                         Execute
                     </Button>
-                    <div className={clsx('temp-ui-override', { connected })}>
-                        <WalletWrapper />
-                    </div>
+                    <ConnectButton
+                        connectText={
+                            <>
+                                Connect Wallet
+                                <ArrowRight
+                                    fill="currentColor"
+                                    className="-rotate-45"
+                                />
+                            </>
+                        }
+                        size="md"
+                        className={clsx(
+                            '!rounded-md !text-bodySmall',
+                            connected
+                                ? '!border !border-solid !border-steel !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
+                                : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
+                        )}
+                    />
                 </div>
             </form>
         </DisclosureBox>

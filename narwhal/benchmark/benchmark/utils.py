@@ -2,7 +2,7 @@
 # Copyright (c) Mysten Labs, Inc.
 import multiaddr
 from multiaddr.protocols import (
-    P_DNS, P_DNS4, P_DNS6, P_HTTP, P_HTTPS, P_IP4, P_IP6, P_TCP)
+    P_DNS, P_DNS4, P_DNS6, P_HTTP, P_HTTPS, P_IP4, P_IP6, P_TCP, P_UDP)
 from os.path import join
 import socket
 import urllib.parse
@@ -209,7 +209,7 @@ def multiaddr_to_url_data(addr: str):  # noqa: C901
 
         # Read port value for IP-based transports
         proto, port = next(addr_iter)
-        if proto.code != P_TCP:
+        if proto.code != P_TCP and proto.code != P_UDP:
             raise AddressError(addr)
 
         # Pre-format network location URL part based on host+port

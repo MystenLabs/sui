@@ -5,10 +5,10 @@ use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
+use mysten_metrics::spawn_monitored_task;
 use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
-use sui_metrics::spawn_monitored_task;
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},
@@ -16,6 +16,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 use tracing::{debug, error, info};
+use types::now;
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
@@ -192,6 +193,22 @@ impl Proposer {
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
         let parents: Vec<_> = self.last_parents.drain(..).collect();
+
+        // Here we check that the timestamp we will include in the header is consistent with the
+        // parents, ie our current time is *after* the timestamp in all the included headers. If
+        // not we log an error and hope a kind operator fixes the clock.
+        let current_time = now();
+        let parent_max_time = parents
+            .iter()
+            .map(|c| c.header.created_at)
+            .max()
+            .unwrap_or(0);
+        if current_time < parent_max_time {
+            error!(
+                "Current time {} earlier than max parent time {}",
+                current_time, parent_max_time
+            );
+        }
 
         let header = Header::new(
             self.name.clone(),

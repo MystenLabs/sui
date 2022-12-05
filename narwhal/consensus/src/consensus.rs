@@ -8,13 +8,13 @@ use crate::{metrics::ConsensusMetrics, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
+use mysten_metrics::spawn_monitored_task;
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,
     sync::Arc,
 };
 use storage::CertificateStore;
-use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{

@@ -172,7 +172,7 @@ fn call(verifier: &mut IDLeakAnalysis, function_handle: &FunctionHandle) -> Part
         .signature_at(function_handle.parameters);
     for _ in 0..parameters.len() {
         if verifier.stack.pop().unwrap() == AbstractValue::ID && !guaranteed_safe {
-            move_verification_error("ID leaked through function call.");
+            return Err(move_verification_error("ID leaked through function call."));
         }
     }
 
@@ -421,6 +421,7 @@ fn expect_ok<T>(res: Result<T, PartialVMError>) -> PartialVMResult<T> {
     }
 }
 
+#[must_use]
 fn move_verification_error(msg: impl std::fmt::Display) -> PartialVMError {
     PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
         .with_message(format!("Sui Move Bytecode Verification Error: {}", msg))

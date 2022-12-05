@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignatureScheme } from '../cryptography/publickey';
+import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
+import { Base64DataBuffer } from '../serialization/base64';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
@@ -166,10 +167,10 @@ export abstract class Provider {
    * Gateway
    */
   abstract executeTransaction(
-    txnBytes: string,
+    txnBytes: Base64DataBuffer,
     signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string,
+    signature: Base64DataBuffer,
+    pubkey: PublicKey,
     requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse>;
 

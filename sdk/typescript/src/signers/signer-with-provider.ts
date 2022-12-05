@@ -101,10 +101,10 @@ export abstract class SignerWithProvider implements Signer {
           : new Base64DataBuffer(transaction.data);
       const sig = await this.signData(txBytes);
       return await this.provider.executeTransaction(
-        txBytes.toString(),
+        txBytes,
         sig.signatureScheme,
-        sig.signature.toString(),
-        sig.pubKey.toString(),
+        sig.signature,
+        sig.pubKey,
         requestType
       );
     }
@@ -134,11 +134,15 @@ export abstract class SignerWithProvider implements Signer {
 
     const sig = await this.signData(txBytes);
     const data = deserializeTransactionBytesToTransactionData(txBytes);
+    let version = await this.provider.getRpcApiVersion();
+    
     return generateTransactionDigest(
       data,
       sig.signatureScheme,
       sig.signature,
-      sig.pubKey
+      sig.pubKey,
+      (version?.major == 0 && version?.minor < 18) ? 'base64' : 'base58',
+      (version?.major == 0 && version?.minor < 18) ? false : true
     );
   }
 

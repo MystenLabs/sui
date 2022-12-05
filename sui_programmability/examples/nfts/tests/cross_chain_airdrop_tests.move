@@ -37,7 +37,7 @@ module nfts::cross_chain_airdrop_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = cross_chain_airdrop::ETokenIDClaimed)]
     fun test_double_claim() {
         let (scenario, oracle_address) = init();
 

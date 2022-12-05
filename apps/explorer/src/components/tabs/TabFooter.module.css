@@ -1,7 +1,7 @@
 .tabsfooter {
-    @apply flex justify-between items-center mt-3;
+    @apply mt-3 flex items-center justify-between;
 }
 
 .stats {
-    @apply ml-auto w-full text-right flex gap-2 justify-end items-center text-subtitle font-medium text-gray-65;
+    @apply ml-auto flex w-full items-center justify-end gap-2 text-right text-subtitle font-medium text-gray-65;
 }

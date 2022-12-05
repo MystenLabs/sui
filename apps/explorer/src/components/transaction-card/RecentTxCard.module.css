@@ -1,13 +1,13 @@
 div.txcardgrid h3 {
-    @apply font-normal leading-3 font-mono text-center;
+    @apply text-center font-mono font-normal leading-3;
 }
 
 div.txcard {
-    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-45 pl-5 pr-5 bg-white mt-5 mb-5 text-left md:justify-around;
+    @apply mt-5 mb-5 grid h-auto items-center border border-solid border-gray-45 bg-white bg-center pt-5 pb-5 pl-5 pr-5 text-left font-mono shadow-sm md:flex md:justify-around;
 }
 
 div.txcardgridlarge {
-    @apply font-mono text-left;
+    @apply text-left font-mono;
 }
 
 div.txcardgrid > div {
@@ -19,31 +19,31 @@ div.txcardgrid > div:first-child {
 }
 
 .txlatestresults {
-    @apply mx-auto mb-[2rem] m-auto;
+    @apply m-auto mx-auto mb-[2rem];
 }
 
 div.txadd {
-    @apply flex md:flex-col flex-row md:w-1/4 lg:w-1/3 w-auto;
+    @apply flex w-auto flex-row md:w-1/4 md:flex-col lg:w-1/3;
 }
 
 .txheader {
-    @apply bg-offblack text-offwhite rounded-none md:h-10 shadow-none md:flex hidden !important;
+    @apply hidden rounded-none bg-offblack text-offwhite shadow-none md:flex md:h-10 !important;
 }
 
 .txtype {
-    @apply md:w-2/12 max-w-sm;
+    @apply max-w-sm md:w-2/12;
 }
 
 .txgas {
-    @apply md:w-1/12 max-w-sm;
+    @apply max-w-sm md:w-1/12;
 }
 
 .txstatus {
-    @apply md:w-1/12 max-w-sm;
+    @apply max-w-sm md:w-1/12;
 }
 
 .txage {
-    @apply md:w-3/12 max-w-sm;
+    @apply max-w-sm md:w-3/12;
 }
 
 .txsearch {
@@ -55,11 +55,11 @@ div.txadd {
 }
 
 .txsearch input {
-    @apply shadow-sm mr-0 ml-0 rounded-none pl-2 pr-2 border-solid border border-gray-45 text-base;
+    @apply mr-0 ml-0 rounded-none border border-solid border-gray-45 pl-2 pr-2 text-base shadow-sm;
 }
 
 .txsearch [type='submit'] {
-    @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui h-16 shadow-sm border-solid border border-gray-45;
+    @apply h-16 w-20 border border-solid border-gray-45 bg-offblack text-offwhite shadow-sm hover:bg-sui hover:text-offblack md:w-1/12;
 }
 
 .txlatestresults .tab {
@@ -67,9 +67,9 @@ div.txadd {
 }
 
 .moretxbtn {
-    @apply bg-transparent cursor-pointer border-0 pl-0 pr-0 w-full
-   flex items-center gap-[6px]
-    text-gray-90 font-semibold text-[14px]
+    @apply flex w-full cursor-pointer items-center gap-[6px] border-0
+   bg-transparent pl-0 pr-0
+    text-[14px] font-semibold text-gray-90
     hover:text-gray-70;
 
     text-decoration: none;
@@ -101,15 +101,15 @@ div.txadd {
 }
 
 .suisuffix {
-    @apply text-[10px] ml-[2px];
+    @apply ml-[2px] text-[10px];
 }
 
 .addresses {
-    @apply flex flex-wrap items-center gap-[4px] h-full px-[8px];
+    @apply flex h-full flex-wrap items-center gap-[4px] px-[8px];
 }
 
 tbody tr td:hover .addresses {
-    @apply bg-sui-light rounded-[4px];
+    @apply rounded-[4px] bg-sui-light;
 }
 
 .addresses a {
@@ -117,10 +117,10 @@ tbody tr td:hover .addresses {
 }
 
 .statuswrapper {
-    @apply flex flex-col justify-center items-start;
+    @apply flex flex-col items-start justify-center;
 }
 
 .success,
 .fail {
-    @apply flex items-center gap-[6px] justify-center;
+    @apply flex items-center justify-center gap-[6px];
 }

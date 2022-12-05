@@ -14,11 +14,11 @@ use async_trait::async_trait;
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use move_core_types::value::MoveStructLayout;
+use mysten_metrics::{monitored_future, spawn_monitored_task};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
-use sui_metrics::{monitored_future, spawn_monitored_task};
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };

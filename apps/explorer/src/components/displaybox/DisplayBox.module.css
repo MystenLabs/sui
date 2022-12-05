@@ -1,14 +1,14 @@
 div.imagebox {
-    @apply h-full w-full flex items-center justify-center;
+    @apply flex h-full w-full items-center justify-center;
 }
 
 img.smallimage {
-    @apply object-fill cursor-pointer rounded-[6px];
+    @apply cursor-pointer rounded-[6px] object-fill;
 }
 
 div.modalcontainer,
 div.detailsbg {
-    @apply fixed top-0 left-0 w-full h-full z-20;
+    @apply fixed top-0 left-0 z-20 h-full w-full;
 }
 
 @keyframes fadein {
@@ -27,11 +27,11 @@ div.fade {
 }
 
 .modal {
-    @apply w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex;
+    @apply fixed left-0 top-0 z-50 flex h-full w-full justify-center text-center;
 }
 
 .fig {
-    @apply mt-auto mb-[60px] sm:my-auto sm:relative sm:left-[19px];
+    @apply mt-auto mb-[60px] sm:relative sm:left-[19px] sm:my-auto;
 }
 
 div.imageandcross {
@@ -39,39 +39,39 @@ div.imageandcross {
 }
 
 img.largeimage {
-    @apply max-w-[80vw] max-h-[80vh] z-50 self-start border-0;
+    @apply z-50 max-h-[80vh] max-w-[80vw] self-start border-0;
 
     border-radius: 6px !important;
 }
 
 span.cross {
-    @apply text-offwhite bg-gray-100 z-20 h-[30px] w-[30px]
-  flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl mx-auto;
+    @apply z-20 mx-auto flex h-[30px] w-[30px]
+  cursor-pointer items-center justify-center rounded-[50px] bg-gray-100  text-2xl text-offwhite;
 }
 
 span.desktopcross {
-    @apply hidden sm:block sm:ml-[8px] sm:mr-0;
+    @apply hidden sm:ml-[8px] sm:mr-0 sm:block;
 }
 
 div.mobilecross {
-    @apply block mx-auto mt-[10vh] sm:hidden;
+    @apply mx-auto mt-[10vh] block sm:hidden;
 }
 
 div.filetype,
 div.caption {
-    @apply break-words max-w-[90vw] relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
+    @apply relative z-50 mt-5 max-w-[90vw] break-words text-center text-2xl font-semibold text-offwhite sm:text-left;
 }
 
 div.filetype {
-    @apply text-sm text-gray-60 font-medium mt-0;
+    @apply mt-0 text-sm font-medium text-gray-60;
 }
 
 div.detailsbg {
-    @apply bg-gray-100 z-20 opacity-[0.85];
+    @apply z-20 bg-gray-100 opacity-[0.85];
 }
 
 .automod {
-    @apply border-0 border-b-2 border-solid border-gray-45 w-1/2;
+    @apply w-1/2 border-0 border-b-2 border-solid border-gray-45;
 
     background-color: #d8e5ea;
     position: relative;
@@ -85,5 +85,5 @@ div.detailsbg {
 }
 
 .brokenimage {
-    @apply stroke-gray-65 bg-gray-45 rounded-[6px];
+    @apply rounded-[6px] bg-gray-45 stroke-gray-65;
 }

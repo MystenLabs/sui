@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use fastcrypto::hash::Hash;
+use mysten_metrics::spawn_monitored_task;
 use std::sync::Arc;
-use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 use tracing::debug;
 use types::{metered_channel, Batch, CommittedSubDag, ConsensusOutput, Timestamp};

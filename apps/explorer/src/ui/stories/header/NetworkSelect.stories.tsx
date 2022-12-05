@@ -13,7 +13,7 @@ export default {
     component: NetworkSelect,
     decorators: [
         (Story) => (
-            <div className="bg-headerNav p-6 flex justify-end">
+            <div className="flex justify-end bg-headerNav p-6">
                 <Story />
             </div>
         ),

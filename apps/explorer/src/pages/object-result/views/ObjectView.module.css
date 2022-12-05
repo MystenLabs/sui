@@ -6,11 +6,11 @@
     }
 
     .textdetails > tbody > tr > td {
-        @apply block sm:table-cell text-start align-top text-[0.875rem] leading-[1.063rem];
+        @apply block text-start align-top text-[0.875rem] leading-[1.063rem] sm:table-cell;
     }
 
     .textdetails > tbody > tr > td:first-child {
-        @apply text-gray-80  font-medium pr-6 w-[150px];
+        @apply w-[150px]  pr-6 font-medium text-gray-80;
     }
 
     .textdetails > tbody > tr > td:nth-child(2) {
@@ -18,7 +18,7 @@
     }
 
     .textdetails > tbody > tr:not(:last-child) > td:nth-child(2) {
-        @apply pb-5 sm:pb-2.5 break-all;
+        @apply break-all pb-5 sm:pb-2.5;
     }
 
     .textdetails > tbody > tr:last-child > td:nth-child(2) {
@@ -27,21 +27,21 @@
 }
 
 h1.title {
-    @apply font-semibold text-3xl leading-6;
+    @apply text-3xl font-semibold leading-6;
 }
 
 /* Description / Image CSS */
 
 div.descimagecontainer {
-    @apply flex flex-wrap inline-block mb-[3.75rem];
+    @apply mb-[3.75rem] inline-block flex flex-wrap;
 }
 
 div.displaycontainer {
-    @apply w-[533px] flex;
+    @apply flex w-[533px];
 }
 
 div.metadata {
-    @apply ml-2.5 sm:ml-5 my-auto sm:my-0;
+    @apply my-auto ml-2.5 sm:my-0 sm:ml-5;
 }
 
 div.metadata > h2 {
@@ -49,13 +49,13 @@ div.metadata > h2 {
 }
 
 div.metadata > p {
-    @apply text-gray-80 text-[13px] leading-[12px];
+    @apply text-[13px] leading-[12px] text-gray-80;
 }
 
 .desktoppreviewmedia,
 .mobilepreviewmedia {
-    @apply bg-inherit border-0 p-0 cursor-pointer text-[14px] leading-[13px]
-  text-gray-80 font-semibold tracking-[-0.02em];
+    @apply cursor-pointer border-0 bg-inherit p-0 text-[14px] font-semibold
+  leading-[13px] tracking-[-0.02em] text-gray-80;
 }
 
 .desktoppreviewmedia {
@@ -63,7 +63,7 @@ div.metadata > p {
 }
 
 .mobilepreviewmedia {
-    @apply block sm:hidden w-full mt-1;
+    @apply mt-1 block w-full sm:hidden;
 }
 
 div.display {
@@ -71,16 +71,16 @@ div.display {
 }
 
 div.display > div > img {
-    @apply max-h-[120px] w-[120px] ml-auto;
+    @apply ml-auto max-h-[120px] w-[120px];
 }
 
 div.display > div > div > div,
 div.display > div > div > figure > div > div {
-    @apply w-[120px] h-[120px] flex justify-center items-center;
+    @apply flex h-[120px] w-[120px] items-center justify-center;
 }
 
 table.description {
-    @apply w-full sm:w-[866px] mb-[3.75rem] 2xl:mb-0;
+    @apply mb-[3.75rem] w-full sm:w-[866px] 2xl:mb-0;
 }
 
 table.properties,
@@ -108,13 +108,13 @@ td.objectid {
 }
 
 .objecttypelink {
-    @apply no-underline text-sui-dark;
+    @apply text-sui-dark no-underline;
 }
 
 /* Clickable Header CSS */
 
 h2.header {
-    @apply text-gray-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5 mt-0;
+    @apply mb-5 mt-0 text-[1.125rem] font-semibold leading-[1.125rem] text-gray-100;
 }
 
 div.accommodate > h2.header {

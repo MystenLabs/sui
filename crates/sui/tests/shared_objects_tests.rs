@@ -250,9 +250,6 @@ async fn shared_object_sync() {
         initial_shared_version: counter_initial_shared_version,
     };
 
-    // Check that the counter object only exist in one validator, but not the rest.
-    // count the number of validators that have the counter object.
-
     // Check that the counter object exists in at least one of the validators the transaction was
     // sent to.
     let has_counter = stream::iter(&configs.validator_set()[1..]).any(|config| async move {

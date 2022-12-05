@@ -26,4 +26,18 @@ describe('search', () => {
                 cy.url().should('include', `/object/${objectId}`);
             });
     });
+
+    it('can search for transaction', () => {
+        cy.task('faucet')
+            .then((address) => cy.task('mint', address))
+            .then((tx) => {
+                if (!('EffectsCert' in tx)) {
+                    throw new Error('Missing effects cert');
+                }
+                const txid = tx.EffectsCert.certificate.transactionDigest;
+                cy.visit('/');
+                cy.get('[data-testid=search]').type(txid).type('{enter}');
+                cy.url().should('include', `/transaction/${txid}`);
+            });
+    });
 });

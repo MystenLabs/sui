@@ -3,11 +3,11 @@
 
 use std::{sync::Arc, time::Duration};
 
+use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
-use sui_metrics::spawn_monitored_task;
 use tokio::{sync::Semaphore, time::sleep};
 use tracing::{debug, error, info, warn};
 
@@ -132,7 +132,11 @@ where
             }
 
             // Remove the certificate that finished execution.
-            let _ = authority.state.database.remove_pending_certificate(&digest);
+            let _ = authority
+                .state
+                .database
+                .epoch_store()
+                .remove_pending_certificate(&digest);
 
             authority
                 .execution_driver_metrics

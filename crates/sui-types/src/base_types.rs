@@ -17,6 +17,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use sha2::Sha512;
 use std::borrow::Borrow;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -33,7 +34,7 @@ use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use crate::waypoint::IntoPoint;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
@@ -285,8 +286,8 @@ pub const OBJECT_DIGEST_LENGTH: usize = 32;
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
@@ -482,6 +483,10 @@ impl TransactionDigest {
     /// Translates digest into a Vec of bytes
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+
+    pub fn into_bytes(self) -> [u8; TRANSACTION_DIGEST_LENGTH] {
+        self.0
     }
 }
 
@@ -697,22 +702,29 @@ impl SequenceNumber {
         SequenceNumber(u)
     }
 
+    pub fn increment_to(&mut self, next: SequenceNumber) {
+        debug_assert!(*self < next, "Not an increment: {} to {}", self, next);
+        *self = next;
+    }
+
+    pub fn decrement_to(&mut self, prev: SequenceNumber) {
+        debug_assert!(prev < *self, "Not a decrement: {} to {}", self, prev);
+        *self = prev;
+    }
+
+    /// Returns a new sequence number that is greater than all `SequenceNumber`s in `inputs`,
+    /// assuming this operation will not overflow.
     #[must_use]
-    pub fn increment(self) -> SequenceNumber {
-        // TODO: Ensure this never overflow.
+    pub fn lamport_increment(inputs: impl IntoIterator<Item = SequenceNumber>) -> SequenceNumber {
+        let max_input = inputs.into_iter().fold(SequenceNumber::new(), max);
+
+        // TODO: Ensure this never overflows.
         // Option 1: Freeze the object when sequence number reaches MAX.
         // Option 2: Reject tx with MAX sequence number.
         // Issue #182.
-        debug_assert_ne!(self.0, u64::MAX);
-        Self(self.0 + 1)
-    }
+        assert_ne!(max_input.0, u64::MAX);
 
-    pub fn decrement(self) -> Result<SequenceNumber, SuiError> {
-        let val = self.0.checked_sub(1);
-        match val {
-            None => Err(SuiError::SequenceUnderflow),
-            Some(val) => Ok(Self(val)),
-        }
+        SequenceNumber(max_input.0 + 1)
     }
 }
 

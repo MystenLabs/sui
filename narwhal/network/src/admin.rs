@@ -3,8 +3,8 @@
 
 use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
+use mysten_metrics::spawn_monitored_task;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use sui_metrics::spawn_monitored_task;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::info;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
+use crate::authority::authority_per_epoch_store::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
 use async_trait::async_trait;

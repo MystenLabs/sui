@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::p2p::P2pConfig;
+use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
+use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -62,7 +63,7 @@ impl NetworkConfig {
     }
 
     pub fn generate_fullnode_config(&self) -> NodeConfig {
-        self.generate_fullnode_config_with_random_dir_name(false, true)
+        self.generate_fullnode_config_with_random_dir_name(false)
     }
 
     /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
@@ -70,7 +71,6 @@ impl NetworkConfig {
     pub fn generate_fullnode_config_with_random_dir_name(
         &self,
         use_random_dir_name: bool,
-        enable_websocket: bool,
     ) -> NodeConfig {
         let protocol_key_pair: Arc<AuthorityKeyPair> =
             Arc::new(get_key_pair_from_rng(&mut OsRng).1);
@@ -97,10 +97,24 @@ impl NetworkConfig {
             FULL_NODE_DB_PATH.to_string()
         };
 
-        let network_address = utils::new_network_address();
-        let p2p_config = P2pConfig {
-            listen_address: utils::available_local_socket_address(),
-            ..Default::default()
+        let network_address = utils::new_tcp_network_address();
+        let p2p_config = {
+            let address = utils::available_local_socket_address();
+            let seed_peers = self
+                .validator_configs()
+                .iter()
+                .map(|config| SeedPeer {
+                    peer_id: Some(anemo::PeerId(config.network_key_pair.public().0.to_bytes())),
+                    address: config.p2p_config.external_address.clone().unwrap(),
+                })
+                .collect();
+
+            P2pConfig {
+                listen_address: address,
+                external_address: Some(utils::socket_address_to_udp_multiaddr(address)),
+                seed_peers,
+                ..Default::default()
+            }
         };
 
         NodeConfig {
@@ -113,11 +127,6 @@ impl NetworkConfig {
             metrics_address: utils::available_local_socket_address(),
             admin_interface_port: utils::get_available_port(),
             json_rpc_address: utils::available_local_socket_address(),
-            websocket_address: if enable_websocket {
-                Some(utils::available_local_socket_address())
-            } else {
-                None
-            },
             consensus_config: None,
             enable_event_processing,
             enable_checkpoint: false,

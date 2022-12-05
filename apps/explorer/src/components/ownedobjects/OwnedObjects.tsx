@@ -112,7 +112,7 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
 
         req.then((objects) => {
             const ids = objects.map(({ objectId }) => objectId);
-            rpc.getObjectBatch(ids).then((results) => {
+            return rpc.getObjectBatch(ids).then((results) => {
                 setResults(
                     results
                         .filter(({ status }) => status === 'Exists')

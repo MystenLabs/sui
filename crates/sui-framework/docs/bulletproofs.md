@@ -5,11 +5,26 @@
 
 
 
+-  [Constants](#@Constants_0)
 -  [Function `native_verify_full_range_proof`](#0x2_bulletproofs_native_verify_full_range_proof)
 -  [Function `verify_full_range_proof`](#0x2_bulletproofs_verify_full_range_proof)
 
 
 <pre><code><b>use</b> <a href="elliptic_curve.md#0x2_elliptic_curve">0x2::elliptic_curve</a>;
+</code></pre>
+
+
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_bulletproofs_EBulletproofsVerificationFailed"></a>
+
+
+
+<pre><code><b>const</b> <a href="bulletproofs.md#0x2_bulletproofs_EBulletproofsVerificationFailed">EBulletproofsVerificationFailed</a>: u64 = 5;
 </code></pre>
 
 

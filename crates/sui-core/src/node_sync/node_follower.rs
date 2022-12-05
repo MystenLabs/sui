@@ -5,7 +5,7 @@ use crate::{
     authority_active::gossip::GossipMetrics, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI, safe_client::SafeClient,
 };
-use sui_metrics::monitored_future;
+use mysten_metrics::monitored_future;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{AuthorityName, EpochId, ExecutionDigests},

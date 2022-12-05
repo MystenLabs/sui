@@ -12,20 +12,20 @@ pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
-use crate::metrics::TaskUtilizationExt;
+use crate::stake_aggregator::{InsertResult, StakeAggregator};
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_metrics::spawn_monitored_task;
-use sui_types::base_types::{AuthorityName, TransactionDigest};
-use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::base_types::TransactionDigest;
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
@@ -226,8 +226,7 @@ pub struct SignatureAggregator {
     next_index: u64,
     summary: CheckpointSummary,
     digest: CheckpointDigest,
-    signatures: HashMap<AuthorityName, AuthoritySignInfo>,
-    stake: StakeUnit,
+    signatures: StakeAggregator<AuthoritySignInfo, false>,
 }
 
 impl CheckpointBuilder {
@@ -284,7 +283,7 @@ impl CheckpointBuilder {
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<()> {
-        let _timer = self.metrics.builder_utilization.utilization_timer();
+        let _scope = monitored_scope("MakeCheckpoint");
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
@@ -518,7 +517,7 @@ impl CheckpointAggregator {
     }
 
     async fn run_inner(&mut self) -> SuiResult {
-        let _timer = self.metrics.aggregator_utilization.utilization_timer();
+        let _scope = monitored_scope("CheckpointAggregator");
         'outer: loop {
             let current = if let Some(current) = &mut self.current {
                 current
@@ -529,8 +528,7 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: Default::default(),
-                    stake: Default::default(),
+                    signatures: StakeAggregator::new(self.state.committee().clone()),
                 });
                 self.current.as_mut().unwrap()
             };
@@ -558,7 +556,7 @@ impl CheckpointAggregator {
                         data.summary.auth_signature.authority.concise()
                     )])
                     .inc();
-                if let Ok(auth_signature) = current.try_aggregate(&self.state.committee(), data) {
+                if let Ok(auth_signature) = current.try_aggregate(data) {
                     let summary = CertifiedCheckpointSummary {
                         summary: current.summary.clone(),
                         auth_signature,
@@ -594,7 +592,6 @@ impl SignatureAggregator {
     #[allow(clippy::result_unit_err)]
     pub fn try_aggregate(
         &mut self,
-        committee: &Committee,
         data: CheckpointSignatureMessage,
     ) -> Result<AuthorityWeakQuorumSignInfo, ()> {
         let their_digest = data.summary.summary.digest();
@@ -611,32 +608,30 @@ impl SignatureAggregator {
             );
             return Err(());
         }
-        match self.signatures.entry(author) {
-            Entry::Occupied(oc) => {
-                if oc.get() != &signature {
-                    warn!("Validator {:?} submitted two different signatures for checkpoint {}: {:?}, {:?}", author.concise(), self.summary.sequence_number, oc.get(), signature);
-                    return Err(());
+        match self.signatures.insert(author, signature) {
+            InsertResult::RepeatingEntry { previous, new } => {
+                if previous != new {
+                    warn!("Validator {:?} submitted two different signatures for checkpoint {}: {:?}, {:?}", author.concise(), self.summary.sequence_number, previous, new);
+                }
+                Err(())
+            }
+            InsertResult::QuorumReached(values) => {
+                let signatures = values.values().cloned().collect();
+                match AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+                    signatures,
+                    self.signatures.committee(),
+                ) {
+                    Ok(aggregated) => Ok(aggregated),
+                    Err(err) => {
+                        error!(
+                            "Unexpected error when aggregating signatures for checkpoint {}: {:?}",
+                            self.summary.sequence_number, err
+                        );
+                        Err(())
+                    }
                 }
             }
-            Entry::Vacant(va) => {
-                va.insert(signature);
-            }
-        }
-        self.stake += committee.weight(&author);
-        if self.stake >= committee.validity_threshold() {
-            let signatures = self.signatures.values().cloned().collect();
-            match AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(signatures, committee) {
-                Ok(aggregated) => Ok(aggregated),
-                Err(err) => {
-                    error!(
-                        "Unexpected error when aggregating signatures for checkpoint {}: {:?}",
-                        self.summary.sequence_number, err
-                    );
-                    Err(())
-                }
-            }
-        } else {
-            Err(())
+            InsertResult::NotEnoughVotes => Err(()),
         }
     }
 }
@@ -868,6 +863,7 @@ mod tests {
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
+    use sui_types::committee::Committee;
     use sui_types::crypto::AuthorityKeyPair;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
@@ -893,16 +889,8 @@ mod tests {
         let store = Box::new(store);
 
         let (keypair, committee) = committee();
-        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = mpsc::channel(10);
         let state = Arc::new(
-            AuthorityState::new_for_testing(
-                committee.clone(),
-                &keypair,
-                None,
-                None,
-                tx_reconfigure_consensus,
-            )
-            .await,
+            AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await,
         );
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());

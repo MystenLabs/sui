@@ -191,7 +191,7 @@ The second block (`ports`) specifies the TCP ports to use:
 ```json
 "port": 5000,
 ```
-Narwhal requires a number of TCP ports, depending on the number of workers per node. Each primary requires two ports: one to receive messages from other primaries and one to receive messages from its workers. And each worker requires three ports: one to receive client transactions, one to receive messages from its primary, and one to receive messages from other workers. Note that the script will open a large port range (5000-7000) to the WAN on all your AWS instances.
+Narwhal requires a number of TCP and UDP ports, depending on the number of workers per node. Each primary requires one udp ports: one to receive messages from other primaries and its own workers. And each worker requires one udp and one tcp ports: one tpc port to receive client transactions, and one udp port to receive messages from its primary from other workers. Note that the script will open a large port range (5000-7000) to the WAN on all your AWS instances.
 
 The third block (`repo`) contains the information regarding the repository's name, the URL of the repo, and the branch containing the code to deploy:
 ```json

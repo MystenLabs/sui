@@ -51,8 +51,6 @@ pub struct NodeConfig {
     pub network_address: Multiaddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
-    #[serde(default = "default_websocket_address")]
-    pub websocket_address: Option<SocketAddr>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
@@ -209,6 +207,7 @@ pub struct ValidatorInfo {
     pub gas_price: u64,
     pub commission_rate: u64,
     pub network_address: Multiaddr,
+    pub p2p_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
 
     //TODO remove all of these as they shouldn't be needed to be encoded in genesis
@@ -260,6 +259,10 @@ impl ValidatorInfo {
 
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
+    }
+
+    pub fn p2p_address(&self) -> &Multiaddr {
+        &self.p2p_address
     }
 
     pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {

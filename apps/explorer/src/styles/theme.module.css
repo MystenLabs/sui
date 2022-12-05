@@ -1,6 +1,6 @@
 div.textresults > div {
-    @apply py-[1vh] sm:table ml-[5vw]
-  border-0 border-b border-solid border-gray-45 w-[90%];
+    @apply ml-[5vw] w-[90%] border-0
+  border-b border-solid border-gray-45 py-[1vh] sm:table;
 }
 
 div.textresults > div:first-child {
@@ -12,12 +12,12 @@ div.textresults > div:last-child {
 }
 
 div.textresults > div > div:first-child {
-    @apply font-sans tracking-tight font-semibold block
-    sm:w-[10vw] sm:table-cell sm:pr-[2vw];
+    @apply block font-sans font-semibold tracking-tight
+    sm:table-cell sm:w-[10vw] sm:pr-[2vw];
 }
 
 div.textresults > div > div:nth-child(2) {
-    @apply font-mono tracking-tight text-gray-90 break-all rounded-l-md block sm:table-cell;
+    @apply block break-all rounded-l-md font-mono tracking-tight text-gray-90 sm:table-cell;
 }
 
 div.textresults > div > div:nth-child(2) > div {
@@ -27,13 +27,13 @@ div.textresults > div > div:nth-child(2) > div {
 /* Pending State CSS */
 
 div.pending {
-    @apply font-sans mt-2 ml-[5vw];
+    @apply mt-2 ml-[5vw] font-sans;
 }
 
 div.txdetailstitle {
-    @apply pt-5 pb-0 mt-0 mb-0 !important;
+    @apply mt-0 mb-0 pt-5 pb-0 !important;
 }
 
 .txdetailstitle h3 {
-    @apply text-offblack uppercase font-semibold;
+    @apply font-semibold uppercase text-offblack;
 }
