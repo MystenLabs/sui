@@ -5,6 +5,7 @@ use bytes::Bytes;
 use futures::future::select;
 use futures::future::Either;
 use futures::FutureExt;
+use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::Mutex;
@@ -14,7 +15,6 @@ use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use rand::rngs::StdRng;
-use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use std::collections::HashSet;
 use std::future::Future;
@@ -22,7 +22,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::{Committee, StakeUnit};
+use sui_types::committee::Committee;
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::ConsensusTransaction,
@@ -234,55 +234,41 @@ impl ConsensusAdapter {
     }
 
     /// Check when this authority should submit the certificate to consensus.
+    /// This sorts all authorities based on pseudo-random distribution derived from transaction hash.
+    /// Authorities higher in the list wait less time.
+    ///
+    /// The function targets having only 1 consensus transaction submitted per user transaction
+    /// when system operates normally
     fn submit_delay_certificate(
         committee: &Committee,
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
     ) -> Duration {
-        let (nominator, denominator) =
-            Self::position_submit_certificate(committee, ourselves, tx_digest);
-        const MAX_DELAY_MS: u64 = 60_000;
-        // There is no overflow as long as total_stake < u64::MAX / MAX_DELAY_MS, which seem to be reasonable expectation
-        let duration_ms = MAX_DELAY_MS * nominator / denominator;
-        Duration::from_millis(duration_ms)
+        let position = Self::position_submit_certificate(committee, ourselves, tx_digest);
+        const MAX_DELAY_MUL: usize = 10;
+        // DELAY_STEP is chosen as 1.5 * mean consensus delay
+        // In the future we can actually use information about consensus rounds instead of this delay
+        const DELAY_STEP: Duration = Duration::from_secs(7);
+        DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32
     }
 
     /// Returns a position of the current validator in ordered list of validator to submit transaction
-    /// You can think of this value as a float in range [0, 1)
-    /// Validators closer to 0 are submitting transaction sooner, and validators closer to 1 wait longer
-    ///
-    /// In practice, instead of returning float we return integer fraction here in form of (nominator, denominator)
-    /// If returned tuple (A, B) the value A is in range [0, B)
     fn position_submit_certificate(
         committee: &Committee,
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
-    ) -> (StakeUnit, StakeUnit) {
+    ) -> usize {
         // the 32 is as requirement of the deault StdRng::from_seed choice
         let digest_bytes = tx_digest.into_bytes();
 
         // permute the validators deterministically, based on the digest
         let mut rng = StdRng::from_seed(digest_bytes);
-        let mut validators = committee.voting_rights.clone();
-        validators.shuffle(&mut rng);
-
-        let mut our_position = 0u64;
-        loop {
-            if let Some((name, weight)) = validators.pop() {
-                if name == *ourselves {
-                    break;
-                }
-                // note that our_position is 0 for first validator in the list
-                // our_position is strictly less then committee.total_votes for last validator
-                our_position += weight;
-            } else {
-                unreachable!(
-                    "We should find ourselves in committee before running out of validators"
-                );
-            }
-        }
-
-        (our_position, committee.total_votes)
+        let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+        let (position, _) = validators
+            .into_iter()
+            .find_position(|a| a == ourselves)
+            .expect("Could not find ourselves in shuffled committee");
+        position
     }
 
     /// This method is called externally to begin reconfiguration
@@ -517,9 +503,8 @@ mod adapter_tests {
 
             let mut zero_found = false;
             for (name, _) in authorities.iter() {
-                let (f, total_votes) =
-                    ConsensusAdapter::position_submit_certificate(&committee, name, &tx_digest);
-                assert!(f < total_votes);
+                let f = ConsensusAdapter::position_submit_certificate(&committee, name, &tx_digest);
+                assert!(f < committee.num_members());
                 if f == 0 {
                     // One and only one validator gets position 0
                     assert!(!zero_found);
