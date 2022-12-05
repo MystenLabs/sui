@@ -8,7 +8,7 @@ use crate::{metrics::ConsensusMetrics, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,
@@ -311,8 +311,6 @@ where
     async fn run_inner(mut self) -> StoreResult<()> {
         // Listen to incoming certificates.
         loop {
-            let _scope = monitored_scope("NarwhalConsensus");
-
             tokio::select! {
                 Some(certificate) = self.rx_new_certificates.recv() => {
                     // If the core already moved to the next epoch we should pull the next
