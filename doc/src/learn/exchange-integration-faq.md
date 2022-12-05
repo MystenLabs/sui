@@ -59,7 +59,7 @@ Staking transactions are Move call transactions that call specific Move function
 
 ### Does Sui support staking a partial amount of the SUI owned by an address?
     
-Yes, an address can own multiple coins of different amounts. Sui supports staking different coins owned by an address to different validators. The minimum staking amount is 1.0 SUI.
+Yes, an address can own multiple coins of different amounts. Sui supports staking coins owned by an address to different validators. The minimum staking amount that can be delegated is 1 MIST which is equal to .000000001 SUI.
 
 ### Can I use one account address to stake with multiple validators?
     
@@ -102,7 +102,7 @@ Rewards are compounded every epoch, and paid out when you withdraw your stake. Y
 There will be a minimum amount required and a maximum amount allowed, as well as limits on stake changes within an epoch. 
     
  * Validation: Requires a high minimum amount of SUI.
- * Delegation: Minimum planned to be 1 SUI (subject to change). 
+ * Delegation: Minimum planned to be .000000001 SUI (subject to change). 
     
 Specific amounts will be provided when available.
 
