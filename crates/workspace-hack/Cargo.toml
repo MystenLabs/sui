@@ -1395,7 +1395,7 @@ errno = { version = "0.2", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "1", default-features = false, features = ["close", "libc", "windows-sys"] }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support"] }
@@ -1411,7 +1411,7 @@ pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "infer
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 security-framework = { version = "2", features = ["OSX_10_9"] }
 security-framework-sys = { version = "2", features = ["OSX_10_9"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
@@ -1437,7 +1437,7 @@ findshlibs = { version = "0.10", default-features = false }
 fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "1", default-features = false, features = ["close", "libc", "windows-sys"] }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support"] }
@@ -1454,7 +1454,7 @@ protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 security-framework = { version = "2", features = ["OSX_10_9"] }
 security-framework-sys = { version = "2", features = ["OSX_10_9"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
@@ -1477,12 +1477,12 @@ foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "1", default-features = false, features = ["close", "libc", "windows-sys"] }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support"] }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
-linux-raw-sys = { version = "0.0.46", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys = { version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2 = { version = "0.5", default-features = false }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
@@ -1497,7 +1497,7 @@ pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "infer
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
@@ -1521,12 +1521,12 @@ foreign-types-shared = { version = "0.1", default-features = false }
 fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "1", default-features = false, features = ["close", "libc", "windows-sys"] }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support"] }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
-linux-raw-sys = { version = "0.0.46", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys = { version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2 = { version = "0.5", default-features = false }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
@@ -1543,7 +1543,7 @@ protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.36", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
@@ -1579,7 +1579,7 @@ widestring = { version = "0.5", features = ["alloc", "std"] }
 winapi = { version = "0.3", default-features = false, features = ["accctrl", "aclapi", "activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys-4e55305914c60c55 = { package = "windows-sys", version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
-windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32", "Win32_Networking", "Win32_Networking_WinSock"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO"] }
 windows_x86_64_msvc-4e55305914c60c55 = { package = "windows_x86_64_msvc", version = "0.36", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
@@ -1609,7 +1609,7 @@ widestring = { version = "0.5", features = ["alloc", "std"] }
 winapi = { version = "0.3", default-features = false, features = ["accctrl", "aclapi", "activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys-4e55305914c60c55 = { package = "windows-sys", version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
-windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32", "Win32_Networking", "Win32_Networking_WinSock"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO"] }
 windows_x86_64_msvc-4e55305914c60c55 = { package = "windows_x86_64_msvc", version = "0.36", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
