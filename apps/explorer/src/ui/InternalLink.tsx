@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { truncate } from '../utils/stringUtils';
+import { formatAddress } from '../utils/stringUtils';
 
 import { Link } from '~/ui/Link';
-
-const TRUNCATE_LENGTH = 16;
 
 export type AddressLinkProps = {
     address: string;
@@ -18,9 +16,7 @@ export type ObjectLinkProps = {
 };
 
 export function AddressLink({ address, noTruncate }: AddressLinkProps) {
-    const truncatedAddress = noTruncate
-        ? address
-        : truncate(address, TRUNCATE_LENGTH);
+    const truncatedAddress = noTruncate ? address : formatAddress(address);
     return (
         <Link variant="mono" to={`/address/${encodeURIComponent(address)}`}>
             {truncatedAddress}
@@ -29,9 +25,7 @@ export function AddressLink({ address, noTruncate }: AddressLinkProps) {
 }
 
 export function ObjectLink({ objectId, noTruncate }: ObjectLinkProps) {
-    const truncatedObjectId = noTruncate
-        ? objectId
-        : truncate(objectId, TRUNCATE_LENGTH);
+    const truncatedObjectId = noTruncate ? objectId : formatAddress(objectId);
     return (
         <Link variant="mono" to={`/object/${encodeURIComponent(objectId)}`}>
             {truncatedObjectId}

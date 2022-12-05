@@ -12,7 +12,8 @@ import {
     getObjectId,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
-import cl from 'clsx';
+import clsx from 'clsx';
+import { useState } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
@@ -44,11 +45,16 @@ import styles from './TransactionResult.module.css';
 import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
+import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
+import { ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
 import { SenderRecipient } from '~/ui/SenderRecipient';
 import { StatAmount } from '~/ui/StatAmount';
+import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
+import { Tooltip } from '~/ui/Tooltip';
+import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 type TxDataProps = CertifiedTransaction & {
@@ -198,7 +204,7 @@ function ItemView({ data }: { data: TxItemView }) {
                     return (
                         <div
                             key={index}
-                            className={cl(
+                            className={clsx(
                                 styles.itemviewcontentitem,
                                 label && styles.singleitem
                             )}
@@ -209,7 +215,7 @@ function ItemView({ data }: { data: TxItemView }) {
                                 </div>
                             )}
                             <div
-                                className={cl(
+                                className={clsx(
                                     styles.itemviewcontentvalue,
                                     item.monotypeClass && styles.mono
                                 )}
@@ -243,7 +249,15 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
-function GasAmount({ amount }: { amount: bigint | number }) {
+function GasAmount({
+    amount,
+    expandable,
+    expanded,
+}: {
+    amount?: bigint | number;
+    expandable?: boolean;
+    expanded?: boolean;
+}) {
     const [formattedAmount, symbol] = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
@@ -256,16 +270,25 @@ function GasAmount({ amount }: { amount: bigint | number }) {
                 <Text variant="body">{formattedAmount}</Text>
                 <Text variant="subtitleSmall">{symbol}</Text>
             </div>
+
             <Text variant="bodySmall">
-                <div className="flex items-center text-gray-65">
+                <div className="flex items-center text-steel">
                     (
                     <div className="flex items-baseline gap-0.5">
-                        <div>{amount.toLocaleString()}</div>
+                        <div>{amount?.toLocaleString()}</div>
                         <Text variant="subtitleSmall">MIST</Text>
                     </div>
                     )
                 </div>
             </Text>
+
+            {expandable && (
+                <ChevronDownIcon
+                    height={12}
+                    width={12}
+                    className={clsx('text-steel', expanded && 'rotate-180')}
+                />
+            )}
         </div>
     );
 }
@@ -274,6 +297,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
+    const gasUsed = txdata.transaction?.effects.gasUsed;
+
+    const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
     const txnTransfer = getAmount(txdetails, txdata.transaction?.effects);
     const sendReceiveRecipients = txnTransfer?.map((item) => ({
@@ -355,25 +381,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const createdMutateData = generateMutatedCreated(txdata);
 
-    const GasStorageFees = {
-        title: 'Gas & Storage Fees',
-        content: [
-            {
-                label: 'Gas Payment',
-                value: txdata.data.gasPayment.objectId,
-                link: true,
-            },
-            {
-                label: 'Gas Budget',
-                value: <GasAmount amount={txdata.data.gasBudget} />,
-            },
-            {
-                label: 'Total Gas Fee',
-                value: <GasAmount amount={txdata.gasFee} />,
-            },
-            //TODO: Add Storage Fees
-        ],
-    };
     const typearguments =
         txKindData.title === 'Call' && txKindData.package
             ? {
@@ -425,7 +432,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const hasEvents = txEventData && txEventData.length > 0;
 
     return (
-        <div className={cl(styles.txdetailsbg)}>
+        <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
                     type={txKindName}
@@ -452,7 +459,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         >
                             {typearguments && (
                                 <section
-                                    className={cl([
+                                    className={clsx([
                                         styles.txcomponent,
                                         styles.txgridcolspan2,
                                         styles.packagedetails,
@@ -462,7 +469,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 </section>
                             )}
                             <section
-                                className={cl([
+                                className={clsx([
                                     styles.txcomponent,
                                     styles.txsender,
                                     'md:ml-4',
@@ -494,7 +501,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             </section>
 
                             <section
-                                className={cl([
+                                className={clsx([
                                     styles.txcomponent,
                                     styles.txgridcolspan2,
                                 ])}
@@ -508,7 +515,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
                             {modules && (
                                 <section
-                                    className={cl([
+                                    className={clsx([
                                         styles.txcomponent,
                                         styles.txgridcolspan3,
                                     ])}
@@ -522,8 +529,85 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 </section>
                             )}
                         </div>
-                        <div className={styles.txgridcomponent}>
-                            <ItemView data={GasStorageFees} />
+                        <div className="mt-8">
+                            <TableHeader>Gas & Storage Fees</TableHeader>
+
+                            <DescriptionList>
+                                <DescriptionItem title="Gas Payment">
+                                    <ObjectLink
+                                        noTruncate
+                                        objectId={
+                                            txdata.data.gasPayment.objectId
+                                        }
+                                    />
+                                </DescriptionItem>
+
+                                <DescriptionItem title="Gas Budget">
+                                    <GasAmount amount={txdata.data.gasBudget} />
+                                </DescriptionItem>
+
+                                {gasFeesExpanded && (
+                                    <>
+                                        <DescriptionItem title="Computation Fee">
+                                            <GasAmount
+                                                amount={
+                                                    gasUsed?.computationCost
+                                                }
+                                            />
+                                        </DescriptionItem>
+
+                                        <DescriptionItem title="Storage Fee">
+                                            <GasAmount
+                                                amount={gasUsed?.storageCost}
+                                            />
+                                        </DescriptionItem>
+
+                                        <DescriptionItem title="Storage Rebate">
+                                            <GasAmount
+                                                amount={gasUsed?.storageRebate}
+                                            />
+                                        </DescriptionItem>
+
+                                        <div className="h-px bg-gray-45" />
+                                    </>
+                                )}
+
+                                <DescriptionItem
+                                    title={
+                                        <Text
+                                            variant="body"
+                                            weight="semibold"
+                                            color="steel-darker"
+                                        >
+                                            Total Gas Fee
+                                        </Text>
+                                    }
+                                >
+                                    <Tooltip
+                                        tip={
+                                            gasFeesExpanded
+                                                ? 'Hide Gas Fee breakdown'
+                                                : 'Show Gas Fee breakdown'
+                                        }
+                                    >
+                                        <button
+                                            className="cursor-pointer border-none bg-inherit p-0"
+                                            type="button"
+                                            onClick={() =>
+                                                setGasFeesExpanded(
+                                                    (expanded) => !expanded
+                                                )
+                                            }
+                                        >
+                                            <GasAmount
+                                                amount={txdata.gasFee}
+                                                expanded={gasFeesExpanded}
+                                                expandable
+                                            />
+                                        </button>
+                                    </Tooltip>
+                                </DescriptionItem>
+                            </DescriptionList>
                         </div>
                     </TabPanel>
                     {hasEvents && (
