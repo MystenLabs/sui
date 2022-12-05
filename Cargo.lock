@@ -801,7 +801,7 @@ dependencies = [
  "funty",
  "radium 0.5.3",
  "tap",
- "wyz",
+ "wyz 0.2.0",
 ]
 
 [[package]]
@@ -813,7 +813,7 @@ dependencies = [
  "funty",
  "radium 0.6.2",
  "tap",
- "wyz",
+ "wyz 0.2.0",
 ]
 
 [[package]]
@@ -11591,7 +11591,7 @@ dependencies = [
  "windows_x86_64_msvc 0.42.0",
  "winreg",
  "wyhash",
- "wyz",
+ "wyz 0.6.1",
  "x509-parser",
  "yaml-rust",
  "yansi",
@@ -11616,6 +11616,15 @@ name = "wyz"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
+
+[[package]]
+name = "wyz"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4eee9a828e072dd4920c6ecddb1f693ff5660a8c4dfc1ab1fb8487dc69d021ea"
+dependencies = [
+ "tap",
+]
 
 [[package]]
 name = "x"

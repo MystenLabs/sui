@@ -632,7 +632,7 @@ webpki = { version = "0.22", default-features = false, features = ["alloc", "std
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
 wyhash = { version = "0.5", default-features = false }
-wyz = { version = "0.2", default-features = false, features = ["alloc"] }
+wyz = { version = "0.6", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14", features = ["ring", "verify"] }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
@@ -1374,7 +1374,7 @@ webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
 wyhash = { version = "0.5", default-features = false }
-wyz = { version = "0.2", default-features = false, features = ["alloc"] }
+wyz = { version = "0.6", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14", features = ["ring", "verify"] }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
