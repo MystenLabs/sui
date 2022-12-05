@@ -62,16 +62,14 @@ pub async fn payloads(
         .ok_or_else(|| Error::new(ErrorType::MissingMetadata))?;
 
     let data = Operation::create_data(request.operations, metadata).await?;
-    let data1 = data.clone();
+    let address = data.signer();
     let intent_msg = IntentMessage::new(Intent::default(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
     Ok(ConstructionPayloadsResponse {
         unsigned_transaction: Hex::from_bytes(&intent_msg_bytes),
         payloads: vec![SigningPayload {
-            account_identifier: AccountIdentifier {
-                address: data1.signer(),
-            },
+            account_identifier: AccountIdentifier { address },
             hex_bytes: Hex::encode(bcs::to_bytes(&intent_msg)?),
             signature_type: Some(SignatureType::Ed25519),
         }],
@@ -255,7 +253,9 @@ pub async fn parse(
         )?;
         tx.into_data().intent_message.value
     } else {
-        bcs::from_bytes(&request.transaction.to_vec().map_err(|e| anyhow!(e))?)?
+        let intent: IntentMessage<TransactionData> =
+            bcs::from_bytes(&request.transaction.to_vec().map_err(|e| anyhow!(e))?)?;
+        intent.value
     };
     let account_identifier_signers = if request.signed {
         vec![AccountIdentifier {
