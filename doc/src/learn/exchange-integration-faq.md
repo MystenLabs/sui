@@ -112,7 +112,7 @@ There will not be slashing for the principal stake allocated. Instead, validator
 
 ### Does Sui support on-chain governance or voting?
     
-On-chain governance is not implemented for Sui. This is not planned for in the near future.
+On-chain governance is not implemented for Sui. There is no plan to add it in the near future.
 
 ## Where can I find block details?
 
