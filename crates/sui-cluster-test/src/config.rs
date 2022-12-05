@@ -7,6 +7,7 @@ pub enum Env {
     Devnet,
     Staging,
     Ci,
+    CiNomad,
     Testnet,
     CustomRemote,
     NewLocal,
