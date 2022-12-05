@@ -21,9 +21,12 @@ async fn main() -> Result<(), anyhow::Error> {
         None => panic!("Cannot obtain home directory path"),
     };
 
-    let my_address = SuiAddress::from_str("0x47722589dc23d63e82862f7814070002ffaaa465")?;
-    let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
-    let recipient = SuiAddress::from_str("0xbd42a850e81ebb8f80283266951d4f4f5722e301")?;
+    let my_address =
+        SuiAddress::from_str("sui1sau0w2w6j38k2tqtx0t87w9uaackz4gq5qagletswavsnc3n59ksjtk7gf")?;
+    let gas_object_id =
+        ObjectID::from_str("sui1qqqqqqqqqqqqqqqqqqqzwwe2s0c678768hduq2knzdnlev2x4q2q83tpuj")?;
+    let recipient =
+        SuiAddress::from_str("sui1lk3pxl3kutypw423eknhm2xq2sd83ugrsrw89g07hjwx7j9uvg3qntl4r0")?;
 
     // Create a sui transfer transaction
     let transfer_tx = sui

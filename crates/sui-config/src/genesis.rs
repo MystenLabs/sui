@@ -487,7 +487,7 @@ fn process_package(
                 .iter()
                 .zip(input_objects.iter())
                 .all(|(kind, obj_opt)| obj_opt.is_some()
-                    || to_be_published_addresses.contains(&kind.object_id()))
+                    || to_be_published_addresses.contains(&kind.object_id().into()))
         );
     }
     let filtered = inputs

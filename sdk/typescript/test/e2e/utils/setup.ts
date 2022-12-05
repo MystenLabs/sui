@@ -23,8 +23,8 @@ const DEFAULT_FAUCET_URL =
 const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullNode;
 
-export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
-export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
+export const DEFAULT_RECIPIENT = 'sui1hexrm8m3zre03hjl5t8psga34427ply4kz29dze62w8zrkjlt9esv4rnx2';
+export const DEFAULT_RECIPIENT_2 = 'sui1w9zfmw8lgxx6ngq9gc2r05yxh8c0lthws0zz72fgzmvgs8gdu4cqsdwhs2';
 export const DEFAULT_GAS_BUDGET = 10000;
 
 export const SUI_SYSTEM_STATE_OBJECT_ID =

@@ -1228,7 +1228,7 @@ impl From<MoveValue> for SuiMoveValue {
                 SuiMoveValue::Struct(value.into())
             }
             MoveValue::Signer(value) | MoveValue::Address(value) => {
-                SuiMoveValue::Address(SuiAddress::from(ObjectID::from(value)))
+                SuiMoveValue::Address(value.into())
             }
         }
     }
@@ -1644,11 +1644,7 @@ impl Display for SuiTransactionKind {
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(
-                    writer,
-                    "Package ID : {}",
-                    c.package.object_id.to_hex_literal()
-                )?;
+                writeln!(writer, "Package ID : {}", c.package.object_id)?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
@@ -1694,14 +1690,14 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                         CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
                         CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
                         | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
+                            SuiJsonValue::new(Value::String(id.to_string()))
                         }
                         CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
                             vec.iter()
                                 .map(|obj_arg| match obj_arg {
                                     ObjectArg::ImmOrOwnedObject((id, _, _))
                                     | ObjectArg::SharedObject { id, .. } => {
-                                        Value::String(id.to_hex_literal())
+                                        Value::String(id.to_string())
                                     }
                                 })
                                 .collect(),

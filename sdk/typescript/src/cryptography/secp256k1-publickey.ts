@@ -9,6 +9,7 @@ import {
   PublicKeyInitData,
   SIGNATURE_SCHEME_TO_FLAG,
 } from './publickey';
+import { bech32 } from 'bech32';
 
 const SECP256K1_PUBLIC_KEY_SIZE = 33;
 
@@ -73,6 +74,7 @@ export class Secp256k1PublicKey implements PublicKey {
     let tmp = new Uint8Array(SECP256K1_PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['Secp256k1']]);
     tmp.set(this.toBytes(), 1);
-    return sha3.sha3_256(tmp).slice(0, 40);
+    let words = bech32.toWords(Buffer.from(sha3.sha3_256(tmp).slice(0, 64), 'hex'));
+    return bech32.encode('sui', words);
   }
 }

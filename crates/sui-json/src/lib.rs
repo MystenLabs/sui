@@ -105,7 +105,7 @@ impl SuiJsonValue {
     }
 
     pub fn from_object_id(id: ObjectID) -> SuiJsonValue {
-        Self(JsonValue::String(id.to_hex_literal()))
+        Self(JsonValue::String(id.to_string()))
     }
 
     pub fn to_bcs_bytes(&self, ty: &MoveTypeLayout) -> Result<Vec<u8>, anyhow::Error> {
@@ -244,14 +244,10 @@ impl SuiJsonValue {
                 )
             }
 
-            (JsonValue::String(s), MoveTypeLayout::Address) => {
-                let s = s.trim().to_lowercase();
-                if !s.starts_with(HEX_PREFIX) {
-                    bail!("Address hex string must start with 0x.",);
-                }
-                let r = SuiAddress::from_str(&s)?;
-                MoveValue::Address(r.into())
-            }
+            (JsonValue::String(s), MoveTypeLayout::Address) => match SuiAddress::from_str(s) {
+                Ok(a) => MoveValue::Address(a.into()),
+                Err(e) => bail!("Invalid address {e} {s}"),
+            },
             _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })
     }

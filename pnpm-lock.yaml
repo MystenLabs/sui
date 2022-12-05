@@ -399,6 +399,7 @@ importers:
       '@types/lossless-json': ^1.0.1
       axios: ^0.27.2
       bs58: ^5.0.0
+      bech32: ^2.0.0
       cross-fetch: ^3.1.5
       eslint: ^8.23.0
       eslint-config-prettier: ^8.5.0
@@ -431,6 +432,7 @@ importers:
       '@scure/bip39': 1.1.0
       '@suchipi/femver': 1.0.0
       bs58: 5.0.0
+      bech32: 2.0.0
       cross-fetch: 3.1.5
       jayson: 3.7.0
       js-sha3: 0.8.0
@@ -6922,6 +6924,10 @@ packages:
       tweetnacl: 0.14.5
     dev: true
 
+  /bech32/2.0.0:
+    resolution: {integrity: sha512-LcknSilhIGatDAsY1ak2I8VtGaHNhgMSYVxFrGLXv+xLHytaKZKcaUJJUE7qmBr7h33o5YQwP55pMI0xmkpJwg==}
+    dev: false
+
   /better-opn/2.1.1:
     resolution: {integrity: sha512-kIPXZS5qwyKiX/HcRvDYfmBQUa8XP17I0mYZZ0y4UhpYOSvtsLHDYqmomS+Mj20aDvD3knEiQ0ecQy2nhio3yA==}
     engines: {node: '>8.0.0'}
@@ -10663,6 +10669,16 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.2
+    dev: true
+
+  /follow-redirects/1.15.1_debug@4.3.2:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
     dev: true
 
   /for-each/0.3.3:

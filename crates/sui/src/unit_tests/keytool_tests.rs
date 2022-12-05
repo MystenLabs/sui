@@ -6,8 +6,8 @@ use crate::keytool::read_keypair_from_file;
 
 use super::write_keypair_to_file;
 use super::KeyToolCommand;
+use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
-use fastcrypto::encoding::Hex;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
@@ -154,14 +154,14 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     .execute(&mut keystore)?;
     keystore.keys().iter().for_each(|pk| {
         assert_eq!(
-            Hex::encode(pk.as_ref()),
-            "685b2d6f98784dd763249af21c92f588ca1be80c40a98c55bf7c91b74e5ac1e2"
+            Base64::encode(pk.as_ref()),
+            "aFstb5h4TddjJJryHJL1iMob6AxAqYxVv3yRt05aweI="
         );
     });
     keystore.addresses().iter().for_each(|addr| {
         assert_eq!(
             addr.to_string(),
-            "0x1a4623343cd42be47d67314fce0ad042f3c82685"
+            "sui1rfrzxdpu6s47glt8x98uuzksgteusf59239uj8vvz8fyua96wdtsn9h4da"
         );
     });
     Ok(())
@@ -179,14 +179,14 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     .execute(&mut keystore)?;
     keystore.keys().iter().for_each(|pk| {
         assert_eq!(
-            Hex::encode(pk.as_ref()),
-            "03e3717435582ab33d2e315d21e9bc4e19500a1fc4c8cdc73a15365891774b131f"
+            Base64::encode(pk.as_ref()),
+            "A+NxdDVYKrM9LjFdIem8ThlQCh/EyM3HOhU2WJF3SxMf"
         );
     });
     keystore.addresses().iter().for_each(|addr| {
         assert_eq!(
             addr.to_string(),
-            "0xed17b3f435c03ff69c2cdc6d394932e68375f20f"
+            "sui1a5tm8ap4cqlld8pvm3knjjfju6phtus07dtk7cnw60nejn8kff8qts0efh"
         );
     });
     Ok(())

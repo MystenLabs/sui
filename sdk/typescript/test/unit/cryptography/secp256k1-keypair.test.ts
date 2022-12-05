@@ -100,7 +100,7 @@ describe('secp256k1-keypair', () => {
       'A+NxdDVYKrM9LjFdIem8ThlQCh/EyM3HOhU2WJF3SxMf'
     );
     expect(keypair.getPublicKey().toSuiAddress()).toEqual(
-      'ed17b3f435c03ff69c2cdc6d394932e68375f20f'
+      'sui1a5tm8ap4cqlld8pvm3knjjfju6phtus07dtk7cnw60nejn8kff8qts0efh'
     );
   });
 

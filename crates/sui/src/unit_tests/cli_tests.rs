@@ -476,7 +476,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let err_string = format!("{} ", resp.err().unwrap());
     let framework_addr = SUI_FRAMEWORK_ADDRESS.to_hex_literal();
-    let package_addr = package.to_hex_literal();
+    let package_addr = package.to_string();
     assert!(err_string.contains(&format!("Expected argument of type {package_addr}::object_basics::Object, but found type {framework_addr}::coin::Coin<{framework_addr}::sui::SUI>")));
 
     // Try a proper transfer

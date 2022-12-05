@@ -11,7 +11,7 @@ AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 20
+      SIZE: 32
 AuthorityBatch:
   STRUCT:
     - next_sequence_number: U64
@@ -392,7 +392,9 @@ ObjectFormatOptions:
     - include_types: BOOL
 ObjectID:
   NEWTYPESTRUCT:
-    TYPENAME: AccountAddress
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 ObjectInfoRequestKind:
   ENUM:
     0:
@@ -514,7 +516,7 @@ SuiAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 20
+      SIZE: 32
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
 TransactionEffectsDigest:

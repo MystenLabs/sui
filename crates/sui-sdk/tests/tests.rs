@@ -1,16 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::str::FromStr;
-
 use tempfile::TempDir;
 
-use fastcrypto::hash::{HashFunction, Sha3_256};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_types::crypto::Ed25519SuiSignature;
 use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
-use sui_types::{
-    base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
-    crypto::Ed25519SuiSignature,
-};
 #[test]
 fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
@@ -27,36 +21,6 @@ fn mnemonic_test() {
         .unwrap();
     assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);
-}
-
-/// This test confirms rust's implementation of mnemonic is the same with the Sui Wallet
-#[test]
-fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
-    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
-    let expected_address = SuiAddress::from_str("0x1a4623343cd42be47d67314fce0ad042f3c82685")?;
-
-    let temp_dir = TempDir::new().unwrap();
-    let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-
-    keystore
-        .import_from_mnemonic(phrase, SignatureScheme::ED25519, None)
-        .unwrap();
-
-    let pubkey = keystore.keys()[0].clone();
-    assert_eq!(pubkey.flag(), Ed25519SuiSignature::SCHEME.flag());
-
-    let mut hasher = Sha3_256::default();
-    hasher.update([pubkey.flag()]);
-    hasher.update(pubkey);
-    let g_arr = hasher.finalize();
-    let mut res = [0u8; SUI_ADDRESS_LENGTH];
-    res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-    let address = SuiAddress::try_from(res.as_slice())?;
-
-    assert_eq!(expected_address, address);
-
-    Ok(())
 }
 
 #[test]

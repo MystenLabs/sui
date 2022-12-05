@@ -57,7 +57,7 @@ impl ModuleResolver for InMemoryStorage {
     // TODO: duplicated code with ModuleResolver for SuiDataStore in authority_store.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
+            .get_package(&ObjectID::new(module_id.address().into_bytes()))?
             .and_then(|package| {
                 package
                     .data

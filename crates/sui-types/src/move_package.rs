@@ -59,11 +59,11 @@ impl MovePackage {
     ) -> Result<Self, ExecutionError> {
         let mut iter = iter.into_iter().peekable();
         let id = ObjectID::from(
-            *iter
-                .peek()
+            iter.peek()
                 .expect("Tried to build a Move package from an empty iterator of Compiled modules")
                 .self_id()
-                .address(),
+                .address()
+                .into_bytes(),
         );
 
         Self::new(

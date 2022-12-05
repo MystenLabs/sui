@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use move_core_types::account_address::AccountAddress;
 use sui::client_commands::WalletContext;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
@@ -293,7 +294,8 @@ async fn copy_package<'s>(
         let mut toml = fs::OpenOptions::new().append(true).open(dst_toml)?;
         writeln!(toml, "[addresses]")?;
         for (name, addr) in addresses {
-            writeln!(toml, "{name} = \"{addr}\"")?;
+            let acc_addr: AccountAddress = addr.into();
+            writeln!(toml, "{name} = \"{acc_addr}\"")?;
         }
     }
 

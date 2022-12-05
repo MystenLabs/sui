@@ -520,8 +520,8 @@ fn test_basic_args_linter_top_level() {
     let address = SuiAddress::random_for_testing_only();
 
     let value = json!(value_raw);
-    // Encode as hex string
-    let addr = json!(format!("0x{:02x}", address));
+    // Encode as bech32 string
+    let addr = json!(format!("{}", address));
 
     // They have to be ordered
     let args = vec![value, addr]
@@ -556,8 +556,8 @@ fn test_basic_args_linter_top_level() {
     let address = SuiAddress::random_for_testing_only();
 
     let object_id = json!(format!("0x{:02x}", object_id_raw));
-    // Encode as hex string
-    let addr = json!(format!("0x{:02x}", address));
+    // Encode as Bech32 string
+    let addr = json!(format!("{}", address));
 
     // They have to be ordered
     let args = vec![object_id, addr]
@@ -677,7 +677,7 @@ fn test_from_str() {
     assert!(test.0.is_boolean());
 
     // test id without quotes
-    let object_id = ObjectID::random().to_hex_literal();
+    let object_id = ObjectID::random().to_string();
     let test = SuiJsonValue::from_str(&object_id).unwrap();
     assert!(test.0.is_string());
     assert_eq!(object_id, test.0.as_str().unwrap());

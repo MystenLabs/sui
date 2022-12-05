@@ -44,7 +44,7 @@ use sui_sdk::SuiClient;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let sui = SuiClient::new("https://fullnode.devnet.sui.io:443", None, None).await?;
-    let address = SuiAddress::from_str("0xec11cad080d0496a53bafcea629fcbcfff2a9866")?;
+    let address = SuiAddress::from_str("sui1rfrzxdpu6s47glt8x98uuzksgteusf59vfm7v4")?;
     let objects = sui.read_api().get_objects_owned_by_address(address).await?;
     println!("{:?}", objects);
     Ok(())
@@ -78,9 +78,8 @@ async fn main() -> Result<(), anyhow::Error> {
         None => panic!("Cannot obtain home directory path"),
     };
 
-    let my_address = SuiAddress::from_str("0x47722589dc23d63e82862f7814070002ffaaa465")?;
-    let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
-    let recipient = SuiAddress::from_str("0xbd42a850e81ebb8f80283266951d4f4f5722e301")?;
+    let my_address = SuiAddress::from_str("sui1zupu00ayxqddcu3vrthm2ppe9409r504fqn7cjwl9lpmsjufqjhss6yl72")?;let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
+    let recipient = SuiAddress::from_str("sui1tqdprxn9wmfm2q44m3ruthjf0dm5u6x2cdm3n2py44a57ete07gsg5xll6")?;
 
     // Create a sui transfer transaction
     let transfer_tx = sui

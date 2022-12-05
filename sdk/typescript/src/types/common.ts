@@ -14,6 +14,7 @@ import { sha256Hash } from '../cryptography/hash';
 import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
 import { Base64DataBuffer } from '../serialization/base64';
+import { bech32 } from 'bech32';
 
 export type TransactionDigest = string;
 export type SuiAddress = string;
@@ -50,13 +51,20 @@ export function isValidTransactionDigest(
 // which uses the Move account address length
 // https://github.com/move-language/move/blob/67ec40dc50c66c34fd73512fcc412f3b68d67235/language/move-core/types/src/account_address.rs#L23 .
 
-export const SUI_ADDRESS_LENGTH = 20;
+export const SUI_ADDRESS_LENGTH = 32;
 export function isValidSuiAddress(value: string): value is SuiAddress {
-  return isHex(value) && getHexByteLength(value) === SUI_ADDRESS_LENGTH;
+  try {
+    let {prefix, words}= bech32.decode(value);
+    const bytes = Buffer.from(bech32.fromWords(words));
+    return prefix == "sui" && bytes.length == SUI_ADDRESS_LENGTH
+  } catch {
+    // invalid bech32 checksum
+    return false;
+  }
 }
 
 export function isValidSuiObjectId(value: string): boolean {
-  return isValidSuiAddress(value);
+  return isHex(value) && getHexByteLength(value) === SUI_ADDRESS_LENGTH;;
 }
 
 /**

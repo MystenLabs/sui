@@ -417,7 +417,7 @@ impl Display for SingleTransactionKind {
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
+                writeln!(writer, "Package ID : {}", c.package.0)?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
@@ -863,7 +863,8 @@ impl<S> Envelope<SenderSignedData, S> {
         for module in compiled_modules {
             for handle in &module.module_handles {
                 if !to_be_published.contains(&module.module_id_for_handle(handle)) {
-                    let address = ObjectID::from(*module.address_identifier_at(handle.address));
+                    let address =
+                        ObjectID::from(module.address_identifier_at(handle.address).into_bytes());
                     dependent_packages.insert(address);
                 }
             }

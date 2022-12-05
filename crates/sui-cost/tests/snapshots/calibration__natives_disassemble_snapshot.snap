@@ -87,7 +87,7 @@ B1:
 B2:
 	6: Branch(14)
 B3:
-	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
+	7: LdConst[1](Vector(U8): [32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
 	8: Call[14](calibrate_address_from_bytes(vector<u8>))
 	9: MoveLoc[1](trials: u64)
 	10: LdU64(1)
@@ -111,7 +111,7 @@ B1:
 B2:
 	6: Branch(14)
 B3:
-	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
+	7: LdConst[1](Vector(U8): [32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
 	8: Call[15](calibrate_address_from_bytes_nop(vector<u8>))
 	9: MoveLoc[1](trials: u64)
 	10: LdU64(1)
@@ -131,7 +131,7 @@ L5:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
-	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	3: Call[16](begin(address): Scenario)
 	4: StLoc[3](scenario_val: Scenario)
 	5: MutBorrowLoc[3](scenario_val: Scenario)
@@ -179,7 +179,7 @@ L5:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
-	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	3: Call[16](begin(address): Scenario)
 	4: StLoc[3](scenario_val: Scenario)
 	5: MutBorrowLoc[3](scenario_val: Scenario)

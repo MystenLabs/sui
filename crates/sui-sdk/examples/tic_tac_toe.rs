@@ -176,7 +176,7 @@ impl TicTacToe {
                     "place_mark",
                     vec![],
                     vec![
-                        SuiJsonValue::from_str(&game_state.info.object_id().to_hex_literal())?,
+                        SuiJsonValue::from_str(&game_state.info.object_id().to_string())?,
                         SuiJsonValue::from_str(&row.to_string())?,
                         SuiJsonValue::from_str(&col.to_string())?,
                     ],

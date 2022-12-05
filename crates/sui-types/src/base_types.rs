@@ -10,6 +10,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 use opentelemetry::{global, Context};
+use rand::rngs::OsRng;
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,7 @@ use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
+use crate::sui_serde::Bech32;
 use crate::sui_serde::Readable;
 use crate::waypoint::IntoPoint;
 use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
@@ -73,9 +75,9 @@ pub type AuthorityName = AuthorityPublicKeyBytes;
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
-    #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
-    AccountAddress,
+    #[schemars(with = "Bech32")]
+    #[serde_as(as = "Readable<Bech32, _>")]
+    [u8; ObjectID::LENGTH],
 );
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
@@ -154,8 +156,8 @@ pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct SuiAddress(
-    #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
+    #[schemars(with = "Bech32")]
+    #[serde_as(as = "Readable<Bech32, _>")]
     [u8; SUI_ADDRESS_LENGTH],
 );
 
@@ -179,7 +181,7 @@ impl SuiAddress {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&key.map(Hex::encode).unwrap_or_default())
+        serializer.serialize_str(&key.map(Bech32::encode).unwrap_or_default())
     }
 
     pub fn optional_address_from_hex<'de, D>(
@@ -189,8 +191,10 @@ impl SuiAddress {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
-        Ok(Some(value))
+        let value = Bech32::decode(&s).map_err(serde::de::Error::custom)?;
+        let mut array = [0u8; SUI_ADDRESS_LENGTH];
+        array.copy_from_slice(&value[..SUI_ADDRESS_LENGTH]);
+        Ok(Some(SuiAddress(array)))
     }
 
     pub fn to_inner(self) -> [u8; SUI_ADDRESS_LENGTH] {
@@ -200,7 +204,7 @@ impl SuiAddress {
 
 impl From<ObjectID> for SuiAddress {
     fn from(object_id: ObjectID) -> SuiAddress {
-        Self(object_id.into_bytes())
+        Self(object_id.0)
     }
 }
 
@@ -372,7 +376,7 @@ pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
     /// Signer/sender of the transaction
-    sender: AccountAddress,
+    sender: SuiAddress,
     /// Digest of the current transaction
     digest: Vec<u8>,
     /// The current epoch number
@@ -384,7 +388,7 @@ pub struct TxContext {
 impl TxContext {
     pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
         Self {
-            sender: AccountAddress::new(sender.0),
+            sender: *sender,
             digest: digest.0.to_vec(),
             epoch,
             ids_created: 0,
@@ -409,7 +413,7 @@ impl TxContext {
     }
 
     pub fn sender(&self) -> SuiAddress {
-        SuiAddress::from(ObjectID(self.sender))
+        self.sender
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -592,31 +596,13 @@ where
 
 impl fmt::Display for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#x}", self)
+        write!(f, "{}", Bech32::encode(self.0))
     }
 }
 
 impl fmt::Debug for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
-    }
-}
-
-impl fmt::LowerHex for SuiAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self))
-    }
-}
-
-impl fmt::UpperHex for SuiAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self).to_uppercase())
+        write!(f, "{}", Bech32::encode(self.0))
     }
 }
 
@@ -764,12 +750,23 @@ impl ObjectID {
     pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
     /// Creates a new ObjectID
     pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
-        Self(AccountAddress::new(obj_id))
+        Self(obj_id)
     }
 
     /// Random ObjectID
     pub fn random() -> Self {
-        Self::from(AccountAddress::random())
+        let mut rng = OsRng;
+        let buf: [u8; Self::LENGTH] = rng.gen();
+        Self(buf)
+    }
+
+    /// Return underlying bytes
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
+    pub fn into_bytes(self) -> [u8; Self::LENGTH] {
+        self.0
     }
 
     // Random for testing
@@ -803,9 +800,13 @@ impl ObjectID {
                 hex_str.push('0');
             }
             hex_str.push_str(&literal[2..]);
-            Self::from_str(&hex_str)
+            Self::from_bytes(
+                Hex::decode(&hex_str).map_err(|_| ObjectIDParseError::TryFromSliceError)?,
+            )
         } else {
-            Self::from_str(&literal[2..])
+            Self::from_bytes(
+                Hex::decode(literal).map_err(|_| ObjectIDParseError::TryFromSliceError)?,
+            )
         }
     }
 
@@ -817,7 +818,7 @@ impl ObjectID {
 
     /// Incremenent the ObjectID by usize IDs, assuming the ObjectID hex is a number represented as an array of bytes
     pub fn advance(&self, step: usize) -> Result<ObjectID, anyhow::Error> {
-        let mut curr_vec = self.as_slice().to_vec();
+        let mut curr_vec = self.0;
         let mut step_copy = step;
 
         let mut carry = 0;
@@ -843,7 +844,7 @@ impl ObjectID {
 
     /// Incremenent the ObjectID by one, assuming the ObjectID hex is a number represented as an array of bytes
     pub fn next_increment(&self) -> Result<ObjectID, anyhow::Error> {
-        let mut prev_val = self.as_slice().to_vec();
+        let mut prev_val = self.0;
         let mx = [0xFF; Self::LENGTH];
 
         if prev_val == mx {
@@ -859,7 +860,7 @@ impl ObjectID {
                 break;
             };
         }
-        ObjectID::from_bytes(prev_val.clone()).map_err(|w| w.into())
+        ObjectID::from_bytes(prev_val).map_err(|w| w.into())
     }
 
     /// Create `count` object IDs starting with one at `offset`
@@ -902,28 +903,19 @@ impl From<[u8; ObjectID::LENGTH]> for ObjectID {
 
 impl From<SuiAddress> for ObjectID {
     fn from(address: SuiAddress) -> ObjectID {
-        let tmp: AccountAddress = address.into();
-        tmp.into()
-    }
-}
-
-impl std::ops::Deref for ObjectID {
-    type Target = AccountAddress;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+        ObjectID::new(address.0)
     }
 }
 
 impl From<AccountAddress> for ObjectID {
     fn from(address: AccountAddress) -> Self {
-        Self(address)
+        Self(address.into_bytes())
     }
 }
 
 impl From<ObjectID> for AccountAddress {
     fn from(obj_id: ObjectID) -> Self {
-        obj_id.0
+        Self::from(obj_id.0)
     }
 }
 
@@ -935,7 +927,7 @@ impl From<SuiAddress> for AccountAddress {
 
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#x}", self)
+        write!(f, "{:?}", self)
     }
 }
 
@@ -950,7 +942,7 @@ impl fmt::Display for ObjectType {
 
 impl fmt::Debug for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
+        write!(f, "{}", Bech32::encode(self.0))
     }
 }
 
@@ -960,15 +952,6 @@ impl fmt::LowerHex for ObjectID {
             write!(f, "0x")?;
         }
         write!(f, "{}", Hex::encode(self))
-    }
-}
-
-impl fmt::UpperHex for ObjectID {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self).to_uppercase())
     }
 }
 
@@ -1006,8 +989,8 @@ impl TryFrom<String> for ObjectID {
 
 impl FromStr for SuiAddress {
     type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        decode_bytes_hex(s).map_err(|e| anyhow!(e))
+    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        SuiAddress::try_from(Bech32::decode(s).map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))
     }
 }
 
@@ -1015,8 +998,11 @@ impl FromStr for ObjectID {
     type Err = ObjectIDParseError;
 
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
-        // Try to match both the literal (0xABC..) and the normal (ABC)
-        decode_bytes_hex(s).or_else(|_| Self::from_hex_literal(s))
+        let bytes = Bech32::decode(s).map_err(|_| ObjectIDParseError::TryFromSliceError)?;
+        let arr: [u8; Self::LENGTH] = bytes
+            .try_into()
+            .map_err(|_| ObjectIDParseError::TryFromSliceError)?;
+        Ok(Self(arr))
     }
 }
 

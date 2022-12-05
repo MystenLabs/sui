@@ -10,33 +10,28 @@ import { Ed25519PublicKey } from '../../../src';
 // ../sui/target/debug/sui keytool list
 let TEST_CASES = new Map<string, string>([
   [
-    'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
-    '3415400a4bfdf924aefa55446e5f4cd6e9a9399f',
+    'rJzjxQ+FCK9m8YDU8Dq1Yx931HkIArhcw33kUPL9P8c=',
+    'sui1tqdprxn9wmfm2q44m3ruthjf0dm5u6x2cdm3n2py44a57ete07gsg5xll6',
   ],
   [
-    '0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
-    '2e6dad710b343b8655825bc420783aaa5ade08c2',
+    'QSLOoEwXV83ZMZu95mnJvnTxXfTdwEyWg+MeduPXmBU=',
+    'sui1w9zfmw8lgxx6ngq9gc2r05yxh8c0lthws0zz72fgzmvgs8gdu4cqsdwhs2',
   ],
   [
-    '6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
-    '607a2403069d547c3fbba4b9e22793c7d78abb1f',
+    'iyIIV/Pje7ywljsAq31JpoyrWSQR+3s0mAVA+7uNfzo=',
+    'sui1sau0w2w6j38k2tqtx0t87w9uaackz4gq5qagletswavsnc3n59ksjtk7gf',
   ],
   [
-    '6qZ88i8NJjaD+qZety3qXi4pLptGKS3wwO8bfDmUD+Y=',
-    '7a4b0fd76cce17ef014d64ec5e073117bfc0b4de',
+    'K6ePM4sz9MvdHEUQLz89gCa+4hImfL21Gj9ZGazu6/Q=',
+    'sui1u5ymnhwverczfq5xrqc7eyxl23ysq0n33wpzds3m8t4vfmdzcrzsfawu3c',
   ],
   [
-    'RgdFhZXGe21x48rhe9X+Kh/WyFCo9ft6e9nQKZYHpi0=',
-    'ecd7ef15f92a26bc8f22a88a7786fe1aae1051c6',
+    'b0iCDMXUS8ZMJtVto1nenxYMfW539P5yRBPyISVk3Vg',
+    'sui1cn6rfe7l2ngxtuwy4z2kpcaktljyghwh3c7jzevxh5w223dzpgxqz7l4hf',
   ],
 ]);
 
 const VALID_KEY_BASE64 = 'Uz39UFseB/B38iBwjesIU1JZxY6y+TRL9P84JFw41W4=';
-
-const BASE64_KEY_BYTES = [
-  180, 107, 26, 32, 169, 88, 248, 46, 88, 100, 108, 243, 255, 87, 146, 92, 42,
-  147, 104, 2, 39, 200, 114, 145, 37, 122, 8, 37, 170, 238, 164, 236,
-];
 
 describe('Ed25519PublicKey', () => {
   it('invalid', () => {
@@ -71,23 +66,10 @@ describe('Ed25519PublicKey', () => {
     }).toThrow();
   });
 
-  it('toBase64', () => {
-    const key = new Ed25519PublicKey(VALID_KEY_BASE64);
-    expect(key.toBase64()).toEqual(VALID_KEY_BASE64);
-    expect(key.toString()).toEqual(VALID_KEY_BASE64);
-  });
-
   it('toBuffer', () => {
     const key = new Ed25519PublicKey(VALID_KEY_BASE64);
     expect(key.toBytes().length).toBe(32);
     expect(new Ed25519PublicKey(key.toBytes()).equals(key)).toBe(true);
-  });
-
-  it('toSuiAddress', () => {
-    const key = new Ed25519PublicKey(new Uint8Array(BASE64_KEY_BYTES));
-    expect(key.toSuiAddress()).toEqual(
-      '98fc1c8179b95274327069cf3b0ed051fb14e0bc'
-    );
   });
 
   TEST_CASES.forEach((address, base64) => {

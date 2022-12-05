@@ -4,18 +4,19 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use anyhow::anyhow;
+use crate::crypto::{AggregateAuthoritySignature, AuthoritySignature, KeypairTraits};
+use bech32::Variant::Bech32 as Bech32Variant;
+use bech32::{FromBase32, ToBase32};
+use eyre::{bail, eyre};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
-use move_core_types::account_address::AccountAddress;
+use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
-
-use crate::crypto::{AggregateAuthoritySignature, AuthoritySignature, KeypairTraits};
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -83,7 +84,7 @@ where
         if deserializer.is_human_readable() {
             let value = E::deserialize_as(deserializer)?;
             if value.len() != N {
-                return Err(Error::custom(anyhow!(
+                return Err(Error::custom(eyre!(
                     "invalid array length {}, expecting {}",
                     value.len(),
                     N
@@ -109,30 +110,6 @@ where
     {
         if deserializer.is_human_readable() {
             E::deserialize_as(deserializer)
-        } else {
-            R::deserialize_as(deserializer)
-        }
-    }
-}
-
-/// DeserializeAs support for AccountAddress
-impl<'de, R, E> DeserializeAs<'de, AccountAddress> for Readable<E, R>
-where
-    R: DeserializeAs<'de, AccountAddress>,
-    E: Encoding,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<AccountAddress, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            if s.starts_with("0x") {
-                AccountAddress::from_hex_literal(&s)
-            } else {
-                AccountAddress::from_hex(&s)
-            }
-            .map_err(to_custom_error::<'de, D, _>)
         } else {
             R::deserialize_as(deserializer)
         }
@@ -238,5 +215,58 @@ impl<'de> DeserializeAs<'de, AggregateAuthoritySignature> for AggrAuthSignature 
         let sig_bytes = Base64::decode(&s).map_err(to_custom_error::<'de, D, _>)?;
         AggregateAuthoritySignature::from_bytes(&sig_bytes[..])
             .map_err(to_custom_error::<'de, D, _>)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+#[serde(try_from = "String")]
+pub struct Bech32(String);
+
+impl TryFrom<String> for Bech32 {
+    type Error = anyhow::Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        // Make sure the value is valid base64 string.
+        bech32::decode(&value)?;
+        Ok(Self(value))
+    }
+}
+
+impl Encoding for Bech32 {
+    fn decode(s: &str) -> Result<Vec<u8>, eyre::Report> {
+        match bech32::decode(s) {
+            Ok((hrp, data, variant)) => {
+                if hrp != "sui" || variant != Bech32Variant {
+                    bail!("Invalid hrp or variant")
+                }
+                Ok(Vec::<u8>::from_base32(&data).unwrap())
+            }
+            Err(e) => Err(eyre!(e)),
+        }
+    }
+
+    fn encode<T: AsRef<[u8]>>(data: T) -> String {
+        bech32::encode("sui", data.to_base32(), Bech32Variant).unwrap()
+    }
+}
+
+impl<'de> DeserializeAs<'de, Vec<u8>> for Bech32 {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::decode(&s).map_err(to_custom_error::<'de, D, _>)
+    }
+}
+
+impl<T> SerializeAs<T> for Bech32
+where
+    T: AsRef<[u8]>,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Self::encode(value).serialize(serializer)
     }
 }

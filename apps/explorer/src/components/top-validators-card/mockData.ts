@@ -17,52 +17,52 @@ const validators: TestValidatorInfo[] = [
     {
         name: 'Jump Crypto',
         stake: BigInt(9_220_000),
-        suiAddress: '0x693447224cf96c7b1f8de90d15198ceea22439e5',
+        suiAddress: 'sui1zupu00ayxqddcu3vrthm2ppe9409r504fqn7cjwl9lpmsjufqjhss6yl72',
     },
     {
         name: 'Blockdaemon',
         stake: BigInt(8_220_000),
-        suiAddress: '0x4497a41750e240f7a3352215c78b1e8ce9d605c1',
+        suiAddress: 'sui1r8e5df4tf99jwuf6s0n8mkdauspfcq3yd3xd5twej7e2qlshwamqyt60u9',
     },
     {
         name: 'Kraken',
         stake: BigInt(4_650_000),
-        suiAddress: '0xdb3d8f18e40e7fdcb4a3179e029044595e33cf76',
+        suiAddress: 'sui1tqdprxn9wmfm2q44m3ruthjf0dm5u6x2cdm3n2py44a57ete07gsg5xll6',
     },
     {
         name: 'Coinbase',
         stake: BigInt(4_550_000),
-        suiAddress: '0xf2f70c204eed5c33a9bb3eb4c0e3048edbbc3ac3',
+        suiAddress: 'sui1w9zfmw8lgxx6ngq9gc2r05yxh8c0lthws0zz72fgzmvgs8gdu4cqsdwhs2',
     },
     {
         name: 'a16z',
         stake: BigInt(2_860_000),
-        suiAddress: '0xf446d537680e4601f8fdc922ab897cc78f3706d7',
+        suiAddress: 'sui1sau0w2w6j38k2tqtx0t87w9uaackz4gq5qagletswavsnc3n59ksjtk7gf',
     },
     {
         name: 'Figment',
         stake: BigInt(2_840_000),
-        suiAddress: '0x1c83e3c2fe69dd15f60633cf072c3840adef504b',
+        suiAddress: 'sui1nm3vwhtt858whaa5w3gepanuhqprujaq8vdsksq8a0usyv3mjxjq9nz5fq',
     },
     {
         name: 'Another One',
         stake: BigInt(2_730_000),
-        suiAddress: '0x62afdd1fb17dbeb5325a0f3f6d073ba05bf1b958',
+        suiAddress: 'sui1hexrm8m3zre03hjl5t8psga34427ply4kz29dze62w8zrkjlt9esv4rnx2',
     },
     {
         name: 'Someone Else',
         stake: BigInt(2_730_000),
-        suiAddress: '0xdd0b64b253fe55b71f9784afee2dfa2e8bbd1ab7',
+        suiAddress: 'sui1cn6rfe7l2ngxtuwy4z2kpcaktljyghwh3c7jzevxh5w223dzpgxqz7l4hf',
     },
     {
         name: '4Pool',
         stake: BigInt(2_730_000),
-        suiAddress: '0xd4394c1577ca125630f652428d071a7b7dd047ad',
+        suiAddress: 'sui1mne690jmzjda8jj34cmsd6kju5vlct88azu3z8q5l2jf7yk9f24sdu9738',
     },
     {
         name: '3Pool',
         stake: BigInt(2_730_000),
-        suiAddress: '0xb0ecf49920c6a46104e94d810a9e81db17a6e866',
+        suiAddress: 'sui1mne690jmzjda8jj34cmsd6kju5vlct88azu3z8q5l2jf7yk9f24sdu9738',
     },
 ];
 

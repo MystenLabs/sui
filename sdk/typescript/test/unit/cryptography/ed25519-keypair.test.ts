@@ -73,7 +73,7 @@ describe('ed25519-keypair', () => {
       'aFstb5h4TddjJJryHJL1iMob6AxAqYxVv3yRt05aweI='
     );
     expect(keypair.getPublicKey().toSuiAddress()).toEqual(
-      '1a4623343cd42be47d67314fce0ad042f3c82685'
+      'sui1rfrzxdpu6s47glt8x98uuzksgteusf59239uj8vvz8fyua96wdtsn9h4da'
     );
   });
 

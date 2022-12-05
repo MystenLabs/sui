@@ -779,7 +779,7 @@ impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
 impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
+        let package_id = &ObjectID::from(module_id.address().into_bytes());
         let package_obj;
         let package = match self.read_object(package_id) {
             Some(object) => object,
@@ -813,9 +813,9 @@ impl<S> ResourceResolver for TemporaryStore<S> {
         address: &AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(&ObjectID::from(*address)) {
+        let object = match self.read_object(&ObjectID::from(address.into_bytes())) {
             Some(x) => x,
-            None => match self.read_object(&ObjectID::from(*address)) {
+            None => match self.read_object(&ObjectID::from(address.into_bytes())) {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_immutable() {

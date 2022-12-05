@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::path::{Path, PathBuf};
-
 use anyhow::anyhow;
 use bip32::{DerivationPath, Mnemonic};
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use signature::rand_core::OsRng;
+use std::fs;
+use std::path::{Path, PathBuf};
 use sui_keys::key_derive::derive_key_pair_from_path;
 use tracing::info;
 

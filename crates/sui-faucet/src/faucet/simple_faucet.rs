@@ -231,10 +231,10 @@ impl SimpleFaucet {
                 Err(FaucetError::FullnodeReadingError)
             }
             GasCoinResponse::GasCoinWithInsufficientBalance(gas_coin) => Err(
-                FaucetError::GasCoinWithInsufficientBalance(gas_coin.to_hex_literal()),
+                FaucetError::GasCoinWithInsufficientBalance(gas_coin.to_string()),
             ),
             GasCoinResponse::InvalidGasCoin(gas_coin) => {
-                Err(FaucetError::InvalidGasCoin(gas_coin.to_hex_literal()))
+                Err(FaucetError::InvalidGasCoin(gas_coin.to_string()))
             }
             GasCoinResponse::NoGasCoinAvailable => Err(FaucetError::NoGasCoinAvailable),
         }

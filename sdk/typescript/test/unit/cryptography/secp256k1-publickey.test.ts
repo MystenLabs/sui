@@ -15,20 +15,20 @@ import {
 // ../sui/target/debug/sui keytool list
 let SECP_TEST_CASES = new Map<string, string>([
   [
-    'AwTC3jVFRxXc3RJIFgoQcv486QdqwYa8vBp4bgSq0gsI',
-    '35057079b5dfc60d650768e2f4f92318f4ea5a77',
+    'A834EDsIyL2EKPl78zm6Wzw4d6KYM4KJ9t+mphDbPuGf',
+    'sui1zupu00ayxqddcu3vrthm2ppe9409r504fqn7cjwl9lpmsjufqjhss6yl72',
   ],
   [
-    'A1F2CtldIGolO92Pm9yuxWXs5E07aX+6ZEHAnSuKOhii',
-    '0187cf4234ff80862d5a1665d840df400fef29a0',
+    'AxXzjBz67/6kS3gokGLq5ZMKj2I8JGisIwNkoYCakz+F',
+    'sui1r8e5df4tf99jwuf6s0n8mkdauspfcq3yd3xd5twej7e2qlshwamqyt60u9',
   ],
   [
-    'Ak5rsa5Od4T6YFN/V3VIhZ/azMMYPkUilKQwc+RiaId+',
-    '70eaff6b7973c57842c2272f00aa19af9f20dc1b',
+    'A1P5G6fhBC1lebdLPV7Ja7eoeIs8DKJ+uMLK2OjJrlPR',
+    'sui1hexrm8m3zre03hjl5t8psga34427ply4kz29dze62w8zrkjlt9esv4rnx2',
   ],
   [
-    'A4XbJ3fLvV/8ONsnLHAW1nORKsoCYsHaXv9FK1beMtvY',
-    'deb28f733d9f59910cb210d56a46614f9dd28360',
+    'A55duFJFRIx9QpCkYpmpsXDNtici1OYUK9QjTKuvvezU',
+    'sui1mne690jmzjda8jj34cmsd6kju5vlct88azu3z8q5l2jf7yk9f24sdu9738',
   ],
 ]);
 describe('Secp256k1PublicKey', () => {
