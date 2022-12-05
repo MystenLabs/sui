@@ -47,7 +47,7 @@ The first three functions are for validator staking for themselves while the res
 
 ### How many validators will Sui have at genesis?
     
-The number is still TBD. The validator set is not fixed, but validators must apply and then be approved through our validator application process.
+The number is still under consideration. The validator set is not fixed, but validators must apply and then be approved through our validator application process.
 
 ### Is the address used for staking the same as the wallet address that owns the staked coins?
     
@@ -55,7 +55,7 @@ Yes, a user/validator stakes using the address that owns the staked coin. There 
 
 ### How is a staking transaction different from a typical transaction regarding construction, signing, and broadcasting?
     
-Staking transactions are Move call transactions that call specific Move function in the [Sui Framework](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move). The staking transaction uses a shared object, and is no different from other shared object transactions. [[add link]]
+Staking transactions are Move call transactions that call specific Move function in the [Sui Framework](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move). The staking transaction uses a shared object, and is no different from other shared object transactions.
 
 ### Does Sui support staking a partial amount of the SUI owned by an address?
     
@@ -115,6 +115,8 @@ There will not be slashing for the principal stake allocated. Instead, validator
 On-chain governance is not implemented for Sui. There is no plan to add it in the near future.
 
 ## Where can I find block details?
+
+Answers to the following questions address specific details around surfacing block details.
 
 ### How can I retrieve the current block height or query a block by height using a Sui endpoint?
     
