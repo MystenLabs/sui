@@ -34,7 +34,7 @@ function ReceiptPage() {
     );
 
     useEffect(() => {
-        dispatch(getTransactionsByAddress()).unwrap();
+        dispatch(getTransactionsByAddress());
     }, [dispatch]);
 
     const txnItem = useMemo(() => {

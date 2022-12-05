@@ -223,6 +223,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 dryRun: !IS_PROD || !sentryAuthToken,
                 authToken: sentryAuthToken,
                 release: walletVersionDetails.version,
+                silent: true,
             }),
         ],
     };

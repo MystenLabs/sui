@@ -80,9 +80,16 @@ function DappStatus() {
                 props: { source: 'Header' },
             });
             setDisconnecting(true);
-            await dispatch(appDisconnect({ origin: activeOriginUrl })).unwrap();
-            setVisible(false);
-            setDisconnecting(false);
+            try {
+                await dispatch(
+                    appDisconnect({ origin: activeOriginUrl })
+                ).unwrap();
+                setVisible(false);
+            } catch (e) {
+                // Do nothing
+            } finally {
+                setDisconnecting(false);
+            }
         }
     }, [disconnecting, isConnected, activeOriginUrl, dispatch]);
     if (!isConnected) {
