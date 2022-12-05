@@ -174,4 +174,4 @@ Validators form a certificate (a quorum of signatures) for each transaction, and
 
 ### How can I get in touch and request more information?
 
-- Please visit our Discord [here](https://discord.gg/sui).
+- Please visit our [Discord server](https://discord.gg/sui).
