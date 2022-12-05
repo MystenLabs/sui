@@ -4,7 +4,7 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::{path::Path, str::FromStr};
 
-use crate::api::TransactionExecutionApiClient;
+use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
 use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
@@ -67,10 +67,12 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let tx_bytes1 = tx_bytes.clone();
+    let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
     let tx_response: SuiExecuteTransactionResponse = http_client
         .execute_transaction(
-            tx_bytes,
+            tx_bytes1,
             sig_scheme,
             signature_bytes,
             pub_key,
@@ -78,8 +80,12 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.mutated.len() == 2);
-
+    if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response {
+        assert_eq!(
+            dryrun_response.transaction_digest,
+            effects.effects.transaction_digest
+        );
+    }
     Ok(())
 }
 
