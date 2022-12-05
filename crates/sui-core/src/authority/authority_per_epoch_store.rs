@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_storage::default_db_options;
@@ -333,20 +334,6 @@ where
         self.tables.next_shared_object_versions.get(obj).unwrap()
     }
 
-    /// Read a lock for a specific (transaction, shared object) pair.
-    #[cfg(test)] // Nothing wrong with this function, but it is not currently used outside of tests
-    pub fn get_assigned_shared_object_versions<'a>(
-        &self,
-        transaction_digest: &TransactionDigest,
-        object_ids: impl Iterator<Item = &'a ObjectID>,
-    ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
-        let object_keys: std::collections::BTreeMap<_, _> = self
-            .get_shared_locks(transaction_digest)?
-            .into_iter()
-            .collect();
-        Ok(object_ids.map(|id| object_keys.get(id).cloned()).collect())
-    }
-
     pub fn delete_shared_object_versions(
         &self,
         executed_transaction: &TransactionDigest,
@@ -355,7 +342,7 @@ where
         let mut write_batch = self.tables.assigned_shared_object_versions.batch();
         write_batch = write_batch.delete_batch(
             &self.tables.assigned_shared_object_versions,
-            vec![executed_transaction],
+            iter::once(executed_transaction),
         )?;
         write_batch =
             write_batch.delete_batch(&self.tables.next_shared_object_versions, deleted_objects)?;
@@ -366,14 +353,11 @@ where
     pub fn set_assigned_shared_object_versions(
         &self,
         transaction_digest: &TransactionDigest,
-        assigned_versions: Vec<(ObjectID, SequenceNumber)>,
+        assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
-        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
-        write_batch = write_batch.insert_batch(
-            &self.tables.assigned_shared_object_versions,
-            vec![(transaction_digest, assigned_versions)],
-        )?;
-        write_batch.write()?;
+        self.tables
+            .assigned_shared_object_versions
+            .insert(transaction_digest, assigned_versions)?;
         Ok(())
     }
 
@@ -514,7 +498,7 @@ where
 
         write_batch = write_batch.insert_batch(
             &self.tables.assigned_shared_object_versions,
-            vec![(certificate.digest(), assigned_versions)],
+            iter::once((certificate.digest(), assigned_versions)),
         )?;
 
         write_batch =

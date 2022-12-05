@@ -10,7 +10,7 @@ use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
@@ -692,18 +692,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.effects_notify_read
             .notify(transaction_digest, effects.data());
 
-        // Clean up the locks of hared objects. This should be done after we write effects, as
+        // Clean up the locks of shared objects. This should be done after we write effects, as
         // effects_exists is used as the guard to avoid re-writing locks for a previously
         // executed transaction. Otherwise, there can be left-over locks in the tables.
         // However, the issue is benign because epoch tables are cleaned up for each epoch.
-        let mut deleted_objects = Vec::new();
+        let deleted_objects: BTreeSet<_> = effects
+            .deleted
+            .iter()
+            .map(|(object_id, _, _)| object_id)
+            .collect();
+        let mut deleted_shared_objects = Vec::new();
         for (object_id, _) in certificate.shared_input_objects() {
-            if !self.object_exists(*object_id)? {
-                deleted_objects.push(*object_id);
+            if deleted_objects.contains(object_id) {
+                deleted_shared_objects.push(*object_id);
             }
         }
         self.epoch_store()
-            .delete_shared_object_versions(certificate.digest(), &deleted_objects)?;
+            .delete_shared_object_versions(certificate.digest(), &deleted_shared_objects)?;
 
         Ok(seq)
     }
@@ -1158,7 +1163,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> SuiResult {
         self.epoch_store().set_assigned_shared_object_versions(
             certificate.digest(),
-            effects
+            &effects
                 .shared_objects
                 .iter()
                 .map(|(id, version, _)| (*id, *version))
