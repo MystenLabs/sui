@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
+
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
@@ -157,12 +158,27 @@ pub async fn preprocess(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
+
     let sender = request
         .operations
-        .first()
-        .and_then(|op| op.account.clone())
-        .ok_or_else(|| Error::new(ErrorType::MalformedOperationError))?
-        .address;
+        .iter()
+        .find_map(|op| match (&op.account, &op.amount) {
+            (Some(acc), Some(amount)) => {
+                if amount.value.is_negative() {
+                    Some(acc.address)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .ok_or_else(|| {
+            Error::new_with_msg(
+                ErrorType::MalformedOperationError,
+                "Cannot extract sender's address from operations.",
+            )
+        })?;
+
     Ok(ConstructionPreprocessResponse {
         options: Some(MetadataOptions { sender }),
         required_public_keys: vec![AccountIdentifier { address: sender }],
