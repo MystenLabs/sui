@@ -9,6 +9,7 @@ transfer(10){
       }
     });
     recipient_amount = random_number({"minimum": "1", "maximum": "100000"});
+    sender_amount = 0 - {{recipient_amount}};
     print_message({"recipient_amount":{{recipient_amount}}});
 
     // Find recipient and construct operations
@@ -24,11 +25,23 @@ transfer(10){
       {
         "operation_identifier":{"index":0},
         "type":"PaySui",
-        "account":{{sender.account_identifier}},
-        "metadata":{"recipients":[{{recipient.account_identifier.address}}], "amounts": [{{recipient_amount}}]}
+        "account":{{recipient.account_identifier}},
+        "amount":{
+          "value":{{recipient_amount}},
+          "currency":{{currency}}
+        }
       },
       {
         "operation_identifier":{"index":1},
+        "type":"PaySui",
+        "account":{{sender.account_identifier}},
+        "amount":{
+          "value":{{sender_amount}},
+          "currency":{{currency}}
+        }
+      },
+      {
+        "operation_identifier":{"index":2},
         "type":"GasBudget",
         "account":{{sender.account_identifier}},
         "metadata":{
