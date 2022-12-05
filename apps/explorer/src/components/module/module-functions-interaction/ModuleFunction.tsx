@@ -24,7 +24,6 @@ import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
-import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const argsSchema = z.object({
     params: z.optional(z.array(z.string().trim().min(1))),
@@ -86,9 +85,6 @@ export function ModuleFunction({
             return result;
         },
     });
-    const executeFunctionError = execute.error
-        ? (execute.error as Error).message
-        : false;
     const isExecuteDisabled =
         formState.isValidating ||
         !formState.isValid ||
@@ -117,6 +113,7 @@ export function ModuleFunction({
                         label={`Arg${index}`}
                         {...register(`params.${index}` as const)}
                         placeholder={paramTypeText}
+                        disabled={formState.isSubmitting}
                     />
                 ))}
                 <div className="flex items-stretch justify-end gap-1.5">
@@ -124,8 +121,9 @@ export function ModuleFunction({
                         variant="primary"
                         type="submit"
                         disabled={isExecuteDisabled}
+                        loading={execute.isLoading}
                     >
-                        {execute.isLoading ? <LoadingSpinner /> : 'Execute'}
+                        Execute
                     </Button>
                     <ConnectButton
                         connectText={
@@ -146,9 +144,13 @@ export function ModuleFunction({
                         )}
                     />
                 </div>
-                {executeFunctionError || execute.data ? (
+                {execute.error || execute.data ? (
                     <FunctionExecutionResult
-                        error={executeFunctionError}
+                        error={
+                            execute.error
+                                ? (execute.error as Error).message || 'Error'
+                                : false
+                        }
                         result={execute.data || null}
                         onClear={() => {
                             execute.reset();

@@ -4,9 +4,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import { Button } from './Button';
+import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
-import { ReactComponent as CloseIcon } from './icons/x.svg';
 
 const bannerStyles = cva(
     'inline-flex text-p2 font-medium rounded-lg overflow-hidden box-border gap-1',
@@ -62,7 +61,8 @@ const closeBtnStyles = cva('self-start', {
 
 export interface BannerProps
     extends VariantProps<typeof bannerStyles>,
-        VariantProps<typeof contentStyles> {
+        VariantProps<typeof contentStyles>,
+        VariantProps<typeof closeBtnStyles> {
     icon?: ReactNode | null;
     children: ReactNode;
     onDismiss?: () => void;
@@ -93,9 +93,7 @@ export function Banner({
             </div>
             {onDismiss ? (
                 <div className={closeBtnStyles({ spacing })}>
-                    <Button onClick={onDismiss} variant="txt" size="md">
-                        <CloseIcon />
-                    </Button>
+                    <IconButton icon="x" onClick={onDismiss} />
                 </div>
             ) : null}
         </div>

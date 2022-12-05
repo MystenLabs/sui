@@ -10,7 +10,7 @@ export function useTxEffectsObjectRefs(
     tx: SuiTransactionResponse | null,
     objectType: 'created' | 'mutated' = 'created'
 ) {
-    const txEffects = useMemo(() => tx && getTransactionEffects(tx), [tx]);
+    const txEffects = tx && getTransactionEffects(tx);
     return useMemo(
         () => txEffects?.[objectType]?.map((anObj) => anObj.reference) || [],
         [txEffects, objectType]
