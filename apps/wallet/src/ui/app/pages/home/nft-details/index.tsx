@@ -60,40 +60,9 @@ function NFTDetailsPage() {
     const { nftFields, fileExtensionType, filePath } =
         useNFTBasicData(selectedNft);
     const { loading } = useObjectsState();
-    const detailAttrs = [
-        {
-            label: 'Object Id',
-            value: nftId ? (
-                <ExplorerLink
-                    type={ExplorerLinkType.object}
-                    objectID={nftId}
-                    title="View on Sui Explorer"
-                    className="text-sui-dark no-underline font-mono"
-                    showIcon={false}
-                >
-                    {shortAddress}
-                </ExplorerLink>
-            ) : null,
-        },
-        {
-            label: 'Media Type',
-            value:
-                filePath && fileExtensionType.name && fileExtensionType.type
-                    ? `${fileExtensionType.name} ${fileExtensionType.type}`
-                    : '-',
-        },
-    ];
     const metaFields = nftFields?.metadata?.fields?.attributes?.fields || null;
     const metaKeys: string[] = metaFields ? metaFields.keys : [];
     const metaValues = metaFields ? metaFields.values : [];
-    const metaAttrs = metaKeys.map((aKey, idx) => ({
-        label: aKey,
-        value:
-            typeof metaValues[idx] === 'object'
-                ? JSON.stringify(metaValues[idx])
-                : metaValues[idx],
-        key: aKey,
-    }));
     return (
         <div
             className={cl('flex flex-col flex-nowrap flex-1 gap-5', {
@@ -133,13 +102,58 @@ function NFTDetailsPage() {
                             </div>
                             <div className="flex-1">
                                 <Collapse title="Details" initialIsOpen>
-                                    <LabelValueItems items={detailAttrs} />
+                                    <LabelValueItems
+                                        items={[
+                                            {
+                                                label: 'Object Id',
+                                                value: nftId ? (
+                                                    <ExplorerLink
+                                                        type={
+                                                            ExplorerLinkType.object
+                                                        }
+                                                        objectID={nftId}
+                                                        title="View on Sui Explorer"
+                                                        className="text-sui-dark no-underline font-mono"
+                                                        showIcon={false}
+                                                    >
+                                                        {shortAddress}
+                                                    </ExplorerLink>
+                                                ) : null,
+                                            },
+                                            {
+                                                label: 'Media Type',
+                                                value:
+                                                    filePath &&
+                                                    fileExtensionType.name &&
+                                                    fileExtensionType.type
+                                                        ? `${fileExtensionType.name} ${fileExtensionType.type}`
+                                                        : '-',
+                                            },
+                                        ]}
+                                    />
                                 </Collapse>
                             </div>
-                            {metaAttrs.length ? (
+                            {metaKeys.length ? (
                                 <div className="flex-1">
                                     <Collapse title="Attributes" initialIsOpen>
-                                        <LabelValueItems items={metaAttrs} />
+                                        <LabelValueItems
+                                            items={metaKeys.map(
+                                                (aKey, idx) => ({
+                                                    label: aKey,
+                                                    value:
+                                                        typeof metaValues[
+                                                            idx
+                                                        ] === 'object'
+                                                            ? JSON.stringify(
+                                                                  metaValues[
+                                                                      idx
+                                                                  ]
+                                                              )
+                                                            : metaValues[idx],
+                                                    key: aKey,
+                                                })
+                                            )}
+                                        />
                                     </Collapse>
                                 </div>
                             ) : null}

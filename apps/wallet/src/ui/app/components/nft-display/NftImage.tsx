@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva } from 'class-variance-authority';
+import cl from 'classnames';
 
 import Icon, { SuiIcons } from '../icon';
 
 import type { VariantProps } from 'class-variance-authority';
 
-const containerStyles = cva('overflow-hidden', {
+const nftImageStyles = cva('overflow-hidden', {
     variants: {
         animateHover: {
             true: [
@@ -37,15 +38,7 @@ const containerStyles = cva('overflow-hidden', {
     },
 });
 
-const imageStyles = cva('w-full h-full object-cover', {
-    variants: {
-        animateHover: {
-            true: 'group-hover:scale-110 duration-500 ease-ease-out-cubic',
-        },
-    },
-});
-
-export interface NftImageProps extends VariantProps<typeof containerStyles> {
+export interface NftImageProps extends VariantProps<typeof nftImageStyles> {
     src: string | null;
     name: string | null;
     title?: string;
@@ -61,24 +54,26 @@ export function NftImage({
     borderRadius,
     size,
 }: NftImageProps) {
+    const imgCls = cl(
+        'w-full h-full object-cover',
+        animateHover && 'group-hover:scale-110 duration-500 ease-ease-out-cubic'
+    );
     return (
-        <div className={containerStyles({ animateHover, borderRadius, size })}>
+        <div className={nftImageStyles({ animateHover, borderRadius, size })}>
             {src ? (
                 <img
-                    className={imageStyles({ animateHover })}
+                    className={imgCls}
                     src={src}
                     alt={name || 'NFT'}
                     title={title}
                 />
             ) : (
                 <div
-                    className={imageStyles({
-                        animateHover,
-                        class: [
-                            'flex flex-col flex-nowrap items-center justify-center',
-                            'select-none uppercase text-steel-dark bg-noMedia gap-2',
-                        ],
-                    })}
+                    className={cl(
+                        imgCls,
+                        'flex flex-col flex-nowrap items-center justify-center',
+                        'select-none uppercase text-steel-dark bg-placeholderGradient01 gap-2'
+                    )}
                     title={title}
                 >
                     <Icon className="text-xl" icon={SuiIcons.NftTypeImage} />

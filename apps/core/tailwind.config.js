@@ -140,7 +140,8 @@ module.exports = {
         400: "400ms",
       },
       backgroundImage: {
-        noMedia: "linear-gradient(165.96deg, #e6f5ff 9.97%, #ebecff 94.97%)",
+        placeholderGradient01:
+          "linear-gradient(165.96deg, #e6f5ff 10%, #ebecff 95%)",
       },
       rotate: {
         135: "135deg",

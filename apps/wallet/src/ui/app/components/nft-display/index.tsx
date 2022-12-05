@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva } from 'class-variance-authority';
+import cl from 'classnames';
 
 import { NftImage, type NftImageProps } from './NftImage';
 import { useMiddleEllipsis, useNFTBasicData } from '_hooks';
@@ -12,7 +13,7 @@ import type { VariantProps } from 'class-variance-authority';
 const OBJ_TYPE_MAX_LENGTH = 20;
 const OBJ_TYPE_MAX_PREFIX_LENGTH = 3;
 
-const containerStyles = cva('flex flex-nowrap items-center', {
+const nftDisplayCardStyles = cva('flex flex-nowrap items-center', {
     variants: {
         animateHover: {
             true: 'group',
@@ -27,18 +28,7 @@ const containerStyles = cva('flex flex-nowrap items-center', {
     },
 });
 
-const labelStyles = cva(
-    'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
-    {
-        variants: {
-            animateHover: {
-                true: 'group-hover:text-black duration-200 ease-ease-in-out-cubic',
-            },
-        },
-    }
-);
-
-export interface NFTsProps extends VariantProps<typeof containerStyles> {
+export interface NFTsProps extends VariantProps<typeof nftDisplayCardStyles> {
     nftobj: SuiObjectType;
     showlabel?: boolean;
     size: NftImageProps['size'];
@@ -64,7 +54,7 @@ function NFTDisplayCard({
     );
     const displayTitle = name || objIDShort;
     return (
-        <div className={containerStyles({ animateHover, wideView })}>
+        <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <NftImage
                 src={filePath}
                 name={fileExtensionType.name}
@@ -90,7 +80,13 @@ function NFTDisplayCard({
                     </div>
                 </div>
             ) : showlabel && displayTitle ? (
-                <div className={labelStyles({ animateHover })}>
+                <div
+                    className={cl(
+                        'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
+                        animateHover &&
+                            'group-hover:text-black duration-200 ease-ease-in-out-cubic'
+                    )}
+                >
                     {displayTitle}
                 </div>
             ) : null}
