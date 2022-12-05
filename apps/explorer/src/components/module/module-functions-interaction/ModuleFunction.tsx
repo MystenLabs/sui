@@ -7,7 +7,7 @@ import {
 } from '@mysten/sui.js';
 import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
-import { cva } from 'class-variance-authority';
+import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
@@ -23,15 +23,6 @@ import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
     params: z.array(z.object({ value: z.string().trim().min(1) })),
-});
-
-const connectButtonStyles = cva('!text-bodySmall !rounded-md', {
-    variants: {
-        connected: {
-            true: '!font-mono !text-hero-dark !border-solid !border !border-steel !shadow-sm !shadow-ebony/5',
-            false: '!font-sans !flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !text-sui-light !hover:text-white !hover:bg-sui-dark',
-        },
-    },
 });
 
 export type ModuleFunctionProps = {
@@ -129,7 +120,12 @@ export function ModuleFunction({
                             </>
                         }
                         size="md"
-                        className={connectButtonStyles({ connected })}
+                        className={clsx(
+                            '!rounded-md !text-bodySmall',
+                            connected
+                                ? '!border !border-solid !border-steel !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
+                                : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
+                        )}
                         type="button"
                     />
                 </div>
