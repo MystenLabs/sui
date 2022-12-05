@@ -272,7 +272,7 @@ function GasAmount({
             </div>
 
             <Text variant="bodySmall">
-                <div className="flex items-center text-gray-65">
+                <div className="flex items-center text-steel">
                     (
                     <div className="flex items-baseline gap-0.5">
                         <div>{amount?.toLocaleString()}</div>
