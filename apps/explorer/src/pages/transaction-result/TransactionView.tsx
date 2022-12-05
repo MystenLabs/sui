@@ -591,7 +591,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         }
                                     >
                                         <button
-                                            className="cursor-pointer bg-inherit p-0 border-none"
+                                            className="cursor-pointer border-none bg-inherit p-0"
                                             type="button"
                                             onClick={() =>
                                                 setGasFeesExpanded(
