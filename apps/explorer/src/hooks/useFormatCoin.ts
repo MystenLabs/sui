@@ -105,19 +105,19 @@ export function useFormatCoin(
     );
 
     const [decimals, queryResult] = useCoinDecimals(coinType);
-    const { isFetched, isError } = queryResult;
+    const { isFetched } = queryResult;
 
     const formatted = useMemo(() => {
         if (typeof balance === 'undefined' || balance === null) return '';
 
-        if (isError) {
+        if (!coinType) {
             return numberFormatter.format(BigInt(balance));
         }
 
         if (!isFetched) return '...';
 
         return formatBalance(balance, decimals, format);
-    }, [decimals, isError, isFetched, balance, format]);
+    }, [decimals, isFetched, balance, format, coinType]);
 
     return [formatted, symbol, queryResult];
 }
