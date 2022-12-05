@@ -83,7 +83,6 @@ describe('Pagination test', () => {
             secondLastBtn?.textContent || '0',
             10
         );
-        //  const lastBtnNum = parseInt(lastBtn. || '0', 10);
 
         await userEvent.click(secondBtn);
         expect(setPageNumChange).toHaveReturnedWith(2);
