@@ -1200,7 +1200,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         authority: AuthorityName,
         transaction: &ConsensusTransaction,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult<bool> {
+    ) -> SuiResult {
         self.epoch_store()
             .record_end_of_publish(authority, transaction.key(), consensus_index)
     }
@@ -1340,6 +1340,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         );
 
         Ok(Some((index, roots)))
+    }
+
+    pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
+        self.epoch_store().final_epoch_checkpoint()
     }
 
     pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {

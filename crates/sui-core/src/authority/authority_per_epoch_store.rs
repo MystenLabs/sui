@@ -35,8 +35,8 @@ use typed_store_derive::DBMapUtils;
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
-
 const RECONFIG_STATE_INDEX: u64 = 0;
+const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 
 pub struct CertLockGuard(LockGuard);
 
@@ -126,6 +126,12 @@ pub struct AuthorityEpochTables<S> {
 
     /// Validators that have sent EndOfPublish message in this epoch
     end_of_publish: DBMap<AuthorityName, ()>,
+
+    // todo - if we move processing of entire nw commit into single DB batch,
+    // we can potentially get rid of this table
+    /// Records narwhal consensus output index of the final checkpoint in epoch
+    /// This is a single entry table with key FINAL_EPOCH_CHECKPOINT_INDEX
+    final_epoch_checkpoint: DBMap<u64, u64>,
 }
 
 impl<S> AuthorityEpochTables<S>
@@ -421,7 +427,7 @@ where
         authority: AuthorityName,
         key: ConsensusTransactionKey,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult<bool> {
+    ) -> SuiResult {
         let mut write_batch = self.tables.last_consensus_index.batch();
         // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
         // And this function itself is always executed from consensus task
@@ -448,6 +454,13 @@ where
             lock.close_all_certs();
             // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
             write_batch = self.store_reconfig_state_batch(&lock, write_batch)?;
+            write_batch = write_batch.insert_batch(
+                &self.tables.final_epoch_checkpoint,
+                [(
+                    &FINAL_EPOCH_CHECKPOINT_INDEX,
+                    &consensus_index.index.last_committed_round,
+                )],
+            )?;
             // Holding this lock until end of this function where we write batch to DB
             Some(lock)
         } else {
@@ -456,8 +469,7 @@ where
         // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
         // If some day we won't panic in ConsensusHandler on error we need to figure out here how
         // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
-        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)?;
-        Ok(collected_end_of_publish)
+        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
 
     pub fn finish_consensus_transaction_process(
@@ -551,6 +563,13 @@ where
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
+    }
+
+    pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
+        Ok(self
+            .tables
+            .final_epoch_checkpoint
+            .get(&FINAL_EPOCH_CHECKPOINT_INDEX)?)
     }
 
     pub fn get_reconfig_state_read_lock_guard(
