@@ -170,7 +170,7 @@ Validators form a certificate (a quorum of signatures) for each transaction, and
 
 ### How do I get Devnet coins?
 
-- You can find our faucet in Discord [here](https://discord.com/channels/916379725201563759/971488439931392130).
+- You can find our [faucet in Discord](https://discord.com/channels/916379725201563759/971488439931392130).
 
 ### How can I get in touch and request more information?
 
