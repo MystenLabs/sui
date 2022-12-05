@@ -26,7 +26,6 @@
     { "path": "../typescript" },
     { "path": "./packages/react-providers" },
     { "path": "./packages/wallet-kit" },
-    { "path": "./packages/ui" },
     { "path": "./packages/wallet-standard" },
     { "path": "./packages/adapters/all-wallets" },
     { "path": "./packages/adapters/base-adapter" },
