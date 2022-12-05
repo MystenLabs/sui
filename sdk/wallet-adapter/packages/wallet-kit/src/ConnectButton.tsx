@@ -16,7 +16,8 @@ export function ConnectButton({
   connectText = "Connect Wallet",
   ...props
 }: ConnectButtonProps) {
-  const [open, setOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
 
   const { connected, getAccounts } = useWallet();
@@ -40,7 +41,8 @@ export function ConnectButton({
           css={{ fontFamily: "$mono" }}
           color="connected"
           size="lg"
-          onClick={() => setOpen(true)}
+          onClick={() => setAccountModalOpen(true)}
+          type="button"
           {...props}
         >
           {`${account.slice(0, 4)}...${account.slice(-4)}`}
@@ -49,7 +51,8 @@ export function ConnectButton({
         <Button
           color="primary"
           size="lg"
-          onClick={() => setOpen(true)}
+          onClick={() => setConnectModalOpen(true)}
+          type="button"
           {...props}
         >
           {connectText}
@@ -59,11 +62,14 @@ export function ConnectButton({
       {account ? (
         <AccountModal
           account={account}
-          open={open}
-          onClose={() => setOpen(false)}
+          open={accountModalOpen}
+          onClose={() => setAccountModalOpen(false)}
         />
       ) : (
-        <ConnectModal open={open} onClose={() => setOpen(false)} />
+        <ConnectModal
+          open={connectModalOpen}
+          onClose={() => setConnectModalOpen(false)}
+        />
       )}
     </>
   );
