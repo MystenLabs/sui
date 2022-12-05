@@ -107,6 +107,7 @@
         "bignumber.js": "^9.1.0",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
+        "class-variance-authority": "^0.2.3",
         "classnames": "^2.3.1",
         "eslint-plugin-react": "^7.31.8",
         "formik": "^2.2.9",

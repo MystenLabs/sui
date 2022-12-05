@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import type { SuiData } from '@mysten/sui.js';
 
-export default function useMediaUrl(objData: SuiData) {
+export default function useMediaUrl(objData: SuiData | null) {
     const { fields } = (isSuiMoveObject(objData) && objData) || {};
     return useMemo(() => {
         if (fields) {
