@@ -47,7 +47,7 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
         }
         self.stake += self.committee.weight(&authority);
         if self.stake >= self.committee.threshold::<STRENGTH>() {
-            InsertResult::Success(&self.data)
+            InsertResult::QuorumReached(&self.data)
         } else {
             InsertResult::NotEnoughVotes
         }
@@ -63,13 +63,13 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
 }
 
 pub enum InsertResult<'a, V> {
-    Success(&'a HashMap<AuthorityName, V>),
+    QuorumReached(&'a HashMap<AuthorityName, V>),
     RepeatingEntry { previous: V, new: V },
     NotEnoughVotes,
 }
 
 impl<'a, V> InsertResult<'a, V> {
-    pub fn is_success(&self) -> bool {
-        matches!(self, InsertResult::Success(_))
+    pub fn is_quorum_reached(&self) -> bool {
+        matches!(self, InsertResult::QuorumReached(_))
     }
 }
