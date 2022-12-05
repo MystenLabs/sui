@@ -24,6 +24,7 @@
 .sui-icons-Union:before { content: "\ea07"; }
 .sui-icons-activity:before { content: "\ea08"; }
 .sui-icons-apps:before { content: "\ea09"; }
+<<<<<<< HEAD
 .sui-icons-arrow-left:before { content: "\ea0a"; }
 .sui-icons-arrow-right:before { content: "\ea0b"; }
 .sui-icons-check-fill:before { content: "\ea0c"; }
@@ -35,6 +36,19 @@
 .sui-icons-close:before { content: "\ea12"; }
 .sui-icons-coins:before { content: "\ea13"; }
 .sui-icons-copy-fill:before { content: "\ea14"; }
+=======
+.sui-icons-arrow-down:before { content: "\ea0a"; }
+.sui-icons-arrow-left:before { content: "\ea0b"; }
+.sui-icons-arrow-right:before { content: "\ea0c"; }
+.sui-icons-check-fill:before { content: "\ea0d"; }
+.sui-icons-check:before { content: "\ea0e"; }
+.sui-icons-checkmark:before { content: "\ea0f"; }
+.sui-icons-chevron-down:before { content: "\ea10"; }
+.sui-icons-clipboard:before { content: "\ea11"; }
+.sui-icons-close-fill:before { content: "\ea12"; }
+.sui-icons-close:before { content: "\ea13"; }
+.sui-icons-coins:before { content: "\ea14"; }
+>>>>>>> 6b78edaa4 (wallet-ext: nft-details ui update (#6241))
 .sui-icons-copy:before { content: "\ea15"; }
 .sui-icons-globe:before { content: "\ea16"; }
 .sui-icons-hand-coins:before { content: "\ea17"; }
@@ -64,6 +78,7 @@ $sui-icons-ThumbsUp: "\ea06";
 $sui-icons-Union: "\ea07";
 $sui-icons-activity: "\ea08";
 $sui-icons-apps: "\ea09";
+<<<<<<< HEAD
 $sui-icons-arrow-left: "\ea0a";
 $sui-icons-arrow-right: "\ea0b";
 $sui-icons-check-fill: "\ea0c";
@@ -75,6 +90,19 @@ $sui-icons-close-fill: "\ea11";
 $sui-icons-close: "\ea12";
 $sui-icons-coins: "\ea13";
 $sui-icons-copy-fill: "\ea14";
+=======
+$sui-icons-arrow-down: "\ea0a";
+$sui-icons-arrow-left: "\ea0b";
+$sui-icons-arrow-right: "\ea0c";
+$sui-icons-check-fill: "\ea0d";
+$sui-icons-check: "\ea0e";
+$sui-icons-checkmark: "\ea0f";
+$sui-icons-chevron-down: "\ea10";
+$sui-icons-clipboard: "\ea11";
+$sui-icons-close-fill: "\ea12";
+$sui-icons-close: "\ea13";
+$sui-icons-coins: "\ea14";
+>>>>>>> 6b78edaa4 (wallet-ext: nft-details ui update (#6241))
 $sui-icons-copy: "\ea15";
 $sui-icons-globe: "\ea16";
 $sui-icons-hand-coins: "\ea17";
