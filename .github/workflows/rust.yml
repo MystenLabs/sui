@@ -126,6 +126,19 @@ jobs:
         run: |
           MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
 
+  # Check all features build in release.
+  check-release:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - name: cargo check
+        run: |
+          cargo check --release --all-features
+
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and
