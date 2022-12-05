@@ -111,7 +111,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb#2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=3716a5669c68bd61d6e4958db99674507e0160b4#3716a5669c68bd61d6e4958db99674507e0160b4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb#2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=3716a5669c68bd61d6e4958db99674507e0160b4#3716a5669c68bd61d6e4958db99674507e0160b4"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb#2c6c81d94fb8abcc0c36f99ab212282bd14cd9cb"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=3716a5669c68bd61d6e4958db99674507e0160b4#3716a5669c68bd61d6e4958db99674507e0160b4"
 dependencies = [
  "anemo",
  "bytes",
@@ -6709,9 +6709,9 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.9.1"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57659b2d8340fa1a8b9358d14597b0b62ea8b9f6cd77cde07895079d619d2d4e"
+checksum = "445cbfe2382fa023c4f2f3c7e1c95c03dcc1df2bf23cebcb2b13e1402c4394d1"
 dependencies = [
  "bytes",
  "futures-io",
