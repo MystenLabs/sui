@@ -10,7 +10,7 @@ use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
@@ -299,7 +299,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             self.epoch_store()
-                                .get_all_shared_locks(digest)?
+                                .get_shared_locks(digest)?
                                 .into_iter()
                                 .collect(),
                         )
@@ -370,7 +370,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             self.epoch_store()
-                                .get_all_shared_locks(digest)?
+                                .get_shared_locks(digest)?
                                 .into_iter()
                                 .collect(),
                         )
@@ -692,10 +692,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.effects_notify_read
             .notify(transaction_digest, effects.data());
 
-        // Cleanup the lock of the shared objects. This must be done after we write effects, as
-        // effects_exists is used as the guard to avoid re-locking objects for a previously
-        // executed tx. remove_shared_objects_locks.
-        self.remove_shared_objects_locks(transaction_digest, certificate)?;
+        // Clean up the locks of shared objects. This should be done after we write effects, as
+        // effects_exists is used as the guard to avoid re-writing locks for a previously
+        // executed transaction. Otherwise, there can be left-over locks in the tables.
+        // However, the issue is benign because epoch tables are cleaned up for each epoch.
+        let deleted_objects: BTreeSet<_> = effects
+            .deleted
+            .iter()
+            .map(|(object_id, _, _)| object_id)
+            .collect();
+        let mut deleted_shared_objects = Vec::new();
+        for (object_id, _) in certificate.shared_input_objects() {
+            if deleted_objects.contains(object_id) {
+                deleted_shared_objects.push(*object_id);
+            }
+        }
+        self.epoch_store()
+            .delete_shared_object_versions(certificate.digest(), &deleted_shared_objects)?;
 
         Ok(seq)
     }
@@ -1138,25 +1151,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
     }
 
-    /// Remove the shared objects locks.
-    pub fn remove_shared_objects_locks(
-        &self,
-        transaction_digest: &TransactionDigest,
-        transaction: &VerifiedCertificate,
-    ) -> SuiResult {
-        let mut sequenced_to_delete = Vec::new();
-        let mut schedule_to_delete = Vec::new();
-        for (object_id, _) in transaction.shared_input_objects() {
-            sequenced_to_delete.push((*transaction_digest, *object_id));
-
-            if !self.object_exists(*object_id)? {
-                schedule_to_delete.push(*object_id);
-            }
-        }
-        self.epoch_store()
-            .remove_shared_objects_locks(&sequenced_to_delete, &schedule_to_delete)
-    }
-
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
     /// of that transaction. Used by the nodes, which don't listen to consensus.
     pub fn acquire_shared_locks_from_effects(
@@ -1167,17 +1161,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // lock.
         _tx_guard: &CertTxGuard<'_>,
     ) -> SuiResult {
-        let digest = *certificate.digest();
-
-        let sequenced: Vec<_> = effects
-            .shared_objects
-            .iter()
-            .map(|(id, version, _)| ((digest, *id), *version))
-            .collect();
-        debug!(?sequenced, "Shared object locks sequenced from effects");
-
-        self.epoch_store()
-            .insert_assigned_shared_object_versions(sequenced)
+        self.epoch_store().set_assigned_shared_object_versions(
+            certificate.digest(),
+            &effects
+                .shared_objects
+                .iter()
+                .map(|(id, version, _)| (*id, *version))
+                .collect(),
+        )
     }
 
     pub fn consensus_message_processed(
@@ -1255,14 +1246,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects().map(|(id, _)| id);
         let epoch_store = self.epoch_store();
-        let versions = epoch_store.multi_get_next_object_versions(ids)?;
+        let versions = epoch_store.multi_get_next_shared_object_versions(ids)?;
 
         let mut input_object_keys = certificate_input_object_keys(certificate)?;
-        let mut sequenced_to_write = Vec::new();
+        let mut assigned_versions = Vec::new();
         for ((id, initial_shared_version), v) in
             certificate.shared_input_objects().zip(versions.iter())
         {
-            // On epoch changes, the `next_object_versions` table will be empty, and we rely on
+            // On epoch changes, the `next_shared_object_versions` table will be empty, and we rely on
             // parent sync to recover the current version of the object.  However, if an object was
             // previously aware of the object as owned, and it was upgraded to shared, the version
             // in parent sync may be out of date, causing a fork.  In that case, we know that the
@@ -1282,20 +1273,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 ),
             };
 
-            sequenced_to_write.push(((transaction_digest, *id), version));
+            assigned_versions.push((*id, version));
             input_object_keys.push(ObjectKey(*id, version));
         }
 
         let next_version =
             SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
-
-        let schedule_to_write: Vec<_> = sequenced_to_write
+        let next_versions: Vec<_> = assigned_versions
             .iter()
-            .map(|((_, id), _)| (*id, next_version))
+            .map(|(id, _)| (*id, next_version))
             .collect();
 
         trace!(tx_digest = ?transaction_digest,
-               ?sequenced_to_write, ?schedule_to_write,
+               ?assigned_versions, ?next_version,
                "locking shared objects");
 
         // Make an iterator to update the last consensus index.
@@ -1303,7 +1293,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Holding _tx_lock avoids the following race:
         // - we check effects_exist, returns false
         // - another task (starting from handle_node_sync_certificate) writes effects,
-        //    and then deletes locks from assigned_object_versions
+        //    and then deletes locks from assigned_shared_object_versions
         // - we write to assigned_object versions, re-creating the locks that were just deleted
         // - now it's possible to run a new tx against old versions of the shared objects.
         let _tx_lock = epoch_store.acquire_tx_lock(&transaction_digest).await;
@@ -1315,8 +1305,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             transaction.key(),
             certificate,
             consensus_index,
-            sequenced_to_write,
-            schedule_to_write,
+            assigned_versions,
+            next_versions,
         )
     }
 
