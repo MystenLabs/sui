@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_storage::default_db_options;
@@ -65,12 +66,17 @@ pub struct AuthorityEpochTables<S> {
     #[default_options_override_fn = "transactions_table_default_config"]
     transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, S>>,
 
-    /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
-    /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
-    /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
-    /// TODO: These two maps should be merged into a single one (no reason to have two).
-    assigned_object_versions: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
-    next_object_versions: DBMap<ObjectID, SequenceNumber>,
+    /// The two tables below manage shared object locks / versions. There are two ways they can be
+    /// updated:
+    /// 1. Upon receiving a certified transaction from consensus, the authority assigns the next
+    /// version to each shared object of the transaction. The next versions of the shared objects
+    /// are updated as well.
+    /// 2. Upon receiving a certified effect, the authority assigns the shared object versions from
+    /// the effect to the transaction of the effect. Next object versions are not updated.
+    ///
+    /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
+    assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
+    next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
 
     /// Certificates that have been received from clients or received from consensus, but not yet
     /// executed. Entries are cleared after execution.
@@ -84,7 +90,7 @@ pub struct AuthorityEpochTables<S> {
     pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
-    /// sure to advance next_object_versions exactly once for each transaction we receive from
+    /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
     /// consensus. But, we may also be processing transactions from checkpoints, so we need to
     /// track this state separately.
     ///
@@ -236,11 +242,11 @@ where
         Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
     }
 
-    pub fn multi_get_next_object_versions<'a>(
+    pub fn multi_get_next_shared_object_versions<'a>(
         &self,
         ids: impl Iterator<Item = &'a ObjectID>,
     ) -> SuiResult<Vec<Option<SequenceNumber>>> {
-        Ok(self.tables.next_object_versions.multi_get(ids)?)
+        Ok(self.tables.next_shared_object_versions.multi_get(ids)?)
     }
 
     pub fn get_last_checkpoint_boundary(&self) -> Option<(u64, u64)> {
@@ -311,63 +317,47 @@ where
             .collect()
     }
 
-    /// Read a lock for a specific (transaction, shared object) pair.
-    pub fn get_all_shared_locks(
+    /// Read shared object locks / versions for a specific transaction.
+    pub fn get_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
         Ok(self
             .tables
-            .assigned_object_versions
-            .iter()
-            .skip_to(&(*transaction_digest, ObjectID::ZERO))?
-            .take_while(|((tx, _objid), _ver)| tx == transaction_digest)
-            .map(|((_tx, objid), ver)| (objid, ver))
-            .collect())
+            .assigned_shared_object_versions
+            .get(transaction_digest)?
+            .unwrap_or_default())
     }
 
     #[cfg(test)]
     pub fn get_next_object_version(&self, obj: &ObjectID) -> Option<SequenceNumber> {
-        self.tables.next_object_versions.get(obj).unwrap()
+        self.tables.next_shared_object_versions.get(obj).unwrap()
     }
 
-    /// Read a lock for a specific (transaction, shared object) pair.
-    #[cfg(test)] // Nothing wrong with this function, but it is not currently used outside of tests
-    pub fn get_assigned_object_versions<'a>(
+    pub fn delete_shared_object_versions(
         &self,
-        transaction_digest: &TransactionDigest,
-        object_ids: impl Iterator<Item = &'a ObjectID>,
-    ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
-        let keys = object_ids.map(|objid| (*transaction_digest, *objid));
-
-        self.tables
-            .assigned_object_versions
-            .multi_get(keys)
-            .map_err(SuiError::from)
-    }
-
-    pub fn remove_shared_objects_locks(
-        &self,
-        sequenced_to_delete: &[(TransactionDigest, ObjectID)],
-        schedule_to_delete: &[ObjectID],
+        executed_transaction: &TransactionDigest,
+        deleted_objects: &[ObjectID],
     ) -> SuiResult {
-        let mut write_batch = self.tables.assigned_object_versions.batch();
+        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
+        write_batch = write_batch.delete_batch(
+            &self.tables.assigned_shared_object_versions,
+            iter::once(executed_transaction),
+        )?;
         write_batch =
-            write_batch.delete_batch(&self.tables.assigned_object_versions, sequenced_to_delete)?;
-        write_batch =
-            write_batch.delete_batch(&self.tables.next_object_versions, schedule_to_delete)?;
+            write_batch.delete_batch(&self.tables.next_shared_object_versions, deleted_objects)?;
         write_batch.write()?;
         Ok(())
     }
 
-    pub fn insert_assigned_shared_object_versions(
+    pub fn set_assigned_shared_object_versions(
         &self,
-        sequenced: Vec<((TransactionDigest, ObjectID), SequenceNumber)>,
+        transaction_digest: &TransactionDigest,
+        assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
-        let mut write_batch = self.tables.assigned_object_versions.batch();
-        write_batch = write_batch.insert_batch(&self.tables.assigned_object_versions, sequenced)?;
-        write_batch.write()?;
-
+        self.tables
+            .assigned_shared_object_versions
+            .insert(transaction_digest, assigned_versions)?;
         Ok(())
     }
 
@@ -499,18 +489,20 @@ where
         key: ConsensusTransactionKey,
         certificate: &VerifiedCertificate,
         consensus_index: ExecutionIndicesWithHash,
-        sequenced_to_write: Vec<((TransactionDigest, ObjectID), SequenceNumber)>,
-        schedule_to_write: Vec<(ObjectID, SequenceNumber)>,
+        assigned_versions: Vec<(ObjectID, SequenceNumber)>,
+        next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
         // Atomically store all elements.
         // TODO: clear the shared object locks per transaction after ensuring consistency.
-        let mut write_batch = self.tables.assigned_object_versions.batch();
+        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
+
+        write_batch = write_batch.insert_batch(
+            &self.tables.assigned_shared_object_versions,
+            iter::once((certificate.digest(), assigned_versions)),
+        )?;
 
         write_batch =
-            write_batch.insert_batch(&self.tables.assigned_object_versions, sequenced_to_write)?;
-
-        write_batch =
-            write_batch.insert_batch(&self.tables.next_object_versions, schedule_to_write)?;
+            write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
 
         self.finish_consensus_certificate_process_with_batch(
             write_batch,
