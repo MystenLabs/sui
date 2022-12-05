@@ -49,7 +49,7 @@ describe('Pagination test', () => {
         const { container } = render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} />
         );
-
+        
         // Handle multiple elements with the same test id:
         const firstBtn = container.querySelector(
             'button[data-testid="firstBtn"]:not([style*="display:none"])'
@@ -69,7 +69,7 @@ describe('Pagination test', () => {
  
         const setPageNumChange = vi.fn((number) => number)
 
-        const {  getByTestId, } = render(
+        const {  getByTestId } = render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} onPagiChangeFn={setPageNumChange} />
         );
             
@@ -77,6 +77,8 @@ describe('Pagination test', () => {
         const secondBtnPageNum = parseInt(secondBtn.textContent || '0', 10);
         const secondLastBtn = getByTestId('secondLastBtn');
         const secondLastBtnNumber = parseInt(secondLastBtn?.textContent || '0', 10);
+       //  const lastBtnNum = parseInt(lastBtn. || '0', 10);
+
 
         await userEvent.click(secondBtn)
         expect(setPageNumChange).toHaveReturnedWith(2);
