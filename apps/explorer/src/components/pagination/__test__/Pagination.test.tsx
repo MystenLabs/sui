@@ -7,18 +7,18 @@ import { describe, it, expect, vi } from 'vitest';
 
 import Pagination from '../Pagination';
 
-describe('Pagination test', () => {
+describe('Pagination', () => {
     it('check pagination buttons exist and check disabled behavior for the nextBtn and prevBtn', () => {
         const { getByTestId } = render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} />
         );
 
         const nextBtn = screen.getByRole('button', {
-            name: /pagination back button/i,
+            name: /back/i,
         });
 
         const prevBtn = screen.getByRole('button', {
-            name: /pagination next button/i,
+            name: /next/i,
         });
 
         const secondBtn = getByTestId('secondBtn');
@@ -38,11 +38,11 @@ describe('Pagination test', () => {
         );
 
         const nextBtn = screen.getByRole('button', {
-            name: /pagination back button/i,
+            name: /back/i,
         });
 
         const prevBtn = screen.getByRole('button', {
-            name: /pagination next button/i,
+            name: /next/i,
         });
 
         expect(nextBtn).not.toHaveProperty('disabled', true);
@@ -56,11 +56,11 @@ describe('Pagination test', () => {
 
         // Handle multiple elements with the same test id:
         const firstBtn = screen.getByRole('button', {
-            name: /first page button/i,
+            name: /first page/i,
         });
 
         const lastBtn = screen.getByRole('button', {
-            name: /last page button/i,
+            name: /last page/i,
         });
 
         expect(firstBtn).toBeDefined();
@@ -90,7 +90,7 @@ describe('Pagination test', () => {
         );
 
         const lastBtn = screen.getByRole('button', {
-            name: /last page button/i,
+            name: /last page/i,
         });
 
         const lastBtnPageNum = parseInt(lastBtn.textContent || '0', 10);

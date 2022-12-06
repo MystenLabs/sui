@@ -23,7 +23,7 @@ function IndexZeroButton({
                 pageIndex === 0 ? styles.pagenumber : styles.btncontainer
             }
             data-testid="firstBtn"
-            aria-label="first page button"
+            aria-label="first page"
             onClick={onClick}
             disabled={pageIndex === 0}
         >
@@ -47,7 +47,7 @@ function FinalPageButton({
         <button
             type="button"
             data-testid="lastBtn"
-            aria-label="last page button"
+            aria-label="last page"
             disabled={pageIndex === finalPageNo - 1}
             onClick={onClick}
             className={
@@ -143,7 +143,7 @@ function Pagination({
                     : styles.btncontainer
             }
             data-testid="backBtn"
-            aria-label="pagination back button"
+            aria-label="back"
             onClick={handleBackClick}
             disabled={pageIndex === 0}
         >
@@ -162,7 +162,7 @@ function Pagination({
             }
             disabled={pageIndex === finalPageNo - 1}
             onClick={handleNextClick}
-            aria-label="pagination next button"
+            aria-label="next"
         >
             &rarr;
         </button>
