@@ -238,6 +238,10 @@ async fn run(
     let node_handles = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
+            // spawn primary networking
+
+            // pass it down to the primary node
+
             Node::spawn_primary(
                 primary_keypair,
                 primary_network_keypair,
