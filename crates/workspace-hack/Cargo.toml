@@ -150,7 +150,8 @@ ctr = { version = "0.9", default-features = false }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["alloc", "serde", "std", "u64_backend"] }
-dashmap = { version = "5", default-features = false }
+dashmap-aab1d76ef665c0d4 = { package = "dashmap", git = "https://github.com/velvia/dashmap", rev = "a6e36242044f86412531c24c437e95beadc67b62", default-features = false }
+dashmap-cdf1610d3e1514e9 = { package = "dashmap", version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 data-encoding-macro = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
@@ -240,6 +241,7 @@ hakari = { version = "0.11", default-features = false, features = ["cli-support"
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown-23157565204cc58a = { package = "hashbrown", git = "https://github.com/velvia/hashbrown", rev = "db403dbf63207e22ef388fd6c182e7daa594bce4", default-features = false }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -800,7 +802,8 @@ curve25519-dalek-ng = { version = "4", features = ["alloc", "serde", "std", "u64
 darling = { version = "0.14", features = ["suggestions"] }
 darling_core = { version = "0.14", default-features = false, features = ["strsim", "suggestions"] }
 darling_macro = { version = "0.14", default-features = false }
-dashmap = { version = "5", default-features = false }
+dashmap-aab1d76ef665c0d4 = { package = "dashmap", git = "https://github.com/velvia/dashmap", rev = "a6e36242044f86412531c24c437e95beadc67b62", default-features = false }
+dashmap-cdf1610d3e1514e9 = { package = "dashmap", version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 data-encoding-macro = { version = "0.1", default-features = false }
 data-encoding-macro-internal = { version = "0.1", default-features = false }
@@ -901,6 +904,7 @@ hakari = { version = "0.11", default-features = false, features = ["cli-support"
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown-23157565204cc58a = { package = "hashbrown", git = "https://github.com/velvia/hashbrown", rev = "db403dbf63207e22ef388fd6c182e7daa594bce4", default-features = false }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
