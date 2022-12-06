@@ -9,11 +9,11 @@ use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
 use multiaddr::Multiaddr;
 use node::{
-    create_primary_networking,
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, worker_metrics_registry},
     Node,
 };
+use primary::create_primary_networking;
 use prometheus::{proto::Metric, Registry};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 use storage::NodeStorage;
@@ -351,7 +351,13 @@ impl PrimaryNodeDetails {
 
         // create the networking
         let (network, primary_receiver_controller, worker_receiver_controller) =
-            create_primary_networking(self.committee.clone(), self.worker_cache.clone(), &registry);
+            create_primary_networking(
+                &self.key_pair.copy(),
+                &self.network_key_pair.copy(),
+                self.committee.clone(),
+                self.worker_cache.clone(),
+                &registry,
+            );
 
         let mut primary_handlers = Node::spawn_primary(
             self.key_pair.copy(),

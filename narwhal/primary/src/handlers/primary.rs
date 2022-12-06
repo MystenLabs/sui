@@ -1,7 +1,5 @@
 use crate::metrics::PrimaryMetrics;
 use crate::synchronizer::Synchronizer;
-use anemo::rpc::Status;
-use async_trait::async_trait;
 use config::{SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
 use dashmap::DashSet;
@@ -28,48 +26,6 @@ use types::{
 /// Maximum duration to fetch certficates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
 
-#[async_trait]
-pub trait TraitPrimaryReceiverController: Sync + Send + 'static {
-    async fn send_message(
-        &self,
-        _request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-
-    async fn request_vote(
-        &self,
-        _request: anemo::Request<RequestVoteRequest>,
-    ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-
-    async fn get_certificates(
-        &self,
-        _request: anemo::Request<GetCertificatesRequest>,
-    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-
-    async fn fetch_certificates(
-        &self,
-        _request: anemo::Request<FetchCertificatesRequest>,
-    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-
-    async fn get_payload_availability(
-        &self,
-        _request: anemo::Request<PayloadAvailabilityRequest>,
-    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-}
-
-pub struct UnimplementedPrimaryReceiverController {}
-
-impl TraitPrimaryReceiverController for UnimplementedPrimaryReceiverController {}
-
 #[derive(Clone)]
 pub struct PrimaryReceiverController {
     /// The public key of this primary.
@@ -92,8 +48,8 @@ pub struct PrimaryReceiverController {
     pub request_vote_inflight: Arc<DashSet<PublicKey>>,
 }
 
+#[allow(clippy::result_large_err)]
 impl PrimaryReceiverController {
-    #[allow(clippy::result_large_err)]
     fn find_next_round(
         &self,
         origin: &PublicKey,
@@ -340,12 +296,8 @@ impl PrimaryReceiverController {
             missing: Vec::new(),
         })
     }
-}
 
-#[allow(clippy::result_large_err)]
-#[async_trait]
-impl TraitPrimaryReceiverController for PrimaryReceiverController {
-    async fn send_message(
+    pub async fn send_message(
         &self,
         request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
@@ -362,7 +314,7 @@ impl TraitPrimaryReceiverController for PrimaryReceiverController {
         Ok(anemo::Response::new(()))
     }
 
-    async fn request_vote(
+    pub async fn request_vote(
         &self,
         request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
@@ -404,7 +356,7 @@ impl TraitPrimaryReceiverController for PrimaryReceiverController {
             })
     }
 
-    async fn get_certificates(
+    pub async fn get_certificates(
         &self,
         request: anemo::Request<GetCertificatesRequest>,
     ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
@@ -424,7 +376,7 @@ impl TraitPrimaryReceiverController for PrimaryReceiverController {
         }))
     }
 
-    async fn fetch_certificates(
+    pub async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
@@ -516,7 +468,7 @@ impl TraitPrimaryReceiverController for PrimaryReceiverController {
         Ok(anemo::Response::new(response))
     }
 
-    async fn get_payload_availability(
+    pub async fn get_payload_availability(
         &self,
         request: anemo::Request<PayloadAvailabilityRequest>,
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {

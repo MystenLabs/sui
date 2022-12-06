@@ -11,8 +11,8 @@ use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
-use narwhal_node::create_primary_networking;
 use node::{restarter::NodeRestarter, Node};
+use primary::create_primary_networking;
 use prometheus::Registry;
 use std::{
     collections::HashMap,
@@ -331,6 +331,8 @@ async fn epoch_change() {
         let registry = Registry::new();
         let (network, primary_receiver_controller, worker_receiver_controller) =
             create_primary_networking(
+                &a.keypair().copy(),
+                &a.network_keypair().copy(),
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
                 worker_cache.clone(),
                 &registry,

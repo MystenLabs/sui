@@ -38,12 +38,9 @@ pub use crate::{
     grpc_server::metrics::EndpointMetrics,
     handlers::PrimaryReceiverController,
     handlers::PrimaryReceiverHandler,
-    handlers::TraitPrimaryReceiverController,
-    handlers::TraitWorkerReceiverController,
-    handlers::UnimplementedPrimaryReceiverController,
-    handlers::UnimplementedWorkerReceiverController,
     handlers::WorkerReceiverController,
     handlers::WorkerReceiverHandler,
     metrics::PrimaryChannelMetrics,
+    primary::create_primary_networking,
     primary::{NetworkModel, Primary, CHANNEL_CAPACITY},
 };

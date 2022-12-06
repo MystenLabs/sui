@@ -7,7 +7,7 @@ use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
-use node::create_primary_networking;
+use primary::create_primary_networking;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
@@ -112,6 +112,8 @@ async fn test_get_collections() {
     let registry_primary = Registry::new();
     let (network, primary_receiver_controller, worker_receiver_controller) =
         create_primary_networking(
+            &signer.copy(),
+            &author.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary,
@@ -320,6 +322,8 @@ async fn test_remove_collections() {
     let registry_primary = Registry::new();
     let (network, primary_receiver_controller, worker_receiver_controller) =
         create_primary_networking(
+            &signer.copy(),
+            &author.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary,
@@ -545,6 +549,8 @@ async fn test_read_causal_signed_certificates() {
     let registry_primary_1 = Registry::new();
     let (network, primary_receiver_controller_1, worker_receiver_controller_1) =
         create_primary_networking(
+            &keypair_1.copy(),
+            &authority_1.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary_1,
@@ -597,6 +603,8 @@ async fn test_read_causal_signed_certificates() {
     let registry_primary_2 = Registry::new();
     let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
         create_primary_networking(
+            &keypair_2.copy(),
+            &authority_2.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary_2,
@@ -782,6 +790,8 @@ async fn test_read_causal_unsigned_certificates() {
     let registry_primary_1 = Registry::new();
     let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
         create_primary_networking(
+            &keypair_1.copy(),
+            &authority_1.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary_1,
@@ -827,6 +837,8 @@ async fn test_read_causal_unsigned_certificates() {
     let registry_primary_2 = Registry::new();
     let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
         create_primary_networking(
+            &keypair_2.copy(),
+            &network_keypair_2,
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary_2,
@@ -1007,6 +1019,8 @@ async fn test_get_collections_with_missing_certificates() {
     let registry_primary = Registry::new();
     let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
         create_primary_networking(
+            &authority_1.keypair().copy(),
+            &authority_1.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary,
@@ -1081,6 +1095,8 @@ async fn test_get_collections_with_missing_certificates() {
     let registry_primary_2 = Registry::new();
     let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
         create_primary_networking(
+            &authority_2.keypair().copy(),
+            &authority_2.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_primary_2,
@@ -1110,7 +1126,7 @@ async fn test_get_collections_with_missing_certificates() {
         None,
         primary_receiver_controller_2,
         worker_receiver_controller_2,
-        registry_primary_2,
+        network_2,
     );
 
     let registry_2 = Registry::new();

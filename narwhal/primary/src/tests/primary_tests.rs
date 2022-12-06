@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use crate::handlers::TraitPrimaryReceiverController;
 use crate::{
     common::create_db_stores,
+    create_primary_networking,
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
     synchronizer::Synchronizer,
 };
@@ -89,6 +89,8 @@ async fn get_network_peers_from_admin_server() {
     let registry_1 = Registry::new();
     let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
         create_primary_networking(
+            &signer_1,
+            &authority_1.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_1,
@@ -214,6 +216,8 @@ async fn get_network_peers_from_admin_server() {
     let registry_2 = Registry::new();
     let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
         create_primary_networking(
+            &signer_2,
+            &authority_2.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_2,

@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{create_primary_networking, Node, NodeStorage};
+use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
+use primary::create_primary_networking;
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
@@ -50,9 +51,11 @@ impl NodeRestarter {
         // create the primary networking
         let (network, primary_receiver_controller, worker_receiver_controller) =
             create_primary_networking(
+                &primary_keypair,
+                &primary_network_keypair,
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
                 worker_cache.clone(),
-                &registry,
+                registry,
             );
 
         // Listen for new committees.

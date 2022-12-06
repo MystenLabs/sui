@@ -1,6 +1,4 @@
 use crate::proposer::OurDigestMessage;
-use anemo::rpc::Status;
-use async_trait::async_trait;
 use config::{WorkerId, WorkerInfo};
 use std::collections::BTreeMap;
 use storage::PayloadToken;
@@ -9,34 +7,6 @@ use tokio::sync::oneshot;
 use types::metered_channel::Sender;
 use types::{BatchDigest, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage};
 
-#[async_trait]
-pub trait TraitWorkerReceiverController: Sync + Send + 'static {
-    async fn report_our_batch(
-        &self,
-        request: anemo::Request<WorkerOurBatchMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-
-    async fn report_others_batch(
-        &self,
-        request: anemo::Request<WorkerOthersBatchMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-
-    async fn worker_info(
-        &self,
-        _request: anemo::Request<()>,
-    ) -> Result<anemo::Response<WorkerInfoResponse>, anemo::rpc::Status> {
-        Err(Status::internal("Service not ready"))
-    }
-}
-
-pub struct UnimplementedWorkerReceiverController {}
-
-impl TraitWorkerReceiverController for UnimplementedWorkerReceiverController {}
-
 #[derive(Clone)]
 pub struct WorkerReceiverController {
     pub tx_our_digests: Sender<OurDigestMessage>,
@@ -44,9 +14,8 @@ pub struct WorkerReceiverController {
     pub our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
 
-#[async_trait]
-impl TraitWorkerReceiverController for WorkerReceiverController {
-    async fn report_our_batch(
+impl WorkerReceiverController {
+    pub async fn report_our_batch(
         &self,
         request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
@@ -72,7 +41,7 @@ impl TraitWorkerReceiverController for WorkerReceiverController {
         Ok(response)
     }
 
-    async fn report_others_batch(
+    pub async fn report_others_batch(
         &self,
         request: anemo::Request<WorkerOthersBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
@@ -83,7 +52,7 @@ impl TraitWorkerReceiverController for WorkerReceiverController {
         Ok(anemo::Response::new(()))
     }
 
-    async fn worker_info(
+    pub async fn worker_info(
         &self,
         _request: anemo::Request<()>,
     ) -> Result<anemo::Response<WorkerInfoResponse>, anemo::rpc::Status> {

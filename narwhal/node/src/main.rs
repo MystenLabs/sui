@@ -8,32 +8,22 @@
     rust_2021_compatibility
 )]
 
-use anemo::{Network, PeerId};
 use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
-use config::{
-    Committee, Import, Parameters, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId,
-};
+use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use executor::SerializedTransaction;
 use eyre::Context;
 use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
 use futures::future::join_all;
-use multiaddr::Protocol;
 use narwhal_node as node;
-use narwhal_node::create_primary_networking;
-use network::metrics::{MetricsMakeCallbackHandler, NetworkMetrics};
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
     Node,
 };
-use primary::{
-    TraitPrimaryReceiverController, TraitWorkerReceiverController,
-    UnimplementedPrimaryReceiverController, UnimplementedWorkerReceiverController,
-};
+use primary::create_primary_networking;
 use prometheus::Registry;
-use std::net::Ipv4Addr;
 use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
@@ -251,7 +241,13 @@ async fn run(
         ("primary", Some(sub_matches)) => {
             // spawn primary networking
             let (network, primary_receiver_controller, worker_receiver_controller) =
-                create_primary_networking(committee.clone(), worker_cache.clone(), &registry);
+                create_primary_networking(
+                    &primary_keypair,
+                    &primary_network_keypair,
+                    committee.clone(),
+                    worker_cache.clone(),
+                    &registry,
+                );
 
             // pass it down to the primary node
             Node::spawn_primary(

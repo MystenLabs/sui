@@ -11,7 +11,7 @@ use fastcrypto::{
     traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
-use node::create_primary_networking;
+use primary::create_primary_networking;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
@@ -101,9 +101,11 @@ async fn test_rounds_errors() {
     let registry = Registry::new();
     let (network, primary_receiver_controller, worker_receiver_controller) =
         create_primary_networking(
+            &keypair.copy(),
+            &network_keypair,
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
-            &registry_2,
+            &registry,
         );
 
     Primary::spawn(
@@ -199,9 +201,11 @@ async fn test_rounds_return_successful_response() {
     let registry = Registry::new();
     let (network, primary_receiver_controller, worker_receiver_controller) =
         create_primary_networking(
+            &keypair.copy(),
+            &author.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
-            &registry_2,
+            &registry,
         );
 
     Primary::spawn(
@@ -363,6 +367,8 @@ async fn test_node_read_causal_signed_certificates() {
     let registry_1 = Registry::new();
     let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
         create_primary_networking(
+            &keypair_1.copy(),
+            &authority_1.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_1,
@@ -414,6 +420,8 @@ async fn test_node_read_causal_signed_certificates() {
     let registry_2 = Registry::new();
     let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
         create_primary_networking(
+            &keypair_2.copy(),
+            &authority_2.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &registry_2,

@@ -8,6 +8,7 @@ use config::{Committee, Parameters};
 use fastcrypto::traits::KeyPair;
 use futures::future::{join_all, try_join_all};
 use narwhal_primary as primary;
+use primary::create_primary_networking;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -59,6 +60,16 @@ async fn test_simple_epoch_change() {
         let store = NodeStorage::reopen(temp_dir());
 
         let p = parameters.get(&name).unwrap().clone();
+
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(
+                &signer.copy(),
+                &authority.network_keypair().copy(),
+                Arc::new(ArcSwap::new(Arc::new(committee_0.clone()))),
+                worker_cache_0.clone(),
+                &Registry::new(),
+            );
+
         Primary::spawn(
             name,
             signer.copy(),
@@ -80,6 +91,9 @@ async fn test_simple_epoch_change() {
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
             None,
+            primary_receiver_controller,
+            worker_receiver_controller,
+            network,
         );
     }
 
@@ -182,6 +196,16 @@ async fn test_partial_committee_change() {
         let store = NodeStorage::reopen(temp_dir());
 
         let p = parameters.get(&name).unwrap().clone();
+
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(
+                &signer.copy(),
+                &authority.network_keypair().copy(),
+                Arc::new(ArcSwap::new(Arc::new(committee_0.clone()))),
+                worker_cache_0.clone(),
+                &Registry::new(),
+            );
+
         Primary::spawn(
             name,
             signer.copy(),
@@ -203,6 +227,9 @@ async fn test_partial_committee_change() {
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
             None,
+            primary_receiver_controller,
+            worker_receiver_controller,
+            network,
         );
     }
 
@@ -272,6 +299,16 @@ async fn test_partial_committee_change() {
         let store = NodeStorage::reopen(temp_dir());
 
         let p = parameters.get(&name).unwrap().clone();
+
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(
+                &signer.copy(),
+                &authority.network_keypair().copy(),
+                Arc::new(ArcSwap::new(Arc::new(committee_1.clone()))),
+                worker_cache_1.clone(),
+                &Registry::new(),
+            );
+
         Primary::spawn(
             name,
             signer.copy(),
@@ -293,6 +330,9 @@ async fn test_partial_committee_change() {
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
             None,
+            primary_receiver_controller,
+            worker_receiver_controller,
+            network,
         );
     }
 
@@ -352,6 +392,15 @@ async fn test_restart_with_new_committee_change() {
 
         let store = NodeStorage::reopen(temp_dir());
 
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(
+                &signer.copy(),
+                &authority.network_keypair().copy(),
+                Arc::new(ArcSwap::new(Arc::new(committee_0.clone()))),
+                worker_cache_0.clone(),
+                &Registry::new(),
+            );
+
         let p = parameters.get(&name).unwrap().clone();
         let primary_handles = Primary::spawn(
             name,
@@ -374,6 +423,9 @@ async fn test_restart_with_new_committee_change() {
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
             None,
+            primary_receiver_controller,
+            worker_receiver_controller,
+            network,
         );
         handles.extend(primary_handles);
     }
@@ -442,6 +494,15 @@ async fn test_restart_with_new_committee_change() {
 
             let store = NodeStorage::reopen(temp_dir());
 
+            let (network, primary_receiver_controller, worker_receiver_controller) =
+                create_primary_networking(
+                    &signer.copy(),
+                    &authority.network_keypair().copy(),
+                    Arc::new(ArcSwap::new(Arc::new(new_committee.clone()))),
+                    Arc::new(ArcSwap::from_pointee(new_worker_cache.clone())),
+                    &Registry::new(),
+                );
+
             let p = parameters.get(&name).unwrap().clone();
             let primary_handles = Primary::spawn(
                 name,
@@ -464,6 +525,9 @@ async fn test_restart_with_new_committee_change() {
                 /* tx_committed_certificates */ tx_feedback,
                 &Registry::new(),
                 None,
+                primary_receiver_controller,
+                worker_receiver_controller,
+                network,
             );
             handles.extend(primary_handles);
         }
@@ -546,6 +610,15 @@ async fn test_simple_committee_update() {
 
         let store = NodeStorage::reopen(temp_dir());
 
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(
+                &signer.copy(),
+                &authority.network_keypair().copy(),
+                Arc::new(ArcSwap::new(Arc::new(committee_0.clone()))),
+                worker_cache_0.clone(),
+                &Registry::new(),
+            );
+
         let p = parameters.get(&name).unwrap().clone();
         Primary::spawn(
             name,
@@ -568,6 +641,9 @@ async fn test_simple_committee_update() {
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
             None,
+            primary_receiver_controller,
+            worker_receiver_controller,
+            network,
         );
     }
 
