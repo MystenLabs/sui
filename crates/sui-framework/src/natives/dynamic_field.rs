@@ -317,7 +317,7 @@ fn test_u64_dynamic_object_field_first_key() {
         type_params: vec![TypeTag::U64],
     };
 
-    let wrapper_u64_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
+    let wrapper_u64_tag = TypeTag::Struct(Box::new(struct_tag));
     let wrapper_u64_tag_bytes = bcs::to_bytes(&wrapper_u64_tag).unwrap();
     let expect = [
         7u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 20, 100, 121, 110, 97,
@@ -327,9 +327,7 @@ fn test_u64_dynamic_object_field_first_key() {
     .to_vec();
     assert_eq!(expect, wrapper_u64_tag_bytes);
 
-    let wrapper_u64_layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime {
-        0: vec![MoveTypeLayout::U64],
-    });
+    let wrapper_u64_layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::U64]));
 
     let wrapper_u64_value = Value::struct_(Struct::pack([Value::u64(0)]));
     let wrapper_u64_value_bytes = wrapper_u64_value
