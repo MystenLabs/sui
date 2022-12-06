@@ -29,7 +29,7 @@ use types::{
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
 
 #[async_trait]
-pub trait TraitPrimaryReceiverController {
+pub trait TraitPrimaryReceiverController: Sync + Send + 'static {
     async fn send_message(
         &self,
         _request: anemo::Request<PrimaryMessage>,
@@ -65,6 +65,10 @@ pub trait TraitPrimaryReceiverController {
         Err(Status::internal("Service not ready"))
     }
 }
+
+pub struct UnimplementedPrimaryReceiverController {}
+
+impl TraitPrimaryReceiverController for UnimplementedPrimaryReceiverController {}
 
 #[derive(Clone)]
 pub struct PrimaryReceiverController {

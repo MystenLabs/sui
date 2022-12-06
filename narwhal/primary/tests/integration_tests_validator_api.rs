@@ -7,6 +7,7 @@ use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
+use node::create_primary_networking;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
@@ -108,6 +109,14 @@ async fn test_get_collections() {
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
+    let registry_primary = Registry::new();
+    let (network, primary_receiver_controller, worker_receiver_controller) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary,
+        );
+
     Primary::spawn(
         name.clone(),
         signer.copy(),
@@ -130,8 +139,11 @@ async fn test_get_collections() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
-        &Registry::new(),
+        &registry_primary,
         None,
+        primary_receiver_controller,
+        worker_receiver_controller,
+        network,
     );
 
     let registry = Registry::new();
@@ -305,6 +317,14 @@ async fn test_remove_collections() {
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
+    let registry_primary = Registry::new();
+    let (network, primary_receiver_controller, worker_receiver_controller) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary,
+        );
+
     Primary::spawn(
         name.clone(),
         signer.copy(),
@@ -324,8 +344,11 @@ async fn test_remove_collections() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
-        &Registry::new(),
+        &registry_primary,
         None,
+        primary_receiver_controller,
+        worker_receiver_controller,
+        network,
     );
 
     // Wait for tasks to start
@@ -519,6 +542,14 @@ async fn test_read_causal_signed_certificates() {
     let name_1 = keypair_1.public().clone();
 
     // Spawn Primary 1 that we will be interacting with.
+    let registry_primary_1 = Registry::new();
+    let (network, primary_receiver_controller_1, worker_receiver_controller_1) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary_1,
+        );
+
     Primary::spawn(
         name_1.clone(),
         keypair_1.copy(),
@@ -538,8 +569,11 @@ async fn test_read_causal_signed_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
-        &Registry::new(),
+        &registry_primary_1,
         None,
+        primary_receiver_controller_1,
+        worker_receiver_controller_1,
+        network,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -560,6 +594,14 @@ async fn test_read_causal_signed_certificates() {
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
+    let registry_primary_2 = Registry::new();
+    let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary_2,
+        );
+
     Primary::spawn(
         name_2.clone(),
         keypair_2.copy(),
@@ -582,8 +624,11 @@ async fn test_read_causal_signed_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
-        &Registry::new(),
+        &registry_primary_2,
         None,
+        primary_receiver_controller_2,
+        worker_receiver_controller_2,
+        network_2,
     );
 
     // Wait for tasks to start
@@ -734,6 +779,14 @@ async fn test_read_causal_unsigned_certificates() {
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     // Spawn Primary 1 that we will be interacting with.
+    let registry_primary_1 = Registry::new();
+    let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary_1,
+        );
+
     Primary::spawn(
         name_1.clone(),
         keypair_1.copy(),
@@ -753,8 +806,11 @@ async fn test_read_causal_unsigned_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
-        &Registry::new(),
+        &registry_primary_1,
         None,
+        primary_receiver_controller_1,
+        worker_receiver_controller_1,
+        network_1,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -768,6 +824,14 @@ async fn test_read_causal_unsigned_certificates() {
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
+    let registry_primary_2 = Registry::new();
+    let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary_2,
+        );
+
     Primary::spawn(
         name_2.clone(),
         keypair_2.copy(),
@@ -790,8 +854,11 @@ async fn test_read_causal_unsigned_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
-        &Registry::new(),
+        &registry_primary_2,
         None,
+        primary_receiver_controller_2,
+        worker_receiver_controller_2,
+        network_2,
     );
 
     // Wait for tasks to start
@@ -937,6 +1004,14 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
+    let registry_primary = Registry::new();
+    let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary,
+        );
+
     Primary::spawn(
         name_1.clone(),
         authority_1.keypair().copy(),
@@ -959,8 +1034,11 @@ async fn test_get_collections_with_missing_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_1,
-        &Registry::new(),
+        &registry_primary,
         None,
+        primary_receiver_controller_1,
+        worker_receiver_controller_1,
+        network_1,
     );
 
     let registry_1 = Registry::new();
@@ -1000,6 +1078,14 @@ async fn test_get_collections_with_missing_certificates() {
         ..Parameters::default()
     };
 
+    let registry_primary_2 = Registry::new();
+    let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_primary_2,
+        );
+
     Primary::spawn(
         name_2.clone(),
         authority_2.keypair().copy(),
@@ -1020,8 +1106,11 @@ async fn test_get_collections_with_missing_certificates() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback_2,
-        &Registry::new(),
+        &registry_primary_2,
         None,
+        primary_receiver_controller_2,
+        worker_receiver_controller_2,
+        registry_primary_2,
     );
 
     let registry_2 = Registry::new();

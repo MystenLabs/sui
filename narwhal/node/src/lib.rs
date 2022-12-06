@@ -1,5 +1,13 @@
+use std::net::Ipv4Addr;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use anemo::{Network, PeerId};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::CallbackLayer,
+    trace::{DefaultMakeSpan, TraceLayer},
+};
+use arc_swap::ArcSwap;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::{
     bullshark::Bullshark,
@@ -7,17 +15,23 @@ use consensus::{
     metrics::{ChannelMetrics, ConsensusMetrics},
     Consensus,
 };
-
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
+use multiaddr::Protocol;
+use network::metrics::{MetricsMakeCallbackHandler, NetworkMetrics};
 use network::P2pNetwork;
-use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
+use primary::{
+    NetworkModel, Primary, PrimaryChannelMetrics, TraitPrimaryReceiverController,
+    TraitWorkerReceiverController, UnimplementedPrimaryReceiverController,
+    UnimplementedWorkerReceiverController,
+};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 use storage::NodeStorage;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
+use tower::ServiceBuilder;
 use tracing::{debug, info};
 use types::{metered_channel, Certificate, ReconfigureNotification, Round};
 use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
@@ -57,6 +71,11 @@ impl Node {
         execution_state: Arc<State>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
+        // The network handler
+        network: Network,
+        // The network controllers
+        primary_receiver_controller: Arc<ArcSwap<impl TraitPrimaryReceiverController>>,
+        worker_receiver_controller: Arc<ArcSwap<impl TraitWorkerReceiverController>>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -139,6 +158,9 @@ impl Node {
             tx_committed_certificates,
             registry,
             Some(tx_executor_network),
+            primary_receiver_controller,
+            worker_receiver_controller,
+            network,
         );
         handles.extend(primary_handles);
 
@@ -269,4 +291,106 @@ impl Node {
         }
         handles
     }
+}
+
+pub fn create_primary_networking(
+    committee: SharedCommittee,
+    worker_cache: SharedWorkerCache,
+    registry: &Registry,
+) -> (
+    Network,
+    Arc<ArcSwap<impl TraitPrimaryReceiverController>>,
+    Arc<ArcSwap<impl TraitWorkerReceiverController>>,
+) {
+    // The metrics used for communicating over the network
+    let inbound_network_metrics = Arc::new(NetworkMetrics::new("primary", "inbound", registry));
+    let outbound_network_metrics = Arc::new(NetworkMetrics::new("primary", "outbound", registry));
+
+    let address = committee
+        .load()
+        .primary(&name)
+        .expect("Our public key or worker id is not in the committee");
+    let address = address
+        .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
+        .unwrap();
+
+    let primary_receiver = Arc::new(ArcSwap::from_pointee(
+        UnimplementedPrimaryReceiverController {},
+    ));
+    let primary_service = PrimaryToPrimaryServer::new(handlers::PrimaryReceiverHandler::new(
+        primary_receiver.clone(),
+    ));
+
+    let worker_receiver = Arc::new(ArcSwap::from_pointee(
+        UnimplementedWorkerReceiverController {},
+    ));
+    let worker_service = WorkerToPrimaryServer::new(handlers::WorkerReceiverHandler::new(
+        worker_receiver.clone(),
+    ));
+
+    let addr = network::multiaddr_to_address(&address).unwrap();
+
+    let our_worker_peer_ids = worker_cache
+        .load()
+        .our_workers(&name)
+        .unwrap()
+        .into_iter()
+        .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
+    let worker_to_primary_router = anemo::Router::new()
+        .add_rpc_service(worker_service)
+        // Add an Authorization Layer to ensure that we only service requests from our workers
+        .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+            our_worker_peer_ids,
+        )));
+
+    let routes = anemo::Router::new()
+        .add_rpc_service(primary_service)
+        .merge(worker_to_primary_router);
+
+    let service = ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_server_errors()
+                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+        )
+        .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+            inbound_network_metrics,
+        )))
+        .service(routes);
+
+    let outbound_layer = ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_client_and_server_errors()
+                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+        )
+        .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+            outbound_network_metrics,
+        )))
+        .into_inner();
+
+    let anemo_config = {
+        let mut quic_config = anemo::QuicConfig::default();
+        // Enable keep alives every 5s
+        quic_config.keep_alive_interval_ms = Some(5_000);
+        let mut config = anemo::Config::default();
+        config.quic = Some(quic_config);
+        // Set a default timeout of 30s for all outbound RPC requests
+        config.outbound_request_timeout_ms = Some(30_000);
+        config
+    };
+
+    let network = anemo::Network::bind(addr.clone())
+        .server_name("narwhal")
+        .private_key(network_signer.copy().private().0.to_bytes())
+        .config(anemo_config)
+        .outbound_request_layer(outbound_layer)
+        .start(service)
+        .unwrap_or_else(|_| {
+            panic!(
+                "Address {} should be available for the primary Narwhal service",
+                addr
+            )
+        });
+    info!("Primary {} listening on {}", name.encode_base64(), address);
+
+    (network, primary_receiver, worker_receiver)
 }

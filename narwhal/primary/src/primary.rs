@@ -7,21 +7,16 @@ use crate::{
     certificate_fetcher::CertificateFetcher,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
-    handlers,
     metrics::initialise_metrics,
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockRemover,
+    BlockRemover, TraitPrimaryReceiverController, TraitWorkerReceiverController,
 };
 
 use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
-use anemo_tower::{
-    auth::{AllowedPeers, RequireAuthorizationLayer},
-    callback::CallbackLayer,
-    trace::{DefaultMakeSpan, TraceLayer},
-};
+use arc_swap::ArcSwap;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
@@ -30,25 +25,22 @@ use fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair as _},
     SignatureService,
 };
-use multiaddr::{Multiaddr, Protocol};
-use network::metrics::MetricsMakeCallbackHandler;
+use multiaddr::Multiaddr;
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::collections::HashMap;
-use std::{net::Ipv4Addr, sync::Arc};
+use std::sync::Arc;
 use storage::{CertificateStore, PayloadToken, ProposerStore};
 use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
-use tower::ServiceBuilder;
 use tracing::info;
 
 use crate::handlers::{PrimaryReceiverController, WorkerReceiverController};
 pub use types::PrimaryMessage;
 use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, Certificate, Header, HeaderDigest, PrimaryToPrimaryServer,
-    ReconfigureNotification, Round, VoteInfo, WorkerToPrimaryServer,
+    BatchDigest, Certificate, Header, HeaderDigest, ReconfigureNotification, Round, VoteInfo,
 };
 
 #[cfg(any(test))]
@@ -91,6 +83,14 @@ impl Primary {
         registry: &Registry,
         // See comments in Subscriber::spawn
         tx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
+
+        // swappable network controllers
+        primary_receiver_controller: Arc<ArcSwap<impl TraitPrimaryReceiverController>>,
+
+        worker_receiver_controller: Arc<ArcSwap<impl TraitWorkerReceiverController>>,
+
+        // The network handler
+        network: Network,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -106,8 +106,8 @@ impl Primary {
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
-        let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
-        let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
+        //let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
+        //let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
         let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
@@ -192,40 +192,27 @@ impl Primary {
             .0
             .clone();
 
-        // Spawn the network receiver listening to messages from the other primaries.
-        let address = committee
-            .load()
-            .primary(&name)
-            .expect("Our public key or worker id is not in the committee");
-        let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
-            .unwrap();
-        let primary_service = PrimaryToPrimaryServer::new(handlers::PrimaryReceiverHandler::new(
-            PrimaryReceiverController {
-                name: name.clone(),
-                committee: committee.clone(),
-                worker_cache: worker_cache.clone(),
-                synchronizer: synchronizer.clone(),
-                signature_service: signature_service.clone(),
-                tx_certificates: tx_certificates.clone(),
-                header_store: header_store.clone(),
-                certificate_store: certificate_store.clone(),
-                payload_store: payload_store.clone(),
-                vote_digest_store,
-                rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
-                metrics: node_metrics.clone(),
-                request_vote_inflight: Arc::new(DashSet::new()),
-            },
-        ));
-        let worker_service = WorkerToPrimaryServer::new(handlers::WorkerReceiverHandler::new(
-            WorkerReceiverController {
-                tx_our_digests,
-                payload_store: payload_store.clone(),
-                our_workers,
-            },
-        ));
+        primary_receiver_controller.swap(Arc::new(PrimaryReceiverController {
+            name: name.clone(),
+            committee: committee.clone(),
+            worker_cache: worker_cache.clone(),
+            synchronizer: synchronizer.clone(),
+            signature_service: signature_service.clone(),
+            tx_certificates: tx_certificates.clone(),
+            header_store: header_store.clone(),
+            certificate_store: certificate_store.clone(),
+            payload_store: payload_store.clone(),
+            vote_digest_store,
+            rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
+            metrics: node_metrics.clone(),
+            request_vote_inflight: Arc::new(DashSet::new()),
+        }));
 
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        worker_receiver_controller.swap(Arc::new(WorkerReceiverController {
+            tx_our_digests,
+            payload_store: payload_store.clone(),
+            our_workers,
+        }));
 
         let our_worker_peer_ids = worker_cache
             .load()
@@ -233,61 +220,6 @@ impl Primary {
             .unwrap()
             .into_iter()
             .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
-        let worker_to_primary_router = anemo::Router::new()
-            .add_rpc_service(worker_service)
-            // Add an Authorization Layer to ensure that we only service requests from our workers
-            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
-                our_worker_peer_ids,
-            )));
-
-        let routes = anemo::Router::new()
-            .add_rpc_service(primary_service)
-            .merge(worker_to_primary_router);
-
-        let service = ServiceBuilder::new()
-            .layer(
-                TraceLayer::new_for_server_errors()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
-            )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                inbound_network_metrics,
-            )))
-            .service(routes);
-
-        let outbound_layer = ServiceBuilder::new()
-            .layer(
-                TraceLayer::new_for_client_and_server_errors()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
-            )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                outbound_network_metrics,
-            )))
-            .into_inner();
-
-        let anemo_config = {
-            let mut quic_config = anemo::QuicConfig::default();
-            // Enable keep alives every 5s
-            quic_config.keep_alive_interval_ms = Some(5_000);
-            let mut config = anemo::Config::default();
-            config.quic = Some(quic_config);
-            // Set a default timeout of 30s for all outbound RPC requests
-            config.outbound_request_timeout_ms = Some(30_000);
-            config
-        };
-
-        let network = anemo::Network::bind(addr.clone())
-            .server_name("narwhal")
-            .private_key(network_signer.copy().private().0.to_bytes())
-            .config(anemo_config)
-            .outbound_request_layer(outbound_layer)
-            .start(service)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Address {} should be available for the primary Narwhal service",
-                    addr
-                )
-            });
-        info!("Primary {} listening on {}", name.encode_base64(), address);
 
         let mut peer_types = HashMap::new();
 
@@ -341,14 +273,6 @@ impl Primary {
             peer_types,
         );
 
-        info!(
-            "Primary {} listening to network admin messages on 127.0.0.1:{}",
-            name.encode_base64(),
-            parameters
-                .network_admin_server
-                .primary_network_admin_server_port
-        );
-
         let admin_handles = network::admin::start_admin_server(
             parameters
                 .network_admin_server
@@ -356,6 +280,14 @@ impl Primary {
             network.clone(),
             tx_reconfigure.subscribe(),
             Some(tx_state_handler),
+        );
+
+        info!(
+            "Primary {} listening to network admin messages on 127.0.0.1:{}",
+            name.encode_base64(),
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port
         );
 
         if let Some(tx_executor_network) = tx_executor_network {

@@ -86,6 +86,14 @@ async fn get_network_peers_from_admin_server() {
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
+    let registry_1 = Registry::new();
+    let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_1,
+        );
+
     Primary::spawn(
         name_1.clone(),
         signer_1,
@@ -108,8 +116,11 @@ async fn get_network_peers_from_admin_server() {
         NetworkModel::Asynchronous,
         tx_reconfigure,
         tx_feedback,
-        &Registry::new(),
+        &registry_1,
         None,
+        primary_receiver_controller_1,
+        worker_receiver_controller_1,
+        network_1,
     );
 
     // Wait for tasks to start
@@ -200,6 +211,14 @@ async fn get_network_peers_from_admin_server() {
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
+    let registry_2 = Registry::new();
+    let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
+        create_primary_networking(
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry_2,
+        );
+
     Primary::spawn(
         name_2.clone(),
         signer_2,
@@ -222,8 +241,11 @@ async fn get_network_peers_from_admin_server() {
         NetworkModel::Asynchronous,
         tx_reconfigure_2,
         tx_feedback_2,
-        &Registry::new(),
+        &registry_2,
         None,
+        primary_receiver_controller_2,
+        worker_receiver_controller_2,
+        network_2,
     );
 
     // Wait for tasks to start

@@ -11,6 +11,9 @@ use types::{
 
 pub use crate::handlers::primary::PrimaryReceiverController;
 pub use crate::handlers::primary::TraitPrimaryReceiverController;
+pub use crate::handlers::primary::UnimplementedPrimaryReceiverController;
+pub use crate::handlers::worker::TraitWorkerReceiverController;
+pub use crate::handlers::worker::UnimplementedWorkerReceiverController;
 pub use crate::handlers::worker::WorkerReceiverController;
 
 mod primary;
@@ -18,23 +21,19 @@ mod worker;
 
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
-pub struct PrimaryReceiverHandler<T: TraitPrimaryReceiverController + Sync + Send + 'static> {
+pub struct PrimaryReceiverHandler<T: TraitPrimaryReceiverController> {
     pub controller: Arc<ArcSwap<T>>,
 }
 
 #[allow(clippy::result_large_err)]
-impl<T: TraitPrimaryReceiverController + Sync + Send + 'static> PrimaryReceiverHandler<T> {
-    pub fn new(controller: T) -> Self {
-        PrimaryReceiverHandler {
-            controller: Arc::new(ArcSwap::from_pointee(controller)),
-        }
+impl<T: TraitPrimaryReceiverController> PrimaryReceiverHandler<T> {
+    pub fn new(controller: Arc<ArcSwap<T>>) -> Self {
+        PrimaryReceiverHandler { controller }
     }
 }
 
 #[async_trait]
-impl<T: TraitPrimaryReceiverController + Sync + Send + 'static> PrimaryToPrimary
-    for PrimaryReceiverHandler<T>
-{
+impl<T: TraitPrimaryReceiverController> PrimaryToPrimary for PrimaryReceiverHandler<T> {
     async fn send_message(
         &self,
         request: anemo::Request<PrimaryMessage>,
@@ -77,20 +76,18 @@ impl<T: TraitPrimaryReceiverController + Sync + Send + 'static> PrimaryToPrimary
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
-pub struct WorkerReceiverHandler {
-    pub controller: Arc<ArcSwap<WorkerReceiverController>>,
+pub struct WorkerReceiverHandler<T: TraitWorkerReceiverController> {
+    pub controller: Arc<ArcSwap<T>>,
 }
 
-impl WorkerReceiverHandler {
-    pub fn new(controller: WorkerReceiverController) -> Self {
-        Self {
-            controller: Arc::new(ArcSwap::from_pointee(controller)),
-        }
+impl<T: TraitWorkerReceiverController> WorkerReceiverHandler<T> {
+    pub fn new(controller: Arc<ArcSwap<T>>) -> Self {
+        Self { controller }
     }
 }
 
 #[async_trait]
-impl WorkerToPrimary for WorkerReceiverHandler {
+impl<T: TraitWorkerReceiverController> WorkerToPrimary for WorkerReceiverHandler<T> {
     async fn report_our_batch(
         &self,
         request: anemo::Request<WorkerOurBatchMessage>,

@@ -5194,6 +5194,7 @@ name = "narwhal-node"
 version = "0.1.0"
 dependencies = [
  "anemo",
+ "anemo-tower",
  "arc-swap",
  "async-trait",
  "axum",

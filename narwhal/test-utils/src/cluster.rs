@@ -9,6 +9,7 @@ use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
 use multiaddr::Multiaddr;
 use node::{
+    create_primary_networking,
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, worker_metrics_registry},
     Node,
@@ -347,6 +348,11 @@ impl PrimaryNodeDetails {
 
         // Primary node
         let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone());
+
+        // create the networking
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(self.committee.clone(), self.worker_cache.clone(), &registry);
+
         let mut primary_handlers = Node::spawn_primary(
             self.key_pair.copy(),
             self.network_key_pair.copy(),
@@ -358,6 +364,9 @@ impl PrimaryNodeDetails {
             /* execution_state */
             Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
             &registry,
+            network,
+            primary_receiver_controller,
+            worker_receiver_controller,
         )
         .await
         .unwrap();

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{Node, NodeStorage};
+use crate::{create_primary_networking, Node, NodeStorage};
 use arc_swap::ArcSwap;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
@@ -47,6 +47,14 @@ impl NodeRestarter {
 
         let mut handles = Vec::new();
 
+        // create the primary networking
+        let (network, primary_receiver_controller, worker_receiver_controller) =
+            create_primary_networking(
+                Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+                worker_cache.clone(),
+                &registry,
+            );
+
         // Listen for new committees.
         loop {
             tracing::info!("Starting epoch E{}", committee.epoch());
@@ -67,6 +75,9 @@ impl NodeRestarter {
                 /* consensus */ true,
                 execution_state.clone(),
                 registry,
+                network.clone(),
+                primary_receiver_controller.clone(),
+                worker_receiver_controller.clone(),
             )
             .await
             .unwrap();
