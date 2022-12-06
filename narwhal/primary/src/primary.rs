@@ -376,9 +376,6 @@ impl Primary {
             }
         }
 
-        // TODO (Laura): if we are restarting and not advancing, for the headers in the header
-        // TODO (Laura): store that do not have a matching certificate, re-create and send a vote
-        // The `Core` receives and handles headers, votes, and certificates from the other primaries.
         let core_primary_network = P2pNetwork::new(network.clone());
         let core_handle = Core::spawn(
             name.clone(),

@@ -199,6 +199,10 @@ pub struct AuthorityMetrics {
     pub(crate) batch_svc_is_running: IntCounter,
 
     pending_notify_read: IntGauge,
+
+    /// Consensus handler metrics
+    pub consensus_handler_processed_batches: IntCounter,
+    pub consensus_handler_processed_bytes: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -472,6 +476,16 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
+            consensus_handler_processed_batches: register_int_counter_with_registry!(
+                "consensus_handler_processed_batches",
+                "Number of batches processed by consensus_handler",
+                registry
+            ).unwrap(),
+            consensus_handler_processed_bytes: register_int_counter_with_registry!(
+                "consensus_handler_processed_bytes",
+                "Number of bytes processed by consensus_handler",
+                registry
+            ).unwrap(),
         }
     }
 }
@@ -2171,7 +2185,7 @@ impl AuthorityState {
                 })?;
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
-                if &AuthorityName::from(&transaction.certificate.origin()) != authority {
+                if &transaction.sender_authority() != authority {
                     warn!(
                         "EndOfPublish authority {} does not match narwhal certificate source {}",
                         authority,

@@ -1309,6 +1309,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             next_versions,
         )
     }
+
     /// Returns transaction digests from consensus_message_order table in the "checkpoint range".
     ///
     /// Checkpoint range is defined from the last seen checkpoint(excluded) to the provided

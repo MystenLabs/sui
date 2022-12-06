@@ -97,7 +97,7 @@ impl ExecutionState for SimpleExecutionState {
 
 impl SimpleExecutionState {
     async fn process_transaction(&self, transaction: Transaction, change_epoch: bool) {
-        let transaction: u64 = bincode::deserialize(&transaction).unwrap();
+        let _transaction: u64 = bincode::deserialize(&transaction).unwrap();
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
