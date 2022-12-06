@@ -1,40 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    isSuiMoveObject,
-    Delegation_OUTDATED_DO_NOT_USE as Delegation,
-} from '@mysten/sui.js';
+import { isSuiMoveObject, DELEGATION_OBJECT_TYPE } from '@mysten/sui.js';
 import { createSelector } from '@reduxjs/toolkit';
 
 import { ownedObjects } from '_redux/slices/account';
 import { suiSystemObjectSelector } from '_redux/slices/sui-objects';
 
-import type { SuiMoveObject, DelegationSuiObject } from '@mysten/sui.js';
+import type { SuiMoveObject, Delegation } from '@mysten/sui.js';
 
 export const delegationsSelector = createSelector(
     ownedObjects,
     (objects) =>
-        objects.filter((obj) =>
-            Delegation.isDelegationSuiObject(obj)
-        ) as DelegationSuiObject[]
-);
-
-export const activeDelegationsSelector = createSelector(
-    delegationsSelector,
-    (delegations) => delegations.filter((obj) => new Delegation(obj).isActive())
+        objects
+            .map((obj) => obj.data)
+            .filter(
+                (obj) => 'type' in obj && obj.type === DELEGATION_OBJECT_TYPE
+            ) as unknown as SuiMoveObject<Delegation>[]
 );
 
 export const activeDelegationIDsSelector = createSelector(
-    activeDelegationsSelector,
-    (delegations) => delegations.map(({ reference: { objectId } }) => objectId)
+    delegationsSelector,
+    (delegations) => delegations.map(({ fields }) => fields.id)
 );
 
 export const totalActiveStakedSelector = createSelector(
-    activeDelegationsSelector,
+    delegationsSelector,
     (activeDelegations) =>
         activeDelegations.reduce((total, obj) => {
-            total += BigInt(new Delegation(obj).activeDelegation());
+            total += BigInt(obj.fields.principal_sui_amount);
             return total;
         }, BigInt(0))
 );

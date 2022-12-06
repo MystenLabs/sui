@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Delegation_OUTDATED_DO_NOT_USE as Delegation } from '@mysten/sui.js';
+import { DELEGATION_OBJECT_TYPE, type Delegation } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { suiObjectsAdapterSelectors } from '../../redux/slices/sui-objects';
@@ -19,8 +19,12 @@ export function ActiveDelegation({ id }: Props) {
     const delegationSelector = useMemo(
         () => (state: RootState) => {
             const suiObj = suiObjectsAdapterSelectors.selectById(state, id);
-            if (suiObj && Delegation.isDelegationSuiObject(suiObj)) {
-                return new Delegation(suiObj);
+            if (
+                suiObj &&
+                'type' in suiObj.data &&
+                suiObj.data.type === DELEGATION_OBJECT_TYPE
+            ) {
+                return suiObj.data.fields as Delegation;
             }
             return undefined;
         },
@@ -28,7 +32,7 @@ export function ActiveDelegation({ id }: Props) {
     );
 
     const delegation = useAppSelector(delegationSelector);
-    const validatorAddress = delegation?.validatorAddress();
+    const validatorAddress = delegation?.validator_address;
     const validatorSelector = useMemo(
         () => getValidatorSelector(validatorAddress),
         [validatorAddress]
@@ -48,7 +52,7 @@ export function ActiveDelegation({ id }: Props) {
     return (
         <DelegationCard
             name={validatorName}
-            staked={delegation.delegateAmount()}
+            staked={delegation.principal_sui_amount}
             state={DelegationState.EARNING}
         />
     );
