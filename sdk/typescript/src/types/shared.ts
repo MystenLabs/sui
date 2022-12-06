@@ -1,23 +1,34 @@
-import { Infer, literal, number, object, string, union } from 'superstruct';
+import {
+  array,
+  boolean,
+  Infer,
+  lazy,
+  literal,
+  number,
+  object,
+  string,
+  union,
+  unknown,
+} from 'superstruct';
 
-export const TransactionDigestStruct = string();
-export type TransactionDigest = Infer<typeof TransactionDigestStruct>;
+export const TransactionDigest = string();
+export type TransactionDigest = Infer<typeof TransactionDigest>;
 
-export const ObjectIdStruct = string();
-export type ObjectId = Infer<typeof ObjectIdStruct>;
+export const ObjectId = string();
+export type ObjectId = Infer<typeof ObjectId>;
 
-export const SuiAddressStruct = string();
-export type SuiAddress = Infer<typeof SuiAddressStruct>;
+export const SuiAddress = string();
+export type SuiAddress = Infer<typeof SuiAddress>;
 
-export const SequenceNumberStruct = number();
-export type SequenceNumber = Infer<typeof SequenceNumberStruct>;
+export const SequenceNumber = number();
+export type SequenceNumber = Infer<typeof SequenceNumber>;
 
-export const ObjectOwnerStruct = union([
+export const ObjectOwner = union([
   object({
-    AddressOwner: SuiAddressStruct,
+    AddressOwner: SuiAddress,
   }),
   object({
-    ObjectOwner: SuiAddressStruct,
+    ObjectOwner: SuiAddress,
   }),
   object({
     Shared: object({
@@ -26,5 +37,8 @@ export const ObjectOwnerStruct = union([
   }),
   literal('Immutable'),
 ]);
+export type ObjectOwner = Infer<typeof ObjectOwner>;
 
-export type ObjectOwner = Infer<typeof ObjectOwnerStruct>;
+// TODO: Figure out if we actually should have validaton on this:
+export const SuiJsonValue = unknown();
+export type SuiJsonValue = boolean | number | string | Array<SuiJsonValue>;

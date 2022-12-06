@@ -9,19 +9,16 @@ import {
   union,
   literal,
   Infer,
+  array,
 } from 'superstruct';
 import {
   ObjectId,
-  ObjectIdStruct,
   ObjectOwner,
-  ObjectOwnerStruct,
-  SequenceNumberStruct,
   SuiAddress,
-  SuiAddressStruct,
   TransactionDigest,
-  TransactionDigestStruct,
+  SuiJsonValue,
+  SequenceNumber,
 } from './shared';
-import { SuiJsonValue } from './transactions';
 
 export const BalanceChangeTypeStruct = union([
   literal('Gas'),
@@ -33,9 +30,9 @@ export type BalanceChangeType = Infer<typeof BalanceChangeTypeStruct>;
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
 export const MoveEventStruct = object({
-  packageId: ObjectIdStruct,
+  packageId: ObjectId,
   transactionModule: string(),
-  sender: SuiAddressStruct,
+  sender: SuiAddress,
   type: string(),
   fields: object(),
   bcs: string(),
@@ -44,72 +41,72 @@ export const MoveEventStruct = object({
 export type MoveEvent = Infer<typeof MoveEventStruct>;
 
 export const PublishEventStruct = object({
-  sender: SuiAddressStruct,
-  packageId: ObjectIdStruct,
+  sender: SuiAddress,
+  packageId: ObjectId,
 });
 
 export type PublishEvent = Infer<typeof PublishEventStruct>;
 
 export const CoinBalanceChangeEventStruct = object({
-  packageId: ObjectIdStruct,
+  packageId: ObjectId,
   transactionModule: string(),
-  sender: SuiAddressStruct,
-  owner: ObjectOwnerStruct,
+  sender: SuiAddress,
+  owner: ObjectOwner,
   changeType: BalanceChangeTypeStruct,
   coinType: string(),
-  coinObjectId: ObjectIdStruct,
-  version: SequenceNumberStruct,
+  coinObjectId: ObjectId,
+  version: SequenceNumber,
   amount: number(),
 });
 
 export type CoinBalanceChangeEvent = Infer<typeof CoinBalanceChangeEventStruct>;
 
 export const TransferObjectEventStruct = object({
-  packageId: ObjectIdStruct,
+  packageId: ObjectId,
   transactionModule: string(),
-  sender: SuiAddressStruct,
-  recipient: ObjectOwnerStruct,
+  sender: SuiAddress,
+  recipient: ObjectOwner,
   objectType: string(),
-  objectId: ObjectIdStruct,
-  version: SequenceNumberStruct,
+  objectId: ObjectId,
+  version: SequenceNumber,
 });
 
 export type TransferObjectEvent = Infer<typeof TransferObjectEventStruct>;
 
 export const MutateObjectEventStruct = object({
-  packageId: ObjectIdStruct,
+  packageId: ObjectId,
   transactionModule: string(),
-  sender: SuiAddressStruct,
+  sender: SuiAddress,
   objectType: string(),
-  objectId: ObjectIdStruct,
-  version: SequenceNumberStruct,
+  objectId: ObjectId,
+  version: SequenceNumber,
 });
 
 export type MutateObjectEvent = Infer<typeof MutateObjectEventStruct>;
 
 export const DeleteObjectEventStruct = object({
-  packageId: ObjectIdStruct,
+  packageId: ObjectId,
   transactionModule: string(),
-  sender: SuiAddressStruct,
-  objectId: ObjectIdStruct,
-  version: SequenceNumberStruct,
+  sender: SuiAddress,
+  objectId: ObjectId,
+  version: SequenceNumber,
 });
 
 export type DeleteObjectEvent = Infer<typeof DeleteObjectEventStruct>;
 
 export const NewObjectEventStruct = object({
-  packageId: ObjectIdStruct,
+  packageId: ObjectId,
   transactionModule: string(),
-  sender: SuiAddressStruct,
-  recipient: ObjectOwnerStruct,
+  sender: SuiAddress,
+  recipient: ObjectOwner,
   objectType: string(),
-  objectId: ObjectIdStruct,
-  version: SequenceNumberStruct,
+  objectId: ObjectId,
+  version: SequenceNumber,
 });
 
 export type NewObjectEvent = Infer<typeof NewObjectEventStruct>;
 
-export const SuiEventStruct = union([
+export const SuiEvent = union([
   object({ moveEvent: MoveEventStruct }),
   object({ publish: PublishEventStruct }),
   object({ coinBalanceChange: CoinBalanceChangeEventStruct }),
@@ -120,8 +117,7 @@ export const SuiEventStruct = union([
   object({ epochChange: bigint() }),
   object({ checkpoint: bigint() }),
 ]);
-
-export type SuiEvent = Infer<typeof SuiEventStruct>;
+export type SuiEvent = Infer<typeof SuiEvent>;
 
 export type MoveEventField = {
   path: string;
@@ -139,17 +135,12 @@ export type EventQuery =
   | { Object: ObjectId }
   | { TimeRange: { start_time: number; end_time: number } };
 
-export const EventIdStruct = object({
+export const EventId = object({
   txSeq: number(),
   eventSeq: number(),
 });
 
-export type EventId = Infer<typeof EventIdStruct>;
-
-export type PaginatedEvents = {
-  data: SuiEvents;
-  nextCursor: EventId | null;
-};
+export type EventId = Infer<typeof EventId>;
 
 export type EventType =
   | 'MoveEvent'
@@ -175,24 +166,29 @@ export type SuiEventFilter =
   | { And: [SuiEventFilter, SuiEventFilter] }
   | { Or: [SuiEventFilter, SuiEventFilter] };
 
-export const SuiEventEnvelopeStruct = object({
+export const SuiEventEnvelope = object({
   timestamp: number(),
-  txDigest: TransactionDigestStruct,
-  id: EventIdStruct,
-  event: SuiEventStruct,
+  txDigest: TransactionDigest,
+  id: EventId,
+  event: SuiEvent,
 });
 
-export type SuiEventEnvelope = Infer<typeof SuiEventEnvelopeStruct>;
+export type SuiEventEnvelope = Infer<typeof SuiEventEnvelope>;
 
 export type SuiEvents = SuiEventEnvelope[];
 
-export const SubscriptionIdStruct = number();
-
-export type SubscriptionId = Infer<typeof SubscriptionIdStruct>;
-
-export const SubscriptionEventStruct = object({
-  subscription: SubscriptionIdStruct,
-  result: SuiEventEnvelopeStruct,
+export const PaginatedEvents = object({
+  data: array(SuiEventEnvelope),
+  nextCursor: union([EventId, literal(null)]),
 });
 
-export type SubscriptionEvent = Infer<typeof SubscriptionEventStruct>;
+export const SubscriptionId = number();
+
+export type SubscriptionId = Infer<typeof SubscriptionId>;
+
+export const SubscriptionEvent = object({
+  subscription: SubscriptionId,
+  result: SuiEventEnvelope,
+});
+
+export type SubscriptionEvent = Infer<typeof SubscriptionEvent>;
