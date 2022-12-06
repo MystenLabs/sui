@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base58DataBuffer } from '../serialization/base58';
-import { ObjectId } from './objects';
 import { bcs, TransactionData } from './sui-bcs';
 import {
   PublicKey,
@@ -14,14 +13,7 @@ import { sha256Hash } from '../cryptography/hash';
 import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
 import { Base64DataBuffer } from '../serialization/base64';
-
-export type TransactionDigest = string;
-export type SuiAddress = string;
-export type ObjectOwner =
-  | { AddressOwner: SuiAddress }
-  | { ObjectOwner: SuiAddress }
-  | { Shared: { initial_shared_version: number } }
-  | 'Immutable';
+import { ObjectId, SuiAddress, TransactionDigest } from './shared';
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171

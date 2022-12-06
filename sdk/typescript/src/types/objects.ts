@@ -65,14 +65,21 @@ export const SuiData = union([
   }),
   object({ dataType: ObjectType, ...SuiMovePackage.schema }),
 ]);
+export type SuiData = Infer<typeof SuiData>;
 
 export const MIST_PER_SUI = BigInt(1000000000);
 
-export type SuiMoveFunctionArgTypesResponse = SuiMoveFunctionArgType[];
+export type SuiMoveFunctionArgTypesResponse = Infer<
+  typeof SuiMoveFunctionArgType
+>[];
 
-export type SuiMoveFunctionArgType = string | { Object: string };
+export const SuiMoveFunctionArgType = union([
+  string(),
+  object({ Object: string() }),
+]);
 
-export type SuiMoveFunctionArgTypes = SuiMoveFunctionArgType[];
+export const SuiMoveFunctionArgTypes = array(SuiMoveFunctionArgType);
+export type SuiMoveFunctionArgTypes = Infer<typeof SuiMoveFunctionArgTypes>;
 
 export type SuiMoveNormalizedModules = Record<string, SuiMoveNormalizedModule>;
 

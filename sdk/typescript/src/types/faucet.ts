@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionDigest } from './common';
-import { ObjectId } from './objects';
+import { TransactionDigest, ObjectId } from './shared';
 
 export type FaucetCoinInfo = {
   amount: number;

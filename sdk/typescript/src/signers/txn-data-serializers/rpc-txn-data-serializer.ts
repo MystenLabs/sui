@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isTransactionBytes } from '../../types/index.guard';
 import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
+import { TransactionBytes } from '../../types/transactions';
 import {
   MoveCallTransaction,
   MergeCoinTransaction,
@@ -163,7 +163,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       const resp = await this.client.requestWithType(
         endpoint,
         args,
-        isTransactionBytes,
+        TransactionBytes,
         this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);

@@ -1,8 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSubscriptionEvent } from '../types/index.guard';
-import { SuiEventFilter, SuiEventEnvelope, SubscriptionId } from '../types';
+import { is } from 'superstruct';
+import {
+  SuiEventFilter,
+  SuiEventEnvelope,
+  SubscriptionId,
+  SubscriptionEvent,
+} from '../types';
 import { Client as WsRpcClient } from 'rpc-websockets';
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
@@ -152,7 +157,7 @@ export class WebsocketClient {
         if (sub)
           // cast to bypass type validation of 'result'
           (sub.onMessage as (m: any) => void)(params.result);
-      } else if (isSubscriptionEvent(params)) {
+      } else if (is(params, SubscriptionEvent)) {
         // call any registered handler for the message's subscription
         const sub = this.eventSubscriptions.get(params.subscription);
         if (sub) sub.onMessage(params.result);

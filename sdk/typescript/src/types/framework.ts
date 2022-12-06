@@ -9,18 +9,17 @@ import {
   SuiObject,
   SuiData,
   getMoveObjectType,
-  ObjectId,
   getObjectId,
 } from './objects';
-import { normalizeSuiObjectId, SuiAddress } from './common';
+import { normalizeSuiObjectId } from './common';
 
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { isSuiMoveObject } from './index.guard';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { SignerWithProvider } from '../signers/signer-with-provider';
-import { Infer, literal, number, object, string, union } from 'superstruct';
-import { ObjectIdStruct } from './shared';
+import { Infer, is, literal, number, object, string, union } from 'superstruct';
+import { ObjectId, SuiAddress } from './shared';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
@@ -44,7 +43,7 @@ export const CoinMetadataStruct = object({
   symbol: string(),
   description: string(),
   iconUrl: union([string(), literal(null)]),
-  id: union([ObjectIdStruct, literal(null)]),
+  id: union([ObjectId, literal(null)]),
 });
 
 export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
@@ -87,7 +86,7 @@ export class Coin {
   }
 
   public static getID(obj: ObjectData): ObjectId {
-    if (isSuiMoveObject(obj)) {
+    if (is(obj, SuiMoveObject)) {
       return obj.fields.id.id;
     }
     return getObjectId(obj);

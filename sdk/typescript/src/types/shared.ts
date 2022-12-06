@@ -1,8 +1,5 @@
 import {
-  array,
-  boolean,
   Infer,
-  lazy,
   literal,
   number,
   object,

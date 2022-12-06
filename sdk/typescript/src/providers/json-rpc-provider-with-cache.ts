@@ -12,7 +12,6 @@ import {
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
   getTransactionEffects,
-  SuiObjectRefStruct,
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
 import { Base64DataBuffer } from '../serialization/base64';
@@ -102,7 +101,7 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
     if (newData == null) {
       return;
     }
-    const ref = is(newData, SuiObjectRefStruct)
+    const ref = is(newData, SuiObjectRef)
       ? newData
       : getObjectReference(newData);
     if (ref != null) {
