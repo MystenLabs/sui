@@ -13,16 +13,25 @@ use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
 use node::{restarter::NodeRestarter, Node};
 use prometheus::Registry;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 use storage::NodeStorage;
-use test_utils::CommitteeFixture;
+use test_utils::{AuthorityFixture, CommitteeFixture};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
+use tracing::info;
+use tracing::instrument::WithSubscriber;
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::filter::FilterExt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{fmt, reload, Layer};
 use types::ConsensusOutput;
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
@@ -42,6 +51,7 @@ struct SimpleExecutionState {
         Vec<(WorkerId, NetworkKeyPair)>,
         WorkerCache,
     )>,
+    node_id: u32,
 }
 
 impl SimpleExecutionState {
@@ -59,6 +69,7 @@ impl SimpleExecutionState {
             Vec<(WorkerId, NetworkKeyPair)>,
             WorkerCache,
         )>,
+        node_id: u32,
     ) -> Self {
         Self {
             keypair,
@@ -68,6 +79,7 @@ impl SimpleExecutionState {
             committee: Arc::new(Mutex::new(committee)),
             tx_output,
             tx_reconfigure,
+            node_id,
         }
     }
 }
@@ -84,7 +96,11 @@ impl ExecutionState for SimpleExecutionState {
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
+        if transaction >= epoch
+            && execution_indices.next_certificate_index >= 3
+            && execution_indices.next_certificate_index % 3 == 0
+            && self.node_id == 0
+        {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
@@ -162,17 +178,64 @@ async fn run_client(
     }
 }
 
-#[ignore]
+pub fn init_for_testing() {
+    use once_cell::sync::Lazy;
+
+    static LOGGER: Lazy<()> = Lazy::new(|| {
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("narwhal_node=debug,narwhal_primary::primary=info,narwhal_primary::core=info,anemo=info"));
+        let (log_filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
+
+        let mut layers = Vec::new();
+        layers.push(console_subscriber::spawn().boxed());
+        layers.push(
+            fmt::layer()
+                .with_line_number(true)
+                .with_file(true)
+                .with_filter(log_filter)
+                .boxed(),
+        );
+
+        /*
+        let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(
+                EnvFilter::builder()
+                    .with_default_directive(LevelFilter::INFO.into())
+                    .from_env_lossy(),
+            )
+            .with_file(true)
+            .with_line_number(true)
+            .with_test_writer()
+            .finish();
+
+         */
+
+        tracing_subscriber::registry().with(layers).init();
+
+        // ::tracing::subscriber::set_global_default(subscriber)
+        //    .expect("unable to initialize logging for tests");
+    });
+
+    Lazy::force(&LOGGER);
+}
+
 #[tokio::test]
 async fn restart() {
-    telemetry_subscribers::init_for_testing();
+    //telemetry_subscribers::init_for_testing();
+    //console_subscriber::init();
+    init_for_testing();
+
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
 
     // Spawn the nodes.
     let mut rx_nodes = Vec::new();
+    let mut node_id = 0;
     for a in fixture.authorities() {
+        if node_id == 4 {
+            break;
+        }
         let (tx_output, rx_output) = channel(10);
         let (tx_node_reconfigure, rx_node_reconfigure) = channel(10);
 
@@ -184,7 +247,10 @@ async fn restart() {
             committee.clone(),
             tx_output,
             tx_node_reconfigure,
+            node_id,
         ));
+
+        node_id += 1;
 
         let worker_keypairs = a.worker_keypairs();
         let worker_ids = 0..worker_keypairs.len() as u32;
@@ -194,8 +260,10 @@ async fn restart() {
         let worker_cache = worker_cache.clone();
 
         let parameters = Parameters {
-            batch_size: 200,
+            batch_size: 200_000,
             max_header_num_of_batches: 1,
+            max_header_delay: Duration::from_secs(2),
+            header_num_of_batches_threshold: 10,
             ..Parameters::default()
         };
 
@@ -226,7 +294,11 @@ async fn restart() {
 
     // Spawn some clients.
     let mut tx_clients = Vec::new();
+    node_id = 0;
     for a in fixture.authorities() {
+        if node_id == 4 {
+            break;
+        }
         let (tx_client_reconfigure, rx_client_reconfigure) = channel(10);
         tx_clients.push(tx_client_reconfigure);
 
@@ -235,6 +307,8 @@ async fn restart() {
         tokio::spawn(
             async move { run_client(name, worker_cache.clone(), rx_client_reconfigure).await },
         );
+
+        node_id += 1;
     }
 
     // Listen to the outputs.
@@ -244,11 +318,13 @@ async fn restart() {
             let mut current_epoch = 0u64;
 
             while let Some(epoch) = rx.recv().await {
-                println!("Received epoch {}", epoch);
                 if epoch == 5 {
+                    info!("Received epoch {}", epoch);
                     return;
                 }
                 if epoch > current_epoch {
+                    info!("Received epoch {}", epoch);
+
                     current_epoch = epoch;
                     tx.send(current_epoch).await.unwrap();
                 }
@@ -263,6 +339,102 @@ async fn restart() {
     try_join_all(handles)
         .await
         .expect("No error should occurred");
+}
+
+#[tokio::test]
+async fn simple_node_restarter() {
+    init_for_testing();
+
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+
+    // Spawn the nodes.
+    for a in fixture.authorities() {
+        let (tx_output, mut rx_output) = channel(1000);
+        let (tx_node_reconfigure, rx_node_reconfigure) = channel(10);
+
+        let execution_state = Arc::new(SimpleExecutionState::new(
+            a.keypair().copy(),
+            a.network_keypair().copy(),
+            a.worker_keypairs(),
+            fixture.worker_cache(),
+            committee.clone(),
+            tx_output,
+            tx_node_reconfigure.clone(),
+            0,
+        ));
+
+        let worker_keypairs = a.worker_keypairs();
+        let worker_ids = 0..worker_keypairs.len() as u32;
+        let worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)> = worker_ids
+            .clone()
+            .zip(worker_keypairs.into_iter())
+            .collect();
+
+        let committee_1 = committee.clone();
+        let arc_worker_cache = worker_cache.clone();
+
+        let parameters = Parameters {
+            batch_size: 200,
+            max_header_num_of_batches: 1,
+            ..Parameters::default()
+        };
+
+        let keypair = a.keypair().copy();
+        let network_keypair = a.network_keypair().copy();
+        tokio::spawn(async move {
+            NodeRestarter::watch(
+                keypair,
+                network_keypair,
+                worker_ids_and_keypairs,
+                &committee_1,
+                arc_worker_cache.clone(),
+                /* base_store_path */ test_utils::temp_dir(),
+                execution_state,
+                parameters,
+                TrivialTransactionValidator::default(),
+                rx_node_reconfigure,
+                &Registry::new(),
+            )
+            .await;
+        });
+
+        // wait for a few seconds
+        sleep(Duration::from_secs(5)).await;
+
+        // now update committee
+        let mut committee = committee.clone();
+        committee.epoch = 1;
+
+        // now send a reconfigure signal
+        let worker_keypairs = a.worker_keypairs();
+        let worker_ids = 0..worker_keypairs.len() as u32;
+        let worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)> = worker_ids
+            .clone()
+            .zip(worker_keypairs.into_iter())
+            .collect();
+
+        let network_keypair = a.network_keypair().copy();
+        let keypair = a.keypair().copy();
+
+        tx_node_reconfigure
+            .send((
+                keypair,
+                network_keypair,
+                committee,
+                worker_ids_and_keypairs,
+                fixture.worker_cache(),
+            ))
+            .await
+            .unwrap();
+
+        // now wait to see whether it will bootstrap
+        sleep(Duration::from_secs(5_000)).await;
+
+        // spin up just one node
+        break;
+    }
 }
 
 #[tokio::test]
@@ -301,6 +473,7 @@ async fn epoch_change() {
             committee.clone(),
             tx_output,
             tx_node_reconfigure,
+            0,
         ));
 
         // Start a task that will broadcast the committee change signal.

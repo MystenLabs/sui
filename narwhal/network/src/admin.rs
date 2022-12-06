@@ -13,7 +13,7 @@ use types::ReconfigureNotification;
 
 pub fn start_admin_server(
     port: u16,
-    network: anemo::Network,
+    // network: anemo::Network,
     mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     tx_state_handler: Option<Sender<ReconfigureNotification>>,
 ) -> Vec<JoinHandle<()>> {
@@ -29,7 +29,7 @@ pub fn start_admin_server(
         router = router.merge(r);
     }
 
-    router = router.layer(Extension(network));
+    // router = router.layer(Extension(network));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     info!(
@@ -46,6 +46,7 @@ pub fn start_admin_server(
         while (rx_reconfigure.changed().await).is_ok() {
             let message = rx_reconfigure.borrow().clone();
             if let ReconfigureNotification::Shutdown = message {
+                info!("Shutting down admin server");
                 handle.clone().shutdown();
                 return;
             }

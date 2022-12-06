@@ -274,7 +274,7 @@ impl Worker {
 
         let admin_handles = network::admin::start_admin_server(
             network_admin_server_base_port,
-            network.clone(),
+            // network.clone(),
             rx_reconfigure.clone(),
             None,
         );

@@ -6,6 +6,7 @@ use anemo::PeerId;
 use mysten_metrics::spawn_monitored_task;
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 const PEER_TYPE_NONE: &str = "";
 
@@ -70,6 +71,8 @@ impl ConnectionMonitor {
                     .set(0),
             }
         }
+
+        info!("ConnectionMonitor shutting down");
     }
 
     fn peer_type(&self, peer_id: PeerId) -> &str {

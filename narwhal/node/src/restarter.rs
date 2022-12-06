@@ -6,8 +6,11 @@ use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
+use prometheus::core::Atomic;
 use prometheus::Registry;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use types::ReconfigureNotification;
@@ -35,7 +38,7 @@ impl NodeRestarter {
             Vec<(WorkerId, NetworkKeyPair)>,
             WorkerCache,
         )>,
-        registry: &Registry,
+        _registry: &Registry,
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
@@ -51,9 +54,11 @@ impl NodeRestarter {
         loop {
             tracing::info!("Starting epoch E{}", committee.epoch());
 
+            let registry = Registry::new();
+
             // Get a fresh store for the new epoch.
             let mut store_path = storage_base_path.clone();
-            store_path.push(format!("epoch{}", committee.epoch()));
+            // store_path.push(format!("epoch{}", committee.epoch()));
             let store = NodeStorage::reopen(store_path);
 
             // Restart the relevant components.
@@ -66,7 +71,7 @@ impl NodeRestarter {
                 parameters.clone(),
                 /* consensus */ true,
                 execution_state.clone(),
-                registry,
+                &registry,
             )
             .await
             .unwrap();
@@ -79,7 +84,7 @@ impl NodeRestarter {
                 &store,
                 parameters.clone(),
                 tx_validator.clone(),
-                registry,
+                &registry,
             );
 
             handles.extend(primary_handles);
@@ -115,14 +120,22 @@ impl NodeRestarter {
 
             tracing::info!("Committee reconfiguration message successfully sent");
 
+            /*
+            for h in handles.iter() {
+                h.abort();
+            }*/
+
             // Wait for the components to shut down.
             join_all(handles.drain(..)).await;
             tracing::info!("All tasks successfully exited");
 
             // Give it an extra second in case the last task to exit is a network server. The OS
             // may need a moment to make the TCP ports available again.
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             tracing::info!("Epoch E{} terminated", committee.epoch());
+
+            drop(store);
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
             // Update the settings for the next epoch.
             primary_keypair = new_keypair;

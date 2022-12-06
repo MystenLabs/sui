@@ -32,6 +32,7 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
+use mysten_metrics::spawn_monitored_task;
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
@@ -207,6 +208,16 @@ impl Primary {
             .0
             .clone();
 
+
+        let admin_handles = network::admin::start_admin_server(
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port,
+            // network.clone(),
+            tx_reconfigure.subscribe(),
+            Some(tx_state_handler),
+        );
+
         // Spawn the network receiver listening to messages from the other primaries.
         let address = committee
             .load()
@@ -352,21 +363,15 @@ impl Primary {
             peer_types,
         );
 
+        let mut shutdown_receiver = tx_reconfigure.subscribe();
+        let net = network.clone();
+
         info!(
             "Primary {} listening to network admin messages on 127.0.0.1:{}",
             name.encode_base64(),
             parameters
                 .network_admin_server
                 .primary_network_admin_server_port
-        );
-
-        let admin_handles = network::admin::start_admin_server(
-            parameters
-                .network_admin_server
-                .primary_network_admin_server_port,
-            network.clone(),
-            tx_reconfigure.subscribe(),
-            Some(tx_state_handler),
         );
 
         if let Some(tx_executor_network) = tx_executor_network {
@@ -685,8 +690,7 @@ impl PrimaryReceiverHandler {
                     results?;
                     break
                 },
-                result = rx_narwhal_round_updates.changed() => {
-                    result.unwrap();
+                Ok(result) = rx_narwhal_round_updates.changed() => {
                     narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
                         narwhal_round <= header.round,
