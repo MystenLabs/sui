@@ -317,7 +317,7 @@ fn test_u64_dynamic_object_field_first_key() {
         type_params: vec![TypeTag::U64],
     };
 
-    let wrapper_u64_tag = TypeTag::Struct(struct_tag.clone());
+    let wrapper_u64_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
     let wrapper_u64_tag_bytes = bcs::to_bytes(&wrapper_u64_tag).unwrap();
     let expect = [
         7u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 20, 100, 121, 110, 97,
