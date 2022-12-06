@@ -134,63 +134,8 @@ impl CertificateFetcher {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_certificate_fetcher.recv() => {
-                    let header = &certificate.header;
-                    if header.epoch != self.committee.epoch() {
-                        continue;
-                    }
-                    // Unnecessary to validate the header and certificate further, since it has
-                    // already been validated.
+                biased;
 
-                    if let Some(r) = self.targets.get(&header.author) {
-                        if header.round <= *r {
-                            // Ignore fetch request when we already need to sync to a later
-                            // certificate from the same authority. Although this certificate may
-                            // not be the parent of the later certificate, this should be ok
-                            // because eventually a child of this certificate will miss parents and
-                            // get inserted into the targets.
-                            //
-                            // Basically, it is ok to stop fetching without this certificate.
-                            // If this certificate becomes a parent of other certificates, another
-                            // fetch will be triggered eventually because of missing certificates.
-                            continue;
-                        }
-                    }
-
-                    // The header should have been verified as part of the certificate.
-                    match self
-                    .certificate_store
-                    .last_round_number(&header.author) {
-                        Ok(r) => {
-                            if header.round <= r.unwrap_or(0) {
-                                // Ignore fetch request. Possibly the certificate was processed
-                                // while the message is in the queue.
-                                continue;
-                            }
-                            // Otherwise, continue to update fetch targets.
-                        }
-                        Err(e) => {
-                            // If this happens, it is most likely due to bincode serialization error.
-                            error!("Failed to read latest round for {}: {}", header.author, e);
-                            continue;
-                        }
-                    };
-
-                    // Update the target rounds for the authority.
-                    self.targets.insert(header.author.clone(), header.round);
-
-                    // Kick start a fetch task if there is no other task running.
-                    if self.fetch_certificates_task.is_empty() {
-                        self.kickstart();
-                    }
-                },
-                _ = self.fetch_certificates_task.next(), if !self.fetch_certificates_task.is_empty() => {
-                    // Kick start another fetch task after the previous one terminates.
-                    // If all targets have been fetched, the new task will clean up the targets and exit.
-                    if self.fetch_certificates_task.is_empty() {
-                        self.kickstart();
-                    }
-                },
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow_and_update().clone();
@@ -209,6 +154,71 @@ impl CertificateFetcher {
                     }
                     debug!("Committee updated to {}", self.committee);
                 }
+
+
+                else => {
+                    tokio::select! {
+                         _ = self.fetch_certificates_task.next(), if !self.fetch_certificates_task.is_empty() => {
+                        // Kick start another fetch task after the previous one terminates.
+                        // If all targets have been fetched, the new task will clean up the targets and exit.
+                            if self.fetch_certificates_task.is_empty() {
+                                self.kickstart();
+                            }
+                        },
+
+                        Some(certificate) = self.rx_certificate_fetcher.recv() => {
+                            let header = &certificate.header;
+                            if header.epoch != self.committee.epoch() {
+                                continue;
+                            }
+                            // Unnecessary to validate the header and certificate further, since it has
+                            // already been validated.
+
+                            if let Some(r) = self.targets.get(&header.author) {
+                                if header.round <= *r {
+                                    // Ignore fetch request when we already need to sync to a later
+                                    // certificate from the same authority. Although this certificate may
+                                    // not be the parent of the later certificate, this should be ok
+                                    // because eventually a child of this certificate will miss parents and
+                                    // get inserted into the targets.
+                                    //
+                                    // Basically, it is ok to stop fetching without this certificate.
+                                    // If this certificate becomes a parent of other certificates, another
+                                    // fetch will be triggered eventually because of missing certificates.
+                                    continue;
+                                }
+                            }
+
+                            // The header should have been verified as part of the certificate.
+                            match self
+                            .certificate_store
+                            .last_round_number(&header.author) {
+                                Ok(r) => {
+                                    if header.round <= r.unwrap_or(0) {
+                                        // Ignore fetch request. Possibly the certificate was processed
+                                        // while the message is in the queue.
+                                        continue;
+                                    }
+                                    // Otherwise, continue to update fetch targets.
+                                }
+                                Err(e) => {
+                                    // If this happens, it is most likely due to bincode serialization error.
+                                    error!("Failed to read latest round for {}: {}", header.author, e);
+                                    continue;
+                                }
+                            };
+
+                            // Update the target rounds for the authority.
+                            self.targets.insert(header.author.clone(), header.round);
+
+                            // Kick start a fetch task if there is no other task running.
+                            if self.fetch_certificates_task.is_empty() {
+                                self.kickstart();
+                            }
+                        },
+                    }
+                }
+
             }
         }
     }

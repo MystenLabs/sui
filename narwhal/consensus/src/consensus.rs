@@ -312,6 +312,24 @@ where
         // Listen to incoming certificates.
         loop {
             tokio::select! {
+                biased;
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        ReconfigureNotification::NewEpoch(new_committee) => {
+                            self.state = self.change_epoch(new_committee)?;
+                        },
+                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.committee = new_committee;
+                        }
+                        ReconfigureNotification::Shutdown => return Ok(())
+                    }
+                    tracing::debug!("Committee updated to {}", self.committee);
+                }
+
                 Some(certificate) = self.rx_new_certificates.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
@@ -405,22 +423,6 @@ where
                         .with_label_values(&[])
                         .set(self.state.dag.len() as i64);
                 },
-
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.state = self.change_epoch(new_committee)?;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::Shutdown => return Ok(())
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-                }
             }
         }
     }

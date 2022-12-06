@@ -139,9 +139,7 @@ impl StateHandler {
         );
         loop {
             tokio::select! {
-                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(commit_round, certificates).await;
-                },
+                biased;
 
                 Some(message) = self.rx_state_handler.recv() => {
                     // Notify our workers
@@ -173,6 +171,12 @@ impl StateHandler {
                         return;
                     }
                 }
+
+                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(commit_round, certificates).await;
+                },
+
+
             }
         }
     }

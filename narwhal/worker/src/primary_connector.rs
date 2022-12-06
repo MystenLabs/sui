@@ -59,27 +59,8 @@ impl PrimaryConnector {
 
         loop {
             tokio::select! {
-                // Send the digest through the network.
-                Some((batch, response)) = self.rx_our_batch.recv() => {
-                    if futures.len() >= MAX_PENDING_DIGESTS {
-                        tracing::warn!("Primary unreachable: dropping {batch:?}");
-                        continue;
-                    }
-
-                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch);
-                    futures.push( monitor(handle_future(handle, response)) );
-                },
-                Some(batch) = self.rx_others_batch.recv() => {
-                    if futures.len() >= MAX_PENDING_DIGESTS {
-                        tracing::warn!("Primary unreachable: dropping {batch:?}");
-                        continue;
-                    }
-
-                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch);
-                    futures.push( monitor(handle_future(handle, None)) );
-                },
-
-                // Trigger reconfigure.
+                biased;
+                // check for reconfiguration
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     // TODO: Move logic to handle epoch & committee changes to wherever anemo
@@ -89,7 +70,32 @@ impl PrimaryConnector {
                     }
                 }
 
-                Some(_result) = futures.next() => ()
+
+                else => {
+                    tokio::select! {
+                        // Send the digest through the network.
+                        Some((batch, response)) = self.rx_our_batch.recv() => {
+                            if futures.len() >= MAX_PENDING_DIGESTS {
+                                tracing::warn!("Primary unreachable: dropping {batch:?}");
+                                continue;
+                            }
+
+                            let handle = self.primary_client.send(self.primary_name.to_owned(), &batch);
+                            futures.push( monitor(handle_future(handle, response)) );
+                        },
+                        Some(batch) = self.rx_others_batch.recv() => {
+                            if futures.len() >= MAX_PENDING_DIGESTS {
+                                tracing::warn!("Primary unreachable: dropping {batch:?}");
+                                continue;
+                            }
+
+                            let handle = self.primary_client.send(self.primary_name.to_owned(), &batch);
+                            futures.push( monitor(handle_future(handle, None)) );
+                        },
+
+                        Some(_result) = futures.next() => ()
+                    }
+                }
             }
         }
     }

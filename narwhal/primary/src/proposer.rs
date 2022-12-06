@@ -404,152 +404,7 @@ impl Proposer {
             }
 
             tokio::select! {
-
-                () = &mut header_repeat_timer => {
-                    // If the round has not advanced within header_resend_timeout then try to
-                    // re-process our own header.
-                    if let Some(header) = &opt_latest_header {
-                        debug!("resend header {:?}", header);
-
-                        if let Err(err) = self.tx_headers.send(header.clone()).await.map_err(|_| DagError::ShuttingDown) {
-                            error!("failed to resend header {:?} : {:?}", header, err);
-                        }
-
-                        // we want to reset the timer only when there is already a previous header
-                        // created.
-                        header_repeat_timer = Box::pin(sleep(header_resend_timeout));
-                    }
-                }
-
-                Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
-                    // Remove committed headers from the list of pending
-                    for round in &commit_headers {
-                        self.proposed_headers.remove(round);
-                    }
-
-                    // Now for any round much below the current commit round we re-insert
-                    // the batches into the digests we need to send, effectivelly re-sending
-                    // them
-                    let mut digests_to_resend = Vec::new();
-                    let mut retransmit_rounds = Vec::new();
-
-                    // Iterate in order of rounds of our own headers.
-                    for (round_header, header) in &mut self.proposed_headers {
-                        // If we are within 2 rounds of the commit we break
-                        if round_header + 2 >= commit_round {
-                            break;
-                        }
-
-                        digests_to_resend.extend(
-                            header.payload.iter().map(|(digest, worker)| (*digest, *worker, 0))
-                        );
-                        retransmit_rounds.push(*round_header);
-                    }
-
-                    if !retransmit_rounds.is_empty() {
-                        // Add the digests to retransmit to the digests for the next header
-                        digests_to_resend.extend(&self.digests);
-                        self.digests = digests_to_resend;
-
-                        // Now delete the headers with batches we re-transmit
-                        for round in &retransmit_rounds {
-                            self.proposed_headers.remove(round);
-                        }
-
-                        debug!(
-                            "Retransmit batches in undelivered headers {:?} at commit round {:?}",
-                            retransmit_rounds,
-                            commit_round
-                        );
-                    }
-                },
-
-                Some((parents, round, epoch)) = self.rx_parents.recv() => {
-                    // If the core already moved to the next epoch we should pull the next
-                    // committee as well.
-                    match epoch.cmp(&self.committee.epoch()) {
-                        Ordering::Greater => {
-                            let message = self.rx_reconfigure.borrow_and_update().clone();
-                            match message  {
-                                ReconfigureNotification::NewEpoch(new_committee) => {
-                                    self.change_epoch(new_committee);
-                                },
-                                ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                    self.committee = new_committee;
-                                },
-                                ReconfigureNotification::Shutdown => return,
-                            }
-                            tracing::debug!("Committee updated to {}", self.committee);
-                        }
-                        Ordering::Less => {
-                            // We already updated committee but the core is slow. Ignore the parents
-                            // from older epochs.
-                            continue
-                        },
-                        Ordering::Equal => {
-                            // Nothing to do, we can proceed.
-                        }
-                    }
-
-                    // Compare the parents' round number with our current round.
-                    match round.cmp(&self.round) {
-                        Ordering::Greater => {
-                            // We accept round bigger than our current round to jump ahead in case we were
-                            // late (or just joined the network).
-                            self.round = round;
-                            let _ = self.tx_narwhal_round_updates.send(self.round);
-                            self.last_parents = parents;
-
-                        },
-                        Ordering::Less => {
-                            // Ignore parents from older rounds.
-                            continue;
-                        },
-                        Ordering::Equal => {
-                            // The core gives us the parents the first time they are enough to form a quorum.
-                            // Then it keeps giving us all the extra parents.
-                            self.last_parents.extend(parents)
-                        }
-                    }
-
-                    // Check whether we can advance to the next round. Note that if we timeout,
-                    // we ignore this check and advance anyway.
-                    advance = self.ready();
-
-                    let round_type = if self.round % 2 == 0 {
-                        "even"
-                    } else {
-                        "odd"
-                    };
-
-                    self.metrics
-                    .proposer_ready_to_advance
-                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
-                    .inc();
-                }
-
-                // Receive digests from our workers.
-                Some(OurDigestMessage {
-                    digest,
-                    worker_id,
-                    timestamp,
-                    ack_channel,
-                }) = self.rx_our_digests.recv() => {
-                    let digest_record = (digest, worker_id, timestamp, );
-                    self.digests.push(digest_record);
-                    // Signal back to the worker that the batch is recorded on the
-                    // primary, and will be tracked until inclusion. This means that
-                    // if the primary does not fail it will attempt to send the digest
-                    // (and re-send if necessary) until it is sequenced, or the end of
-                    // the epoch is reached. For the moment this does not persist primary
-                    // crashes and re-starts.
-                    let _ = ack_channel.send(());
-                }
-
-                // Check whether the timer expired.
-                () = &mut timer, if !timer_expired => {
-                    // Nothing to do.
-                }
+                biased;
 
                 // Check whether the committee changed.
                 result = self.rx_reconfigure.changed() => {
@@ -567,6 +422,158 @@ impl Proposer {
                     tracing::debug!("Committee updated to {}", self.committee);
 
                 }
+                else => {
+                    tokio::select! {
+                        () = &mut header_repeat_timer => {
+                        // If the round has not advanced within header_resend_timeout then try to
+                        // re-process our own header.
+                        if let Some(header) = &opt_latest_header {
+                            debug!("resend header {:?}", header);
+
+                            if let Err(err) = self.tx_headers.send(header.clone()).await.map_err(|_| DagError::ShuttingDown) {
+                                error!("failed to resend header {:?} : {:?}", header, err);
+                            }
+
+                            // we want to reset the timer only when there is already a previous header
+                            // created.
+                            header_repeat_timer = Box::pin(sleep(header_resend_timeout));
+                            }
+                        }
+
+
+                        Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
+                            // Remove committed headers from the list of pending
+                            for round in &commit_headers {
+                                self.proposed_headers.remove(round);
+                            }
+
+                            // Now for any round much below the current commit round we re-insert
+                            // the batches into the digests we need to send, effectivelly re-sending
+                            // them
+                            let mut digests_to_resend = Vec::new();
+                            let mut retransmit_rounds = Vec::new();
+
+                            // Iterate in order of rounds of our own headers.
+                            for (round_header, header) in &mut self.proposed_headers {
+                                // If we are within 2 rounds of the commit we break
+                                if round_header + 2 >= commit_round {
+                                    break;
+                                }
+
+                                digests_to_resend.extend(
+                                    header.payload.iter().map(|(digest, worker)| (*digest, *worker, 0))
+                                );
+                                retransmit_rounds.push(*round_header);
+                            }
+
+                            if !retransmit_rounds.is_empty() {
+                                // Add the digests to retransmit to the digests for the next header
+                                digests_to_resend.extend(&self.digests);
+                                self.digests = digests_to_resend;
+
+                                // Now delete the headers with batches we re-transmit
+                                for round in &retransmit_rounds {
+                                    self.proposed_headers.remove(round);
+                                }
+
+                                debug!(
+                                    "Retransmit batches in undelivered headers {:?} at commit round {:?}",
+                                    retransmit_rounds,
+                                    commit_round
+                                );
+                            }
+                        },
+
+                        Some((parents, round, epoch)) = self.rx_parents.recv() => {
+                            // If the core already moved to the next epoch we should pull the next
+                            // committee as well.
+                            match epoch.cmp(&self.committee.epoch()) {
+                                Ordering::Greater => {
+                                    let message = self.rx_reconfigure.borrow_and_update().clone();
+                                    match message  {
+                                        ReconfigureNotification::NewEpoch(new_committee) => {
+                                            self.change_epoch(new_committee);
+                                        },
+                                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                                            self.committee = new_committee;
+                                        },
+                                        ReconfigureNotification::Shutdown => return,
+                                    }
+                                    tracing::debug!("Committee updated to {}", self.committee);
+                                }
+                                Ordering::Less => {
+                                    // We already updated committee but the core is slow. Ignore the parents
+                                    // from older epochs.
+                                    continue
+                                },
+                                Ordering::Equal => {
+                                    // Nothing to do, we can proceed.
+                                }
+                            }
+
+                            // Compare the parents' round number with our current round.
+                            match round.cmp(&self.round) {
+                                Ordering::Greater => {
+                                    // We accept round bigger than our current round to jump ahead in case we were
+                                    // late (or just joined the network).
+                                    self.round = round;
+                                    let _ = self.tx_narwhal_round_updates.send(self.round);
+                                    self.last_parents = parents;
+
+                                },
+                                Ordering::Less => {
+                                    // Ignore parents from older rounds.
+                                    continue;
+                                },
+                                Ordering::Equal => {
+                                    // The core gives us the parents the first time they are enough to form a quorum.
+                                    // Then it keeps giving us all the extra parents.
+                                    self.last_parents.extend(parents)
+                                }
+                            }
+
+                            // Check whether we can advance to the next round. Note that if we timeout,
+                            // we ignore this check and advance anyway.
+                            advance = self.ready();
+
+                            let round_type = if self.round % 2 == 0 {
+                                "even"
+                            } else {
+                                "odd"
+                            };
+
+                            self.metrics
+                            .proposer_ready_to_advance
+                            .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                            .inc();
+                        }
+
+                        // Receive digests from our workers.
+                        Some(OurDigestMessage {
+                            digest,
+                            worker_id,
+                            timestamp,
+                            ack_channel,
+                        }) = self.rx_our_digests.recv() => {
+                            let digest_record = (digest, worker_id, timestamp, );
+                            self.digests.push(digest_record);
+                            // Signal back to the worker that the batch is recorded on the
+                            // primary, and will be tracked until inclusion. This means that
+                            // if the primary does not fail it will attempt to send the digest
+                            // (and re-send if necessary) until it is sequenced, or the end of
+                            // the epoch is reached. For the moment this does not persist primary
+                            // crashes and re-starts.
+                            let _ = ack_channel.send(());
+                        }
+
+                        // Check whether the timer expired.
+                        () = &mut timer, if !timer_expired => {
+                            // Nothing to do.
+                        }
+
+                    }
+                }
+
             }
 
             // update metrics

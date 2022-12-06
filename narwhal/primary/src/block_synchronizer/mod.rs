@@ -243,56 +243,7 @@ impl BlockSynchronizer {
         );
         loop {
             tokio::select! {
-                Some(command) = self.rx_block_synchronizer_commands.recv() => {
-                    match command {
-                        Command::SynchronizeBlockHeaders { digests, respond_to } => {
-                            let fut = self.handle_synchronize_block_headers_command(digests, respond_to).await;
-                            if fut.is_some() {
-                                waiting.push(fut.unwrap());
-                            }
-                        },
-                        Command::SynchronizeBlockPayload { certificates, respond_to } => {
-                            let fut = self.handle_synchronize_block_payload_command(certificates, respond_to).await;
-                            if fut.is_some() {
-                                waiting.push(fut.unwrap());
-                            }
-                        }
-                    }
-                },
-                Some(state) = waiting.next() => {
-                    match state {
-                        State::HeadersSynchronized { certificates } => {
-                            debug!("Result for the block headers synchronize request with certs {certificates:?}");
-
-                            for (digest, result) in certificates {
-                                self.notify_requestors_for_result(Header(digest), result).await;
-                            }
-                        },
-                        State::PayloadAvailabilityReceived { certificates, peers } => {
-                             debug!("Result for the block payload synchronize request wwith certs {certificates:?}");
-
-                            // now try to synchronise the payload only for the ones that have been found
-                            let futures = self.handle_synchronize_block_payloads(peers).await;
-                            for fut in futures {
-                                waiting.push(fut);
-                            }
-
-                            // notify immediately for digests that have been errored or timedout
-                            for (digest, result) in certificates {
-                                if result.is_err() {
-                                    self.notify_requestors_for_result(Payload(digest), result).await;
-                                }
-                            }
-                        },
-                        State::PayloadSynchronized { result } => {
-                            let digest = result.as_ref().map_or_else(|e| e.digest(), |r| r.certificate.digest());
-
-                            debug!("Block payload synchronize result received for certificate digest {digest}");
-
-                            self.notify_requestors_for_result(Payload(digest), result).await;
-                        },
-                    }
-                }
+                biased;
 
                 // Check whether the committee changed.
                 result = self.rx_reconfigure.changed() => {
@@ -309,6 +260,65 @@ impl BlockSynchronizer {
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
                 }
+
+
+                else => {
+                    tokio::select! {
+                          Some(state) = waiting.next() => {
+                            match state {
+                                State::HeadersSynchronized { certificates } => {
+                                    debug!("Result for the block headers synchronize request with certs {certificates:?}");
+
+                                    for (digest, result) in certificates {
+                                        self.notify_requestors_for_result(Header(digest), result).await;
+                                    }
+                                },
+                                State::PayloadAvailabilityReceived { certificates, peers } => {
+                                    debug!("Result for the block payload synchronize request wwith certs {certificates:?}");
+
+                                // now try to synchronise the payload only for the ones that have been found
+                                let futures = self.handle_synchronize_block_payloads(peers).await;
+                                for fut in futures {
+                                        waiting.push(fut);
+                                }
+
+                                // notify immediately for digests that have been errored or timedout
+                                for (digest, result) in certificates {
+                                        if result.is_err() {
+                                            self.notify_requestors_for_result(Payload(digest), result).await;
+                                        }
+                                    }
+                            },
+                                State::PayloadSynchronized { result } => {
+                                    let digest = result.as_ref().map_or_else(|e| e.digest(), |r| r.certificate.digest());
+
+                                    debug!("Block payload synchronize result received for certificate digest {digest}");
+
+                                    self.notify_requestors_for_result(Payload(digest), result).await;
+                                },
+                            }
+                        }
+
+                        Some(command) = self.rx_block_synchronizer_commands.recv() => {
+                            match command {
+                                Command::SynchronizeBlockHeaders { digests, respond_to } => {
+                                    let fut = self.handle_synchronize_block_headers_command(digests, respond_to).await;
+                                    if fut.is_some() {
+                                        waiting.push(fut.unwrap());
+                                    }
+                                },
+                                Command::SynchronizeBlockPayload { certificates, respond_to } => {
+                                    let fut = self.handle_synchronize_block_payload_command(certificates, respond_to).await;
+                                    if fut.is_some() {
+                                        waiting.push(fut.unwrap());
+                                    }
+                                }
+                            }
+                        },
+
+                    }
+                }
+
             }
         }
     }

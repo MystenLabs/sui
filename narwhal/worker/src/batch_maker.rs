@@ -111,53 +111,9 @@ impl BatchMaker {
 
         loop {
             tokio::select! {
-                // Assemble client transactions into batches of preset size.
-                // Note that transactions are only consumed when the number of batches
-                // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
-                // condition will be met eventually if the store and network are functioning.
-                Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+                biased;
 
-                    if current_batch.transactions.is_empty() {
-                        // We are interested to measure the time to seal a batch
-                        // only when we do have transactions to include. Thus we reset
-                        // the timer on the first transaction we receive to include on
-                        // an empty batch.
-                        self.batch_start_timestamp = Instant::now();
-                    }
-
-                    current_batch_size += transaction.len();
-                    current_batch.transactions.push(transaction);
-                    current_responses.push(response_sender);
-                    if current_batch_size >= self.batch_size {
-                        if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
-                            batch_pipeline.push_back(seal);
-                        }
-                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
-
-                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
-                        current_batch = Batch::default();
-                        current_responses = Vec::new();
-                        current_batch_size = 0;
-                    }
-                },
-
-                // If the timer triggers, seal the batch even if it contains few transactions.
-                () = &mut timer => {
-                    if !current_batch.transactions.is_empty() {
-                        if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
-                            batch_pipeline.push_back(seal);
-                        }
-                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
-
-                        current_batch = Batch::default();
-                        current_responses = Vec::new();
-                        current_batch_size = 0;
-                    }
-                    timer.as_mut().reset(Instant::now() + self.max_batch_delay);
-                }
-
-                // TODO: duplicated code in quorum_waiter.rs
-                // Trigger reconfigure.
+                // check for reconfiguration.
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
@@ -174,11 +130,60 @@ impl BatchMaker {
                     tracing::debug!("Committee updated to {}", self.committee);
                 },
 
-                // Process the pipeline of batches, this consumes items in the `batch_pipeline`
-                // list, and ensures the main loop in run will always be able to make progress
-                // by lowering it until condition batch_pipeline.len() < MAX_PARALLEL_BATCH is met.
-                _ = batch_pipeline.next(), if !batch_pipeline.is_empty() => {
-                    self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+                else => {
+                    tokio::select! {
+                        // Assemble client transactions into batches of preset size.
+                        // Note that transactions are only consumed when the number of batches
+                        // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
+                        // condition will be met eventually if the store and network are functioning.
+                        Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+
+                            if current_batch.transactions.is_empty() {
+                                // We are interested to measure the time to seal a batch
+                                // only when we do have transactions to include. Thus we reset
+                                // the timer on the first transaction we receive to include on
+                                // an empty batch.
+                                self.batch_start_timestamp = Instant::now();
+                            }
+
+                            current_batch_size += transaction.len();
+                            current_batch.transactions.push(transaction);
+                            current_responses.push(response_sender);
+                            if current_batch_size >= self.batch_size {
+                                if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
+                                    batch_pipeline.push_back(seal);
+                                }
+                                self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
+                                timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                                current_batch = Batch::default();
+                                current_responses = Vec::new();
+                                current_batch_size = 0;
+                            }
+                        },
+
+                        // If the timer triggers, seal the batch even if it contains few transactions.
+                        () = &mut timer => {
+                            if !current_batch.transactions.is_empty() {
+                                if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
+                                    batch_pipeline.push_back(seal);
+                                }
+                                self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
+                                current_batch = Batch::default();
+                                current_responses = Vec::new();
+                                current_batch_size = 0;
+                            }
+                            timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                        }
+
+                        // Process the pipeline of batches, this consumes items in the `batch_pipeline`
+                        // list, and ensures the main loop in run will always be able to make progress
+                        // by lowering it until condition batch_pipeline.len() < MAX_PARALLEL_BATCH is met.
+                        _ = batch_pipeline.next(), if !batch_pipeline.is_empty() => {
+                            self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+                        }
+                    }
                 }
 
             }

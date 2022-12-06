@@ -80,95 +80,9 @@ impl QuorumWaiter {
 
         loop {
             tokio::select! {
+                biased;
 
-                // When a new batch is available, and the pipeline is not full, add a new
-                // task to the pipeline to send this batch to workers.
-                //
-                // TODO: make the constant a config parameter.
-                Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
-                    // Broadcast the batch to the other workers.
-                    let workers: Vec<_> = self
-                        .worker_cache
-                        .load()
-                        .others_workers_by_id(&self.name, &self.id)
-                        .into_iter()
-                        .map(|(name, info)| (name, info.name))
-                        .collect();
-                    let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
-                    let message  = WorkerBatchMessage{batch: batch.clone()};
-                    let handlers = self.network.broadcast(worker_names, &message);
-
-                    // Collect all the handlers to receive acknowledgements.
-                    let mut wait_for_quorum: FuturesUnordered<_> = primary_names
-                        .into_iter()
-                        .zip(handlers.into_iter())
-                        .map(|(name, handler)| {
-                            let stake = self.committee.stake(&name);
-                            monitored_future!(Self::waiter(handler, stake))
-                        })
-                        .collect();
-
-                    // Wait for the first 2f nodes to send back an Ack. Then we consider the batch
-                    // delivered and we send its digest to the primary (that will include it into
-                    // the dag). This should reduce the amount of synching.
-                    let threshold = self.committee.quorum_threshold();
-                    let mut total_stake = self.committee.stake(&self.name);
-
-                    pipeline.push_back(async move {
-                        // A future that sends to 2/3 stake then returns. Also prints an error
-                        // if we terminate before we have managed to get to the full 2/3 stake.
-
-                        loop{
-                            if let Some(stake) = wait_for_quorum.next().await {
-                                total_stake += stake;
-                                if total_stake >= threshold {
-
-                                    // Notify anyone waiting for this.
-                                    if let Some(channel) = opt_channel {
-                                        if let Err(e) = channel.send(()) {
-                                            error!("Channel waiting for quorum response dropped: {:?}", e);
-                                        }
-                                    }
-                                    break
-                                }
-                            } else {
-                                // TODO: maybe we should be stopping the system if that happens,
-                                //       since it seems serious. However, it may happen at the
-                                //       start of the epoch when not everyone is ready?
-                                tracing::error!("Batch dissemination ended without a quorum.");
-                                break;
-                            }
-                        }
-                        (batch, wait_for_quorum)
-                    });
-                },
-
-                // Process futures in the pipeline. They complete when we have sent to >2/3
-                // of other worker by stake, but after that we still try to send to the remaining
-                // on a best effort basis.
-                Some((batch, mut remaining)) = pipeline.next() => {
-
-                    // Attempt to send messages to the remaining workers
-                    if !remaining.is_empty() {
-                        trace!("Best effort dissemination for batch {} for remaining {}", batch.digest(), remaining.len());
-                        best_effort_with_timeout.push(async move {
-                           // Bound the attempt to a few seconds to tolerate nodes that are
-                           // offline and will never succeed.
-                           //
-                           // TODO: make the constant a config parameter.
-                           timeout(Duration::from_secs(5), async move{
-                               while remaining.next().await.is_some() { }
-                           }).await
-                       });
-                    }
-
-                },
-
-                // Drive the best effort send efforts which may update remaining workers
-                // or timeout.
-                Some(_) = best_effort_with_timeout.next() => {}
-
-                // Trigger reconfigure.
+                // check for reconfiguration
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
@@ -191,6 +105,99 @@ impl QuorumWaiter {
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
                 }
+
+                else => {
+                    tokio::select! {
+                        // When a new batch is available, and the pipeline is not full, add a new
+                        // task to the pipeline to send this batch to workers.
+                        //
+                        // TODO: make the constant a config parameter.
+                        Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
+                            // Broadcast the batch to the other workers.
+                            let workers: Vec<_> = self
+                                .worker_cache
+                                .load()
+                                .others_workers_by_id(&self.name, &self.id)
+                                .into_iter()
+                                .map(|(name, info)| (name, info.name))
+                                .collect();
+                            let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
+                            let message  = WorkerBatchMessage{batch: batch.clone()};
+                            let handlers = self.network.broadcast(worker_names, &message);
+
+                            // Collect all the handlers to receive acknowledgements.
+                            let mut wait_for_quorum: FuturesUnordered<_> = primary_names
+                                .into_iter()
+                                .zip(handlers.into_iter())
+                                .map(|(name, handler)| {
+                                    let stake = self.committee.stake(&name);
+                                    monitored_future!(Self::waiter(handler, stake))
+                                })
+                                .collect();
+
+                            // Wait for the first 2f nodes to send back an Ack. Then we consider the batch
+                            // delivered and we send its digest to the primary (that will include it into
+                            // the dag). This should reduce the amount of synching.
+                            let threshold = self.committee.quorum_threshold();
+                            let mut total_stake = self.committee.stake(&self.name);
+
+                            pipeline.push_back(async move {
+                                // A future that sends to 2/3 stake then returns. Also prints an error
+                                // if we terminate before we have managed to get to the full 2/3 stake.
+
+                                loop{
+                                    if let Some(stake) = wait_for_quorum.next().await {
+                                        total_stake += stake;
+                                        if total_stake >= threshold {
+
+                                            // Notify anyone waiting for this.
+                                            if let Some(channel) = opt_channel {
+                                                if let Err(e) = channel.send(()) {
+                                                    error!("Channel waiting for quorum response dropped: {:?}", e);
+                                                }
+                                            }
+                                            break
+                                        }
+                                    } else {
+                                        // TODO: maybe we should be stopping the system if that happens,
+                                        //       since it seems serious. However, it may happen at the
+                                        //       start of the epoch when not everyone is ready?
+                                        tracing::error!("Batch dissemination ended without a quorum.");
+                                        break;
+                                    }
+                                }
+                                (batch, wait_for_quorum)
+                            });
+                        },
+
+                        // Process futures in the pipeline. They complete when we have sent to >2/3
+                        // of other worker by stake, but after that we still try to send to the remaining
+                        // on a best effort basis.
+                        Some((batch, mut remaining)) = pipeline.next() => {
+
+                            // Attempt to send messages to the remaining workers
+                            if !remaining.is_empty() {
+                                trace!("Best effort dissemination for batch {} for remaining {}", batch.digest(), remaining.len());
+                                best_effort_with_timeout.push(async move {
+                                   // Bound the attempt to a few seconds to tolerate nodes that are
+                                   // offline and will never succeed.
+                                   //
+                                   // TODO: make the constant a config parameter.
+                                   timeout(Duration::from_secs(5), async move{
+                                       while remaining.next().await.is_some() { }
+                                   }).await
+                               });
+                            }
+
+                        },
+
+                        // Drive the best effort send efforts which may update remaining workers
+                        // or timeout.
+                        Some(_) = best_effort_with_timeout.next() => {}
+
+                    }
+                }
+
             }
         }
     }
