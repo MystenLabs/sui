@@ -113,8 +113,8 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn new_id(&mut self, id: ObjectID) {
-        // remove if from deleted_ids for the case in dynamic fields where the
-        // object was deleted and then re-added in a single transaction
+        // remove from deleted_ids for the case in dynamic fields where the object was deleted and
+        // then re-added in a single transaction
         self.state.deleted_ids.remove(&id);
         // mark the id as new
         self.state.new_ids.insert(id, ());
