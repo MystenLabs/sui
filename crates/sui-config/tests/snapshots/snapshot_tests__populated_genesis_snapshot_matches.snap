@@ -12,7 +12,9 @@ expression: genesis.validator_set()
   gas-price: 1
   commission-rate: 0
   network-address: ""
+  p2p-address: ""
   narwhal-primary-address: ""
   narwhal-worker-address: ""
   narwhal-internal-worker-address: ~
   narwhal-consensus-address: ""
+

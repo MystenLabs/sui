@@ -10,6 +10,7 @@ use axum::{
 };
 use clap::Parser;
 use http::Method;
+use mysten_metrics::spawn_monitored_task;
 use std::env;
 use std::{
     borrow::Cow,
@@ -20,7 +21,6 @@ use std::{
 use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet};
-use sui_metrics::spawn_monitored_task;
 use tower::{limit::RateLimitLayer, ServiceBuilder};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};

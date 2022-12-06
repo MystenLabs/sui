@@ -35,7 +35,7 @@ impl GAS {
     }
 
     pub fn type_tag() -> TypeTag {
-        TypeTag::Struct(Self::type_())
+        TypeTag::Struct(Box::new(Self::type_()))
     }
 
     pub fn is_gas(other: &StructTag) -> bool {

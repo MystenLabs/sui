@@ -11,13 +11,18 @@ export const navigateWithUnknown = async (
     network: Network | string
 ) => {
     let searchPromises = [];
-
-    if (isValidTransactionDigest(input)) {
+    const version = await rpc(network).getRpcApiVersion();
+    if (
+        isValidTransactionDigest(
+            input,
+            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
+        )
+    ) {
         searchPromises.push(
             rpc(network)
                 .getTransactionWithEffects(input)
                 .then((data) => ({
-                    category: 'transactions',
+                    category: 'transaction',
                     data: data,
                 }))
         );
@@ -35,7 +40,7 @@ export const navigateWithUnknown = async (
                         throw new Error('No objects for Address');
 
                     return {
-                        category: 'addresses',
+                        category: 'address',
                         data: data,
                     };
                 }),
@@ -46,7 +51,7 @@ export const navigateWithUnknown = async (
                         throw new Error('no object found');
                     }
                     return {
-                        category: 'objects',
+                        category: 'object',
                         data: data,
                     };
                 }),
@@ -77,9 +82,9 @@ export const navigateWithUnknown = async (
 
                 if (
                     pac?.data &&
-                    (pac?.category === 'objects' ||
-                        pac?.category === 'addresses' ||
-                        pac?.category === 'transactions')
+                    (pac?.category === 'object' ||
+                        pac?.category === 'address' ||
+                        pac?.category === 'transaction')
                 ) {
                     navigate(
                         `../${pac.category}/${encodeURIComponent(input)}`,

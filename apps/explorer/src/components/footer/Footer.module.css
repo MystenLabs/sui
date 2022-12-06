@@ -1,17 +1,17 @@
 footer {
-    @apply bg-gray-75 sm:pl-[5vw] pt-[10vh] pb-[2.5vh] sm:pt-[4vh] sm:pb-[6.2vh] xl:w-[50vw];
+    @apply bg-gray-75 pt-[10vh] pb-[2.5vh] sm:pl-[5vw] sm:pt-[4vh] sm:pb-[6.2vh] xl:w-[50vw];
 }
 
 nav.links {
-    @apply text-center sm:text-left grid grid-cols-3 sm:grid-cols-4 mx-auto;
+    @apply mx-auto grid grid-cols-3 text-center sm:grid-cols-4 sm:text-left;
 }
 
 nav.links > div > h6 {
-    @apply text-gray-60 uppercase font-bold text-xs my-0 pb-0;
+    @apply my-0 pb-0 text-xs font-bold uppercase text-gray-60;
 }
 
 nav.links > div > ul {
-    @apply list-none pl-0 pt-[0.5rem] my-0;
+    @apply my-0 list-none pl-0 pt-[0.5rem];
 }
 
 nav.links > div > ul > li:not(:last-child) {
@@ -19,7 +19,7 @@ nav.links > div > ul > li:not(:last-child) {
 }
 
 nav.links a {
-    @apply text-offwhite no-underline font-medium text-[0.875rem] leading-[0.75rem] hover:text-sui;
+    @apply text-[0.875rem] font-medium leading-[0.75rem] text-offwhite no-underline hover:text-sui;
 }
 
 .copyright {
@@ -35,7 +35,7 @@ nav.links a {
 }
 
 .logomobile {
-    @apply sm:hidden grid justify-center mt-[66px];
+    @apply mt-[66px] grid justify-center sm:hidden;
 }
 
 .logomobile > svg {

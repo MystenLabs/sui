@@ -16,15 +16,15 @@ export function SenderRecipientAddress({
     address,
 }: SenderRecipientAddressProps) {
     return (
-        <div className="break-all flex gap-2 items-center">
-            <div className="w-4 mt-1">
+        <div className="flex items-center gap-2 break-all">
+            <div className="mt-1 w-4">
                 {isSender ? <Sender /> : <Recipient />}
             </div>
 
             <Link
                 variant="mono"
                 size="md"
-                to={`/addresses/${encodeURIComponent(address)}`}
+                to={`/address/${encodeURIComponent(address)}`}
             >
                 {address}
             </Link>

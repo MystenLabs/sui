@@ -9,8 +9,8 @@ import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function Header() {
     return (
-        <header className="bg-headerNav h-header">
-            <div className="flex items-center max-w-[1440px] mx-auto px-5 h-full">
+        <header className="h-header bg-headerNav">
+            <div className="mx-auto flex h-full max-w-[1440px] items-center px-5">
                 <div className="mr-8">
                     <LinkWithQuery data-testid="nav-logo-button" to="/">
                         <SuiLogo />

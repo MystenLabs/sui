@@ -11,11 +11,11 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
+use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::QuorumDriver;
-use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
@@ -229,6 +229,22 @@ impl PseudoBlockProvider {
                     hash: digest.as_ref().try_into()?,
                 };
 
+                // update balance
+                let (tx, effect) = state.get_transaction(digest).await?;
+
+                let operations = Operation::from_data_and_events(
+                    &tx.data().data,
+                    &effect.status,
+                    &effect.events,
+                )?;
+
+                let transaction = Transaction {
+                    transaction_identifier: TransactionIdentifier { hash: digest },
+                    operations,
+                    related_transactions: vec![],
+                    metadata: None,
+                };
+
                 let new_block = BlockResponse {
                     block: Block {
                         block_identifier: block_identifier.clone(),
@@ -238,14 +254,11 @@ impl PseudoBlockProvider {
                             .map_err(|e| Error::new_with_cause(InternalError, e))?
                             .as_millis()
                             .try_into()?,
-                        transactions: vec![],
+                        transactions: vec![transaction],
                         metadata: None,
                     },
-                    other_transactions: vec![TransactionIdentifier { hash: digest }],
+                    other_transactions: vec![],
                 };
-
-                // update balance
-                let (tx, effect) = state.get_transaction(digest).await?;
 
                 let ops = Operation::from_data_and_events(
                     &tx.data().data,
@@ -316,7 +329,10 @@ fn extract_balance_changes_from_ops(
     let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
     for op in ops {
         match op.type_ {
-            OperationType::SuiBalanceChange | OperationType::GasSpent | OperationType::Genesis => {
+            OperationType::SuiBalanceChange
+            | OperationType::GasSpent
+            | OperationType::Genesis
+            | OperationType::PaySui => {
                 let addr = op
                     .account
                     .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?

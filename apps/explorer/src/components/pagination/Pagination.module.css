@@ -2,24 +2,24 @@
 
 @layer components {
     .basecontainer {
-        @apply h-[2.3rem] inline-block
-        rounded border-[1px] border-solid border-gray-50
-        font-sans items-center
-        text-gray-75 stroke-gray-75 bg-inherit;
+        @apply inline-block h-[2.3rem]
+        items-center rounded border-[1px] border-solid
+        border-gray-50 bg-inherit
+        stroke-gray-75 font-sans text-gray-75;
 
         box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
     }
 
     .desktopfooter .basecontainer {
-        @apply px-2 py-2 mx-[4px];
+        @apply mx-[4px] px-2 py-2;
     }
 
     .under6footer .basecontainer {
-        @apply px-2 py-2 mx-[1vw] sm:mx-[4px];
+        @apply mx-[1vw] px-2 py-2 sm:mx-[4px];
     }
 
     .btncontainer {
-        @apply basecontainer hover:bg-sui-light hover:text-gray-100 hover:stroke-gray-100 cursor-pointer inline-block;
+        @apply basecontainer inline-block cursor-pointer hover:bg-sui-light hover:stroke-gray-100 hover:text-gray-100;
 
         transition: all 0.4s ease;
     }
@@ -43,7 +43,7 @@ button.gone {
 
 /* RHS stats styling */
 .rhs > div {
-    @apply capitalize text-gray-75 text-sm mx-auto sm:mr-[12px] mt-2 sm:mt-0;
+    @apply mx-auto mt-2 text-sm capitalize text-gray-75 sm:mr-[12px] sm:mt-0;
 }
 
 .rhs {
@@ -55,46 +55,46 @@ button.gone {
 }
 
 .rhs > select {
-    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block border-0 border-r-[12px] border-transparent overflow-visible;
+    @apply ml-[1vw] hidden cursor-pointer overflow-visible rounded-[6px] border-0 border-r-[12px] border-transparent sm:block;
 
     outline: 1px solid #e9eaeb !important;
 }
 
 /* Less than 6 case */
 .under6footer {
-    @apply mt-2 sm:grid sm:grid-cols-12 text-center text-left;
+    @apply mt-2 text-left text-center sm:grid sm:grid-cols-12;
 }
 
 .under6footer > div:first-child {
-    @apply block sm:col-span-8 self-center sm:justify-self-start;
+    @apply block self-center sm:col-span-8 sm:justify-self-start;
 }
 
 .under6footer > div:nth-child(2) {
-    @apply sm:col-span-4 justify-self-end items-center;
+    @apply items-center justify-self-end sm:col-span-4;
 }
 
 /* Desktop */
 
 .desktopfooter {
-    @apply hidden sm:block sm:mt-2 sm:grid sm:grid-cols-12 text-center sm:text-left;
+    @apply hidden text-center sm:mt-2 sm:block sm:grid sm:grid-cols-12 sm:text-left;
 }
 
 .desktopfooter > div:first-child {
-    @apply inline-block sm:block sm:col-span-8 sm:self-center;
+    @apply inline-block sm:col-span-8 sm:block sm:self-center;
 }
 
 .desktopfooter > div:nth-child(2) {
-    @apply sm:col-span-4 sm:justify-self-end sm:items-center;
+    @apply sm:col-span-4 sm:items-center sm:justify-self-end;
 }
 
 /* Mobile */
 
 .mobilefooter {
-    @apply sm:hidden block w-[85vw];
+    @apply block w-[85vw] sm:hidden;
 }
 
 .mobiletoprow {
-    @apply sm:hidden block grid grid-cols-6 my-2;
+    @apply my-2 block grid grid-cols-6 sm:hidden;
 }
 
 .mobiletoprow > button:nth-child(1),

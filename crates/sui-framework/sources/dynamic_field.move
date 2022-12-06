@@ -59,7 +59,7 @@ public fun add<Name: copy + drop + store, Value: store>(
     };
     // TODO remove once we have lamport timestamps
     assert!(has_child_object_with_ty<Field<Name, Value>>(object_addr, hash), EFieldAlreadyExists);
-    let field = borrow_child_object<Field<Name, Value>>(object_addr, hash);
+    let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
     assert!(option::is_none(&field.value), EFieldAlreadyExists);
     option::fill(&mut field.value, value);
 }
@@ -74,7 +74,7 @@ public fun borrow<Name: copy + drop + store, Value: store>(
 ): &Value {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name, Value>>(object_addr, hash);
+    let field = borrow_child_object<Field<Name, Value>>(object, hash);
     assert!(option::is_some(&field.value), EFieldDoesNotExist);
     option::borrow(&field.value)
 }
@@ -89,7 +89,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
 ): &mut Value {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name, Value>>(object_addr, hash);
+    let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
     assert!(option::is_some(&field.value), EFieldDoesNotExist);
     option::borrow_mut(&mut field.value)
 }
@@ -105,7 +105,7 @@ public fun remove<Name: copy + drop + store, Value: store>(
 ): Value {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name, Value>>(object_addr, hash);
+    let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
     assert!(option::is_some(&field.value), EFieldDoesNotExist);
     option::extract(&mut field.value)
 }
@@ -120,20 +120,32 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
     if (!has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)) return false;
-    let field = borrow_child_object<Field<Name, Value>>(object_addr, hash);
+    let field = borrow_child_object<Field<Name, Value>>(object, hash);
     option::is_some(&field.value)
 }
 
-public(friend) fun field_ids<Name: copy + drop + store>(
+public(friend) fun field_info<Name: copy + drop + store>(
     object: &UID,
     name: Name,
-): (address, address) {
+): (&UID, address) {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name, ID>>(object_addr, hash);
+    let field = borrow_child_object<Field<Name, ID>>(object, hash);
     assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    (object::uid_to_address(&field.id), object::id_to_address(&option::destroy_some(field.value)))
+    (&field.id, object::id_to_address(&option::destroy_some(field.value)))
 }
+
+public(friend) fun field_info_mut<Name: copy + drop + store>(
+    object: &mut UID,
+    name: Name,
+): (&mut UID, address) {
+    let object_addr = object::uid_to_address(object);
+    let hash = hash_type_and_key(object_addr, name);
+    let field = borrow_child_object_mut<Field<Name, ID>>(object, hash);
+    assert!(option::is_some(&field.value), EFieldDoesNotExist);
+    (&mut field.id, object::id_to_address(&option::destroy_some(field.value)))
+}
+
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
@@ -141,7 +153,9 @@ public(friend) native fun add_child_object<Child: key>(parent: address, child: C
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match
-public(friend) native fun borrow_child_object<Child: key>(parent: address, id: address): &mut Child;
+/// we need two versions to return a reference or a mutable reference
+public(friend) native fun borrow_child_object<Child: key>(object: &UID, id: address): &Child;
+public(friend) native fun borrow_child_object_mut<Child: key>(object: &mut UID, id: address): &mut Child;
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match

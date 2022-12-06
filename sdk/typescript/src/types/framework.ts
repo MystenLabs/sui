@@ -26,8 +26,6 @@ export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
 
-export const COIN_TYPE = `${SUI_FRAMEWORK_ADDRESS}::coin::Coin`;
-
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';
@@ -52,7 +50,7 @@ export type CoinMetadata = {
  */
 export class Coin {
   static isCoin(data: ObjectData): boolean {
-    return Coin.getType(data)?.startsWith(COIN_TYPE) ?? false;
+    return Coin.getType(data)?.match(COIN_TYPE_ARG_REGEX) != null;
   }
 
   static getCoinType(type: string) {
@@ -304,12 +302,14 @@ export class Coin {
       gasBudget: Number(gasBudget),
     };
     if (isSuiTransfer) {
-      return signer.serializer.newPaySui(signerAddress, {
-        ...txCommon,
+      return signer.serializer.serializeToBytes(signerAddress, {
+        kind: 'paySui',
+        data: { ...txCommon },
       });
     }
-    return signer.serializer.newPay(signerAddress, {
-      ...txCommon,
+    return signer.serializer.serializeToBytes(signerAddress, {
+      kind: 'pay',
+      data: { ...txCommon },
       // we know there is a gas coin with enough balance to cover
       // the gas budget let rpc select one for us
     });

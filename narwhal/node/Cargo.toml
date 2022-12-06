@@ -13,12 +13,11 @@ bincode = "1.3.3"
 bytes = "1.3.0"
 cfg-if = "1.0.0"
 clap = "2.34"
-dhat = { version = "0.3.2", optional = true }
 futures = "0.3.24"
 multiaddr = "0.16.0"
 rand = "0.8.5"
 thiserror = "1.0.35"
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.10"
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tracing = "0.1.36"
@@ -41,15 +40,15 @@ types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
 eyre = "0.6.8"
 
+mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 
-sui-metrics = { path = "../../crates/sui-metrics" }
 workspace-hack.workspace = true
 
 anemo.workspace = true
-reqwest = { version = "0.11.12", features = ["json"] }
+reqwest = { version = "0.11.13", features = ["json"] }
 once_cell = "1.16.0"
 
 [dev-dependencies]
@@ -61,7 +60,6 @@ test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
-dhat-heap = ["dhat"]    # if you are doing heap profiling
 trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]

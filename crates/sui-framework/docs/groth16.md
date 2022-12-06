@@ -8,6 +8,7 @@
 -  [Struct `PreparedVerifyingKey`](#0x2_groth16_PreparedVerifyingKey)
 -  [Struct `PublicProofInputs`](#0x2_groth16_PublicProofInputs)
 -  [Struct `ProofPoints`](#0x2_groth16_ProofPoints)
+-  [Constants](#@Constants_0)
 -  [Function `pvk_from_bytes`](#0x2_groth16_pvk_from_bytes)
 -  [Function `pvk_to_bytes`](#0x2_groth16_pvk_to_bytes)
 -  [Function `public_proof_inputs_from_bytes`](#0x2_groth16_public_proof_inputs_from_bytes)
@@ -122,6 +123,20 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 </details>
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_groth16_EInvalidVerifyingKey"></a>
+
+
+
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidVerifyingKey">EInvalidVerifyingKey</a>: u64 = 7;
+</code></pre>
+
+
 
 <a name="0x2_groth16_pvk_from_bytes"></a>
 

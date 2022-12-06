@@ -69,7 +69,7 @@ class WorkerCache:
                 for j, host in enumerate(hosts):
                     workers_addr[j] = {
                         'name': worker_key,
-                        'worker_address': f'/ip4/{host}/tcp/{port}/http',
+                        'worker_address': f'/ip4/{host}/udp/{port}',
                         'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
                     }
                     port += 2
@@ -177,7 +177,7 @@ class Committee:
         self.json = {'authorities': OrderedDict(), 'epoch': 0}
         for name, (network_name, hosts) in addresses.items():
             host = hosts.pop(0)
-            primary_addr = f'/ip4/{host}/tcp/{port}/http'
+            primary_addr = f'/ip4/{host}/udp/{port}'
             port += 1
 
             self.json['authorities'][name] = {
@@ -290,11 +290,6 @@ class BenchParameters:
             self.tx_size = int(json['tx_size'])
 
             self.duration = int(json['duration'])
-
-            if 'mem_profiling' in json:
-                self.mem_profile = bool(json['mem_profiling'])
-            else:
-                self.mem_profile = False
 
             self.runs = int(json['runs']) if 'runs' in json else 1
         except KeyError as e:

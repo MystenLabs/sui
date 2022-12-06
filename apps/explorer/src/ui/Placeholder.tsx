@@ -14,7 +14,7 @@ export function Placeholder({ width, height }: PlaceholderProps) {
     return (
         <div
             className={clsx(
-                'rounded-[3px] animate-shimmer',
+                'animate-shimmer rounded-[3px]',
                 styles.placeholder
             )}
             style={{

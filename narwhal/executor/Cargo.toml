@@ -18,7 +18,7 @@ multiaddr = "0.16.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
-tokio = { version = "1.20.1", features = ["sync"] }
+tokio = { workspace = true, features = ["sync"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"
 tracing = "0.1.36"
@@ -35,7 +35,7 @@ match_opt = "0.1.2"
 rand = "0.8.5"
 mockall = "0.11.2"
 
-sui-metrics = { path = "../../crates/sui-metrics" }
+mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 

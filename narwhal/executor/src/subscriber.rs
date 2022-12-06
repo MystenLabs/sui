@@ -20,9 +20,9 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use fastcrypto::hash::Hash;
+use mysten_metrics::{monitored_future, spawn_monitored_task};
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
-use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},

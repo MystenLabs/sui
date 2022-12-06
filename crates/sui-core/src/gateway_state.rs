@@ -193,9 +193,10 @@ impl<A> GatewayState<A> {
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = Arc::new(SafeClientMetrics::new(prometheus_registry));
         let gateway_store = Arc::new(
-            GatewayStore::open(
+            GatewayStore::open_with_committee(
                 &base_path.join("store"),
                 None,
+                &committee,
                 &Genesis::get_default_genesis(),
             )
             .await?,
@@ -555,11 +556,12 @@ where
                 | TypeTag::Address
                 | TypeTag::Signer => (),
                 TypeTag::Vector(inner) => used_packages(packages, inner),
-                TypeTag::Struct(StructTag {
-                    address,
-                    type_params,
-                    ..
-                }) => {
+                TypeTag::Struct(st) => {
+                    let StructTag {
+                        address,
+                        type_params,
+                        ..
+                    } = &**st;
                     packages.push((*address).into());
                     for t in type_params {
                         used_packages(packages, t)

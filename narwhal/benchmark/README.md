@@ -20,7 +20,6 @@ bench_params = {
     'tx_size': 512,
     'faults': 0,
     'duration': 300,
-    'mem_profiling': False
 }
 ```
 They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (transactions per second, or tx/s) at which the clients submit transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes (`faults`), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes; this ensures the transactions of a client are all different.
@@ -115,19 +114,19 @@ Here is sample output:
 ```
 The 'Consensus TPS' and 'Consensus latency' report the average throughput and latency without considering the client, respectively. The consensus latency thus refers to the time elapsed between the block's creation and its commit. In contrast, `End-to-end TPS` and `End-to-end latency` report the performance of the whole system, starting from when the client submits the transaction. The end-to-end latency is often called 'client-perceived latency'. To accurately measure this value without degrading performance, the client periodically submits 'sample' transactions that are tracked across all the modules until they get committed into a block; the benchmark scripts use sample transactions to estimate the end-to-end latency.
 
-### Memory/Allocation Profiling
+### Memory / Allocation Profiling
 
-There is an option to run the benchmark in memory allocation profiling mode.  This slows down the benchmark,
-replacing the global allocator with one which profiles allocations.  It requires the `dhat-heap` compiler feature
-to be turned on.  To enable memory profiling mode, set the following benchmark options:
+Memory profiling for benchmarks are possible via `jemalloc` on Linux. It can be enabled in the following way:
 
-* `'mem_profiling': True`
-* `duration`: This should be set to 5 minutes or longer
+* Intall `jemalloc`, e.g. `sudo apt install libjemalloc-dev`
+* Enable `jemalloc` by setting `export MALLOC_CONF=prof:true,prof_prefix:jeprof.out,lg_prof_interval:33` before launching the benchmark script.
 
-`dhat-heap-*.json` files will be written to the benchmark dir, one for each primary.
-You might not get files for all primaries as some primaries might die with a panic (see https://github.com/nnethercote/dhat-rs/issues/19).
+Memory profiles with names `jeprof.out*` will be written to the currently directory.
 
-To view the profiling information, use the [hosted viewer](https://nnethercote.github.io/dh_view/dh_view.html) or see [the viewing instructions](https://docs.rs/dhat/latest/dhat/index.html#viewing) for details.
+To visualize the profile,
+
+* Intall `graphviz`, e.g. `sudo apt install graphviz`
+* `sudo jeprof --svg <path to Narwhal binary> <path to profile> > prof.svg`
 
 ## AWS Benchmarks
 This repo integrates various Python scripts to deploy and benchmark the codebase on [Amazon Web Services (AWS)](https://aws.amazon.com). They are particularly useful to run benchmarks in the WAN, across multiple data centers. This section provides a step-by-step tutorial explaining how to use them.
@@ -191,7 +190,7 @@ The second block (`ports`) specifies the TCP ports to use:
 ```json
 "port": 5000,
 ```
-Narwhal requires a number of TCP ports, depending on the number of workers per node. Each primary requires two ports: one to receive messages from other primaries and one to receive messages from its workers. And each worker requires three ports: one to receive client transactions, one to receive messages from its primary, and one to receive messages from other workers. Note that the script will open a large port range (5000-7000) to the WAN on all your AWS instances.
+Narwhal requires a number of TCP and UDP ports, depending on the number of workers per node. Each primary requires one udp ports: one to receive messages from other primaries and its own workers. And each worker requires one udp and one tcp ports: one tpc port to receive client transactions, and one udp port to receive messages from its primary from other workers. Note that the script will open a large port range (5000-7000) to the WAN on all your AWS instances.
 
 The third block (`repo`) contains the information regarding the repository's name, the URL of the repo, and the branch containing the code to deploy:
 ```json

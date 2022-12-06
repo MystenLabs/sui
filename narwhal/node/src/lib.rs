@@ -117,21 +117,6 @@ impl Node {
             (None, NetworkModel::PartiallySynchronous)
         };
 
-        // Inject memory profiling here if we build with dhat-heap feature flag
-        // Put name of primary in heap profile to distinguish diff primaries
-        #[cfg(feature = "dhat-heap")]
-        let profiler = {
-            use fastcrypto::traits::EncodeDecodeBase64;
-            use std::path::Path;
-
-            let heap_file = format!("dhat-heap-{}.json", name.encode_base64());
-            Arc::new(
-                dhat::Profiler::builder()
-                    .file_name(Path::new(&heap_file))
-                    .build(),
-            )
-        };
-
         // Spawn the primary.
         let primary_handles = Primary::spawn(
             name.clone(),
@@ -156,23 +141,6 @@ impl Node {
             Some(tx_executor_network),
         );
         handles.extend(primary_handles);
-
-        // Let's spin off a separate thread that waits a while then dumps the profile,
-        // otherwise this function exits immediately and the profile is dumped way too soon.
-        // See https://github.com/nnethercote/dhat-rs/issues/19 for a panic that happens,
-        // but at least 2 primaries should complete and dump their profiles.
-        #[cfg(feature = "dhat-heap")]
-        {
-            use std::time::Duration;
-
-            #[allow(clippy::redundant_clone)]
-            let profiler2 = profiler.clone();
-            std::thread::spawn(|| {
-                std::thread::sleep(Duration::from_secs(240));
-                println!("Dropping DHAT profiler...");
-                drop(profiler2);
-            });
-        }
 
         Ok(handles)
     }

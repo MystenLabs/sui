@@ -8,7 +8,8 @@ use rocksdb::MultiThreaded;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use strum_macros::EnumString;
-use sui_core::authority::authority_store_tables::{AuthorityEpochTables, AuthorityPerpetualTables};
+use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
@@ -127,7 +128,7 @@ pub fn dump_table(
 
 #[cfg(test)]
 mod test {
-    use sui_core::authority::authority_store_tables::AuthorityEpochTables;
+    use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_types::crypto::AuthoritySignInfo;
 

@@ -113,16 +113,16 @@ impl NodeRestarter {
                 .await
                 .unwrap();
 
-            tracing::debug!("Committee reconfiguration message successfully sent");
+            tracing::info!("Committee reconfiguration message successfully sent");
 
             // Wait for the components to shut down.
             join_all(handles.drain(..)).await;
-            tracing::debug!("All tasks successfully exited");
+            tracing::info!("All tasks successfully exited");
 
             // Give it an extra second in case the last task to exit is a network server. The OS
             // may need a moment to make the TCP ports available again.
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            tracing::debug!("Epoch E{} terminated", committee.epoch());
+            tracing::info!("Epoch E{} terminated", committee.epoch());
 
             // Update the settings for the next epoch.
             primary_keypair = new_keypair;

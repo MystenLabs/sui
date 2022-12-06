@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
+  deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
   RawSigner,
@@ -38,13 +39,13 @@ describe('Transaction Serialization and deserialization', () => {
   async function serializeAndDeserialize(
     moveCall: MoveCallTransaction
   ): Promise<MoveCallTransaction> {
-    const rpcTxnBytes = await rpcSerializer.newMoveCall(
+    const rpcTxnBytes = await rpcSerializer.serializeToBytes(
       toolbox.address(),
-      moveCall
+      { kind: 'moveCall', data: moveCall }
     );
-    const localTxnBytes = await localSerializer.newMoveCall(
+    const localTxnBytes = await localSerializer.serializeToBytes(
       toolbox.address(),
-      moveCall
+      { kind: 'moveCall', data: moveCall }
     );
 
     expect(rpcTxnBytes).toEqual(localTxnBytes);
@@ -54,6 +55,13 @@ describe('Transaction Serialization and deserialization', () => {
         localTxnBytes
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
+
+    const deserializedTxnData =
+      deserializeTransactionBytesToTransactionData(localTxnBytes);
+    const reserialized = await localSerializer.serializeTransactionData(
+      deserializedTxnData
+    );
+    expect(reserialized).toEqual(localTxnBytes);
     if ('moveCall' === deserialized.kind) {
       const normalized = {
         ...deserialized.data,

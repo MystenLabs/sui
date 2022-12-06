@@ -217,6 +217,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         gas_price: validator.gas_price,
                         commission_rate: validator.commission_rate,
                         network_address,
+                        p2p_address: validator.p2p_address.clone(),
                         narwhal_primary_address: validator.narwhal_primary_address.clone(),
                         narwhal_worker_address: validator.narwhal_worker_address.clone(),
                         narwhal_internal_worker_address: validator
@@ -266,7 +267,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 let p2p_config = P2pConfig {
-                    listen_address: utils::available_local_socket_address(),
+                    listen_address: utils::udp_multiaddr_to_listen_address(&validator.p2p_address)
+                        .unwrap(),
+                    external_address: Some(validator.p2p_address),
                     ..Default::default()
                 };
 
@@ -280,7 +283,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: utils::available_local_socket_address(),
                     admin_interface_port: utils::get_available_port(),
                     json_rpc_address: utils::available_local_socket_address(),
-                    websocket_address: None,
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_checkpoint: false,

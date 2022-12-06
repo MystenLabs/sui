@@ -33,7 +33,7 @@ impl Balance {
             address: SUI_FRAMEWORK_ADDRESS,
             module: BALANCE_MODULE_NAME.to_owned(),
             name: BALANCE_STRUCT_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(type_param)],
+            type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
     }
 

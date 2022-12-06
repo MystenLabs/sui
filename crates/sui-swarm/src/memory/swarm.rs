@@ -26,7 +26,6 @@ pub struct SwarmBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
-    websocket_rpc_addr: Option<SocketAddr>,
 }
 
 impl SwarmBuilder {
@@ -39,7 +38,6 @@ impl SwarmBuilder {
             initial_accounts_config: None,
             fullnode_count: 0,
             fullnode_rpc_addr: None,
-            websocket_rpc_addr: None,
         }
     }
 }
@@ -53,7 +51,6 @@ impl<R> SwarmBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
-            websocket_rpc_addr: self.websocket_rpc_addr,
         }
     }
 
@@ -67,7 +64,7 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    /// Set the committe size (the number of validators in the validator set).
+    /// Set the committee size (the number of validators in the validator set).
     ///
     /// Defaults to 1.
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
@@ -92,11 +89,6 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
         self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
-        self
-    }
-
-    pub fn with_websocket_rpc_addr(mut self, websocket_rpc_addr: SocketAddr) -> Self {
-        self.websocket_rpc_addr = Some(websocket_rpc_addr);
         self
     }
 }
@@ -132,12 +124,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
-                let mut config =
-                    network_config.generate_fullnode_config_with_random_dir_name(true, true);
+                let mut config = network_config.generate_fullnode_config_with_random_dir_name(true);
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }
-                config.websocket_address = self.websocket_rpc_addr;
                 fullnodes.insert(config.sui_address(), Node::new(config));
             });
         }
@@ -159,9 +149,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-            let mut config =
-                network_config.generate_fullnode_config_with_random_dir_name(true, true);
-            config.websocket_address = self.websocket_rpc_addr;
+            let mut config = network_config.generate_fullnode_config_with_random_dir_name(true);
             config.json_rpc_address = fullnode_rpc_addr;
             HashMap::from([(config.sui_address(), Node::new(config))])
         } else {
@@ -340,11 +328,11 @@ mod test {
         swarm.launch().await.unwrap();
 
         for validator in swarm.validators() {
-            validator.health_check().await.unwrap();
+            validator.health_check(true).await.unwrap();
         }
 
         for fullnode in swarm.fullnodes() {
-            fullnode.health_check().await.unwrap();
+            fullnode.health_check(false).await.unwrap();
         }
     }
 }

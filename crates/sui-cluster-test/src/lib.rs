@@ -7,7 +7,7 @@ use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use helper::ObjectChecker;
-use jsonrpsee::types::ParamsSer;
+use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
@@ -115,7 +115,7 @@ impl TestContext {
     pub async fn build_transaction_remotely(
         &self,
         method: &str,
-        params: Option<ParamsSer<'_>>,
+        params: ArrayParams,
     ) -> anyhow::Result<TransactionData> {
         let fn_rpc_url = self.get_fullnode_rpc_url();
         // TODO cache this?

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": "."
+  },
+  "references": [
+    { "path": "../../../typescript" },
+    { "path": "../react-providers" },
+    { "path": "../adapters/base-adapter" },
+    { "path": "../adapters/wallet-standard-adapter" }
+  ]
+}

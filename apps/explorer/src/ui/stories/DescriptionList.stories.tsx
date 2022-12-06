@@ -5,13 +5,13 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import {
-    Label,
-    Value,
     DescriptionList,
+    DescriptionItem,
     type DescriptionListProps,
 } from '../DescriptionList';
 
 import { Link } from '~/ui/Link';
+import { Text } from '~/ui/Text';
 
 export default {
     component: DescriptionList,
@@ -27,14 +27,14 @@ export default {
 export const Default: StoryObj<DescriptionListProps> = {
     render: () => (
         <DescriptionList>
-            <Label>Object ID</Label>
-            <Value>
+            <DescriptionItem title="Object ID">
                 <Link variant="mono" to="/">
                     0xb758af2061e7c0e55df23de52c51968f6efbc959
                 </Link>
-            </Value>
-            <Label variant="bodySmall">Owner</Label>
-            <Value>Value 1</Value>
+            </DescriptionItem>
+            <DescriptionItem title={<Text variant="bodySmall">Owner</Text>}>
+                Value 1
+            </DescriptionItem>
         </DescriptionList>
     ),
 };

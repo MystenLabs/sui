@@ -5,10 +5,9 @@
 module sui::validator_set_tests {
     use sui::balance;
     use sui::coin;
-    use sui::sui::SUI;
     use sui::tx_context::TxContext;
     use sui::validator::{Self, Validator};
-    use sui::validator_set;
+    use sui::validator_set::{Self, ValidatorSet};
     use sui::test_scenario;
     use sui::stake::Stake;
     use sui::vec_map;
@@ -80,10 +79,8 @@ module sui::validator_set_tests {
 
         test_scenario::next_tx(&mut scenario, @0x1);
         {
-            let reward = balance::zero<SUI>();
-            let delegation_reward = balance::zero<SUI>();
             let ctx1 = test_scenario::ctx(&mut scenario);
-            validator_set::advance_epoch(&mut validator_set, &mut reward, &mut delegation_reward, &vec_map::empty(), ctx1);
+            advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
             // The total stake and quorum should reflect 4 validators.
             assert!(validator_set::next_epoch_validator_count(&validator_set) == 4, 0);
             assert!(validator_set::total_validator_stake(&validator_set) == 1000, 0);
@@ -95,11 +92,9 @@ module sui::validator_set_tests {
             // Total validator candidate count changes, but total stake remains during epoch.
             assert!(validator_set::next_epoch_validator_count(&validator_set) == 3, 0);
             assert!(validator_set::total_validator_stake(&validator_set) == 1000, 0);
-            validator_set::advance_epoch(&mut validator_set, &mut reward, &mut delegation_reward, &vec_map::empty(), ctx1);
+            advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
             // Validator1 is gone.
             assert!(validator_set::total_validator_stake(&validator_set) == 900, 0);
-            balance::destroy_zero(reward);
-            balance::destroy_zero(delegation_reward);
         };
 
         validator_set::destroy_for_testing(validator_set);
@@ -110,8 +105,6 @@ module sui::validator_set_tests {
     fun test_reference_gas_price_derivation() {
         let scenario = test_scenario::begin(@0x1);
         let ctx1 = test_scenario::ctx(&mut scenario);
-        let dummy_balance = balance::zero();
-        let dummy_delegator_reward = balance::zero();
         // Create 5 validators with different stakes and different gas prices.
         let v1 = create_validator_with_gas_price(@0x1, 1, 45, ctx1);
         let v2 = create_validator_with_gas_price(@0x2, 2, 42, ctx1);
@@ -128,7 +121,7 @@ module sui::validator_set_tests {
             &mut validator_set,
             v2,
         );
-        validator_set::advance_epoch(&mut validator_set, &mut dummy_balance, &mut dummy_delegator_reward, &vec_map::empty(), ctx1);
+        advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
         assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 1);
 
@@ -136,7 +129,7 @@ module sui::validator_set_tests {
             &mut validator_set,
             v3,
         );
-        validator_set::advance_epoch(&mut validator_set, &mut dummy_balance, &mut dummy_delegator_reward, &vec_map::empty(), ctx1);
+        advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
         assert!(validator_set::derive_reference_gas_price(&validator_set) == 42, 2);
 
@@ -144,7 +137,7 @@ module sui::validator_set_tests {
             &mut validator_set,
             v4,
         );
-        validator_set::advance_epoch(&mut validator_set, &mut dummy_balance, &mut dummy_delegator_reward, &vec_map::empty(), ctx1);
+        advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
         assert!(validator_set::derive_reference_gas_price(&validator_set) == 41, 3);
 
@@ -152,13 +145,11 @@ module sui::validator_set_tests {
             &mut validator_set,
             v5,
         );
-        validator_set::advance_epoch(&mut validator_set, &mut dummy_balance, &mut dummy_delegator_reward, &vec_map::empty(), ctx1);
+        advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
         assert!(validator_set::derive_reference_gas_price(&validator_set) == 43, 4);
 
         validator_set::destroy_for_testing(validator_set);
-        balance::destroy_zero(dummy_balance);
-        balance::destroy_zero(dummy_delegator_reward);
         test_scenario::end(scenario);
     }
 
@@ -198,5 +189,24 @@ module sui::validator_set_tests {
             0,
             ctx
         )
+    }
+
+    fun advance_epoch_with_dummy_rewards(validator_set: &mut ValidatorSet, ctx: &mut TxContext) {
+        let dummy_validator_reward = balance::zero();
+        let dummy_delegator_reward = balance::zero();
+        let dummy_storage_fund_reward = balance::zero();
+
+        validator_set::advance_epoch(
+            validator_set, 
+            &mut dummy_validator_reward, 
+            &mut dummy_delegator_reward, 
+            &mut dummy_storage_fund_reward, 
+            &vec_map::empty(), 
+            ctx
+        );
+
+        balance::destroy_zero(dummy_validator_reward);
+        balance::destroy_zero(dummy_delegator_reward);
+        balance::destroy_zero(dummy_storage_fund_reward);
     }
 }

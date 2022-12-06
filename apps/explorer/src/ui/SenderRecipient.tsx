@@ -41,9 +41,9 @@ export function SenderRecipient({
             <Heading variant="heading4" weight="semibold" color="gray-90">
                 {singleTransferCoin ? 'Sender & Recipient' : 'Sender'}
             </Heading>
-            <div className="flex flex-col gap-[15px] justify-center relative">
+            <div className="relative flex flex-col justify-center gap-[15px]">
                 {singleTransferCoin && (
-                    <div className="absolute border-dashed border border-steel overflow-y-hidden h-[calc(57%)] w-4 border-r-transparent border-t-transparent mt-1 ml-1.5 rounded-l" />
+                    <div className="absolute mt-1 ml-1.5 h-[calc(57%)] w-4 overflow-y-hidden rounded-l border border-dashed border-steel border-r-transparent border-t-transparent" />
                 )}
                 <SenderRecipientAddress isSender address={sender} />
                 {primaryRecipient && (

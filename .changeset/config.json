@@ -10,7 +10,6 @@
   "ignore": [
     "sui-explorer",
     "sui-wallet",
-    "demo-nft-dapp",
     "sui-wallet-adapter",
     "@mysten/core"
   ]

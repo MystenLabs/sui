@@ -11,11 +11,11 @@ serde = { version = "1.0.144", features = ["derive"] }
 futures = "0.3.24"
 serde_json = "1.0.88"
 tempfile = "3.3.0"
-tokio = { version = "1.20.1", features = ["full"] }
-jsonrpsee = { version = "0.15.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
+jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["full"] }
 tracing = { version = "0.1.36", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
-reqwest = { version = "0.11.11", features = ["blocking", "json"] }
+reqwest = { version = "0.11.13", features = ["blocking", "json"] }
 async-trait = "0.1.57"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"

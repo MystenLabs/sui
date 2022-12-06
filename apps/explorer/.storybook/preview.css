@@ -1,4 +1,0 @@
-/* Within the preview, we enable anti-aliasing, which will be enabled in the explorer at some point in the future. */
-body {
-    @apply antialiased;
-}

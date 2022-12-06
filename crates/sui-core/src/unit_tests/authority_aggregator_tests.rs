@@ -85,7 +85,7 @@ pub async fn init_local_authorities(
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     genesis_objects.push(pkg);
 
@@ -108,11 +108,12 @@ pub async fn init_local_authorities(
             delegation: 0,
             gas_price: 1,
             commission_rate: 0,
-            network_address: sui_config::utils::new_network_address(),
-            narwhal_primary_address: sui_config::utils::new_network_address(),
-            narwhal_worker_address: sui_config::utils::new_network_address(),
+            network_address: sui_config::utils::new_tcp_network_address(),
+            p2p_address: sui_config::utils::new_udp_network_address(),
+            narwhal_primary_address: sui_config::utils::new_udp_network_address(),
+            narwhal_worker_address: sui_config::utils::new_udp_network_address(),
             narwhal_internal_worker_address: None,
-            narwhal_consensus_address: sui_config::utils::new_network_address(),
+            narwhal_consensus_address: sui_config::utils::new_tcp_network_address(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);
@@ -443,7 +444,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);

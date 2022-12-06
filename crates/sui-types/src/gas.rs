@@ -23,12 +23,9 @@ use std::{
 };
 use sui_cost_tables::{
     bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE},
-    non_execution_tables::{
-        BASE_TX_COST_FIXED, CONSENSUS_COST, MAXIMUM_TX_GAS, OBJ_ACCESS_COST_MUTATE_PER_BYTE,
-        OBJ_ACCESS_COST_READ_PER_BYTE, OBJ_DATA_COST_REFUNDABLE, PACKAGE_PUBLISH_COST_PER_BYTE,
-    },
     units_types::GasUnit,
 };
+use sui_protocol_constants::*;
 
 pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}
@@ -189,7 +186,8 @@ pub static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
-pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| u64::from(to_external(MAXIMUM_TX_GAS)));
+pub static MAX_GAS_BUDGET: Lazy<u64> =
+    Lazy::new(|| u64::from(to_external(InternalGas::new(MAX_TX_GAS))));
 
 pub static MIN_GAS_BUDGET: Lazy<u64> =
     Lazy::new(|| to_external(*INIT_SUI_COST_TABLE.min_transaction_cost).into());
@@ -471,9 +469,7 @@ pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u6
     let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
     assert_eq!(move_object.contents().len(), new_contents.len());
     // unwrap safe gas object cannot exceed max object size
-    move_object
-        .update_contents_and_increment_version(new_contents)
-        .unwrap();
+    move_object.update_contents(new_contents).unwrap();
 }
 
 pub fn refund_gas(gas_object: &mut Object, amount: u64) {
@@ -485,9 +481,7 @@ pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     // unwrap safe because GasCoin is guaranteed to serialize
     let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
     // unwrap because safe gas object cannot exceed max object size
-    move_object
-        .update_contents_and_increment_version(new_contents)
-        .unwrap();
+    move_object.update_contents(new_contents).unwrap();
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {

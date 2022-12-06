@@ -15,7 +15,7 @@ services:
       - -c
       - |
         /usr/local/bin/sui-rosetta generate-rosetta-cli-config &
-        /usr/local/bin/sui start &> /sui/sui.log &
+        /usr/local/bin/sui start --no-full-node &> /sui/sui.log &
         /usr/local/bin/sui-rosetta start-online-server
     stdin_open: true
     tty: true

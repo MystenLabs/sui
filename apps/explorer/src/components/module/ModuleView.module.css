@@ -7,21 +7,21 @@ pre {
 
 section .codeview {
     border-color: transparent !important;
-    @apply font-mono text-sm pl-0 pr-0;
+    @apply pl-0 pr-0 font-mono text-sm;
 }
 
 .moduletitle {
-    @apply text-sm font-semibold pt-2 pb-2;
+    @apply pt-2 pb-2 text-sm font-semibold;
 }
 
 .module {
-    @apply grid grid-cols-1 md:grid-cols-3 gap-0 pt-2 md:pb-2;
+    @apply grid grid-cols-1 gap-0 pt-2 md:grid-cols-3 md:pb-2;
 }
 
 .module section {
     border-top: 1px solid #f0f1f2;
     border-bottom: 1px solid #f0f1f2;
-    @apply md:p-3 pb-0;
+    @apply pb-0 md:p-3;
 }
 
 .module section:first-child {
@@ -30,7 +30,7 @@ section .codeview {
 
 .itemviewtitle,
 .title {
-    @apply text-gray-100 font-[500] text-lg  mt-5 mb-0;
+    @apply mt-5 mb-0 text-lg  font-[500] text-gray-100;
 }
 
 section .codeview pre {
@@ -44,7 +44,7 @@ section .codeview pre {
 }
 
 .viewmore {
-    @apply flex justify-end w-full font-normal text-sm;
+    @apply flex w-full justify-end text-sm font-normal;
 }
 
 .modulewrapper {
@@ -75,7 +75,7 @@ section .codeview pre {
 }
 
 .modulewraper nav ul {
-    @apply mt-3 md:mt-1 mx-0 px-0 justify-start;
+    @apply mx-0 mt-3 justify-start px-0 md:mt-1;
 }
 
 .pagmodule {

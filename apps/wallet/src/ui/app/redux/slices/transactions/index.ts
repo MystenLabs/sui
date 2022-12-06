@@ -125,9 +125,13 @@ const slice = createSlice({
     reducers: {},
     extraReducers: (builder) => {
         builder.addCase(sendTokens.fulfilled, (state, { payload }) => {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore: This causes a compiler error, but it will be removed when we migrate off of Redux.
             return txAdapter.setOne(state, payload);
         });
         builder.addCase(StakeTokens.fulfilled, (state, { payload }) => {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore: This causes a compiler error, but it will be removed when we migrate off of Redux.
             return txAdapter.setOne(state, payload);
         });
     },

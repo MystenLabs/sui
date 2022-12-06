@@ -16,6 +16,7 @@
 //! This allows reads to proceed without being blocked on writes.
 
 use futures::channel::oneshot;
+use mysten_metrics::monitored_scope;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -500,6 +501,7 @@ impl LockServiceImpl {
         debug!("LockService command processing loop started");
         // NOTE: we use blocking_recv() as its faster than using regular async recv() with awaits in a loop
         while let Some(msg) = receiver.blocking_recv() {
+            let _scope = monitored_scope("LockServiceCommandLoop");
             match msg {
                 LockServiceCommands::Acquire {
                     epoch,
@@ -548,6 +550,7 @@ impl LockServiceImpl {
     fn run_queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
         debug!("LockService queries processing loop started");
         while let Some(msg) = receiver.blocking_recv() {
+            let _scope = monitored_scope("LockServiceQueryLoop");
             match msg {
                 LockServiceQueries::GetLock {
                     object,
@@ -988,7 +991,7 @@ mod tests {
         );
 
         // Initialize the object's entry to another version
-        let new_ref2 = (ref2.0, ref2.1.increment(), ref2.2);
+        let new_ref2 = (ref2.0, SequenceNumber::lamport_increment([ref2.1]), ref2.2);
         ls.initialize_locks(&[new_ref2], false /* is_force_reset */)
             .unwrap();
 

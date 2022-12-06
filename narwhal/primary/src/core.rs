@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
-    certificate_waiter::CertificateLoopbackMessage,
+    certificate_fetcher::CertificateLoopbackMessage,
     metrics::PrimaryMetrics,
     primary::PrimaryMessage,
     synchronizer::Synchronizer,
@@ -15,12 +15,12 @@ use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
+use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use storage::CertificateStore;
 use store::Store;
-use sui_metrics::spawn_monitored_task;
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinHandle, JoinSet},
@@ -64,7 +64,7 @@ pub struct Core {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receiver for certificates.
     rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
-    /// Receives loopback certificates from the `CertificateWaiter`.
+    /// Receives loopback certificates from the `CertificateFetcher`.
     rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
     /// Receives our newly created headers from the `Proposer`.
     rx_headers: Receiver<Header>,
@@ -420,7 +420,7 @@ impl Core {
         // Broadcast the certificate.
         let epoch = certificate.epoch();
         let round = certificate.header.round;
-        let created_at = certificate.header.metadata.created_at;
+        let created_at = certificate.header.created_at;
         let network_keys = self
             .committee
             .others_primaries(&self.name)
@@ -429,8 +429,7 @@ impl Core {
             .collect();
         let tasks = self
             .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate))
-            .await;
+            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,
@@ -688,13 +687,13 @@ impl Core {
                     }
                 },
 
-                // Here loopback certificates from the `CertificateWaiter` are received. These are
+                // Here loopback certificates from the `CertificateFetcher` are received. These are
                 // certificates fetched from other validators that are potentially missing locally.
                 Some(message) = self.rx_certificates_loopback.recv() => {
                     let mut result = Ok(());
                     for cert in message.certificates {
                         result = match self.sanitize_certificate(&cert).await {
-                            // TODO: consider moving some checks to CertificateWaiter, and skipping
+                            // TODO: consider moving some checks to CertificateFetcher, and skipping
                             // those checks here?
                             Ok(()) => self.process_certificate(cert, None).await,
                             // It is possible that subsequent certificates are above GC round,
@@ -706,7 +705,7 @@ impl Core {
                             break;
                         }
                     };
-                    message.done.send(()).expect("Failed to signal back to CertificateWaiter");
+                    message.done.send(()).expect("Failed to signal back to CertificateFetcher");
                     result
                 },
 

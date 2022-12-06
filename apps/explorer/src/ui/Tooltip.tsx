@@ -106,7 +106,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
                 <AnimatePresence>
                     {open ? (
                         <motion.div
-                            className="left-0 top-0 z-50 pointer-events-none text-white text-subtitleSmall font-semibold"
+                            className="pointer-events-none left-0 top-0 z-50 text-subtitleSmall font-semibold text-white"
                             initial={{
                                 opacity: 0,
                                 scale: 0,
@@ -134,12 +134,12 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
                             }}
                             {...getFloatingProps({ ref: floating })}
                         >
-                            <div className="bg-gray-100 p-2 flex flex-col flex-nowrap gap-px rounded-md">
+                            <div className="flex flex-col flex-nowrap gap-px rounded-md bg-gray-100 p-2">
                                 {tip}
                             </div>
                             <div
                                 ref={arrowRef}
-                                className="absolute z-[-1] bg-gray-100 transform rotate-45 h-[12px] w-[12px]"
+                                className="absolute z-[-1] h-[12px] w-[12px] rotate-45 transform bg-gray-100"
                                 style={arrowStyle}
                             />
                         </motion.div>

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::tx_context {
-    use std::signer;
 
     friend sui::object;
 
@@ -23,8 +22,8 @@ module sui::tx_context {
     /// This cannot be constructed by a transaction--it is a privileged object created by
     /// the VM and passed in to the entrypoint of the transaction as `&mut TxContext`.
     struct TxContext has drop {
-        /// A `signer` wrapping the address of the user that signed the current transaction
-        signer: signer,
+        /// The address of the user that signed the current transaction
+        sender: address,
         /// Hash of the current transaction
         tx_hash: vector<u8>,
         /// The current epoch number.
@@ -37,14 +36,10 @@ module sui::tx_context {
     /// Return the address of the user that signed the current
     /// transaction
     public fun sender(self: &TxContext): address {
-        signer::address_of(&self.signer)
+        self.sender
     }
 
-    /// Return a `signer` for the user that signed the current transaction
-    public fun signer_(self: &TxContext): &signer {
-        &self.signer
-    }
-
+    /// Return the current epoch
     public fun epoch(self: &TxContext): u64 {
         self.epoch
     }
@@ -70,9 +65,9 @@ module sui::tx_context {
 
     #[test_only]
     /// Create a `TxContext` for testing
-    public fun new(addr: address, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
+    public fun new(sender: address, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
         assert!(vector::length(&tx_hash) == TX_HASH_LENGTH, EBadTxHashLength);
-        TxContext { signer: new_signer_from_address(addr), tx_hash, epoch, ids_created }
+        TxContext { sender, tx_hash, epoch, ids_created }
     }
 
     #[test_only]
@@ -119,10 +114,6 @@ module sui::tx_context {
     public fun increment_epoch_number(self: &mut TxContext) {
         self.epoch = self.epoch + 1
     }
-
-    #[test_only]
-    /// Test-only function for creating a new signer from `signer_address`.
-    native fun new_signer_from_address(signer_address: address): signer;
 
     // Cost calibration functions
     #[test_only]

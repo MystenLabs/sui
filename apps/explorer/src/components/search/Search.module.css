@@ -1,24 +1,24 @@
 .form {
-    @apply flex bg-search-fill border-[1px] border-solid border-sui rounded-[6px] h-[2rem] px-[0.2vw] max-w-[500px];
+    @apply flex h-[2rem] max-w-[500px] rounded-[6px] border-[1px] border-solid border-sui bg-search-fill px-[0.2vw];
 }
 
 .searchbtn {
-    @apply flex-initial font-sans text-xs border-none bg-transparent cursor-pointer;
+    @apply flex-initial cursor-pointer border-none bg-transparent font-sans text-xs;
 }
 
 .searchicon {
-    @apply fill-gray-65 hover:fill-offwhite leading-8 stroke-1 hover:stroke-2;
+    @apply fill-gray-65 stroke-1 leading-8 hover:fill-offwhite hover:stroke-2;
 }
 
 .disabled {
-    @apply bg-transparent text-offwhite cursor-text;
+    @apply cursor-text bg-transparent text-offwhite;
 }
 
 .searchtextdesktop,
 .searchtextmobile {
-    @apply bg-transparent border-none font-mono leading-8
-    flex-1 w-[85%]
-    text-xs text-white;
+    @apply w-[85%] flex-1 border-none bg-transparent
+    font-mono text-xs
+    leading-8 text-white;
 }
 
 .searchtextdesktop {
@@ -26,5 +26,5 @@
 }
 
 .searchtextmobile {
-    @apply sm:hidden block;
+    @apply block sm:hidden;
 }

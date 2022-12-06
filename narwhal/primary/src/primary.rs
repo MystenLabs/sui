@@ -4,7 +4,7 @@
 use crate::{
     block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::BlockWaiter,
-    certificate_waiter::CertificateWaiter,
+    certificate_fetcher::CertificateFetcher,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
     metrics::{initialise_metrics, PrimaryMetrics},
@@ -49,12 +49,13 @@ use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument, warn};
+
 pub use types::PrimaryMessage;
 use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
     PrimaryToPrimaryServer, ReconfigureNotification, RequestVoteRequest, RequestVoteResponse,
@@ -140,10 +141,10 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
-        let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
+        let (tx_certificate_fetcher, rx_certificate_fetcher) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_certificate_waiter,
-            &primary_channel_metrics.tx_certificate_waiter_total,
+            &primary_channel_metrics.tx_certificate_fetcher,
+            &primary_channel_metrics.tx_certificate_fetcher_total,
         );
         let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
             1, // Only one inflight item is possible.
@@ -191,7 +192,7 @@ impl Primary {
             worker_cache.clone(),
             certificate_store.clone(),
             payload_store.clone(),
-            tx_certificate_waiter,
+            tx_certificate_fetcher,
             rx_consensus_round_updates.clone(),
             dag.clone(),
         ));
@@ -427,9 +428,9 @@ impl Primary {
             parameters.clone(),
         );
 
-        // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
+        // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
-        let certificate_waiter_handle = CertificateWaiter::spawn(
+        let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             (**committee.load()).clone(),
             P2pNetwork::new(network.clone()),
@@ -437,7 +438,7 @@ impl Primary {
             rx_consensus_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            rx_certificate_waiter,
+            rx_certificate_fetcher,
             tx_certificates_loopback,
             node_metrics.clone(),
         );
@@ -529,7 +530,7 @@ impl Primary {
         let mut handles = vec![
             core_handle,
             block_synchronizer_handle,
-            certificate_waiter_handle,
+            certificate_fetcher_handle,
             proposer_handle,
             state_handler_handle,
             connection_monitor_handle,
@@ -656,14 +657,14 @@ impl PrimaryReceiverHandler {
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
         let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
-        let mut narwhal_round = *rx_narwhal_round_updates.borrow();
-        ensure!(
-            narwhal_round <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
-        );
+        // Maximum header age is chosen to strike a balance between allowing for slightly older
+        // certificates to still have a chance to be included in the DAG while not wasting
+        // resources on very old vote requests. This value affects performance but not correctness
+        // of the algorithm.
+        const HEADER_AGE_LIMIT: Round = 3;
 
         // If requester has provided us with parent certificates, process them all
-        // before proceeding. This may advance our round, so do it before checking round.
+        // before proceeding.
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
             let (tx_notify, rx_notify) = oneshot::channel();
@@ -686,9 +687,9 @@ impl PrimaryReceiverHandler {
                 },
                 result = rx_narwhal_round_updates.changed() => {
                     result.unwrap();
-                    narwhal_round = *rx_narwhal_round_updates.borrow();
+                    let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
-                        narwhal_round <= header.round,
+                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
                         DagError::TooOld(header.digest().into(), header.round, narwhal_round)
                     )
                 },
@@ -706,9 +707,9 @@ impl PrimaryReceiverHandler {
 
         // Now that we've got all the required certificates, ensure we're voting on a
         // current Header.
-        narwhal_round = *rx_narwhal_round_updates.borrow();
+        let narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            narwhal_round <= header.round,
+            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
             DagError::TooOld(header.digest().into(), header.round, narwhal_round)
         );
 
@@ -738,6 +739,27 @@ impl PrimaryReceiverHandler {
         self.synchronizer
             .sync_batches(header, network, /* max_age */ 0)
             .await?;
+
+        // Check that the time of the header is smaller than the current time. If not but the difference is
+        // small, just wait. Otherwise reject with an error.
+        const TOLERANCE: u64 = 15 * 1000; // 15 sec in milliseconds
+        let current_time = now();
+        if current_time < header.created_at {
+            if header.created_at - current_time < TOLERANCE {
+                // for a small difference we simply wait
+                tokio::time::sleep(Duration::from_millis(header.created_at - current_time)).await;
+            } else {
+                // For larger differences return an error, and log it
+                warn!(
+                    "Rejected header {:?} due to timestamp {} newer than {current_time}",
+                    header, header.created_at
+                );
+                return Err(DagError::InvalidTimestamp {
+                    created_time: header.created_at,
+                    local_time: current_time,
+                });
+            }
+        }
 
         // Store the header.
         self.header_store

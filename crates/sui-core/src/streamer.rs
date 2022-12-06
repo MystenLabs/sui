@@ -3,10 +3,10 @@
 
 use crate::event_handler::EVENT_DISPATCH_BUFFER_SIZE;
 use futures::Stream;
+use mysten_metrics::spawn_monitored_task;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
 use sui_types::filter::Filter;

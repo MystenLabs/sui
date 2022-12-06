@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    non_execution_tables::{MAX_NUM_EVENT_EMIT, MAX_TX_GAS},
-    units_types::GasCost,
-};
+use crate::units_types::GasCost;
+use sui_protocol_constants::*;
 
 //
 // Native function costs

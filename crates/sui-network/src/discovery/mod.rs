@@ -446,7 +446,10 @@ pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types:
         (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
             Some((hostname.as_ref(), port).into())
         }
-        _ => None,
+        _ => {
+            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
+            None
+        }
     }
 }
 

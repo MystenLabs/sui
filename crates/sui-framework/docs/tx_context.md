@@ -8,15 +8,13 @@
 -  [Struct `TxContext`](#0x2_tx_context_TxContext)
 -  [Constants](#@Constants_0)
 -  [Function `sender`](#0x2_tx_context_sender)
--  [Function `signer_`](#0x2_tx_context_signer_)
 -  [Function `epoch`](#0x2_tx_context_epoch)
 -  [Function `new_object`](#0x2_tx_context_new_object)
 -  [Function `ids_created`](#0x2_tx_context_ids_created)
 -  [Function `derive_id`](#0x2_tx_context_derive_id)
 
 
-<pre><code><b>use</b> <a href="">0x1::signer</a>;
-</code></pre>
+<pre><code></code></pre>
 
 
 
@@ -40,10 +38,10 @@ the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <
 
 <dl>
 <dt>
-<code><a href="">signer</a>: <a href="">signer</a></code>
+<code>sender: <b>address</b></code>
 </dt>
 <dd>
- A <code><a href="">signer</a></code> wrapping the address of the user that signed the current transaction
+ The address of the user that signed the current transaction
 </dd>
 <dt>
 <code>tx_hash: <a href="">vector</a>&lt;u8&gt;</code>
@@ -112,32 +110,7 @@ transaction
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_sender">sender</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
-    <a href="_address_of">signer::address_of</a>(&self.<a href="">signer</a>)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_tx_context_signer_"></a>
-
-## Function `signer_`
-
-Return a <code><a href="">signer</a></code> for the user that signed the current transaction
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_signer_">signer_</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<a href="">signer</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_signer_">signer_</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): &<a href="">signer</a> {
-    &self.<a href="">signer</a>
+    self.sender
 }
 </code></pre>
 
@@ -149,6 +122,7 @@ Return a <code><a href="">signer</a></code> for the user that signed the current
 
 ## Function `epoch`
 
+Return the current epoch
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch">epoch</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64

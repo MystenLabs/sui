@@ -50,7 +50,7 @@ async fn test_node_staggered_starts() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let node_staggered_delay = Duration::from_secs(60 * 5); // 5 minutes
+    let node_staggered_delay = Duration::from_secs(60 * 2); // 2 minutes
 
     // A cluster of 4 nodes will be created
     let cluster = Cluster::new(None, true);

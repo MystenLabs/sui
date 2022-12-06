@@ -270,11 +270,12 @@ module sui::validator_set {
         self: &mut ValidatorSet,
         validator_reward: &mut Balance<SUI>,
         delegator_reward: &mut Balance<SUI>,
+        storage_fund_reward: &mut Balance<SUI>,
         _validator_report_records: &VecMap<address, VecSet<address>>,
         ctx: &mut TxContext,
     ) {
-        // `compute_reward_distribution` must be called before `adjust_stake` to make sure we are using the current
-        // epoch's stake information to compute reward distribution.
+        // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` to 
+        // make sure we are using the current epoch's stake information to compute reward distribution.
         let (validator_reward_amounts, delegator_reward_amounts) = compute_reward_distribution(
             &self.active_validators,
             self.total_validator_stake,
@@ -283,20 +284,21 @@ module sui::validator_set {
             balance::value(delegator_reward),
         );
 
-        // `adjust_stake_and_gas_price` must be called before `distribute_reward`, because reward distribution goes to
-        // each validator's pending stake, and that shouldn't be available in the next epoch.
-        adjust_stake_and_gas_price(&mut self.active_validators);
-
         // TODO: use `validator_report_records` and punish validators whose numbers of reports receives are greater than
         // some threshold.
+        // Distribute the rewards before adjusting stake so that we immediately start compounding
+        // the rewards for validators and delegators.
         distribute_reward(
             &mut self.active_validators, 
             &validator_reward_amounts, 
             validator_reward,
             &delegator_reward_amounts,
-            delegator_reward, 
+            delegator_reward,
+            storage_fund_reward, 
             ctx
         );
+
+        adjust_stake_and_gas_price(&mut self.active_validators);
 
         // Delegation switches must be processed before delgation deposits and withdraws so that the
         // rewards portion of the delegation switch can be added to the new validator's pool when we
@@ -599,9 +601,12 @@ module sui::validator_set {
         validator_rewards: &mut Balance<SUI>,
         delegator_reward_amounts: &vector<u64>,
         delegator_rewards: &mut Balance<SUI>,
+        storage_fund_reward: &mut Balance<SUI>,
         ctx: &mut TxContext
     ) {
         let length = vector::length(validators);
+        assert!(length > 0, 0);
+        let storage_fund_reward_per_validator = balance::value(storage_fund_reward) / length;
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
@@ -614,8 +619,9 @@ module sui::validator_set {
             // Validator takes a cut of the rewards as commission.
             let commission_amount = (delegator_reward_amount as u128) * (validator::commission_rate(validator) as u128) / BASIS_POINT_DENOMINATOR;
             balance::join(&mut validator_reward, balance::split(&mut delegator_reward, (commission_amount as u64)));
-
-            // Add rewards to the validator. Because reward goes to pending stake, it's the same as calling `request_add_stake`.
+            // Each validator gets an equal share of the storage fund rewards.
+            balance::join(&mut validator_reward, balance::split(storage_fund_reward, storage_fund_reward_per_validator));
+            // Add rewards to the validator. 
             validator::request_add_stake(validator, validator_reward, option::none(), ctx);
             // Add rewards to delegation staking pool to auto compound for delegators.
             validator::deposit_delegation_rewards(validator, delegator_reward);

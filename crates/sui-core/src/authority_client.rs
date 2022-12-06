@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::ToFromBytes;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use mysten_metrics::spawn_monitored_task;
 use mysten_network::config::Config;
 use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
@@ -15,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_metrics::spawn_monitored_task;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetAddresses;
@@ -460,15 +460,7 @@ impl AuthorityAPI for LocalAuthorityClient {
 impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
-        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-        let state = AuthorityState::new_for_testing(
-            committee,
-            &secret,
-            None,
-            Some(genesis),
-            tx_reconfigure_consensus,
-        )
-        .await;
+        let state = AuthorityState::new_for_testing(committee, &secret, None, Some(genesis)).await;
         Self {
             state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),
@@ -514,7 +506,7 @@ impl LocalAuthorityClient {
         let response = match state.get_tx_info_already_executed(&tx_digest).await {
             Ok(Some(response)) => response,
             _ => {
-                let certificate = certificate.verify(&state.committee.load())?;
+                let certificate = certificate.verify(&state.committee())?;
                 state.handle_certificate(&certificate).await?
             }
         };

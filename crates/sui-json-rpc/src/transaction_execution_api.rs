@@ -7,15 +7,15 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee_core::server::rpc_module::RpcModule;
+use jsonrpsee::RpcModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use mysten_metrics::spawn_monitored_task;
 use signature::Signature;
 use std::sync::Arc;
 use sui_core::authority::{AuthorityStore, ResolverWrapper};
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
-use sui_metrics::spawn_monitored_task;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::{
@@ -85,7 +85,39 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             txn_digest,
             self.module_cache.as_ref(),
         )
-        .map_err(jsonrpsee_core::Error::from)
+        .map_err(jsonrpsee::core::Error::from)
+    }
+
+    async fn execute_transaction_serialized_sig(
+        &self,
+        tx_bytes: Base64,
+        signature: Base64,
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse> {
+        let data =
+            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
+            .map_err(|e| anyhow!(e))?;
+        let txn = Transaction::new(SenderSignedData::new(data, signature));
+        let txn_digest = *txn.digest();
+
+        let transaction_orchestrator = self.transaction_orchestrator.clone();
+        let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type,
+            }
+        ))
+        .await
+        .map_err(|e| anyhow!(e))? // for JoinError
+        .map_err(|e| anyhow!(e))?; // For Sui transaction execution error (SuiResult<ExecuteTransactionResponse>)
+
+        SuiExecuteTransactionResponse::from_execute_transaction_response(
+            response,
+            txn_digest,
+            self.module_cache.as_ref(),
+        )
+        .map_err(jsonrpsee::core::Error::from)
     }
 }
 

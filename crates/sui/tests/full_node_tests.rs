@@ -20,6 +20,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
+use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
 use sui_types::messages::{
@@ -52,7 +53,7 @@ use tokio::time::{sleep, Duration};
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = start_a_fullnode(&test_cluster.swarm).await?;
 
     let context = &mut test_cluster.wallet;
 
@@ -84,7 +85,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = start_a_fullnode(&test_cluster.swarm).await?;
 
     let context = &mut test_cluster.wallet;
 
@@ -412,7 +413,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     // Start a new fullnode that is not on the write path
-    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -434,7 +435,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let context = test_cluster.wallet;
 
     // Start a new fullnode that is not on the write path
-    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     let mut futures = Vec::new();
 
@@ -521,10 +522,10 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     let context = &mut test_cluster.wallet;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false)
+    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None)
         .await
         .unwrap();
-    let ws_client = fullnode.ws_client.as_ref().unwrap();
+    let ws_client = fullnode.ws_client;
     let node = fullnode.sui_node;
 
     let mut sub: Subscription<SuiTransactionResponse> = ws_client
@@ -563,11 +564,6 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
             other
         ),
     }
-
-    // Node Config without websocket_address does not create a transaction streamer
-    let full_node = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, true).await?;
-    assert!(full_node.sui_node.state().transaction_streamer.is_none());
-
     Ok(())
 }
 
@@ -577,11 +573,11 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let context = &mut test_cluster.wallet;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false)
+    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None)
         .await
         .unwrap();
     let node = fullnode.sui_node;
-    let ws_client = fullnode.ws_client.as_ref().unwrap();
+    let ws_client = fullnode.ws_client;
 
     let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
@@ -896,7 +892,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = start_a_fullnode(&test_cluster.swarm).await?;
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = node
@@ -1048,6 +1044,51 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
 }
 
 #[tokio::test]
+async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error> {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+    context
+        .config
+        .keystore
+        .add_key(SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1))?;
+    context
+        .config
+        .keystore
+        .add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
+
+    let jsonrpc_client = &test_cluster.fullnode_handle.as_ref().unwrap().rpc_client;
+
+    let txn_count = 4;
+    let txns = make_transactions_with_wallet_context(context, txn_count).await;
+    for txn in txns {
+        let tx_digest = txn.digest();
+        let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+        let params = rpc_params![
+            tx_bytes,
+            signature,
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        ];
+        let response: SuiExecuteTransactionResponse = jsonrpc_client
+            .request("sui_executeTransactionSerializedSig", params)
+            .await
+            .unwrap();
+
+        if let SuiExecuteTransactionResponse::EffectsCert {
+            certificate,
+            effects: _,
+            confirmed_local_execution,
+        } = response
+        {
+            assert_eq!(&certificate.transaction_digest, tx_digest);
+            assert!(confirmed_local_execution);
+        } else {
+            panic!("Expect EffectsCert but got {:?}", response);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
     let context = &mut test_cluster.wallet;
@@ -1174,34 +1215,29 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
 async fn get_obj_read_from_node(
     node: &SuiNode,
     object_id: ObjectID,
-    seq_num: Option<SequenceNumber>,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
-    match seq_num {
-        None => {
-            let object_read = node.state().get_object_read(&object_id).await?;
-            match object_read {
-                ObjectRead::Exists(obj_ref, object, layout) => Ok((obj_ref, object, layout)),
-                _ => {
-                    anyhow::bail!("Can't find object {object_id:?} on fullnode.")
-                }
-            }
-        }
-        Some(seq_num) => {
-            let object_read = node
-                .state()
-                .get_past_object_read(&object_id, seq_num)
-                .await?;
-            match object_read {
-                PastObjectRead::VersionFound(obj_ref, object, layout) => {
-                    Ok((obj_ref, object, layout))
-                }
-                _ => {
-                    anyhow::bail!(
-                        "Can't find object {object_id:?} with seq {seq_num:?} on fullnode."
-                    )
-                }
-            }
-        }
+    if let ObjectRead::Exists(obj_ref, object, layout) =
+        node.state().get_object_read(&object_id).await?
+    {
+        Ok((obj_ref, object, layout))
+    } else {
+        anyhow::bail!("Can't find object {object_id:?} on fullnode.")
+    }
+}
+
+async fn get_past_obj_read_from_node(
+    node: &SuiNode,
+    object_id: ObjectID,
+    seq_num: SequenceNumber,
+) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
+    if let PastObjectRead::VersionFound(obj_ref, object, layout) = node
+        .state()
+        .get_past_object_read(&object_id, seq_num)
+        .await?
+    {
+        Ok((obj_ref, object, layout))
+    } else {
+        anyhow::bail!("Can't find object {object_id:?} with seq {seq_num:?} on fullnode.")
     }
 }
 
@@ -1210,21 +1246,17 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
     let context = &mut test_cluster.wallet;
-    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(context).await?;
-    sleep(Duration::from_secs(15)).await;
+    sleep(Duration::from_secs(1)).await;
 
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
 
-    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
+    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
 
-    // Transfer some SUI to recipient
-    transfer_coin(context)
-        .await
-        .expect("Failed to transfer coins to recipient");
     // Transfer the object from sender to recipient
     let gas_ref = get_gas_object_with_wallet_context(context, &sender)
         .await
@@ -1237,17 +1269,22 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         recipient,
     );
     context.execute_transaction(nft_transfer_tx).await.unwrap();
-    sleep(Duration::from_secs(15)).await;
+    sleep(Duration::from_secs(1)).await;
 
-    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id, None).await?;
+    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
+
+    // Transfer some SUI to recipient
+    transfer_coin(context)
+        .await
+        .expect("Failed to transfer coins to recipient");
 
     // Delete the object
     let package_ref = node.state().get_framework_object_ref().await.unwrap();
     let (_tx_cert, effects) =
         delete_devnet_nft(context, &recipient, object_ref_v2, package_ref).await;
     assert_eq!(effects.status, SuiExecutionStatus::Success);
-    sleep(Duration::from_secs(15)).await;
+    sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read
     let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
@@ -1255,30 +1292,33 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
 
-    let obj_ref_v3 = match node
+    let read_ref_v3 = match node
         .state()
-        .get_past_object_read(&object_id, SequenceNumber::from_u64(3))
+        .get_past_object_read(&object_id, object_ref_v3.1)
         .await?
     {
         PastObjectRead::ObjectDeleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
-    assert_eq!(object_ref_v3, obj_ref_v3);
+    assert_eq!(object_ref_v3, read_ref_v3);
 
-    let (obj_ref_v2, obj_v2, _) =
-        get_obj_read_from_node(&node, object_id, Some(SequenceNumber::from_u64(2))).await?;
-    assert_eq!(object_ref_v2, obj_ref_v2);
-    assert_eq!(object_v2, obj_v2);
-    assert_eq!(obj_v2.owner, Owner::AddressOwner(recipient));
-    let (obj_ref_v1, obj_v1, _) =
-        get_obj_read_from_node(&node, object_id, Some(SequenceNumber::from_u64(1))).await?;
-    assert_eq!(object_ref_v1, obj_ref_v1);
-    assert_eq!(object_v1, obj_v1);
-    assert_eq!(obj_v1.owner, Owner::AddressOwner(sender));
+    let (read_ref_v2, read_obj_v2, _) =
+        get_past_obj_read_from_node(&node, object_id, object_ref_v2.1).await?;
+    assert_eq!(read_ref_v2, object_ref_v2);
+    assert_eq!(read_obj_v2, object_v2);
+    assert_eq!(read_obj_v2.owner, Owner::AddressOwner(recipient));
+
+    let (read_ref_v1, read_obj_v1, _) =
+        get_past_obj_read_from_node(&node, object_id, object_ref_v1.1).await?;
+    assert_eq!(read_ref_v1, object_ref_v1);
+    assert_eq!(read_obj_v1, object_v1);
+    assert_eq!(read_obj_v1.owner, Owner::AddressOwner(sender));
+
+    let too_high_version = SequenceNumber::lamport_increment([object_ref_v3.1]);
 
     match node
         .state()
-        .get_past_object_read(&object_id, SequenceNumber::from_u64(4))
+        .get_past_object_read(&object_id, too_high_version)
         .await?
     {
         PastObjectRead::VersionTooHigh {
@@ -1287,8 +1327,8 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
             latest_version,
         } => {
             assert_eq!(obj_id, object_id);
-            assert_eq!(asked_version, SequenceNumber::from_u64(4));
-            assert_eq!(latest_version, SequenceNumber::from_u64(3));
+            assert_eq!(asked_version, too_high_version);
+            assert_eq!(latest_version, object_ref_v3.1);
         }
         other => anyhow::bail!(
             "Expect SequenceNumberTooHigh for object {object_id:?} but got {other:?}."

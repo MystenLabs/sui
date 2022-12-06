@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
-use sui_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 
 type InnerLockTable<K> = HashMap<K, Arc<Mutex<()>>>;
 // MutexTable supports mutual exclusion on keys such as TransactionDigest or ObjectDigest

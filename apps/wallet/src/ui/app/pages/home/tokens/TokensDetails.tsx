@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
@@ -17,6 +18,7 @@ import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
+import { FEATURES } from '_src/ui/app/experimentation/features';
 
 import st from './TokensPage.module.scss';
 
@@ -93,6 +95,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         [activeCoinType]
     );
 
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
     return (
         <>
             {coinType && (
@@ -152,7 +156,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         <IconLink
                             icon={SuiIcons.Union}
                             to="/stake"
-                            disabled={true}
+                            disabled={!stakingEnabled}
                             text="Stake & Earn SUI"
                         />
                     </div>

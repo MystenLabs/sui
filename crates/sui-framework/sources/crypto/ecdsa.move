@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::ecdsa {
+
+    // TODO document this
+    const EFailToRecoverPubKey: u64 = 0;
+    const EInvalidSignature: u64 = 1;
+
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
     /// Secp256k1. Reference implementation on signature generation using RFC6979:
     /// https://github.com/MystenLabs/narwhal/blob/5d6f6df8ccee94446ff88786c0dbbc98be7cfc09/crypto/src/secp256k1.rs
