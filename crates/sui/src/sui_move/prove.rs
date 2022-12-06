@@ -36,6 +36,12 @@ impl Prove {
 
         let mut options = move_prover::cli::Options::create_from_args(&args)?;
 
+        // it requires custom treatment due to it implementing custom borrow semantics
+        options
+            .prover
+            .borrow_natives
+            .push("dynamic_field::borrow_child_object_mut".to_string());
+
         // provide Sui-specific Boogie template for the native functions to the prover.
         if options.backend.custom_natives.is_none() {
             options.backend.custom_natives =
@@ -65,17 +71,15 @@ impl Prove {
                     ],
                 });
         }
-        options
-            .prover
-            .borrow_natives
-            .push(move_stackless_bytecode::options::BorrowNative::new(
-                "0x2".to_string(),
-                "dynamic_field".to_string(),
+        // tell the backend what the names of aggregates implementing custom borrow semantics in
+        // Boogie are
+        options.backend.borrow_aggregates.push(
+            move_prover_boogie_backend::options::BorrowAggregate::new(
                 "dynamic_field::borrow_child_object_mut".to_string(),
                 "GetDynField".to_string(),
                 "UpdateDynField".to_string(),
-                0,
-            ));
+            ),
+        );
 
         let prover_result = std::thread::spawn(move || {
             prove::run_move_prover(

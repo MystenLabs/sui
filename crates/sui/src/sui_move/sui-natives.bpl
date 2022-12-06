@@ -143,6 +143,13 @@ procedure {:inline 1} $2_elliptic_curve_native_scalar_from_bytes(bytes: Vec (int
 procedure {:inline 1} $2_hmac_native_hmac_sha3_256(key: Vec (int), msg: Vec (int)) returns (res: Vec (int));
 
 // ==================================================================================
+// Native groth
+
+procedure {:inline 1} $2_groth16_prepare_verifying_key(verifying_key: Vec (int)) returns (res: $2_groth16_PreparedVerifyingKey);
+
+procedure {:inline 1} $2_groth16_verify_groth16_proof_internal(vk_gamma_abc_g1_bytes: Vec (int), alpha_g1_beta_g2_bytes: Vec (int), gamma_g2_neg_pc_bytes: Vec (int), delta_g2_neg_pc_bytes: Vec (int), public_proof_inputs: Vec (int), proof_points: Vec (int)) returns (res: bool);
+
+// ==================================================================================
 // Reads and writes to dynamic fields (skeletons)
 
 function GetDynField<T, V>(o: T, addr: int): V;
