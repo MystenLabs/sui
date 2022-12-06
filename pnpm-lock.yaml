@@ -436,6 +436,7 @@ importers:
       prettier: ^2.8.1
       rpc-websockets: ^7.5.0
       size-limit: ^7.0.8
+      superstruct: ^1.0.3
       ts-auto-guard: ^2.4.1
       ts-node: ^10.9.1
       ts-retry-promise: ^0.7.0
@@ -459,6 +460,7 @@ importers:
       jayson: 3.7.0
       js-sha3: 0.8.0
       rpc-websockets: 7.5.0
+      superstruct: 1.0.3
       tweetnacl: 1.0.3
     devDependencies:
       '@size-limit/preset-small-lib': 7.0.8_size-limit@7.0.8
@@ -17865,6 +17867,11 @@ packages:
     engines: {node: '>=10'}
     dependencies:
       copy-anything: 3.0.3
+    dev: false
+
+  /superstruct/1.0.3:
+    resolution: {integrity: sha512-8iTn3oSS8nRGn+C2pgXSKPI3jmpm6FExNazNpjvqS6ZUJQCej3PUXEKM8NjHBOs54ExM+LPW/FBRhymrdcCiSg==}
+    engines: {node: '>=14.0.0'}
     dev: false
 
   /supports-color/5.5.0:

@@ -29,7 +29,8 @@ const TX_DIGEST_LENGTH = 32;
 
 /** Returns whether the tx digest is valid based on the serialization format */
 export function isValidTransactionDigest(
-  value: string, serializationFmt: 'base64' | 'base58'
+  value: string,
+  serializationFmt: 'base64' | 'base58'
 ): value is TransactionDigest {
   let buffer;
   try {
@@ -150,7 +151,9 @@ export function generateTransactionDigest(
     hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
   }
 
-  return serializationFmt === 'base58' ? new Base58DataBuffer(hash).toString() : new Base64DataBuffer(hash).toString();
+  return serializationFmt === 'base58'
+    ? new Base58DataBuffer(hash).toString()
+    : new Base64DataBuffer(hash).toString();
 }
 
 function isHex(value: string): boolean {
