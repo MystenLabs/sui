@@ -551,7 +551,7 @@ environment variable):
 $ sui client publish --path $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
 ```
 
-The call uses the optional `--verify-dependencies` flag to verify the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found:
+The call uses the optional `--verify-dependencies` flag to verify the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating at which package and module the mismatch was found:
 
 ```shell
 Local dependency did not match its on-chain version at <address>::<package>::<module>
