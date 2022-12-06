@@ -43,6 +43,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::info;
 
+use crate::handlers::{PrimaryReceiverController, WorkerReceiverController};
 pub use types::PrimaryMessage;
 use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
@@ -199,26 +200,30 @@ impl Primary {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let primary_service = PrimaryToPrimaryServer::new(handlers::PrimaryReceiverHandler {
-            name: name.clone(),
-            committee: committee.clone(),
-            worker_cache: worker_cache.clone(),
-            synchronizer: synchronizer.clone(),
-            signature_service: signature_service.clone(),
-            tx_certificates: tx_certificates.clone(),
-            header_store: header_store.clone(),
-            certificate_store: certificate_store.clone(),
-            payload_store: payload_store.clone(),
-            vote_digest_store,
-            rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
-            metrics: node_metrics.clone(),
-            request_vote_inflight: Arc::new(DashSet::new()),
-        });
-        let worker_service = WorkerToPrimaryServer::new(handlers::WorkerReceiverHandler {
-            tx_our_digests,
-            payload_store: payload_store.clone(),
-            our_workers,
-        });
+        let primary_service = PrimaryToPrimaryServer::new(handlers::PrimaryReceiverHandler::new(
+            PrimaryReceiverController {
+                name: name.clone(),
+                committee: committee.clone(),
+                worker_cache: worker_cache.clone(),
+                synchronizer: synchronizer.clone(),
+                signature_service: signature_service.clone(),
+                tx_certificates: tx_certificates.clone(),
+                header_store: header_store.clone(),
+                certificate_store: certificate_store.clone(),
+                payload_store: payload_store.clone(),
+                vote_digest_store,
+                rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
+                metrics: node_metrics.clone(),
+                request_vote_inflight: Arc::new(DashSet::new()),
+            },
+        ));
+        let worker_service = WorkerToPrimaryServer::new(handlers::WorkerReceiverHandler::new(
+            WorkerReceiverController {
+                tx_our_digests,
+                payload_store: payload_store.clone(),
+                our_workers,
+            },
+        ));
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 

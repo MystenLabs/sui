@@ -41,6 +41,7 @@ use types::{
     ReconfigureNotification, RequestVoteRequest, Round,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
+use crate::handlers::PrimaryReceiverController;
 
 #[tokio::test]
 async fn get_network_peers_from_admin_server() {
@@ -303,7 +304,7 @@ async fn test_request_vote_missing_parents() {
         rx_consensus_round_updates,
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name,
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
@@ -470,7 +471,7 @@ async fn test_request_vote_missing_batches() {
         rx_consensus_round_updates,
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name: name.clone(),
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
@@ -589,7 +590,7 @@ async fn test_request_vote_already_voted() {
         rx_consensus_round_updates,
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name: name.clone(),
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
@@ -741,7 +742,7 @@ async fn test_fetch_certificates_handler() {
         rx_consensus_round_updates.clone(),
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name,
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
@@ -903,7 +904,7 @@ async fn test_process_payload_availability_success() {
         rx_consensus_round_updates,
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name,
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
@@ -1047,7 +1048,7 @@ async fn test_process_payload_availability_when_failures() {
         rx_consensus_round_updates,
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name,
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
@@ -1139,7 +1140,7 @@ async fn test_request_vote_created_at_in_future() {
         rx_consensus_round_updates,
         None,
     ));
-    let handler = PrimaryReceiverHandler {
+    let handler = PrimaryReceiverController {
         name: name.clone(),
         committee: fixture.committee().into(),
         worker_cache: worker_cache.clone(),
