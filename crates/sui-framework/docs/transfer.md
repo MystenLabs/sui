@@ -91,12 +91,6 @@ longer be transferred or mutated.
 Turn the given object into a mutable shared object that everyone
 can access and mutate. This is irreversible, i.e. once an object
 is shared, it will stay shared forever.
-Shared mutable object is not yet fully supported in Sui, which is being
-actively worked on and should be supported very soon.
-https://github.com/MystenLabs/sui/issues/633
-https://github.com/MystenLabs/sui/issues/681
-This API is exposed to demonstrate how we may be able to use it to program
-Move contracts that use shared objects.
 Aborts with <code><a href="transfer.md#0x2_transfer_ESharedNonNewObject">ESharedNonNewObject</a></code> of the object being shared was not created
 in this transaction. This restriction may be relaxed in the future.
 
