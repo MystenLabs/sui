@@ -6,7 +6,6 @@ import { SummaryCard } from './SummaryCard';
 import AccountAddress from '_components/account-address';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import ExternalLink from '_components/external-link';
 import {
     useMiddleEllipsis,
     useFormatCoin,
@@ -76,7 +75,8 @@ function CoinMeta({
 
     const activeAccount = useAppSelector(({ account }) => account.address);
 
-    const useOrigin = receiverAddress === activeAccount;
+    // TODO add receiver address;
+    const showAddress = receiverAddress !== activeAccount;
 
     const receiverAddr = useMiddleEllipsis(
         receiverAddress,
@@ -100,18 +100,10 @@ function CoinMeta({
             </div>
 
             <div className={st.row}>
-                <div className={st.label}>{receiveLabel}</div>
+                <div className={st.label}>{showAddress && receiveLabel}</div>
                 <div className={st.value}>
                     <div className={st.value}>
-                        {useOrigin ? (
-                            <ExternalLink
-                                href={origin}
-                                className={st.origin}
-                                showIcon={false}
-                            >
-                                {new URL(origin).host}
-                            </ExternalLink>
-                        ) : (
+                        {showAddress && (
                             <ExplorerLink
                                 type={ExplorerLinkType.address}
                                 address={receiverAddress}

@@ -75,6 +75,7 @@ function UserApproveContainer({
                         <AccountAddress
                             showLink={false}
                             mode="normal"
+                            copyable
                             className={st.address}
                         />
                     </div>
