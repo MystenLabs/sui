@@ -141,18 +141,24 @@ impl CertificateFetcher {
                     let message = self.rx_reconfigure.borrow_and_update().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(committee) => {
+                            tracing::debug!("received new epoch reconfiguration message in certificate fetcher");
                             self.committee = committee;
                             self.targets.clear();
                             self.fetch_certificates_task = FuturesUnordered::new();
+
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
+                            tracing::debug!("received new committee reconfiguration message in certificate fetcher");
                             self.committee = committee;
-                            // There should be no committee membership change so self.targets does
-                            // not need to be updated.
+                            debug!("Committee updated to {}", self.committee);
+
                         },
-                        ReconfigureNotification::Shutdown => return
+                        ReconfigureNotification::Shutdown => {
+                            tracing::debug!("received shutdown message in certificate fetcher");
+                            return
+                        }
                     }
-                    debug!("Committee updated to {}", self.committee);
+
                 }
 
 

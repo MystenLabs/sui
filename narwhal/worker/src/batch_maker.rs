@@ -113,21 +113,25 @@ impl BatchMaker {
             tokio::select! {
                 biased;
 
-                // check for reconfiguration.
+                // check for reconfiguration
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
+                            tracing::debug!("received new epoch reconfiguration message in batch maker");
                             self.committee = new_committee;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            tracing::debug!("received new committee reconfiguration message in batch maker");
                             self.committee = new_committee;
-
+                            tracing::debug!("Committee updated to {}", self.committee);
                         },
-                        ReconfigureNotification::Shutdown => return
+                        ReconfigureNotification::Shutdown => {
+                            tracing::debug!("received shutdown message in batch maker");
+                            return
+                        }
                     }
-                    tracing::debug!("Committee updated to {}", self.committee);
                 },
 
                 else => {

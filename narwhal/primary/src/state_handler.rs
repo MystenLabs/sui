@@ -147,16 +147,20 @@ impl StateHandler {
 
                     let shutdown = match &message {
                         ReconfigureNotification::NewEpoch(committee) => {
+                            tracing::debug!("received new epoch reconfiguration message in state handler");
                             self.update_committee(committee.to_owned());
-
                             false
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
+                            tracing::debug!("received new committee reconfiguration message in state handler");
                             self.update_committee(committee.to_owned());
-
+                            tracing::debug!("Committee updated to {}", self.committee);
                             false
                         }
-                        ReconfigureNotification::Shutdown => true,
+                        ReconfigureNotification::Shutdown => {
+                            tracing::debug!("received shutdown message in state handler");
+                            true
+                        },
                     };
 
                     // Notify all other tasks.

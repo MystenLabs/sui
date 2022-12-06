@@ -251,14 +251,19 @@ impl BlockSynchronizer {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee)=> {
+                            tracing::debug!("received new epoch reconfiguration message in block synchronizer");
                             self.committee = new_committee;
                         }
                         ReconfigureNotification::UpdateCommittee(new_committee)=> {
+                            tracing::debug!("received new committee reconfiguration message in block synchronizer");
                             self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         }
-                        ReconfigureNotification::Shutdown => return
+                        ReconfigureNotification::Shutdown => {
+                            tracing::debug!("received shutdown message in block synchronizer");
+                            return
+                        }
                     }
-                    tracing::debug!("Committee updated to {}", self.committee);
                 }
 
 

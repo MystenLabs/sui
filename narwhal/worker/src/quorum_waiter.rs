@@ -88,9 +88,12 @@ impl QuorumWaiter {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
+                            tracing::debug!("received new epoch reconfiguration message in quorum waiter");
                             self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            tracing::debug!("received new committee reconfiguration message in quorum waiter");
                             self.committee = new_committee;
 
                             // Upon reconfiguration we drop all current batches.
@@ -101,9 +104,12 @@ impl QuorumWaiter {
                             best_effort_with_timeout = FuturesUnordered::new()
 
                         },
-                        ReconfigureNotification::Shutdown => return
+                        ReconfigureNotification::Shutdown => {
+                            tracing::debug!("received shutdown message in quorum waiter");
+                            return
+                        }
                     }
-                    tracing::debug!("Committee updated to {}", self.committee);
+
                 }
 
                 else => {

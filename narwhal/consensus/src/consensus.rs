@@ -320,14 +320,19 @@ where
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
+                            tracing::debug!("received new epoch reconfiguration message in consensus");
                             self.state = self.change_epoch(new_committee)?;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            tracing::debug!("received new committee reconfiguration message in consensus");
                             self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         }
-                        ReconfigureNotification::Shutdown => return Ok(())
+                        ReconfigureNotification::Shutdown => {
+                            tracing::debug!("received shutdown message in consensus");
+                            return Ok(())}
                     }
-                    tracing::debug!("Committee updated to {}", self.committee);
+
                 }
 
                 Some(certificate) = self.rx_new_certificates.recv() => {

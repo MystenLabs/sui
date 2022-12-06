@@ -63,9 +63,11 @@ impl PrimaryConnector {
                 // check for reconfiguration
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
+
                     // TODO: Move logic to handle epoch & committee changes to wherever anemo
                     // network is managed after worker-to-worker interface is migrated.
                     if self.rx_reconfigure.borrow().clone() == ReconfigureNotification::Shutdown {
+                        tracing::debug!("received shutdown message in primary connector");
                         return
                     }
                 }
