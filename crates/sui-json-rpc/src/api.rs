@@ -18,6 +18,7 @@ use sui_json_rpc_types::{
     SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
+use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
@@ -67,6 +68,14 @@ pub trait CoinReadApi {
         /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
     ) -> RpcResult<SuiCoinMetadata>;
+
+    /// Return total supply for a coin
+    #[method(name = "getTotalSupply")]
+    async fn get_total_supply(
+        &self,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: String,
+    ) -> RpcResult<Supply>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Read API")]

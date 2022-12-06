@@ -436,7 +436,7 @@ impl SuiExecuteTransactionResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiCoinMetadata {
     /// Number of decimal places the coin uses.

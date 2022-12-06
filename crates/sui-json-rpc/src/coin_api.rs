@@ -15,11 +15,15 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
+use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
-use sui_types::coin::{Coin, CoinMetadata};
+use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
+use sui_types::error::SuiError;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
 use sui_types::object::{Object, Owner};
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::{parse_sui_struct_tag, SUI_SYSTEM_STATE_OBJECT_ID};
 
 use crate::api::{cap_page_limit, CoinReadApiServer};
 use crate::error::Error;
@@ -63,6 +67,36 @@ impl CoinReadApi {
             .get_owner_objects_iterator(Owner::AddressOwner(owner))?
             .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
             .map(|info|info.object_id))
+    }
+
+    async fn find_package_object(
+        &self,
+        package_id: &ObjectID,
+        object_struct_tag: StructTag,
+    ) -> Result<Object, Error> {
+        let publish_txn_digest = self.get_object(package_id).await?.previous_transaction;
+        let (_, effects) = self.state.get_transaction(publish_txn_digest).await?;
+
+        let object_id = effects
+            .events
+            .into_iter()
+            .find_map(|e| {
+                if let Event::NewObject { object_type, .. } = &e {
+                    if matches!(parse_sui_struct_tag(object_type), Ok(tag) if tag == object_struct_tag) {
+                        return e.object_id();
+                    }
+                }
+                None
+            })
+            .ok_or_else(|| {
+                anyhow!(
+                    "Cannot find object [{}] from [{}] package event.",
+                    object_struct_tag,
+                    package_id
+                )
+            })?;
+
+        self.get_object(&object_id).await
     }
 }
 
@@ -141,7 +175,7 @@ impl CoinReadApiServer for CoinReadApi {
     }
 
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
-        let coin_struct = coin_type.parse::<StructTag>().map_err(|e| anyhow!("{e}"))?;
+        let coin_struct = parse_sui_struct_tag(&coin_type)?;
         if GAS::is_gas(&coin_struct) {
             // TODO: We need to special case for `CoinMetadata<0x2::sui::SUI> because `get_transaction`
             // will fail for genesis transaction. However, instead of hardcoding the values here, We
@@ -155,57 +189,43 @@ impl CoinReadApiServer for CoinReadApi {
                 icon_url: None,
             });
         }
-        let publish_txn_digest = self
-            .get_object(&coin_struct.address.into())
-            .await?
-            .previous_transaction;
-        let (_, effects) = self.state.get_transaction(publish_txn_digest).await?;
-        let event = effects
-            .events
-            .into_iter()
-            .find(|e| {
-                if let Event::NewObject { object_type, .. } = e {
-                    return object_type.parse::<StructTag>().map_or(false, |tag| {
-                        CoinMetadata::is_coin_metadata(&tag)
-                            && tag.type_params.len() == 1
-                            && tag.type_params[0].to_canonical_string()
-                                == coin_struct.to_canonical_string()
-                    });
-                }
-                false
-            })
-            .ok_or(0)
-            .map_err(|_| anyhow!("No NewObject event was emitted for CoinMetaData"))?;
 
-        let metadata_object_id = event
-            .object_id()
-            .ok_or(0)
-            .map_err(|_| anyhow!("No object id is found in NewObject event"))?;
+        let metadata_object = self
+            .find_package_object(
+                &coin_struct.address.into(),
+                CoinMetadata::type_(coin_struct),
+            )
+            .await?;
+        let metadata_object_id = metadata_object.id();
+        Ok(metadata_object.try_into().map_err(|e: SuiError| {
+            debug!(
+                ?metadata_object_id,
+                "Failed to convert object to CoinMetadata: {:?}", e
+            );
+            anyhow!(e)
+        })?)
+    }
 
-        Ok(self
-            .state
-            .get_object_read(&metadata_object_id)
-            .await
-            .map_err(|e| {
-                debug!(?metadata_object_id, "Failed to get object: {:?}", e);
-                anyhow!("{e}")
-            })?
-            .into_object()
-            .map_err(|e| {
-                debug!(
-                    ?metadata_object_id,
-                    "Failed to convert ObjectRead to Object: {:?}", e
-                );
-                anyhow!("{e}")
-            })?
-            .try_into()
-            .map_err(|e| {
-                debug!(
-                    ?metadata_object_id,
-                    "Failed to convert object to CoinMetadata: {:?}", e
-                );
-                anyhow!("{e}")
-            })?)
+    async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
+        let coin_struct = parse_sui_struct_tag(&coin_type)?;
+
+        Ok(if GAS::is_gas(&coin_struct) {
+            let system_state_object = self.get_object(&SUI_SYSTEM_STATE_OBJECT_ID).await?;
+            let system_state: SuiSystemState =
+                bcs::from_bytes(system_state_object.data.try_as_move().unwrap().contents())
+                    .map_err(Error::from)?;
+            system_state.treasury_cap
+        } else {
+            let treasury_cap_object = self
+                .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))
+                .await?;
+
+            let treasury_cap = TreasuryCap::from_bcs_bytes(
+                treasury_cap_object.data.try_as_move().unwrap().contents(),
+            )
+            .map_err(Error::from)?;
+            treasury_cap.total_supply
+        })
     }
 }
 
