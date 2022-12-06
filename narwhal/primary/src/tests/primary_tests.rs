@@ -289,7 +289,7 @@ async fn test_request_vote_missing_parents() {
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificates, mut rx_certificates) = test_utils::test_channel!(100);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -299,7 +299,7 @@ async fn test_request_vote_missing_parents() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
     ));
@@ -456,7 +456,7 @@ async fn test_request_vote_missing_batches() {
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -466,7 +466,7 @@ async fn test_request_vote_missing_batches() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
     ));
@@ -575,7 +575,7 @@ async fn test_request_vote_already_voted() {
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -585,7 +585,7 @@ async fn test_request_vote_already_voted() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
     ));
@@ -727,7 +727,7 @@ async fn test_fetch_certificates_handler() {
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificates, _) = test_utils::test_channel!(1);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -737,7 +737,7 @@ async fn test_fetch_certificates_handler() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -889,7 +889,7 @@ async fn test_process_payload_availability_success() {
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificates, _) = test_utils::test_channel!(1);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -899,7 +899,7 @@ async fn test_process_payload_availability_success() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
     ));
@@ -1033,7 +1033,7 @@ async fn test_process_payload_availability_when_failures() {
 
     let (header_store, _, _) = create_db_stores();
     let (tx_certificates, _) = test_utils::test_channel!(1);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -1043,7 +1043,7 @@ async fn test_process_payload_availability_when_failures() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
     ));
@@ -1125,7 +1125,7 @@ async fn test_request_vote_created_at_in_future() {
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
 
@@ -1135,7 +1135,7 @@ async fn test_request_vote_created_at_in_future() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
     ));

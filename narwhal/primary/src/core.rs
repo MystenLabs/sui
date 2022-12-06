@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
-    certificate_waiter::CertificateLoopbackMessage,
+    certificate_fetcher::CertificateLoopbackMessage,
     metrics::PrimaryMetrics,
     primary::PrimaryMessage,
     synchronizer::Synchronizer,
@@ -64,7 +64,7 @@ pub struct Core {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receiver for certificates.
     rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
-    /// Receives loopback certificates from the `CertificateWaiter`.
+    /// Receives loopback certificates from the `CertificateFetcher`.
     rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
     /// Receives our newly created headers from the `Proposer`.
     rx_headers: Receiver<Header>,
@@ -687,13 +687,13 @@ impl Core {
                     }
                 },
 
-                // Here loopback certificates from the `CertificateWaiter` are received. These are
+                // Here loopback certificates from the `CertificateFetcher` are received. These are
                 // certificates fetched from other validators that are potentially missing locally.
                 Some(message) = self.rx_certificates_loopback.recv() => {
                     let mut result = Ok(());
                     for cert in message.certificates {
                         result = match self.sanitize_certificate(&cert).await {
-                            // TODO: consider moving some checks to CertificateWaiter, and skipping
+                            // TODO: consider moving some checks to CertificateFetcher, and skipping
                             // those checks here?
                             Ok(()) => self.process_certificate(cert, None).await,
                             // It is possible that subsequent certificates are above GC round,
@@ -705,7 +705,7 @@ impl Core {
                             break;
                         }
                     };
-                    message.done.send(()).expect("Failed to signal back to CertificateWaiter");
+                    message.done.send(()).expect("Failed to signal back to CertificateFetcher");
                     result
                 },
 

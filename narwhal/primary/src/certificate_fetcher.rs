@@ -28,8 +28,8 @@ use types::{
 };
 
 #[cfg(test)]
-#[path = "tests/certificate_waiter_tests.rs"]
-pub mod certificate_waiter_tests;
+#[path = "tests/certificate_fetcher_tests.rs"]
+pub mod certificate_fetcher_tests;
 
 // Maximum number of certificates to fetch with one request.
 const MAX_CERTIFICATES_TO_FETCH: usize = 1000;
@@ -39,7 +39,7 @@ const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: Duration = Duration::from_secs(5);
 // num peers * PARALLEL_FETCH_REQUEST_INTERVAL_SECS + PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT
 const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// Message format from CertificateWaiter to core on the loopback channel.
+/// Message format from CertificateFetcher to core on the loopback channel.
 pub struct CertificateLoopbackMessage {
     /// Certificates to be processed by the core.
     /// In normal case processing the certificates in order should not encounter any missing parent.
@@ -48,15 +48,15 @@ pub struct CertificateLoopbackMessage {
     pub done: oneshot::Sender<()>,
 }
 
-/// The CertificateWaiter is responsible for fetching certificates that this node is missing
+/// The CertificateFetcher is responsible for fetching certificates that this node is missing
 /// from other primaries. It operates two loops:
 /// Loop 1: listens for certificates missing parents from the core, tracks the highest missing
 /// round per origin, and kicks start fetch tasks if needed.
 /// Loop 2: runs fetch task to request certificates from other primaries continuously, until all
 /// highest missing rounds have been met.
-pub(crate) struct CertificateWaiter {
-    /// Internal state of CertificateWaiter.
-    state: Arc<CertificateWaiterState>,
+pub(crate) struct CertificateFetcher {
+    /// Internal state of CertificateFetcher.
+    state: Arc<CertificateFetcherState>,
     /// The committee information.
     committee: Committee,
     /// Persistent storage for certificates. Read-only usage.
@@ -68,7 +68,7 @@ pub(crate) struct CertificateWaiter {
     /// Watch channel notifying of epoch changes, it is only used for cleanup.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives certificates with missing parents from the `Synchronizer`.
-    rx_certificate_waiter: Receiver<Certificate>,
+    rx_certificate_fetcher: Receiver<Certificate>,
     /// Map of validator to target rounds that local store must catch up to.
     /// The targets are updated with each certificate missing parents sent from the core.
     /// Each fetch task may satisfy some / all / none of the targets.
@@ -80,8 +80,8 @@ pub(crate) struct CertificateWaiter {
     fetch_certificates_task: FuturesUnordered<BoxFuture<'static, Result<(), JoinError>>>,
 }
 
-/// Thread-safe internal state of CertificateWaiter shared with its fetch task.
-struct CertificateWaiterState {
+/// Thread-safe internal state of CertificateFetcher shared with its fetch task.
+struct CertificateFetcherState {
     /// Identity of the current authority.
     name: PublicKey,
     /// Network client to fetch certificates from other primaries.
@@ -92,7 +92,7 @@ struct CertificateWaiterState {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl CertificateWaiter {
+impl CertificateFetcher {
     #[must_use]
     pub fn spawn(
         name: PublicKey,
@@ -102,11 +102,11 @@ impl CertificateWaiter {
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_certificate_waiter: Receiver<Certificate>,
+        rx_certificate_fetcher: Receiver<Certificate>,
         tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
-        let state = Arc::new(CertificateWaiterState {
+        let state = Arc::new(CertificateFetcherState {
             name,
             network,
             tx_certificates_loopback,
@@ -122,7 +122,7 @@ impl CertificateWaiter {
                 rx_consensus_round_updates,
                 gc_depth,
                 rx_reconfigure,
-                rx_certificate_waiter,
+                rx_certificate_fetcher,
                 targets: BTreeMap::new(),
                 fetch_certificates_task,
             }
@@ -134,7 +134,7 @@ impl CertificateWaiter {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_certificate_waiter.recv() => {
+                Some(certificate) = self.rx_certificate_fetcher.recv() => {
                     let header = &certificate.header;
                     if header.epoch != self.committee.epoch() {
                         continue;
@@ -275,7 +275,7 @@ impl CertificateWaiter {
                 let _scope = monitored_scope("CertificatesFetching");
                 state
                     .metrics
-                    .certificate_waiter_inflight_fetch
+                    .certificate_fetcher_inflight_fetch
                     .with_label_values(&[&committee.epoch.to_string()])
                     .inc();
 
@@ -296,7 +296,7 @@ impl CertificateWaiter {
 
                 state
                     .metrics
-                    .certificate_waiter_inflight_fetch
+                    .certificate_fetcher_inflight_fetch
                     .with_label_values(&[&committee.epoch.to_string()])
                     .dec();
             })
@@ -315,7 +315,7 @@ impl CertificateWaiter {
 #[allow(clippy::mutable_key_type)]
 #[instrument(level = "debug", skip_all)]
 async fn run_fetch_task(
-    state: Arc<CertificateWaiterState>,
+    state: Arc<CertificateFetcherState>,
     committee: Committee,
     gc_round: Round,
     written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
@@ -334,7 +334,7 @@ async fn run_fetch_task(
     process_certificates_helper(response, &state.tx_certificates_loopback).await?;
     state
         .metrics
-        .certificate_waiter_num_certificates_processed
+        .certificate_fetcher_num_certificates_processed
         .with_label_values(&[&committee.epoch().to_string()])
         .add(num_certs_fetched as i64);
 

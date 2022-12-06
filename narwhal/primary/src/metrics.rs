@@ -67,8 +67,8 @@ pub struct PrimaryChannelMetrics {
     /// occupancy of the channel from the `primary::Proposer` to the `primary::Core`
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
-    pub tx_certificate_waiter: IntGauge,
-    /// occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`
+    pub tx_certificate_fetcher: IntGauge,
+    /// occupancy of the channel from the `primary::CertificateFetcher` to the `primary::Core`
     pub tx_certificates_loopback: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
     pub tx_certificates: IntGauge,
@@ -95,8 +95,8 @@ pub struct PrimaryChannelMetrics {
     /// total received on channel from the `primary::Proposer` to the `primary::Core`
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
-    pub tx_certificate_waiter_total: IntCounter,
-    /// total received on channel from the `primary::CertificateWaiter` to the `primary::Core`
+    pub tx_certificate_fetcher_total: IntCounter,
+    /// total received on channel from the `primary::CertificateFetcher` to the `primary::Core`
     pub tx_certificates_loopback_total: IntCounter,
     /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
     pub tx_certificates_total: IntCounter,
@@ -159,14 +159,14 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Proposer` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_certificate_waiter: register_int_gauge_with_registry!(
-                "tx_certificate_waiter",
+            tx_certificate_fetcher: register_int_gauge_with_registry!(
+                "tx_certificate_fetcher",
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
             tx_certificates_loopback: register_int_gauge_with_registry!(
                 "tx_certificates_loopback",
-                "occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`",
+                "occupancy of the channel from the `primary::CertificateFetcher` to the `primary::Core`",
                 registry
             ).unwrap(),
             tx_certificates: register_int_gauge_with_registry!(
@@ -226,14 +226,14 @@ impl PrimaryChannelMetrics {
                 "total received on channel from the `primary::Proposer` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_certificate_waiter_total: register_int_counter_with_registry!(
-                "tx_certificate_waiter_total",
+            tx_certificate_fetcher_total: register_int_counter_with_registry!(
+                "tx_certificate_fetcher_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
             tx_certificates_loopback_total: register_int_counter_with_registry!(
                 "tx_certificates_loopback_total",
-                "total received on channel from the `primary::CertificateWaiter` to the `primary::Core`",
+                "total received on channel from the `primary::CertificateFetcher` to the `primary::Core`",
                 registry
             ).unwrap(),
             tx_certificates_total: register_int_counter_with_registry!(
@@ -336,9 +336,9 @@ pub struct PrimaryMetrics {
     /// The highest Narwhal round that has been processed.
     pub highest_processed_round: IntGaugeVec,
     /// 0 if there is no inflight certificates fetching, 1 otherwise.
-    pub certificate_waiter_inflight_fetch: IntGaugeVec,
+    pub certificate_fetcher_inflight_fetch: IntGaugeVec,
     /// Number of fetched certificates successfully processed by core.
-    pub certificate_waiter_num_certificates_processed: IntGaugeVec,
+    pub certificate_fetcher_num_certificates_processed: IntGaugeVec,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounterVec,
     /// Number of pending batches in proposer
@@ -439,15 +439,15 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
-            certificate_waiter_inflight_fetch: register_int_gauge_vec_with_registry!(
-                "certificate_waiter_inflight_fetch",
+            certificate_fetcher_inflight_fetch: register_int_gauge_vec_with_registry!(
+                "certificate_fetcher_inflight_fetch",
                 "0 if there is no inflight certificates fetching, 1 otherwise.",
                 &["epoch"],
                 registry
             )
             .unwrap(),
-            certificate_waiter_num_certificates_processed: register_int_gauge_vec_with_registry!(
-                "certificate_waiter_num_certificates_processed",
+            certificate_fetcher_num_certificates_processed: register_int_gauge_vec_with_registry!(
+                "certificate_fetcher_num_certificates_processed",
                 "Number of fetched certificates successfully processed by core.",
                 &["epoch"],
                 registry
