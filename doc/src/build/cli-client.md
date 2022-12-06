@@ -515,7 +515,7 @@ Parameters used for the `publish` command example:
 * `--path` - Defines the path to the Move package to publish.
 * `--gas` - The Coin object used to pay for gas.
 * `--gas-budget` - Gas budget for running module initializers. 
-* `--verify-dependencies` - Optional flag to have the CLI check that a dependency exists on-chain. 
+* `--verify-dependencies` - Optional flag to have the CLI check that all dependencies match their on-chain counterparts. 
 
 Refer to the [Move developer documentation](move/index.md) for a
 description on how to [write a simple Move code package](move/write-package.md),
