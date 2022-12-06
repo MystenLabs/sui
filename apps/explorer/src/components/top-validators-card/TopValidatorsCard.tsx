@@ -7,7 +7,7 @@ import {
     isSuiMoveObject,
     type Validator,
     type SuiSystemState,
-    type SuiMoveObject,
+    type SuiMoveObjectTyped,
 } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
@@ -41,7 +41,7 @@ function StakeColumn(prop: { stake: bigint | number; stakePercent: number }) {
 }
 
 export function processValidators(
-    set: SuiMoveObject<Validator>[],
+    set: SuiMoveObjectTyped<Validator>[],
     totalStake: bigint
 ) {
     return set.map((av) => {

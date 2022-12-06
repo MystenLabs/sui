@@ -7,7 +7,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import { ownedObjects } from '_redux/slices/account';
 import { suiSystemObjectSelector } from '_redux/slices/sui-objects';
 
-import type { SuiMoveObject, Delegation } from '@mysten/sui.js';
+import type { SuiMoveObjectTyped, Delegation } from '@mysten/sui.js';
 
 export const delegationsSelector = createSelector(
     ownedObjects,
@@ -16,7 +16,7 @@ export const delegationsSelector = createSelector(
             .map((obj) => obj.data)
             .filter(
                 (obj) => 'type' in obj && obj.type === DELEGATION_OBJECT_TYPE
-            ) as unknown as SuiMoveObject<Delegation>[]
+            ) as unknown as SuiMoveObjectTyped<Delegation>[]
 );
 
 export const activeDelegationIDsSelector = createSelector(
