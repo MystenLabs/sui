@@ -385,7 +385,7 @@ export class JsonRpcProvider extends Provider {
 
   async getObjectsOwnedByObject(objectId: ObjectId): Promise<SuiObjectInfo[]> {
     try {
-      if (!isValidSuiObjectId(normalizeSuiObjectId(objectId)) || !objectId) {
+      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
         throw new Error('Invalid Sui Object id');
       }
       return await this.client.requestWithType(
@@ -403,7 +403,7 @@ export class JsonRpcProvider extends Provider {
 
   async getObject(objectId: ObjectId): Promise<GetObjectDataResponse> {
     try {
-      if (!isValidSuiObjectId(normalizeSuiObjectId(objectId)) || !objectId) {
+      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
         throw new Error('Invalid Sui Object id');
       }
       return await this.client.requestWithType(
@@ -423,18 +423,23 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getObjectBatch(objectIds: ObjectId[]): Promise<GetObjectDataResponse[]> {
-    const requests = objectIds.map((id) => ({
-      method: 'sui_getObject',
-      args: [id],
-    }));
     try {
+      const requests = objectIds.map((id) => {
+        if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
+          throw new Error(`Invalid Sui Object id ${id}`);
+        }
+        return { 
+          method: 'sui_getObject',
+          args: [id],
+        };
+      });
       return await this.client.batchRequestWithType(
         requests,
         isGetObjectDataResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
+      throw new Error(`Error fetching object info: ${err} for ids [${objectIds}]`);
     }
   }
 
@@ -475,7 +480,7 @@ export class JsonRpcProvider extends Provider {
     ];
 
     try {
-      if (!isValidSuiObjectId(normalizeSuiObjectId(objectID)) || !objectID) {
+      if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
         throw new Error('Invalid Sui Object id');
       }
       const results = await this.client.batchRequestWithType(
@@ -506,7 +511,7 @@ export class JsonRpcProvider extends Provider {
       },
     ];
     try {
-      if (!isValidSuiAddress(normalizeSuiAddress(addressID)) || !addressID) {
+      if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
         throw new Error('Invalid Sui address');
       }
       const results = await this.client.batchRequestWithType(
@@ -542,24 +547,28 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
-
+ 
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
   ): Promise<SuiTransactionResponse[]> {
-    const requests = digests.map((d) => ({
-      method: 'sui_getTransaction',
-      args: [d],
-    }));
     try {
+      const requests = digests.map((d) => {
+        if (!isValidTransactionDigest(d)) {
+          throw new Error(`Invalid Transaction digest ${d}`);
+        }
+        return { 
+          method: 'sui_getTransaction',
+          args: [d],
+        };
+      });
       return await this.client.batchRequestWithType(
         requests,
         isSuiTransactionResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
-      const list = digests.join(', ').substring(0, -2);
       throw new Error(
-        `Error getting transaction effects: ${err} for digests [${list}]`
+        `Error getting transaction effects: ${err} for digests [${digests}]`
       );
     }
   }
