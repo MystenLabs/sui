@@ -4,24 +4,6 @@
 import { Provider } from './provider';
 import { HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
-  isGetObjectDataResponse,
-  isGetOwnedObjectsResponse,
-  isGetTxnDigestsResponse,
-  isPaginatedEvents,
-  isPaginatedTransactionDigests,
-  isSuiExecuteTransactionResponse,
-  isSuiMoveFunctionArgTypes,
-  isSuiMoveNormalizedFunction,
-  isSuiMoveNormalizedModule,
-  isSuiMoveNormalizedModules,
-  isSuiMoveNormalizedStruct,
-  isSuiTransactionResponse,
-  isTransactionEffects,
-  isDevInspectResults,
-  isCoinMetadata,
-  isSuiTransactionAuthSignersResponse,
-} from '../types/index.guard';
-import {
   Coin,
   ExecuteTransactionRequestType,
   GatewayTxSeqNumber,
@@ -63,8 +45,13 @@ import {
   normalizeSuiAddress,
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
+  CoinMetadataStruct,
 } from '../types';
-import { PublicKey, SignatureScheme, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
+import {
+  PublicKey,
+  SignatureScheme,
+  SIGNATURE_SCHEME_TO_FLAG,
+} from '../cryptography/publickey';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
@@ -74,9 +61,7 @@ import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
-
-const isNumber = (val: any): val is number => typeof val === 'number';
-const isAny = (_val: any): _val is any => true;
+import { any, number } from 'superstruct';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -166,7 +151,7 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'rpc.discover',
         [],
-        isAny,
+        any(),
         this.options.skipDataValidation
       );
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
@@ -206,7 +191,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getCoinMetadata',
         [coinType],
-        isCoinMetadata,
+        CoinMetadataStruct,
         this.options.skipDataValidation
       );
     } catch (err) {
@@ -433,7 +418,7 @@ export class JsonRpcProvider extends Provider {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
-        return { 
+        return {
           method: 'sui_getObject',
           args: [id],
         };
@@ -552,7 +537,7 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
- 
+
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
   ): Promise<SuiTransactionResponse[]> {
@@ -561,7 +546,7 @@ export class JsonRpcProvider extends Provider {
         if (!isValidTransactionDigest(d, "base58")) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
-        return { 
+        return {
           method: 'sui_getTransaction',
           args: [d],
         };
@@ -591,24 +576,36 @@ export class JsonRpcProvider extends Provider {
       if (version?.major === 0 && version?.minor < 18) {
         resp = await this.client.requestWithType(
           'sui_executeTransaction',
-          [txnBytes.toString(), signatureScheme, signature.toString(), pubkey.toString(), requestType],
+          [
+            txnBytes.toString(),
+            signatureScheme,
+            signature.toString(),
+            pubkey.toString(),
+            requestType,
+          ],
           isSuiExecuteTransactionResponse,
           this.options.skipDataValidation
         );
       } else {
         // Serialize sigature field as: `flag || signature || pubkey`
-        const serialized_sig = new Uint8Array(1 + signature.getLength() + pubkey.toBytes().length);
+        const serialized_sig = new Uint8Array(
+          1 + signature.getLength() + pubkey.toBytes().length
+        );
         serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
         serialized_sig.set(signature.getData(), 1);
         serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
 
         resp = await this.client.requestWithType(
           'sui_executeTransactionSerializedSig',
-          [txnBytes.toString(), new Base64DataBuffer(serialized_sig).toString(), requestType],
+          [
+            txnBytes.toString(),
+            new Base64DataBuffer(serialized_sig).toString(),
+            requestType,
+          ],
           isSuiExecuteTransactionResponse,
           this.options.skipDataValidation
         );
-      };
+      }
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}}`);
@@ -620,7 +617,7 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getTotalTransactionNumber',
         [],
-        isNumber,
+        number(),
         this.options.skipDataValidation
       );
       return resp;

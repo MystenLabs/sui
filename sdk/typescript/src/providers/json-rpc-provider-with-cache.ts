@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
-import { isSuiObjectRef } from '../types/index.guard';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
@@ -13,9 +12,11 @@ import {
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
   getTransactionEffects,
+  SuiObjectRefStruct,
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
 import { Base64DataBuffer } from '../serialization/base64';
+import { is } from 'superstruct';
 
 export class JsonRpcProviderWithCache extends JsonRpcProvider {
   /**
@@ -101,7 +102,9 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
     if (newData == null) {
       return;
     }
-    const ref = isSuiObjectRef(newData) ? newData : getObjectReference(newData);
+    const ref = is(newData, SuiObjectRefStruct)
+      ? newData
+      : getObjectReference(newData);
     if (ref != null) {
       this.objectRefs.set(ref.objectId, ref);
     }

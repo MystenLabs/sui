@@ -10,33 +10,18 @@ import {
   literal,
   Infer,
 } from 'superstruct';
+import {
+  ObjectId,
+  ObjectIdStruct,
+  ObjectOwner,
+  ObjectOwnerStruct,
+  SequenceNumberStruct,
+  SuiAddress,
+  SuiAddressStruct,
+  TransactionDigest,
+  TransactionDigestStruct,
+} from './shared';
 import { SuiJsonValue } from './transactions';
-
-const TransactionDigestStruct = string();
-const ObjectIdStruct = string();
-const SuiAddressStruct = string();
-const SequenceNumberStruct = number();
-
-type TransactionDigest = Infer<typeof TransactionDigestStruct>;
-type SuiAddress = Infer<typeof SuiAddressStruct>;
-type ObjectId = Infer<typeof ObjectIdStruct>;
-
-const ObjectOwnerStruct = union([
-  object({
-    AddressOwner: SuiAddressStruct,
-  }),
-  object({
-    ObjectOwner: SuiAddressStruct,
-  }),
-  object({
-    Shared: object({
-      initial_shared_version: number(),
-    }),
-  }),
-  literal('Immutable'),
-]);
-
-type ObjectOwner = Infer<typeof ObjectOwnerStruct>;
 
 export const BalanceChangeTypeStruct = union([
   literal('Gas'),

@@ -18,6 +18,9 @@ import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { isSuiMoveObject } from './index.guard';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
+import { SignerWithProvider } from '../signers/signer-with-provider';
+import { Infer, literal, number, object, string, union } from 'superstruct';
+import { ObjectIdStruct } from './shared';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
@@ -35,14 +38,16 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
 
-export type CoinMetadata = {
-  decimals: number;
-  name: string;
-  symbol: string;
-  description: string;
-  iconUrl: string | null;
-  id: ObjectId | null;
-};
+export const CoinMetadataStruct = object({
+  decimals: number(),
+  name: string(),
+  symbol: string(),
+  description: string(),
+  iconUrl: union([string(), literal(null)]),
+  id: union([ObjectIdStruct, literal(null)]),
+});
+
+export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
 
 /**
  * Utility class for 0x2::coin
