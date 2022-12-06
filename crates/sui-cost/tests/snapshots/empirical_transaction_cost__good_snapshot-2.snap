@@ -14,23 +14,23 @@ expression: common_costs_estimate
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
-    "computation_cost": 670,
-    "storage_cost": 813,
+    "computation_cost": 668,
+    "storage_cost": 811,
     "storage_rebate": 0
   },
   "SharedCounterCreate": {
-    "computation_cost": 548,
-    "storage_cost": 782,
+    "computation_cost": 547,
+    "storage_cost": 779,
     "storage_rebate": 0
   },
   "SharedCounterIncrement": {
-    "computation_cost": 670,
-    "storage_cost": 813,
+    "computation_cost": 668,
+    "storage_cost": 811,
     "storage_rebate": 0
   },
   "SplitCoin": {
-    "computation_cost": 5976,
-    "storage_cost": 8823,
+    "computation_cost": 5916,
+    "storage_cost": 8734,
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {
