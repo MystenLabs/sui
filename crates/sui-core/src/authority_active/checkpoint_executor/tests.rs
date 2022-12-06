@@ -2,12 +2,11 @@ use super::*;
 use fastcrypto::traits::KeyPair;
 use sui_types::{committee::Committee, crypto::AuthorityKeyPair};
 use tempfile::tempdir;
-use tokio::sync::mpsc;
 
 use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
-use sui_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::sync::broadcast;
 
@@ -93,6 +92,8 @@ pub async fn checkpoint_executor_test() {
             Some(highest) if highest == 4 * (buffer_size as u64) - 1,
         ));
     }
+
+    // TODO test crossing epoch boundary
 }
 
 async fn init_executor_test(
@@ -104,17 +105,8 @@ async fn init_executor_test(
     CommitteeFixture,
 ) {
     let (keypair, committee) = committee();
-    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = mpsc::channel(10);
-    let state = Arc::new(
-        AuthorityState::new_for_testing(
-            committee.clone(),
-            &keypair,
-            None,
-            None,
-            tx_reconfigure_consensus,
-        )
-        .await,
-    );
+    let state =
+        Arc::new(AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await);
 
     let metrics = CheckpointMetrics::new_for_tests();
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
@@ -159,7 +151,6 @@ fn sync_new_checkpoints(
 fn committee() -> (AuthorityKeyPair, Committee) {
     use std::collections::BTreeMap;
     use sui_types::crypto::get_key_pair;
-    use sui_types::crypto::AuthorityPublicKeyBytes;
 
     let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();

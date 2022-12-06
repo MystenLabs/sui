@@ -193,7 +193,7 @@ impl SuiNode {
                 state.clone(),
                 CheckpointMetrics::new(&prometheus_registry),
             )?;
-            spawn_monitored_task!(async move { executor.run().await })
+            tokio::spawn(executor.run())
         };
 
         let active_authority = Arc::new(ActiveAuthority::new(

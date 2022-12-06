@@ -14,7 +14,6 @@ pub struct CheckpointMetrics {
     pub checkpoint_errors: IntCounter,
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_recv_channel_overflow: IntCounter,
-    pub checkpoint_exec_lag: IntGauge,
     pub builder_utilization: IntCounter,
     pub aggregator_utilization: IntCounter,
     pub transactions_included_in_checkpoint: IntCounter,
@@ -58,12 +57,6 @@ impl CheckpointMetrics {
             checkpoint_exec_recv_channel_overflow: register_int_counter_with_registry!(
                 "checkpoint_exec_recv_channel_overflow",
                 "Count of the number of times the recv channel from StateSync to CheckpointExecutor has been overflowed",
-                registry
-            )
-            .unwrap(),
-            checkpoint_exec_lag: register_int_gauge_with_registry!(
-                "checkpoint_exec_lag",
-                "Checkpoint execution lag (highest_synced_checkpoint - highest_executed_checkpoint)",
                 registry
             )
             .unwrap(),

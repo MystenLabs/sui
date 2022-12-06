@@ -128,10 +128,6 @@ impl Handle {
     pub fn subscribe_to_synced_checkpoints(&self) -> broadcast::Receiver<VerifiedCheckpoint> {
         self.checkpoint_event_sender.subscribe()
     }
-
-    pub fn get_sender(&self) -> &broadcast::Sender<VerifiedCheckpoint> {
-        &self.checkpoint_event_sender
-    }
 }
 
 struct PeerHeights {
