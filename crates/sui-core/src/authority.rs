@@ -2136,12 +2136,6 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
-    fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
-        // Check the certificate. Remember that Byzantine authorities may input anything into
-        // consensus.
-        certificate.verify_signature(&self.committee())
-    }
-
     /// Verifies transaction signatures and other data
     /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
     /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
@@ -2164,28 +2158,14 @@ impl AuthorityState {
             self.metrics.skipped_consensus_txns.inc();
             return Err(());
         }
+        // Signatures are verified as part of narwhal payload verification in SuiTxValidator
         match &transaction.transaction.kind {
-            ConsensusTransactionKind::UserTransaction(certificate) => {
-                self.verify_narwhal_transaction(certificate)
-                    .map_err(|err| {
-                        warn!(
-                            "Ignoring malformed transaction (failed to verify) from {}: {:?}",
-                            transaction.sender_authority(),
-                            err
-                        );
-                    })?;
-            }
+            ConsensusTransactionKind::UserTransaction(_certificate) => {}
             ConsensusTransactionKind::CheckpointSignature(data) => {
                 if transaction.sender_authority() != data.summary.auth_signature.authority {
                     warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, transaction.certificate.origin() );
                     return Err(());
                 }
-                data.verify(&self.committee()).map_err(|err|{
-                    warn!(
-                        "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
-                        transaction.sender_authority(), data.summary.summary.sequence_number, err
-                    );
-                })?;
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 if &transaction.sender_authority() != authority {

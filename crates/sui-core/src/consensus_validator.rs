@@ -3,27 +3,24 @@
 
 use eyre::WrapErr;
 use std::sync::Arc;
-use tap::TapFallible;
 
 use narwhal_worker::TransactionValidator;
 use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
-    message_envelope::Message,
     messages::{ConsensusTransaction, ConsensusTransactionKind},
 };
-use tracing::warn;
 
 use crate::authority::AuthorityState;
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
-struct ConsensusTxValidator {
+pub struct SuiTxValidator {
     // a pointer to the Authority state, mostly in order to get access to consensus
+    // todo - change it to AuthorityPerEpochStore to avoid race conditions
     state: Arc<AuthorityState>,
 }
 
-impl ConsensusTxValidator {
-    #[allow(dead_code)]
+impl SuiTxValidator {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
     }
@@ -34,25 +31,11 @@ fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
         .wrap_err("Malformed transaction (failed to deserialize)")
 }
 
-impl TransactionValidator for ConsensusTxValidator {
+impl TransactionValidator for SuiTxValidator {
     type Error = eyre::Report;
 
-    fn validate(&self, tx: &[u8]) -> Result<(), Self::Error> {
-        let transaction = tx_from_bytes(tx)?;
-        let committee = self.state.committee();
-        match &transaction.kind {
-            ConsensusTransactionKind::UserTransaction(certificate) => {
-                certificate.verify_signature(&committee).tap_err(|err| {
-                    warn!("Malformed transaction (failed to verify): {err}");
-                })?;
-            }
-            ConsensusTransactionKind::CheckpointSignature(signature) => {
-                signature.verify(&committee).tap_err(|err| {
-                    warn!("Ignoring malformed signature (failed to verify): {err}");
-                })?;
-            }
-            ConsensusTransactionKind::EndOfPublish(_) => {}
-        }
+    fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
+        // We only accept transactions from local sui instance so no need to re-verify it
         Ok(())
     }
 
@@ -68,9 +51,7 @@ impl TransactionValidator for ConsensusTxValidator {
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
-                    // verify the inner user signature
-                    certificate.data().verify()?;
-
+                    // todo - verify user signature when we pin signature in certificate
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
                     certificate.auth_sig().add_to_verification_obligation(
                         &committee,
@@ -115,7 +96,7 @@ mod tests {
         consensus_adapter::consensus_tests::{
             test_certificates, test_gas_objects, test_shared_object,
         },
-        consensus_validator::ConsensusTxValidator,
+        consensus_validator::SuiTxValidator,
     };
 
     use sui_macros::sim_test;
@@ -148,7 +129,7 @@ mod tests {
         )
         .unwrap();
 
-        let validator = ConsensusTxValidator::new(Arc::new(state));
+        let validator = SuiTxValidator::new(Arc::new(state));
         let res = validator.validate(&first_transaction_bytes);
         assert!(res.is_ok(), "{res:?}");
 

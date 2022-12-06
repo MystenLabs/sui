@@ -452,10 +452,6 @@ impl<'a> Drop for InflightDropGuard<'a> {
     }
 }
 
-/// An implementation of the Narwhal TxValidator trait that validates transactions coming from Sui, and those coming from the network.
-// TODO: replace by a ConsensusTxValidator in order to make Narwhal-side validation effective
-pub use narwhal_worker::TrivialTransactionValidator as SuiTxValidator;
-
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
     async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
