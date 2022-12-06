@@ -37,8 +37,8 @@ async fn successful_verification() -> anyhow::Result<()> {
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
     };
-
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
     verifier
         .verify_deployed_dependencies(&a_pkg.package)
         .await
@@ -67,7 +67,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.client.clone();
+    let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     // Stop the network, so future RPC requests fail.
@@ -94,7 +94,8 @@ async fn package_not_found() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     assert!(matches!(
         verifier.verify_deployed_dependencies(&a_pkg.package).await,
@@ -116,8 +117,8 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
     };
-
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     assert!(matches!(
         verifier.verify_deployed_dependencies(&a_pkg.package).await,
@@ -150,8 +151,8 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
     };
-
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     let Err(err) = verifier.verify_deployed_dependencies(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -188,7 +189,8 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     let Err(err) = verifier.verify_deployed_dependencies(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -232,7 +234,8 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     let Err(err) = verifier.verify_deployed_dependencies(&a_pkg.package).await else {
         panic!("Expected verification to fail");

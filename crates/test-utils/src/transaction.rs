@@ -95,9 +95,9 @@ pub async fn publish_package_with_wallet(
     sender: SuiAddress,
     all_module_bytes: Vec<Vec<u8>>,
 ) -> ObjectRef {
+    let client = context.get_client().await.unwrap();
     let transaction = {
-        let data = context
-            .client
+        let data = client
             .transaction_builder()
             .publish(sender, all_module_bytes, None, GAS_BUDGET)
             .await
@@ -111,8 +111,7 @@ pub async fn publish_package_with_wallet(
         Transaction::from_data(data, signature).verify().unwrap()
     };
 
-    let resp = context
-        .client
+    let resp = client
         .quorum_driver()
         .execute_transaction(
             transaction,
@@ -143,9 +142,8 @@ pub async fn submit_move_transaction(
     gas_object: Option<ObjectID>,
 ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
     debug!(?package_ref, ?arguments, "move_transaction");
-
-    let data = context
-        .client
+    let client = context.get_client().await.unwrap();
+    let data = client
         .transaction_builder()
         .move_call(
             sender,
@@ -169,8 +167,7 @@ pub async fn submit_move_transaction(
     let tx_digest = tx.digest();
     debug!(?tx_digest, "submitting move transaction");
 
-    let resp = context
-        .client
+    let resp = client
         .quorum_driver()
         .execute_transaction(
             tx,
@@ -310,9 +307,8 @@ pub async fn transfer_coin(
 > {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await.unwrap();
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(sender)
         .await?;
@@ -392,9 +388,8 @@ pub async fn delete_devnet_nft(
         .sign(sender, &data.to_bytes())
         .unwrap();
     let tx = Transaction::from_data(data, signature).verify().unwrap();
-
-    let resp = context
-        .client
+    let client = context.get_client().await.unwrap();
+    let resp = client
         .quorum_driver()
         .execute_transaction(
             tx,

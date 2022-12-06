@@ -43,7 +43,7 @@ async fn test_transfer_sui() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Transfer Sui
@@ -64,7 +64,7 @@ async fn test_transfer_sui_whole_coin() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test transfer sui whole coin
@@ -85,7 +85,7 @@ async fn test_transfer_object() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test transfer object
@@ -107,7 +107,7 @@ async fn test_publish_and_move_call() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test publish
@@ -176,7 +176,7 @@ async fn test_split_coin() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test spilt coin
@@ -199,7 +199,7 @@ async fn test_merge_coin() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test merge coin
@@ -223,7 +223,7 @@ async fn test_pay() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Pay
@@ -246,7 +246,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Pay multiple coin multiple recipient
@@ -279,7 +279,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Pay multiple coin same recipient
@@ -303,7 +303,7 @@ async fn test_pay_sui() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Pay Sui
@@ -336,7 +336,7 @@ async fn test_pay_all_sui() {
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Pay All Sui

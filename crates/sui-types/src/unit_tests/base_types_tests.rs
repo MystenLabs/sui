@@ -215,8 +215,8 @@ fn test_object_id_zero_padding() {
     let hex = "0x2";
     let long_hex = "0x0000000000000000000000000000000000000002";
     let long_hex_alt = "0000000000000000000000000000000000000002";
-    let obj_id_1 = ObjectID::from_hex_literal(hex).unwrap();
-    let obj_id_2 = ObjectID::from_hex_literal(long_hex).unwrap();
+    let obj_id_1 = ObjectID::from_str(hex).unwrap();
+    let obj_id_2 = ObjectID::from_str(long_hex).unwrap();
     let obj_id_3 = ObjectID::from_str(long_hex_alt).unwrap();
     let obj_id_4: ObjectID = serde_json::from_str(&format!("\"{}\"", hex)).unwrap();
     let obj_id_5: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex)).unwrap();

@@ -105,6 +105,10 @@ where
     pub fn into_inner(self) -> C {
         self.inner
     }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 impl<C> std::ops::Deref for PersistedConfig<C> {
