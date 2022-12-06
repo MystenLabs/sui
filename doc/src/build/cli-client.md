@@ -507,25 +507,24 @@ id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
 
 ## Publish packages
 
-In order for user-written code to be available in Sui, it must be
-*published* to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
-Please see the [Move developer documentation](move/index.md) for a
+You must publish packages to the Sui [distributed ledger](../learn/how-sui-works.md#architecture) for the code you developed to be available in Sui. To publish packages with the Sui client, use the `publish` command.
+
+The publish command requires that you specify the directory where your package lives using the `--path` parameter. The value is the path to the `my_move_package` as per the [package creation description](move/write-package.md). You must also provide a `gas` object to pay for publishing the package and a `gas-budget` value.
+
+Parameters used for the `publish` command example:
+* `--path` - Defines the path to the Move package to publish.
+* `--gas` - The Coin object used to pay for gas.
+* `--gas-budget` - Gas budget for running module initializers. 
+* `--verify-dependencies` - Optional flag to have the CLI check that a dependency exists on-chain. 
+
+Refer to the [Move developer documentation](move/index.md) for a
 description on how to [write a simple Move code package](move/write-package.md),
-which we can publish using Sui client's `publish` command.
+which you can then publish using the Sui client `publish` command.
 
-> **Important:** All calls to functions in the `debug` module must be removed from no-test code
-> before the new module can be published (test code is marked with the `#[test]` annotation).
+> **Important:** You must remove all calls to functions in the `debug` module from no-test code
+> before you can publish the new module (test code is marked with the `#[test]` annotation).
 
-The publish command
-requires us to specify a directory where the user-defined package lives.
-It's the path to the `my_move_package` as per the
-[package creation description](move/write-package.md), a gas
-object that will be used to pay for publishing the package (we use the
-same gas object we used to pay for the function call in the
-[Calling Move code](#calling-move-code)) section, and gas budget to put
-an upper limit we use 1000 as our gas budget.
-
-Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`) which now has 4 objects left:
+Use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`) which now has four objects left:
 
 ```shell
 $ sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
@@ -549,10 +548,22 @@ that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-$ sui client publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
+$ sui client publish --path $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
 ```
 
-The result of running this command should look as follows:
+The call uses the optional `--verify-dependencies` flag to verify the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found:
+
+```shell
+Local dependency did not match its on-chain version at <address>::<package>::<module>
+```
+
+The `--verify-dependencies` flag can fail the publish for other reasons, as well.
+* There are modules missing, either in the local version of the dependency or on-chain.
+* There's nothing at the address that the dependency points to (it was deleted or never existed).
+* The address supplied for the dependency points to an object instead of a package.
+* The CLI fails to connect to the node to fetch the package.
+
+If successful, your response resembles the following:
 
 ```shell
 ----- Certificate ----
@@ -577,19 +588,18 @@ swords_created: 0
 Updated Gas : Coin { id: 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19, value: 96929 }
 ```
 
-Please note that running this command resulted in creating an object representing the published package.
-From now on, we can use the package object ID (`0xdbcee02bd4eb326122ced0a8540f15a057d82850`) in the Sui client's call
-command just like we used `0x2` for built-in packages in the
-[Calling Move code](#calling-move-code) section.
+Running this command created an object representing the published package.
+From now on, use the package object ID (`0xdbcee02bd4eb326122ced0a8540f15a057d82850`) in the Sui client call
+command (similar to `0x2` used for built-in packages in the
+[Calling Move code](#calling-move-code) section).
 
 Another object created as a result of package publishing is a
-user-defined object (of type `Forge`) crated inside initializer
+user-defined object (of type `Forge`) created inside the initializer
 function of the (only) module included in the published package - see
 the part of Move developer documentation concerning [module
-initializers](move/debug-publish.md#module-initializers) for more details on module
-initializers.
+initializers](move/debug-publish.md#module-initializers) for more details.
 
-Finally, we see that the gas object that was used to pay for
+You might notice that the gas object that was used to pay for
 publishing was updated as well.
 
 > **Important:** If the publishing attempt results in an error regarding verification failure,
