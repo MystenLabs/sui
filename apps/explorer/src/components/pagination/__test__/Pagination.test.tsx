@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -9,15 +9,18 @@ import Pagination from '../Pagination';
 
 describe('Pagination test', () => {
     it('check pagination buttons exist and check disabled behavior for the nextBtn and prevBtn', () => {
-        const { getByTestId, container } = render(
+        const { getByTestId } = render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} />
         );
-        const nextBtn = container.querySelector(
-            'button[data-testid="nextBtn"]:not([style*="display:none"])'
-        );
-        const prevBtn = container.querySelector(
-            'button[data-testid="backBtn"]:not([style*="display:none"])'
-        );
+
+        const nextBtn = screen.getByRole('button', {
+            name: /pagination back button/i,
+        });
+
+        const prevBtn = screen.getByRole('button', {
+            name: /pagination next button/i,
+        });
+
         const secondBtn = getByTestId('secondBtn');
         const secondLastBtn = getByTestId('secondLastBtn');
 
@@ -25,38 +28,40 @@ describe('Pagination test', () => {
         expect(nextBtn).toBeDefined();
         expect(secondBtn).toBeDefined();
         expect(secondLastBtn).toBeDefined();
-        expect(nextBtn).not.toHaveProperty('disabled', true);
-        expect(prevBtn).toHaveProperty('disabled', true);
-    });
-
-    it('check active state for backBtn and nextBtn on the last page', () => {
-        const { container } = render(
-            <Pagination totalItems={105} itemsPerPage={10} currentPage={11} />
-        );
-
-        const nextBtn = container.querySelector(
-            'button[data-testid="nextBtn"]:not([style*="display:none"])'
-        );
-        const prevBtn = container.querySelector(
-            'button[data-testid="backBtn"]:not([style*="display:none"])'
-        );
         expect(nextBtn).toHaveProperty('disabled', true);
         expect(prevBtn).not.toHaveProperty('disabled', true);
     });
 
+    it('check active state for backBtn and nextBtn on the last page', () => {
+        render(
+            <Pagination totalItems={105} itemsPerPage={10} currentPage={11} />
+        );
+
+        const nextBtn = screen.getByRole('button', {
+            name: /pagination back button/i,
+        });
+
+        const prevBtn = screen.getByRole('button', {
+            name: /pagination next button/i,
+        });
+
+        expect(nextBtn).not.toHaveProperty('disabled', true);
+        expect(prevBtn).toHaveProperty('disabled', true);
+    });
+
     it('check pagination button values', () => {
-        const { container } = render(
+        render(
             <Pagination totalItems={105} itemsPerPage={10} currentPage={1} />
         );
 
         // Handle multiple elements with the same test id:
-        const firstBtn = container.querySelector(
-            'button[data-testid="firstBtn"]:not([style*="display:none"])'
-        );
+        const firstBtn = screen.getByRole('button', {
+            name: /first page button/i,
+        });
 
-        const lastBtn = container.querySelector(
-            'button[data-testid="lastBtn"]:not([style*="display:none"])'
-        );
+        const lastBtn = screen.getByRole('button', {
+            name: /last page button/i,
+        });
 
         expect(firstBtn).toBeDefined();
         expect(lastBtn).toBeDefined();
@@ -84,6 +89,12 @@ describe('Pagination test', () => {
             10
         );
 
+        const lastBtn = screen.getByRole('button', {
+            name: /last page button/i,
+        });
+
+        const lastBtnPageNum = parseInt(lastBtn.textContent || '0', 10);
+
         await userEvent.click(secondBtn);
         expect(setPageNumChange).toHaveReturnedWith(2);
 
@@ -92,5 +103,8 @@ describe('Pagination test', () => {
 
         await userEvent.click(secondLastBtn);
         expect(setPageNumChange).toHaveReturnedWith(secondLastBtnNumber);
+
+        await userEvent.click(lastBtn);
+        expect(setPageNumChange).toHaveReturnedWith(lastBtnPageNum);
     });
 });
