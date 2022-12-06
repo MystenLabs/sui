@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::{handlers::PrimaryReceiverHandler, NetworkModel, Primary, CHANNEL_CAPACITY};
+use super::{NetworkModel, Primary, CHANNEL_CAPACITY};
+use crate::handlers::TraitPrimaryReceiverController;
 use crate::{
     common::create_db_stores,
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
@@ -35,13 +36,13 @@ use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
+use crate::handlers::PrimaryReceiverController;
 use types::{
     error::DagError, now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    MockPrimaryToWorker, PayloadAvailabilityRequest, PrimaryToPrimary, PrimaryToWorkerServer,
+    MockPrimaryToWorker, PayloadAvailabilityRequest, PrimaryToWorkerServer,
     ReconfigureNotification, RequestVoteRequest, Round,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
-use crate::handlers::PrimaryReceiverController;
 
 #[tokio::test]
 async fn get_network_peers_from_admin_server() {

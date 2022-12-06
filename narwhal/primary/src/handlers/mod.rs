@@ -1,61 +1,40 @@
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use crypto::PublicKey;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use tracing::instrument;
-use types::error::DagResult;
 use types::{
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PrimaryMessage, PrimaryToPrimary, RequestVoteRequest, RequestVoteResponse, Round,
-    WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
+    PrimaryMessage, PrimaryToPrimary, RequestVoteRequest, RequestVoteResponse, WorkerInfoResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
 };
 
 pub use crate::handlers::primary::PrimaryReceiverController;
+pub use crate::handlers::primary::TraitPrimaryReceiverController;
 pub use crate::handlers::worker::WorkerReceiverController;
 
 mod primary;
 mod worker;
 
-pub type SwappablePrimaryReceiverController = Arc<ArcSwap<PrimaryReceiverController>>;
-
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
-pub struct PrimaryReceiverHandler {
-    pub controller: SwappablePrimaryReceiverController,
+pub struct PrimaryReceiverHandler<T: TraitPrimaryReceiverController + Sync + Send + 'static> {
+    pub controller: Arc<ArcSwap<T>>,
 }
 
 #[allow(clippy::result_large_err)]
-impl PrimaryReceiverHandler {
-    pub fn new(controller: PrimaryReceiverController) -> Self {
+impl<T: TraitPrimaryReceiverController + Sync + Send + 'static> PrimaryReceiverHandler<T> {
+    pub fn new(controller: T) -> Self {
         PrimaryReceiverHandler {
             controller: Arc::new(ArcSwap::from_pointee(controller)),
         }
     }
-
-    fn find_next_round(
-        &self,
-        origin: &PublicKey,
-        current_round: Round,
-        skip_rounds: &BTreeSet<Round>,
-    ) -> Result<Option<Round>, anemo::rpc::Status> {
-        self.controller
-            .load()
-            .find_next_round(origin, current_round, skip_rounds)
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    async fn process_request_vote(
-        &self,
-        request: anemo::Request<RequestVoteRequest>,
-    ) -> DagResult<RequestVoteResponse> {
-        self.controller.load().process_request_vote(request).await
-    }
 }
 
 #[async_trait]
-impl PrimaryToPrimary for PrimaryReceiverHandler {
+impl<T: TraitPrimaryReceiverController + Sync + Send + 'static> PrimaryToPrimary
+    for PrimaryReceiverHandler<T>
+{
     async fn send_message(
         &self,
         request: anemo::Request<PrimaryMessage>,
