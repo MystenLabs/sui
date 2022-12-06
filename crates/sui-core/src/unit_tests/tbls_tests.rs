@@ -82,5 +82,5 @@ fn test_validator_without_shares() {
     // Validators with stake of 100 should get floor(100*1000/1001) = 99.
     let tbls_ids = TBlsIds::new(&stakes);
     assert_eq!(tbls_ids.get_ids(&get_key(1)).unwrap().len(), 99);
-    assert_eq!(tbls_ids.get_ids(&get_key(11)).is_some(), false);
+    assert!(tbls_ids.get_ids(&get_key(11)).is_none());
 }
