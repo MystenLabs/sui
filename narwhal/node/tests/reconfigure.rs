@@ -101,7 +101,7 @@ impl SimpleExecutionState {
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && change_epoch {
+        if change_epoch {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
