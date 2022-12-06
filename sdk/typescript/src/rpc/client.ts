@@ -4,7 +4,7 @@
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
-import { Infer, is, Struct } from 'superstruct';
+import { is, Struct } from 'superstruct';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -105,9 +105,10 @@ export class JsonRpcClient {
     });
   }
 
+  // TODO: Improve validation errors:
   async batchRequestWithType<T>(
     requests: RpcParams[],
-    isT: (val: any) => val is T,
+    struct: Struct<T>,
     skipDataValidation: boolean = false
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
@@ -115,7 +116,7 @@ export class JsonRpcClient {
     const validResponses = responses.filter(
       (response: any) =>
         isValidResponse(response) &&
-        (skipDataValidation || isT(response.result))
+        (skipDataValidation || is(response.result, struct))
     );
 
     if (responses.length > validResponses.length) {
@@ -124,7 +125,9 @@ export class JsonRpcClient {
           responses.length - validResponses.length
         } of the ${responses.length} requests has invalid schema.`
       );
-      const exampleTypeMismatch = responses.find((r: any) => !isT(r.result));
+      const exampleTypeMismatch = responses.find(
+        (r: any) => !is(r.result, struct)
+      );
       const exampleInvalidResponseIndex = responses.findIndex(
         (r: any) => !isValidResponse(r)
       );
