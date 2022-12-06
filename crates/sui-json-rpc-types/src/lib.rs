@@ -1214,11 +1214,7 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
-                if let Some(bytes) = to_bytearray(&values) {
-                    SuiMoveValue::Bytearray(Base64::from_bytes(&bytes))
-                } else {
-                    SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
-                }
+                SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
             }
             MoveValue::Struct(value) => {
                 // Best effort Sui core type conversion
