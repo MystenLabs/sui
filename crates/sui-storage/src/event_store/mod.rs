@@ -28,7 +28,7 @@ use tokio_stream::StreamExt;
 
 pub use sql::SqlEventStore;
 use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope};
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest, ObjectDigest};
 use sui_types::error::SuiError;
 use sui_types::error::SuiError::{StorageCorruptedFieldError, StorageMissingFieldError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
@@ -44,6 +44,7 @@ pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 1000;
 pub const OBJECT_VERSION_KEY: &str = "obj_ver";
 pub const AMOUNT_KEY: &str = "amount";
 pub const BALANCE_CHANGE_TYPE_KEY: &str = "change_type";
+pub const OBJECT_DIGEST_KEY: &str = "obj_digest";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -119,7 +120,18 @@ impl StoredEvent {
     pub fn into_publish(self) -> Result<SuiEvent, anyhow::Error> {
         let package_id = self.package_id()?;
         let sender = self.sender()?;
-        Ok(SuiEvent::Publish { sender, package_id })
+        let version = self.object_version()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
+        })?;
+        let digest = self.object_digest()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract object digest from StoredEvent: {self:?}")
+        })?;
+        Ok(SuiEvent::Publish { 
+            sender, 
+            package_id, 
+            version,
+            digest
+        })
     }
 
     pub fn into_transfer_object(self) -> Result<SuiEvent, anyhow::Error> {
@@ -322,6 +334,13 @@ impl StoredEvent {
             opt.and_then(|s| u64::from_str(&s).ok())
                 .map(SequenceNumber::from_u64)
         })
+    }
+    
+    fn object_digest(&self) -> Result<Option<ObjectDigest>, anyhow::Error> {
+        self.extract_string_field(OBJECT_DIGEST_KEY).map(|opt| {
+                opt.and_then(|s| Some((&s).as_bytes())
+                    .map(|v| ObjectDigest::try_from(v).unwrap()))
+            })
     }
 
     fn change_type(&self) -> Result<Option<BalanceChangeType>, anyhow::Error> {
