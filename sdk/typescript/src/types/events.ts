@@ -181,6 +181,7 @@ export const PaginatedEvents = object({
   data: array(SuiEventEnvelope),
   nextCursor: union([EventId, literal(null)]),
 });
+export type PaginatedEvents = Infer<typeof PaginatedEvents>;
 
 export const SubscriptionId = number();
 

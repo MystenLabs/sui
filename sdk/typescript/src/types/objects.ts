@@ -3,6 +3,7 @@
 
 import {
   any,
+  array,
   boolean,
   Infer,
   literal,
@@ -166,7 +167,8 @@ export const ObjectStatus = union([
 ]);
 export type ObjectStatus = Infer<typeof ObjectStatus>;
 
-export type GetOwnedObjectsResponse = SuiObjectInfo[];
+export const GetOwnedObjectsResponse = array(SuiObjectInfo);
+export type GetOwnedObjectsResponse = Infer<typeof GetOwnedObjectsResponse>;
 
 export const GetObjectDataResponse = object({
   status: ObjectStatus,

@@ -46,6 +46,7 @@ import {
   SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
   GetObjectDataResponse,
+  GetOwnedObjectsResponse,
 } from '../types';
 import {
   PublicKey,
@@ -314,7 +315,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getObjectsOwnedByAddress',
         [address],
-        isGetOwnedObjectsResponse,
+        GetOwnedObjectsResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
@@ -381,7 +382,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getObjectsOwnedByObject',
         [objectId],
-        isGetOwnedObjectsResponse,
+        GetOwnedObjectsResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
@@ -634,7 +635,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getTransactionsInRange',
         [start, end],
-        isGetTxnDigestsResponse,
+        GetTxnDigestsResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
