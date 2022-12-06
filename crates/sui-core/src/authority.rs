@@ -2098,16 +2098,6 @@ impl AuthorityState {
             ))
     }
 
-    /// Check whether certificate was processed by consensus.
-    /// Returned future is immediately ready if consensus message was already processed.
-    /// Otherwise returns future that waits for message to be processed by consensus.
-    pub async fn consensus_message_processed_notify(
-        &self,
-        key: ConsensusTransactionKey,
-    ) -> Result<(), SuiError> {
-        self.database.consensus_message_processed_notify(key).await
-    }
-
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
         &self,

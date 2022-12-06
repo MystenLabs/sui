@@ -23,9 +23,10 @@ use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
-use crate::authority::authority_notify_read::{NotifyRead, Registration};
+use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -53,6 +54,7 @@ pub struct AuthorityPerEpochStore<S> {
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
+    epoch_alive: NotifyOnce,
     end_of_publish: Mutex<StakeAggregator<(), true>>,
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
@@ -176,10 +178,12 @@ where
             .expect("Load reconfig state at initialization cannot fail");
         let wal_path = parent_path.join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
+        let epoch_alive = NotifyOnce::new();
         Self {
             epoch_id,
             tables,
             reconfig_state_mem: RwLock::new(reconfig_state),
+            epoch_alive,
             consensus_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             wal,
@@ -406,19 +410,24 @@ where
         Ok(self.tables.consensus_message_processed.contains_key(key)?)
     }
 
+    pub async fn consensus_message_processed_notify(
+        &self,
+        key: ConsensusTransactionKey,
+    ) -> Result<(), SuiError> {
+        let registration = self.consensus_notify_read.register_one(&key);
+        if self.is_consensus_message_processed(&key)? {
+            return Ok(());
+        }
+        registration.await;
+        Ok(())
+    }
+
     pub fn has_sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
         Ok(self
             .end_of_publish
             .try_lock()
             .expect("No contention on end_of_publish lock")
             .contains_key(authority))
-    }
-
-    pub fn register_consensus_message_notify(
-        &self,
-        key: &ConsensusTransactionKey,
-    ) -> Registration<ConsensusTransactionKey, ()> {
-        self.consensus_notify_read.register_one(key)
     }
 
     /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
@@ -592,6 +601,18 @@ where
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
+    }
+
+    /// Notify epoch is terminated, can only be called once on epoch store
+    pub fn epoch_terminated(&self) {
+        self.epoch_alive
+            .notify()
+            .expect("epoch_terminated called twice on same epoch store");
+    }
+
+    /// Waits for the notification about epoch termination
+    pub async fn wait_epoch_terminated(&self) {
+        self.epoch_alive.wait().await
     }
 }
 
