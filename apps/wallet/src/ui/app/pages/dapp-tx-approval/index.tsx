@@ -326,7 +326,7 @@ export function DappTxApprovalPage() {
         queryFn: () => {
             if (txRequest) {
                 const signer = thunkExtras.api.getSignerInstance(
-                    thunkExtras.keypairVault.getKeyPair()
+                    thunkExtras.keypairVault.getKeypair()
                 );
                 let txToEstimate: Parameters<
                     typeof signer.dryRunTransaction

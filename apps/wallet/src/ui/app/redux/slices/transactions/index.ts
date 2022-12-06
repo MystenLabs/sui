@@ -46,7 +46,7 @@ export const sendTokens = createAsyncThunk<
     ) => {
         const state = getState();
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
-        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const signer = api.getSignerInstance(keypairVault.getKeypair());
         const response = await CoinAPI.transfer(
             signer,
             coins,
@@ -101,7 +101,7 @@ export const StakeTokens = createAsyncThunk<
         const metadata = (first_validator as SuiMoveObject).fields.metadata;
         const validatorAddress = (metadata as SuiMoveObject).fields.sui_address;
         const response = await Coin.stakeCoin(
-            api.getSignerInstance(keypairVault.getKeyPair()),
+            api.getSignerInstance(keypairVault.getKeypair()),
             coins,
             amount,
             validatorAddress
