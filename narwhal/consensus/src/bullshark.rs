@@ -167,14 +167,13 @@ impl ConsensusProtocol for Bullshark {
                 sub_dag_index: next_sub_dag_index,
             };
 
-            // Increase the global consensus index.
-            state.latest_sub_dag_index = next_sub_dag_index;
-
             // Persist the update.
-            // TODO [issue #116]: Ensure this is not a performance bottleneck.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
             debug!("Store commit index:{},", &next_sub_dag_index,);
+
+            // Increase the global consensus index.
+            state.latest_sub_dag_index = next_sub_dag_index;
 
             committed_sub_dags.push(sub_dag);
         }

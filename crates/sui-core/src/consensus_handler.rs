@@ -34,7 +34,7 @@ impl ConsensusHandler {
     fn update_hash(
         last_seen: &Mutex<ExecutionIndicesWithHash>,
         index: ExecutionIndices,
-        v: &[u8; 8],
+        v: &[u8],
     ) -> Option<ExecutionIndicesWithHash> {
         let mut last_seen_guard = last_seen
             .try_lock()
@@ -74,12 +74,16 @@ impl ExecutionState for ConsensusHandler {
         let mut sequenced_transactions = Vec::new();
         let mut seq = 0;
 
+        let mut bytes = 0usize;
         let round = consensus_output.sub_dag.round();
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
             let output_cert = Arc::new(cert);
             for batch in batches {
+                self.state.metrics.consensus_handler_processed_batches.inc();
                 for serialized_transaction in batch.transactions {
+                    bytes += serialized_transaction.len();
+
                     let transaction = match bincode::deserialize::<ConsensusTransaction>(
                         &serialized_transaction,
                     ) {
@@ -99,7 +103,7 @@ impl ExecutionState for ConsensusHandler {
                     };
 
                     let index_with_hash =
-                        match Self::update_hash(&self.last_seen, index, &transaction.tracking_id) {
+                        match Self::update_hash(&self.last_seen, index, &serialized_transaction) {
                             Some(i) => i,
                             None => {
                                 debug!(
@@ -119,6 +123,11 @@ impl ExecutionState for ConsensusHandler {
                 }
             }
         }
+
+        self.state
+            .metrics
+            .consensus_handler_processed_bytes
+            .inc_by(bytes as u64);
 
         for sequenced_transaction in sequenced_transactions {
             let verified_transaction = match self
@@ -207,7 +216,7 @@ pub fn test_update_hash() {
     };
 
     let last_seen = Mutex::new(last_seen);
-    let tx = &[0, 0, 0, 0, 0, 0, 0, 0];
+    let tx = &[0];
     assert!(ConsensusHandler::update_hash(&last_seen, index0, tx).is_none());
     assert!(ConsensusHandler::update_hash(&last_seen, index1, tx).is_none());
     assert!(ConsensusHandler::update_hash(&last_seen, index2, tx).is_some());
