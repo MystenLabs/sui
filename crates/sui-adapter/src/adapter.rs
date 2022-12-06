@@ -77,8 +77,9 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
                 max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
                 max_basic_blocks: Some(MAX_BASIC_BLOCKS),
                 max_value_stack_size: MAX_VALUE_STACK_SIZE,
-                max_type_nodes: Some(256),
-                ..Default::default()
+                max_type_nodes: Some(MAX_TYPE_NODES),
+                max_push_size: Some(MAX_PUSH_SIZE),
+                max_dependency_depth: MAX_DEPENDENCY_DEPTH,
             },
             max_binary_format_version: MOVE_BINARY_FORMAT_VERSION,
             paranoid_type_checks: false,

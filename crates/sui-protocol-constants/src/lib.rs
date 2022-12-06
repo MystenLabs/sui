@@ -36,6 +36,12 @@ pub const MAX_VALUE_STACK_SIZE: usize = 1024;
 /// Maximum number of type nodes. Enforced by the Move bytecode verifier.
 pub const MAX_TYPE_NODES: usize = 256;
 
+/// Maximum number of pushes in one function. Enforced by the Move bytecode verifier.
+pub const MAX_PUSH_SIZE: usize = 10000;
+
+/// Maximum dependency depth. Enforced by the Move bytecode verifier.
+pub const MAX_DEPENDENCY_DEPTH: u64 = 100;
+
 /// Maximum number of events that a single Move function can emit. Enforced by the Sui adapter during execution.
 // TODO: is this per Move function, or per transaction? And if per-function, can't I get around the limit by calling
 // a function that emits 255 events in a loop?
