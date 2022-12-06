@@ -27,12 +27,14 @@ pub mod error;
 pub mod event_api;
 mod metrics;
 pub mod read_api;
-#[cfg(test)]
-#[path = "unit_tests/rpc_server_tests.rs"]
-mod rpc_server_test;
+
 pub mod streaming_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
+
+#[cfg(test)]
+#[path = "unit_tests/rpc_server_tests.rs"]
+mod rpc_server_test;
 
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,

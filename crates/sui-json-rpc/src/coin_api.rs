@@ -22,8 +22,7 @@ use sui_types::error::SuiError;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
 use sui_types::object::{Object, Owner};
-use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{parse_sui_struct_tag, SUI_SYSTEM_STATE_OBJECT_ID};
+use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer};
 use crate::error::Error;
@@ -210,11 +209,11 @@ impl CoinReadApiServer for CoinReadApi {
         let coin_struct = parse_sui_struct_tag(&coin_type)?;
 
         Ok(if GAS::is_gas(&coin_struct) {
-            let system_state_object = self.get_object(&SUI_SYSTEM_STATE_OBJECT_ID).await?;
-            let system_state: SuiSystemState =
-                bcs::from_bytes(system_state_object.data.try_as_move().unwrap().contents())
-                    .map_err(Error::from)?;
-            system_state.treasury_cap
+            self.state
+                .get_sui_system_state_object()
+                .await
+                .map_err(Error::from)?
+                .treasury_cap
         } else {
             let treasury_cap_object = self
                 .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))
