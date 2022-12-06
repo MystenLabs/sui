@@ -657,14 +657,14 @@ impl PrimaryReceiverHandler {
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
         let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
-        let mut narwhal_round = *rx_narwhal_round_updates.borrow();
-        ensure!(
-            narwhal_round <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
-        );
+        // Maximum header age is chosen to strike a balance between allowing for slightly older
+        // certificates to still have a chance to be included in the DAG while not wasting
+        // resources on very old vote requests. This value affects performance but not correctness
+        // of the algorithm.
+        const HEADER_AGE_LIMIT: Round = 3;
 
         // If requester has provided us with parent certificates, process them all
-        // before proceeding. This may advance our round, so do it before checking round.
+        // before proceeding.
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
             let (tx_notify, rx_notify) = oneshot::channel();
@@ -687,9 +687,9 @@ impl PrimaryReceiverHandler {
                 },
                 result = rx_narwhal_round_updates.changed() => {
                     result.unwrap();
-                    narwhal_round = *rx_narwhal_round_updates.borrow();
+                    let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
-                        narwhal_round <= header.round,
+                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
                         DagError::TooOld(header.digest().into(), header.round, narwhal_round)
                     )
                 },
@@ -707,9 +707,9 @@ impl PrimaryReceiverHandler {
 
         // Now that we've got all the required certificates, ensure we're voting on a
         // current Header.
-        narwhal_round = *rx_narwhal_round_updates.borrow();
+        let narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            narwhal_round <= header.round,
+            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
             DagError::TooOld(header.digest().into(), header.round, narwhal_round)
         );
 

@@ -387,7 +387,7 @@ async fn test_request_vote_missing_parents() {
         let tx_narwhal_round_updates = tx_narwhal_round_updates.clone();
         tokio::task::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
-            let _ = tx_narwhal_round_updates.send(3);
+            let _ = tx_narwhal_round_updates.send(100);
         });
     }
     let mut request = anemo::Request::new(RequestVoteRequest {
