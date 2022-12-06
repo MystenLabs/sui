@@ -18,8 +18,6 @@ import {
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
-import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
-import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import Longtext from '../../components/longtext/Longtext';
 import { getAmount } from '../../utils/getAmount';
@@ -30,6 +28,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import styles from './RecentTxCard.module.css';
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
+import { TxType } from '~/ui/TxType';
 
 export type TxnData = {
     To?: string;
@@ -101,22 +100,10 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
 }
 
 function TxStatusType({ content }: { content: TxStatus }) {
-    const TxStatus = {
-        success: ContentSuccessStatus,
-        fail: ContentFailedStatus,
-    };
-    const TxResultStatus =
-        content.status === 'success' ? TxStatus.success : TxStatus.fail;
     return (
-        <section className={styles.statuswrapper}>
-            <div
-                className={
-                    content.status === 'success' ? styles.success : styles.fail
-                }
-            >
-                <TxResultStatus /> <div>{content.txTypeName}</div>
-            </div>
-        </section>
+        <TxType isSuccess={content.status === 'success'}>
+            {content.txTypeName}
+        </TxType>
     );
 }
 

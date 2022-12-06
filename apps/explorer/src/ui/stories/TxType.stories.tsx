@@ -12,11 +12,13 @@ export default {
 export const Default: StoryObj<TxTypeProps> = {
     render: () => (
         <div className="flex gap-[21px]">
+            <TxType isSuccess>Call</TxType>
             <TxType>Call</TxType>
-            <TxType isFail>Call</TxType>
-            <TxType>TransferObject</TxType>
-            <TxType>ChangeEpoch</TxType>
-            <TxType count="42">Batch</TxType>
+            <TxType isSuccess>TransferObject</TxType>
+            <TxType isSuccess>ChangeEpoch</TxType>
+            <TxType isSuccess count="42">
+                Batch
+            </TxType>
         </div>
     ),
 };
