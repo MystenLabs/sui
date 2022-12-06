@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    isSuiMoveObject,
-    isSuiObject,
-    type SuiAddress,
-} from '@mysten/sui.js';
+import { isSuiMoveObject, isSuiObject, type SuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -75,38 +71,39 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
 
         const systemState = data.details.data.fields as SystemStateObject;
 
-        const validators = systemState.validators.fields.active_validators
-            .map((validator) => {
-                const pendingDelegations =
-                    validator.fields.delegation_staking_pool.fields
-                        .pending_delegations;
+        const pendingDelegationsPerValidator =
+            systemState.validators.fields.active_validators
+                .map((validator) => {
+                    const pendingDelegations =
+                        validator.fields.delegation_staking_pool.fields
+                            .pending_delegations;
 
-                if (!Array.isArray(pendingDelegations)) return null;
+                    if (!Array.isArray(pendingDelegations)) return null;
 
-                const filteredDelegations = pendingDelegations.filter(
-                    (delegation) => delegation.fields.delegator === address
-                );
+                    const filteredDelegations = pendingDelegations.filter(
+                        (delegation) => delegation.fields.delegator === address
+                    );
 
-                if (!filteredDelegations) return null;
+                    if (!filteredDelegations.length) return null;
 
-                // TODO: Follow-up about why this is base64 encoded:
-                const name = Buffer.from(
-                    validator.fields.metadata.fields.name,
-                    'base64'
-                ).toString();
+                    // TODO: Follow-up about why this is base64 encoded:
+                    const name = Buffer.from(
+                        validator.fields.metadata.fields.name,
+                        'base64'
+                    ).toString();
 
-                return {
-                    name,
-                    staked: filteredDelegations.reduce(
-                        (acc, delegation) =>
-                            acc + BigInt(delegation.fields.sui_amount),
-                        0n
-                    ),
-                } as PendingDelegation;
-            })
-            .filter(notEmpty);
+                    return {
+                        name,
+                        staked: filteredDelegations.reduce(
+                            (acc, delegation) =>
+                                acc + BigInt(delegation.fields.sui_amount),
+                            0n
+                        ),
+                    } as PendingDelegation;
+                })
+                .filter(notEmpty);
 
-        return validators;
+        return pendingDelegationsPerValidator;
     }, [data, address]);
 
     return [pendingDelegation, objectQuery];
