@@ -942,9 +942,11 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
-                    if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                        return Ok(GasCoin::new(*id, *balance));
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
+                    if let Ok(balance) = balance.parse::<u64>() {
+                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                            return Ok(GasCoin::new(*id, balance));
+                        }
                     }
                 }
             }
@@ -1207,7 +1209,7 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U16(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U32(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U64(value) => SuiMoveValue::Number(value),
+            MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
