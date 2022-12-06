@@ -28,15 +28,16 @@ export type SuiData = { dataType: ObjectType } & (
   | SuiMovePackage
 );
 
-export type SuiMoveObject = {
-  /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
-  type: string;
-  /** Fields and values stored inside the Move object */
-  fields: ObjectContentFields;
-  has_public_transfer?: boolean;
-};
+export type SuiMoveObject<T extends ObjectContentFields = ObjectContentFields> =
+  {
+    /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
+    type: string;
+    /** Fields and values stored inside the Move object */
+    fields: T;
+    has_public_transfer?: boolean;
+  };
 
-export const MIST_PER_SUI: BigInt = BigInt(1000000000);
+export const MIST_PER_SUI = BigInt(1000000000);
 
 export type SuiMovePackage = {
   /** A mapping from module name to disassembled Move bytecode */

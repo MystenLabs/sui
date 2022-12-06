@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, isSuiObject, type SuiAddress } from '@mysten/sui.js';
+import { isSuiMoveObject, isSuiObject, type SuiSystemState } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -10,36 +10,6 @@ import { useAppSelector } from '../hooks';
 import { api } from '../redux/store/thunk-extras';
 
 const STATE_OBJECT = '0x5';
-
-// TODO: Generalize into SDK:
-interface SystemStateObject {
-    validators: {
-        fields: {
-            active_validators: {
-                fields: {
-                    metadata: {
-                        fields: {
-                            name: string;
-                        };
-                    };
-                    delegation_staking_pool: {
-                        fields: {
-                            // TODO: Figure out why this is an empty string sometimes:
-                            pending_delegations:
-                                | string
-                                | {
-                                      fields: {
-                                          delegator: SuiAddress;
-                                          sui_amount: number;
-                                      };
-                                  }[];
-                        };
-                    };
-                };
-            }[];
-        };
-    };
-}
 
 interface PendingDelegation {
     name: string;
@@ -69,7 +39,7 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
             return [];
         }
 
-        const systemState = data.details.data.fields as SystemStateObject;
+        const systemState = data.details.data.fields as SuiSystemState;
 
         const pendingDelegationsPerValidator =
             systemState.validators.fields.active_validators
