@@ -507,15 +507,7 @@ id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
 
 ## Publish packages
 
-You must publish packages to the Sui [distributed ledger](../learn/how-sui-works.md#architecture) for the code you developed to be available in Sui. To publish packages with the Sui client, use the `publish` command.
-
-The publish command requires that you specify the directory where your package lives using the `--path` parameter. The value is the path to `my_move_package` as per the [package creation description](move/write-package.md). You must also provide a `gas` object to pay for publishing the package and a `gas-budget` value.
-
-Parameters used for the `publish` command example:
-* `--path` - Defines the path to the Move package to publish.
-* `--gas` - The Coin object used to pay for gas.
-* `--gas-budget` - Gas budget for running module initializers. 
-* `--verify-dependencies` - Optional flag to have the CLI check that all dependencies match their on-chain counterparts. 
+You must publish packages to the Sui [distributed ledger](../learn/how-sui-works.md#architecture) for the code you developed to be available in Sui. To publish packages with the Sui client, use the `publish` command. 
 
 Refer to the [Move developer documentation](move/index.md) for a
 description on how to [write a simple Move code package](move/write-package.md),
@@ -544,20 +536,27 @@ Showing 4 results.
 
 The whole command to publish a package for address
 `0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75` resembles the following (assuming
-that the location of the package's sources is in the `PATH_TO_PACKAGE`
+that the location of the package sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-$ sui client publish --path $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
+$ sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
 ```
 
-The call uses the optional `--verify-dependencies` flag to verify the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating at which package and module the mismatch was found:
+The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command defaults the path value to the current working directory. The call also provides the following data:
+
+* `--gas` - The Coin object used to pay for gas.
+* `--gas-budget` - Gas budget for running module initializers. 
+* `--verify-dependencies` - Optional flag to have the CLI check that all dependencies match their on-chain counterparts. 
+
+When the `--verify-dependencies` flag is present, the CLI verifies that the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found in:
 
 ```shell
 Local dependency did not match its on-chain version at <address>::<package>::<module>
 ```
 
-The `--verify-dependencies` flag can fail the publish for other reasons, as well.
+The `--verify-dependencies` flag can fail the publish for other reasons, as well:
+
 * There are modules missing, either in the local version of the dependency or on-chain.
 * There's nothing at the address that the dependency points to (it was deleted or never existed).
 * The address supplied for the dependency points to an object instead of a package.
