@@ -16,7 +16,7 @@ use crate::stake_aggregator::{InsertResult, StakeAggregator};
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -283,11 +283,15 @@ impl CheckpointBuilder {
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<()> {
-        let _scope = monitored_scope("MakeCheckpoint");
         self.metrics
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
-        let roots = self.effects_store.notify_read(roots).await?;
+        let roots = self
+            .effects_store
+            .notify_read(roots)
+            .in_monitored_scope("CheckpointNotifyRead")
+            .await?;
+        let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
         let new_checkpoint = self
