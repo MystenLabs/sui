@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Delegation } from '@mysten/sui.js';
+import { Delegation_OUTDATED_DO_NOT_USE as Delegation } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { suiObjectsAdapterSelectors } from '../../redux/slices/sui-objects';

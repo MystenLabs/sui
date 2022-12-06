@@ -339,14 +339,17 @@ export type DelegationSuiObject = Omit<SuiObject, 'data'> & {
 
 // Class for delegation.move
 // see https://github.com/MystenLabs/fastnft/blob/161aa27fe7eb8ecf2866ec9eb192e768f25da768/crates/sui-framework/sources/governance/delegation.move
-export class Delegation {
+export class Delegation_OUTDATED_DO_NOT_USE {
   public static readonly SUI_OBJECT_TYPE = '0x2::delegation::Delegation';
   private suiObject: DelegationSuiObject;
 
   public static isDelegationSuiObject(
     obj: SuiObject
   ): obj is DelegationSuiObject {
-    return 'type' in obj.data && obj.data.type === Delegation.SUI_OBJECT_TYPE;
+    return (
+      'type' in obj.data &&
+      obj.data.type === Delegation_OUTDATED_DO_NOT_USE.SUI_OBJECT_TYPE
+    );
   }
 
   constructor(obj: DelegationSuiObject) {
@@ -384,3 +387,11 @@ export class Delegation {
     );
   }
 }
+
+export type NewDelegation = {
+  id: string;
+  validator_address: SuiAddress;
+  pool_starting_epoch: number;
+  pool_tokens: SuiMoveObject<{ value: number }>;
+  principal_sui_amount: number;
+};

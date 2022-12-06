@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, Delegation } from '@mysten/sui.js';
+import {
+    isSuiMoveObject,
+    Delegation_OUTDATED_DO_NOT_USE as Delegation,
+} from '@mysten/sui.js';
 import { createSelector } from '@reduxjs/toolkit';
 
 import { ownedObjects } from '_redux/slices/account';
