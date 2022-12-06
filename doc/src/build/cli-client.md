@@ -543,7 +543,7 @@ environment variable):
 $ sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
 ```
 
-The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command defaults the path value to the current working directory. The call also provides the following data:
+The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:
 
 * `--gas` - The Coin object used to pay for gas.
 * `--gas-budget` - Gas budget for running module initializers. 
