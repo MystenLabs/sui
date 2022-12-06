@@ -1156,45 +1156,6 @@ where
         }
     }
 
-    pub async fn get_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        let (aggregate_object_info, _certificates) =
-            // Skip committee check because this call usually happens when there's a potential new epoch
-            self.get_object_by_id(SUI_SYSTEM_STATE_OBJECT_ID, true).await?;
-
-        let bcs_bytes = aggregate_object_info
-            .into_iter()
-            .filter_map(
-                |(
-                    (_object_ref, _transaction_digest),
-                    (object_option, _layout_option, object_authorities),
-                )| {
-                    if let Some(object) = object_option {
-                        let contents = object
-                            .data
-                            .try_into_move()
-                            .map(|move_object| move_object.into_contents())?;
-                        let weights: u64 = object_authorities
-                            .iter()
-                            .map(|a| self.committee.weight(&a.0))
-                            .sum();
-                        Some((contents, weights))
-                    } else {
-                        None
-                    }
-                },
-            )
-            .max_by_key(|v| v.1);
-        let Some((bcs_bytes, votes)) = bcs_bytes else {
-            return Err(SuiError::FailedToGetAgreedObjectStateFromMajority { object_id: SUI_SYSTEM_STATE_OBJECT_ID });
-        };
-        if votes < self.committee.quorum_threshold() {
-            return Err(SuiError::FailedToGetAgreedObjectStateFromMajority {
-                object_id: SUI_SYSTEM_STATE_OBJECT_ID,
-            });
-        }
-        bcs::from_bytes::<SuiSystemState>(&bcs_bytes).map_err(|_| SuiError::InvalidDecoding)
-    }
-
     /// Query validators for latest SuiSystemState and try to form
     /// CommitteeWithNetworkAddress. Only return Some(CommitteeWithNetAddresses)
     /// when there is quorum. This function tolerates uninteresting
