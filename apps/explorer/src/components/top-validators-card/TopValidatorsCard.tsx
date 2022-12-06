@@ -27,7 +27,7 @@ const NUMBER_OF_VALIDATORS = 10;
 
 const textDecoder = new TextDecoder();
 
-function StakeColumn(prop: { stake: bigint; stakePercent: number }) {
+function StakeColumn(prop: { stake: bigint | number; stakePercent: number }) {
     return (
         <div className="flex items-end gap-0.5">
             <Text variant="bodySmall" color="steel-darker">

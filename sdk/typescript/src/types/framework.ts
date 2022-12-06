@@ -6,15 +6,12 @@ import {
   GetObjectDataResponse,
   SuiMoveObject,
   SuiObjectInfo,
-  SuiObject,
-  SuiData,
   getMoveObjectType,
   ObjectId,
   getObjectId,
 } from './objects';
 import { normalizeSuiObjectId, SuiAddress } from './common';
 
-import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { isSuiMoveObject } from './index.guard';
 import { SignerWithProvider } from '../signers/signer-with-provider';
@@ -315,13 +312,3 @@ export class Coin {
     });
   }
 }
-
-export const DELEGATION_OBJECT_TYPE = '0x2::delegation::Delegation';
-
-export type Delegation = {
-  id: string;
-  validator_address: SuiAddress;
-  pool_starting_epoch: number;
-  pool_tokens: SuiMoveObject<{ value: number }>;
-  principal_sui_amount: number;
-};
