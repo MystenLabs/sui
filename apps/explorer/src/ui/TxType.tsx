@@ -21,7 +21,11 @@ export function TxType({ isFail, count, children }: TxTypeProps) {
                 <ContentSuccessStatus className="fill-success" />
             )}
             {children}
-            {count && <div>{count}</div>}
+            {count && (
+                <div className="rounded-lg bg-gray-40 py-0.5 px-1.25">
+                    {count}
+                </div>
+            )}
         </div>
     );
 }
