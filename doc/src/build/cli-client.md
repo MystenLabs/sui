@@ -509,7 +509,7 @@ id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
 
 You must publish packages to the Sui [distributed ledger](../learn/how-sui-works.md#architecture) for the code you developed to be available in Sui. To publish packages with the Sui client, use the `publish` command.
 
-The publish command requires that you specify the directory where your package lives using the `--path` parameter. The value is the path to the `my_move_package` as per the [package creation description](move/write-package.md). You must also provide a `gas` object to pay for publishing the package and a `gas-budget` value.
+The publish command requires that you specify the directory where your package lives using the `--path` parameter. The value is the path to `my_move_package` as per the [package creation description](move/write-package.md). You must also provide a `gas` object to pay for publishing the package and a `gas-budget` value.
 
 Parameters used for the `publish` command example:
 * `--path` - Defines the path to the Move package to publish.
