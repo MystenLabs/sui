@@ -147,8 +147,7 @@ class Bench:
         Print.info(
             f'Updating {len(ips)} machines (branch "{self.settings.branch}")...'
         )
-        compile_cmd = ' '.join(CommandMaker.compile(
-            mem_profiling=bench_parameters.mem_profile))
+        compile_cmd = ' '.join(CommandMaker.compile())
         cmd = [
             f'(cd {self.settings.repo_name} && git fetch -f)',
             f'(cd {self.settings.repo_name} && git checkout -f {self.settings.branch} --)',
@@ -171,8 +170,7 @@ class Bench:
         sleep(0.5)  # Removing the store may take time.
 
         # Recompile the latest code.
-        cmd = CommandMaker.compile(
-            mem_profiling=bench_parameters.mem_profile)
+        cmd = CommandMaker.compile()
         Print.info(f"About to run {cmd}...")
         subprocess.run(cmd, check=True, cwd=PathMaker.node_crate_path())
 

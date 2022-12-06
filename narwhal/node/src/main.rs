@@ -34,10 +34,6 @@ use tracing::subscriber::set_global_default;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use worker::TrivialTransactionValidator;
 
-#[cfg(feature = "dhat-heap")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
-
 #[tokio::main]
 async fn main() -> Result<(), eyre::Report> {
     let matches = App::new(crate_name!())
