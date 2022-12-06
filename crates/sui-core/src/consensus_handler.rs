@@ -11,6 +11,7 @@ use narwhal_types::ConsensusOutput;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
+use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransaction;
 use tracing::{debug, instrument, warn};
 
@@ -69,12 +70,12 @@ impl ExecutionState for ConsensusHandler {
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         consensus_output: ConsensusOutput,
     ) {
-        let _scope = monitored_scope("HandleConsensusOutputFull");
+        let _scope = monitored_scope("HandleConsensusOutput");
         let mut sequenced_transactions = Vec::new();
         let mut seq = 0;
 
+        let round = consensus_output.sub_dag.round();
         for (cert, batches) in consensus_output.batches {
-            let round = cert.header.round;
             let author = cert.header.author.clone();
             let output_cert = Arc::new(cert);
             for batch in batches {
@@ -125,7 +126,7 @@ impl ExecutionState for ConsensusHandler {
                 .verify_consensus_transaction(sequenced_transaction)
             {
                 Ok(verified_transaction) => verified_transaction,
-                Err(()) => return,
+                Err(()) => continue,
             };
 
             self.state
@@ -154,6 +155,12 @@ pub struct SequencedConsensusTransaction {
     pub certificate: Arc<narwhal_types::Certificate>,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: ConsensusTransaction,
+}
+
+impl SequencedConsensusTransaction {
+    pub fn sender_authority(&self) -> AuthorityName {
+        (&self.certificate.header.author).into()
+    }
 }
 
 pub struct VerifiedSequencedConsensusTransaction(pub SequencedConsensusTransaction);

@@ -2153,21 +2153,20 @@ impl AuthorityState {
                     .map_err(|err| {
                         warn!(
                             "Ignoring malformed transaction (failed to verify) from {}: {:?}",
-                            transaction.certificate.header.author, err
+                            transaction.sender_authority(),
+                            err
                         );
                     })?;
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
-                if AuthorityName::from(&transaction.certificate.origin())
-                    != data.summary.auth_signature.authority
-                {
+                if transaction.sender_authority() != data.summary.auth_signature.authority {
                     warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, transaction.certificate.origin() );
                     return Err(());
                 }
                 data.verify(&self.committee()).map_err(|err|{
                     warn!(
                         "Ignoring malformed checkpoint signature (failed to verify) from {}, sequence {}: {:?}",
-                        transaction.certificate.header.author, data.summary.summary.sequence_number, err
+                        transaction.sender_authority(), data.summary.summary.sequence_number, err
                     );
                 })?;
             }
