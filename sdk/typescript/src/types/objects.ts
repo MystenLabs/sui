@@ -1,47 +1,80 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+  any,
+  boolean,
+  Infer,
+  literal,
+  number,
+  object,
+  optional,
+  record,
+  string,
+  union,
+} from 'superstruct';
 import { ObjectOwner } from './common';
 import { TransactionDigest } from './common';
+import {
+  ObjectIdStruct,
+  ObjectOwnerStruct,
+  TransactionDigestStruct,
+} from './shared';
 
-export type SuiObjectRef = {
+export const ObjectTypeStruct = union([
+  literal('moveObject'),
+  literal('package'),
+]);
+export type ObjectType = Infer<typeof ObjectTypeStruct>;
+
+export const SuiObjectRefStruct = object({
   /** Base64 string representing the object digest */
-  digest: TransactionDigest;
+  digest: TransactionDigestStruct,
   /** Hex code as string representing the object id */
-  objectId: string;
+  objectId: string(),
   /** Object version */
-  version: number;
-};
+  version: number(),
+});
+export type SuiObjectRef = Infer<typeof SuiObjectRefStruct>;
 
-export type SuiObjectInfo = SuiObjectRef & {
-  type: string;
-  owner: ObjectOwner;
-  previousTransaction: TransactionDigest;
-};
+export const SuiObjectInfoStruct = object({
+  ...SuiObjectRefStruct.schema,
+  type: string(),
+  owner: ObjectOwnerStruct,
+  previousTransaction: TransactionDigestStruct,
+});
+export type SuiObjectInfo = Infer<typeof SuiObjectInfoStruct>;
 
-export type ObjectContentFields = Record<string, any>;
+export const ObjectContentFieldsStruct = record(string(), any());
+export type ObjectContentFields = Infer<typeof ObjectContentFieldsStruct>;
 
-export type MovePackageContent = Record<string, string>;
+export const MovePackageContentStruct = record(string(), string());
+export type MovePackageContent = Infer<typeof MovePackageContentStruct>;
 
-export type SuiData = { dataType: ObjectType } & (
-  | SuiMoveObject
-  | SuiMovePackage
-);
-
-export type SuiMoveObject = {
+export const SuiMoveObjectStruct = object({
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
-  type: string;
+  type: string(),
   /** Fields and values stored inside the Move object */
-  fields: ObjectContentFields;
-  has_public_transfer?: boolean;
-};
+  fields: ObjectContentFieldsStruct,
+  has_public_transfer: optional(boolean()),
+});
+export type SuiMoveObject = Infer<typeof SuiMoveObjectStruct>;
 
-export const MIST_PER_SUI: BigInt = BigInt(1000000000);
-
-export type SuiMovePackage = {
+export const SuiMovePackageStruct = object({
   /** A mapping from module name to disassembled Move bytecode */
-  disassembled: MovePackageContent;
-};
+  disassembled: MovePackageContentStruct,
+});
+export type SuiMovePackage = Infer<typeof SuiMovePackageStruct>;
+
+export const SuiData = union([
+  object({
+    dataType: ObjectTypeStruct,
+    ...SuiMoveObjectStruct.schema,
+  }),
+  object({ dataType: ObjectTypeStruct, ...SuiMovePackageStruct.schema }),
+]);
+
+export const MIST_PER_SUI = BigInt(1000000000);
 
 export type SuiMoveFunctionArgTypesResponse = SuiMoveFunctionArgType[];
 
@@ -118,31 +151,37 @@ export type SuiMoveNormalizedStructType = {
   };
 };
 
-export type SuiObject = {
+export const SuiObjectStruct = object({
   /** The meat of the object */
-  data: SuiData;
+  data: SuiData,
   /** The owner of the object */
-  owner: ObjectOwner;
+  owner: ObjectOwnerStruct,
   /** The digest of the transaction that created or last mutated this object */
-  previousTransaction: TransactionDigest;
+  previousTransaction: TransactionDigestStruct,
   /**
    * The amount of SUI we would rebate if this object gets deleted.
    * This number is re-calculated each time the object is mutated based on
    * the present storage gas price.
    */
-  storageRebate: number;
-  reference: SuiObjectRef;
-};
+  storageRebate: number(),
+  reference: SuiObjectRefStruct,
+});
+export type SuiObject = Infer<typeof SuiObjectStruct>;
 
-export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
-export type ObjectType = 'moveObject' | 'package';
+export const ObjectStatusStruct = union([
+  literal('Exists'),
+  literal('NotExists'),
+  literal('Deleted'),
+]);
+export type ObjectStatus = Infer<typeof ObjectStatusStruct>;
 
 export type GetOwnedObjectsResponse = SuiObjectInfo[];
 
-export type GetObjectDataResponse = {
-  status: ObjectStatus;
-  details: SuiObject | ObjectId | SuiObjectRef;
-};
+export const GetObjectDataResponseStruct = object({
+  status: ObjectStatusStruct,
+  details: union([SuiObjectStruct, ObjectIdStruct, SuiObjectRefStruct]),
+});
+export type GetObjectDataResponse = Infer<typeof GetObjectDataResponseStruct>;
 
 export type ObjectDigest = string;
 export type ObjectId = string;
