@@ -17,13 +17,13 @@ pub struct TBlsIds {
 }
 
 impl TBlsIds {
-    pub fn new(stakes: &Vec<(AuthorityName, StakeUnit)>) -> Self {
-        let total_stake = stakes.into_iter().fold(0, |acc, x| acc + x.1);
+    pub fn new(stakes: &[(AuthorityName, StakeUnit)]) -> Self {
+        let total_stake = stakes.iter().fold(0, |acc, x| acc + x.1);
         // Indexes start from 1.
         let mut curr_index: u32 = 1;
         let mut result = HashMap::new();
         stakes
-            .into_iter()
+            .iter()
             .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
             .map(|(name, stake)| {
                 // Better to multiply before dividing, to improve precision.
@@ -34,17 +34,16 @@ impl TBlsIds {
                 if delta == 0.0 {
                     return;
                 }
-                // Next 2 lines are safe since:
+                // Next lines are safe since:
                 // - delta >= 1.0 because of the above check.
                 // - delta < max(u32) because stake/total_stake < 1.0 and MAX_NUM_OF_SHARES is u32.
-                let range: Vec<u32> = (curr_index..(curr_index + (delta as u32))).collect();
-                curr_index += delta as u32;
-                // Next unwrap is safe since we start from curr_index = 1;
-                let range = range
+                // - We start from curr_index = 1;
+                let range = (curr_index..(curr_index + (delta as u32)))
                     .into_iter()
                     .map(|i| NonZeroU32::new(i).unwrap())
                     .collect();
-                result.insert(name.clone(), range);
+                result.insert(*name, range);
+                curr_index += delta as u32;
             });
         TBlsIds {
             name_to_ids: result,
