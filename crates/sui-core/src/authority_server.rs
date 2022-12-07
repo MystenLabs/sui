@@ -5,7 +5,6 @@
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, SuiTxValidator},
-    metrics::start_timer,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -339,17 +338,19 @@ impl ValidatorService {
 
         let is_consensus_tx = transaction.contains_shared_object();
 
-        let _metrics_guard = start_timer(if is_consensus_tx {
-            metrics.handle_transaction_consensus_latency.clone()
+        let _metrics_guard = if is_consensus_tx {
+            metrics.handle_transaction_consensus_latency.start_timer()
         } else {
-            metrics.handle_transaction_non_consensus_latency.clone()
-        });
-        let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
+            metrics
+                .handle_transaction_non_consensus_latency
+                .start_timer()
+        };
+        let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
         let transaction = transaction.verify().tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
-        drop(tx_verif_metrics_guard);
+        tx_verif_metrics_guard.stop_and_record();
 
         let tx_digest = transaction.digest();
 
@@ -392,9 +393,9 @@ impl ValidatorService {
         }
 
         // 2) Verify cert signatures
-        let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
+        let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
         let certificate = certificate.verify(&state.committee())?;
-        drop(cert_verif_metrics_guard);
+        cert_verif_metrics_guard.stop_and_record();
 
         // 3) All certificates are sent to consensus (at least by some authorities)
         // For shared objects this will wait until either timeout or we have heard back from consensus.
