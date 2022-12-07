@@ -911,9 +911,12 @@ impl WalletContext {
             client.clone()
         } else {
             drop(read);
-            let client =
-                sui_sdk::embedded_gateway::SuiClient::new(&self.config.path().parent().unwrap())
-                    .await?;
+            let client = self
+                .config
+                .get_active_env()?
+                .create_rpc_client(self.request_timeout)
+                .await?;
+
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
                 println!("{}", format!("[warn] {e}").yellow().bold());

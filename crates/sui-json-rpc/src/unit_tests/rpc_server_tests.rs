@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::{path::Path, str::FromStr};
+use std::path::Path;
+
+#[cfg(not(msim))]
+use std::str::FromStr;
 
 use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
 use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
@@ -15,7 +17,6 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, SuiExecuteTransactionResponse, SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_sdk::SuiClient;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::gas_coin::GAS;
@@ -278,9 +279,10 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();
 
+    let client = context.get_client().await.unwrap();
+
     for address in cluster.accounts.iter() {
-        let objects = context
-            .client
+        let objects = client
             .read_api()
             .get_objects_owned_by_address(*address)
             .await
@@ -289,15 +291,13 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
         // Make some transactions
         for oref in &objects[..objects.len() - 1] {
-            let data = context
-                .client
+            let data = client
                 .transaction_builder()
                 .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
                 .await?;
             let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
 
-            let response = context
-                .client
+            let response = client
                 .quorum_driver()
                 .execute_transaction(
                     tx,
@@ -311,8 +311,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     }
 
     // test get_recent_transactions with smaller range
-    let tx = context
-        .client
+    let tx = client
         .read_api()
         .get_transactions(TransactionQuery::All, None, Some(3), Some(true))
         .await
@@ -320,8 +319,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(3, tx.data.len());
 
     // test get all transactions paged
-    let first_page = context
-        .client
+    let first_page = client
         .read_api()
         .get_transactions(TransactionQuery::All, None, Some(5), None)
         .await
@@ -330,8 +328,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert!(first_page.next_cursor.is_some());
 
     // test get all transactions in ascending order
-    let second_page = context
-        .client
+    let second_page = client
         .read_api()
         .get_transactions(TransactionQuery::All, first_page.next_cursor, None, None)
         .await
@@ -344,8 +341,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     all_txs_rev.reverse();
 
     // test get 10 latest transactions paged
-    let latest = context
-        .client
+    let latest = client
         .read_api()
         .get_transactions(TransactionQuery::All, None, Some(10), Some(true))
         .await
@@ -356,8 +352,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(all_txs_rev[0..10], latest.data);
 
     // test get from address txs in ascending order
-    let address_txs_asc = context
-        .client
+    let address_txs_asc = client
         .read_api()
         .get_transactions(
             TransactionQuery::FromAddress(cluster.accounts[0]),
@@ -370,8 +365,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(4, address_txs_asc.data.len());
 
     // test get from address txs in descending order
-    let address_txs_desc = context
-        .client
+    let address_txs_desc = client
         .read_api()
         .get_transactions(
             TransactionQuery::FromAddress(cluster.accounts[0]),
@@ -389,8 +383,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(data_asc, address_txs_desc.data);
 
     // test get_recent_transactions
-    let tx = context
-        .client
+    let tx = client
         .read_api()
         .get_transactions(TransactionQuery::All, None, Some(20), Some(true))
         .await
@@ -399,12 +392,8 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get_transaction
     for tx_digest in tx.data {
-        let response: SuiTransactionResponse = context
-            .client
-            .read_api()
-            .get_transaction(tx_digest)
-            .await
-            .unwrap();
+        let response: SuiTransactionResponse =
+            client.read_api().get_transaction(tx_digest).await.unwrap();
         assert!(tx_responses.iter().any(|effects| effects
             .effects
             .as_ref()

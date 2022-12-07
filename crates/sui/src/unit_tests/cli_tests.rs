@@ -150,7 +150,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 // fixing issue https://github.com/MystenLabs/sui/issues/6546
 #[tokio::test]
 async fn test_regression_6546() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
