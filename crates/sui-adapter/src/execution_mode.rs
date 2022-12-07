@@ -47,13 +47,9 @@ impl ExecutionMode for Normal {
         Ok(())
     }
 
-    fn empty_results() -> Self::ExecutionResults {
-        ()
-    }
+    fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_result(_: &mut Self::ExecutionResults, _: TransactionIndex, _: Self::ExecutionResult) {
-        ()
-    }
+    fn add_result(_: &mut Self::ExecutionResults, _: TransactionIndex, _: Self::ExecutionResult) {}
 }
 
 /// WARNING! Using this mode will bypass all normal checks around Move entry functions! This

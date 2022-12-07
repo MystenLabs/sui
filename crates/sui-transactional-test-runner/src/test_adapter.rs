@@ -548,7 +548,7 @@ impl<'a> SuiTestAdapter<'a> {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
                     "Transaction Effects Status: {}\nExecution Error: {}",
                     error,
-                    execution_error.err().expect(
+                    execution_error.expect_err(
                         "to have an execution error if a transaction's status is a failure"
                     )
                 ))))
