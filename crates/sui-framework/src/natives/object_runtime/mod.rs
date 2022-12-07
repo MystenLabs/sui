@@ -113,8 +113,8 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn new_id(&mut self, id: ObjectID) {
-        // remove from deleted_ids for the case in dynamic fields where the object was deleted and
-        // then re-added in a single transaction
+        // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
+        // and then re-added in a single transaction
         self.state.deleted_ids.remove(&id);
         // mark the id as new
         self.state.new_ids.insert(id, ());
@@ -256,7 +256,7 @@ impl ObjectRuntimeState {
             } = child_object_effect;
             if let Some(v) = loaded_version {
                 // remove if from new_ids if it was loaded for case in dynamic fields where the
-                // object was removed and then re-added in a single transaction
+                // Field object was removed and then re-added in a single transaction
                 self.new_ids.remove(&child);
                 loaded_child_objects.insert(child, v);
             }
