@@ -5,11 +5,13 @@
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
+use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Mutex;
 use std::time::Duration;
 use typed_store::metrics::SamplingInterval;
+use typed_store::rocks::be_fix_int_ser;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::traits::Map;
@@ -61,13 +63,35 @@ async fn macro_test() {
     let tbls_primary = Tables::open_tables_read_write(primary_path.clone(), None, None);
 
     // Write to both tables
-    let keys_vals_1 = (1..10).map(|i| (i.to_string(), i.to_string()));
+    let mut raw_key_bytes1 = 0;
+    let mut raw_value_bytes1 = 0;
+    let kv_range = 1..10;
+    for i in kv_range.clone() {
+        let key = i.to_string();
+        let value = i.to_string();
+        let k_buf = be_fix_int_ser::<String>(key.borrow()).unwrap();
+        let value_buf = bincode::serialize::<String>(value.borrow()).unwrap();
+        raw_key_bytes1 += k_buf.len();
+        raw_value_bytes1 += value_buf.len();
+    }
+    let keys_vals_1 = kv_range.map(|i| (i.to_string(), i.to_string()));
     tbls_primary
         .table1
         .multi_insert(keys_vals_1.clone())
         .expect("Failed to multi-insert");
 
-    let keys_vals_2 = (3..10).map(|i| (i, i.to_string()));
+    let mut raw_key_bytes2 = 0;
+    let mut raw_value_bytes2 = 0;
+    let kv_range = 3..10;
+    for i in kv_range.clone() {
+        let key = i;
+        let value = i.to_string();
+        let k_buf = be_fix_int_ser(key.borrow()).unwrap();
+        let value_buf = bincode::serialize::<String>(value.borrow()).unwrap();
+        raw_key_bytes2 += k_buf.len();
+        raw_value_bytes2 += value_buf.len();
+    }
+    let keys_vals_2 = kv_range.map(|i| (i, i.to_string()));
     tbls_primary
         .table2
         .multi_insert(keys_vals_2.clone())
@@ -91,6 +115,16 @@ async fn macro_test() {
     // Check the counts
     assert_eq!(9, tbls_secondary.count_keys("table1").unwrap());
     assert_eq!(7, tbls_secondary.count_keys("table2").unwrap());
+
+    // check raw byte sizes of key and values
+    let (count, key_bytes, value_bytes) = tbls_secondary.table_summary("table1").unwrap();
+    assert_eq!(9, count);
+    assert_eq!(raw_key_bytes1, key_bytes);
+    assert_eq!(raw_value_bytes1, value_bytes);
+    let (count, key_bytes, value_bytes) = tbls_secondary.table_summary("table2").unwrap();
+    assert_eq!(7, count);
+    assert_eq!(raw_key_bytes2, key_bytes);
+    assert_eq!(raw_value_bytes2, value_bytes);
 
     // Test all entries
     let m = tbls_secondary.dump("table1", 100, 0).unwrap();

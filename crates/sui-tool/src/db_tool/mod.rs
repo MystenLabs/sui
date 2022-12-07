@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::db_dump::{dump_table, list_tables, StoreName};
+use self::db_dump::{dump_table, list_tables, table_summary, StoreName};
 use clap::Parser;
 use std::path::PathBuf;
 use sui_types::base_types::EpochId;
@@ -13,6 +13,7 @@ pub mod db_dump;
 pub enum DbToolCommand {
     ListTables,
     Dump(Dump),
+    TableSummary(Dump),
 }
 
 #[derive(Parser)]
@@ -50,11 +51,28 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             d.page_size,
             d.page_number,
         ),
+        DbToolCommand::TableSummary(d) => {
+            print_db_table_summary(d.store_name, d.epoch, db_path, &d.table_name)
+        }
     }
 }
 
 pub fn print_db_all_tables(db_path: PathBuf) -> anyhow::Result<()> {
     list_tables(db_path)?.iter().for_each(|t| println!("{}", t));
+    Ok(())
+}
+
+pub fn print_db_table_summary(
+    store: StoreName,
+    epoch: Option<EpochId>,
+    path: PathBuf,
+    table_name: &str,
+) -> anyhow::Result<()> {
+    let (count_keys, key_bytes, value_bytes) = table_summary(store, epoch, path, table_name)?;
+    println!(
+        "Total keys = {}, key bytes = {}, value bytes = {}",
+        count_keys, key_bytes, value_bytes
+    );
     Ok(())
 }
 
