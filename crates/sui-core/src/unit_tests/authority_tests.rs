@@ -43,7 +43,6 @@ use sui_types::{
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
-use narwhal_types::Certificate;
 use sui_types::dynamic_field::DynamicFieldType;
 use tracing::info;
 
@@ -2457,8 +2456,16 @@ async fn test_store_revert_transfer_sui() {
         db.get_latest_parent_entry(gas_object_id).unwrap().unwrap(),
         (gas_object_ref, TransactionDigest::genesis()),
     );
-    assert!(db.get_owner_objects(recipient).unwrap().is_empty());
-    assert_eq!(db.get_owner_objects(sender).unwrap().len(), 1);
+    assert!(db
+        .get_owner_objects(Owner::AddressOwner(recipient))
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        db.get_owner_objects(Owner::AddressOwner(sender))
+            .unwrap()
+            .len(),
+        1
+    );
     assert!(db.get_certified_transaction(&tx_digest).unwrap().is_none());
     assert!(db.as_ref().get_effects(&tx_digest).is_err());
 }

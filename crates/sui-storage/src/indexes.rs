@@ -6,19 +6,31 @@
 
 use move_core_types::identifier::Identifier;
 use serde::{de::DeserializeOwned, Serialize};
+use tracing::debug;
+
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectInfo, ObjectRef};
+use sui_types::batch::TxSequenceNumber;
+use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::error::SuiResult;
+use sui_types::object::Owner;
 use typed_store::rocks::DBMap;
 use typed_store::rocks::DBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
 
-use sui_types::base_types::ObjectRef;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::batch::TxSequenceNumber;
-use sui_types::error::SuiResult;
-use sui_types::object::Owner;
-
 use crate::default_db_options;
+
+type OwnerIndexKey = (SuiAddress, ObjectID);
+type DynamicFieldKey = (ObjectID, ObjectID);
+
+pub struct ObjectIndexChanges {
+    pub deleted_owners: Vec<OwnerIndexKey>,
+    pub deleted_dynamic_fields: Vec<DynamicFieldKey>,
+    pub new_owners: Vec<(OwnerIndexKey, ObjectInfo)>,
+    pub new_dynamic_fields: Vec<(DynamicFieldKey, DynamicFieldInfo)>,
+}
 
 #[derive(DBMapUtils)]
 pub struct IndexStore {
@@ -53,6 +65,20 @@ pub struct IndexStore {
     /// Index from transaction digest to sequence number.
     #[default_options_override_fn = "transactions_seq_table_default_config"]
     transactions_seq: DBMap<TransactionDigest, TxSequenceNumber>,
+
+    /// This is an index of object references to currently existing objects, indexed by the
+    /// composite key of the SuiAddress of their owner and the object ID of the object.
+    /// This composite index allows an efficient iterator to list all objected currently owned
+    /// by a specific user, and their object reference.
+    #[default_options_override_fn = "owner_index_table_default_config"]
+    owner_index: DBMap<OwnerIndexKey, ObjectInfo>,
+
+    /// This is an index of object references to currently existing dynamic field object, indexed by the
+    /// composite key of the object ID of their parent and the object ID of the dynamic field object.
+    /// This composite index allows an efficient iterator to list all objects currently owned
+    /// by a specific object, and their object reference.
+    #[default_options_override_fn = "dynamic_field_index_table_default_config"]
+    dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
 }
 
 // These functions are used to initialize the DB tables
@@ -77,6 +103,12 @@ fn transactions_by_move_function_table_default_config() -> DBOptions {
 fn timestamps_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).1
 }
+fn owner_index_table_default_config() -> DBOptions {
+    default_db_options(None, Some(1_000_000)).0
+}
+fn dynamic_field_index_table_default_config() -> DBOptions {
+    default_db_options(None, Some(1_000_000)).0
+}
 
 impl IndexStore {
     pub fn index_tx(
@@ -85,6 +117,7 @@ impl IndexStore {
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
         move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
+        object_index_changes: ObjectIndexChanges,
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,
         timestamp_ms: u64,
@@ -133,6 +166,24 @@ impl IndexStore {
 
         let batch =
             batch.insert_batch(&self.timestamps, std::iter::once((*digest, timestamp_ms)))?;
+
+        // Owner index
+        let batch = batch.delete_batch(
+            &self.owner_index,
+            object_index_changes.deleted_owners.into_iter(),
+        )?;
+        let batch = batch.delete_batch(
+            &self.dynamic_field_index,
+            object_index_changes.deleted_dynamic_fields.into_iter(),
+        )?;
+        let batch = batch.insert_batch(
+            &self.owner_index,
+            object_index_changes.new_owners.into_iter(),
+        )?;
+        let batch = batch.insert_batch(
+            &self.dynamic_field_index,
+            object_index_changes.new_dynamic_fields.into_iter(),
+        )?;
 
         batch.write()?;
 
@@ -292,5 +343,51 @@ impl IndexStore {
         digest: &TransactionDigest,
     ) -> SuiResult<Option<TxSequenceNumber>> {
         Ok(self.transactions_seq.get(digest)?)
+    }
+
+    pub fn get_dynamic_fields(
+        &self,
+        object: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+        debug!(?object, "get_dynamic_fields");
+        let cursor = cursor.unwrap_or(ObjectID::ZERO);
+        Ok(self
+            .dynamic_field_index
+            .iter()
+            // The object id 0 is the smallest possible
+            .skip_to(&(object, cursor))?
+            .take_while(|((object_owner, _), _)| (object_owner == &object))
+            .map(|(_, object_info)| object_info)
+            .take(limit)
+            .collect())
+    }
+
+    pub fn get_dynamic_field_object_id(
+        &self,
+        object: ObjectID,
+        name: &str,
+    ) -> SuiResult<Option<ObjectID>> {
+        debug!(?object, "get_dynamic_field_object_id");
+        Ok(self
+            .dynamic_field_index
+            .iter()
+            // The object id 0 is the smallest possible
+            .skip_to(&(object, ObjectID::ZERO))?
+            .find(|((object_owner, _), info)| (object_owner == &object && info.name == name))
+            .map(|(_, object_info)| object_info.object_id))
+    }
+
+    pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
+        debug!(?owner, "get_owner_objects");
+        Ok(self
+            .owner_index
+            .iter()
+            // The object id 0 is the smallest possible
+            .skip_to(&(owner, ObjectID::ZERO))?
+            .take_while(|((object_owner, _), _)| (object_owner == &owner))
+            .map(|(_, object_info)| object_info)
+            .collect())
     }
 }

@@ -75,17 +75,19 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
+    // TODO: Remove this
+    // This is very expensive, it's only for backward compatibilities and should be removed asap.
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
     ) -> RpcResult<Vec<SuiObjectInfo>> {
-        let dynamic_fields: DynamicFieldPage =
-            self.get_dynamic_fields(object_id, None, None).await?;
+        let dynamic_fields = self
+            .state
+            .get_dynamic_fields(object_id, None, usize::MAX)
+            .map_err(|e| anyhow!("{e}"))?;
 
         let mut object_info = vec![];
-        for info in dynamic_fields.data {
-            // TODO: Remove this
-            // This is very expensive, it's only for backward compatibilities and should be removed asap.
+        for info in dynamic_fields {
             let object = self
                 .state
                 .get_object_read(&info.object_id)

@@ -31,10 +31,10 @@ use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{debug, error, instrument, warn, Instrument};
-use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
+use mysten_metrics::monitored_scope;
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
@@ -47,6 +47,7 @@ use sui_json_rpc_types::{
     SuiTransactionEffects,
 };
 use sui_simulator::nondeterministic;
+use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
@@ -56,10 +57,13 @@ use sui_storage::{
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
+use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::PastObjectRead;
+use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::storage::WriteKind;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -75,6 +79,7 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use typed_store::Map;
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
@@ -98,10 +103,6 @@ use crate::{
     transaction_manager::TransactionManager,
     transaction_streamer::TransactionStreamer,
 };
-use narwhal_types::ConsensusOutput;
-use sui_types::dynamic_field::DynamicFieldInfo;
-
-use sui_types::gas::GasCostSummary;
 
 use self::authority_store::ObjectKey;
 
@@ -1256,6 +1257,8 @@ impl AuthorityState {
         effects: &SignedTransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult {
+        let changes = self.process_object_index(effects)?;
+
         indexes.index_tx(
             cert.sender_address(),
             cert.data()
@@ -1274,10 +1277,160 @@ impl AuthorityState {
                 .move_calls()
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
+            changes,
             seq,
             digest,
             timestamp_ms,
         )
+    }
+
+    fn process_object_index(
+        &self,
+        effects: &SignedTransactionEffects,
+    ) -> Result<ObjectIndexChanges, SuiError> {
+        let mut deleted_owners = vec![];
+        let mut deleted_dynamic_fields = vec![];
+        for (id, version, _) in &effects.deleted {
+            match self.get_owner_at_version(id, *version)? {
+                Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
+                Owner::ObjectOwner(object_id) => {
+                    deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                }
+                _ => {}
+            }
+        }
+
+        let mut new_owners = vec![];
+        let mut new_dynamic_fields = vec![];
+
+        let modified_at_version = effects
+            .modified_at_versions
+            .iter()
+            .cloned()
+            .collect::<HashMap<_, _>>();
+
+        for (oref, owner, kind) in effects.all_mutated() {
+            let id = &oref.0;
+            // For mutated objects, retrieve old owner and delete old index if there is a owner change.
+            if let WriteKind::Mutate = kind {
+                let Some(old_version) = modified_at_version.get(id) else{
+                        error!("Error processing object owner index for tx [{}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest);
+                        continue;
+                    };
+                let Some(old_object) = self.database.get_object_by_key(id, *old_version)? else {
+                        error!("Error processing object owner index for tx [{}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest);
+                        continue;
+                    };
+                if &old_object.owner != owner {
+                    match old_object.owner {
+                        Owner::AddressOwner(addr) => {
+                            deleted_owners.push((addr, *id));
+                        }
+                        Owner::ObjectOwner(object_id) => {
+                            deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                        }
+                        _ => {}
+                    }
+                } else {
+                    // Owner is the same, nothing to update.
+                    continue;
+                }
+            }
+
+            match owner {
+                Owner::AddressOwner(addr) => {
+                    let Some(o) = self.database.get_object_by_key(id, oref.1)? else{
+                        continue;
+                    };
+
+                    let type_ = o
+                        .type_()
+                        .map(|type_| ObjectType::Struct(type_.clone()))
+                        .unwrap_or(ObjectType::Package);
+
+                    new_owners.push((
+                        (*addr, *id),
+                        ObjectInfo {
+                            object_id: *id,
+                            version: oref.1,
+                            digest: oref.2,
+                            type_,
+                            owner: *owner,
+                            previous_transaction: effects.transaction_digest,
+                        },
+                    ));
+                }
+                Owner::ObjectOwner(owner) => {
+                    let Some(df_info) = self.try_create_dynamic_field_info(oref)? else{
+                        continue;
+                    };
+                    new_dynamic_fields.push(((ObjectID::from(*owner), *id), df_info))
+                }
+                _ => {}
+            }
+        }
+
+        Ok(ObjectIndexChanges {
+            deleted_owners,
+            deleted_dynamic_fields,
+            new_owners,
+            new_dynamic_fields,
+        })
+    }
+
+    fn try_create_dynamic_field_info(
+        &self,
+        oref: &ObjectRef,
+    ) -> SuiResult<Option<DynamicFieldInfo>> {
+        // Skip if not a move object
+        let Some(move_object) = self
+            .database.get_object_by_key(&oref.0, oref.1)?.and_then(|o| o.data.try_as_move().cloned()) else {
+            return Ok(None);
+        };
+        // We only index dynamic field objects
+        if !DynamicFieldInfo::is_dynamic_field(&move_object.type_) {
+            return Ok(None);
+        }
+        let move_struct = move_object.to_move_struct_with_resolver(
+            ObjectFormatOptions::default(),
+            self.module_cache.as_ref(),
+        )?;
+
+        let Some((name, type_, object_id)) = DynamicFieldInfo::parse_move_object(&move_struct)? else{
+            return Ok(None)
+        };
+
+        Ok(Some(match type_ {
+            DynamicFieldType::DynamicObject => {
+                // Find the actual object from storage using the object id obtained from the wrapper.
+                let Some(object) = self.database.find_object_lt_or_eq_version(object_id, oref.1) else{
+                    return Err(SuiError::ObjectNotFound {
+                        object_id,
+                        version: Some(oref.1),
+                    })
+                };
+                let version = object.version();
+                let digest = object.digest();
+                let object_type = object.data.type_().unwrap();
+
+                DynamicFieldInfo {
+                    name,
+                    type_,
+                    object_type: object_type.to_string(),
+                    object_id,
+                    version,
+                    digest,
+                }
+            }
+            DynamicFieldType::DynamicField { .. } => DynamicFieldInfo {
+                name,
+                type_,
+                object_type: move_object.type_.type_params[1].to_string(),
+                object_id: oref.0,
+                version: oref.1,
+                digest: oref.2,
+            },
+        }))
     }
 
     #[instrument(level = "debug", skip_all, fields(seq=?seq, tx_digest=?digest), err)]
@@ -1863,8 +2016,26 @@ impl AuthorityState {
         }
     }
 
+    fn get_owner_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Owner, SuiError> {
+        self.database
+            .get_object_by_key(object_id, version)?
+            .ok_or(SuiError::ObjectNotFound {
+                object_id: *object_id,
+                version: Some(version),
+            })
+            .map(|o| o.owner)
+    }
+
     pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
-        self.database.get_owner_objects(owner)
+        if let Some(indexes) = &self.indexes {
+            indexes.get_owner_objects(owner)
+        } else {
+            Err(SuiError::IndexStoreNotAvailable)
+        }
     }
 
     pub fn get_dynamic_fields(
@@ -1873,7 +2044,11 @@ impl AuthorityState {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> SuiResult<Vec<DynamicFieldInfo>> {
-        self.database.get_dynamic_fields(owner, cursor, limit)
+        if let Some(indexes) = &self.indexes {
+            indexes.get_dynamic_fields(owner, cursor, limit)
+        } else {
+            Err(SuiError::IndexStoreNotAvailable)
+        }
     }
 
     pub fn get_dynamic_field_object_id(
@@ -1881,7 +2056,11 @@ impl AuthorityState {
         owner: ObjectID,
         name: &str,
     ) -> SuiResult<Option<ObjectID>> {
-        self.database.get_dynamic_field_object_id(owner, name)
+        if let Some(indexes) = &self.indexes {
+            indexes.get_dynamic_field_object_id(owner, name)
+        } else {
+            Err(SuiError::IndexStoreNotAvailable)
+        }
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
@@ -2144,7 +2323,7 @@ impl AuthorityState {
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
         self.database
-            .get_owner_objects(account)
+            .get_owner_objects(Owner::AddressOwner(account))
             .map(|object_ids| AccountInfoResponse {
                 object_ids: object_ids.into_iter().map(|id| id.into()).collect(),
                 owner: account,

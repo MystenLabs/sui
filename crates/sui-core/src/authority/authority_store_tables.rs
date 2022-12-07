@@ -7,7 +7,6 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
-use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;
@@ -31,17 +30,11 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "objects_table_default_config"]
     pub(crate) objects: DBMap<ObjectKey, Object>,
 
-    /// This is an index of object references to currently existing objects, indexed by the
+    /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
-    pub(crate) owner_index: DBMap<(SuiAddress, ObjectID), ObjectInfo>,
-
-    /// This is an index of object references to currently existing dynamic field object, indexed by the
-    /// composite key of the object ID of their parent and the object ID of the dynamic field object.
-    /// This composite index allows an efficient iterator to list all objects currently owned
-    /// by a specific object, and their object reference.
-    pub(crate) dynamic_field_index: DBMap<(ObjectID, ObjectID), DynamicFieldInfo>,
+    pub(crate) owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
@@ -137,6 +130,22 @@ impl AuthorityPerpetualTables {
             Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
             _ => Ok(None),
         }
+    }
+
+    // This is used by indexer to find the correct version of dynamic field child object.
+    // We do not store the version of the child object, but because of lamport timestamp,
+    // we know the child must have version number less then or eq to the parent.
+    pub fn find_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        let Ok(iter) = self.objects
+            .iter()
+            .skip_prior_to(&ObjectKey(object_id, version))else {
+            return None
+        };
+        iter.reverse().next().map(|(_, o)| o)
     }
 
     pub fn get_latest_parent_entry(

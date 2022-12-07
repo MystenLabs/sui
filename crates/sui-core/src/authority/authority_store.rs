@@ -8,10 +8,7 @@ use std::sync::Arc;
 use std::{fmt::Debug, path::PathBuf};
 
 use arc_swap::ArcSwap;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -25,7 +22,6 @@ use sui_storage::{
     LockService,
 };
 use sui_types::crypto::AuthoritySignInfo;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::object::Owner;
 use sui_types::storage::ChildObjectResolver;
@@ -67,8 +63,6 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
-
-    module_cache: RwLock<BTreeMap<ModuleId, Arc<CompiledModule>>>,
 }
 
 impl AuthorityStore {
@@ -132,7 +126,6 @@ impl AuthorityStore {
             path: path.into(),
             db_options,
             effects_notify_read: NotifyRead::new(),
-            module_cache: Default::default(),
         };
         // Only initialize an empty database.
         if store
@@ -217,7 +210,7 @@ impl AuthorityStore {
     }
 
     // Methods to read the store
-    pub fn get_owner_objects(&self, owner: SuiAddress) -> Result<Vec<ObjectInfo>, SuiError> {
+    pub fn get_owner_objects(&self, owner: Owner) -> Result<Vec<ObjectInfo>, SuiError> {
         debug!(?owner, "get_owner_objects");
         Ok(self.get_owner_objects_iterator(owner)?.collect())
     }
@@ -236,42 +229,6 @@ impl AuthorityStore {
             .skip_to(&(owner, ObjectID::ZERO))?
             .take_while(move |((object_owner, _), _)| (object_owner == &owner))
             .map(|(_, object_info)| object_info))
-    }
-
-    pub fn get_dynamic_fields(
-        &self,
-        object: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<DynamicFieldInfo>, SuiError> {
-        debug!(?object, "get_dynamic_fields");
-        let cursor = cursor.unwrap_or(ObjectID::ZERO);
-        Ok(self
-            .perpetual_tables
-            .dynamic_field_index
-            .iter()
-            // The object id 0 is the smallest possible
-            .skip_to(&(object, cursor))?
-            .take_while(|((object_owner, _), _)| (object_owner == &object))
-            .map(|(_, object_info)| object_info)
-            .take(limit)
-            .collect())
-    }
-
-    pub fn get_dynamic_field_object_id(
-        &self,
-        object: ObjectID,
-        name: &str,
-    ) -> Result<Option<ObjectID>, SuiError> {
-        debug!(?object, "get_dynamic_field_object_id");
-        Ok(self
-            .perpetual_tables
-            .dynamic_field_index
-            .iter()
-            // The object id 0 is the smallest possible
-            .skip_to(&(object, ObjectID::ZERO))?
-            .find(|((object_owner, _), info)| (object_owner == &object && info.name == name))
-            .map(|(_, object_info)| object_info.object_id))
     }
 
     pub fn get_object_by_key(
@@ -608,24 +565,10 @@ impl AuthorityStore {
 
         // Update the index
         if object.get_single_owner().is_some() {
-            match object.owner {
-                Owner::AddressOwner(addr) => self
-                    .perpetual_tables
-                    .owner_index
-                    .insert(&(addr, object_ref.0), &ObjectInfo::new(&object_ref, object))?,
-                Owner::ObjectOwner(object_id) => {
-                    if let Some(info) = self.try_create_dynamic_field_info(
-                        &object_ref,
-                        object,
-                        &Default::default(),
-                    )? {
-                        self.perpetual_tables
-                            .dynamic_field_index
-                            .insert(&(ObjectID::from(object_id), object_ref.0), &info)?
-                    }
-                }
-                _ => {}
-            }
+            self.perpetual_tables.owner_index.insert(
+                &(object.owner, object_ref.0),
+                &ObjectInfo::new(&object_ref, object),
+            )?;
             // Only initialize lock for address owned objects.
             if !object.is_child_object() {
                 self.lock_service
@@ -633,72 +576,13 @@ impl AuthorityStore {
                     .await?;
             }
         }
+
         // Update the parent
         self.perpetual_tables
             .parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
 
         Ok(())
-    }
-
-    fn try_create_dynamic_field_info(
-        &self,
-        oref: &ObjectRef,
-        o: &Object,
-        uncommitted_objects: &BTreeMap<ObjectID, &Object>,
-    ) -> SuiResult<Option<DynamicFieldInfo>> {
-        // Skip if not a move object
-        let Some(move_object) = o.data.try_as_move() else {
-            return Ok(None);
-        };
-        // We only index dynamic field objects
-        if !DynamicFieldInfo::is_dynamic_field(&move_object.type_) {
-            return Ok(None);
-        }
-        let move_struct =
-            move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), &self)?;
-
-        let Some((name, type_, object_id)) = DynamicFieldInfo::parse_move_object(&move_struct)? else{
-            return Ok(None)
-        };
-
-        Ok(Some(match type_ {
-            DynamicFieldType::DynamicObject => {
-                // Find the actual object from storage using the object id obtained from the wrapper.
-                let (object_type, version, digest) =
-                    if let Some(o) = uncommitted_objects.get(&object_id) {
-                        o.data
-                            .type_()
-                            .map(|type_| (type_.clone(), o.version(), o.digest()))
-                    } else if let Ok(Some(o)) = self.get_object(&object_id) {
-                        o.data
-                            .type_()
-                            .map(|type_| (type_.clone(), o.version(), o.digest()))
-                    } else {
-                        None
-                    }
-                    .ok_or_else(|| SuiError::ObjectDeserializationError {
-                        error: format!("Cannot found data for dynamic object {object_id}"),
-                    })?;
-
-                DynamicFieldInfo {
-                    name,
-                    type_,
-                    object_type: object_type.to_string(),
-                    object_id,
-                    version,
-                    digest,
-                }
-            }
-            DynamicFieldType::DynamicField { .. } => DynamicFieldInfo {
-                name,
-                type_,
-                object_type: move_object.type_.type_params[1].to_string(),
-                object_id: oref.0,
-                version: oref.1,
-                digest: oref.2,
-            },
-        }))
     }
 
     /// This function is used by the bench.rs script, and should not be used in other contexts
@@ -711,38 +595,6 @@ impl AuthorityStore {
             .map(|o| (o.compute_object_reference(), o))
             .collect();
 
-        let (owner_insert, dynamic_field_insert): (Vec<_>, Vec<_>) = ref_and_objects
-            .iter()
-            .map(|(object_ref, o)| match o.owner {
-                Owner::AddressOwner(address) => (
-                    Some(((address, o.id()), ObjectInfo::new(object_ref, o))),
-                    None,
-                ),
-                Owner::ObjectOwner(object_id) => (
-                    None,
-                    Some(((ObjectID::from(object_id), o.id()), (object_ref, o))),
-                ),
-                _ => (None, None),
-            })
-            .unzip();
-
-        let owner_insert = owner_insert.into_iter().flatten();
-
-        let uncommitted_objects = ref_and_objects
-            .iter()
-            .map(|((id, ..), o)| (*id, **o))
-            .collect();
-
-        let dynamic_field_insert = dynamic_field_insert
-            .into_iter()
-            .flatten()
-            .flat_map(|(key, (oref, o))| {
-                self.try_create_dynamic_field_info(oref, o, &uncommitted_objects)
-                    .transpose()
-                    .map(|info| info.map(|info| (key, info)))
-            })
-            .collect::<SuiResult<Vec<_>>>()?;
-
         batch
             .insert_batch(
                 &self.perpetual_tables.objects,
@@ -750,10 +602,11 @@ impl AuthorityStore {
                     .iter()
                     .map(|(oref, o)| (ObjectKey::from(oref), **o)),
             )?
-            .insert_batch(&self.perpetual_tables.owner_index, owner_insert)?
             .insert_batch(
-                &self.perpetual_tables.dynamic_field_index,
-                dynamic_field_insert,
+                &self.perpetual_tables.owner_index,
+                ref_and_objects
+                    .iter()
+                    .map(|(oref, o)| ((o.owner, oref.0), ObjectInfo::new(oref, o))),
             )?
             .insert_batch(
                 &self.perpetual_tables.parent_sync,
@@ -969,7 +822,7 @@ impl AuthorityStore {
         // For wrapped objects, although their owners technically didn't change, we will lose track
         // of them and there is no guarantee on their owner in the future. Hence we treat them
         // the same as deleted.
-        let (old_object_owners, old_dynamic_fields): (Vec<_>, Vec<_>) =
+        let old_object_owners =
             deleted
                 .iter()
                 // We need to call get() on objects because some object that were just deleted may not
@@ -983,24 +836,11 @@ impl AuthorityStore {
                         }
                         _ => None,
                     },
-                ))
-                .map(|(owner, id)| match owner {
-                    Owner::AddressOwner(address) => (Some((address, id)), None),
-                    Owner::ObjectOwner(object_id) => (None, Some((ObjectID::from(object_id), id))),
-                    _ => (None, None),
-                })
-                .unzip();
-
-        let old_object_owners = old_object_owners.into_iter().flatten();
-        let old_dynamic_fields = old_dynamic_fields.into_iter().flatten();
+                ));
 
         // Delete the old owner index entries
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.owner_index, old_object_owners)?;
-        write_batch = write_batch.delete_batch(
-            &self.perpetual_tables.dynamic_field_index,
-            old_dynamic_fields,
-        )?;
 
         // Index the certificate by the objects mutated
         write_batch = write_batch.insert_batch(
@@ -1028,40 +868,20 @@ impl AuthorityStore {
                 )
             }),
         )?;
-        let uncommitted_objects = written.iter().map(|(id, (_, o, _))| (*id, o)).collect();
+
         // Update the indexes of the objects written
-        let (owner_written, dynamic_field_written): (Vec<_>, Vec<_>) = written
-            .iter()
-            .map(|(id, (object_ref, new_object, _))| match new_object.owner {
-                Owner::AddressOwner(address) => (
-                    Some(((address, *id), ObjectInfo::new(object_ref, new_object))),
-                    None,
-                ),
-                Owner::ObjectOwner(object_id) => (
-                    None,
-                    Some(((ObjectID::from(object_id), *id), (object_ref, new_object))),
-                ),
-                _ => (None, None),
-            })
-            .unzip();
-
-        let owner_written = owner_written.into_iter().flatten();
-        let dynamic_field_written = dynamic_field_written
-            .into_iter()
-            .flatten()
-            .flat_map(|(key, (oref, o))| {
-                self.try_create_dynamic_field_info(oref, o, &uncommitted_objects)
-                    .transpose()
-                    .map(|info| info.map(|info| (key, info)))
-            })
-            .collect::<SuiResult<Vec<_>>>()?;
-
-        write_batch =
-            write_batch.insert_batch(&self.perpetual_tables.owner_index, owner_written)?;
         write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.dynamic_field_index,
-            dynamic_field_written,
+            &self.perpetual_tables.owner_index,
+            written
+                .iter()
+                .filter_map(|(_id, (object_ref, new_object, _kind))| {
+                    trace!(?object_ref, owner =? new_object.owner, "Updating owner_index");
+                    new_object
+                        .get_owner_and_id()
+                        .map(|owner_id| (owner_id, ObjectInfo::new(object_ref, new_object)))
+                }),
         )?;
+
         // Insert each output object into the stores
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.objects,
@@ -1177,82 +997,61 @@ impl AuthorityStore {
         // the older version, and then rewrite the entry with the old object info.
         // TODO: Validators should not need to maintain owner_index.
         // This is dependent on https://github.com/MystenLabs/sui/issues/2629.
-        let (owners_to_delete, dynamic_field_to_delete): (Vec<_>, Vec<_>) = effects
+        let owners_to_delete = effects
             .created
             .iter()
             .chain(effects.unwrapped.iter())
             .chain(effects.mutated.iter())
-            .map(|((id, _, _), owner)| match owner {
-                Owner::AddressOwner(addr) => (Some((*addr, *id)), None),
-                Owner::ObjectOwner(object_id) => (None, Some((ObjectID::from(*object_id), *id))),
-                _ => (None, None),
-            })
-            .unzip();
-
-        let owners_to_delete = owners_to_delete.into_iter().flatten();
-        let dynamic_field_to_delete = dynamic_field_to_delete.into_iter().flatten();
-
+            .map(|((id, _, _), owner)| (*owner, *id));
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.owner_index, owners_to_delete)?;
-        write_batch = write_batch.delete_batch(
-            &self.perpetual_tables.dynamic_field_index,
-            dynamic_field_to_delete,
-        )?;
+
         let modified_object_keys = effects
             .modified_at_versions
             .iter()
             .map(|(id, version)| ObjectKey(*id, *version));
 
-        let (old_objects_and_locks, old_dynamic_fields): (Vec<_>, Vec<_>) = self
+        let (old_modified_objects, old_locks): (Vec<_>, Vec<_>) = self
             .perpetual_tables
             .objects
             .multi_get(modified_object_keys)?
             .into_iter()
-            .map(|obj_opt| {
+            .filter_map(|obj_opt| {
                 let obj = obj_opt.expect("Older object version not found");
-                match obj.owner {
-                    Owner::AddressOwner(addr) => {
-                        let oref = obj.compute_object_reference();
-                        (
-                            Some((((addr, obj.id()), ObjectInfo::new(&oref, &obj)), oref)),
-                            None,
-                        )
-                    }
-                    Owner::ObjectOwner(object_id) => {
-                        (None, Some(((ObjectID::from(object_id), obj.id()), obj)))
-                    }
-                    _ => (None, None),
+
+                if obj.is_immutable() {
+                    return None;
                 }
+
+                let obj_ref = obj.compute_object_reference();
+                Some((
+                    ((obj.owner, obj.id()), ObjectInfo::new(&obj_ref, &obj)),
+                    obj.is_address_owned().then_some(obj_ref),
+                ))
             })
             .unzip();
 
-        let (old_modified_objects, old_locks): (Vec<_>, Vec<_>) =
-            old_objects_and_locks.into_iter().flatten().unzip();
-        let old_dynamic_fields = old_dynamic_fields
-            .into_iter()
-            .flatten()
-            .flat_map(|(key, o)| {
-                self.try_create_dynamic_field_info(
-                    &o.compute_object_reference(),
-                    &o,
-                    &Default::default(),
-                )
-                .transpose()
-                .map(|info| info.map(|info| (key, info)))
-            })
-            .collect::<SuiResult<Vec<_>>>()?;
+        let old_locks: Vec<_> = old_locks.into_iter().flatten().collect();
 
         write_batch =
             write_batch.insert_batch(&self.perpetual_tables.owner_index, old_modified_objects)?;
-        write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.dynamic_field_index,
-            old_dynamic_fields,
-        )?;
 
         write_batch.write()?;
 
         self.lock_service.initialize_locks(&old_locks, true).await?;
         Ok(())
+    }
+    /// Return the object with version less then or eq to the provided seq number.
+    /// This is used by indexer to find the correct version of dynamic field child object.
+    /// We do not store the version of the child object, but because of lamport timestamp,
+    /// we know the child must have version number less then or eq to the parent.
+    pub fn find_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        self.perpetual_tables
+            .find_object_lt_or_eq_version(object_id, version)
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used
@@ -1635,30 +1434,6 @@ impl ModuleResolver for AuthorityStore {
                     .get(module_id.name().as_str())
                     .cloned()
             }))
-    }
-}
-
-impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> GetModule for &SuiDataStore<S> {
-    type Error = SuiError;
-    type Item = Arc<CompiledModule>;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
-        if let Some(compiled_module) = self.module_cache.read().get(id) {
-            return Ok(Some(compiled_module.clone()));
-        }
-
-        if let Some(module_bytes) = self.get_module(id)? {
-            let module = Arc::new(CompiledModule::deserialize(&module_bytes).map_err(|e| {
-                SuiError::ModuleDeserializationFailure {
-                    error: e.to_string(),
-                }
-            })?);
-
-            self.module_cache.write().insert(id.clone(), module.clone());
-            Ok(Some(module))
-        } else {
-            Ok(None)
-        }
     }
 }
 
