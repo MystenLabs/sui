@@ -350,14 +350,13 @@ impl PrimaryNodeDetails {
         let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone());
 
         // create the networking
-        let (network, primary_receiver_controller, worker_receiver_controller) =
-            create_primary_networking(
-                &self.key_pair.copy(),
-                &self.network_key_pair.copy(),
-                self.committee.clone(),
-                self.worker_cache.clone(),
-                &registry,
-            );
+        let primary_network = create_primary_networking(
+            &self.key_pair.copy(),
+            &self.network_key_pair.copy(),
+            self.committee.clone(),
+            self.worker_cache.clone(),
+            &registry,
+        );
 
         let mut primary_handlers = Node::spawn_primary(
             self.key_pair.copy(),
@@ -370,9 +369,9 @@ impl PrimaryNodeDetails {
             /* execution_state */
             Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
             &registry,
-            network,
-            primary_receiver_controller,
-            worker_receiver_controller,
+            primary_network.network,
+            primary_network.primary_receiver_controller,
+            primary_network.worker_receiver_controller,
         )
         .await
         .unwrap();

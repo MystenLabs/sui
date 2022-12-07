@@ -87,14 +87,13 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn Primary 1
     let registry_1 = Registry::new();
-    let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
-        create_primary_networking(
-            &signer_1,
-            &authority_1.network_keypair().copy(),
-            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-            worker_cache.clone(),
-            &registry_1,
-        );
+    let primary_network = create_primary_networking(
+        &signer_1,
+        &authority_1.network_keypair().copy(),
+        Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+        worker_cache.clone(),
+        &registry_1,
+    );
 
     Primary::spawn(
         name_1.clone(),
@@ -120,9 +119,9 @@ async fn get_network_peers_from_admin_server() {
         tx_feedback,
         &registry_1,
         None,
-        primary_receiver_controller_1,
-        worker_receiver_controller_1,
-        network_1,
+        primary_network.primary_receiver_controller,
+        primary_network.worker_receiver_controller,
+        primary_network.network,
     );
 
     // Wait for tasks to start
@@ -214,14 +213,13 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn Primary 2
     let registry_2 = Registry::new();
-    let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
-        create_primary_networking(
-            &signer_2,
-            &authority_2.network_keypair().copy(),
-            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-            worker_cache.clone(),
-            &registry_2,
-        );
+    let primary_network_2 = create_primary_networking(
+        &signer_2,
+        &authority_2.network_keypair().copy(),
+        Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+        worker_cache.clone(),
+        &registry_2,
+    );
 
     Primary::spawn(
         name_2.clone(),
@@ -247,9 +245,9 @@ async fn get_network_peers_from_admin_server() {
         tx_feedback_2,
         &registry_2,
         None,
-        primary_receiver_controller_2,
-        worker_receiver_controller_2,
-        network_2,
+        primary_network_2.primary_receiver_controller,
+        primary_network_2.worker_receiver_controller,
+        primary_network_2.network,
     );
 
     // Wait for tasks to start

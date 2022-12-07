@@ -85,7 +85,10 @@ impl ExecutionState for SimpleExecutionState {
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
+        if transaction >= epoch
+            && execution_indices.next_certificate_index % 3 == 0
+            && execution_indices.next_certificate_index >= 20
+        {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
@@ -163,10 +166,10 @@ async fn run_client(
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn restart() {
-    telemetry_subscribers::init_for_testing();
+    console_subscriber::init();
+    // telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -195,8 +198,10 @@ async fn restart() {
         let worker_cache = worker_cache.clone();
 
         let parameters = Parameters {
-            batch_size: 200,
-            max_header_num_of_batches: 1,
+            batch_size: 200_000,
+            max_header_delay: Duration::from_secs(2),
+            max_header_num_of_batches: 10,
+            header_num_of_batches_threshold: 10,
             ..Parameters::default()
         };
 
@@ -329,14 +334,13 @@ async fn epoch_change() {
 
         // create networking
         let registry = Registry::new();
-        let (network, primary_receiver_controller, worker_receiver_controller) =
-            create_primary_networking(
-                &a.keypair().copy(),
-                &a.network_keypair().copy(),
-                Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-                worker_cache.clone(),
-                &registry,
-            );
+        let primary_network = create_primary_networking(
+            &a.keypair().copy(),
+            &a.network_keypair().copy(),
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            &registry,
+        );
 
         let _primary_handles = Node::spawn_primary(
             a.keypair().copy(),
@@ -348,9 +352,9 @@ async fn epoch_change() {
             /* consensus */ true,
             execution_state,
             &registry,
-            network,
-            primary_receiver_controller,
-            worker_receiver_controller,
+            primary_network.network,
+            primary_network.primary_receiver_controller,
+            primary_network.worker_receiver_controller,
         )
         .await
         .unwrap();

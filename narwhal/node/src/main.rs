@@ -240,14 +240,13 @@ async fn run(
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
             // spawn primary networking
-            let (network, primary_receiver_controller, worker_receiver_controller) =
-                create_primary_networking(
-                    &primary_keypair,
-                    &primary_network_keypair,
-                    committee.clone(),
-                    worker_cache.clone(),
-                    &registry,
-                );
+            let primary_network = create_primary_networking(
+                &primary_keypair,
+                &primary_network_keypair,
+                committee.clone(),
+                worker_cache.clone(),
+                &registry,
+            );
 
             // pass it down to the primary node
             Node::spawn_primary(
@@ -261,9 +260,9 @@ async fn run(
                 /* execution_state */
                 Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
                 &registry,
-                network,
-                primary_receiver_controller,
-                worker_receiver_controller,
+                primary_network.network,
+                primary_network.primary_receiver_controller,
+                primary_network.worker_receiver_controller,
             )
             .await?
         }

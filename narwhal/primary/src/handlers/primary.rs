@@ -147,8 +147,7 @@ impl PrimaryReceiverController {
                     results?;
                     break
                 },
-                result = rx_narwhal_round_updates.changed() => {
-                    result.unwrap();
+                Ok(_result) = rx_narwhal_round_updates.changed() => {
                     let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
                         narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,

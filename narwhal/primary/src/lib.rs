@@ -42,5 +42,5 @@ pub use crate::{
     handlers::WorkerReceiverHandler,
     metrics::PrimaryChannelMetrics,
     primary::create_primary_networking,
-    primary::{NetworkModel, Primary, CHANNEL_CAPACITY},
+    primary::{NetworkModel, Primary, PrimaryNetwork, CHANNEL_CAPACITY},
 };

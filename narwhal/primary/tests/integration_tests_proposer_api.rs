@@ -99,14 +99,13 @@ async fn test_rounds_errors() {
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     let registry = Registry::new();
-    let (network, primary_receiver_controller, worker_receiver_controller) =
-        create_primary_networking(
-            &keypair.copy(),
-            &network_keypair,
-            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-            worker_cache.clone(),
-            &registry,
-        );
+    let primary_network = create_primary_networking(
+        &keypair.copy(),
+        &network_keypair,
+        Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+        worker_cache.clone(),
+        &registry,
+    );
 
     Primary::spawn(
         name.clone(),
@@ -132,9 +131,9 @@ async fn test_rounds_errors() {
         tx_feedback,
         &registry,
         None,
-        primary_receiver_controller,
-        worker_receiver_controller,
-        network,
+        primary_network.primary_receiver_controller,
+        primary_network.worker_receiver_controller,
+        primary_network.network,
     );
 
     // AND Wait for tasks to start
@@ -199,14 +198,13 @@ async fn test_rounds_return_successful_response() {
     let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 
     let registry = Registry::new();
-    let (network, primary_receiver_controller, worker_receiver_controller) =
-        create_primary_networking(
-            &keypair.copy(),
-            &author.network_keypair().copy(),
-            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-            worker_cache.clone(),
-            &registry,
-        );
+    let primary_network = create_primary_networking(
+        &keypair.copy(),
+        &author.network_keypair().copy(),
+        Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+        worker_cache.clone(),
+        &registry,
+    );
 
     Primary::spawn(
         name.clone(),
@@ -229,9 +227,9 @@ async fn test_rounds_return_successful_response() {
         tx_feedback,
         &registry,
         None,
-        primary_receiver_controller,
-        worker_receiver_controller,
-        network,
+        primary_network.primary_receiver_controller,
+        primary_network.worker_receiver_controller,
+        primary_network.network,
     );
 
     // AND Wait for tasks to start
@@ -365,14 +363,13 @@ async fn test_node_read_causal_signed_certificates() {
 
     // Spawn Primary 1 that we will be interacting with.
     let registry_1 = Registry::new();
-    let (network_1, primary_receiver_controller_1, worker_receiver_controller_1) =
-        create_primary_networking(
-            &keypair_1.copy(),
-            &authority_1.network_keypair().copy(),
-            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-            worker_cache.clone(),
-            &registry_1,
-        );
+    let primary_network_1 = create_primary_networking(
+        &keypair_1.copy(),
+        &authority_1.network_keypair().copy(),
+        Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+        worker_cache.clone(),
+        &registry_1,
+    );
 
     Primary::spawn(
         name_1.clone(),
@@ -395,9 +392,9 @@ async fn test_node_read_causal_signed_certificates() {
         tx_feedback,
         &registry_1,
         None,
-        primary_receiver_controller_1,
-        worker_receiver_controller_1,
-        network_1,
+        primary_network_1.primary_receiver_controller,
+        primary_network_1.worker_receiver_controller,
+        primary_network_1.network,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -418,14 +415,13 @@ async fn test_node_read_causal_signed_certificates() {
 
     // Spawn Primary 2
     let registry_2 = Registry::new();
-    let (network_2, primary_receiver_controller_2, worker_receiver_controller_2) =
-        create_primary_networking(
-            &keypair_2.copy(),
-            &authority_2.network_keypair().copy(),
-            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-            worker_cache.clone(),
-            &registry_2,
-        );
+    let primary_network_2 = create_primary_networking(
+        &keypair_2.copy(),
+        &authority_2.network_keypair().copy(),
+        Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+        worker_cache.clone(),
+        &registry_2,
+    );
 
     Primary::spawn(
         name_2.clone(),
@@ -451,9 +447,9 @@ async fn test_node_read_causal_signed_certificates() {
         tx_feedback_2,
         &registry_2,
         None,
-        primary_receiver_controller_2,
-        worker_receiver_controller_2,
-        network_2,
+        primary_network_2.primary_receiver_controller,
+        primary_network_2.worker_receiver_controller,
+        primary_network_2.network,
     );
 
     // Wait for tasks to start

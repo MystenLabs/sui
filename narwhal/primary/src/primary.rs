@@ -29,7 +29,8 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
-use network::metrics::{MetricsMakeCallbackHandler, NetworkMetrics};
+use mysten_metrics::spawn_monitored_task;
+use network::metrics::{MetricsMakeCallbackHandler, NetworkConnectionMetrics, NetworkMetrics};
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::collections::HashMap;
@@ -112,10 +113,7 @@ impl Primary {
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
-        //let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
-        //let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
-        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
         let (tx_our_digests, rx_our_digests) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -219,58 +217,6 @@ impl Primary {
             payload_store: payload_store.clone(),
             our_workers,
         })));
-
-        let mut peer_types = HashMap::new();
-
-        // Add my workers
-        for worker in worker_cache.load().our_workers(&name).unwrap() {
-            let (peer_id, address) = Self::add_peer_in_network(
-                &network,
-                worker.name,
-                worker
-                    .internal_worker_address
-                    .as_ref()
-                    .unwrap_or(&worker.worker_address),
-            );
-            peer_types.insert(peer_id, "our_worker".to_string());
-            info!(
-                "Adding our worker with peer id {} and address {}",
-                peer_id, address
-            );
-        }
-
-        // Add others workers
-        for (_, worker) in worker_cache.load().others_workers(&name) {
-            let (peer_id, address) =
-                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
-            peer_types.insert(peer_id, "other_worker".to_string());
-            info!(
-                "Adding others worker with peer id {} and address {}",
-                peer_id, address
-            );
-        }
-
-        // Add other primaries
-        let primaries = committee
-            .load()
-            .others_primaries(&name)
-            .into_iter()
-            .map(|(_, address, network_key)| (network_key, address));
-
-        for (public_key, address) in primaries {
-            let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
-            peer_types.insert(peer_id, "other_primary".to_string());
-            info!(
-                "Adding others primaries with peer id {} and address {}",
-                peer_id, address
-            );
-        }
-
-        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.downgrade(),
-            network_connection_metrics,
-            peer_types,
-        );
 
         let admin_handles = network::admin::start_admin_server(
             parameters
@@ -384,6 +330,22 @@ impl Primary {
             node_metrics,
         );
 
+        // spawn a task to swap the controllers in network when shutdown
+        let mut rx_reconfigure = tx_reconfigure.subscribe();
+        let shutdown_monitor_handle = spawn_monitored_task!(async move {
+            while (rx_reconfigure.changed().await).is_ok() {
+                let message = rx_reconfigure.borrow().clone();
+                if let ReconfigureNotification::Shutdown = message {
+                    // swap the handlers
+                    primary_receiver_controller.swap(None);
+                    worker_receiver_controller.swap(None);
+                    info!("Swapped the network handlers");
+                    break;
+                }
+            }
+            info!("Network swapper ended");
+        });
+
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
             name.clone(),
@@ -453,7 +415,7 @@ impl Primary {
             certificate_fetcher_handle,
             proposer_handle,
             state_handler_handle,
-            connection_monitor_handle,
+            shutdown_monitor_handle,
         ];
 
         handles.extend(admin_handles);
@@ -464,23 +426,13 @@ impl Primary {
 
         handles
     }
+}
 
-    fn add_peer_in_network(
-        network: &Network,
-        peer_name: NetworkPublicKey,
-        address: &Multiaddr,
-    ) -> (PeerId, Address) {
-        let peer_id = PeerId(peer_name.0.to_bytes());
-        let address = network::multiaddr_to_address(address).unwrap();
-        let peer_info = PeerInfo {
-            peer_id,
-            affinity: anemo::types::PeerAffinity::High,
-            address: vec![address.clone()],
-        };
-        network.known_peers().insert(peer_info);
-
-        (peer_id, address)
-    }
+pub struct PrimaryNetwork {
+    pub network: Network,
+    pub primary_receiver_controller: Arc<ArcSwapOption<PrimaryReceiverController>>,
+    pub worker_receiver_controller: Arc<ArcSwapOption<WorkerReceiverController>>,
+    pub connection_monitor_handle: JoinHandle<()>,
 }
 
 pub fn create_primary_networking(
@@ -489,16 +441,15 @@ pub fn create_primary_networking(
     committee: SharedCommittee,
     worker_cache: SharedWorkerCache,
     registry: &Registry,
-) -> (
-    Network,
-    Arc<ArcSwapOption<PrimaryReceiverController>>,
-    Arc<ArcSwapOption<WorkerReceiverController>>,
-) {
+) -> PrimaryNetwork {
     let name = keypair.public().clone();
 
     // The metrics used for communicating over the network
     let inbound_network_metrics = Arc::new(NetworkMetrics::new("primary", "inbound", registry));
     let outbound_network_metrics = Arc::new(NetworkMetrics::new("primary", "outbound", registry));
+
+    // Network metrics for the primary connection
+    let network_connection_metrics = NetworkConnectionMetrics::new("primary", registry);
 
     let address = committee
         .load()
@@ -580,5 +531,95 @@ pub fn create_primary_networking(
         });
     info!("Primary {} listening on {}", name.encode_base64(), address);
 
-    (network, primary_receiver, worker_receiver)
+    // update peer types
+    let peer_types = update_network_peers(name, committee, &network, worker_cache);
+
+    // now spin up the connection monitor handle
+    // TODO: move this to a better place - now this can stay here as there is no meaning
+    // to bring it down
+    let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+        network.downgrade(),
+        network_connection_metrics,
+        peer_types,
+    );
+
+    PrimaryNetwork {
+        network,
+        primary_receiver_controller: primary_receiver,
+        worker_receiver_controller: worker_receiver,
+        connection_monitor_handle,
+    }
+}
+
+/// Updates the peers in the provided Network. It also returns
+/// a map of the peer_ids and their corresponding type.
+fn update_network_peers(
+    name: PublicKey,
+    committee: SharedCommittee,
+    network: &Network,
+    worker_cache: SharedWorkerCache,
+) -> HashMap<PeerId, String> {
+    let mut peer_types = HashMap::new();
+
+    // Add my workers
+    for worker in worker_cache.load().our_workers(&name).unwrap() {
+        let (peer_id, address) = add_peer_in_network(
+            network,
+            worker.name,
+            worker
+                .internal_worker_address
+                .as_ref()
+                .unwrap_or(&worker.worker_address),
+        );
+        peer_types.insert(peer_id, "our_worker".to_string());
+        info!(
+            "Adding our worker with peer id {} and address {}",
+            peer_id, address
+        );
+    }
+
+    // Add others workers
+    for (_, worker) in worker_cache.load().others_workers(&name) {
+        let (peer_id, address) = add_peer_in_network(network, worker.name, &worker.worker_address);
+        peer_types.insert(peer_id, "other_worker".to_string());
+        info!(
+            "Adding others worker with peer id {} and address {}",
+            peer_id, address
+        );
+    }
+
+    // Add other primaries
+    let primaries = committee
+        .load()
+        .others_primaries(&name)
+        .into_iter()
+        .map(|(_, address, network_key)| (network_key, address));
+
+    for (public_key, address) in primaries {
+        let (peer_id, address) = add_peer_in_network(network, public_key, &address);
+        peer_types.insert(peer_id, "other_primary".to_string());
+        info!(
+            "Adding others primaries with peer id {} and address {}",
+            peer_id, address
+        );
+    }
+
+    peer_types
+}
+
+fn add_peer_in_network(
+    network: &Network,
+    peer_name: NetworkPublicKey,
+    address: &Multiaddr,
+) -> (PeerId, Address) {
+    let peer_id = PeerId(peer_name.0.to_bytes());
+    let address = network::multiaddr_to_address(address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id,
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address.clone()],
+    };
+    network.known_peers().insert(peer_info);
+
+    (peer_id, address)
 }

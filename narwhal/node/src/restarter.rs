@@ -49,14 +49,13 @@ impl NodeRestarter {
         let mut handles = Vec::new();
 
         // create the primary networking
-        let (network, primary_receiver_controller, worker_receiver_controller) =
-            create_primary_networking(
-                &primary_keypair,
-                &primary_network_keypair,
-                Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
-                worker_cache.clone(),
-                registry,
-            );
+        let primary_network = create_primary_networking(
+            &primary_keypair,
+            &primary_network_keypair,
+            Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+            worker_cache.clone(),
+            registry,
+        );
 
         // Listen for new committees.
         loop {
@@ -77,10 +76,10 @@ impl NodeRestarter {
                 parameters.clone(),
                 /* consensus */ true,
                 execution_state.clone(),
-                registry,
-                network.clone(),
-                primary_receiver_controller.clone(),
-                worker_receiver_controller.clone(),
+                &Registry::new(),
+                primary_network.network.clone(),
+                primary_network.primary_receiver_controller.clone(),
+                primary_network.worker_receiver_controller.clone(),
             )
             .await
             .unwrap();
@@ -93,7 +92,7 @@ impl NodeRestarter {
                 &store,
                 parameters.clone(),
                 tx_validator.clone(),
-                registry,
+                &Registry::new(),
             );
 
             handles.extend(primary_handles);

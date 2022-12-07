@@ -5202,6 +5202,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "clap 2.34.0",
+ "console-subscriber",
  "eyre",
  "fastcrypto",
  "futures",
