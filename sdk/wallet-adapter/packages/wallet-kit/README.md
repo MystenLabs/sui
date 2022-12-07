@@ -90,3 +90,4 @@ The following wallets are known to work with the Wallet Standard:
 - **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)**
 - **[Ethos Wallet](https://chrome.google.com/webstore/detail/ethos-wallet/mcbigmjiafegjnnogedioegffbooigli)**
 - **[Suiet Wallet](https://suiet.app/)**
+- **[Morphis Wallet](https://chrome.google.com/webstore/detail/morphis-wallet/heefohaffomkkkphnlpohglngmbcclhi)**
