@@ -1295,18 +1295,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "coarsetime"
-version = "0.1.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "454038500439e141804c655b4cd1bc6a70bcb95cd2bc9463af5661b6956f0e46"
-dependencies = [
- "libc",
- "once_cell",
- "wasi 0.11.0+wasi-snapshot-preview1",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "codespan"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1898,18 +1886,6 @@ checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
 dependencies = [
  "cfg-if",
  "hashbrown 0.12.3",
- "lock_api",
- "once_cell",
- "parking_lot_core 0.9.3",
-]
-
-[[package]]
-name = "dashmap"
-version = "5.4.0"
-source = "git+https://github.com/velvia/dashmap?rev=a6e36242044f86412531c24c437e95beadc67b62#a6e36242044f86412531c24c437e95beadc67b62"
-dependencies = [
- "cfg-if",
- "hashbrown 0.13.1",
  "lock_api",
  "once_cell",
  "parking_lot_core 0.9.3",
@@ -3104,11 +3080,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hashbrown"
-version = "0.13.1"
-source = "git+https://github.com/velvia/hashbrown?rev=db403dbf63207e22ef388fd6c182e7daa594bce4#db403dbf63207e22ef388fd6c182e7daa594bce4"
-
-[[package]]
 name = "hashlink"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3542,7 +3513,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
 dependencies = [
  "ahash",
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dashmap",
  "hashbrown 0.12.3",
  "once_cell",
  "parking_lot 0.12.1",
@@ -5105,7 +5076,7 @@ name = "narwhal-dag"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dashmap",
  "either",
  "fastcrypto",
  "itertools",
@@ -5270,7 +5241,7 @@ dependencies = [
  "base64",
  "bincode",
  "bytes",
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dashmap",
  "derive_builder",
  "fastcrypto",
  "futures",
@@ -5316,7 +5287,7 @@ dependencies = [
 name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dashmap",
  "fastcrypto",
  "futures",
  "narwhal-config",
@@ -5386,7 +5357,7 @@ dependencies = [
  "bincode",
  "bytes",
  "criterion",
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dashmap",
  "derive_builder",
  "fastcrypto",
  "futures",
@@ -5916,7 +5887,7 @@ checksum = "1ca41c4933371b61c2a2f214bf16931499af4ec90543604ec828f7a625c09113"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dashmap",
  "fnv",
  "futures-channel",
  "futures-executor",
@@ -8813,7 +8784,6 @@ dependencies = [
  "tracing",
  "typed-store",
  "workspace-hack",
- "ying-profiler",
 ]
 
 [[package]]
@@ -10937,7 +10907,6 @@ dependencies = [
  "clear_on_drop",
  "clipboard-win",
  "cmake",
- "coarsetime",
  "codespan",
  "codespan-reporting",
  "collectable",
@@ -10985,8 +10954,7 @@ dependencies = [
  "darling",
  "darling_core",
  "darling_macro",
- "dashmap 5.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "dashmap 5.4.0 (git+https://github.com/velvia/dashmap?rev=a6e36242044f86412531c24c437e95beadc67b62)",
+ "dashmap",
  "data-encoding",
  "data-encoding-macro",
  "data-encoding-macro-internal",
@@ -11096,7 +11064,6 @@ dependencies = [
  "half",
  "hashbrown 0.11.2",
  "hashbrown 0.12.3",
- "hashbrown 0.13.1",
  "hashlink",
  "hdrhistogram",
  "heck 0.3.3",
@@ -11612,25 +11579,14 @@ dependencies = [
  "windows_x86_64_msvc 0.36.1",
  "windows_x86_64_msvc 0.42.0",
  "winreg",
- "wyhash",
  "wyz",
  "x509-parser",
  "yaml-rust",
  "yansi",
  "yasna",
- "ying-profiler",
  "zeroize",
  "zeroize_derive",
  "zstd-sys",
-]
-
-[[package]]
-name = "wyhash"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
-dependencies = [
- "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -11690,22 +11646,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
 dependencies = [
  "time 0.3.15",
-]
-
-[[package]]
-name = "ying-profiler"
-version = "0.1.0"
-source = "git+https://github.com/velvia/ying-profiler#b3babafa758c3ec7e29d487d5d14483e5350f0ce"
-dependencies = [
- "backtrace",
- "chrono",
- "coarsetime",
- "dashmap 5.4.0 (git+https://github.com/velvia/dashmap?rev=a6e36242044f86412531c24c437e95beadc67b62)",
- "log",
- "once_cell",
- "regex",
- "tracing",
- "wyhash",
 ]
 
 [[package]]
