@@ -94,7 +94,6 @@ use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     event_handler::EventHandler,
     execution_engine,
-    metrics::start_timer,
     query_helpers::QueryHelpers,
     transaction_input_checker,
     transaction_manager::TransactionManager,
@@ -619,7 +618,7 @@ impl AuthorityState {
             SuiError::InvalidSystemTransaction
         );
 
-        let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
+        let _metrics_guard = self.metrics.handle_transaction_latency.start_timer();
 
         self.metrics.tx_orders.inc();
 
@@ -655,7 +654,10 @@ impl AuthorityState {
         // TODO: allow CertifiedTransactionEffects only
         effects: &TransactionEffectsEnvelope<S>,
     ) -> SuiResult {
-        let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
+        let _metrics_guard = self
+            .metrics
+            .handle_node_sync_certificate_latency
+            .start_timer();
         let digest = *certificate.digest();
         debug!(?digest, "handle_certificate_with_effects");
         fp_ensure!(
@@ -700,7 +702,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
+        let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
@@ -1012,7 +1014,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
-        let _metrics_guard = start_timer(self.metrics.prepare_certificate_latency.clone());
+        let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
         let (gas_status, input_objects) =
             transaction_input_checker::check_certificate_input(&self.database, certificate).await?;
 
@@ -2001,7 +2003,7 @@ impl AuthorityState {
         signed_effects: &SignedTransactionEffects,
         notifier_ticket: TransactionNotifierTicket,
     ) -> SuiResult<TxSequenceNumber> {
-        let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
+        let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
         let seq = notifier_ticket.seq();
 
