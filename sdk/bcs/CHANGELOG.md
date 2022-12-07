@@ -8,6 +8,12 @@
 
 ## 0.4.0
 
+- Adds support for generics;
+- Each instance can now have its own configuration;
+- Address length and encoding are now configured during initialization;
+- Vectos are built-in and are automatically picked up;
+- Supports 2 configurations: `getSuiMoveConfig` and `getRustConfig`;
+
 ### Minor Changes
 
 - 1591726e8: Support multiple instances of BCS
