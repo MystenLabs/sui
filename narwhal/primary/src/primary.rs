@@ -69,7 +69,7 @@ pub mod primary_tests;
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-/// Maximum duration to fetch certficates from local storage.
+/// Maximum duration to fetch certificates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
 
 /// The network model in which the primary operates.
@@ -165,7 +165,7 @@ impl Primary {
             &primary_channel_metrics.tx_state_handler,
             &primary_channel_metrics.tx_state_handler_total,
         );
-        let (tx_commited_own_headers, rx_commited_own_headers) = channel_with_total(
+        let (tx_committed_own_headers, rx_committed_own_headers) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_commited_own_headers,
             &primary_channel_metrics.tx_commited_own_headers_total,
@@ -305,14 +305,8 @@ impl Primary {
 
         // Add my workers
         for worker in worker_cache.load().our_workers(&name).unwrap() {
-            let (peer_id, address) = Self::add_peer_in_network(
-                &network,
-                worker.name,
-                worker
-                    .internal_worker_address
-                    .as_ref()
-                    .unwrap_or(&worker.worker_address),
-            );
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "our_worker".to_string());
             info!(
                 "Adding our worker with peer id {} and address {}",
@@ -455,7 +449,7 @@ impl Primary {
             rx_our_digests,
             tx_headers,
             tx_narwhal_round_updates,
-            rx_commited_own_headers,
+            rx_committed_own_headers,
             node_metrics,
         );
 
@@ -467,7 +461,7 @@ impl Primary {
             rx_committed_certificates,
             rx_state_handler,
             tx_reconfigure,
-            Some(tx_commited_own_headers),
+            Some(tx_committed_own_headers),
             network.clone(),
         );
 

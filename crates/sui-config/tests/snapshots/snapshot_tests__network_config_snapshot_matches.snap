@@ -13,8 +13,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -60,8 +61,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -107,8 +109,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -154,8 +157,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -201,8 +205,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -248,8 +253,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -295,8 +301,9 @@ validator_configs:
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      consensus-address: ""
-      consensus-db-path: /tmp/foo/
+      address: ""
+      db-path: /tmp/foo/
+      internal-worker-address: ""
       timeout-secs: 60
       narwhal-config:
         header_num_of_batches_threshold: 32
@@ -339,4 +346,3 @@ account_keys:
   - cHifntmjxd4QLaC71WRMoOeCpvicyDJMbTKRuo2v3R9UjI8DXP6RwO6c5B70OPjZEdiV0XB+RVfcjX6/JKfZeg==
   - mTzV/JVz4RdheOnQVFF3xuCPFF4AYAPyShHQCUizJX9pHbCeXB5wKAz9LCwtuoC4PCML0v4vko2/c16HlmPrbQ==
 genesis: "[fake genesis]"
-

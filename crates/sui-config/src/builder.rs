@@ -3,12 +3,13 @@
 
 use crate::{
     genesis,
-    genesis_config::{GenesisConfig, ValidatorGenesisInfo},
+    genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
     p2p::P2pConfig,
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME,
 };
 use fastcrypto::encoding::{Encoding, Hex};
+use multiaddr::Multiaddr;
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -23,7 +24,7 @@ use sui_types::crypto::{
 
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
-    Validators(Vec<ValidatorGenesisInfo>),
+    Validators(Vec<ValidatorConfigInfo>),
 }
 
 enum ValidatorIpSelection {
@@ -82,7 +83,7 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> Self {
+    pub fn with_validators(mut self, validators: Vec<ValidatorConfigInfo>) -> Self {
         self.committee = Some(CommitteeConfig::Validators(validators));
         self
     }
@@ -155,14 +156,19 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         worker_key_pair: NetworkKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: NetworkKeyPair,
-    ) -> ValidatorGenesisInfo {
+    ) -> ValidatorConfigInfo {
         match self.validator_ip_sel {
-            ValidatorIpSelection::Localhost => ValidatorGenesisInfo::from_localhost_for_testing(
-                key_pair,
-                worker_key_pair,
-                account_key_pair,
-                network_key_pair,
-            ),
+            ValidatorIpSelection::Localhost => ValidatorConfigInfo {
+                genesis_info: ValidatorGenesisInfo::from_localhost_for_testing(
+                    key_pair,
+                    worker_key_pair,
+                    account_key_pair,
+                    network_key_pair,
+                ),
+                consensus_address: utils::new_tcp_network_address(),
+                consensus_internal_worker_address: None,
+            },
+
             ValidatorIpSelection::Simulator => {
                 // we will probably never run this many validators in a sim
                 let low_octet = index + 1;
@@ -171,15 +177,22 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 }
 
                 let ip = format!("10.10.0.{}", low_octet);
+                let make_tcp_addr = |port: u16| -> Multiaddr {
+                    format!("/ip4/{}/tcp/{}/http", ip, port).parse().unwrap()
+                };
 
-                ValidatorGenesisInfo::from_base_ip(
-                    key_pair,
-                    worker_key_pair,
-                    account_key_pair,
-                    network_key_pair,
-                    ip,
-                    index,
-                )
+                ValidatorConfigInfo {
+                    genesis_info: ValidatorGenesisInfo::from_base_ip(
+                        key_pair,
+                        worker_key_pair,
+                        account_key_pair,
+                        network_key_pair,
+                        ip.clone(),
+                        index,
+                    ),
+                    consensus_address: make_tcp_addr(4000 + index as u16),
+                    consensus_internal_worker_address: None,
+                }
             }
         }
     }
@@ -187,22 +200,25 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
     fn build_with_validators(
         self,
         mut rng: R,
-        validators: Vec<ValidatorGenesisInfo>,
+        validators: Vec<ValidatorConfigInfo>,
     ) -> NetworkConfig {
         let validator_set = validators
             .iter()
             .enumerate()
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
-                let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
-                let account_key: PublicKey = validator.account_key_pair.public();
-                let network_key: NetworkPublicKey = validator.network_key_pair.public().clone();
-                let worker_key: NetworkPublicKey = validator.worker_key_pair.public().clone();
-                let stake = validator.stake;
-                let network_address = validator.network_address.clone();
+                let protocol_key: AuthorityPublicKeyBytes =
+                    validator.genesis_info.key_pair.public().into();
+                let account_key: PublicKey = validator.genesis_info.account_key_pair.public();
+                let network_key: NetworkPublicKey =
+                    validator.genesis_info.network_key_pair.public().clone();
+                let worker_key: NetworkPublicKey =
+                    validator.genesis_info.worker_key_pair.public().clone();
+                let stake = validator.genesis_info.stake;
+                let network_address = validator.genesis_info.network_address.clone();
                 let pop = generate_proof_of_possession(
-                    &validator.key_pair,
-                    (&validator.account_key_pair.public()).into(),
+                    &validator.genesis_info.key_pair,
+                    (&validator.genesis_info.account_key_pair.public()).into(),
                 );
 
                 (
@@ -214,16 +230,18 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         account_key,
                         stake,
                         delegation: 0, // no delegation yet at genesis
-                        gas_price: validator.gas_price,
-                        commission_rate: validator.commission_rate,
+                        gas_price: validator.genesis_info.gas_price,
+                        commission_rate: validator.genesis_info.commission_rate,
                         network_address,
-                        p2p_address: validator.p2p_address.clone(),
-                        narwhal_primary_address: validator.narwhal_primary_address.clone(),
-                        narwhal_worker_address: validator.narwhal_worker_address.clone(),
-                        narwhal_internal_worker_address: validator
-                            .narwhal_internal_worker_address
+                        p2p_address: validator.genesis_info.p2p_address.clone(),
+                        narwhal_primary_address: validator
+                            .genesis_info
+                            .narwhal_primary_address
                             .clone(),
-                        narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
+                        narwhal_worker_address: validator
+                            .genesis_info
+                            .narwhal_worker_address
+                            .clone(),
                     },
                     pop,
                 )
@@ -250,36 +268,41 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
-                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
+                let public_key: AuthorityPublicKeyBytes =
+                    validator.genesis_info.key_pair.public().into();
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
                     .join(Hex::encode(public_key));
-                let network_address = validator.network_address;
-                let consensus_address = validator.narwhal_consensus_address;
+                let network_address = validator.genesis_info.network_address;
+                let consensus_address = validator.consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
                     .join(Hex::encode(public_key));
+                let internal_worker_address = validator.consensus_internal_worker_address;
                 let consensus_config = ConsensusConfig {
-                    consensus_address,
-                    consensus_db_path,
+                    address: consensus_address,
+                    db_path: consensus_db_path,
+                    internal_worker_address,
                     timeout_secs: Some(60),
                     narwhal_config: Default::default(),
                 };
 
                 let p2p_config = P2pConfig {
-                    listen_address: utils::udp_multiaddr_to_listen_address(&validator.p2p_address)
-                        .unwrap(),
-                    external_address: Some(validator.p2p_address),
+                    listen_address: utils::udp_multiaddr_to_listen_address(
+                        &validator.genesis_info.p2p_address,
+                    )
+                    .unwrap(),
+                    external_address: Some(validator.genesis_info.p2p_address),
                     ..Default::default()
                 };
 
                 NodeConfig {
-                    protocol_key_pair: Arc::new(validator.key_pair),
-                    worker_key_pair: Arc::new(validator.worker_key_pair),
-                    account_key_pair: Arc::new(validator.account_key_pair),
-                    network_key_pair: Arc::new(validator.network_key_pair),
+                    protocol_key_pair: Arc::new(validator.genesis_info.key_pair),
+                    worker_key_pair: Arc::new(validator.genesis_info.worker_key_pair),
+                    account_key_pair: Arc::new(validator.genesis_info.account_key_pair),
+                    network_key_pair: Arc::new(validator.genesis_info.network_key_pair),
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),

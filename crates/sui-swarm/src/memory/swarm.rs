@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use sui_config::builder::{CommitteeConfig, ConfigBuilder};
-use sui_config::genesis_config::{GenesisConfig, ValidatorGenesisInfo};
+use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use tempfile::TempDir;
@@ -72,7 +72,7 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> Self {
+    pub fn with_validators(mut self, validators: Vec<ValidatorConfigInfo>) -> Self {
         self.committee = CommitteeConfig::Validators(validators);
         self
     }

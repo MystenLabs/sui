@@ -946,7 +946,6 @@ impl WorkerFixture {
             info: WorkerInfo {
                 name: worker_name,
                 worker_address,
-                internal_worker_address: None,
                 transactions,
             },
         }
