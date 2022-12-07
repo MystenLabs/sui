@@ -671,7 +671,7 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
         let digest = *certificate.digest();
-        debug!(?digest, "handle_certificate_with_effects");
+        debug!(tx_digest = ?digest, "handle_certificate_with_effects");
         fp_ensure!(
             effects.data().transaction_digest == digest,
             SuiError::ErrorWhileProcessingCertificate {
@@ -976,7 +976,9 @@ impl AuthorityState {
         //
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
-        self.transaction_manager.objects_committed(output_keys);
+        self.transaction_manager
+            .objects_committed(output_keys)
+            .await;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
