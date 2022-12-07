@@ -1076,6 +1076,11 @@ impl AuthorityState {
         Ok((inner_temp_store, signed_effects))
     }
 
+    /// Notifies TransactionManager about an executed certificate.
+    pub async fn certificate_executed(&self, digest: &TransactionDigest) {
+        self.transaction_manager.certificate_executed(digest).await
+    }
+
     pub async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
