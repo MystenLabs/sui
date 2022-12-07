@@ -40,7 +40,7 @@ use sui_storage::{
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
 use tower::ServiceBuilder;
-use tracing::{info, warn};
+use tracing::info;
 use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
@@ -489,13 +489,6 @@ pub async fn build_server(
 ) -> Result<Option<ServerHandle>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
-        return Ok(None);
-    }
-
-    if cfg!(msim) {
-        // jsonrpsee uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
-        // can't yet run it in the simulator.
-        warn!("disabling http servers in simulator");
         return Ok(None);
     }
 

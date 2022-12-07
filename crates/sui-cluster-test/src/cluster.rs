@@ -151,7 +151,9 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
-        let mut cluster_builder = TestClusterBuilder::new().set_genesis_config(genesis_config);
+        let mut cluster_builder = TestClusterBuilder::new()
+            .set_genesis_config(genesis_config)
+            .enable_fullnode_events();
 
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
@@ -165,12 +167,7 @@ impl Cluster for LocalNewCluster {
         info!(?faucet_address, "faucet_address");
 
         // This cluster has fullnode handle, safe to unwrap
-        let fullnode_url = test_cluster
-            .fullnode_handle
-            .as_ref()
-            .unwrap()
-            .rpc_url
-            .clone();
+        let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;

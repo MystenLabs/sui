@@ -4772,7 +4772,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=0667864838a8c1b5b9d19972102086ccf4a525ff#0667864838a8c1b5b9d19972102086ccf4a525ff"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=3aeccfeb0f021ad5801c1ab4dcf4004de7780847#3aeccfeb0f021ad5801c1ab4dcf4004de7780847"
 dependencies = [
  "ahash",
  "async-task",
@@ -4801,7 +4801,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=0667864838a8c1b5b9d19972102086ccf4a525ff#0667864838a8c1b5b9d19972102086ccf4a525ff"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=3aeccfeb0f021ad5801c1ab4dcf4004de7780847#3aeccfeb0f021ad5801c1ab4dcf4004de7780847"
 dependencies = [
  "darling",
  "proc-macro2 1.0.47",
@@ -8653,6 +8653,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "prometheus",
+ "rand 0.8.5",
  "serde 1.0.147",
  "signature",
  "sui-config",
@@ -8662,9 +8663,11 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-sdk",
+ "sui-simulator",
  "sui-transaction-builder",
  "sui-types",
  "tap",

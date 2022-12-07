@@ -15,8 +15,8 @@ use tracing::info;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
-    sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
-    SUI_NETWORK_CONFIG,
+    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
+    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
@@ -339,7 +339,11 @@ async fn genesis(
 
     info!("Client keystore is stored in {:?}.", keystore_path);
 
-    let mut fullnode_config = network_config.generate_fullnode_config();
+    let mut fullnode_config = network_config
+        .fullnode_config_builder()
+        .with_dir(FULL_NODE_DB_PATH.into())
+        .build()?;
+
     fullnode_config.json_rpc_address = sui_config::node::default_json_rpc_address();
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
 

@@ -50,9 +50,6 @@ use sui_types::{
     messages::TransactionData,
 };
 
-#[cfg(msim)]
-use sui_sdk::embedded_gateway::SuiClient;
-#[cfg(not(msim))]
 use sui_sdk::SuiClient;
 
 use crate::config::SuiEnv;
@@ -914,17 +911,12 @@ impl WalletContext {
             client.clone()
         } else {
             drop(read);
-            #[cfg(not(msim))]
             let client = self
                 .config
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout)
                 .await?;
 
-            #[cfg(msim)]
-            let client =
-                sui_sdk::embedded_gateway::SuiClient::new(&self.config.path().parent().unwrap())
-                    .await?;
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
                 println!("{}", format!("[warn] {e}").yellow().bold());

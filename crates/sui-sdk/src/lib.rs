@@ -48,9 +48,6 @@ use types::committee::EpochId;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::{CommitteeInfoResponse, ExecuteTransactionRequestType};
 
-#[cfg(msim)]
-pub mod embedded_gateway;
-
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
 
 #[derive(Debug)]

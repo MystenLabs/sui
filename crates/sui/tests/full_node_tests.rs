@@ -38,9 +38,7 @@ use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::messages::{
     get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
 };
-use test_utils::network::{
-    init_cluster_builder_env_aware, start_a_fullnode, start_a_fullnode_with_handle,
-};
+use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter,
     publish_basics_package_and_make_counter, transfer_coin,
@@ -52,8 +50,8 @@ use tokio::time::{sleep, Duration};
 
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm).await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let node = test_cluster.start_fullnode().await?.sui_node;
 
     let context = &mut test_cluster.wallet;
 
@@ -84,8 +82,8 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm).await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let node = test_cluster.start_fullnode().await?.sui_node;
 
     let context = &mut test_cluster.wallet;
 
@@ -102,11 +100,11 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
 const HOUR_MS: u64 = 3_600_000;
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let node = &test_cluster.fullnode_handle.sui_node;
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -164,11 +162,14 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let mut test_cluster = TestClusterBuilder::new()
+        .enable_fullnode_events()
+        .build()
+        .await?;
+    let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
 
     let (transferred_object, sender, receiver, digest, gas, gas_used) =
@@ -401,7 +402,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 // Test for syncing a node to an authority that already has many txes.
 #[sim_test]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     let context = &mut test_cluster.wallet;
     let _ = transfer_coin(context).await?;
@@ -413,7 +414,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     // Start a new fullnode that is not on the write path
-    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
+    let node = test_cluster.start_fullnode().await.unwrap().sui_node;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -430,12 +431,13 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
-    let test_cluster = init_cluster_builder_env_aware().build().await?;
-    let sender = test_cluster.get_address_0();
-    let context = test_cluster.wallet;
+    let test_cluster = TestClusterBuilder::new().build().await?;
 
     // Start a new fullnode that is not on the write path
-    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
+    let node = test_cluster.start_fullnode().await.unwrap().sui_node;
+
+    let sender = test_cluster.get_address_0();
+    let context = test_cluster.wallet;
 
     let mut futures = Vec::new();
 
@@ -516,17 +518,16 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let context = &mut test_cluster.wallet;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None)
-        .await
-        .unwrap();
+    let fullnode = test_cluster.start_fullnode().await.unwrap();
     let ws_client = fullnode.ws_client;
     let node = fullnode.sui_node;
+
+    let context = &mut test_cluster.wallet;
 
     let mut sub: Subscription<SuiTransactionResponse> = ws_client
         .subscribe(
@@ -567,17 +568,28 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let context = &mut test_cluster.wallet;
+    let mut test_cluster = TestClusterBuilder::new()
+        .enable_fullnode_events()
+        .build()
+        .await?;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None)
-        .await
-        .unwrap();
+    let fullnode = start_fullnode_from_config(
+        test_cluster
+            .fullnode_config_builder()
+            .with_event_store()
+            .build()
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+
     let node = fullnode.sui_node;
     let ws_client = fullnode.ws_client;
+
+    let context = &mut test_cluster.wallet;
 
     let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
@@ -660,31 +672,40 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 }
 
 // Test fullnode has event read jsonrpc endpoints working
-#[tokio::test]
-async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+#[sim_test]
+async fn test_full_node_event_read_api_ok() {
+    let mut test_cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(50000)
+        .enable_fullnode_events()
+        .build()
+        .await
+        .unwrap();
+
     let sender = test_cluster.get_address_0();
     let receiver = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
-    let jsonrpc_client = &test_cluster.fullnode_handle.as_ref().unwrap().rpc_client;
+    let node = &test_cluster.fullnode_handle.sui_node;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (transferred_object, _, _, digest, gas, gas_used) = transfer_coin(context).await?;
+    let (transferred_object, _, _, digest, gas, gas_used) = transfer_coin(context).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
-    let txes = node.state().get_transactions(
-        TransactionQuery::InputObject(transferred_object),
-        None,
-        None,
-        false,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions(
+            TransactionQuery::InputObject(transferred_object),
+            None,
+            None,
+            false,
+        )
+        .unwrap();
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
     // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await?;
+    let ts = node.state().get_timestamp_ms(&digest).await.unwrap();
     assert!(ts.is_some());
 
     // This is a poor substitute for the post processing taking some time
@@ -837,11 +858,11 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         vec![sender_event.clone(), recipient_event.clone()]
     );
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context).await?;
+    let (_sender, _object_id, digest2) = create_devnet_nft(context).await.unwrap();
     wait_for_tx(digest2, node.state().clone()).await;
 
     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
-    let ts2 = node.state().get_timestamp_ms(&digest2).await?;
+    let ts2 = node.state().get_timestamp_ms(&digest2).await.unwrap();
 
     // query by move event struct name
     let params = rpc_params![
@@ -885,14 +906,12 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         tx_digests,
         vec![digest, digest, digest, digest2, digest2, digest2]
     );
-
-    Ok(())
 }
 
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
-    let node = start_a_fullnode(&test_cluster.swarm).await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let node = test_cluster.start_fullnode().await?.sui_node;
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = node
@@ -1043,9 +1062,9 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
         .is_err());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
     context
         .config
@@ -1056,7 +1075,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
         .keystore
         .add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
 
-    let jsonrpc_client = &test_cluster.fullnode_handle.as_ref().unwrap().rpc_client;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
     let txns = make_transactions_with_wallet_context(context, txn_count).await;
@@ -1088,11 +1107,11 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
-    let jsonrpc_client = &test_cluster.fullnode_handle.as_ref().unwrap().rpc_client;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
     let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
@@ -1244,9 +1263,9 @@ async fn get_past_obj_read_from_node(
 #[sim_test]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let node = test_cluster.start_fullnode().await.unwrap().sui_node;
     let context = &mut test_cluster.wallet;
-    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(context).await?;

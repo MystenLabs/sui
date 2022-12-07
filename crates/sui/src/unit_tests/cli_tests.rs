@@ -33,7 +33,7 @@ use sui_types::crypto::{
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::network::init_cluster_builder_env_aware;
+use test_utils::network::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
@@ -104,7 +104,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
-    let test_cluster = init_cluster_builder_env_aware().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await?;
     let mut context = test_cluster.wallet;
 
     // Add 3 accounts
@@ -127,7 +127,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -150,7 +150,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 // fixing issue https://github.com/MystenLabs/sui/issues/6546
 #[tokio::test]
 async fn test_regression_6546() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -197,7 +197,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_create_example_nft_command() {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
+    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -244,7 +244,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         }],
         gas_object_ranges: None,
     });
-    let mut cluster = init_cluster_builder_env_aware()
+    let mut cluster = TestClusterBuilder::new()
         .set_genesis_config(config)
         .build()
         .await?;
@@ -266,7 +266,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -290,7 +290,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -336,7 +336,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address1 = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -503,7 +503,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -555,7 +555,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -678,7 +678,7 @@ fn test_bug_1078() {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let addr2 = cluster.get_address_1();
     let context = cluster.wallet_mut();
 
@@ -767,7 +767,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let context = cluster.wallet_mut();
 
     // keypairs loaded from config are Ed25519
@@ -807,7 +807,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let context = cluster.wallet_mut();
 
     // Get the active address
@@ -869,7 +869,7 @@ async fn get_parsed_object_assert_existence(
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
     let client = context.get_client().await?;
@@ -960,7 +960,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
     let client = context.get_client().await?;
@@ -1137,7 +1137,7 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
     let mut txns = make_transactions_with_wallet_context(context, 1).await;
     let txn = txns.swap_remove(0);
@@ -1156,7 +1156,7 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_serialize_tx() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
