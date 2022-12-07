@@ -15,10 +15,7 @@ use sui_types::{base_types::ObjectID, error::SuiError};
 #[cfg(test)]
 mod tests;
 
-#[cfg(not(msim))]
 type ReadApi = sui_sdk::ReadApi;
-#[cfg(msim)]
-type ReadApi = sui_sdk::embedded_gateway::ReadApi;
 
 #[derive(Debug, Error)]
 pub enum DependencyVerificationError {

@@ -16,7 +16,7 @@ use tracing::{debug, trace};
 
 use sui_macros::*;
 use test_utils::{
-    network::{init_cluster_builder_env_aware, start_a_fullnode},
+    network::TestClusterBuilder,
     transaction::{transfer_coin, wait_for_tx},
 };
 
@@ -127,14 +127,14 @@ async fn test_hash_collections() {
 // repeatable and deterministic.
 #[sim_test]
 async fn test_net_determinism() {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
+    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let context = &mut test_cluster.wallet;
 
     let (_transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
     sleep(Duration::from_millis(1000)).await;
 
-    let node = start_a_fullnode(&test_cluster.swarm).await.unwrap();
+    let node = test_cluster.start_fullnode().await.unwrap();
 
-    wait_for_tx(digest, node.state().clone()).await;
+    wait_for_tx(digest, node.sui_node.state().clone()).await;
 }

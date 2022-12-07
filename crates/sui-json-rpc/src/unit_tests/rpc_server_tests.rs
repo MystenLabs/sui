@@ -33,7 +33,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
         .build()
         .await?;
 
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -48,7 +48,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -96,7 +96,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -135,7 +135,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -191,7 +191,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
@@ -211,7 +211,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -404,6 +404,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new()
         .set_fullnode_rpc_port(get_available_port())
+        .enable_fullnode_events()
         .build()
         .await
         .unwrap();

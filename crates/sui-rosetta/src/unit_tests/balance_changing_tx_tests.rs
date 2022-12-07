@@ -14,12 +14,9 @@ use sui_config::utils::get_available_port;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
-#[cfg(msim)]
-use sui_sdk::embedded_gateway::SuiClient;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
 };
-#[cfg(not(msim))]
 use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};

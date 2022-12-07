@@ -15,7 +15,7 @@ use sui_types::messages::{
 use test_utils::messages::{
     make_counter_increment_transaction_with_wallet_context, make_transactions_with_wallet_context,
 };
-use test_utils::network::{start_a_fullnode_with_handle, TestClusterBuilder};
+use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::{
     increment_counter, publish_basics_package_and_make_counter, wait_for_all_txes, wait_for_tx,
 };
@@ -25,7 +25,7 @@ use tracing::info;
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let node = &test_cluster.fullnode_handle.sui_node;
 
     let active = node.active();
 
@@ -85,7 +85,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let node = &test_cluster.fullnode_handle.sui_node;
 
     let active = node.active();
 
@@ -145,12 +145,13 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
 async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let context = &mut test_cluster.wallet;
 
-    let fullnode_handle = start_a_fullnode_with_handle(&test_cluster.swarm, None).await?;
+    let fullnode_handle = test_cluster.start_fullnode().await.unwrap();
     // Note this node is different from the one connected with WalletContext
     let node = &fullnode_handle.sui_node;
-    let wallet_context_node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+
+    let context = &mut test_cluster.wallet;
+    let wallet_context_node = &test_cluster.fullnode_handle.sui_node;
 
     let active = node.active();
 
