@@ -15,8 +15,6 @@ use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use crate::error::{RpcError, SuiRpcResult};
 use rpc_types::{SuiCertifiedTransaction, SuiParsedTransactionResponse, SuiTransactionEffects};
 use serde_json::Value;
-pub use sui_config::gateway;
-use sui_core::gateway_state::TxSeqNumber;
 pub use sui_json as json;
 
 use crate::apis::{CoinReadApi, EventApi, QuorumDriver, ReadApi};

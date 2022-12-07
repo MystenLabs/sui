@@ -390,4 +390,22 @@ impl IndexStore {
             .map(|(_, object_info)| object_info)
             .collect())
     }
+
+    pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
+        let batch = self.owner_index.batch();
+        let batch = batch.insert_batch(
+            &self.owner_index,
+            object_index_changes.new_owners.into_iter(),
+        )?;
+        let batch = batch.insert_batch(
+            &self.dynamic_field_index,
+            object_index_changes.new_dynamic_fields.into_iter(),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.owner_index.is_empty()
+    }
 }

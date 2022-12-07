@@ -2,6 +2,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering as CmpOrdering;
+use std::hash::Hash;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
+use std::{
+    collections::{HashMap, VecDeque},
+    pin::Pin,
+    sync::{atomic::Ordering, Arc},
+};
+
 use anyhow::anyhow;
 use arc_swap::Guard;
 use chrono::prelude::*;
@@ -16,16 +27,6 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
-};
-use std::cmp::Ordering as CmpOrdering;
-use std::hash::Hash;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
-use std::{
-    collections::{HashMap, VecDeque},
-    pin::Pin,
-    sync::{atomic::Ordering, Arc},
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
@@ -1257,7 +1258,9 @@ impl AuthorityState {
         effects: &SignedTransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult {
-        let changes = self.process_object_index(effects)?;
+        let changes = self
+            .process_object_index(effects)
+            .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
             cert.sender_address(),
@@ -1288,10 +1291,20 @@ impl AuthorityState {
         &self,
         effects: &SignedTransactionEffects,
     ) -> Result<ObjectIndexChanges, SuiError> {
+        let modified_at_version = effects
+            .modified_at_versions
+            .iter()
+            .cloned()
+            .collect::<HashMap<_, _>>();
+
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
-        for (id, version, _) in &effects.deleted {
-            match self.get_owner_at_version(id, *version)? {
+        for (id, _, _) in &effects.deleted {
+            let Some(old_version) = modified_at_version.get(id) else{
+                error!("Error processing object owner index for tx [{}], cannot find modified at version for deleted object [{id}].", effects.transaction_digest);
+                continue;
+            };
+            match self.get_owner_at_version(id, *old_version)? {
                 Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
                 Owner::ObjectOwner(object_id) => {
                     deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
@@ -1302,12 +1315,6 @@ impl AuthorityState {
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
-
-        let modified_at_version = effects
-            .modified_at_versions
-            .iter()
-            .cloned()
-            .collect::<HashMap<_, _>>();
 
         for (oref, owner, kind) in effects.all_mutated() {
             let id = &oref.0;
@@ -1321,19 +1328,14 @@ impl AuthorityState {
                         error!("Error processing object owner index for tx [{}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest);
                         continue;
                     };
-                if &old_object.owner != owner {
-                    match old_object.owner {
-                        Owner::AddressOwner(addr) => {
-                            deleted_owners.push((addr, *id));
-                        }
-                        Owner::ObjectOwner(object_id) => {
-                            deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
-                        }
-                        _ => {}
+                match old_object.owner {
+                    Owner::AddressOwner(addr) => {
+                        deleted_owners.push((addr, *id));
                     }
-                } else {
-                    // Owner is the same, nothing to update.
-                    continue;
+                    Owner::ObjectOwner(object_id) => {
+                        deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                    }
+                    _ => {}
                 }
             }
 
@@ -1361,7 +1363,10 @@ impl AuthorityState {
                     ));
                 }
                 Owner::ObjectOwner(owner) => {
-                    let Some(df_info) = self.try_create_dynamic_field_info(oref)? else{
+                    let Some(o) = self.database.get_object_by_key(&oref.0, oref.1)? else{
+                        continue;
+                    };
+                    let Some(df_info) = self.try_create_dynamic_field_info(o)? else{
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(*owner), *id), df_info))
@@ -1378,13 +1383,9 @@ impl AuthorityState {
         })
     }
 
-    fn try_create_dynamic_field_info(
-        &self,
-        oref: &ObjectRef,
-    ) -> SuiResult<Option<DynamicFieldInfo>> {
+    fn try_create_dynamic_field_info(&self, o: Object) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
-        let Some(move_object) = self
-            .database.get_object_by_key(&oref.0, oref.1)?.and_then(|o| o.data.try_as_move().cloned()) else {
+        let Some(move_object) =  o.data.try_as_move().cloned() else {
             return Ok(None);
         };
         // We only index dynamic field objects
@@ -1396,17 +1397,16 @@ impl AuthorityState {
             self.module_cache.as_ref(),
         )?;
 
-        let Some((name, type_, object_id)) = DynamicFieldInfo::parse_move_object(&move_struct)? else{
-            return Ok(None)
-        };
+        let (name, type_, object_id) =
+            DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
 
         Ok(Some(match type_ {
             DynamicFieldType::DynamicObject => {
                 // Find the actual object from storage using the object id obtained from the wrapper.
-                let Some(object) = self.database.find_object_lt_or_eq_version(object_id, oref.1) else{
+                let Some(object) = self.database.find_object_lt_or_eq_version(object_id, o.version()) else{
                     return Err(SuiError::ObjectNotFound {
                         object_id,
-                        version: Some(oref.1),
+                        version: Some(o.version()),
                     })
                 };
                 let version = object.version();
@@ -1426,9 +1426,9 @@ impl AuthorityState {
                 name,
                 type_,
                 object_type: move_object.type_.type_params[1].to_string(),
-                object_id: oref.0,
-                version: oref.1,
-                digest: oref.2,
+                object_id: o.id(),
+                version: o.version(),
+                digest: o.digest(),
             },
         }))
     }
@@ -1769,6 +1769,10 @@ impl AuthorityState {
         spawn_monitored_task!(execution_process(authority_state, rx_ready_certificates));
 
         state
+            .create_owner_index_if_empty()
+            .expect("Error indexing genesis objects.");
+
+        state
     }
 
     // TODO: Technically genesis_committee can be derived from genesis.
@@ -1818,19 +1822,29 @@ impl AuthorityState {
             None,
         ));
 
+        let index_store = Some(Arc::new(IndexStore::open_tables_read_write(
+            path.join("indexes"),
+            None,
+            None,
+        )));
+
         // add the object_basics module
-        AuthorityState::new(
+        let state = AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
             node_sync_store,
             epochs,
-            None,
+            index_store,
             None,
             None,
             &Registry::new(),
         )
-        .await
+        .await;
+
+        state.create_owner_index_if_empty().unwrap();
+
+        state
     }
 
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
@@ -1877,6 +1891,38 @@ impl AuthorityState {
         }
 
         Ok(())
+    }
+
+    fn create_owner_index_if_empty(&self) -> SuiResult {
+        let Some(index_store) = &self.indexes else{
+            return Ok(())
+        };
+
+        let mut new_owners = vec![];
+        let mut new_dynamic_fields = vec![];
+        for (_, o) in self.database.perpetual_tables.objects.iter() {
+            match o.owner {
+                Owner::AddressOwner(addr) => new_owners.push((
+                    (addr, o.id()),
+                    ObjectInfo::new(&o.compute_object_reference(), &o),
+                )),
+                Owner::ObjectOwner(object_id) => {
+                    let id = o.id();
+                    let Some(info) = self.try_create_dynamic_field_info(o)? else{
+                        continue;
+                    };
+                    new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
+                }
+                _ => {}
+            }
+        }
+
+        index_store.insert_genesis_objects(ObjectIndexChanges {
+            deleted_owners: vec![],
+            deleted_dynamic_fields: vec![],
+            new_owners,
+            new_dynamic_fields,
+        })
     }
 
     pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {

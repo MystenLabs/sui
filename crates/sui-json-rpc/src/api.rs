@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::anyhow;
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
