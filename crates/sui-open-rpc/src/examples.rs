@@ -565,5 +565,3 @@ impl RpcExampleProvider {
         )
     }
 }
-
-
