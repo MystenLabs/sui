@@ -72,7 +72,6 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
         VMConfig {
             verifier: VerifierConfig {
                 max_loop_depth: Some(MAX_LOOP_DEPTH),
-                treat_friend_as_private: true,
                 max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
                 max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
                 max_basic_blocks: Some(MAX_BASIC_BLOCKS),
