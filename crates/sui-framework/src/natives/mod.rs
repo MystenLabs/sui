@@ -218,6 +218,11 @@ pub fn all_natives(
             make_native!(types::is_one_time_witness),
         ),
         (
+            "types",
+            "type_tag_bytes",
+            make_native!(types::type_tag_bytes),
+        ),
+        (
             "groth16",
             "verify_groth16_proof_internal",
             make_native!(crypto::verify_groth16_proof_internal),

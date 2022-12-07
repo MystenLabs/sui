@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::legacy_length_cost;
+use crate::{legacy_emit_cost, legacy_length_cost};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     language_storage::TypeTag,
@@ -13,6 +13,8 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+
+const E_BCS_SERIALIZATION_FAILURE: u64 = 1;
 
 pub fn is_one_time_witness(
     context: &mut NativeContext,
@@ -62,5 +64,31 @@ pub fn is_one_time_witness(
         smallvec![Value::bool(
             matches!(type_tag, TypeTag::Struct(struct_tag) if has_one_bool_field && struct_tag.name.to_string() == struct_tag.module.to_string().to_ascii_uppercase())
         )],
+    ))
+}
+
+// native fun type_tag_bytes<T>(): address;
+pub fn type_tag_bytes(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    assert!(ty_args.len() == 1);
+    assert!(args.len() == 0);
+    let ty = ty_args.pop().unwrap();
+    let tag = context.type_to_type_tag(&ty)?;
+    // build bytes
+    let tag_bytes = match bcs::to_bytes(&tag) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            return Ok(NativeResult::err(
+                legacy_emit_cost(),
+                E_BCS_SERIALIZATION_FAILURE,
+            ));
+        }
+    };
+    Ok(NativeResult::ok(
+        legacy_emit_cost(),
+        smallvec![Value::vector_u8(tag_bytes)],
     ))
 }
