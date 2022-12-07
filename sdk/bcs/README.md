@@ -109,20 +109,20 @@ export const bcs = new BCS(getSuiMoveConfig());
 
 // BCS has a set of built ins:
 // U8, U16, U32, U64, U128, BOOL, STRING
-console.assert(bcs.U64 === 'u64');
-console.assert(bcs.BOOL === 'bool');
-console.assert(bcs.STRING === 'string');
+console.assert(BCS.U64 === 'u64');
+console.assert(BCS.BOOL === 'bool');
+console.assert(BCS.STRING === 'string');
 
 // De/serialization of primitives is included by default;
-let u8 = bcs.de(bcs.U8, '00', 'hex'); // '0'
-let u16 = bcs.de(bcs.U16, '0000', 'hex'); // '0'
-let u32 = bcs.de(bcs.U32, '78563412', 'hex'); // '78563412'
-let u64 = bcs.de(bcs.U64, 'ffffffffffffffff', 'hex'); // '18446744073709551615'
-let u128 = bcs.de(bcs.U128, 'FFFFFFFF000000000000000000000000', 'hex'); // '4294967295'
-let bool = bcs.de(bcs.BOOL, '00', 'hex'); // false
+let u8 = bcs.de(BCS.U8, '00', 'hex'); // '0'
+let u16 = bcs.de(BCS.U16, '0000', 'hex'); // '0'
+let u32 = bcs.de(BCS.U32, '78563412', 'hex'); // '78563412'
+let u64 = bcs.de(BCS.U64, 'ffffffffffffffff', 'hex'); // '18446744073709551615'
+let u128 = bcs.de(BCS.U128, 'FFFFFFFF000000000000000000000000', 'hex'); // '4294967295'
+let bool = bcs.de(BCS.BOOL, '00', 'hex'); // false
 
 // There's also a handy built-in for ASCII strings (which are `vector<u8>` under the hood)
-let str = bcs.de(bcs.STRING, '0a68656c6c6f5f6d6f7665', 'hex'); // hello_move
+let str = bcs.de(BCS.STRING, '0a68656c6c6f5f6d6f7665', 'hex'); // hello_move
 
 console.log(str);
 ```
@@ -154,9 +154,9 @@ export const bcs = new BCS(getSuiMoveConfig());
 // }
 
 bcs.registerStructType('Coin', {
-    value: bcs.U64,
-    owner: bcs.STRING,
-    is_locked: bcs.BOOL
+    value: BCS.U64,
+    owner: BCS.STRING,
+    is_locked: BCS.BOOL
 });
 
 // Created in Rust with diem/bcs
