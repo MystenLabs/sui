@@ -35,7 +35,7 @@ impl NodeRestarter {
             Vec<(WorkerId, NetworkKeyPair)>,
             WorkerCache,
         )>,
-        registry: &Registry,
+        _registry: &Registry,
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
@@ -49,6 +49,8 @@ impl NodeRestarter {
 
         // Listen for new committees.
         loop {
+            let registry = Registry::new();
+
             tracing::info!("Starting epoch E{}", committee.epoch());
 
             // Get a fresh store for the new epoch.
@@ -66,7 +68,7 @@ impl NodeRestarter {
                 parameters.clone(),
                 /* consensus */ true,
                 execution_state.clone(),
-                registry,
+                &registry,
             )
             .await
             .unwrap();
@@ -79,11 +81,15 @@ impl NodeRestarter {
                 &store,
                 parameters.clone(),
                 tx_validator.clone(),
-                registry,
+                &registry,
             );
 
             handles.extend(primary_handles);
             handles.extend(worker_handles);
+
+            // give some time to the node to bootstrap before we are ready to receive
+            // another reconfiguration message
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
             // Wait for a committee change.
             let (
@@ -106,7 +112,7 @@ impl NodeRestarter {
                     "http://127.0.0.1:{}/reconfigure",
                     parameters
                         .network_admin_server
-                        .primary_network_admin_server_port
+                        .primary_network_admin_server_port,
                 ))
                 .json(&ReconfigureNotification::Shutdown)
                 .send()
@@ -118,6 +124,8 @@ impl NodeRestarter {
             // Wait for the components to shut down.
             join_all(handles.drain(..)).await;
             tracing::info!("All tasks successfully exited");
+
+            drop(store);
 
             // Give it an extra second in case the last task to exit is a network server. The OS
             // may need a moment to make the TCP ports available again.
