@@ -28,7 +28,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import styles from './RecentTxCard.module.css';
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
-import { TxType } from '~/ui/TxType';
+import { TransactionType } from '~/ui/TransactionType';
 
 export type TxnData = {
     To?: string;
@@ -101,9 +101,9 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
 
 function TxStatusType({ content }: { content: TxStatus }) {
     return (
-        <TxType isSuccess={content.status === 'success'}>
+        <TransactionType isSuccess={content.status === 'success'}>
             {content.txTypeName}
-        </TxType>
+        </TransactionType>
     );
 }
 
