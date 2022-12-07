@@ -17,6 +17,7 @@ use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
+use std::cmp::Ordering as CmpOrdering;
 use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -2275,11 +2276,9 @@ impl AuthorityState {
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 debug!("Received EndOfPublish from {:?}", authority.concise());
-                // todo use return value to signal last checkpoint
                 self.database
                     .record_end_of_publish(*authority, &transaction, consensus_index)
-                    .await?;
-                Ok(())
+                    .await
             }
         }
     }
@@ -2298,7 +2297,20 @@ impl AuthorityState {
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
         if let Some((index, roots)) = self.database.last_checkpoint(round)? {
-            checkpoint_service.notify_checkpoint(index, roots, false)?;
+            let final_checkpoint_round = self.database.final_epoch_checkpoint()?;
+            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
+                Some(CmpOrdering::Less) => {
+                    debug!(
+                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
+                        round, final_checkpoint_round
+                    );
+                    return Ok(());
+                }
+                Some(CmpOrdering::Equal) => true,
+                Some(CmpOrdering::Greater) => false,
+                None => false,
+            };
+            checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
         }
         self.database.record_checkpoint_boundary(round)
     }
