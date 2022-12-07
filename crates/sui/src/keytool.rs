@@ -72,6 +72,8 @@ impl KeyToolCommand {
                 key_scheme,
                 derivation_path,
             } => {
+                let password = rpassword::prompt_password("Your password: ").unwrap();
+                println!("Your password is {}", password);
                 let k = key_scheme.to_string();
                 if "bls12381" == key_scheme.to_string() {
                     let (address, keypair): (_, AuthorityKeyPair) = get_key_pair();

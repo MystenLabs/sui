@@ -282,3 +282,25 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
     Ok(())
 }
+
+#[test]
+fn test_keytool_generate_encrypt() -> Result<(), anyhow::Error> {
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
+    KeyToolCommand::Generate {
+        key_scheme: SignatureScheme::Secp256k1,
+        derivation_path: None,
+    } .execute(&mut keystore)?;
+    keystore.keys().iter().for_each(|pk| {
+        assert_eq!(
+            Hex::encode(pk.as_ref()),
+            "03e3717435582ab33d2e315d21e9bc4e19500a1fc4c8cdc73a15365891774b131f"
+        );
+    });
+    keystore.addresses().iter().for_each(|addr| {
+        assert_eq!(
+            addr.to_string(),
+            "0xed17b3f435c03ff69c2cdc6d394932e68375f20f"
+        );
+    });
+    Ok(())
+}
