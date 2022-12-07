@@ -100,7 +100,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
 const HOUR_MS: u64 = 3_600_000;
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -162,7 +162,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
@@ -518,7 +518,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
 
@@ -568,7 +568,7 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new()
         .enable_fullnode_events()
@@ -1062,7 +1062,7 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
         .is_err());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
@@ -1107,7 +1107,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;

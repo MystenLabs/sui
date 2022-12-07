@@ -25,7 +25,9 @@ use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::TestClusterBuilder;
 
-#[tokio::test]
+use sui_macros::sim_test;
+
+#[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -41,7 +43,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -89,7 +91,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_publish() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -128,7 +130,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -184,7 +186,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -204,7 +206,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -261,17 +263,17 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
+    let mut cluster = TestClusterBuilder::new()
         .set_fullnode_rpc_port(port)
         .build()
         .await
         .unwrap();
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    let client = SuiClient::new(&format!("http://{}", addr), None, None).await?;
+    let context = &mut cluster.wallet;
+
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();
@@ -400,7 +402,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new()
         .set_fullnode_rpc_port(get_available_port())
