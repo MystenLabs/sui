@@ -1,12 +1,5 @@
 [
     {
-        "name": "Sui Name Service (SuiNS)",
-        "description": "Find your .sui name!",
-        "link": "https://suins.io/",
-        "icon": "https://raw.githubusercontent.com/SuiNSdapp/docs/main/SuiNS-small2.jpg",
-        "tags": ["Service"]
-    },
-    {
         "name": "Capy",
         "description": "Sui Capy",
         "link": "https://capy.art/",
@@ -19,6 +12,13 @@
         "link": "https://sui-wallet-demo.sui.io/",
         "icon": "https://sui.io/img/sui-social.jpg",
         "tags": ["NFT"]
+    },
+    {
+        "name": "Sui Name Service (SuiNS)",
+        "description": "Find your .sui name!",
+        "link": "https://suins.io/",
+        "icon": "https://raw.githubusercontent.com/SuiNSdapp/docs/main/SuiNS-small2.jpg",
+        "tags": ["Infra"]
     },
     {
         "name": "Got Beef?",
