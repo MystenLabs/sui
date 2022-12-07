@@ -287,11 +287,11 @@ fn test_u64_dynamic_field_first_key() {
     let u64_value_bytes = u64_value.simple_serialize(&MoveTypeLayout::U64).unwrap();
     assert_eq!(u64_value_bytes, [0, 0, 0, 0, 0, 0, 0, 0]);
 
-    let account =
+    let table_id =
         AccountAddress::from_hex_literal("0x03c8e4462dfb7deecabb5af3dc6e95a02619ebae").unwrap();
 
     let mut hasher = Sha3_256::default();
-    hasher.update(account);
+    hasher.update(table_id);
     hasher.update(u64_value_bytes);
     hasher.update(u64_tag_bytes);
     let hash = hasher.finalize();
