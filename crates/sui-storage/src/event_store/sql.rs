@@ -7,6 +7,7 @@ use core::time::Duration;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
+use fastcrypto::encoding::{Encoding, Hex};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -272,7 +273,7 @@ impl SqlEventStore {
                 fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
             }
             if let Some(digest) = event.event.digest() {
-                fields.insert(OBJECT_DIGEST_KEY, digest.to_string());
+                fields.insert(OBJECT_DIGEST_KEY, Hex::encode(digest.0).to_string());
             }
             json!(fields).to_string()
         }
@@ -695,6 +696,7 @@ mod tests {
             queried.move_event_contents.as_deref(),
             orig.event.move_event_contents()
         );
+        assert_eq!(queried.object_digest().unwrap(), orig.event.digest());
         assert_eq!(queried.amount().unwrap(), orig.event.amount());
         let move_event_name = orig.event.move_event_name();
         assert_eq!(queried.move_event_name.as_ref(), move_event_name.as_ref());
@@ -975,7 +977,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[1]);
-        assert_eq!(queried_events[0].fields.len(), 0);
+        assert_eq!(queried_events[0].fields.len(), 2); // version field, digest field
 
         // Query NewObject Event
         let queried_events = db

@@ -40,6 +40,8 @@ telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
+fastcrypto = { workspace = true, features = ["copy_key"] }
+
 [dev-dependencies]
 anyhow = "1.0.64"
 criterion = { version = "0.4.0", features = ["async", "async_tokio"] }

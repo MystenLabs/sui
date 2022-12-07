@@ -44,7 +44,7 @@ pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 1000;
 pub const OBJECT_VERSION_KEY: &str = "obj_ver";
 pub const AMOUNT_KEY: &str = "amount";
 pub const BALANCE_CHANGE_TYPE_KEY: &str = "change_type";
-pub const OBJECT_DIGEST_KEY: &str = "obj_digest";
+pub const OBJECT_DIGEST_KEY: &str = "obj_dig";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
