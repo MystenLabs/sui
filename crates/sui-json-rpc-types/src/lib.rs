@@ -1166,7 +1166,6 @@ pub enum SuiMoveValue {
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
-    Bytearray(Base64),
     String(String),
     UID { id: ObjectID },
     Struct(SuiMoveStruct),
@@ -1189,13 +1188,6 @@ impl Display for SuiMoveValue {
                     writer,
                     "{}",
                     vec.iter().map(|value| format!("{value}")).join(",\n")
-                )?;
-            }
-            SuiMoveValue::Bytearray(value) => {
-                write!(
-                    writer,
-                    "{:?}",
-                    value.clone().to_vec().map_err(fmt::Error::custom)?
                 )?;
             }
         }
