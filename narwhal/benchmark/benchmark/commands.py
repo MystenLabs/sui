@@ -17,7 +17,7 @@ class CommandMaker:
         return f'rm -r {PathMaker.logs_path()} ; mkdir -p {PathMaker.logs_path()}'
 
     @staticmethod
-    def compile(mem_profiling, failpoints=False):
+    def compile(failpoints=False):
         cmd = ["cargo", "build", "--quiet",
                "--release", "--features", "benchmark"]
 
