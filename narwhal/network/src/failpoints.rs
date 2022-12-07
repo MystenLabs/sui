@@ -28,7 +28,7 @@ impl ResponseHandler for FailpointsResponseHandler {
         // Warning: if this failpoint is used with the default sleep()
         // or delay() it could end up blocking the system and causing other
         // unintended effects.
-        fail_point!("rpc-delay");
+        fail_point!("rpc-response-delay");
     }
 
     fn on_error<E>(self, _error: &E) {}

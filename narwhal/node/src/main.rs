@@ -23,13 +23,13 @@ use node::{
     Node,
 };
 use prometheus::Registry;
-use std::sync::Arc;
+use std::{mem, sync::Arc};
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::{channel, Receiver};
-use tracing::info;
 #[cfg(feature = "benchmark")]
 use tracing::subscriber::set_global_default;
+use tracing::{info, warn};
 #[cfg(feature = "benchmark")]
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use worker::TrivialTransactionValidator;
@@ -206,6 +206,14 @@ async fn run(
     worker_keypair: NetworkKeyPair,
     registry: Registry,
 ) -> Result<(), eyre::Report> {
+    // Only enabled if failpoints feature flag is set
+    if fail::has_failpoints() {
+        warn!("Failpoints are enabled");
+        mem::forget(fail::FailScenario::setup());
+    } else {
+        info!("Failpoints are not enabled");
+    }
+
     let committee_file = matches.value_of("committee").unwrap();
     let workers_file = matches.value_of("workers").unwrap();
     let parameters_file = matches.value_of("parameters");

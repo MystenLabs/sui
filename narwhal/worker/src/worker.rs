@@ -86,9 +86,6 @@ impl Worker {
             PeerId(keypair.public().0.to_bytes())
         );
 
-        // Only enabled if failpoints feature flag is set
-        types::initialize_failpoints();
-
         // Define a worker instance.
         let worker = Self {
             primary_name: primary_name.clone(),
