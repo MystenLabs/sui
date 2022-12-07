@@ -14,6 +14,7 @@ pub mod epoch;
 pub mod event_handler;
 pub mod execution_engine;
 pub mod metrics;
+pub mod narwhal_manager;
 pub mod quorum_driver;
 pub mod safe_client;
 pub mod storage;
