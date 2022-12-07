@@ -15,13 +15,12 @@
 
     &.normal {
         color: colors.$gray-60;
-        font-size: 10px;
+        font-size: 12px;
     }
 
     &.highlighted {
         color: colors.$sui-steel-blue;
-        font-size: 11px;
-        opacity: 0.5;
+        font-size: 12px;
     }
 
     &.plain {

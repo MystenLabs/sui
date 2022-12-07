@@ -15,9 +15,9 @@ import {
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
+import type { CoinsMetaProps } from '../../hooks/useExecuteDryRunTransactionRequest';
 import type { SignableTransaction, Base64DataBuffer } from '@mysten/sui.js';
 import type { TransactionRequest } from '_payloads/transactions';
-import type { CoinsMetaProps } from '_redux/slices/transaction-requests';
 
 import st from './DappTxApprovalPage.module.scss';
 
