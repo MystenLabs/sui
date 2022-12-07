@@ -335,12 +335,11 @@ impl StoredEvent {
                 .map(SequenceNumber::from_u64)
         })
     }
-    
+
     fn object_digest(&self) -> Result<Option<ObjectDigest>, anyhow::Error> {
-        self.extract_string_field(OBJECT_DIGEST_KEY).map(|opt| {
-                opt.and_then(|s| Some((&s).as_bytes())
-                    .map(|v| ObjectDigest::try_from(v).unwrap()))
-            })
+        Ok(self.extract_string_field(OBJECT_DIGEST_KEY)?
+        .map(|opt| ObjectDigest::try_from(opt.as_bytes()))
+        .transpose()?)
     }
 
     fn change_type(&self) -> Result<Option<BalanceChangeType>, anyhow::Error> {
