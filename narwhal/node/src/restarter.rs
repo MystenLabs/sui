@@ -35,7 +35,7 @@ impl NodeRestarter {
             Vec<(WorkerId, NetworkKeyPair)>,
             WorkerCache,
         )>,
-        _registry: &Registry,
+        registry: &Registry,
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
@@ -49,8 +49,6 @@ impl NodeRestarter {
 
         // Listen for new committees.
         loop {
-            let registry = Registry::new();
-
             tracing::info!("Starting epoch E{}", committee.epoch());
 
             // Get a fresh store for the new epoch.
@@ -68,7 +66,7 @@ impl NodeRestarter {
                 parameters.clone(),
                 /* consensus */ true,
                 execution_state.clone(),
-                &registry,
+                registry,
             )
             .await
             .unwrap();
@@ -81,7 +79,7 @@ impl NodeRestarter {
                 &store,
                 parameters.clone(),
                 tx_validator.clone(),
-                &registry,
+                registry,
             );
 
             handles.extend(primary_handles);
