@@ -33,7 +33,14 @@ impl ConnectionMonitor {
     async fn run(self) {
         let ((mut subscriber, connected_peers), all_peers) = {
             if let Some(network) = self.network.upgrade() {
-                (network.subscribe(), network.known_peers().get_all())
+                let Ok((subscriber, connected_peers)) = network.subscribe() else {
+                    return;
+                };
+
+                (
+                    (subscriber, connected_peers),
+                    network.known_peers().get_all(),
+                )
             } else {
                 return;
             }
