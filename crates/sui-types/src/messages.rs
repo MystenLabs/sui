@@ -1729,24 +1729,24 @@ pub struct TransactionEffects {
     /// this transaction.
     pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
-    pub shared_objects: Vec<ObjectRef>,
+    pub shared_objects: Vec<ObjectRefAndType>,
     /// The transaction digest
     pub transaction_digest: TransactionDigest,
 
     // TODO: All the SequenceNumbers in the ObjectRefs below equal the same value (the lamport
     // timestamp of the transaction).  Consider factoring this out into one place in the effects.
     /// ObjectRef and owner of new objects created.
-    pub created: Vec<(ObjectRef, Owner)>,
+    pub created: Vec<(ObjectRefAndType, Owner)>,
     /// ObjectRef and owner of mutated objects, including gas object.
-    pub mutated: Vec<(ObjectRef, Owner)>,
+    pub mutated: Vec<(ObjectRefAndType, Owner)>,
     /// ObjectRef and owner of objects that are unwrapped in this transaction.
     /// Unwrapped objects are objects that were wrapped into other objects in the past,
     /// and just got extracted out.
-    pub unwrapped: Vec<(ObjectRef, Owner)>,
+    pub unwrapped: Vec<(ObjectRefAndType, Owner)>,
     /// Object Refs of objects now deleted (the old refs).
-    pub deleted: Vec<ObjectRef>,
+    pub deleted: Vec<ObjectRefAndType>,
     /// Object refs of objects now wrapped in other objects.
-    pub wrapped: Vec<ObjectRef>,
+    pub wrapped: Vec<ObjectRefAndType>,
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
@@ -1761,7 +1761,7 @@ impl TransactionEffects {
     /// created and unwrapped objects. In other words, all objects that still exist
     /// in the object state after this transaction.
     /// It doesn't include deleted/wrapped objects.
-    pub fn all_mutated(&self) -> impl Iterator<Item = (&ObjectRef, &Owner, WriteKind)> + Clone {
+    pub fn all_mutated(&self) -> impl Iterator<Item = (&ObjectRefAndType, &Owner, WriteKind)> + Clone {
         self.mutated
             .iter()
             .map(|(r, o)| (r, o, WriteKind::Mutate))
@@ -1781,8 +1781,8 @@ impl TransactionEffects {
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
-    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
-        self.mutated.iter().filter(|o| *o != &self.gas_object)
+    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRefAndType, Owner)> {
+        self.mutated.iter()
     }
 
     pub fn gas_cost_summary(&self) -> &GasCostSummary {
@@ -1832,31 +1832,31 @@ impl Display for TransactionEffects {
         writeln!(writer, "Status : {:?}", self.status)?;
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
-            for ((id, _, _), owner) in &self.created {
+            for (((id, _, _), _), owner) in &self.created {
                 writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         if !self.mutated.is_empty() {
             writeln!(writer, "Mutated Objects:")?;
-            for ((id, _, _), owner) in &self.mutated {
+            for (((id, _, _), _), owner) in &self.mutated {
                 writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         if !self.deleted.is_empty() {
             writeln!(writer, "Deleted Objects:")?;
-            for (id, _, _) in &self.deleted {
+            for ((id, _, _),_) in &self.deleted {
                 writeln!(writer, "  - ID: {}", id)?;
             }
         }
         if !self.wrapped.is_empty() {
             writeln!(writer, "Wrapped Objects:")?;
-            for (id, _, _) in &self.wrapped {
+            for ((id, _, _),_) in &self.wrapped {
                 writeln!(writer, "  - ID: {}", id)?;
             }
         }
         if !self.unwrapped.is_empty() {
             writeln!(writer, "Unwrapped Objects:")?;
-            for ((id, _, _), owner) in &self.unwrapped {
+            for (((id, _, _),_), owner) in &self.unwrapped {
                 writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }

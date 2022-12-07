@@ -23,7 +23,7 @@ use crate::messages::InputObjectKind;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+        ObjectDigest, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -449,6 +449,15 @@ impl Object {
         (self.id(), self.version(), self.digest())
     }
 
+    pub fn compute_object_type(&self) -> ObjectType{
+        let type_ = self
+            .data
+            .type_()
+            .map(|tag| ObjectType::Struct(tag.clone()))
+            .unwrap_or(ObjectType::Package);
+            type_
+    }
+    
     pub fn id(&self) -> ObjectID {
         use Data::*;
 

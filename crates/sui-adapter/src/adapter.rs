@@ -639,9 +639,12 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 }
             },
         };
+        let obj = state_view
+            .read_object(&id)
+            .expect("We previously checked all input objects exist").clone();
         changes.insert(
             id,
-            ObjectChange::Delete(tx_ctx.clone(), version, delete_kind),
+            ObjectChange::Delete(tx_ctx.clone(), obj, version, delete_kind),
         );
     }
 

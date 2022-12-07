@@ -192,6 +192,7 @@ pub fn update_input_coins<S>(
             &coin_object.id(),
             coin_object.version(),
             DeleteKind::Normal,
+            coin_object.clone(),
         )
     }
 }

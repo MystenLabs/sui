@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use tracing::trace;
 
+use crate::base_types::ObjectRefAndType;
 use crate::coin::Coin;
 use crate::event::BalanceChangeType;
 use crate::storage::SingleTxContext;
@@ -41,7 +42,7 @@ pub struct InnerTemporaryStore {
     pub objects: BTreeMap<ObjectID, Object>,
     pub mutable_inputs: Vec<ObjectRef>,
     pub written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-    pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind, Object)>,
 }
 
 impl InnerTemporaryStore {
@@ -98,7 +99,7 @@ pub struct TemporaryStore<S> {
     // into written directly.
     written: BTreeMap<ObjectID, (SingleTxContext, Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
-    deleted: BTreeMap<ObjectID, (SingleTxContext, SequenceNumber, DeleteKind)>,
+    deleted: BTreeMap<ObjectID, (SingleTxContext, SequenceNumber, DeleteKind, Object)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     gas_charged: Option<(SuiAddress, ObjectID, GasCostSummary)>,
@@ -193,7 +194,7 @@ impl<S> TemporaryStore<S> {
             written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
 
-        for (id, (ctx, mut version, kind)) in self.deleted {
+        for (id, (ctx, mut version, kind, obj)) in self.deleted {
             // Update the version, post-delete.
             version.increment_to(self.lamport_timestamp);
 
@@ -227,7 +228,7 @@ impl<S> TemporaryStore<S> {
                 },
             };
             events.push(event);
-            deleted.insert(id, (version, kind));
+            deleted.insert(id, (version, kind, obj));
         }
 
         // Combine object events with move events.
@@ -491,7 +492,7 @@ impl<S> TemporaryStore<S> {
 
     pub fn to_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<ObjectRefAndType>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -507,7 +508,7 @@ impl<S> TemporaryStore<S> {
             }
         });
 
-        self.deleted.iter_mut().for_each(|(id, (_, version, _))| {
+        self.deleted.iter_mut().for_each(|(id, (_, version, _, _))| {
             modified_at_versions.push((*id, *version));
         });
 
@@ -527,21 +528,21 @@ impl<S> TemporaryStore<S> {
         let mut unwrapped = vec![];
         for (object_ref, object, kind) in inner.written.values() {
             match kind {
-                WriteKind::Mutate => mutated.push((*object_ref, object.owner)),
-                WriteKind::Create => created.push((*object_ref, object.owner)),
-                WriteKind::Unwrap => unwrapped.push((*object_ref, object.owner)),
+                WriteKind::Mutate => mutated.push(((*object_ref, object.compute_object_type()), object.owner)),
+                WriteKind::Create => created.push(((*object_ref, object.compute_object_type()), object.owner)),
+                WriteKind::Unwrap => unwrapped.push(((*object_ref, object.compute_object_type()), object.owner)),
             }
         }
 
         let mut deleted = vec![];
         let mut wrapped = vec![];
-        for (id, (version, kind)) in &inner.deleted {
+        for (id, (version, kind, obj)) in &inner.deleted {
             match kind {
                 DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
-                    deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
+                    deleted.push(((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED), obj.compute_object_type()))
                 }
                 DeleteKind::Wrap => {
-                    wrapped.push((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
+                    wrapped.push(((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED), obj.compute_object_type()))
                 }
             }
         }
@@ -693,6 +694,7 @@ impl<S> TemporaryStore<S> {
         id: &ObjectID,
         version: SequenceNumber,
         kind: DeleteKind,
+        object: Object
     ) {
         // there should be no deletion after write
         debug_assert!(self.written.get(id).is_none());
@@ -708,7 +710,7 @@ impl<S> TemporaryStore<S> {
 
         // For object deletion, we will increment the version when converting the store to effects
         // so the object will eventually show up in the parent_sync table with a new version.
-        self.deleted.insert(*id, (ctx.clone(), version, kind));
+        self.deleted.insert(*id, (ctx.clone(), version, kind, object));
     }
 
     /// Resets any mutations and deletions recorded in the store.
@@ -733,12 +735,13 @@ impl<S> TemporaryStore<S> {
 
     pub fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
         for (id, change) in changes {
+            let _obj = self.read_object(&id);
             match change {
                 ObjectChange::Write(ctx, new_value, kind) => {
                     self.write_object(&ctx, new_value, kind)
                 }
-                ObjectChange::Delete(ctx, version, kind) => {
-                    self.delete_object(&ctx, &id, version, kind)
+                ObjectChange::Delete(ctx, obj, version, kind) => {
+                    self.delete_object(&ctx, &id, version, kind, obj)
                 }
             }
         }

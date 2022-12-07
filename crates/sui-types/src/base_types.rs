@@ -79,6 +79,7 @@ pub struct ObjectID(
 );
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+pub type ObjectRefAndType = (ObjectRef, ObjectType);
 
 pub fn random_object_ref() -> ObjectRef {
     (
