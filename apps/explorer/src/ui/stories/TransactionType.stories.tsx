@@ -9,16 +9,14 @@ export default {
     component: TransactionType,
 } as Meta;
 
-export const Default: StoryObj<TransactionTypeProps> = {
-    render: () => (
-        <div className="flex gap-[21px]">
-            <TransactionType isSuccess>Call</TransactionType>
-            <TransactionType>Call</TransactionType>
-            <TransactionType isSuccess>TransferObject</TransactionType>
-            <TransactionType isSuccess>ChangeEpoch</TransactionType>
-            <TransactionType isSuccess count="42">
-                Batch
-            </TransactionType>
-        </div>
-    ),
+export const Success: StoryObj<TransactionTypeProps> = {
+    args: { isSuccess: true, children: 'Call' },
+};
+
+export const Fail: StoryObj<TransactionTypeProps> = {
+    args: { children: 'Call' },
+};
+
+export const WithNumber: StoryObj<TransactionTypeProps> = {
+    args: { isSuccess: true, children: 'Batch', count: '42' },
 };
