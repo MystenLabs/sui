@@ -201,8 +201,6 @@ export function DappTxApprovalPage() {
         }
     }, [deserializeTxnFailed, loading, txRequest]);
 
-    // eslint-disable-next-line no-lone-blocks
-
     const valuesContent: {
         label: string;
         content: string | number | null;
