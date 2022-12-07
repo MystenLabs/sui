@@ -34,7 +34,15 @@ module sui::randomness {
         value: Option<vector<u8>>
     }
 
-    // Q: how can we store associated data? we can use another object and store ids (see below), but can we do better?
+    // we want to keep randomness as a keyed obj.
+    // Q: how to store associated data?
+    // - option 1 - use another object and store ids (see example below); can work as is, the relation is stored in the "other" object.
+    // - option 2 - randomness as the parent obj, dup field "associated_data" for the other obj; relation stored on both objs;
+    //              requires adding below apis for that
+    // - option 3 - randomness as a child obj of the other obj; requires the parent obj to call the set function
+    //
+    // other options? any that is better than the rest?
+    // wrapped obj - not relevant since we want to see from outside the obj
 
     fun new<T: drop>(_w: T, ctx: &mut TxContext): Randomness<T> {
         Randomness {
@@ -303,3 +311,5 @@ module sui::lottery_shared_pool2 {
         object::delete(id);
     }
 }
+
+// TODO: add example of buying random game elements.
