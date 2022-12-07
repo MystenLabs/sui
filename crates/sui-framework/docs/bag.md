@@ -32,6 +32,7 @@ empty to be destroyed.
 -  [Function `borrow`](#0x2_bag_borrow)
 -  [Function `borrow_mut`](#0x2_bag_borrow_mut)
 -  [Function `remove`](#0x2_bag_remove)
+-  [Function `contains`](#0x2_bag_contains)
 -  [Function `contains_with_type`](#0x2_bag_contains_with_type)
 -  [Function `length`](#0x2_bag_length)
 -  [Function `is_empty`](#0x2_bag_is_empty)
@@ -237,11 +238,37 @@ the value does not have the specified type.
 
 </details>
 
+<a name="0x2_bag_contains"></a>
+
+## Function `contains`
+
+Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code><a href="bag.md#0x2_bag">bag</a>: &<a href="bag.md#0x2_bag_Bag">Bag</a></code>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bag.md#0x2_bag_contains">contains</a>&lt;K: <b>copy</b>, drop, store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="bag.md#0x2_bag_Bag">bag::Bag</a>, k: K): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bag.md#0x2_bag_contains">contains</a>&lt;K: <b>copy</b> + drop + store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="bag.md#0x2_bag_Bag">Bag</a>, k: K): bool {
+    field::exists_&lt;K&gt;(&<a href="bag.md#0x2_bag">bag</a>.id, k)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_bag_contains_with_type"></a>
 
 ## Function `contains_with_type`
 
-Returns true iff there is an value associated with the key <code>k: K</code> in bag <code><a href="bag.md#0x2_bag">bag</a>: &<a href="bag.md#0x2_bag_Bag">Bag</a></code>
+Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code><a href="bag.md#0x2_bag">bag</a>: &<a href="bag.md#0x2_bag_Bag">Bag</a></code>
+with an assigned value of type <code>V</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bag.md#0x2_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="bag.md#0x2_bag_Bag">bag::Bag</a>, k: K): bool

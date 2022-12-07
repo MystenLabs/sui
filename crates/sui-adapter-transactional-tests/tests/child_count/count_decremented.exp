@@ -21,8 +21,8 @@ created: object(109), object(110)
 written: object(107), object(108)
 
 task 5 'run'. lines 60-60:
-written: object(107), object(109), object(111)
-deleted: object(110)
+written: object(107), object(111)
+deleted: object(109), object(110)
 
 task 6 'view-object'. lines 62-66:
 Owner: Account Address ( A )
