@@ -356,6 +356,6 @@ Search the code base for `fail_point!()` macro to see the list instrumented fail
 Example usage
 
 ```
-$ FAILPOINTS='rpc-delay=5%sleep(10000);request-batch=5%return;report-our-batch=5%return;request-vote=5%return;certificate-store-panic=.01%return;certificate-store=5%return' \
+$ FAILPOINTS='rpc-response-delay=5%sleep(10000);request-batch=5%return;report-our-batch=5%return;request-vote=5%return;certificate-store-panic=.01%return;certificate-store=5%return' \
   fab failpoints
 ```
