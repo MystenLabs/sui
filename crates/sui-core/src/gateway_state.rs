@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_adapter::execution_mode;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -1278,7 +1279,6 @@ where
 
         // Pass in the objects for a deeper check
         let is_genesis = false;
-        let allow_arbitrary_function_calls = false;
         let type_arguments = type_arguments
             .into_iter()
             .map(|arg| arg.try_into())
@@ -1288,14 +1288,13 @@ where
             .try_as_package()
             .ok_or_else(|| anyhow!("Cannot get package from object"))?
             .deserialize_module(&module)?;
-        resolve_and_type_check(
+        resolve_and_type_check::<execution_mode::Normal>(
             &objects,
             &compiled_module,
             &function,
             &type_arguments,
             args.clone(),
             is_genesis,
-            allow_arbitrary_function_calls,
         )?;
         used_object_ids.extend(objects.keys());
 

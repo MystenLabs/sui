@@ -131,17 +131,11 @@ pub fn execute<
             }
             CallArg::ObjVec(obj_args) => {
                 for obj_arg in obj_args {
-                    match obj_arg {
-                        ObjectArg::ImmOrOwnedObject((id, _, _))
-                        | ObjectArg::SharedObject { id, .. } => {
-                            let obj = state_view.read_object(id);
-                            assert_invariant!(
-                                obj.is_some(),
-                                format!("Object {} does not exist yet", id)
-                            );
-                            objects.insert(*id, obj.unwrap());
-                        }
-                    }
+                    let (ObjectArg::ImmOrOwnedObject((id, _, _))
+                    | ObjectArg::SharedObject { id, .. }) = obj_arg;
+                    let obj = state_view.read_object(id);
+                    assert_invariant!(obj.is_some(), format!("Object {} does not exist yet", id));
+                    objects.insert(*id, obj.unwrap());
                 }
             }
         }
@@ -156,15 +150,7 @@ pub fn execute<
         by_value_objects,
         mutable_ref_objects,
         has_ctx_arg,
-    } = resolve_and_type_check(
-        &objects,
-        &module,
-        function,
-        &type_args,
-        args,
-        is_genesis,
-        Mode::allow_arbitrary_function_calls(),
-    )?;
+    } = resolve_and_type_check::<Mode>(&objects, &module, function, &type_args, args, is_genesis)?;
 
     if has_ctx_arg {
         args.push(ctx.to_vec());
@@ -687,14 +673,13 @@ pub struct TypeCheckSuccess {
 /// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
 /// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
 /// of the input objects into objects passed by value vs by mutable reference
-pub fn resolve_and_type_check(
+pub fn resolve_and_type_check<Mode: ExecutionMode>(
     objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
     module: &CompiledModule,
     function: &Identifier,
     type_args: &[TypeTag],
     args: Vec<CallArg>,
     is_genesis: bool,
-    allow_arbitrary_function_calls: bool,
 ) -> Result<TypeCheckSuccess, ExecutionError> {
     // Resolve the function we are calling
     let view = &BinaryIndexedView::Module(module);
@@ -723,7 +708,7 @@ pub fn resolve_and_type_check(
     // Similarly, we will bypass this check for dev-inspect, as the mode does not make state changes
     // and is just for developers to check the result of Move functions. This mode is flagged by
     // allow_arbitrary_function_calls
-    if !fdef.is_entry && !is_genesis && !allow_arbitrary_function_calls {
+    if !fdef.is_entry && !is_genesis && !Mode::allow_arbitrary_function_calls() {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::NonEntryFunctionInvoked,
             "Can only call `entry` functions",
@@ -784,7 +769,7 @@ pub fn resolve_and_type_check(
             let object_arg = match arg {
                 // dev-inspect does not make state changes and just a developer aid, so let through
                 // any BCS bytes (they will be checked later by the VM)
-                CallArg::Pure(arg) if allow_arbitrary_function_calls => return Ok(arg),
+                CallArg::Pure(arg) if Mode::allow_arbitrary_function_calls() => return Ok(arg),
                 CallArg::Pure(arg) => {
                     let (is_primitive, type_layout_opt) =
                         primitive_type(view, type_args, param_type);

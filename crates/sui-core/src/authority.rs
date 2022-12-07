@@ -28,7 +28,6 @@ use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
-use sui_adapter::execution_mode::DevInspect;
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
@@ -1087,34 +1086,6 @@ impl AuthorityState {
                 self.epoch(),
             );
         SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
-    }
-
-    pub async fn dev_inspect_transaction(
-        &self,
-        transaction: TransactionData,
-        transaction_digest: TransactionDigest,
-    ) -> Result<DevInspectResults, anyhow::Error> {
-        let (gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, &transaction)
-                .await?;
-        let shared_object_refs = input_objects.filter_shared_objects();
-
-        let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store =
-            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let (_inner_temp_store, effects, execution_error) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
-                shared_object_refs,
-                temporary_store,
-                transaction,
-                transaction_digest,
-                transaction_dependencies,
-                &self.move_vm,
-                &self._native_functions,
-                gas_status,
-                self.epoch(),
-            );
-        DevInspectResults::try_from(effects, self.module_cache.as_ref())
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {

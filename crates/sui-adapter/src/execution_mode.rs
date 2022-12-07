@@ -7,9 +7,16 @@ use sui_types::error::ExecutionError;
 pub type TransactionIndex = usize;
 
 pub trait ExecutionMode {
+    /// the type of a single Move call execution
     type ExecutionResult;
+
+    /// the gathered results from batched executions
     type ExecutionResults;
 
+    /// Controls two things:
+    /// - the calling of arbitrary Move functions
+    /// - the ability to instantiate any Move function parameter with a Pure call arg.
+    ///   In other words, you can instantiate any struct or object or other value with its BCS bytes.
     fn allow_arbitrary_function_calls() -> bool;
 
     fn make_result(
@@ -49,6 +56,9 @@ impl ExecutionMode for Normal {
     }
 }
 
+/// WARNING! Using this mode will bypass all normal checks around Move entry functions! This
+/// includes the various rules for function arguments, meaning any object can be created just from
+/// BCS bytes!
 pub struct DevInspect;
 
 impl ExecutionMode for DevInspect {

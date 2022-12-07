@@ -150,7 +150,7 @@ fn execute_transaction<
             tx_ctx,
             move_vm,
             native_functions,
-            gas_status,
+            &mut gas_status,
         );
         if execution_result.is_err() {
             // Roll back the temporary store if execution failed.
@@ -182,7 +182,7 @@ fn execution_loop<
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
-    mut gas_status: SuiGasStatus,
+    gas_status: &mut SuiGasStatus,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let mut results = Mode::empty_results();
     // TODO: Since we require all mutable objects to not show up more than
