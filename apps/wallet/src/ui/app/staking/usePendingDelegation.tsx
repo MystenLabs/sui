@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, isSuiObject, type SuiSystemState } from '@mysten/sui.js';
+import {
+    isSuiMoveObject,
+    isSuiObject,
+    type SuiSystemState,
+} from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
