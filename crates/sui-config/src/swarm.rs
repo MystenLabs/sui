@@ -147,9 +147,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             .dir
             .unwrap_or_else(|| OsRng.next_u32().to_string().into());
 
-        let listen_ip = self
-            .listen_ip
-            .unwrap_or_else(|| utils::get_local_ip_for_tests());
+        let listen_ip = self.listen_ip.unwrap_or_else(utils::get_local_ip_for_tests);
 
         let network_address = format!(
             "/ip4/{}/tcp/{}/http",
