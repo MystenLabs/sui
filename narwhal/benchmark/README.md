@@ -133,10 +133,6 @@ The 'Consensus TPS' and 'Consensus latency' report the average throughput and la
 
 Memory profiling for benchmarks are possible via `jemalloc` on Linux. It can be enabled in the following way:
 
-There is an option to run the benchmark in memory allocation profiling mode. This slows down the benchmark,
-replacing the global allocator with one which profiles allocations. It requires the `dhat-heap` compiler feature
-to be turned on. To enable memory profiling mode, set the following benchmark options:
-
 - Intall `jemalloc`, e.g. `sudo apt install libjemalloc-dev`
 - Enable `jemalloc` by setting `export MALLOC_CONF=prof:true,prof_prefix:jeprof.out,lg_prof_interval:33` before launching the benchmark script.
 
