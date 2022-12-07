@@ -1,21 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ReactNode } from 'react';
+import { type TransactionKindName } from '@mysten/sui.js';
 
 import { ReactComponent as ContentSuccessStatus } from './icons/check_12x12.svg';
 import { ReactComponent as ContentFailedStatus } from './icons/x.svg';
 
+type TransactionTypeLabel = TransactionKindName | 'Batch';
+
 export type TransactionTypeProps = {
     isSuccess?: boolean;
     count?: string;
-    children: ReactNode;
+    type?: TransactionTypeLabel;
 };
 
 export function TransactionType({
     isSuccess,
     count,
-    children,
+    type,
 }: TransactionTypeProps) {
     return (
         <div className="flex flex-col items-start">
@@ -25,7 +27,7 @@ export function TransactionType({
                 ) : (
                     <ContentFailedStatus className="text-issue-dark" />
                 )}
-                {children}
+                {type}
                 {count && (
                     <div className="rounded-lg bg-gray-40 py-0.5 px-1.25">
                         {count}

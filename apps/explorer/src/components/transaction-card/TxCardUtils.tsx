@@ -52,11 +52,6 @@ export type LinkObj = {
 
 type Category = 'object' | 'transaction' | 'address' | 'unknown';
 
-type TxStatus = {
-    txTypeName: TransactionKindName | undefined;
-    status: ExecutionStatusType;
-};
-
 export function SuiAmount({
     amount,
 }: {
@@ -96,14 +91,6 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                 </Fragment>
             ))}
         </section>
-    );
-}
-
-function TxStatusType({ content }: { content: TxStatus }) {
-    return (
-        <TransactionType isSuccess={content.status === 'success'}>
-            {content.txTypeName}
-        </TransactionType>
     );
 }
 
@@ -153,11 +140,9 @@ export const genTableDataFromTxData = (
                 />
             ),
             txTypes: (
-                <TxStatusType
-                    content={{
-                        txTypeName: txn.kind,
-                        status: txn.status,
-                    }}
+                <TransactionType
+                    isSuccess={txn.status === 'success'}
+                    type={txn.kind}
                 />
             ),
             amounts: <SuiAmount amount={txn.suiAmount} />,

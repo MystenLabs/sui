@@ -10,13 +10,13 @@ export default {
 } as Meta;
 
 export const Success: StoryObj<TransactionTypeProps> = {
-    args: { isSuccess: true, children: 'Call' },
+    args: { isSuccess: true, type: 'Call' },
 };
 
 export const Fail: StoryObj<TransactionTypeProps> = {
-    args: { children: 'Call' },
+    args: { type: 'Call' },
 };
 
 export const WithNumber: StoryObj<TransactionTypeProps> = {
-    args: { isSuccess: true, children: 'Batch', count: '42' },
+    args: { isSuccess: true, type: 'Batch', count: '42' },
 };
