@@ -3,8 +3,8 @@
 
 import { type ReactNode } from 'react';
 
-import { ReactComponent as ContentSuccessStatus } from '../assets/SVGIcons/12px/Check.svg';
-import { ReactComponent as ContentFailedStatus } from '../assets/SVGIcons/12px/X.svg';
+import { ReactComponent as ContentSuccessStatus } from './icons/check_12x12.svg';
+import { ReactComponent as ContentFailedStatus } from './icons/x.svg';
 
 export type TransactionTypeProps = {
     isSuccess?: boolean;
@@ -21,9 +21,9 @@ export function TransactionType({
         <div className="flex flex-col items-start">
             <div className="flex items-center justify-center gap-1.5">
                 {isSuccess ? (
-                    <ContentSuccessStatus className="fill-success" />
+                    <ContentSuccessStatus className="text-success" />
                 ) : (
-                    <ContentFailedStatus className="fill-issue-dark" />
+                    <ContentFailedStatus className="text-issue-dark" />
                 )}
                 {children}
                 {count && (
