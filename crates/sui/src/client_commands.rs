@@ -392,15 +392,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         tx_data: String,
 
-        /// Signature scheme used to sign the transaction.
-        #[clap(long)]
-        scheme: SignatureScheme,
-
-        /// Public key that the signature can be verified with.
-        #[clap(long)]
-        pubkey: String,
-
-        /// Base64 encoded signature committed to the transaction data.
+        /// Base64 encoded signature `flag || signature || pubkey`.
         #[clap(long)]
         signature: String,
     },
@@ -816,12 +808,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::SerializeTransferSui(data.to_base64())
             }
 
-            SuiClientCommands::ExecuteSignedTx {
-                tx_data,
-                scheme,
-                pubkey,
-                signature,
-            } => {
+            SuiClientCommands::ExecuteSignedTx { tx_data, signature } => {
                 let data = TransactionData::from_signable_bytes(
                     &Base64::try_from(tx_data)
                         .map_err(|e| anyhow!(e))?
@@ -831,12 +818,10 @@ impl SuiClientCommands {
                 let signed_tx = Transaction::from_data(
                     data,
                     Signature::from_bytes(
-                        &[
-                            vec![scheme.flag()],
-                            Base64::decode(signature.as_str()).map_err(|e| anyhow!(e))?,
-                            Base64::decode(pubkey.as_str()).map_err(|e| anyhow!(e))?,
-                        ]
-                        .concat(),
+                        &Base64::try_from(signature)
+                            .map_err(|e| anyhow!(e))?
+                            .to_vec()
+                            .map_err(|e| anyhow!(e))?,
                     )?,
                 )
                 .verify()?;

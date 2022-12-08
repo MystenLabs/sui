@@ -69,16 +69,14 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
     let tx_bytes1 = tx_bytes.clone();
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
     let tx_response: SuiExecuteTransactionResponse = http_client
-        .execute_transaction(
+        .execute_transaction_serialized_sig(
             tx_bytes1,
-            sig_scheme,
             signature_bytes,
-            pub_key,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -116,14 +114,12 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_serialized_sig(
             tx_bytes,
-            sig_scheme,
             signature_bytes,
-            pub_key,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -172,14 +168,12 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_serialized_sig(
             tx_bytes,
-            sig_scheme,
             signature_bytes,
-            pub_key,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -231,14 +225,12 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let tx =
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-        let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+        let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
         let response = http_client
-            .execute_transaction(
+            .execute_transaction_serialized_sig(
                 tx_bytes,
-                sig_scheme,
                 signature_bytes,
-                pub_key,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
             )
             .await?;

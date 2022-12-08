@@ -1125,16 +1125,14 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let tx_digest = txn.digest();
 
     // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
-    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
     let params = rpc_params![
         tx_bytes,
-        flag,
         signature,
-        pub_key,
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransaction", params)
+        .request("sui_executeTransactionSerializedSig", params)
         .await
         .unwrap();
 
@@ -1156,16 +1154,14 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .unwrap();
 
     // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
-    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
     let params = rpc_params![
         tx_bytes,
-        flag,
         signature,
-        pub_key,
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransaction", params)
+        .request("sui_executeTransactionSerializedSig", params)
         .await
         .unwrap();
 
@@ -1184,16 +1180,14 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     // Test request with ExecuteTransactionRequestType::WaitForTxCert
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
-    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
     let params = rpc_params![
         tx_bytes,
-        flag,
         signature,
-        pub_key,
         ExecuteTransactionRequestType::WaitForTxCert
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransaction", params)
+        .request("sui_executeTransactionSerializedSig", params)
         .await
         .unwrap();
 
@@ -1206,16 +1200,14 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     // Test request with ExecuteTransactionRequestType::ImmediateReturn
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
-    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
     let params = rpc_params![
         tx_bytes,
-        flag,
         signature,
-        pub_key,
         ExecuteTransactionRequestType::ImmediateReturn
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransaction", params)
+        .request("sui_executeTransactionSerializedSig", params)
         .await
         .unwrap();
 
