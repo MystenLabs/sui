@@ -280,8 +280,13 @@ impl Builder {
         }
     }
 
-    pub fn set_chain_id(mut self, chain_id: ChainId) -> Self {
+    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
         self.parameters.chain_id = chain_id;
+        self
+    }
+
+    pub fn with_parameters(mut self, parameters: GenesisChainParameters) -> Self {
+        self.parameters = parameters;
         self
     }
 
