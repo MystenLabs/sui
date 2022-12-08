@@ -20,20 +20,18 @@ export function TransactionType({
     type,
 }: TransactionTypeProps) {
     return (
-        <div className="flex flex-col items-start">
-            <div className="flex items-center justify-center gap-1.5">
-                {isSuccess ? (
-                    <ContentSuccessStatus className="text-success" />
-                ) : (
-                    <ContentFailedStatus className="text-issue-dark" />
-                )}
-                {type}
-                {count && (
-                    <div className="rounded-lg bg-gray-40 py-0.5 px-1.25">
-                        {count}
-                    </div>
-                )}
-            </div>
+        <div className="flex items-center gap-1.5">
+            {isSuccess ? (
+                <ContentSuccessStatus className="text-success" />
+            ) : (
+                <ContentFailedStatus className="text-issue-dark" />
+            )}
+            {type}
+            {count && (
+                <div className="rounded-lg bg-gray-40 py-0.5 px-1.25">
+                    {count}
+                </div>
+            )}
         </div>
     );
 }
