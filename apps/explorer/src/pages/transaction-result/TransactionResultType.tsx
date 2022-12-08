@@ -1,25 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type {
-    CertifiedTransaction,
-    ExecutionStatusType,
-    SuiObjectRef,
-    SuiEvent,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
-
-export type DataType = CertifiedTransaction & {
-    transaction: SuiTransactionResponse | null;
-    loadState: string;
-    txId: string;
-    status: ExecutionStatusType;
-    gasFee: number;
-    txError: string;
-    mutated: SuiObjectRef[];
-    created: SuiObjectRef[];
-    events?: SuiEvent[];
-    timestamp_ms: number | null;
-};
-
+// TODO: Remove this when we remove Longtext
 export type Category = 'object' | 'transaction' | 'address' | 'unknown';
