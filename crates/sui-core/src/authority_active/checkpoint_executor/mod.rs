@@ -114,11 +114,11 @@ impl CheckpointExecutor {
     pub async fn execute_checkpoints_for_epoch(
         &mut self,
     ) -> Option<(VerifiedCheckpoint, Vec<(AuthorityPublicKeyBytes, u64)>)> {
-        let mut finished: CheckpointExecutionBuffer = FuturesOrdered::new();
+        let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
 
         loop {
             if !self.end_of_epoch {
-                self.schedule_synced_checkpoints(&mut finished)
+                self.schedule_synced_checkpoints(&mut pending)
                     .await
                     .unwrap_or_else(|err| {
                         self.metrics.checkpoint_exec_errors.inc();
@@ -134,7 +134,7 @@ impl CheckpointExecutor {
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
-                Some(Ok((checkpoint, next_committee))) = finished.next() => {
+                Some(Ok((checkpoint, next_committee))) = pending.next() => {
                     match next_committee {
                         None => {
                             self.metrics.last_executed_checkpoint.set(checkpoint.sequence_number() as i64);
@@ -142,8 +142,9 @@ impl CheckpointExecutor {
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
                         }
-                        // Last checkpoint of epoch -- Note that we must not update the
-                        // highest executed watermark until after reconfig has completed!
+                        // We must not ratchet highest_executed_checkpoint before reconfig. If we
+                        // do and reconfig crashes, node will move forward with checkpoint execution
+                        // in the wrong epoch after startup
                         Some(committee) => return Some((checkpoint, committee)),
                     }
                 }
@@ -176,7 +177,7 @@ impl CheckpointExecutor {
 
     async fn schedule_synced_checkpoints(
         &mut self,
-        finished: &mut CheckpointExecutionBuffer,
+        pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
         let latest_synced_checkpoint = match self.latest_synced_checkpoint.clone() {
             Some(checkpoint) => checkpoint,
@@ -229,7 +230,7 @@ impl CheckpointExecutor {
             // from StateSync
             Ordering::Equal => {
                 return self
-                    .schedule_checkpoint(latest_synced_checkpoint, finished)
+                    .schedule_checkpoint(latest_synced_checkpoint, pending)
                     .await
             }
             // Need to catch up more than 1. Continue
@@ -241,7 +242,7 @@ impl CheckpointExecutor {
         // checkpoints that *need* to be scheduled and the number of tasks available
         // to schedule within
         let checkpoints_diff = latest_synced_checkpoint.sequence_number() - next_to_exec + 1;
-        let tasks_diff = self.task_limit - finished.len();
+        let tasks_diff = self.task_limit - pending.len();
         let num_tasks_to_schedule = std::cmp::min(checkpoints_diff, tasks_diff as u64);
 
         // get all checkpoints to be scheduled, less the last (which we got already above)
@@ -259,10 +260,10 @@ impl CheckpointExecutor {
         let checkpoints_to_schedule = checkpoints_to_schedule;
 
         for checkpoint in checkpoints_to_schedule.into_iter() {
+            self.schedule_checkpoint(checkpoint, pending).await?;
             if self.end_of_epoch {
                 return Ok(());
             }
-            self.schedule_checkpoint(checkpoint, finished).await?;
         }
 
         Ok(())
@@ -271,13 +272,26 @@ impl CheckpointExecutor {
     async fn schedule_checkpoint(
         &mut self,
         checkpoint: VerifiedCheckpoint,
-        finished: &mut CheckpointExecutionBuffer,
+        pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
-        // Since StateSync is guaranteed to produce checkpoint sync messages
-        // in monotonically increasing order, then a mismatch of epoch would
-        // mean that we failed to execute reconfig at the epoch boundary. This
-        // is an invalid state that should not happen under normal operation
-        assert_eq!(checkpoint.epoch(), self.authority_state.epoch());
+        // Mismatch between node epoch and checkpoit epoch only valid if we crashed after
+        // reconfig but before updating highest_executed_checkpoint watermark. In this case,
+        // we can easily recover by reconfiging now since there should be no scheduled checkpoints.
+        if checkpoint.epoch() != self.authority_state.epoch() {
+            assert!(
+                pending.is_empty() && self.highest_scheduled_seq_num.is_none(),
+                "Mismatch between node epoch and checkpoint epoch is only valid at startup"
+            );
+            let new_epoch_committee = self
+                .checkpoint_store
+                .get_highest_executed_checkpoint()?
+                .unwrap()
+                .next_epoch_committee()
+                .unwrap_or_else(
+                    || panic!("Expected last executed checkpoint to be last of epoch due to epoch mismatch, bit it was not")
+                ).to_vec();
+            reconfig(new_epoch_committee).await;
+        }
 
         let next_committee = checkpoint.summary().next_epoch_committee.clone();
 
@@ -290,7 +304,7 @@ impl CheckpointExecutor {
         let store = self.checkpoint_store.clone();
         let metrics = self.metrics.clone();
 
-        finished.push_back(spawn_monitored_task!(async move {
+        pending.push_back(spawn_monitored_task!(async move {
             while let Err(err) =
                 execute_checkpoint(checkpoint.clone(), state.clone(), store.clone()).await
             {
