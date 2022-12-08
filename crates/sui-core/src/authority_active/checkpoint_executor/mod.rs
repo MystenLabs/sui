@@ -17,7 +17,6 @@
 //! handles epoch boundaries by calling to reconfig once all checkpoints of an epoch have finished
 //! executing.
 
-use core::panic;
 use std::{cmp::Ordering, sync::Arc, time::Duration};
 
 use futures::stream::FuturesOrdered;
@@ -25,7 +24,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     crypto::AuthorityPublicKeyBytes,
-    error::{SuiError, SuiResult},
+    error::SuiResult,
     messages::TransactionEffects,
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
@@ -96,16 +95,31 @@ impl CheckpointExecutor {
     }
 
     pub async fn run(mut self) {
+        self.handle_crash_recovery().unwrap();
+
         while let Some((last_checkpoint, next_committee)) =
             self.execute_checkpoints_for_epoch().await
         {
-            reconfig(next_committee).await;
+            reconfig(next_committee);
             self.checkpoint_store
                 .update_highest_executed_checkpoint(&last_checkpoint)
                 .unwrap();
             self.end_of_epoch = false;
         }
         // Channel closed
+    }
+
+    pub fn handle_crash_recovery(&self) -> SuiResult {
+        if let Some(checkpoint) = self.checkpoint_store.get_highest_executed_checkpoint()? {
+            // last executed checkpoint before shutdown was last of epoch. Make sure
+            // reconfig was successful, otherwise redo
+            if let Some(committee) = checkpoint.next_epoch_committee() {
+                if checkpoint.epoch() == self.authority_state.epoch() {
+                    reconfig(committee.to_vec());
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Executes all checkpoints for the current epoch. At epoch boundary,
@@ -119,7 +133,6 @@ impl CheckpointExecutor {
         loop {
             if !self.end_of_epoch {
                 self.schedule_synced_checkpoints(&mut pending)
-                    .await
                     .unwrap_or_else(|err| {
                         self.metrics.checkpoint_exec_errors.inc();
                         panic!(
@@ -175,7 +188,7 @@ impl CheckpointExecutor {
         }
     }
 
-    async fn schedule_synced_checkpoints(
+    fn schedule_synced_checkpoints(
         &mut self,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
@@ -228,11 +241,7 @@ impl CheckpointExecutor {
             Ordering::Greater => return Ok(()),
             // follow case. Avoid reading from DB and used checkpoint passed
             // from StateSync
-            Ordering::Equal => {
-                return self
-                    .schedule_checkpoint(latest_synced_checkpoint, pending)
-                    .await
-            }
+            Ordering::Equal => return self.schedule_checkpoint(latest_synced_checkpoint, pending),
             // Need to catch up more than 1. Continue
             Ordering::Less => {}
         }
@@ -260,7 +269,7 @@ impl CheckpointExecutor {
         let checkpoints_to_schedule = checkpoints_to_schedule;
 
         for checkpoint in checkpoints_to_schedule.into_iter() {
-            self.schedule_checkpoint(checkpoint, pending).await?;
+            self.schedule_checkpoint(checkpoint, pending)?;
             if self.end_of_epoch {
                 return Ok(());
             }
@@ -269,29 +278,20 @@ impl CheckpointExecutor {
         Ok(())
     }
 
-    async fn schedule_checkpoint(
+    fn schedule_checkpoint(
         &mut self,
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
     ) -> SuiResult {
-        // Mismatch between node epoch and checkpoit epoch only valid if we crashed after
-        // reconfig but before updating highest_executed_checkpoint watermark. In this case,
-        // we can easily recover by reconfiging now since there should be no scheduled checkpoints.
-        if checkpoint.epoch() != self.authority_state.epoch() {
-            assert!(
-                pending.is_empty() && self.highest_scheduled_seq_num.is_none(),
-                "Mismatch between node epoch and checkpoint epoch is only valid at startup"
-            );
-            let new_epoch_committee = self
-                .checkpoint_store
-                .get_highest_executed_checkpoint()?
-                .unwrap()
-                .next_epoch_committee()
-                .unwrap_or_else(
-                    || panic!("Expected last executed checkpoint to be last of epoch due to epoch mismatch, bit it was not")
-                ).to_vec();
-            reconfig(new_epoch_committee).await;
-        }
+        // Mismatch between node epoch and checkpoint epoch after startup
+        // crash recovery is invalid
+        let checkpoint_epoch = checkpoint.epoch();
+        let node_epoch = self.authority_state.epoch();
+        assert_eq!(
+            checkpoint_epoch, node_epoch,
+            "Epoch mismatch after startup recovery. checkpoint epoch: {:?}, node epoch: {:?}",
+            checkpoint_epoch, node_epoch,
+        );
 
         let next_committee = checkpoint.summary().next_epoch_committee.clone();
 
@@ -331,8 +331,7 @@ pub async fn execute_checkpoint(
     checkpoint_store: Arc<CheckpointStore>,
 ) -> SuiResult<Vec<TransactionEffects>> {
     let txes = checkpoint_store
-        .get_checkpoint_contents(&checkpoint.content_digest())
-        .map_err(SuiError::from)?
+        .get_checkpoint_contents(&checkpoint.content_digest())?
         .unwrap_or_else(|| {
             panic!(
                 "Checkpoint contents for digest {:?} does not exist",
@@ -368,6 +367,6 @@ async fn execute_transactions(
     Ok(actual_fx)
 }
 
-async fn reconfig(_next_epoch_committee: Vec<(AuthorityPublicKeyBytes, u64)>) {
+fn reconfig(_next_epoch_committee: Vec<(AuthorityPublicKeyBytes, u64)>) {
     // TODO
 }

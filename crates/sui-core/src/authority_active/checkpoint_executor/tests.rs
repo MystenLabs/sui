@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use fastcrypto::traits::KeyPair;
 use sui_types::{committee::Committee, crypto::AuthorityKeyPair};
