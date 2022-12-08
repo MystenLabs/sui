@@ -16,6 +16,7 @@ use rocksdb::{
     WriteBatch,
 };
 use serde::{de::DeserializeOwned, Serialize};
+use std::collections::HashMap;
 use std::{
     borrow::Borrow, collections::BTreeMap, env, marker::PhantomData, path::Path, sync::Arc,
     time::Duration,
@@ -404,6 +405,13 @@ impl<K, V> DBMap<K, V> {
     }
 }
 
+/// Represents a single change in the pending db batch.
+#[derive(Debug, Eq, PartialEq)]
+pub enum Change<V> {
+    Value(V),
+    Deletion,
+}
+
 /// Provides a mutable struct to form a collection of database write operations, and execute them.
 ///
 /// Batching write and delete operations is faster than performing them one by one and ensures their atomicity,
@@ -457,7 +465,8 @@ impl<K, V> DBMap<K, V> {
 ///
 pub struct DBBatch {
     rocksdb: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
-    batch: WriteBatch,
+    // pending changes grouped by column family and respective keys
+    change_set: HashMap<String, HashMap<Vec<u8>, Change<Vec<u8>>>>,
     db_metrics: Arc<DBMetrics>,
     write_sample_interval: SamplingInterval,
 }
@@ -473,7 +482,7 @@ impl DBBatch {
     ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),
-            batch: WriteBatch::default(),
+            change_set: HashMap::new(),
             db_metrics: db_metrics.clone(),
             write_sample_interval: write_sample_interval.clone(),
         }
@@ -482,6 +491,19 @@ impl DBBatch {
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
+        let mut batch = WriteBatch::default();
+        for (cf_name, changes) in self.change_set {
+            let cf = self
+                .rocksdb
+                .cf_handle(&cf_name)
+                .expect("Map-keying column family should have been checked at DB creation");
+            for (key, change) in changes {
+                match change {
+                    Change::Value(value) => batch.put_cf(&cf, key, value),
+                    Change::Deletion => batch.delete_cf(&cf, key),
+                }
+            }
+        }
         let report_metrics = if self.write_sample_interval.sample() {
             let db_name = self
                 .rocksdb
@@ -496,12 +518,12 @@ impl DBBatch {
                 .rocksdb_batch_commit_latency_seconds
                 .with_label_values(&[&db_name])
                 .start_timer();
-            let size = self.batch.size_in_bytes();
+            let size = batch.size_in_bytes();
             Some((db_name, size, timer, RocksDBPerfContext::default()))
         } else {
             None
         };
-        self.rocksdb.write(self.batch)?;
+        self.rocksdb.write(batch)?;
         if let Some((db_name, batch_size, _timer, _perf_ctx)) = report_metrics {
             self.db_metrics
                 .op_metrics
@@ -531,28 +553,12 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                self.batch.delete_cf(&db.cf(), k_buf);
-
+                self.change_set
+                    .entry(db.cf.clone())
+                    .or_default()
+                    .insert(k_buf, Change::Deletion);
                 Ok(())
             })?;
-        Ok(self)
-    }
-
-    /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range<'a, K: Serialize, V>(
-        mut self,
-        db: &'a DBMap<K, V>,
-        from: &K,
-        to: &K,
-    ) -> Result<Self, TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-
-        let from_buf = be_fix_int_ser(from)?;
-        let to_buf = be_fix_int_ser(to)?;
-
-        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf);
         Ok(self)
     }
 
@@ -571,10 +577,31 @@ impl DBBatch {
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
                 let v_buf = bincode::serialize(v.borrow())?;
-                self.batch.put_cf(&db.cf(), k_buf, v_buf);
+                self.change_set
+                    .entry(db.cf.clone())
+                    .or_default()
+                    .insert(k_buf, Change::Value(v_buf));
                 Ok(())
             })?;
         Ok(self)
+    }
+
+    /// returns a pending change for the given key if present
+    pub fn get<K: Serialize, V: DeserializeOwned>(
+        &self,
+        db: &DBMap<K, V>,
+        key: &K,
+    ) -> Result<Option<Change<V>>, TypedStoreError> {
+        let k_buf = be_fix_int_ser(key)?;
+        Ok(self
+            .change_set
+            .get(&db.cf)
+            .and_then(|changes| changes.get(&k_buf))
+            .map(|change| match change {
+                Change::Value(bytes) => bincode::deserialize(bytes).map(|v| Change::Value(v)),
+                Change::Deletion => Ok(Change::Deletion),
+            })
+            .transpose()?)
     }
 }
 

@@ -415,35 +415,6 @@ async fn test_delete_batch() {
 }
 
 #[tokio::test]
-async fn test_delete_range() {
-    let db: DBMap<i32, String> =
-        DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
-
-    // Note that the last element is (100, "100".to_owned()) here
-    let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
-        .insert_batch(&db, keys_vals)
-        .expect("Failed to batch insert");
-
-    let delete_range_batch = insert_batch
-        .delete_range(&db, &50, &100)
-        .expect("Failed to delete range");
-
-    delete_range_batch.write().expect("Failed to execute batch");
-
-    for k in 0..50 {
-        assert!(db.contains_key(&k).expect("Failed to query legal key"),);
-    }
-    for k in 50..100 {
-        assert!(!db.contains_key(&k).expect("Failed to query legal key"));
-    }
-
-    // range operator is not inclusive of to
-    assert!(db.contains_key(&100).expect("Failed to query legel key"));
-}
-
-#[tokio::test]
 async fn test_clear() {
     let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"))
         .expect("Failed to open storage");
@@ -582,4 +553,29 @@ async fn open_as_secondary_test() {
 
     // New value should be present
     assert_eq!(secondary_db.get(&0).unwrap(), Some("10".to_string()));
+}
+
+#[tokio::test]
+async fn query_write_batch_test() {
+    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+    db.insert(&0, &"0".to_string()).expect("failed to insert");
+    let keys_vals = (1..5).map(|i| (i, i.to_string()));
+    let mut batch = db
+        .batch()
+        .insert_batch(&db, keys_vals)
+        .expect("Failed to batch insert");
+    batch = batch
+        .delete_batch(&db, vec![0])
+        .expect("Failed to batch delete");
+
+    assert!(batch.get(&db, &10).unwrap().is_none());
+    assert_eq!(
+        batch.get(&db, &3).unwrap(),
+        Some(Change::Value("3".to_string()))
+    );
+    assert_eq!(batch.get(&db, &0).unwrap(), Some(Change::Deletion));
+
+    batch.write().expect("Failed to execute batch");
+    assert_eq!(db.get(&0).unwrap(), None);
+    assert_eq!(db.get(&3).unwrap(), Some("3".to_string()));
 }
