@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::p2p::{P2pConfig, SeedPeer};
-use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
+use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
 use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::committee::Committee;
 use sui_types::crypto::{
@@ -62,16 +63,71 @@ impl NetworkConfig {
         Self::generate_with_rng(config_dir, quorum_size, OsRng)
     }
 
-    pub fn generate_fullnode_config(&self) -> NodeConfig {
-        self.generate_fullnode_config_with_random_dir_name(false)
+    pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder<'_> {
+        FullnodeConfigBuilder::new(self)
+    }
+}
+
+pub struct FullnodeConfigBuilder<'a> {
+    network_config: &'a NetworkConfig,
+    dir: Option<PathBuf>,
+    enable_event_store: bool,
+    listen_ip: Option<IpAddr>,
+    rpc_port: Option<u16>,
+}
+
+impl<'a> FullnodeConfigBuilder<'a> {
+    fn new(network_config: &'a NetworkConfig) -> Self {
+        Self {
+            network_config,
+            dir: None,
+            enable_event_store: false,
+            listen_ip: None,
+            rpc_port: None,
+        }
     }
 
-    /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
-    /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
-    pub fn generate_fullnode_config_with_random_dir_name(
-        &self,
-        use_random_dir_name: bool,
-    ) -> NodeConfig {
+    // The EventStore uses a non-deterministic async pool which breaks determinism in
+    // the simulator, so do not enable with_event_store in tests unless the test specifically
+    // requires events.
+    // TODO: In the simulator, we may be able to run event store in a separate thread and make
+    // blocking calls to it to fix this.
+    pub fn with_event_store(mut self) -> Self {
+        self.enable_event_store = true;
+        self
+    }
+
+    pub fn with_listen_ip(mut self, ip: IpAddr) -> Self {
+        self.listen_ip = Some(ip);
+        self
+    }
+
+    pub fn with_rpc_port(mut self, port: u16) -> Self {
+        self.rpc_port = Some(port);
+        self
+    }
+
+    pub fn set_rpc_port(mut self, port: Option<u16>) -> Self {
+        self.rpc_port = port;
+        self
+    }
+
+    pub fn set_event_store(mut self, status: bool) -> Self {
+        self.enable_event_store = status;
+        self
+    }
+
+    pub fn with_dir(mut self, dir: PathBuf) -> Self {
+        self.dir = Some(dir);
+        self
+    }
+
+    pub fn with_random_dir(mut self) -> Self {
+        self.dir = None;
+        self
+    }
+
+    pub fn build(self) -> Result<NodeConfig, anyhow::Error> {
         let protocol_key_pair: Arc<AuthorityKeyPair> =
             Arc::new(get_key_pair_from_rng(&mut OsRng).1);
         let worker_key_pair: Arc<NetworkKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
@@ -81,27 +137,29 @@ impl NetworkConfig {
                 .into(),
         );
         let network_key_pair: Arc<NetworkKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
-        let validator_config = &self.validator_configs[0];
+        let validator_configs = &self.network_config.validator_configs;
+        let validator_config = &validator_configs[0];
 
         let mut db_path = validator_config.db_path.clone();
         db_path.pop();
 
-        // The EventStore uses a non-deterministic async pool which breaks determinism in
-        // the simulator.
-        // TODO: In the simulator, we can run event store in a separate thread and make
-        // blocking calls to it to fix this.
-        let enable_event_processing = !cfg!(msim);
-        let dir_name = if use_random_dir_name {
-            OsRng.next_u32().to_string()
-        } else {
-            FULL_NODE_DB_PATH.to_string()
-        };
+        let dir_name = self
+            .dir
+            .unwrap_or_else(|| OsRng.next_u32().to_string().into());
 
-        let network_address = utils::new_tcp_network_address();
+        let listen_ip = self.listen_ip.unwrap_or_else(utils::get_local_ip_for_tests);
+
+        let network_address = format!(
+            "/ip4/{}/tcp/{}/http",
+            listen_ip,
+            utils::get_available_port()
+        )
+        .parse()
+        .unwrap();
+
         let p2p_config = {
             let address = utils::available_local_socket_address();
-            let seed_peers = self
-                .validator_configs()
+            let seed_peers = validator_configs
                 .iter()
                 .map(|config| SeedPeer {
                     peer_id: Some(anemo::PeerId(config.network_key_pair.public().0.to_bytes())),
@@ -117,7 +175,11 @@ impl NetworkConfig {
             }
         };
 
-        NodeConfig {
+        let rpc_port = self.rpc_port.unwrap_or_else(utils::get_available_port);
+        let jsonrpc_server_url = format!("{}:{}", listen_ip, rpc_port);
+        let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
+
+        Ok(NodeConfig {
             protocol_key_pair,
             worker_key_pair,
             account_key_pair,
@@ -126,15 +188,15 @@ impl NetworkConfig {
             network_address,
             metrics_address: utils::available_local_socket_address(),
             admin_interface_port: utils::get_available_port(),
-            json_rpc_address: utils::available_local_socket_address(),
+            json_rpc_address,
             consensus_config: None,
-            enable_event_processing,
+            enable_event_processing: self.enable_event_store,
             enable_checkpoint: false,
             enable_reconfig: false,
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
-        }
+        })
     }
 }

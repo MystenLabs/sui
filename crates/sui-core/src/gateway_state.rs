@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_adapter::execution_mode;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -1287,7 +1288,7 @@ where
             .try_as_package()
             .ok_or_else(|| anyhow!("Cannot get package from object"))?
             .deserialize_module(&module)?;
-        resolve_and_type_check(
+        resolve_and_type_check::<execution_mode::Normal>(
             &objects,
             &compiled_module,
             &function,

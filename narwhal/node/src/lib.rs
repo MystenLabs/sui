@@ -170,7 +170,7 @@ impl Node {
         let (tx_sequence, rx_sequence) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
 
-        // Check for any certs that have been sent by consensus but were not processed by the executor.
+        // Check for any sub-dags that have been sent by consensus but were not processed by the executor.
         let restored_consensus_output = get_restored_consensus_output(
             store.consensus_store.clone(),
             store.certificate_store.clone(),
@@ -178,16 +178,15 @@ impl Node {
         )
         .await?;
 
-        let num_leaders = restored_consensus_output.len() as u64;
-        let num_certificates: usize = restored_consensus_output.iter().map(|x| x.len()).sum();
-        if num_leaders > 0 {
+        let num_sub_dags = restored_consensus_output.len() as u64;
+        if num_sub_dags > 0 {
             info!(
-                "Consensus output on its way to the executor was restored for {num_leaders} leaders and {num_certificates} certificates",
+                "Consensus output on its way to the executor was restored for {num_sub_dags} sub-dags",
             );
         }
         consensus_metrics
             .recovered_consensus_output
-            .inc_by(num_certificates as u64);
+            .inc_by(num_sub_dags as u64);
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(

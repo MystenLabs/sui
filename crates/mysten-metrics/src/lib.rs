@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Instant;
 
 use once_cell::sync::OnceCell;
@@ -133,5 +136,31 @@ pub fn monitored_scope(name: &'static str) -> Option<MonitoredScopeGuard> {
         })
     } else {
         None
+    }
+}
+
+pub trait MonitoredFutureExt: Future + Sized {
+    fn in_monitored_scope(self, name: &'static str) -> MonitoredScopeFuture<Self>;
+}
+
+impl<F: Future> MonitoredFutureExt for F {
+    fn in_monitored_scope(self, name: &'static str) -> MonitoredScopeFuture<Self> {
+        MonitoredScopeFuture {
+            f: Box::pin(self),
+            _scope: monitored_scope(name),
+        }
+    }
+}
+
+pub struct MonitoredScopeFuture<F: Sized> {
+    f: Pin<Box<F>>,
+    _scope: Option<MonitoredScopeGuard>,
+}
+
+impl<F: Future> Future for MonitoredScopeFuture<F> {
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.f.as_mut().poll(cx)
     }
 }

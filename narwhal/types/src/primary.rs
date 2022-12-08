@@ -696,6 +696,7 @@ impl Certificate {
     Ord,
     Arbitrary,
 )]
+
 pub struct CertificateDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl CertificateDigest {

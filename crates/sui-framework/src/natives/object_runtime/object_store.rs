@@ -156,8 +156,8 @@ impl<'a> ObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
     ) -> PartialVMResult<bool> {
-        if self.store.get(&child).is_some() {
-            return Ok(true);
+        if let Some(child_object) = self.store.get(&child) {
+            return child_object.value.exists();
         }
         Ok(self
             .inner
@@ -172,7 +172,8 @@ impl<'a> ObjectStore<'a> {
         child_tag: StructTag,
     ) -> PartialVMResult<bool> {
         if let Some(child_object) = self.store.get(&child) {
-            return Ok(child_object.tag == child_tag);
+            // exists and has same type
+            return Ok(child_object.value.exists()? && child_object.tag == child_tag);
         }
         Ok(self
             .inner

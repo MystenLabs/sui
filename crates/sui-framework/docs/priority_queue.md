@@ -277,6 +277,18 @@ Insert a new entry into the queue.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_priority_queue_max_heapify_recursive"></a>
 
 ## Function `max_heapify_recursive`
@@ -311,6 +323,18 @@ Insert a new entry into the queue.
         <a href="priority_queue.md#0x2_priority_queue_max_heapify_recursive">max_heapify_recursive</a>(v, len, max);
     }
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
 </code></pre>
 
 

@@ -39,7 +39,7 @@ impl WaitingPeer {
         use tokio::sync::broadcast::error::RecvError;
 
         let start = Instant::now();
-        let (mut subscriber, _) = self.network.subscribe();
+        let (mut subscriber, _) = self.network.subscribe()?;
 
         // If we're connected with the peer immediately make the request
         if let Some(mut peer) = self.network.peer(self.peer_id) {

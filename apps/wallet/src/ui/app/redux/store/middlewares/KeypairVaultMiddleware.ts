@@ -4,7 +4,6 @@
 import { isAnyOf } from '@reduxjs/toolkit';
 
 import {
-    loadEntropyFromKeyring,
     setAddress,
     createVault,
     setKeyringStatus,
@@ -15,7 +14,6 @@ import type { Middleware } from '@reduxjs/toolkit';
 
 const keypairVault = thunkExtras.keypairVault;
 const matchUpdateKeypairVault = isAnyOf(
-    loadEntropyFromKeyring.fulfilled,
     createVault.fulfilled,
     setKeyringStatus
 );
@@ -25,19 +23,22 @@ export const KeypairVaultMiddleware: Middleware =
     (next) =>
     (action) => {
         if (matchUpdateKeypairVault(action)) {
-            let entropy;
-            if (typeof action.payload === 'string') {
-                entropy = action.payload;
-            } else {
-                entropy = action.payload?.entropy;
+            let exportedKeypair;
+            if (action.payload) {
+                if ('activeAccount' in action.payload) {
+                    exportedKeypair = action.payload.activeAccount;
+                } else if ('schema' in action.payload) {
+                    exportedKeypair = action.payload;
+                }
             }
-            if (entropy) {
-                keypairVault.entropy = entropy;
+            if (exportedKeypair) {
+                keypairVault.keypair = exportedKeypair;
                 dispatch(setAddress(keypairVault.getAccount()));
             } else {
                 keypairVault.clear();
+                dispatch(setAddress(null));
             }
-            entropy = null;
+            exportedKeypair = null;
         }
         return next(action);
     };

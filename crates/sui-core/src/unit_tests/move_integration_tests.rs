@@ -422,7 +422,7 @@ fn test_object_owning_another_object() {
             .iter()
             .filter(|e| matches!(e.event_type(), EventType::TransferObject { .. }))
             .count();
-        assert_eq!(num_transfers, 2);
+        assert_eq!(num_transfers, 1);
         let num_created = effects
             .events
             .iter()
@@ -434,6 +434,12 @@ fn test_object_owning_another_object() {
             .iter()
             .find(|e| e.object_id() == Some(child.0))
             .unwrap();
+        let num_deleted = effects
+            .events
+            .iter()
+            .filter(|e| matches!(e.event_type(), EventType::DeleteObject { .. }))
+            .count();
+        assert_eq!(num_deleted, 1);
         let (recipient, object_type) = match child_event {
             Event::TransferObject {
                 recipient,
@@ -532,8 +538,7 @@ fn test_create_then_delete_parent_child() {
         .unwrap();
         assert!(effects.status.is_ok());
         // Check that both objects were deleted.
-        // TODO field object should be deleted too
-        assert_eq!(effects.deleted.len(), 2);
+        assert_eq!(effects.deleted.len(), 3);
         assert_eq!(effects.events.len(), 4);
     })
 }
@@ -594,8 +599,7 @@ fn test_create_then_delete_parent_child_wrap() {
         .unwrap();
         assert!(effects.status.is_ok());
         // Check that both objects were deleted.
-        // TODO field object should be deleted too
-        assert_eq!(effects.deleted.len(), 2);
+        assert_eq!(effects.deleted.len(), 3);
         assert_eq!(effects.events.len(), 4);
     })
 }
@@ -689,8 +693,7 @@ fn test_create_then_delete_parent_child_wrap_separate() {
         .unwrap();
         assert!(effects.status.is_ok());
         // Check that both objects were deleted.
-        // TODO field object should be deleted too
-        assert_eq!(effects.deleted.len(), 2);
+        assert_eq!(effects.deleted.len(), 3);
         assert_eq!(effects.events.len(), 4);
     })
 }

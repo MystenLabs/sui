@@ -8,14 +8,11 @@ use crate::{
 };
 use config::{Committee, Stake};
 use crypto::PublicKey;
-use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
+use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, error};
-use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore, Round,
-    SequenceNumber, StoreResult,
-};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -57,12 +54,10 @@ impl ConsensusProtocol for Bullshark {
     fn process_certificate(
         &mut self,
         state: &mut ConsensusState,
-        consensus_index: SequenceNumber,
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
-        let mut consensus_index = consensus_index;
 
         // We must have stored already the parents of this certificate!
         self.log_error_if_missing_parents(&certificate, state);
@@ -158,39 +153,28 @@ impl ConsensusProtocol for Bullshark {
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
-                let digest = x.digest();
-
                 // Update and clean up internal state.
                 state.update(&x, self.gc_depth);
 
                 // Add the certificate to the sequence.
-                sequence.push(ConsensusOutput {
-                    certificate: x,
-                    consensus_index,
-                });
-
-                // Increase the global consensus index.
-                consensus_index += 1;
-
-                // Persist the update.
-                // TODO [issue #116]: Ensure this is not a performance bottleneck.
-                self.store.write_consensus_state(
-                    &state.last_committed,
-                    &consensus_index,
-                    &digest,
-                )?;
-                debug!(
-                    "Store commit index:{}, digest:{}",
-                    &consensus_index, &digest
-                );
+                sequence.push(x);
             }
 
+            let next_sub_dag_index = state.latest_sub_dag_index + 1;
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
+                sub_dag_index: next_sub_dag_index,
             };
+
+            // Persist the update.
             self.store
-                .write_committed_sub_dag(&state.last_committed, &sub_dag)?;
+                .write_consensus_state(&state.last_committed, &sub_dag)?;
+            debug!("Store commit index:{},", &next_sub_dag_index,);
+
+            // Increase the global consensus index.
+            state.latest_sub_dag_index = next_sub_dag_index;
+
             committed_sub_dags.push(sub_dag);
         }
 
@@ -215,7 +199,10 @@ impl ConsensusProtocol for Bullshark {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        let total_commits: usize = committed_sub_dags.iter().map(|x| x.len()).sum();
+        let total_commits: usize = committed_sub_dags
+            .iter()
+            .map(|x| x.certificates.len())
+            .sum();
         debug!("Total committed certificates: {}", total_commits);
 
         self.metrics

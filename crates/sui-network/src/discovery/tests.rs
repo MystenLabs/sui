@@ -116,8 +116,8 @@ async fn make_connection_to_seed_peer() -> Result<()> {
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (mut event_loop_2, _handle_2) = builder.build(network_2.clone());
 
-    let (mut subscriber_1, _) = network_1.subscribe();
-    let (mut subscriber_2, _) = network_2.subscribe();
+    let (mut subscriber_1, _) = network_1.subscribe()?;
+    let (mut subscriber_2, _) = network_2.subscribe()?;
 
     event_loop_2.handle_tick(std::time::Instant::now(), now_unix());
 
@@ -149,8 +149,8 @@ async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (mut event_loop_2, _handle_2) = builder.build(network_2.clone());
 
-    let (mut subscriber_1, _) = network_1.subscribe();
-    let (mut subscriber_2, _) = network_2.subscribe();
+    let (mut subscriber_1, _) = network_1.subscribe()?;
+    let (mut subscriber_2, _) = network_2.subscribe()?;
 
     event_loop_2.handle_tick(std::time::Instant::now(), now_unix());
 
@@ -190,9 +190,9 @@ async fn three_nodes_can_connect_via_discovery() -> Result<()> {
     let network_3 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_3, _handle_3) = builder.build(network_3.clone());
 
-    let (mut subscriber_1, _) = network_1.subscribe();
-    let (mut subscriber_2, _) = network_2.subscribe();
-    let (mut subscriber_3, _) = network_3.subscribe();
+    let (mut subscriber_1, _) = network_1.subscribe()?;
+    let (mut subscriber_2, _) = network_2.subscribe()?;
+    let (mut subscriber_3, _) = network_3.subscribe()?;
 
     // Start all the event loops
     tokio::spawn(event_loop_1.start());

@@ -45,7 +45,7 @@ jobs:
             return `https://github.com/MystenLabs/sui/actions/runs/${context.payload.workflow_run.id}#artifacts`;
 
       - name: Comment PR
-        uses: thollander/actions-comment-pull-request@v1
+        uses: thollander/actions-comment-pull-request@v2
         if: steps.get-artifact.outputs.result != ''
         with:
           pr_number: ${{ steps.source-run-info.outputs.pullRequestNumber }}

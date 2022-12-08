@@ -246,7 +246,7 @@ where
 
         let mut interval = tokio::time::interval(self.config.interval_period());
         let mut peer_events = {
-            let (subscriber, peers) = self.network.subscribe();
+            let (subscriber, peers) = self.network.subscribe().unwrap();
             for peer_id in peers {
                 self.spawn_get_latest_from_peer(peer_id);
             }

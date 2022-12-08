@@ -28,7 +28,8 @@ task 7 'run'. lines 91-91:
 written: object(106), object(114)
 
 task 8 'run'. lines 93-93:
-written: object(106), object(109), object(110), object(115)
+written: object(106), object(115)
+deleted: object(109), object(110)
 
 task 9 'run'. lines 95-95:
 written: object(106), object(116)

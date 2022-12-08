@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use sui_adapter::execution_mode::{self, ExecutionMode};
 use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
@@ -47,7 +48,10 @@ use crate::authority::TemporaryStore;
 mod pay_sui_tests;
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+pub fn execute_transaction_to_effects<
+    Mode: ExecutionMode,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+>(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
     transaction_data: TransactionData,
@@ -60,12 +64,12 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync + Chil
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
-    Option<ExecutionError>,
+    Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
-    let (gas_cost_summary, execution_result) = execute_transaction(
+    let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
         transaction_data,
         gas_object_ref.0,
@@ -75,11 +79,11 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync + Chil
         gas_status,
     );
 
-    let (status, execution_error) = match execution_result {
-        Ok(()) => (ExecutionStatus::Success, None),
+    let (status, execution_result) = match execution_result {
+        Ok(results) => (ExecutionStatus::Success, Ok(results)),
         Err(error) => (
             ExecutionStatus::new_failure(error.to_execution_status()),
-            Some(error),
+            Err(error),
         ),
     };
     debug!(
@@ -101,7 +105,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync + Chil
         status,
         gas_object_ref,
     );
-    (inner, effects, execution_error)
+    (inner, effects, execution_result)
 }
 
 fn charge_gas_for_object_read<S>(
@@ -120,7 +124,10 @@ fn charge_gas_for_object_read<S>(
 }
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
-fn execute_transaction<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+fn execute_transaction<
+    Mode: ExecutionMode,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+>(
     temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,
@@ -128,172 +135,29 @@ fn execute_transaction<S: BackingPackageStore + ParentSync + ChildObjectResolver
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
-) -> (GasCostSummary, Result<(), ExecutionError>) {
+) -> (
+    GasCostSummary,
+    Result<Mode::ExecutionResults, ExecutionError>,
+) {
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
-    let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
-    if result.is_ok() {
-        // TODO: Since we require all mutable objects to not show up more than
-        // once across single tx, we should be able to run them in parallel.
-        for single_tx in transaction_data.kind.into_single_transactions() {
-            result = match single_tx {
-                SingleTransactionKind::TransferObject(TransferObject {
-                    recipient,
-                    object_ref,
-                }) => {
-                    // unwrap is safe because we built the object map from the transactions
-                    let object = temporary_store
-                        .objects()
-                        .get(&object_ref.0)
-                        .unwrap()
-                        .clone();
-                    transfer_object(temporary_store, object, tx_ctx.sender(), recipient)
-                }
-                SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
-                    let gas_object = temporary_store
-                        .objects()
-                        .get(&gas_object_id)
-                        .expect("We constructed the object map so it should always have the gas object id")
-                        .clone();
-                    transfer_sui(temporary_store, gas_object, recipient, amount, tx_ctx)
-                }
-                SingleTransactionKind::PaySui(PaySui {
-                    coins,
-                    recipients,
-                    amounts,
-                }) => {
-                    let mut coin_objects: Vec<Object> =  // unwrap is is safe because we built the object map from the transaction
-                    coins.iter().map(|c|
-                    temporary_store
-                        .objects()
-                        .get(&c.0)
-                        .unwrap()
-                        .clone()
-                    ).collect();
-                    pay_sui(
-                        temporary_store,
-                        &mut coin_objects,
-                        recipients,
-                        amounts,
-                        tx_ctx,
-                    )
-                }
-                SingleTransactionKind::PayAllSui(PayAllSui { coins, recipient }) => {
-                    let mut coin_objects: Vec<Object> =  // unwrap is is safe because we built the object map from the transaction
-                    coins.iter().map(|c|
-                    temporary_store
-                        .objects()
-                        .get(&c.0)
-                        .unwrap()
-                        .clone()
-                    ).collect();
-                    pay_all_sui(
-                        tx_ctx.sender(),
-                        temporary_store,
-                        &mut coin_objects,
-                        recipient,
-                    )
-                }
-                SingleTransactionKind::Call(MoveCall {
-                    package,
-                    module,
-                    function,
-                    type_arguments,
-                    arguments,
-                }) => {
-                    // Charge gas for this VM execution
-                    if let Err(e) = gas_status.charge_vm_gas() {
-                        result = Err(e);
-                        break;
-                    }
-
-                    let module_id = ModuleId::new(package.0.into(), module);
-                    adapter::execute(
-                        move_vm,
-                        temporary_store,
-                        module_id,
-                        &function,
-                        type_arguments,
-                        arguments,
-                        gas_status.create_move_gas_status(),
-                        tx_ctx,
-                    )
-                }
-                SingleTransactionKind::Publish(MoveModulePublish { modules }) => {
-                    // Charge gas for this VM execution
-                    if let Err(e) = gas_status.charge_vm_gas() {
-                        result = Err(e);
-                        break;
-                    }
-                    // Charge gas for this publish
-                    if let Err(e) =
-                        gas_status.charge_publish_package(modules.iter().map(|v| v.len()).sum())
-                    {
-                        result = Err(e);
-                        break;
-                    }
-                    adapter::publish(
-                        temporary_store,
-                        native_functions.clone(),
-                        modules,
-                        tx_ctx,
-                        gas_status.create_move_gas_status(),
-                    )
-                }
-                SingleTransactionKind::Pay(Pay {
-                    coins,
-                    recipients,
-                    amounts,
-                }) => {
-                    let coin_objects =  // unwrap is is safe because we built the object map from the transaction
-                    coins.iter().map(|c|
-                    temporary_store
-                        .objects()
-                        .get(&c.0)
-                        .unwrap()
-                        .clone()
-                    ).collect();
-                    pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)
-                }
-                SingleTransactionKind::ChangeEpoch(ChangeEpoch {
-                    epoch,
-                    storage_charge,
-                    computation_charge,
-                    storage_rebate,
-                }) => {
-                    let module_id =
-                        ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
-                    let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
-                    adapter::execute(
-                        move_vm,
-                        temporary_store,
-                        module_id,
-                        &function,
-                        vec![],
-                        vec![
-                            CallArg::Object(ObjectArg::SharedObject {
-                                id: SUI_SYSTEM_STATE_OBJECT_ID,
-                                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                            }),
-                            CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
-                            CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
-                            CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
-                            CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
-                        ],
-                        gas_status.create_move_gas_status(),
-                        tx_ctx,
-                    )
-                }
-            };
-            if result.is_err() {
-                break;
-            }
-        }
-        if result.is_err() {
+    let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
+    let mut result = result.and_then(|()| {
+        let execution_result = execution_loop::<Mode, _>(
+            temporary_store,
+            transaction_data,
+            gas_object_id,
+            tx_ctx,
+            move_vm,
+            native_functions,
+            &mut gas_status,
+        );
+        if execution_result.is_err() {
             // Roll back the temporary store if execution failed.
             temporary_store.reset();
         }
-    }
+        execution_result
+    });
 
     // Make sure every mutable object's version number is incremented.
     // This needs to happen before `charge_gas_for_storage_changes` so that it
@@ -306,6 +170,161 @@ fn execute_transaction<S: BackingPackageStore + ParentSync + ChildObjectResolver
 
     let cost_summary = gas_status.summary(result.is_ok());
     (cost_summary, result)
+}
+
+fn execution_loop<
+    Mode: ExecutionMode,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+>(
+    temporary_store: &mut TemporaryStore<S>,
+    transaction_data: TransactionData,
+    gas_object_id: ObjectID,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    native_functions: &NativeFunctionTable,
+    gas_status: &mut SuiGasStatus,
+) -> Result<Mode::ExecutionResults, ExecutionError> {
+    let mut results = Mode::empty_results();
+    // TODO: Since we require all mutable objects to not show up more than
+    // once across single tx, we should be able to run them in parallel.
+    for (idx, single_tx) in transaction_data.kind.into_single_transactions().enumerate() {
+        match single_tx {
+            SingleTransactionKind::TransferObject(TransferObject {
+                recipient,
+                object_ref,
+            }) => {
+                // unwrap is safe because we built the object map from the transactions
+                let object = temporary_store
+                    .objects()
+                    .get(&object_ref.0)
+                    .unwrap()
+                    .clone();
+                transfer_object(temporary_store, object, tx_ctx.sender(), recipient)?;
+            }
+            SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
+                let gas_object = temporary_store
+                    .objects()
+                    .get(&gas_object_id)
+                    .expect(
+                        "We constructed the object map so it should always have the gas object id",
+                    )
+                    .clone();
+                transfer_sui(temporary_store, gas_object, recipient, amount, tx_ctx)?;
+            }
+            SingleTransactionKind::PaySui(PaySui {
+                coins,
+                recipients,
+                amounts,
+            }) => {
+                let mut coin_objects: Vec<Object> =  // unwrap is is safe because we built the object map from the transaction
+                    coins.iter().map(|c|
+                    temporary_store
+                        .objects()
+                        .get(&c.0)
+                        .unwrap()
+                        .clone()
+                    ).collect();
+                pay_sui(
+                    temporary_store,
+                    &mut coin_objects,
+                    recipients,
+                    amounts,
+                    tx_ctx,
+                )?;
+            }
+            SingleTransactionKind::PayAllSui(PayAllSui { coins, recipient }) => {
+                // unwrap is is safe because we built the object map from the transaction
+                let mut coin_objects: Vec<Object> = coins
+                    .iter()
+                    .map(|c| temporary_store.objects().get(&c.0).unwrap().clone())
+                    .collect();
+                pay_all_sui(
+                    tx_ctx.sender(),
+                    temporary_store,
+                    &mut coin_objects,
+                    recipient,
+                )?;
+            }
+            SingleTransactionKind::Call(MoveCall {
+                package,
+                module,
+                function,
+                type_arguments,
+                arguments,
+            }) => {
+                // Charge gas for this VM execution
+                gas_status.charge_vm_gas()?;
+
+                let module_id = ModuleId::new(package.0.into(), module);
+                let result = adapter::execute::<Mode, _, _>(
+                    move_vm,
+                    temporary_store,
+                    module_id,
+                    &function,
+                    type_arguments,
+                    arguments,
+                    gas_status.create_move_gas_status(),
+                    tx_ctx,
+                )?;
+                Mode::add_result(&mut results, idx, result);
+            }
+            SingleTransactionKind::Publish(MoveModulePublish { modules }) => {
+                // Charge gas for this VM execution
+                gas_status.charge_vm_gas()?;
+                // Charge gas for this publish
+                gas_status.charge_publish_package(modules.iter().map(|v| v.len()).sum())?;
+                adapter::publish(
+                    temporary_store,
+                    native_functions.clone(),
+                    modules,
+                    tx_ctx,
+                    gas_status.create_move_gas_status(),
+                )?;
+            }
+            SingleTransactionKind::Pay(Pay {
+                coins,
+                recipients,
+                amounts,
+            }) => {
+                // unwrap is is safe because we built the object map from the transaction
+                let coin_objects = coins
+                    .iter()
+                    .map(|c| temporary_store.objects().get(&c.0).unwrap().clone())
+                    .collect();
+                pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)?;
+            }
+            SingleTransactionKind::ChangeEpoch(ChangeEpoch {
+                epoch,
+                storage_charge,
+                computation_charge,
+                storage_rebate,
+            }) => {
+                let module_id =
+                    ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
+                let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
+                adapter::execute::<execution_mode::Normal, _, _>(
+                    move_vm,
+                    temporary_store,
+                    module_id,
+                    &function,
+                    vec![],
+                    vec![
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_SYSTEM_STATE_OBJECT_ID,
+                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                        }),
+                        CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
+                    ],
+                    gas_status.create_move_gas_status(),
+                    tx_ctx,
+                )?;
+            }
+        };
+    }
+    Ok(results)
 }
 
 fn transfer_object<S>(

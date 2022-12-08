@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use std::collections::BTreeMap;
-
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
+use std::collections::BTreeMap;
+use sui_types::sui_system_state::SuiSystemState;
 
 use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
@@ -182,6 +182,10 @@ pub trait RpcFullNodeReadApi {
         /// The epoch of interest. If None, default to the latest epoch
         epoch: Option<EpochId>,
     ) -> RpcResult<CommitteeInfoResponse>;
+
+    /// Return SuiSystemState
+    #[method(name = "getSuiSystemState")]
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]

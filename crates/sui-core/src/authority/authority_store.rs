@@ -145,7 +145,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.path,
             self.db_options.clone(),
         ));
-        self.epoch_store.store(epoch_tables);
+        let previous_store = self.epoch_store.swap(epoch_tables);
+        previous_store.epoch_terminated();
     }
 
     pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore<S>>> {
@@ -1178,19 +1179,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.epoch_store().is_consensus_message_processed(key)
     }
 
-    pub async fn consensus_message_processed_notify(
-        &self,
-        key: ConsensusTransactionKey,
-    ) -> Result<(), SuiError> {
-        let epoch_tables = self.epoch_store();
-        let registration = epoch_tables.register_consensus_message_notify(&key);
-        if self.consensus_message_processed(&key)? {
-            return Ok(());
-        }
-        registration.await;
-        Ok(())
-    }
-
     pub fn sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
         self.epoch_store().has_sent_end_of_publish(authority)
     }
@@ -1200,7 +1188,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         authority: AuthorityName,
         transaction: &ConsensusTransaction,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult<bool> {
+    ) -> SuiResult {
         self.epoch_store()
             .record_end_of_publish(authority, transaction.key(), consensus_index)
     }
@@ -1340,6 +1328,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         );
 
         Ok(Some((index, roots)))
+    }
+
+    pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
+        self.epoch_store().final_epoch_checkpoint()
     }
 
     pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {

@@ -1160,6 +1160,23 @@
       ]
     },
     {
+      "name": "sui_getSuiSystemState",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return SuiSystemState",
+      "params": [],
+      "result": {
+        "name": "SuiSystemState",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiSystemState"
+        }
+      }
+    },
+    {
       "name": "sui_getTotalTransactionNumber",
       "tags": [
         {
@@ -2296,6 +2313,19 @@
           }
         }
       },
+      "Balance": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "BalanceChangeType": {
         "type": "string",
         "enum": [
@@ -2464,6 +2494,41 @@
       },
       "Ed25519SuiSignature": {
         "$ref": "#/components/schemas/Base64"
+      },
+      "Entry_for_SuiAddress_and_VecSet_for_SuiAddress": {
+        "description": "Rust version of the Move sui::vec_map::Entry type",
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "value": {
+            "$ref": "#/components/schemas/VecSet_for_SuiAddress"
+          }
+        }
+      },
+      "Entry_for_ValidatorPair_and_Array_of_PendingWithdrawEntry": {
+        "description": "Rust version of the Move sui::vec_map::Entry type",
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/ValidatorPair"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingWithdrawEntry"
+            }
+          }
+        }
       },
       "Event": {
         "oneOf": [
@@ -3939,6 +4004,46 @@
           }
         }
       },
+      "PendingDelegationEntry": {
+        "description": "Rust version of the Move sui::staking_pool::PendingDelegationEntry type.",
+        "type": "object",
+        "required": [
+          "delegator",
+          "sui_amount"
+        ],
+        "properties": {
+          "delegator": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "sui_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "PendingWithdrawEntry": {
+        "description": "Rust version of the Move sui::staking_pool::PendingWithdrawEntry type.",
+        "type": "object",
+        "required": [
+          "delegator",
+          "principal_withdraw_amount",
+          "withdrawn_pool_tokens"
+        ],
+        "properties": {
+          "delegator": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "principal_withdraw_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "withdrawn_pool_tokens": {
+            "$ref": "#/components/schemas/Balance"
+          }
+        }
+      },
       "RPCTransactionRequestParams": {
         "oneOf": [
           {
@@ -4010,6 +4115,52 @@
           "Secp256k1",
           "BLS12381"
         ]
+      },
+      "StakingPool": {
+        "description": "Rust version of the Move sui::staking_pool::StakingPool type",
+        "type": "object",
+        "required": [
+          "delegation_token_supply",
+          "pending_delegations",
+          "pending_withdraws",
+          "rewards_pool",
+          "starting_epoch",
+          "sui_balance",
+          "validator_address"
+        ],
+        "properties": {
+          "delegation_token_supply": {
+            "$ref": "#/components/schemas/Supply"
+          },
+          "pending_delegations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingDelegationEntry"
+            }
+          },
+          "pending_withdraws": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingWithdrawEntry"
+            }
+          },
+          "rewards_pool": {
+            "$ref": "#/components/schemas/Balance"
+          },
+          "starting_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "sui_balance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validator_address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
       },
       "SuiAddress": {
         "$ref": "#/components/schemas/Hex"
@@ -4572,6 +4723,50 @@
           }
         ]
       },
+      "SuiSystemState": {
+        "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
+        "type": "object",
+        "required": [
+          "epoch",
+          "info",
+          "parameters",
+          "reference_gas_price",
+          "storage_fund",
+          "treasury_cap",
+          "validator_report_records",
+          "validators"
+        ],
+        "properties": {
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "info": {
+            "$ref": "#/components/schemas/UID"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/SystemParameters"
+          },
+          "reference_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_fund": {
+            "$ref": "#/components/schemas/Balance"
+          },
+          "treasury_cap": {
+            "$ref": "#/components/schemas/Supply"
+          },
+          "validator_report_records": {
+            "$ref": "#/components/schemas/VecMap_for_SuiAddress_and_VecSet_for_SuiAddress"
+          },
+          "validators": {
+            "$ref": "#/components/schemas/ValidatorSet"
+          }
+        }
+      },
       "SuiTransactionAuthSignersResponse": {
         "type": "object",
         "required": [
@@ -4614,6 +4809,45 @@
               "integer",
               "null"
             ],
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "Supply": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "SystemParameters": {
+        "description": "Rust version of the Move sui::sui_system::SystemParameters type",
+        "type": "object",
+        "required": [
+          "max_validator_candidate_count",
+          "min_validator_stake",
+          "storage_gas_price"
+        ],
+        "properties": {
+          "max_validator_candidate_count": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "min_validator_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_gas_price": {
+            "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           }
@@ -5020,6 +5254,265 @@
       },
       "TypeTag": {
         "type": "string"
+      },
+      "UID": {
+        "description": "Rust version of the Move sui::object::Info type",
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      },
+      "Validator": {
+        "description": "Rust version of the Move sui::validator::Validator type",
+        "type": "object",
+        "required": [
+          "commission_rate",
+          "delegation_staking_pool",
+          "gas_price",
+          "metadata",
+          "pending_stake",
+          "pending_withdraw",
+          "stake_amount"
+        ],
+        "properties": {
+          "commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "delegation_staking_pool": {
+            "$ref": "#/components/schemas/StakingPool"
+          },
+          "gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ValidatorMetadata"
+          },
+          "pending_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "pending_withdraw": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stake_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "ValidatorMetadata": {
+        "type": "object",
+        "required": [
+          "name",
+          "net_address",
+          "network_pubkey_bytes",
+          "next_epoch_commission_rate",
+          "next_epoch_delegation",
+          "next_epoch_gas_price",
+          "next_epoch_stake",
+          "proof_of_possession_bytes",
+          "pubkey_bytes",
+          "sui_address"
+        ],
+        "properties": {
+          "name": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "net_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "network_pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "next_epoch_commission_rate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_delegation": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_gas_price": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "proof_of_possession_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "pubkey_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "sui_address": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "ValidatorPair": {
+        "description": "Rust version of the Move sui::validator_set::ValidatorPair type",
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "to": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "ValidatorSet": {
+        "description": "Rust version of the Move sui::validator_set::ValidatorSet type",
+        "type": "object",
+        "required": [
+          "active_validators",
+          "delegation_stake",
+          "next_epoch_validators",
+          "pending_delegation_switches",
+          "pending_removals",
+          "pending_validators",
+          "quorum_stake_threshold",
+          "validator_stake"
+        ],
+        "properties": {
+          "active_validators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Validator"
+            }
+          },
+          "delegation_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "next_epoch_validators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidatorMetadata"
+            }
+          },
+          "pending_delegation_switches": {
+            "$ref": "#/components/schemas/VecMap_for_ValidatorPair_and_Array_of_PendingWithdrawEntry"
+          },
+          "pending_removals": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "pending_validators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Validator"
+            }
+          },
+          "quorum_stake_threshold": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validator_stake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "VecMap_for_SuiAddress_and_VecSet_for_SuiAddress": {
+        "description": "Rust version of the Move sui::vec_map::VecMap type",
+        "type": "object",
+        "required": [
+          "contents"
+        ],
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Entry_for_SuiAddress_and_VecSet_for_SuiAddress"
+            }
+          }
+        }
+      },
+      "VecMap_for_ValidatorPair_and_Array_of_PendingWithdrawEntry": {
+        "description": "Rust version of the Move sui::vec_map::VecMap type",
+        "type": "object",
+        "required": [
+          "contents"
+        ],
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Entry_for_ValidatorPair_and_Array_of_PendingWithdrawEntry"
+            }
+          }
+        }
+      },
+      "VecSet_for_SuiAddress": {
+        "description": "Rust version of the Move sui::vec_set::VecSet type",
+        "type": "object",
+        "required": [
+          "contents"
+        ],
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        }
       }
     }
   }

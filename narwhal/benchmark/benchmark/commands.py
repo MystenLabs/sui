@@ -113,4 +113,4 @@ class CommandMaker:
     def alias_binaries(origin):
         assert isinstance(origin, str)
         node, client = join(origin, 'narwhal-node'), join(origin, 'narwhal-benchmark-client')
-        return f'rm narwhal-node ; rm narwhal-benchmark-client ; ln -s {node} . ; ln -s {client} .'
+        return f'rm -f narwhal-node ; rm -f narwhal-benchmark-client ; ln -s {node} . ; ln -s {client} .'

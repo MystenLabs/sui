@@ -9,7 +9,6 @@
 /// building block for core collection types
 module sui::dynamic_field {
 
-use std::option::{Self, Option};
 use sui::object::{Self, ID, UID};
 
 friend sui::dynamic_object_field;
@@ -34,9 +33,8 @@ struct Field<Name: copy + drop + store, Value: store> has key {
     id: UID,
     /// The value for the name of this field
     name: Name,
-    // TODO we need lamport timestamps to make this not an option
     /// The value bound to this field
-    value: Option<Value>,
+    value: Value,
 }
 
 /// Adds a dynamic field to the object `object: &mut UID` at field specified by `name: Name`.
@@ -49,19 +47,13 @@ public fun add<Name: copy + drop + store, Value: store>(
 ) {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    if (!has_child_object(object_addr, hash)) {
-        let field = Field {
-            id: object::new_uid_from_hash(hash),
-            name,
-            value: option::none<Value>(),
-        };
-        add_child_object(object_addr, field)
+    assert!(!has_child_object(object_addr, hash), EFieldAlreadyExists);
+    let field = Field {
+        id: object::new_uid_from_hash(hash),
+        name,
+        value,
     };
-    // TODO remove once we have lamport timestamps
-    assert!(has_child_object_with_ty<Field<Name, Value>>(object_addr, hash), EFieldAlreadyExists);
-    let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
-    assert!(option::is_none(&field.value), EFieldAlreadyExists);
-    option::fill(&mut field.value, value);
+    add_child_object(object_addr, field)
 }
 
 /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
@@ -75,8 +67,7 @@ public fun borrow<Name: copy + drop + store, Value: store>(
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
     let field = borrow_child_object<Field<Name, Value>>(object, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    option::borrow(&field.value)
+    &field.value
 }
 
 /// Mutably borrows the `object`s dynamic field with the name specified by `name: Name`.
@@ -90,8 +81,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
     let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    option::borrow_mut(&mut field.value)
+    &mut field.value
 }
 
 /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
@@ -105,12 +95,22 @@ public fun remove<Name: copy + drop + store, Value: store>(
 ): Value {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    option::extract(&mut field.value)
+    let Field { id, name: _, value } = remove_child_object<Field<Name, Value>>(object_addr, hash);
+    object::delete(id);
+    value
 }
 
-// TODO implement exists (without the Value type) once we have lamport timestamps
+/// Returns true if and only if the `object` has a dynamic field with the name specified by
+/// `name: Name` but without specifying the `Value` type
+public fun exists_<Name: copy + drop + store>(
+    object: &UID,
+    name: Name,
+): bool {
+    let object_addr = object::uid_to_address(object);
+    let hash = hash_type_and_key(object_addr, name);
+    has_child_object(object_addr, hash)
+}
+
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` with an assigned value of type `Value`.
 public fun exists_with_type<Name: copy + drop + store, Value: store>(
@@ -119,9 +119,7 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
 ): bool {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    if (!has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)) return false;
-    let field = borrow_child_object<Field<Name, Value>>(object, hash);
-    option::is_some(&field.value)
+    has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
 }
 
 public(friend) fun field_info<Name: copy + drop + store>(
@@ -130,9 +128,8 @@ public(friend) fun field_info<Name: copy + drop + store>(
 ): (&UID, address) {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name, ID>>(object, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    (&field.id, object::id_to_address(&option::destroy_some(field.value)))
+    let Field { id, name: _, value } = borrow_child_object<Field<Name, ID>>(object, hash);
+    (id, object::id_to_address(value))
 }
 
 public(friend) fun field_info_mut<Name: copy + drop + store>(
@@ -141,11 +138,9 @@ public(friend) fun field_info_mut<Name: copy + drop + store>(
 ): (&mut UID, address) {
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object_mut<Field<Name, ID>>(object, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    (&mut field.id, object::id_to_address(&option::destroy_some(field.value)))
+    let Field { id, name: _, value } = borrow_child_object_mut<Field<Name, ID>>(object, hash);
+    (id, object::id_to_address(value))
 }
-
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 

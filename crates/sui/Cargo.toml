@@ -52,6 +52,7 @@ mysten-network.workspace = true
 move-core-types.workspace = true
 move-prover.workspace = true
 move-prover-boogie-backend.workspace = true
+move-stackless-bytecode.workspace = true
 move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
@@ -76,6 +77,8 @@ sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
+
+assert_cmd = "2.0.6"
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

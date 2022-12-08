@@ -13,6 +13,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
 use sui_adapter::adapter::resolve_and_type_check;
+use sui_adapter::execution_mode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_json_rpc_types::SuiObjectInfo;
@@ -349,7 +350,8 @@ impl TransactionBuilder {
         }
         let compiled_module = package.deserialize_module(module)?;
 
-        resolve_and_type_check(
+        // TODO set the Mode from outside?
+        resolve_and_type_check::<execution_mode::Normal>(
             &objects,
             &compiled_module,
             function,
