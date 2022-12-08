@@ -14,128 +14,141 @@ use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_types::crypto::NetworkKeyPair;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
 pub struct NarwhalManager {
-    primary_handles: Option<Vec<JoinHandle<()>>>,
-    worker_handles: Option<Vec<JoinHandle<()>>>,
-    parameters: Option<Parameters>,
+    pub join_handle: JoinHandle<()>,
+    pub tx_start: Sender<(Arc<Committee>, Registry)>,
+    pub tx_stop: Sender<()>,
 }
 
 pub struct NarwhalConfiguration<
     State: ExecutionState + Send + Sync + 'static,
     TxValidator: TransactionValidator,
 > {
-    primary_keypair: bls12381::min_sig::BLS12381KeyPair,
-    primary_network_keypair: NetworkKeyPair,
+    pub primary_keypair: bls12381::min_sig::BLS12381KeyPair,
+    pub network_keypair: NetworkKeyPair,
+    pub worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
+    pub worker_cache: SharedWorkerCache,
 
-    worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
-    worker_cache: SharedWorkerCache,
-
-    committee: Committee,
-    storage_base_path: PathBuf,
-    registry: Registry,
-
-    parameters: Parameters,
-    execution_state: Arc<State>,
-    tx_validator: TxValidator,
+    pub storage_base_path: PathBuf,
+    pub parameters: Parameters,
+    pub execution_state: Arc<State>,
+    pub tx_validator: TxValidator,
 }
 
-impl NarwhalManager {
-    pub fn new() -> Self {
-        Self {
-            primary_handles: None,
-            worker_handles: None,
-            parameters: None,
+pub async fn run_narwhal_manager<State, TxValidator>(
+    config: NarwhalConfiguration<State, TxValidator>,
+    mut tr_start: Receiver<(Arc<Committee>, Registry)>,
+    mut tr_stop: Receiver<()>,
+) where
+    State: ExecutionState + Send + Sync + 'static,
+    TxValidator: TransactionValidator,
+{
+    let port = config
+        .parameters
+        .network_admin_server
+        .primary_network_admin_server_port;
+
+    loop {
+        // Copy the config for this iteration of the loop
+        let mut id_keypair_copy = Vec::new();
+        for (id, keypair) in &config.worker_ids_and_keypairs {
+            id_keypair_copy.push((id.clone(), keypair.copy()));
         }
-    }
+        let config_copy = NarwhalConfiguration {
+            primary_keypair: config.primary_keypair.copy(),
+            network_keypair: config.network_keypair.copy(),
+            worker_ids_and_keypairs: id_keypair_copy,
+            worker_cache: config.worker_cache.clone(),
+            storage_base_path: config.storage_base_path.clone(),
+            parameters: config.parameters.clone(),
+            execution_state: config.execution_state.clone(),
+            tx_validator: config.tx_validator.clone(),
+        };
 
-    pub async fn shutdown_narwhal(self) {
-        tracing::info!("Sending shutdown message to narwhal");
+        // Wait for instruction to start an instance of narwhal
+        let (new_committee, new_registry) = match tr_start.recv().await {
+            Some(m) => m,
+            None => break,
+        };
+        let narwhal_handles = start_narwhal(config_copy, new_committee, new_registry).await;
 
-        // Send shutdown message to the primary, who will forward it to its workers
-        match self.parameters {
-            Some(parameters) => {
-                let client = reqwest::Client::new();
-                client
-                    .post(format!(
-                        "http://127.0.0.1:{}/reconfigure",
-                        parameters
-                            .network_admin_server
-                            .primary_network_admin_server_port
-                    ))
-                    .json(&ReconfigureNotification::Shutdown)
-                    .send()
-                    .await
-                    .unwrap();
+        // Wait for instruction to stop the instance of narwhal
+        match tr_stop.recv().await {
+            Some(_) => {
+                shutdown_narwhal(port, narwhal_handles).await;
             }
-            None => {
-                tracing::info!("No running instance of narwhal has instantiated yet");
-                return;
-            }
-        }
-
-        // Shutdown the running instance of Narwhal Primary if one is running
-        if let Some(handles) = self.primary_handles {
-            join_all(handles).await;
-        }
-
-        // Shutdown the running instances of Narwhal Workers if they are running
-        if let Some(handles) = self.worker_handles {
-            join_all(handles).await;
-        }
-
-        tracing::info!("Narwhal shutdown is complete");
+            None => break,
+        };
     }
+}
 
-    pub async fn start_narwhal<State, TxValidator>(
-        mut self,
-        config: NarwhalConfiguration<State, TxValidator>,
-    ) where
-        State: ExecutionState + Send + Sync + 'static,
-        TxValidator: TransactionValidator,
-    {
-        // Save parameters for shutdown ability later
-        self.parameters = Some(config.parameters.clone());
+async fn shutdown_narwhal(port: u16, narwhal_handles: Vec<JoinHandle<()>>) {
+    tracing::info!("Sending shutdown message to narwhal");
 
-        // Create a new store
-        let mut store_path = config.storage_base_path.clone();
-        store_path.push(format!("epoch{}", config.committee.epoch()));
-        let store = NodeStorage::reopen(store_path);
+    // Send shutdown message to the primary, who will forward it to its workers
+    let client = reqwest::Client::new();
+    client
+        .post(format!("http://127.0.0.1:{}/reconfigure", port))
+        .json(&ReconfigureNotification::Shutdown)
+        .send()
+        .await
+        .unwrap();
 
-        let name = config.primary_keypair.public().clone();
+    // Shutdown the running instances of Narwhal
+    join_all(narwhal_handles).await;
 
-        tracing::info!("Starting up narwhal");
+    tracing::info!("Narwhal shutdown is complete");
+}
 
-        // Start Narwhal Primary with configuration
-        self.primary_handles = Some(
-            Node::spawn_primary(
-                config.primary_keypair,
-                config.primary_network_keypair,
-                Arc::new(ArcSwap::new(Arc::new(config.committee.clone()))),
-                config.worker_cache.clone(),
-                &store,
-                config.parameters.clone(),
-                /* consensus */ true,
-                config.execution_state.clone(),
-                &config.registry,
-            )
-            .await
-            .unwrap(),
-        );
+async fn start_narwhal<State, TxValidator>(
+    config: NarwhalConfiguration<State, TxValidator>,
+    committee: Arc<Committee>,
+    registry: Registry,
+) -> Vec<JoinHandle<()>>
+where
+    State: ExecutionState + Send + Sync + 'static,
+    TxValidator: TransactionValidator,
+{
+    // Create a new store
+    let mut store_path = config.storage_base_path.clone();
+    store_path.push(format!("epoch{}", committee.epoch()));
+    let store = NodeStorage::reopen(store_path);
 
-        // Start Narwhal Workers with configuration
-        self.worker_handles = Some(Node::spawn_workers(
-            name,
-            config.worker_ids_and_keypairs,
-            Arc::new(ArcSwap::new(Arc::new(config.committee.clone()))),
-            config.worker_cache.clone(),
-            &store,
-            config.parameters.clone(),
-            config.tx_validator.clone(),
-            &config.registry,
-        ));
+    let name = config.primary_keypair.public().clone();
 
-        tracing::info!("Starting up narwhal is complete");
-    }
+    tracing::info!("Starting up narwhal");
+
+    // Start Narwhal Primary with configuration
+    let mut narwhal_handles = Node::spawn_primary(
+        config.primary_keypair.copy(),
+        config.network_keypair.copy(),
+        Arc::new(ArcSwap::new(committee.clone())),
+        config.worker_cache.clone(),
+        &store,
+        config.parameters.clone(),
+        /* consensus */ true,
+        config.execution_state.clone(),
+        &registry,
+    )
+    .await
+    .unwrap();
+
+    // Start Narwhal Workers with configuration
+    narwhal_handles.extend(Node::spawn_workers(
+        name,
+        config.worker_ids_and_keypairs,
+        Arc::new(ArcSwap::new(committee.clone())),
+        config.worker_cache.clone(),
+        &store,
+        config.parameters.clone(),
+        config.tx_validator.clone(),
+        &registry,
+    ));
+
+    tracing::info!("Starting up narwhal is complete");
+
+    narwhal_handles
 }

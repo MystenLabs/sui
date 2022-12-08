@@ -3,41 +3,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::{AuthorityState, ReconfigConsensusMessage},
+    authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
-    consensus_validator::SuiTxValidator,
 };
-use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
-use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use mysten_metrics::spawn_monitored_task;
+use narwhal_types::TransactionsClient;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
 use std::{io, sync::Arc, time::Duration};
-use sui_config::NodeConfig;
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-
-use mysten_metrics::{spawn_monitored_task, RegistryService};
-use narwhal_types::TransactionsClient;
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages::*;
+use sui_types::messages::{
+    AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
+    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ConsensusTransaction,
+    ObjectInfoRequest, ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse,
+};
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
-use sui_types::{error::*, messages::*};
 use tap::TapFallible;
-use tokio::{sync::mpsc::Receiver, task::JoinHandle, time::sleep};
+use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, info, Instrument};
-
-use crate::checkpoints::{
-    CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
-    SubmitCheckpointToConsensus,
-};
-use crate::consensus_handler::ConsensusHandler;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -255,76 +250,14 @@ impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
     pub async fn new(
-        config: &NodeConfig,
         state: Arc<AuthorityState>,
-        checkpoint_store: Arc<CheckpointStore>,
-        state_sync_handle: sui_network::state_sync::Handle,
-        registry_service: RegistryService,
-        rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        prometheus_registry: &Registry,
     ) -> Result<Self> {
-        let prometheus_registry = registry_service.default_registry();
-        let consensus_config = config
-            .consensus_config()
-            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-
-        let consensus_address = consensus_config.address().to_owned();
-        let consensus_client = TransactionsClient::new(
-            mysten_network::client::connect_lazy(&consensus_address)
-                .expect("Failed to connect to consensus"),
-        );
-
-        let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
-
-        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
-        // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter =
-            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
-
-        let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
-            sender: consensus_adapter.clone(),
-            signer: state.secret.clone(),
-            authority: config.protocol_public_key(),
-        });
-
-        let checkpoint_service = CheckpointService::spawn(
-            state.clone(),
-            checkpoint_store,
-            Box::new(state.database.clone()),
-            checkpoint_output,
-            Box::new(certified_checkpoint_output),
-            CheckpointMetrics::new(&prometheus_registry),
-        );
-
-        let consensus_keypair = config.protocol_key_pair().copy();
-        let consensus_worker_keypair = config.worker_key_pair().copy();
-        let consensus_committee = config.genesis()?.narwhal_committee().load();
-        let consensus_worker_cache = config.narwhal_worker_cache()?;
-        let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = ConsensusHandler::new(state.clone(), checkpoint_service);
-        let consensus_execution_state = Arc::new(consensus_execution_state);
-
-        let consensus_parameters = consensus_config.narwhal_config().to_owned();
-        let network_keypair = config.network_key_pair.copy();
-
-        let tx_validator = SuiTxValidator::new(state.clone(), &prometheus_registry);
-        spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
-            consensus_keypair,
-            network_keypair,
-            vec![(0, consensus_worker_keypair)],
-            &consensus_committee,
-            consensus_worker_cache,
-            consensus_storage_base_path,
-            consensus_execution_state,
-            consensus_parameters,
-            tx_validator,
-            rx_reconfigure_consensus,
-            registry_service
-        ));
-
         Ok(Self {
             state,
             consensus_adapter,
-            metrics: Arc::new(ValidatorServiceMetrics::new(&prometheus_registry)),
+            metrics: Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
         })
     }
 

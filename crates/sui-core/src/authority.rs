@@ -535,7 +535,7 @@ pub struct AuthorityState {
     pub(crate) move_vm: Arc<MoveVM>,
 
     /// The database
-    pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
+    pub database: Arc<AuthorityStore>, // TODO: remove pub
 
     pub node_sync_store: Arc<NodeSyncStore>,
 
