@@ -44,7 +44,7 @@ use narwhal_config::{
     WorkerId as ConsensusWorkerId,
 };
 use narwhal_types::CommittedSubDag;
-use sui_adapter::adapter;
+use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, SuiEvent, SuiEventEnvelope, SuiTransactionEffects,
@@ -1058,7 +1058,7 @@ impl AuthorityState {
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, *certificate.digest());
         let (inner_temp_store, effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects(
+            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
                 certificate.data().data.clone(),
@@ -1090,7 +1090,7 @@ impl AuthorityState {
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
         let (_inner_temp_store, effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects(
+            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
                 transaction,
