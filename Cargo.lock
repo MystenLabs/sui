@@ -565,6 +565,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "auto_ops"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7460f7dd8e100147b82a63afca1a20eb6c231ee36b90ba7272e14951cb58af59"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2398,6 +2404,7 @@ dependencies = [
  "ff",
  "generic-array",
  "group",
+ "pkcs8",
  "rand_core 0.6.4",
  "sec1",
  "subtle",
@@ -2527,10 +2534,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=3ac9fa490f2d7eecd133c87a7c616328a217b66a#3ac9fa490f2d7eecd133c87a7c616328a217b66a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=968ca315e508b8fc4364f2d3ca0c77f47922f8a8#968ca315e508b8fc4364f2d3ca0c77f47922f8a8"
 dependencies = [
  "aes",
  "aes-gcm",
+ "auto_ops",
  "base64ct",
  "blake2 0.10.5",
  "blake3",
@@ -2540,7 +2548,9 @@ dependencies = [
  "cbc",
  "ctr",
  "curve25519-dalek-ng",
+ "derive_more",
  "digest 0.10.6",
+ "ecdsa",
  "ed25519-consensus",
  "eyre",
  "fastcrypto-derive",
@@ -2549,8 +2559,10 @@ dependencies = [
  "hkdf",
  "merlin",
  "once_cell",
+ "p256",
  "rand 0.8.5",
  "readonly",
+ "rfc6979",
  "schemars",
  "secp256k1",
  "serde 1.0.149",
@@ -2568,7 +2580,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=3ac9fa490f2d7eecd133c87a7c616328a217b66a#3ac9fa490f2d7eecd133c87a7c616328a217b66a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=968ca315e508b8fc4364f2d3ca0c77f47922f8a8#968ca315e508b8fc4364f2d3ca0c77f47922f8a8"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -2578,7 +2590,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=3ac9fa490f2d7eecd133c87a7c616328a217b66a#3ac9fa490f2d7eecd133c87a7c616328a217b66a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=968ca315e508b8fc4364f2d3ca0c77f47922f8a8#968ca315e508b8fc4364f2d3ca0c77f47922f8a8"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -6081,6 +6093,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
+name = "p256"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51f44edd08f51e2ade572f141051021c5af22677e42b7dd28a88155151c33594"
+dependencies = [
+ "ecdsa",
+ "elliptic-curve",
+ "sha2 0.10.6",
+]
+
+[[package]]
 name = "parity-scale-codec"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7532,6 +7555,7 @@ dependencies = [
  "base16ct",
  "der",
  "generic-array",
+ "pkcs8",
  "subtle",
  "zeroize",
 ]
@@ -10931,6 +10955,7 @@ dependencies = [
  "atoi",
  "atomicwrites",
  "atty",
+ "auto_ops",
  "autocfg",
  "autotools",
  "axum 0.5.17",
@@ -11352,6 +11377,7 @@ dependencies = [
  "output_vt100",
  "overload",
  "owo-colors",
+ "p256",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "parking",

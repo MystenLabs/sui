@@ -53,6 +53,7 @@ async-stream = { version = "0.3", default-features = false }
 atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
+auto_ops = { version = "0.3", default-features = false }
 axum-d8f496e17d97b5cb = { package = "axum", version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-3b31131e45eafb45 = { package = "axum", version = "0.6", default-features = false }
 axum-core-6f8ce4dd05d13bba = { package = "axum-core", version = "0.2", default-features = false }
@@ -61,7 +62,7 @@ axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
 base-x = { version = "0.2", default-features = false }
-base16ct = { version = "0.1", default-features = false }
+base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64 = { version = "0.13", features = ["alloc", "std"] }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
@@ -180,20 +181,20 @@ dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 duration-str = { version = "0.4", features = ["chrono", "serde", "time"] }
 dyn-clone = { version = "1", default-features = false }
-ecdsa = { version = "0.14", default-features = false, features = ["arithmetic", "der", "digest", "hazmat", "rfc6979", "sign", "verify"] }
+ecdsa = { version = "0.14", features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", features = ["alloc", "pkcs8", "serde", "std", "zeroize"] }
 ed25519-consensus = { version = "2", features = ["serde", "std", "thiserror"] }
 ed25519-dalek = { version = "1", features = ["rand", "serde_crate", "std", "u64_backend"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "rand", "serde", "serde_bytes", "serde_crate", "std"] }
 either = { version = "1", features = ["use_std"] }
-elliptic-curve = { version = "0.12", default-features = false, features = ["arithmetic", "digest", "ff", "group", "hazmat", "sec1"] }
+elliptic-curve = { version = "0.12", default-features = false, features = ["alloc", "arithmetic", "digest", "ff", "group", "hazmat", "pkcs8", "sec1", "std"] }
 endian-type = { version = "0.1", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", features = ["copy_key", "secure"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "968ca315e508b8fc4364f2d3ca0c77f47922f8a8", features = ["copy_key", "secure"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "968ca315e508b8fc4364f2d3ca0c77f47922f8a8", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -395,6 +396,7 @@ ouroboros-3575ec1268b04181 = { package = "ouroboros", version = "0.15", features
 ouroboros-274715c4dabd11b0 = { package = "ouroboros", version = "0.9", default-features = false }
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
+p256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "sha2", "sha256", "std"] }
 parity-scale-codec = { version = "2", default-features = false, features = ["bitvec", "chain-error", "max-encoded-len", "parity-scale-codec-derive", "serde", "std"] }
 parking = { version = "2", default-features = false }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
@@ -486,7 +488,7 @@ same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 scopeguard = { version = "1", features = ["use_std"] }
 sct = { version = "0.7", default-features = false }
-sec1 = { version = "0.3", features = ["base16ct", "der", "generic-array", "point", "subtle", "zeroize"] }
+sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array", "pkcs8", "point", "subtle", "zeroize"] }
 secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "global-context", "rand", "rand-std", "recovery", "std"] }
 secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "recovery", "std"] }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
@@ -692,6 +694,7 @@ async-trait = { version = "0.1", default-features = false }
 atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
+auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
 axum-d8f496e17d97b5cb = { package = "axum", version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-3b31131e45eafb45 = { package = "axum", version = "0.6", default-features = false }
@@ -701,7 +704,7 @@ axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
 base-x = { version = "0.2", default-features = false }
-base16ct = { version = "0.1", default-features = false }
+base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64 = { version = "0.13", features = ["alloc", "std"] }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
@@ -841,22 +844,22 @@ dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 duration-str = { version = "0.4", features = ["chrono", "serde", "time"] }
 dyn-clone = { version = "1", default-features = false }
-ecdsa = { version = "0.14", default-features = false, features = ["arithmetic", "der", "digest", "hazmat", "rfc6979", "sign", "verify"] }
+ecdsa = { version = "0.14", features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", features = ["alloc", "pkcs8", "serde", "std", "zeroize"] }
 ed25519-consensus = { version = "2", features = ["serde", "std", "thiserror"] }
 ed25519-dalek = { version = "1", features = ["rand", "serde_crate", "std", "u64_backend"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "rand", "serde", "serde_bytes", "serde_crate", "std"] }
 either = { version = "1", features = ["use_std"] }
-elliptic-curve = { version = "0.12", default-features = false, features = ["arithmetic", "digest", "ff", "group", "hazmat", "sec1"] }
+elliptic-curve = { version = "0.12", default-features = false, features = ["alloc", "arithmetic", "digest", "ff", "group", "hazmat", "pkcs8", "sec1", "std"] }
 endian-type = { version = "0.1", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", features = ["copy_key", "secure"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "968ca315e508b8fc4364f2d3ca0c77f47922f8a8", features = ["copy_key", "secure"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "968ca315e508b8fc4364f2d3ca0c77f47922f8a8", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "968ca315e508b8fc4364f2d3ca0c77f47922f8a8", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1076,6 +1079,7 @@ ouroboros_macro-3575ec1268b04181 = { package = "ouroboros_macro", version = "0.1
 ouroboros_macro-274715c4dabd11b0 = { package = "ouroboros_macro", version = "0.9", default-features = false }
 overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
+p256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "sha2", "sha256", "std"] }
 parity-scale-codec = { version = "2", default-features = false, features = ["bitvec", "chain-error", "max-encoded-len", "parity-scale-codec-derive", "serde", "std"] }
 parity-scale-codec-derive = { version = "2", default-features = false, features = ["max-encoded-len"] }
 parking = { version = "2", default-features = false }
@@ -1196,7 +1200,7 @@ schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"]
 schemars_derive = { version = "0.8", default-features = false }
 scopeguard = { version = "1", features = ["use_std"] }
 sct = { version = "0.7", default-features = false }
-sec1 = { version = "0.3", features = ["base16ct", "der", "generic-array", "point", "subtle", "zeroize"] }
+sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array", "pkcs8", "point", "subtle", "zeroize"] }
 secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "global-context", "rand", "rand-std", "recovery", "std"] }
 secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "recovery", "std"] }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
