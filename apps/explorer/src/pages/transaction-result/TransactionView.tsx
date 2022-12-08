@@ -34,14 +34,7 @@ import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
 import type { Category } from './TransactionResultType';
-import type {
-    CertifiedTransaction,
-    TransactionKindName,
-    ExecutionStatusType,
-    SuiTransactionKind,
-    SuiObjectRef,
-    SuiEvent,
-} from '@mysten/sui.js';
+import type { TransactionKindName, SuiTransactionKind } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
