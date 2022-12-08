@@ -1,0 +1,6 @@
+{% extends "base" %}
+
+{% block content %}
+    <h3>Cluster Test Response</h3>
+    <p> {{response}} </p>
+{% endblock content %}

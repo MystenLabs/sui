@@ -118,7 +118,7 @@ async fn faucet_request(
 ) -> impl IntoResponse {
     let result = match payload {
         FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
-            state.faucet.request_sui_coins(recipient).await
+            state.faucet.request_sui_coins(recipient).await.unwrap()
         }
     };
 

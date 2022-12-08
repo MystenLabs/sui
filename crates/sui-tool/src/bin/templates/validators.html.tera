@@ -1,0 +1,32 @@
+{% extends "base" %}
+
+{% block content %}
+  <body>
+    <div class="container">
+    <h1>Validators</h1>
+      <ol>
+          {% for key in validators %}
+              <li>
+                <strong>{{ key.inner.name }}</strong> 
+                    <ul>
+                      <li> account key: {{key["inner"]["account-key"] }}</li>
+                      <li> account key hex: 0x{{key["account-key-hex"] }}</li>
+                      <li> protocol key: {{key["inner"]["protocol-key"] }}</li>
+                      <li> protocol key hex: 0x{{key["protocol-key-hex"] }}</li>
+                      <li> worker key: {{key["inner"]["worker-key"] }}</li>
+                      <li> worker key hex: 0x{{key["worker-key-hex"] }}</li>
+                      <li> network key: {{key["inner"]["network-key"] }}</li>
+                      <li> network key hex: 0x{{key["network-key-hex"] }}</li>
+                      <li> stake: {{key["inner"]["stake"] }}</li>
+                      <li> delegation: {{key["inner"]["delegation"] }}</li>
+                      <li> gas price: {{key["inner"]["gas-price"] }}</li>
+                      <li> network address: {{key["inner"]["network-address"] }}</li>
+                      <li> narwhal primary address: {{key["inner"]["narwhal-primary-address"] }}</li>
+                      <li> narwhal worker address: {{key["inner"]["narwhal-worker-address"] }}</li>
+                      <li> narwhal consensus address: {{key["inner"]["narwhal-consensus-address"] }}</li>
+                    </ul>
+              </li>
+          {% endfor %}
+      </ol>
+  </body>
+{% endblock content %}

@@ -20,6 +20,7 @@ rocksdb = "0.19.0"
 typed-store.workspace = true
 typed-store-derive.workspace = true
 tempfile = "3.3.0"
+lazy_static = "1.4.0"
 narwhal-executor = { path = "../../narwhal/executor" }
 serde_with = { version = "2.0.1", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
@@ -27,11 +28,19 @@ strum_macros = "^0.24"
 strum = "0.24.1"
 serde = { version = "1.0.144", features = ["derive"] }
 eyre = "0.6.8"
+hex = "0.4.3"
+backtrace = "0.3.66"
+rocket = "0.5.0-rc.2"
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-network = { path = "../sui-network" }
+sui-cluster-test = { path = "../sui-cluster-test" }
 
 colored = "2.0.0"
 workspace-hack.workspace = true
+
+[dependencies.rocket_dyn_templates]
+version = "0.1.0-rc.2"
+features = ["handlebars", "tera"]
