@@ -105,6 +105,20 @@ impl CheckpointStore {
             .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
     }
 
+    pub fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Result<Vec<Option<VerifiedCheckpoint>>, TypedStoreError> {
+        let checkpoints = self
+            .certified_checkpoints
+            .multi_get(sequence_numbers)?
+            .into_iter()
+            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
+            .collect();
+
+        Ok(checkpoints)
+    }
+
     pub fn get_highest_verified_checkpoint(
         &self,
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
