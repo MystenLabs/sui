@@ -1,7 +1,9 @@
-#  Copyright (c) 2022, Mysten Labs, Inc.
-#  Copyright (c) The Diem Core Contributors
-#  Copyright (c) The Move Contributors
-#  SPDX-License-Identifier: Apache-2.0
+# Copyright (c) Mysten Labs
+# SPDX-License-Identifier: Apache-2.0
+
+# Copyright (c) The Diem Core Contributors
+# Copyright (c) The Move Contributors
+# SPDX-License-Identifier: Apache-2.0
 
 # This script draws on the implementation of the dev_setup.sh script in the core Move repository
 # installing all Move dependencies but restricts installed components to those required by the Move
