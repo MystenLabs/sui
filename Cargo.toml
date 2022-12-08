@@ -120,8 +120,8 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "59c5c48547aa7bd9374f2b989d6d9c763914e1f5" }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "59c5c48547aa7bd9374f2b989d6d9c763914e1f5" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5cc756e7d95dfeaa5ba713a789b0cbaa6befcb86" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5cc756e7d95dfeaa5ba713a789b0cbaa6befcb86", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6eb758ba78612e5e22a2748dd7a4b2c8b3724377" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6eb758ba78612e5e22a2748dd7a4b2c8b3724377", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
