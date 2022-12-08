@@ -148,6 +148,10 @@ impl Genesis {
         result
     }
 
+    pub fn chain_id(&self) -> ChainId {
+        self.sui_system_object().chain_id
+    }
+
     pub fn get_default_genesis() -> Self {
         Builder::new().build()
     }
