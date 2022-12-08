@@ -74,7 +74,7 @@ pub fn type_tag_bytes(
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.len() == 1);
-    assert!(args.len() == 0);
+    assert!(args.is_empty());
     let ty = ty_args.pop().unwrap();
     let tag = context.type_to_type_tag(&ty)?;
     // build bytes
