@@ -46,7 +46,7 @@ export function ModuleFunction({
     functionDetails,
 }: ModuleFunctionProps) {
     const { connected, signAndExecuteTransaction } = useWallet();
-    const { handleSubmit, formState, register, control, reset } = useZodForm({
+    const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
     const typeArguments = useFunctionTypeArguments(
@@ -154,7 +154,6 @@ export function ModuleFunction({
                         result={execute.data || null}
                         onClear={() => {
                             execute.reset();
-                            reset();
                         }}
                     />
                 ) : null}

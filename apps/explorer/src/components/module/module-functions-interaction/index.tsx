@@ -56,7 +56,7 @@ export function ModuleFunctionsInteraction({
         <div className="flex flex-col gap-3">
             {executableFunctions.map(({ name, details }) => (
                 <ModuleFunction
-                    key={[packageId, moduleName, name].join('::')}
+                    key={name}
                     functionName={name}
                     functionDetails={details}
                     moduleName={moduleName}

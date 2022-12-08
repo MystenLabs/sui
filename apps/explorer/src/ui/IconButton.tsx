@@ -11,7 +11,9 @@ const iconTypeToIcon: Record<IconType, FC> = {
     x: CloseIcon,
 };
 
-export interface IconButtonProps extends Omit<ButtonOrLinkProps, 'children'> {
+export interface IconButtonProps
+    extends Omit<ButtonOrLinkProps, 'children' | 'aria-label'>,
+        Required<Pick<ButtonOrLinkProps, 'aria-label'>> {
     icon: IconType;
 }
 

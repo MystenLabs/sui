@@ -8,6 +8,7 @@ import { ReactComponent as CheckIcon } from '../icons/check_12x12.svg';
 
 export default {
     component: Banner,
+    args: { onDismiss: undefined },
 } as Meta;
 
 export const Positive: StoryObj<BannerProps> = {

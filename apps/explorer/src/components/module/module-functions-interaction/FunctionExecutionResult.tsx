@@ -5,19 +5,19 @@ import {
     getExecutionStatusError,
     getObjectId,
     getTransactionDigest,
+    getTransactionEffects,
 } from '@mysten/sui.js';
 
-import { useTxEffectsObjectRefs } from './useTxEffectsObjectRefs';
+import { LinkGroup } from './LinkGroup';
 
-import type { SuiTransactionResponse, SuiObjectRef } from '@mysten/sui.js';
+import type { SuiTransactionResponse, OwnedObjectRef } from '@mysten/sui.js';
 
 import { Banner } from '~/ui/Banner';
-import { LinkGroup } from '~/ui/LinkGroup';
 
-function toObjectLink(object: SuiObjectRef) {
+function toObjectLink(object: OwnedObjectRef) {
     return {
-        text: getObjectId(object),
-        to: `/object/${encodeURIComponent(getObjectId(object))}`,
+        text: getObjectId(object.reference),
+        to: `/object/${encodeURIComponent(getObjectId(object.reference))}`,
     };
 }
 
@@ -35,8 +35,6 @@ export function FunctionExecutionResult({
     const adjError =
         error || (result && getExecutionStatusError(result)) || null;
     const variant = adjError ? 'error' : 'message';
-    const createdObjects = useTxEffectsObjectRefs(result, 'created');
-    const mutatedObjects = useTxEffectsObjectRefs(result, 'mutated');
     return (
         <Banner
             icon={null}
@@ -63,11 +61,23 @@ export function FunctionExecutionResult({
                 />
                 <LinkGroup
                     title="Created"
-                    links={createdObjects.map(toObjectLink)}
+                    links={
+                        (result &&
+                            getTransactionEffects(result)?.created?.map(
+                                toObjectLink
+                            )) ||
+                        []
+                    }
                 />
                 <LinkGroup
                     title="Updated"
-                    links={mutatedObjects.map(toObjectLink)}
+                    links={
+                        (result &&
+                            getTransactionEffects(result)?.mutated?.map(
+                                toObjectLink
+                            )) ||
+                        []
+                    }
                 />
                 <LinkGroup title="Transaction failed" text={adjError} />
             </div>

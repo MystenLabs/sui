@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Link } from './Link';
+import { Link } from '~/ui/Link';
 
 export type LinkGroupProps = {
     title: string;

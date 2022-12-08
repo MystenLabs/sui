@@ -8,7 +8,7 @@ import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
 
 const bannerStyles = cva(
-    'inline-flex text-p2 font-medium rounded-lg overflow-hidden box-border gap-1',
+    'inline-flex text-p2 font-medium rounded-lg overflow-hidden box-border gap-2 items-center flex-nowrap relative',
     {
         variants: {
             variant: {
@@ -16,6 +16,10 @@ const bannerStyles = cva(
                 warning: 'bg-warning-light text-warning-dark',
                 error: 'bg-issue-light text-issue-dark',
                 message: 'bg-sui-light text-hero',
+            },
+            align: {
+                left: 'justify-start',
+                center: 'justify-center',
             },
             fullWidth: {
                 true: 'w-full',
@@ -32,37 +36,7 @@ const bannerStyles = cva(
     }
 );
 
-const contentStyles = cva(
-    'flex flex-1 items-center gap-2 max-w-full min-w-0 flex-nowrap',
-    {
-        variants: {
-            align: {
-                left: 'justify-start',
-                center: 'justify-center',
-            },
-        },
-        defaultVariants: {
-            align: 'left',
-        },
-    }
-);
-
-const closeBtnStyles = cva('self-start', {
-    variants: {
-        spacing: {
-            md: '-mt-1 -mr-2',
-            lg: '-mt-4 -mr-4',
-        },
-    },
-    defaultVariants: {
-        spacing: 'md',
-    },
-});
-
-export interface BannerProps
-    extends VariantProps<typeof bannerStyles>,
-        VariantProps<typeof contentStyles>,
-        VariantProps<typeof closeBtnStyles> {
+export interface BannerProps extends VariantProps<typeof bannerStyles> {
     icon?: ReactNode | null;
     children: ReactNode;
     onDismiss?: () => void;
@@ -78,22 +52,26 @@ export function Banner({
     onDismiss,
 }: BannerProps) {
     return (
-        <div className={bannerStyles({ variant, fullWidth, spacing })}>
-            <div
-                className={contentStyles({
-                    align,
-                })}
-            >
-                {icon && (
-                    <div className="flex items-center justify-center">
-                        {icon}
-                    </div>
-                )}
-                <div className="overflow-hidden break-words">{children}</div>
-            </div>
+        <div
+            className={bannerStyles({
+                variant,
+                align,
+                fullWidth,
+                spacing,
+                class: onDismiss && 'pr-9',
+            })}
+        >
+            {icon && (
+                <div className="flex items-center justify-center">{icon}</div>
+            )}
+            <div className="overflow-hidden break-words">{children}</div>
             {onDismiss ? (
-                <div className={closeBtnStyles({ spacing })}>
-                    <IconButton icon="x" onClick={onDismiss} />
+                <div className="absolute top-0 right-0">
+                    <IconButton
+                        icon="x"
+                        onClick={onDismiss}
+                        aria-label="Close"
+                    />
                 </div>
             ) : null}
         </div>

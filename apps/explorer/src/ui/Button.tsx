@@ -8,7 +8,7 @@ import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 const buttonStyles = cva(
     [
-        'inline-flex items-center justify-center',
+        'inline-flex items-center justify-center relative',
         // TODO: Remove when CSS reset is applied.
         'cursor-pointer no-underline',
     ],
@@ -48,8 +48,21 @@ export function Button({
     ...props
 }: ButtonProps) {
     return (
-        <ButtonOrLink className={buttonStyles({ variant, size })} {...props}>
-            {loading ? <LoadingSpinner /> : children}
+        <ButtonOrLink
+            className={buttonStyles({ variant, size })}
+            {...props}
+            disabled={props.disabled || loading}
+        >
+            {loading ? (
+                <>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <LoadingSpinner />
+                    </div>
+                    <div className="text-transparent">{children}</div>
+                </>
+            ) : (
+                children
+            )}
         </ButtonOrLink>
     );
 }
