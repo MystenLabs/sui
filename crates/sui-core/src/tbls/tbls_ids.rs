@@ -9,7 +9,8 @@ use std::unreachable;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::StakeUnit;
 
-/// Threshold BLS requires unique integer "share IDs".
+/// Threshold BLS (tBLS) requires unique integer "share IDs". (tBLS will be used soon by the
+/// randomness beacon.)
 ///
 /// TBlsIds allocates IDs to validators, proportionally to their stake. E.g., if validator A has
 /// stake x and validator B has stake 2x, validator B will receive ~twice than number of IDs A
@@ -18,7 +19,7 @@ use sui_types::committee::StakeUnit;
 /// The maximal number of IDs is fixed. Since we are working with integers, some rounding is used
 /// and thus the ratios between the number of IDs allocated to different validators is only a close
 /// approximation to the ratios between the stakes of those validators. Also, some validators may
-/// not receive any ID (e.g., if they stake is very small compared to the total stake).
+/// not receive any ID (e.g., if their stake is very small compared to the total stake).
 ///
 pub struct TBlsIds {
     name_to_ids: HashMap<AuthorityName, Range<TBlsId>>,
