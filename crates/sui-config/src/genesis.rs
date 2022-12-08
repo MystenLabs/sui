@@ -20,6 +20,7 @@ use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
+use sui_types::chain_id::ChainId;
 use sui_types::crypto::{AuthorityPublicKey, ToFromBytes};
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::gas::SuiGasStatus;
@@ -539,6 +540,7 @@ pub fn generate_genesis_system_object(
     let mut temporary_store =
         TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
+    let chain_id = ChainId::TESTING;
     let mut pubkeys = Vec::new();
     let mut network_pubkeys = Vec::new();
     let mut proof_of_possessions = Vec::new();
@@ -572,6 +574,7 @@ pub fn generate_genesis_system_object(
         &ident_str!("create").to_owned(),
         vec![],
         vec![
+            CallArg::Pure(bcs::to_bytes(&chain_id).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
