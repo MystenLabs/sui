@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-import ExternalLink from '../external-link/ExternalLink';
 
 import styles from './Footer.module.css';
+
+import { Link } from '~/ui/Link';
 
 function Footer() {
     return (
@@ -22,16 +23,14 @@ function Footer() {
                     <h6>Read</h6>
                     <ul>
                         <li>
-                            <ExternalLink
-                                href="https://medium.com/mysten-labs"
-                                label="Blog"
-                            />
+                            <Link href="https://medium.com/mysten-labs">
+                                Blog
+                            </Link>
                         </li>
                         <li>
-                            <ExternalLink
-                                href="https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf"
-                                label="Whitepaper"
-                            />
+                            <Link href="https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf">
+                                Whitepaper
+                            </Link>
                         </li>
                     </ul>
                 </div>
@@ -39,22 +38,15 @@ function Footer() {
                     <h6>Build</h6>
                     <ul>
                         <li>
-                            <ExternalLink
-                                href="https://docs.sui.io/"
-                                label="Docs"
-                            />
+                            <Link href="https://docs.sui.io/">Docs</Link>
                         </li>
                         <li>
-                            <ExternalLink
-                                href="https://github.com/MystenLabs"
-                                label="GitHub"
-                            />
+                            <Link href="https://github.com/MystenLabs">
+                                GitHub
+                            </Link>
                         </li>
                         <li>
-                            <ExternalLink
-                                href="https://discord.gg/sui"
-                                label="Discord"
-                            />
+                            <Link href="https://discord.gg/sui">Discord</Link>
                         </li>
                     </ul>
                 </div>
@@ -62,22 +54,19 @@ function Footer() {
                     <h6>Follow</h6>
                     <ul>
                         <li>
-                            <ExternalLink
-                                href="https://mystenlabs.com/#community"
-                                label="Press"
-                            />
+                            <Link href="https://mystenlabs.com/#community">
+                                Press
+                            </Link>
                         </li>
                         <li>
-                            <ExternalLink
-                                href="https://twitter.com/SuiNetwork"
-                                label="Twitter"
-                            />
+                            <Link href="https://twitter.com/SuiNetwork">
+                                Twitter
+                            </Link>
                         </li>
                         <li>
-                            <ExternalLink
-                                href="https://www.linkedin.com/company/mysten-labs/"
-                                label="LinkedIn"
-                            />
+                            <Link href="https://www.linkedin.com/company/mysten-labs/">
+                                LinkedIn
+                            </Link>
                         </li>
                     </ul>
                 </div>
