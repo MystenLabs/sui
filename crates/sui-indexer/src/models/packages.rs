@@ -16,8 +16,6 @@ use sui_json_rpc_types::SuiEvent;
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
-use tracing::info;
-
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(primary_key(package_id))]
 pub struct Package {
@@ -56,9 +54,6 @@ pub async fn commit_packages_from_events(
         .into_iter()
         .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
         .collect();
-    info!("new packages are {:?}", new_pkgs);
-    info!("pkg errors are {:?}", errors);
-
     log_errors_to_pg(conn, errors);
     commit_new_packages(conn, new_pkgs)
 }

@@ -3,13 +3,10 @@
 
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
-use std::time::Duration;
-use sui::config::{PersistedConfig, SuiClientConfig};
-use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_sdk::SuiClient;
 use tracing::info;
 
-use dotenvy::dotenv;
+use clap::Parser;
 use std::env;
 
 pub mod handlers;
@@ -25,17 +22,15 @@ async fn main() -> anyhow::Result<()> {
         .init();
     info!("Sui indexer started...");
 
+    let indexer_config = IndexerConfig::parse();
     retry(ExponentialBackoff::default(), || async {
-        let rpc_client = new_rpc_client().await?;
-        dotenv().ok();
-        let database_url =
-            env::var("DATABASE_URL").expect("DATABASE_URL must be set in env. to start indexer.");
+        let rpc_client = new_rpc_client(indexer_config.rpc_client_url.clone()).await?;
         // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
         // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
-        HandlerOrchestrator::new(rpc_client.clone(), database_url.clone())
+        HandlerOrchestrator::new(rpc_client.clone(), indexer_config.db_url.clone())
             .run_forever()
             .await;
-        ProcessorOrchestrator::new(rpc_client.clone(), database_url)
+        ProcessorOrchestrator::new(rpc_client.clone(), indexer_config.db_url.clone())
             .run_forever()
             .await;
         Ok(())
@@ -43,12 +38,21 @@ async fn main() -> anyhow::Result<()> {
     .await
 }
 
-async fn new_rpc_client() -> Result<SuiClient, anyhow::Error> {
+async fn new_rpc_client(http_url: String) -> Result<SuiClient, anyhow::Error> {
     info!("Getting new rpc client...");
-    let config_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
-    let config: SuiClientConfig = PersistedConfig::read(&config_path)?;
-    config
-        .get_active_env()?
-        .create_rpc_client(Some(Duration::from_secs(10)))
-        .await
+    let rpc_client = SuiClient::new(http_url.as_str(), None, None).await?;
+    Ok(rpc_client)
+}
+
+#[derive(Parser)]
+#[clap(
+    name = "Sui indexer",
+    about = "An off-fullnode service serving data from Sui protocol",
+    rename_all = "kebab-case"
+)]
+struct IndexerConfig {
+    #[clap(long)]
+    db_url: String,
+    #[clap(long)]
+    rpc_client_url: String,
 }
