@@ -308,7 +308,7 @@ impl ValidatorService {
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
-        let tx_validator = SuiTxValidator::new(state.clone());
+        let tx_validator = SuiTxValidator::new(state.clone(), &registry);
         spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
             consensus_keypair,
             network_keypair,
