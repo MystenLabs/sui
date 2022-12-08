@@ -13,10 +13,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::sync::broadcast;
 
-use crate::{
-    authority::AuthorityState,
-    checkpoints::{CheckpointMetrics, CheckpointStore},
-};
+use crate::{authority::AuthorityState, checkpoints::CheckpointStore};
 
 use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
 
@@ -111,11 +108,10 @@ async fn init_executor_test(
     let state =
         Arc::new(AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await);
 
-    let metrics = CheckpointMetrics::new_for_tests();
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
     let executor =
-        CheckpointExecutor::new(checkpoint_sender.subscribe(), store.clone(), state, metrics)
+        CheckpointExecutor::new_for_tests(checkpoint_sender.subscribe(), store.clone(), state)
             .unwrap();
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     (executor, checkpoint_sender, committee)

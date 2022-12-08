@@ -21,6 +21,7 @@ use std::{cmp::Ordering, sync::Arc, time::Duration};
 
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
+use prometheus::Registry;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     crypto::AuthorityPublicKeyBytes,
@@ -38,9 +39,12 @@ use typed_store::rocks::TypedStoreError;
 
 use crate::{
     authority::{AuthorityState, EffectsNotifyRead},
-    checkpoints::{CheckpointMetrics, CheckpointStore},
+    checkpoints::CheckpointStore,
 };
 
+use self::metrics::CheckpointExecutorMetrics;
+
+mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -72,7 +76,7 @@ pub struct CheckpointExecutor {
     /// will reschedule the last checkpoint and correctly set end_of_epoch.
     end_of_epoch: bool,
     task_limit: usize,
-    metrics: Arc<CheckpointMetrics>,
+    metrics: Arc<CheckpointExecutorMetrics>,
 }
 
 impl CheckpointExecutor {
@@ -80,7 +84,7 @@ impl CheckpointExecutor {
         mailbox: broadcast::Receiver<VerifiedCheckpoint>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
-        metrics: Arc<CheckpointMetrics>,
+        prometheus_registry: &Registry,
     ) -> Result<Self, TypedStoreError> {
         Ok(Self {
             mailbox,
@@ -90,7 +94,24 @@ impl CheckpointExecutor {
             latest_synced_checkpoint: None,
             end_of_epoch: false,
             task_limit: TASKS_PER_CORE * num_cpus::get(),
-            metrics,
+            metrics: CheckpointExecutorMetrics::new(prometheus_registry),
+        })
+    }
+
+    pub fn new_for_tests(
+        mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+        checkpoint_store: Arc<CheckpointStore>,
+        authority_state: Arc<AuthorityState>,
+    ) -> Result<Self, TypedStoreError> {
+        Ok(Self {
+            mailbox,
+            checkpoint_store,
+            authority_state,
+            highest_scheduled_seq_num: None,
+            latest_synced_checkpoint: None,
+            end_of_epoch: false,
+            task_limit: TASKS_PER_CORE * num_cpus::get(),
+            metrics: CheckpointExecutorMetrics::new_for_tests(),
         })
     }
 

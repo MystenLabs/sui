@@ -16,10 +16,9 @@ use std::collections::HashMap;
 use std::option::Option::None;
 use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
-use sui_core::authority_active::checkpoint_executor::CheckpointExecutor;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
-use sui_core::checkpoints::CheckpointMetrics;
+use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -191,7 +190,7 @@ impl SuiNode {
                 state_sync_handle.subscribe_to_synced_checkpoints(),
                 checkpoint_store.clone(),
                 state.clone(),
-                CheckpointMetrics::new(&prometheus_registry),
+                &prometheus_registry,
             )?;
             tokio::spawn(executor.run())
         };

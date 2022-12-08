@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod casual_order;
+pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 

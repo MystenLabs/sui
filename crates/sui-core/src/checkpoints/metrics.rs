@@ -10,10 +10,7 @@ use std::sync::Arc;
 pub struct CheckpointMetrics {
     pub last_certified_checkpoint: IntGauge,
     pub last_constructed_checkpoint: IntGauge,
-    pub last_executed_checkpoint: IntGauge,
     pub checkpoint_errors: IntCounter,
-    pub checkpoint_exec_errors: IntCounter,
-    pub checkpoint_exec_recv_channel_overflow: IntCounter,
     pub builder_utilization: IntCounter,
     pub aggregator_utilization: IntCounter,
     pub transactions_included_in_checkpoint: IntCounter,
@@ -36,27 +33,9 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
-            last_executed_checkpoint: register_int_gauge_with_registry!(
-                "last_executed_checkpoint",
-                "Last executed checkpoint",
-                registry
-            )
-            .unwrap(),
             checkpoint_errors: register_int_counter_with_registry!(
                 "checkpoint_errors",
                 "Checkpoints errors count",
-                registry
-            )
-            .unwrap(),
-            checkpoint_exec_errors: register_int_counter_with_registry!(
-                "checkpoint_exec_errors",
-                "Checkpoint execution errors count",
-                registry
-            )
-            .unwrap(),
-            checkpoint_exec_recv_channel_overflow: register_int_counter_with_registry!(
-                "checkpoint_exec_recv_channel_overflow",
-                "Count of the number of times the recv channel from StateSync to CheckpointExecutor has been overflowed",
                 registry
             )
             .unwrap(),
