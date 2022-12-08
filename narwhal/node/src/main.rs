@@ -23,7 +23,7 @@ use node::{
     Node,
 };
 use prometheus::Registry;
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::{channel, Receiver};
@@ -207,9 +207,10 @@ async fn run(
     registry: Registry,
 ) -> Result<(), eyre::Report> {
     // Only enabled if failpoints feature flag is set
+    let _failpoints_scenario: fail::FailScenario<'_>;
     if fail::has_failpoints() {
         warn!("Failpoints are enabled");
-        mem::forget(fail::FailScenario::setup());
+        _failpoints_scenario = fail::FailScenario::setup();
     } else {
         info!("Failpoints are not enabled");
     }
