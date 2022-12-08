@@ -30,8 +30,7 @@ use std::{
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::unbounded_channel;
-use tracing::Instrument;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, instrument, warn, Instrument};
 use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
@@ -128,7 +127,7 @@ pub mod authority_per_epoch_store;
 pub mod authority_store_tables;
 
 pub mod authority_notifier;
-mod authority_notify_read;
+pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
@@ -662,7 +661,7 @@ impl AuthorityState {
         }
     }
 
-    /// Execute a certificate that's known to have correct effects.
+    /// Executes a certificate that's known to have correct effects.
     /// For such certificate, we don't have to wait for consensus to set shared object
     /// locks because we already know the shared object versions based on the effects.
     /// This function can be called either by a fullnode after seeing a quorum of signed effects,
@@ -670,10 +669,10 @@ impl AuthorityState {
     /// TODO: down the road, we may want to execute a shared object tx on a validator when f+1
     /// validators have executed it.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_certificate_with_effects<S>(
+    pub async fn execute_certificate_with_effects<S>(
         &self,
         certificate: &VerifiedCertificate,
-        // NOTE: the caller of this (node_sync) must promise to wait until it
+        // NOTE: the caller of this must promise to wait until it
         // knows for sure this tx is finalized, namely, it has seen a
         // CertifiedTransactionEffects or at least f+1 identifical effects
         // digests matching this TransactionEffectsEnvelope, before calling
@@ -687,7 +686,7 @@ impl AuthorityState {
             .handle_node_sync_certificate_latency
             .start_timer();
         let digest = *certificate.digest();
-        debug!(tx_digest = ?digest, "handle_certificate_with_effects");
+        debug!(tx_digest = ?digest, "execute_certificate_with_effects");
         fp_ensure!(
             effects.data().transaction_digest == digest,
             SuiError::ErrorWhileProcessingCertificate {
@@ -695,56 +694,91 @@ impl AuthorityState {
             }
         );
 
-        let epoch_store = self.epoch_store();
-        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
-
         if certificate.contains_shared_object() {
-            self.database.acquire_shared_locks_from_effects(
-                certificate,
-                effects.data(),
-                &tx_guard,
-            )?;
+            self.database
+                .acquire_shared_locks_from_effects(certificate, effects.data())
+                .await?;
         }
 
-        let resp = self
-            .process_certificate(tx_guard, certificate)
-            .await
-            .tap_err(|e| debug!(?digest, "process_certificate failed: {e}"))?;
-
         let expected_effects_digest = effects.digest();
-        let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
-        if observed_effects_digest != Some(expected_effects_digest) {
+
+        let certs = vec![certificate.clone()];
+        self.database
+            .epoch_store()
+            .insert_pending_certificates(&certs)?;
+        self.transaction_manager.enqueue(certs).await?;
+
+        let observed_effects = self
+            .database
+            .notify_read_effects(vec![digest])
+            .await?
+            .pop()
+            .expect("notify_read_effects should return exactly 1 element");
+
+        let observed_effects_digest = observed_effects.digest();
+        if observed_effects_digest != expected_effects_digest {
             error!(
                 ?expected_effects_digest,
                 ?observed_effects_digest,
                 expected_effects=?effects.data(),
-                ?resp.signed_effects,
+                observed_effects=?observed_effects.data(),
                 input_objects = ?certificate.data().intent_message.value.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
     }
 
+    /// Executes a certificate for its effects.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_certificate(
+    pub async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
+        let tx_digest = *certificate.digest();
+        debug!(?tx_digest, "execute_certificate");
+
         self.metrics.total_cert_attempts.inc();
+
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
                 "cannot execute cert without effects on fullnode".into(),
             ));
         }
 
-        let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "handle_confirmation_transaction");
-
         if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
             debug!("shared object cert has not been sequenced by narwhal");
             return Err(SuiError::SharedObjectLockNotSetError);
         }
+
+        let certs = vec![certificate.clone()];
+        self.database
+            .epoch_store()
+            .insert_pending_certificates(&certs)?;
+        self.transaction_manager.enqueue(certs).await?;
+
+        self.notify_read_transaction_info(certificate).await
+    }
+
+    /// Internal logic to execute a certificate.
+    ///
+    /// Guarantees that
+    /// - If input objects are available, it should return no permanent failure.
+    /// - Execution and persisting output are atomic. i.e. outputs are only written to storage,
+    /// on successful execution; crashed execution has no observable effect and can be retried.
+    ///
+    /// Since this function does not set locks or guarantee input objects are available, it should
+    /// only be called by the execution driver, for systems transactions, or in tests.
+    ///
+    /// TODO: Reduce callsites and restrict visibility to pub(crate).
+    #[instrument(level = "trace", skip_all)]
+    pub async fn execute_certificate_internal(
+        &self,
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let tx_digest = *certificate.digest();
+        debug!(?tx_digest, "handle_certificate");
+
+        let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -757,7 +791,7 @@ impl AuthorityState {
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
         let span = tracing::debug_span!(
-            "validator_acquire_tx_guard",
+            "handle_certificate_tx_guard",
             ?tx_digest,
             tx_kind = certificate.data().intent_message.value.kind_as_str()
         );
@@ -770,6 +804,24 @@ impl AuthorityState {
         self.process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+    }
+
+    pub async fn notify_read_transaction_info(
+        &self,
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let tx_digest = *certificate.digest();
+        let effects = self
+            .database
+            .notify_read_effects(vec![tx_digest])
+            .await?
+            .pop()
+            .expect("notify_read_effects should return exactly 1 element");
+        Ok(VerifiedTransactionInfoResponse {
+            signed_transaction: self.database.get_transaction(&tx_digest)?,
+            certified_transaction: Some(certificate.clone()),
+            signed_effects: Some(effects),
+        })
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -835,7 +887,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    async fn process_certificate(
+    pub(crate) async fn process_certificate(
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,

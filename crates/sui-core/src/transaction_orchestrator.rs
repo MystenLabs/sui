@@ -298,7 +298,7 @@ where
     ) -> SuiResult {
         let tx_digest = tx_cert.digest();
         let res = state
-            .handle_certificate_with_effects(tx_cert, effects_cert)
+            .execute_certificate_with_effects(tx_cert, effects_cert)
             .await;
         match res {
             Ok(_) => {
@@ -309,8 +309,10 @@ where
                 metrics.tx_directly_executed.inc();
                 Ok(())
             }
+            // TODO: Delete this branch because this error should be impossible to happen with
+            // execute_certificate_with_effects().
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
-                debug!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
+                error!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
 
                 match node_sync_handle
                     .handle_parents_request(state.epoch(), std::iter::once(*tx_digest))

@@ -26,20 +26,19 @@ use sui_network::{
 
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
-use tokio::time::sleep;
-use tokio::{sync::mpsc::Receiver, task::JoinHandle};
+use tokio::{sync::mpsc::Receiver, task::JoinHandle, time::sleep};
 
 use mysten_metrics::spawn_monitored_task;
+use narwhal_types::TransactionsClient;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
+use tracing::{debug, info, Instrument};
 
 use crate::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
 };
 use crate::consensus_handler::ConsensusHandler;
-use narwhal_types::TransactionsClient;
-use tracing::{debug, info, Instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -370,6 +369,7 @@ impl ValidatorService {
         Ok(tonic::Response::new(info.into()))
     }
 
+    // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
     async fn handle_certificate(
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
@@ -428,17 +428,16 @@ impl ValidatorService {
         // Often we cannot execute a cert due to dependenties haven't been executed, and we will
         // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
         // succeed.
-        // TODO: This is a quick hack. We should properly fix this through dependency-based
-        // scheduling.
+        // TODO: call execute_certificate_internal() instead and remove retries.
         let mut retry_delay_ms = 200;
         loop {
             let span = tracing::debug_span!(
-                "validator_state_process_cert",
+                "handle_certificate_execution",
                 ?tx_digest,
                 tx_kind = certificate.data().intent_message.value.kind_as_str()
             );
             match state
-                .handle_certificate(&certificate)
+                .execute_certificate_internal(&certificate)
                 .instrument(span)
                 .await
             {

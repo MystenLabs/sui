@@ -71,13 +71,13 @@ pub async fn execution_process(
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
             let _guard = permit;
-            if let Ok(true) = authority.is_tx_already_executed(certificate.digest()) {
+            if let Ok(true) = authority.is_tx_already_executed(&digest) {
                 return;
             }
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.handle_certificate(&certificate).await;
+                let res = authority.execute_certificate_internal(&certificate).await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
                         error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
@@ -85,7 +85,7 @@ pub async fn execution_process(
                         return;
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
-                    // a bug. There would be nothing that can be done for permanent failures.
+                    // a bug. There is nothing that can be done to recover from permanent failures.
                     error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
