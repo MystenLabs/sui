@@ -68,11 +68,17 @@ pub fn now() -> TimestampMs {
 // for NON CRITICAL purposes only. For example should not be used
 // for any processes that are part of our protocol that can affect
 // safety or liveness.
-#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
     pub created_at: TimestampMs,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        Metadata { created_at: now() }
+    }
 }
 
 pub type Transaction = Vec<u8>;
@@ -86,7 +92,7 @@ impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Batch {
             transactions,
-            metadata: Metadata { created_at: now() },
+            metadata: Metadata::default(),
         }
     }
 }
