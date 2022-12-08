@@ -24,6 +24,9 @@ module sui::genesis {
     /// Initial storage gas price
     const INIT_STORAGE_GAS_PRICE: u64 = 1;
 
+    /// Stake subisidy to be given out in the very first epoch. Placeholder value.
+    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
+
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -95,6 +98,7 @@ module sui::genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STORAGE_GAS_PRICE,
+            INIT_STAKE_SUBSIDY_AMOUNT,
         );
     }
 }

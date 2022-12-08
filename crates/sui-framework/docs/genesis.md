@@ -45,6 +45,16 @@ Initial value of the lower-bound on the amount of stake required to become a val
 
 
 
+<a name="0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT"></a>
+
+Stake subisidy to be given out in the very first epoch. Placeholder value.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>: u64 = 1000000;
+</code></pre>
+
+
+
 <a name="0x2_genesis_INIT_STORAGE_FUND"></a>
 
 The initial amount of SUI locked in the storage fund.
@@ -152,6 +162,7 @@ all the information we need in the system.
         <a href="genesis.md#0x2_genesis_INIT_MAX_VALIDATOR_COUNT">INIT_MAX_VALIDATOR_COUNT</a>,
         <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>,
         <a href="genesis.md#0x2_genesis_INIT_STORAGE_GAS_PRICE">INIT_STORAGE_GAS_PRICE</a>,
+        <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
     );
 }
 </code></pre>

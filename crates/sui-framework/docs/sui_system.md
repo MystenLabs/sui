@@ -23,6 +23,7 @@
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
+-  [Function `update_stake_subsidy_amount`](#0x2_sui_system_update_stake_subsidy_amount)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
@@ -164,6 +165,13 @@ The top-level object containing all information of the Sui system.
  them. If a validator has never been reported they don't have an entry in this map.
  This map resets every epoch.
 </dd>
+<dt>
+<code>next_epoch_stake_subsidy: u64</code>
+</dt>
+<dd>
+ The amount of stake subsidies to be given out in the next epoch, updated at
+ epoch boundaries.
+</dd>
 </dl>
 
 
@@ -228,6 +236,24 @@ The top-level object containing all information of the Sui system.
 
 
 
+<a name="0x2_sui_system_STAKE_SUBSIDY_DECREASE_RATE"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_STAKE_SUBSIDY_DECREASE_RATE">STAKE_SUBSIDY_DECREASE_RATE</a>: u128 = 1000;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_STAKE_SUBSIDY_PERIOD_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_STAKE_SUBSIDY_PERIOD_LENGTH">STAKE_SUBSIDY_PERIOD_LENGTH</a>: u64 = 30;
+</code></pre>
+
+
+
 <a name="0x2_sui_system_create"></a>
 
 ## Function `create`
@@ -236,7 +262,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(chain_id: u8, validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(chain_id: u8, validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64, next_epoch_stake_subsidy: u64)
 </code></pre>
 
 
@@ -253,6 +279,7 @@ This function will be called only once in genesis.
     max_validator_candidate_count: u64,
     min_validator_stake: u64,
     storage_gas_price: u64,
+    next_epoch_stake_subsidy: u64,
 ) {
     <b>assert</b>!(chain_id &gt;= 1 && chain_id &lt;= 127, 1);
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
@@ -272,6 +299,7 @@ This function will be called only once in genesis.
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        next_epoch_stake_subsidy,
     };
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(state);
 }
@@ -811,6 +839,10 @@ gas coins.
     <b>let</b> storage_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(storage_charge);
     <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
 
+    // Include <a href="stake.md#0x2_stake">stake</a> subsidy in the rewards given out <b>to</b> validators and delegators.
+    <b>let</b> stake_subsidy = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> self.sui_supply, self.next_epoch_stake_subsidy);
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> computation_reward, stake_subsidy);
+
     <b>let</b> delegation_stake = <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators);
     <b>let</b> validator_stake = <a href="validator_set.md#0x2_validator_set_total_validator_stake">validator_set::total_validator_stake</a>(&self.validators);
     <b>let</b> storage_fund_balance = <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund);
@@ -856,6 +888,9 @@ gas coins.
     <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate, 0);
     <a href="balance.md#0x2_balance_destroy_storage_rebates">balance::destroy_storage_rebates</a>(<a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
 
+    // Update the amount of subsidy <b>to</b> be given out in the next epoch.
+    <a href="sui_system.md#0x2_sui_system_update_stake_subsidy_amount">update_stake_subsidy_amount</a>(self, new_epoch);
+
     // Validator reports are only valid for the epoch.
     // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
     self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
@@ -875,6 +910,35 @@ Total supply of SUI shouldn't change.
 
 <pre><code><b>ensures</b> <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply)
     == <b>old</b>(<a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply));
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_update_stake_subsidy_amount"></a>
+
+## Function `update_stake_subsidy_amount`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_update_stake_subsidy_amount">update_stake_subsidy_amount</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_update_stake_subsidy_amount">update_stake_subsidy_amount</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, new_epoch: u64) {
+    // Decrease the subsidy amount only when the current period ends.
+    <b>if</b> (new_epoch % <a href="sui_system.md#0x2_sui_system_STAKE_SUBSIDY_PERIOD_LENGTH">STAKE_SUBSIDY_PERIOD_LENGTH</a> == 0) {
+        <b>let</b> decrease_amount = (self.next_epoch_stake_subsidy <b>as</b> u128)
+            * <a href="sui_system.md#0x2_sui_system_STAKE_SUBSIDY_DECREASE_RATE">STAKE_SUBSIDY_DECREASE_RATE</a> / <a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        self.next_epoch_stake_subsidy = self.next_epoch_stake_subsidy - (decrease_amount <b>as</b> u64)
+    };
+}
 </code></pre>
 
 
