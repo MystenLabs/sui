@@ -428,6 +428,8 @@ impl SuiNode {
             .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
+    /// This function waits for a signal from the checkpoint executor to indicate that on-chain
+    /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
     pub async fn monitor_reconfiguration(mut self) -> Result<()> {
         loop {
             let next_epoch = self
@@ -447,34 +449,43 @@ impl SuiNode {
                 .expect("Reading Sui system state object cannot fail")
                 .get_current_epoch_committee();
             assert_eq!(next_epoch, new_committee.committee.epoch);
-            if let Some((_, _)) = &self.validator_server_info {
+            let was_validator = self.state.is_validator();
+            assert_eq!(was_validator, self.validator_server_info.is_some());
+            if was_validator {
                 info!("Reconfiguring the validator.");
                 info!("Shutting down Narwhal");
                 // TODO: Shutdown Narwhal here.
-                self.state
-                    .reconfigure(new_committee.committee)
-                    .expect("Reconfigure authority state cannot fail");
-                info!("Validator State has been reconfigured");
-                if self.state.is_validator() {
-                    // Only restart Narwhal if this node is still a validator.
+            }
+
+            self.state
+                .reconfigure(new_committee.committee)
+                .expect("Reconfigure authority state cannot fail");
+            info!("Validator State has been reconfigured");
+
+            if self.state.is_validator() {
+                // If the node is a validator in the new epoch, we need to make sure validator
+                // service is running in the new epoch.
+                if was_validator {
+                    // If we were a validator in previous epoch, we don't need to start grpc server.
+                    // Only need to start Narwhal.
                     // TODO: Start Narwhal here.
                     info!("Starting Narwhal");
                 } else {
-                    info!("This node is no longer a validator after reconfiguration");
+                    // TODO: It might be easier to require node operator to manually restart the node
+                    // for this transition.
+                    info!("Promoting the node from fullnode to validator, starting grpc server");
+                    self.validator_server_info = Self::start_grpc_validator_service(
+                        &self.config,
+                        self.state.clone(),
+                        self.checkpoint_store.clone(),
+                        &self._state_sync,
+                        &self._prometheus_registry,
+                    )
+                    .await
+                    .expect("Starting grpc server cannot fail");
                 }
-            } else if self.state.is_validator() {
-                // TODO: It might be easier to require node operator to manually restart the node
-                // for this transition.
-                info!("Promoting the node from fullnode to validator, starting grpc server");
-                self.validator_server_info = Self::start_grpc_validator_service(
-                    &self.config,
-                    self.state.clone(),
-                    self.checkpoint_store.clone(),
-                    &self._state_sync,
-                    &self._prometheus_registry,
-                )
-                .await
-                .expect("Starting grpc server cannot fail");
+            } else {
+                info!("This node is no longer a validator after reconfiguration");
             }
             info!("Reconfiguration finished");
         }
