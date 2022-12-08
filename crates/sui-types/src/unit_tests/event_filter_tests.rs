@@ -120,7 +120,12 @@ fn test_publish_filter() {
     let version = PACKAGE_VERSION;
     let digest = ObjectDigest::random();
     // Create a test publish event.
-    let move_event = Event::Publish { sender, package_id, version, digest };
+    let move_event = Event::Publish { 
+        sender, 
+        package_id, 
+        version, 
+        digest 
+    };
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
