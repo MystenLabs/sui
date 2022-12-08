@@ -2532,6 +2532,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fail"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe5e43d0f78a42ad591453aedb1d7ae631ce7ee445c7643691055a9ed8d3b01c"
+dependencies = [
+ "log",
+ "once_cell",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "fastcrypto"
 version = "0.1.4"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=5cc756e7d95dfeaa5ba713a789b0cbaa6befcb86#5cc756e7d95dfeaa5ba713a789b0cbaa6befcb86"
@@ -4830,7 +4841,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=59c5c48547aa7bd9374f2b989d6d9c763914e1f5#59c5c48547aa7bd9374f2b989d6d9c763914e1f5"
 dependencies = [
  "better_any",
- "fail",
+ "fail 0.4.0",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
@@ -5260,6 +5271,7 @@ dependencies = [
  "bincode",
  "bytes",
  "eyre",
+ "fail 0.5.1",
  "fastcrypto",
  "futures",
  "multiaddr 0.16.0",
@@ -5292,6 +5304,7 @@ dependencies = [
  "cfg-if",
  "clap 2.34.0",
  "eyre",
+ "fail 0.5.1",
  "fastcrypto",
  "futures",
  "itertools",
@@ -5345,6 +5358,7 @@ dependencies = [
  "bytes",
  "dashmap",
  "derive_builder",
+ "fail 0.5.1",
  "fastcrypto",
  "futures",
  "indexmap",
@@ -5390,6 +5404,7 @@ name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "fail 0.5.1",
  "fastcrypto",
  "futures",
  "narwhal-config",
@@ -11133,7 +11148,8 @@ dependencies = [
  "ethnum",
  "event-listener",
  "eyre",
- "fail",
+ "fail 0.4.0",
+ "fail 0.5.1",
  "fastcrypto",
  "fastcrypto-derive",
  "fastcrypto-zkp",

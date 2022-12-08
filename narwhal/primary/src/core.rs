@@ -196,6 +196,13 @@ impl Core {
     ) -> DagResult<Vote> {
         let peer_id = anemo::PeerId(target.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
+
+        fail::fail_point!("request-vote", |_| {
+            Err(DagError::NetworkError(format!(
+                "Injected error in request vote for {header}"
+            )))
+        });
+
         let mut client = PrimaryToPrimaryClient::new(peer);
 
         let mut missing_parents: Vec<CertificateDigest> = Vec::new();

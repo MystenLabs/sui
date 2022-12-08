@@ -32,7 +32,7 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
-use network::metrics::MetricsMakeCallbackHandler;
+use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::{
@@ -262,6 +262,7 @@ impl Primary {
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
@@ -272,6 +273,7 @@ impl Primary {
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .into_inner();
 
         let anemo_config = {
@@ -1070,6 +1072,14 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
+
+        fail::fail_point!("report-our-batch", |_| {
+            Err(anemo::rpc::Status::internal(format!(
+                "Injected error in report our batch from worker_id {}",
+                message.worker_id
+            )))
+        });
+
         let (tx_ack, rx_ack) = oneshot::channel();
         let response = self
             .tx_our_digests

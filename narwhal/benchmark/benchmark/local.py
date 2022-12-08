@@ -52,7 +52,7 @@ class LocalBench:
             sleep(0.5)  # Removing the store may take time.
 
             # Recompile the latest code.
-            cmd = CommandMaker.compile()
+            cmd = CommandMaker.compile(failpoints=self.failpoints)
             Print.info(f"About to run {cmd}...")
             subprocess.run(cmd, check=True, cwd=PathMaker.node_crate_path())
 
@@ -79,7 +79,8 @@ class LocalBench:
                 primary_network_keys += [Key.from_file(filename)]
             primary_network_names = [x.name for x in primary_network_keys]
 
-            committee = LocalCommittee(primary_names, primary_network_names, self.BASE_PORT)
+            committee = LocalCommittee(
+                primary_names, primary_network_names, self.BASE_PORT)
             committee.print(PathMaker.committee_file())
 
             worker_keys = []
