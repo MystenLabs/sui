@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::randomness {
+module sui::randomness_stored {
     use std::hash::sha3_256;
     use std::option::{Self, Option};
     use sui::object::{Self, UID, ID, id};
     use sui::tx_context::{Self, TxContext};
+    use sui::transfer;
+    use sui::dynamic_object_field as dof;
 
     /// Set is called with an invalid signature.
     const EInvalidSignature: u64 = 0;
@@ -14,148 +16,181 @@ module sui::randomness {
     /// Unset object cannot be consumed.
     const EUnsetObject: u64 = 2;
 
+    const ChildRef: u8 = 0;
+
     /// Randomness objects can only be created, set or consumed.
     ///
     /// - On creation it contains the epoch in which it was created and a unique id.
     /// - After the object creation transaction is committed, anyone can retrieve the BLS signature on the message
-    ///   "randomness:id:epoch" from validators (signed by the key of that epoch).
-    /// - The owner of the object can *set* the randomness of the object by supplying the above signature. This
+    ///   "randomness:id:epoch" from validators (signed using the tBLS key of that epoch).
+    /// - The owner of the object can set the randomness of the object by supplying the BLS signature. This
     ///   operation verifies the signature and sets the value of the randomness object to be the hash of the signature.
-    /// - The randomness value can be used/consumed.
+    /// - The randomness value can be read/consumed.
     ///
-    /// Can work both as a shared object and as owned.
-    /// - As a shared object - contracts should use the getters to fetch the result.
-    /// - As an owned object - contracts should use the getters to check the state of the object, and consume it once
-    ///   ready.
+    /// Can be used as a shared-/owned-object, dynamic object field, etc.
     ///
-    struct Randomness<phantom T> has key {
+    struct Randomness<phantom T> has key, store {
         id: UID,
         epoch: u64,
         value: Option<vector<u8>>
     }
 
-    // we want to keep randomness as a keyed obj.
-    // Q: how to store associated data?
-    // - option 1 - use another object and store ids (see example below); can work as is, the relation is stored in the "other" object.
-    // - option 2 - randomness as the parent obj, dup field "associated_data" for the other obj; relation stored on both objs;
-    //              requires adding below apis for that
-    // - option 3 - randomness as a child obj of the other obj; requires the parent obj to call the set function
-    //
-    // other options? any that is better than the rest?
-    // wrapped obj - not relevant since we want to see from outside the obj
+    /// Wrapper that links to Randomness obj under ChildRef.
+    /// To be used as a filled in objects.
+    struct RandomnessRef<phantom T> has store {
+        uid: UID,
+    }
 
-    fun new<T: drop>(_w: T, ctx: &mut TxContext): Randomness<T> {
-        Randomness {
+    fun new<T: drop>(ctx: &mut TxContext): Randomness<T> {
+        Randomness<T> {
             id: object::new(ctx),
             epoch: tx_context::epoch(ctx),
             value: option::none(),
         }
     }
+    // Q - is there still a a way in which apps can create Randomness<> without creating a keyed object? i hope not
 
-    /// Create a new Randomness object and transfer it to the recipient address.
-    public fun create_and_transfer<T: drop>(w: T, recipient: address, ctx: &mut TxContext): ID {
-        let r = new(w, ctx);
+    public fun create_and_transfer<T: drop>(_w: T, to: address, ctx: &mut TxContext): ID {
+        let r: Randomness<T> = new(ctx);
         let id = id(&r);
-        sui::transfer::transfer(r, recipient);
+        transfer::transfer(r, to);
         id
     }
 
-    /// Create a new Randomness object and make it a shared object.
-    public fun create_as_shared<T: drop>(w: T, ctx: &mut TxContext): ID {
-        let r = new(w, ctx);
+    public fun create_as_shared<T: drop>(_w: T, ctx: &mut TxContext): ID {
+        let r: Randomness<T> = new(ctx);
         let id = id(&r);
-        sui::transfer::share_object(r);
+        transfer::share_object(r);
         id
     }
 
-    /// Owner(s) can use this function for setting the randomness.
-    entry fun set<T>(self: &mut Randomness<T>, sig: vector<u8>) {
-        assert!(option::is_none(&self.value), EAlreadySetObject);
-        // TODO: construct 'msg'
-        // Q: how to convert int to string?
-        // // TODO: next api is not available yet.
-        // assert!(verify_tbls_signature(self.epoch, msg, sig), EInvalidSignature);
-        let hashed = sha3_256(sig);
-        self.value = option::some(hashed);
+    public fun create_ref<T: drop>(_w: T, ctx: &mut TxContext): RandomnessRef<T> {
+        let r: Randomness<T> = new(ctx);
+        let uid = object::new(ctx);
+        dof::add(&mut uid, ChildRef, r);
+        RandomnessRef { uid }
     }
 
-    /// Delete the object and retrieve the randomness (in case of an owned object).
-    public fun consume<T: drop>(_w: T, self: Randomness<T>): vector<u8> {
-        let Randomness { id, epoch: _, value } = self;
-        object::delete(id);
-        assert!(option::is_some(&value), EUnsetObject);
-        option::extract(&mut value)
+    public fun randomness<T>(rr: &RandomnessRef<T>): &Randomness<T> {
+        dof::borrow(&rr.uid, ChildRef)
+    }
+
+    public fun randomness_mut<T>(rr: &mut RandomnessRef<T>): &mut Randomness<T> {
+        dof::borrow_mut(&mut rr.uid, ChildRef)
     }
 
     /// Read the epoch of the object.
-    public fun epoch<T>(self: &Randomness<T>): u64 {
-        self.epoch
+    public fun epoch<T>(r: &Randomness<T>): u64 {
+        r.epoch
     }
 
     /// Read the current value of the object.
-    public fun value<T>(self: &Randomness<T>): &Option<vector<u8>> {
-        &self.value
+    public fun value<T>(r: &Randomness<T>): &Option<vector<u8>> {
+        &r.value
+    }
+
+    entry public fun set<T>(r: &mut Randomness<T>, sig: vector<u8>) {
+        let _ = set_and_get(r, sig);
+    }
+    /// Owner(s) can use this function for setting the randomness.
+    public fun set_and_get<T>(r: &mut Randomness<T>, sig: vector<u8>): vector<u8> {
+        assert!(option::is_none(&r.value), EAlreadySetObject);
+        // TODO: construct 'msg'
+        // TODO: next api is not available yet.
+        // assert!(verify_tbls_signature(self.epoch, msg, sig), EInvalidSignature);
+        let hashed = sha3_256(sig);
+        r.value = option::some(hashed);
+        hashed
+    }
+
+    /// Delete the object and retrieve the randomness (in case of an owned object).
+    public fun destroy_ref<T>(rr: RandomnessRef<T>) {
+        let r: Randomness<T> = dof::remove(&mut rr.uid, ChildRef);
+        destroy(r);
+        let RandomnessRef { uid } = rr;
+        object::delete(uid);
+    }
+
+    /// Delete the object and retrieve the randomness (in case of an owned object).
+    public fun destroy<T>(r: Randomness<T>) {
+        let Randomness { id, epoch: _, value: _ } = r;
+        object::delete(id);
     }
 }
+
 
 //////////////////////////////////////////////////////////////////////
 // Examples //
 
-//
-module sui::lottery_shared_pool {
+// scratchcard that uses a shared obj for the reward, and randomness_ref
+module sui::scratchcard_example1 {
     use std::vector;
     use sui::balance::{Self, Balance, zero};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, UID};
-    use sui::randomness::{Self, Randomness};
+    use sui::randomness_stored::{Self, RandomnessRef, destroy_ref};
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
+    use sui::transfer;
 
     // Make sure only the current module can access Randomness it creates.
     struct LOTTERY_LOCK has drop {}
 
-    /// Shared object
+    /// Shared object, singelton
     struct Lottery has key {
         id: UID,
         balance: Balance<SUI>,
     }
 
-    entry fun create(ctx: &mut TxContext) {
+    struct Ticket has key {
+        id: UID,
+        randomness_ref: RandomnessRef<LOTTERY_LOCK>,
+    }
+
+    fun init(ctx: &mut TxContext) {
         let lottery = Lottery {
             id: object::new(ctx),
-            balance: zero()
+            balance: zero(),
         };
         sui::transfer::share_object(lottery);
     }
 
-    // TODO: Currently you can use a ticket on any lottery, not only the one you bought ticket for.
+    // Ticket can win with probability 1%, and then receive 100 tokens.
     entry fun buy_ticket(lottery: &mut Lottery, coin: Coin<SUI>, ctx: &mut TxContext) {
         assert!(coin::value(&coin) == 1, 0);
         balance::join(&mut lottery.balance, coin::into_balance(coin));
-        randomness::create_and_transfer(LOTTERY_LOCK {}, tx_context::sender(ctx), ctx);
+        let t = Ticket {
+            id: object::new(ctx),
+            randomness_ref: randomness_stored::create_ref(LOTTERY_LOCK {}, ctx),
+        };
+        transfer::transfer(t, tx_context::sender(ctx));
     }
 
-    entry fun use_ticket(lottery: &mut Lottery, ticket: Randomness<LOTTERY_LOCK>, ctx: &mut TxContext) {
-        let random_bytes = randomness::consume(LOTTERY_LOCK {}, ticket);
+    // takes a reward, if there is enough (else, can be taken later)
+    entry fun use_ticket(lottery: &mut Lottery, ticket: Ticket, sig: vector<u8>, ctx: &mut TxContext) {
+        let random_bytes = randomness_stored::set_and_get(randomness_stored::randomness_mut(&mut ticket.randomness_ref), sig);
         let first_byte = vector::borrow(&random_bytes, 0);
         if (*first_byte % 100 == 0) {
+            assert!(balance::value(&lottery.balance) > 99, 0);
             let coin = coin::from_balance(balance::split(&mut lottery.balance, 100), ctx);
             sui::pay::keep(coin, ctx);
-        }
+        };
+        let Ticket { id, randomness_ref} = ticket;
+        destroy_ref(randomness_ref);
+        object::delete(id);
     }
 }
 
 ///////////////////////////////////////////////////////
+// example that uses id for related objects
 
-
-module sui::lottery_owned {
-    use std::option;
+module sui::scratchcard_owned_example1 {
     use std::vector;
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, UID, ID, id};
-    use sui::randomness::Randomness;
-    use sui::randomness;
+    use sui::randomness_stored::RandomnessRef;
+    use sui::randomness_stored;
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
 
@@ -173,7 +208,7 @@ module sui::lottery_owned {
         id: UID,
         lottery_id: ID,
         creator: address,
-        randomness_id: ID,
+        randomness_ref: RandomnessRef<LOTTERY_LOCK>,
     }
 
     entry fun create(coin: Coin<SUI>, ctx: &mut TxContext) {
@@ -181,7 +216,6 @@ module sui::lottery_owned {
             id: object::new(ctx),
             balance: coin::into_balance(coin),
             creator: tx_context::sender(ctx),
-
         };
         sui::transfer::share_object(lottery);
     }
@@ -199,38 +233,29 @@ module sui::lottery_owned {
     entry fun buy_ticket(lottery_id: ID, creator: address, coin: Coin<SUI>, ctx: &mut TxContext) {
         assert!(coin::value(&coin) == 1, 0);
         sui::transfer::transfer(coin, creator);
-        let randomness_id = randomness::create_and_transfer(LOTTERY_LOCK {}, tx_context::sender(ctx), ctx);
+        let randomness_ref = randomness_stored::create_ref(LOTTERY_LOCK {}, ctx);
         let ticket = Ticket {
             id: object::new(ctx),
             lottery_id,
             creator,
-            randomness_id,
+            randomness_ref,
         };
         sui::transfer::transfer(ticket, tx_context::sender(ctx));
     }
 
-    public fun is_winner(lottery: &Lottery, ticket_r: &Randomness<LOTTERY_LOCK>, ticket: &Ticket): bool {
-        // Check consistency...
-        assert!(id(ticket_r) == ticket.randomness_id, 3);
-        assert!(id(lottery) == ticket.randomness_id, 4);
-        assert!(lottery.creator == ticket.creator, 5);
-        // Check the ticket.
-        let random_bytes = randomness::value(ticket_r);
-        if (option::is_none(random_bytes)) {
-            return false
-        };
-        let random_bytes = option::borrow(random_bytes);
-        let first_byte = vector::borrow(random_bytes, 0);
-        *first_byte % 100 == 0
-    }
-
     // Can be called also after all the reward was taken.
-    entry fun use_ticket(lottery: &mut Lottery, ticket_r: Randomness<LOTTERY_LOCK>, ticket: &Ticket, ctx: &mut TxContext) {
-        if (is_winner(lottery, &ticket_r, ticket)) {
+    entry fun use_ticket(lottery: &mut Lottery, ticket: Ticket, sig: vector<u8>, ctx: &mut TxContext) {
+        assert!(lottery.creator == ticket.creator, 5);
+        assert!(id(lottery) == ticket.lottery_id, 5);
+        let random_bytes = randomness_stored::set_and_get(randomness_stored::randomness_mut(&mut ticket.randomness_ref), sig);
+        let first_byte = vector::borrow(&random_bytes, 0);
+        if (*first_byte % 100 == 0) {
             let coin = coin::from_balance(balance::split(&mut lottery.balance, 100), ctx);
             sui::pay::keep(coin, ctx);
         };
-        randomness::consume(LOTTERY_LOCK {}, ticket_r);
+        let Ticket { id, lottery_id:_, creator:_, randomness_ref} = ticket;
+        randomness_stored::destroy_ref(randomness_ref);
+        object::delete(id);
     }
 }
 
@@ -238,16 +263,17 @@ module sui::lottery_owned {
 
 ////////////////////////////////////
 
-module sui::lottery_shared_pool2 {
+// example of a lottery (1 out of n) using shared obj and randomness shared obj
+module sui::lottery_example1 {
     use std::vector;
     use sui::balance::{Self, Balance, zero};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, UID, ID, id};
-    use sui::randomness::{Self, Randomness};
+    use sui::randomness_stored::{Self, Randomness};
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
-    use std::option::Option;
     use std::option;
+    use std::option::Option;
 
     // Make sure only the current module can access Randomness it creates.
     struct LOTTERY_LOCK has drop {}
@@ -277,7 +303,8 @@ module sui::lottery_shared_pool2 {
     }
 
     entry fun buy_ticket(lottery: &mut Lottery, coin: Coin<SUI>, ctx: &mut TxContext) {
-        assert!(lottery.participants < 100, 0); // just to simply the modulo below
+        assert!(option::is_none(&lottery.randomness_id), 1);
+        assert!(lottery.participants < 100, 0); // just to simplify the modulo below
         assert!(coin::value(&coin) == 1, 0);
         balance::join(&mut lottery.balance, coin::into_balance(coin));
         let ticket = Ticket {
@@ -289,18 +316,16 @@ module sui::lottery_shared_pool2 {
         sui::transfer::transfer(ticket, tx_context::sender(ctx));
     }
 
-    // Create a randomness that will determine the winner.
+    // Stop selling tickets and create a randomness that will determine the winner.
     entry fun close(lottery: &mut Lottery, ctx: &mut TxContext) {
-        assert!(option::is_none(&lottery.randomness_id), 10);
-        let randomness_id = randomness::create_as_shared(LOTTERY_LOCK {}, ctx);
-        lottery.randomness_id = option::some(randomness_id);
+        let randomness_id = randomness_stored::create_as_shared(LOTTERY_LOCK {}, ctx);
+        option::fill(&mut lottery.randomness_id, randomness_id);
     }
 
     entry fun use_ticket(lottery: &mut Lottery, randomness: &Randomness<LOTTERY_LOCK>, ticket: Ticket, ctx: &mut TxContext) {
-        assert!(option::is_some(randomness::value(randomness)), 11);
-        assert!(option::is_some(&lottery.randomness_id), 12);
+        assert!(option::is_some(randomness_stored::value(randomness)), 11);
         assert!(*option::borrow(&lottery.randomness_id) == id(randomness), 13);
-        let random_bytes = option::borrow(randomness::value(randomness));
+        let random_bytes = option::borrow(randomness_stored::value(randomness));
         let first_byte = vector::borrow(random_bytes, 0);
         if (*first_byte % lottery.participants == ticket.participant_id) {
             let amount = balance::value(&lottery.balance);
@@ -311,5 +336,3 @@ module sui::lottery_shared_pool2 {
         object::delete(id);
     }
 }
-
-// TODO: add example of buying random game elements.
