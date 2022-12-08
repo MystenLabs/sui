@@ -194,7 +194,7 @@ async fn test_dry_run_transaction() {
         .unwrap()
         .unwrap()
         .version();
-    assert_eq!(gas_object_version, SequenceNumber::new());
+    assert_eq!(gas_object_version, OBJECT_START_VERSION);
     let shared_object_version = authority
         .get_object(&shared_object_id)
         .await
@@ -1114,11 +1114,11 @@ async fn test_handle_confirmation_transaction_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), old_account.digest()), 0)
+        .get_transaction_lock(&(object_id, 1.into(), old_account.digest()), 0)
         .await
         .is_err());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), new_account.digest()), 0)
+        .get_transaction_lock(&(object_id, 2.into(), new_account.digest()), 0)
         .await
         .expect("Exists")
         .is_none());

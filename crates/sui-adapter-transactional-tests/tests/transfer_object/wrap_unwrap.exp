@@ -13,7 +13,7 @@ written: object(105)
 
 task 3 'view-object'. lines 45-45:
 Owner: Account Address ( A )
-Version: 1
+Version: 2
 Contents: a::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}}
 
 task 4 'run'. lines 47-47:
@@ -23,7 +23,7 @@ deleted: object(106)
 
 task 5 'view-object'. lines 49-49:
 Owner: Account Address ( A )
-Version: 2
+Version: 3
 Contents: a::m::T {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, s: a::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}}}
 
 task 6 'run'. lines 51-51:
@@ -32,5 +32,5 @@ deleted: object(108)
 
 task 7 'view-object'. lines 53-53:
 Owner: Account Address ( A )
-Version: 3
+Version: 4
 Contents: a::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}}
