@@ -9,6 +9,7 @@ use std::fmt::{Display, Formatter};
 use std::path::Path;
 use fastcrypto::encoding::{Encoding, Hex};
 
+
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use sqlx::ConnectOptions;
@@ -273,7 +274,7 @@ impl SqlEventStore {
                 fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
             }
             if let Some(digest) = event.event.digest() {
-                fields.insert(OBJECT_DIGEST_KEY, Hex::encode(digest.0).to_string());
+                fields.insert(OBJECT_DIGEST_KEY, Hex::encode(digest.0));
             }
             json!(fields).to_string()
         }
