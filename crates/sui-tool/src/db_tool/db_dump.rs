@@ -13,15 +13,11 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
-use sui_types::{
-    base_types::EpochId,
-    crypto::{AuthoritySignInfo, EmptySignInfo},
-};
+use sui_types::{base_types::EpochId, crypto::AuthoritySignInfo};
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
     Validator,
-    Gateway,
     Index,
     LocksService,
     NodeSync,
@@ -70,23 +66,6 @@ pub fn dump_table(
             if epoch_tables.contains_key(table_name) {
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::<AuthoritySignInfo>::open_readonly(epoch, &db_path).dump(
-                    table_name,
-                    page_size,
-                    page_number,
-                )
-            } else {
-                AuthorityPerpetualTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
-                    table_name,
-                    page_size,
-                    page_number,
-                )
-            }
-        }
-        StoreName::Gateway => {
-            let epoch_tables = AuthorityEpochTables::<EmptySignInfo>::describe_tables();
-            if epoch_tables.contains_key(table_name) {
-                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
-                AuthorityEpochTables::<EmptySignInfo>::open_readonly(epoch, &db_path).dump(
                     table_name,
                     page_size,
                     page_number,

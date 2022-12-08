@@ -47,8 +47,7 @@ pub mod wallet_client;
 pub struct TestContext {
     /// Cluster handle that allows access to various components in a cluster
     cluster: Box<dyn Cluster + Sync + Send>,
-    /// Client that provides wallet context and gateway access
-    /// Once we sunset gateway, we will spin off fullnode client,
+    /// Client that provides wallet context and fullnode access
     client: WalletClient,
     /// Facuet client that provides faucet access to a test
     faucet: Arc<dyn FaucetClient + Sync + Send>,

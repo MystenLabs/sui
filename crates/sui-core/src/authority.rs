@@ -35,9 +35,7 @@ use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
-pub use authority_store::{
-    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
-};
+pub use authority_store::{AuthorityStore, ResolverWrapper, SuiDataStore, UpdateType};
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,

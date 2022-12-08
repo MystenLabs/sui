@@ -15,11 +15,6 @@ pub struct QueryHelpers<S> {
     _s: std::marker::PhantomData<S>,
 }
 
-// TODO: [gateway-deprecation]
-// TODO: QueryHelpers contains query implementations for the Gateway read API that would otherwise
-// be duplicated between AuthorityState and GatewayState. The gateway read API will be removed
-// soon, since nodes will be handling that. At that point we should delete this struct and move the
-// code back to AuthorityState.
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
     pub fn get_total_transaction_number(database: &SuiDataStore<S>) -> Result<u64, anyhow::Error> {
         Ok(database.next_sequence_number()?)
@@ -32,7 +27,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         fp_ensure!(
             start <= end,
-            SuiError::GatewayInvalidTxRangeQuery {
+            SuiError::FullNodeInvalidTxRangeQuery {
                 error: format!(
                     "start must not exceed end, (start={}, end={}) given",
                     start, end
@@ -42,7 +37,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
         );
         fp_ensure!(
             end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
+            SuiError::FullNodeInvalidTxRangeQuery {
                 error: format!(
                     "Number of transactions queried must not exceed {}, {} queried",
                     MAX_TX_RANGE_SIZE,
@@ -66,7 +61,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         fp_ensure!(
             count <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
+            SuiError::FullNodeInvalidTxRangeQuery {
                 error: format!(
                     "Number of transactions queried must not exceed {}, {} queried",
                     MAX_TX_RANGE_SIZE, count

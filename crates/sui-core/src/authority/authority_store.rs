@@ -10,7 +10,7 @@ use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::iter;
 use std::path::Path;
 use std::sync::Arc;
@@ -20,10 +20,10 @@ use sui_storage::{
     mutex_table::{LockGuard, MutexTable},
     LockService,
 };
-use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::crypto::AuthoritySignInfo;
 use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::object::Owner;
-use sui_types::storage::{ChildObjectResolver, SingleTxContext, WriteKind};
+use sui_types::storage::ChildObjectResolver;
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use sui_types::{batch::TxSequenceNumber, object::PACKAGE_VERSION};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -32,7 +32,6 @@ use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
-pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 const SHARD_SIZE: usize = 128;
@@ -543,8 +542,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
-    /// This is used by the gateway to insert object directly.
-    /// TODO: We need this today because we don't have another way to sync an account.
+    /// This is used to insert genesis objects
     pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         // Insert object
         self.perpetual_tables
@@ -641,19 +639,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
-    /// This function should only be used by the gateway.
-    /// It's called when we could not get a transaction to successfully execute,
-    /// and have to roll back.
-    pub async fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
-        // this object should not be a child object, since child objects can no longer be
-        // inputs, but
-        // TODO double check these are not child objects
-        self.lock_service
-            .initialize_locks(owned_input_objects, true /* is_force_reset */)
-            .await?;
-        Ok(())
-    }
-
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
@@ -725,87 +710,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             inner_temporary_store,
             transaction_digest,
             UpdateType::Genesis,
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// This is used by the Gateway to update its local store after a transaction succeeded
-    /// on the authorities. Since we don't yet have local execution on the gateway, we will
-    /// need to recreate the temporary store based on the inputs and effects to update it properly.
-    pub async fn update_gateway_state(
-        &self,
-        input_objects: InputObjects,
-        mutated_objects: BTreeMap<ObjectRef, (Object, WriteKind)>,
-        certificate: VerifiedCertificate,
-        proposed_seq: TxSequenceNumber,
-        effects: TransactionEffectsEnvelope<S>,
-        effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult {
-        let ctx = SingleTxContext::gateway(certificate.sender_address());
-        let transaction_digest = certificate.digest();
-        let mut temporary_store =
-            TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
-
-        // TemporaryStore::into_inner will increment object versions, and requires that this
-        // operation is a true increment. Roll back modified objects' versions so that this remains
-        // the case.
-        let prev_versions: HashMap<ObjectID, SequenceNumber> = effects
-            .data()
-            .modified_at_versions
-            .iter()
-            .copied()
-            .collect();
-
-        for (_, (mut object, kind)) in mutated_objects {
-            let prev_version = match kind {
-                WriteKind::Create => SequenceNumber::new(),
-                WriteKind::Mutate | WriteKind::Unwrap => prev_versions[&object.id()],
-            };
-
-            if let Owner::Shared {
-                initial_shared_version,
-            } = &mut object.owner
-            {
-                if WriteKind::Create == kind {
-                    *initial_shared_version = SequenceNumber::new();
-                }
-            }
-
-            if let Some(object) = object.data.try_as_move_mut() {
-                object.decrement_version_to(prev_version);
-            }
-
-            temporary_store.write_object(&ctx, object, kind);
-        }
-
-        for obj_ref in &effects.data().deleted {
-            let mut v = obj_ref.1;
-            v.decrement_to(prev_versions[&obj_ref.0]);
-            temporary_store.delete_object(&ctx, &obj_ref.0, v, DeleteKind::Normal);
-        }
-
-        for obj_ref in &effects.data().wrapped {
-            let mut v = obj_ref.1;
-            v.decrement_to(prev_versions[&obj_ref.0]);
-            temporary_store.delete_object(&ctx, &obj_ref.0, v, DeleteKind::Wrap);
-        }
-
-        let (inner_temporary_store, _events) = temporary_store.into_inner();
-
-        let mut write_batch = self.perpetual_tables.certificates.batch();
-        // Store the certificate indexed by transaction digest
-        write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.certificates,
-            iter::once((transaction_digest, certificate.serializable_ref())),
-        )?;
-        self.sequence_tx(
-            write_batch,
-            inner_temporary_store,
-            transaction_digest,
-            proposed_seq,
-            &effects,
-            effects_digest,
         )
         .await?;
         Ok(())

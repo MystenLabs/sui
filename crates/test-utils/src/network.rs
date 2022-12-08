@@ -13,7 +13,6 @@ use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
-use sui_json_rpc::ServerHandle;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_sdk::SuiClient;
@@ -31,12 +30,6 @@ pub struct FullNodeHandle {
     pub rpc_url: String,
     pub ws_client: WsClient,
     pub ws_url: String,
-}
-
-pub struct GatewayHandle {
-    pub handle: ServerHandle,
-    pub http_client: HttpClient,
-    pub url: String,
 }
 
 pub struct TestCluster {
@@ -177,7 +170,7 @@ impl TestClusterBuilder {
         })
     }
 
-    /// Start a Swarm and set up WalletConfig with an embedded Gateway
+    /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder().committee_size(
             NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),

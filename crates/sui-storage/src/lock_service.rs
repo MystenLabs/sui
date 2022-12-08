@@ -699,7 +699,7 @@ impl LockService {
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
     /// If `is_force_reset` is true, we initialize them regardless of their existing state.
     /// Otherwise, if the lock already exists and is locked to a transaction, then return TransactionLockExists
-    /// Only the gateway could set is_force_reset to true.
+    /// Only during epoch boundary `is_force_reset` can be set to true to revert locks.
     pub async fn initialize_locks(&self, refs: &[ObjectRef], is_force_reset: bool) -> SuiResult {
         block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
