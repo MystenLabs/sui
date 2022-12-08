@@ -45,6 +45,7 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-vm-types.workspace = true
 
+narwhal-config = { path = "../../narwhal/config" }
 narwhal-executor = { path = "../../narwhal/executor" }
 sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-constants = { path = "../sui-protocol-constants" }
