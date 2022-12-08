@@ -4,7 +4,8 @@
 
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, SuiTxValidator},
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    consensus_validator::SuiTxValidator,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -307,6 +308,7 @@ impl ValidatorService {
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
+        let tx_validator = SuiTxValidator::new(state.clone());
         spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
             consensus_keypair,
             network_keypair,
@@ -316,8 +318,7 @@ impl ValidatorService {
             consensus_storage_base_path,
             consensus_execution_state,
             consensus_parameters,
-            // TODO: provide something more clever here to specify TX validity
-            SuiTxValidator::default(),
+            tx_validator,
             rx_reconfigure_consensus,
             &registry,
         ));
