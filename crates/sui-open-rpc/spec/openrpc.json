@@ -2399,6 +2399,12 @@
           }
         }
       },
+      "ChainId": {
+        "description": "Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware that this field maybe updated to be uleb64 in the future",
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
       "CommitteeInfoResponse": {
         "type": "object",
         "required": [
@@ -4727,6 +4733,7 @@
         "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
         "type": "object",
         "required": [
+          "chain_id",
           "epoch",
           "info",
           "parameters",
@@ -4737,6 +4744,9 @@
           "validators"
         ],
         "properties": {
+          "chain_id": {
+            "$ref": "#/components/schemas/ChainId"
+          },
           "epoch": {
             "type": "integer",
             "format": "uint64",
