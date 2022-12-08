@@ -211,10 +211,16 @@ fn execute_internal<
             .map_err(|e| convert_type_argument_error(idx, e))?;
     }
     // script visibility checked manually for entry points
-    let (result, (change_set, events, mut native_context_extensions)) = session
-        .execute_function_bypass_visibility(module_id, function, type_args, args, gas_status)
-        .and_then(|ret| Ok((ret, session.finish_with_extensions()?)))?;
-    let mode_result = Mode::make_result(&result)?;
+    let result = session.execute_function_bypass_visibility(
+        module_id,
+        function,
+        type_args.clone(),
+        args,
+        gas_status,
+    )?;
+    let mode_result = Mode::make_result(&session, module_id, function, &type_args, &result)?;
+
+    let (change_set, events, mut native_context_extensions) = session.finish_with_extensions()?;
     let SerializedReturnValues {
         mut mutable_reference_outputs,
         ..

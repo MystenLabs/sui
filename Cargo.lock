@@ -8420,6 +8420,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-runtime",
+ "move-vm-types",
  "once_cell",
  "sui-cost-tables",
  "sui-framework",
