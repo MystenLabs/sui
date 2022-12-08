@@ -11,7 +11,6 @@ use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash, traits::KeyPair, SignatureService};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use network::P2pNetwork;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
@@ -211,7 +210,7 @@ async fn fetch_certificates_basic() {
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
         name.clone(),
         fixture.committee(),
-        P2pNetwork::new(client_network.clone()),
+        client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
         gc_depth,
@@ -240,7 +239,7 @@ async fn fetch_certificates_basic() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(client_network),
+        client_network,
     );
 
     // Generate headers and certificates in successive rounds

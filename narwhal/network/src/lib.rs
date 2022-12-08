@@ -18,7 +18,6 @@ mod retry;
 mod traits;
 
 pub use crate::{
-    p2p::P2pNetwork,
     retry::RetryConfig,
     traits::{
         PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork, UnreliableNetwork, WorkerRpc,

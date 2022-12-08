@@ -8,7 +8,7 @@ use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::future::try_join_all;
 use itertools::Either;
-use network::{P2pNetwork, PrimaryToWorkerRpc};
+use network::PrimaryToWorkerRpc;
 use std::{collections::HashMap, sync::Arc};
 use storage::{CertificateStore, PayloadToken};
 use store::{rocks::TypedStoreError, Store};
@@ -48,7 +48,7 @@ pub struct BlockRemover {
     dag: Option<Arc<Dag>>,
 
     /// Network driver allowing to send messages.
-    worker_network: P2pNetwork,
+    worker_network: anemo::Network,
 
     /// Outputs all the successfully deleted certificates
     tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
@@ -63,7 +63,7 @@ impl BlockRemover {
         header_store: Store<HeaderDigest, Header>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         dag: Option<Arc<Dag>>,
-        worker_network: P2pNetwork,
+        worker_network: anemo::Network,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
     ) -> BlockRemover {
         Self {

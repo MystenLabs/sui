@@ -14,7 +14,6 @@ use crate::metrics::ExecutorMetrics;
 use async_trait::async_trait;
 use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
-use network::P2pNetwork;
 
 use prometheus::Registry;
 
@@ -54,7 +53,7 @@ impl Executor {
     /// Spawn a new client subscriber.
     pub fn spawn<State>(
         name: PublicKey,
-        network: oneshot::Receiver<P2pNetwork>,
+        network: oneshot::Receiver<anemo::Network>,
         worker_cache: SharedWorkerCache,
         committee: Committee,
         execution_state: State,

@@ -39,7 +39,7 @@ async fn worker_batch_reply() {
         store,
         rx_reconfiguration,
         rx_worker_request,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Spawn a listener to receive the batch reply.

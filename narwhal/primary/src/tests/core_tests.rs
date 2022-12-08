@@ -114,7 +114,7 @@ async fn propose_header() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Propose header and ensure that a certificate is formed by pulling it out of the
@@ -212,7 +212,7 @@ async fn propose_header_failure() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Propose header and verify we get no certificate back.
@@ -285,7 +285,7 @@ async fn process_certificates() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Send enough certificates to the core.
@@ -399,7 +399,7 @@ async fn recover_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send 2f+1 certificates to the core.
@@ -444,7 +444,7 @@ async fn recover_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Ensure the core sends the parents of the certificates to the proposer.
@@ -541,7 +541,7 @@ async fn recover_core_partial_certs() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send one certificate to the core.
@@ -589,7 +589,7 @@ async fn recover_core_partial_certs() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send remaining 2f certs to the core.
@@ -677,7 +677,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send 2f+1 certificates for round r, and 1 cert of round r + 1 to the core.
@@ -736,7 +736,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // the recovery flow sends message that contains the parents for the last round for which we
@@ -815,7 +815,7 @@ async fn shutdown_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Shutdown the core.
@@ -893,7 +893,7 @@ async fn reconfigure_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Change committee

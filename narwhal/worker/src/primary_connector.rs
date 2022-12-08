@@ -5,7 +5,7 @@
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::{monitored_future, spawn_monitored_task};
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use network::{CancelOnDropHandler, ReliableNetwork};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
@@ -25,7 +25,7 @@ pub struct PrimaryConnector {
     rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
     rx_others_batch: Receiver<WorkerOthersBatchMessage>,
     /// A network sender to send the batches' digests to the primary.
-    primary_client: P2pNetwork,
+    primary_client: anemo::Network,
 }
 
 impl PrimaryConnector {
@@ -35,7 +35,7 @@ impl PrimaryConnector {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
         rx_others_batch: Receiver<WorkerOthersBatchMessage>,
-        primary_client: P2pNetwork,
+        primary_client: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
             Self {

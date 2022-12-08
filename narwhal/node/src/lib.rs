@@ -11,7 +11,6 @@ use consensus::{
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
-use network::P2pNetwork;
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
@@ -148,7 +147,7 @@ impl Node {
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
         name: PublicKey,
-        rx_executor_network: oneshot::Receiver<P2pNetwork>,
+        rx_executor_network: oneshot::Receiver<anemo::Network>,
         worker_cache: SharedWorkerCache,
         committee: SharedCommittee,
         store: &NodeStorage,

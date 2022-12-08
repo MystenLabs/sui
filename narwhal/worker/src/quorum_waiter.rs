@@ -8,7 +8,7 @@ use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use mysten_metrics::{monitored_future, spawn_monitored_task};
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use network::{CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use tracing::{error, trace};
@@ -33,7 +33,7 @@ pub struct QuorumWaiter {
     /// Input Channel to receive commands.
     rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// A network sender to broadcast the batches to the other workers.
-    network: P2pNetwork,
+    network: anemo::Network,
 }
 
 impl QuorumWaiter {
@@ -46,7 +46,7 @@ impl QuorumWaiter {
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
-        network: P2pNetwork,
+        network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
             Self {

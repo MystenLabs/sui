@@ -16,7 +16,7 @@ use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
 use mysten_metrics::spawn_monitored_task;
-use network::{anemo_ext::NetworkExt, CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use network::{anemo_ext::NetworkExt, CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use storage::CertificateStore;
@@ -93,7 +93,7 @@ pub struct Core {
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
     /// A network sender to send the batches to the other workers.
-    network: P2pNetwork,
+    network: anemo::Network,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -119,7 +119,7 @@ impl Core {
         tx_new_certificates: Sender<Certificate>,
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
-        primary_network: P2pNetwork,
+        primary_network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
             Self {
@@ -530,7 +530,7 @@ impl Core {
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let synchronizer = self.synchronizer.clone();
         let header = certificate.header.clone();
-        let network = self.network.network();
+        let network = self.network.clone();
         let max_age = self.gc_depth.saturating_sub(1);
         self.background_tasks
             .spawn(async move { synchronizer.sync_batches(&header, network, max_age).await });
@@ -725,7 +725,7 @@ impl Core {
                     let certificate_store = self.certificate_store.clone();
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
-                    let network = self.network.network();
+                    let network = self.network.clone();
                     self.propose_header_future = Some(spawn_monitored_task!(Self::propose_header(
                         name,
                         committee,

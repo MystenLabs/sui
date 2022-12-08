@@ -23,7 +23,6 @@ use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_monitored_task;
 use network::metrics::MetricsMakeCallbackHandler;
-use network::P2pNetwork;
 use std::collections::HashMap;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
@@ -284,7 +283,7 @@ impl Worker {
             rx_reconfigure.clone(),
             rx_our_batch,
             rx_others_batch,
-            P2pNetwork::new(network.clone()),
+            network.clone(),
         );
         let client_flow_handles = worker.handle_clients_transactions(
             rx_reconfigure,
@@ -397,7 +396,7 @@ impl Worker {
             self.worker_cache.clone(),
             rx_reconfigure,
             /* rx_message */ rx_quorum_waiter,
-            P2pNetwork::new(network),
+            network,
         );
 
         info!(

@@ -5208,6 +5208,8 @@ dependencies = [
 name = "narwhal-executor"
 version = "0.1.0"
 dependencies = [
+ "anemo",
+ "anemo-tower",
  "anyhow",
  "async-trait",
  "backoff",
