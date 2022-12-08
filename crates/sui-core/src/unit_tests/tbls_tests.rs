@@ -84,4 +84,7 @@ fn test_validator_without_shares() {
     let tbls_ids = TBlsIds::new(&stakes);
     assert_eq!(*tbls_ids.get_ids(&get_key(1)).unwrap(), get_range(1, 100));
     assert!(tbls_ids.get_ids(&get_key(11)).is_none());
+
+    assert_eq!(tbls_ids.participants().len(), 10);
+    assert_eq!(tbls_ids.num_of_shares(), 990);
 }
