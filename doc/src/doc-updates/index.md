@@ -9,7 +9,7 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | Topic | Update | 
 | :------ | :------- |
 | [Exchange Integration FAQ](../learn/exchange-integration-faq.md) | New topic. |
-| [Sui Client CLI](../build/cli-client.md) | [Added the `--ver-dep` flag](https://github.com/MystenLabs/sui/pull/6601) to `sui client publish`. |
+| [Sui Client CLI](../build/cli-client.md) | [Added the `--verify-dependencies` flag to Sui client `publish`](https://github.com/MystenLabs/sui/pull/6601) to `sui client publish`. |
 
 ## Week Ending 11/12/22
 
