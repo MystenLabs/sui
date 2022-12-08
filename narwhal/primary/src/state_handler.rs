@@ -170,10 +170,14 @@ impl StateHandler {
                         .send(message)
                         .expect("Reconfigure channel dropped");
 
+                    warn!("Waiting to broadcast reconfigure message to workers");
+
                     // wait for all the workers to eventually receive the message
                     // TODO: this request will be removed https://mysten.atlassian.net/browse/SUI-984
                     let join_all = futures::future::try_join_all(notify_handlers);
                     join_all.await.expect("Error while sending reconfiguration message to the workers");
+
+                    warn!("Successfully broadcasted reconfigure message to workers");
 
                     // Exit only when we are sure that all the other tasks received
                     // the shutdown message.
