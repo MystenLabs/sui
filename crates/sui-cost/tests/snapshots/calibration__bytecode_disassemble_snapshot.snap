@@ -23,9 +23,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -53,9 +53,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -81,9 +81,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdFalse
@@ -111,9 +111,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdFalse
@@ -139,9 +139,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -169,9 +169,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -197,9 +197,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -227,9 +227,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -255,9 +255,9 @@ B1:
 	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(21)
 B2:
-	8: Branch(21)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](val: u8)
 	10: CastU128
@@ -286,9 +286,9 @@ B1:
 	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](val: u8)
 	10: Pop
@@ -316,9 +316,9 @@ B1:
 	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(21)
 B2:
-	8: Branch(21)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](val: u8)
 	10: CastU64
@@ -347,9 +347,9 @@ B1:
 	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](val: u8)
 	10: Pop
@@ -377,9 +377,9 @@ B1:
 	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(21)
 B2:
-	8: Branch(21)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](val: u64)
 	10: CastU8
@@ -408,9 +408,9 @@ B1:
 	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](val: u64)
 	10: Pop
@@ -435,9 +435,9 @@ B1:
 	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
 	7: CopyLoc[0](trials: u64)
 	8: Pop
@@ -458,9 +458,9 @@ B1:
 	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(12)
 B2:
-	6: Branch(12)
+	6: Branch(7)
 B3:
 	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
@@ -482,9 +482,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -512,9 +512,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -540,9 +540,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdTrue
@@ -570,9 +570,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdTrue
@@ -587,182 +587,175 @@ B4:
 	18: Ret
 }
 entry public test_calibrate_ge() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(16)
 B2:
-	6: Branch(16)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Ge
 	10: Pop
-	11: MoveLoc[1](trials: u64)
+	11: MoveLoc[0](trials: u64)
 	12: LdU64(1)
 	13: Sub
-	14: StLoc[1](trials: u64)
+	14: StLoc[0](trials: u64)
 	15: Branch(2)
 B4:
 	16: Ret
 }
 entry public test_calibrate_ge__baseline() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
 }
 entry public test_calibrate_gt() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(16)
 B2:
-	6: Branch(16)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Gt
 	10: Pop
-	11: MoveLoc[1](trials: u64)
+	11: MoveLoc[0](trials: u64)
 	12: LdU64(1)
 	13: Sub
-	14: StLoc[1](trials: u64)
+	14: StLoc[0](trials: u64)
 	15: Branch(2)
 B4:
 	16: Ret
 }
 entry public test_calibrate_gt__baseline() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
 }
 entry public test_calibrate_imm_borrow_field() {
-L0:	_r: &u64
-L1:	obj: ObjectWithU64Field
-L2:	trials: u64
+L0:	obj: ObjectWithU64Field
+L1:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[2](trials: u64)
+	1: StLoc[1](trials: u64)
 	2: LdU64(0)
 	3: Pack[0](ObjectWithU64Field)
-	4: StLoc[1](obj: ObjectWithU64Field)
+	4: StLoc[0](obj: ObjectWithU64Field)
 B1:
-	5: CopyLoc[2](trials: u64)
+	5: CopyLoc[1](trials: u64)
 	6: LdU64(0)
 	7: Gt
-	8: BrTrue(10)
+	8: BrFalse(18)
 B2:
-	9: Branch(18)
+	9: Branch(10)
 B3:
-	10: ImmBorrowLoc[1](obj: ObjectWithU64Field)
+	10: ImmBorrowLoc[0](obj: ObjectWithU64Field)
 	11: ImmBorrowField[0](ObjectWithU64Field.f0: u64)
 	12: Pop
-	13: MoveLoc[2](trials: u64)
+	13: MoveLoc[1](trials: u64)
 	14: LdU64(1)
 	15: Sub
-	16: StLoc[2](trials: u64)
+	16: StLoc[1](trials: u64)
 	17: Branch(5)
 B4:
 	18: Ret
 }
 entry public test_calibrate_imm_borrow_field__baseline() {
-L0:	_r: &ObjectWithU64Field
-L1:	obj: ObjectWithU64Field
-L2:	trials: u64
+L0:	obj: ObjectWithU64Field
+L1:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[2](trials: u64)
+	1: StLoc[1](trials: u64)
 	2: LdU64(0)
 	3: Pack[0](ObjectWithU64Field)
-	4: StLoc[1](obj: ObjectWithU64Field)
+	4: StLoc[0](obj: ObjectWithU64Field)
 B1:
-	5: CopyLoc[2](trials: u64)
+	5: CopyLoc[1](trials: u64)
 	6: LdU64(0)
 	7: Gt
-	8: BrTrue(10)
+	8: BrFalse(17)
 B2:
-	9: Branch(17)
+	9: Branch(10)
 B3:
-	10: ImmBorrowLoc[1](obj: ObjectWithU64Field)
+	10: ImmBorrowLoc[0](obj: ObjectWithU64Field)
 	11: Pop
-	12: MoveLoc[2](trials: u64)
+	12: MoveLoc[1](trials: u64)
 	13: LdU64(1)
 	14: Sub
-	15: StLoc[2](trials: u64)
+	15: StLoc[1](trials: u64)
 	16: Branch(5)
 B4:
 	17: Ret
 }
 entry public test_calibrate_imm_borrow_loc() {
-L0:	_r: &u64
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: ImmBorrowLoc[1](trials: u64)
+	7: ImmBorrowLoc[0](trials: u64)
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
@@ -776,9 +769,9 @@ B1:
 	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(12)
 B2:
-	6: Branch(12)
+	6: Branch(7)
 B3:
 	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
@@ -789,25 +782,24 @@ B4:
 	12: Ret
 }
 entry public test_calibrate_ld_const() {
-L0:	_num: u64
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU64(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(16)
 B2:
-	8: Branch(16)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: LdConst[1](U64: [255, 255, 255, 255, 255, 255, 255, 255])
 	14: Pop
 	15: Branch(4)
@@ -815,49 +807,47 @@ B4:
 	16: Ret
 }
 entry public test_calibrate_ld_const__baseline() {
-L0:	_num: u64
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU64(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(14)
 B2:
-	8: Branch(14)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(4)
 B4:
 	14: Ret
 }
 entry public test_calibrate_ldu128() {
-L0:	_num: u128
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU128(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(16)
 B2:
-	8: Branch(16)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: LdU128(0)
 	14: Pop
 	15: Branch(4)
@@ -865,49 +855,47 @@ B4:
 	16: Ret
 }
 entry public test_calibrate_ldu128__baseline() {
-L0:	_num: u128
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU128(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(14)
 B2:
-	8: Branch(14)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(4)
 B4:
 	14: Ret
 }
 entry public test_calibrate_ldu64() {
-L0:	_num: u64
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU64(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(16)
 B2:
-	8: Branch(16)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: LdU64(0)
 	14: Pop
 	15: Branch(4)
@@ -915,49 +903,47 @@ B4:
 	16: Ret
 }
 entry public test_calibrate_ldu64__baseline() {
-L0:	_num: u64
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU64(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(14)
 B2:
-	8: Branch(14)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(4)
 B4:
 	14: Ret
 }
 entry public test_calibrate_ldu8() {
-L0:	_num: u8
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU8(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(16)
 B2:
-	8: Branch(16)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: LdU8(0)
 	14: Pop
 	15: Branch(4)
@@ -965,125 +951,120 @@ B4:
 	16: Ret
 }
 entry public test_calibrate_ldu8__baseline() {
-L0:	_num: u8
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 	2: LdU8(0)
 	3: Pop
 B1:
-	4: CopyLoc[1](trials: u64)
+	4: CopyLoc[0](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(14)
 B2:
-	8: Branch(14)
+	8: Branch(9)
 B3:
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(4)
 B4:
 	14: Ret
 }
 entry public test_calibrate_le() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(16)
 B2:
-	6: Branch(16)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Le
 	10: Pop
-	11: MoveLoc[1](trials: u64)
+	11: MoveLoc[0](trials: u64)
 	12: LdU64(1)
 	13: Sub
-	14: StLoc[1](trials: u64)
+	14: StLoc[0](trials: u64)
 	15: Branch(2)
 B4:
 	16: Ret
 }
 entry public test_calibrate_le__baseline() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
 }
 entry public test_calibrate_lt() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(16)
 B2:
-	6: Branch(16)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Lt
 	10: Pop
-	11: MoveLoc[1](trials: u64)
+	11: MoveLoc[0](trials: u64)
 	12: LdU64(1)
 	13: Sub
-	14: StLoc[1](trials: u64)
+	14: StLoc[0](trials: u64)
 	15: Branch(2)
 B4:
 	16: Ret
 }
 entry public test_calibrate_lt__baseline() {
-L0:	_flag: bool
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: CopyLoc[1](trials: u64)
+	7: CopyLoc[0](trials: u64)
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
@@ -1100,9 +1081,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -1130,9 +1111,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -1158,9 +1139,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -1188,9 +1169,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -1205,82 +1186,79 @@ B4:
 	18: Ret
 }
 entry public test_calibrate_mut_borrow_field() {
-L0:	_r: &mut u64
-L1:	obj: ObjectWithU64Field
-L2:	trials: u64
+L0:	obj: ObjectWithU64Field
+L1:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[2](trials: u64)
+	1: StLoc[1](trials: u64)
 	2: LdU64(0)
 	3: Pack[0](ObjectWithU64Field)
-	4: StLoc[1](obj: ObjectWithU64Field)
+	4: StLoc[0](obj: ObjectWithU64Field)
 B1:
-	5: CopyLoc[2](trials: u64)
+	5: CopyLoc[1](trials: u64)
 	6: LdU64(0)
 	7: Gt
-	8: BrTrue(10)
+	8: BrFalse(18)
 B2:
-	9: Branch(18)
+	9: Branch(10)
 B3:
-	10: MutBorrowLoc[1](obj: ObjectWithU64Field)
+	10: MutBorrowLoc[0](obj: ObjectWithU64Field)
 	11: MutBorrowField[0](ObjectWithU64Field.f0: u64)
 	12: Pop
-	13: MoveLoc[2](trials: u64)
+	13: MoveLoc[1](trials: u64)
 	14: LdU64(1)
 	15: Sub
-	16: StLoc[2](trials: u64)
+	16: StLoc[1](trials: u64)
 	17: Branch(5)
 B4:
 	18: Ret
 }
 entry public test_calibrate_mut_borrow_field__baseline() {
-L0:	_r: &mut ObjectWithU64Field
-L1:	obj: ObjectWithU64Field
-L2:	trials: u64
+L0:	obj: ObjectWithU64Field
+L1:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[2](trials: u64)
+	1: StLoc[1](trials: u64)
 	2: LdU64(0)
 	3: Pack[0](ObjectWithU64Field)
-	4: StLoc[1](obj: ObjectWithU64Field)
+	4: StLoc[0](obj: ObjectWithU64Field)
 B1:
-	5: CopyLoc[2](trials: u64)
+	5: CopyLoc[1](trials: u64)
 	6: LdU64(0)
 	7: Gt
-	8: BrTrue(10)
+	8: BrFalse(17)
 B2:
-	9: Branch(17)
+	9: Branch(10)
 B3:
-	10: MutBorrowLoc[1](obj: ObjectWithU64Field)
+	10: MutBorrowLoc[0](obj: ObjectWithU64Field)
 	11: Pop
-	12: MoveLoc[2](trials: u64)
+	12: MoveLoc[1](trials: u64)
 	13: LdU64(1)
 	14: Sub
-	15: StLoc[2](trials: u64)
+	15: StLoc[1](trials: u64)
 	16: Branch(5)
 B4:
 	17: Ret
 }
 entry public test_calibrate_mut_borrow_loc() {
-L0:	_r: &mut u64
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: MutBorrowLoc[1](trials: u64)
+	7: MutBorrowLoc[0](trials: u64)
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
@@ -1294,9 +1272,9 @@ B1:
 	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(12)
 B2:
-	6: Branch(12)
+	6: Branch(7)
 B3:
 	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
@@ -1318,9 +1296,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdTrue
@@ -1348,9 +1326,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdTrue
@@ -1376,9 +1354,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](_flag: bool)
 	10: Not
@@ -1404,9 +1382,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(17)
 B2:
-	8: Branch(17)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](_flag: bool)
 	10: Not
@@ -1431,9 +1409,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdFalse
@@ -1461,9 +1439,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](flag: bool)
 	10: LdFalse
@@ -1478,23 +1456,22 @@ B4:
 	18: Ret
 }
 entry public test_calibrate_pack() {
-L0:	_num: ObjectWithU8Field
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(15)
 B2:
-	6: Branch(15)
+	6: Branch(7)
 B3:
-	7: MoveLoc[1](trials: u64)
+	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Sub
-	10: StLoc[1](trials: u64)
+	10: StLoc[0](trials: u64)
 	11: LdU8(0)
 	12: Pack[1](ObjectWithU8Field)
 	13: Pop
@@ -1503,23 +1480,22 @@ B4:
 	15: Ret
 }
 entry public test_calibrate_pack__baseline() {
-L0:	_num: ObjectWithU8Field
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
-	7: MoveLoc[1](trials: u64)
+	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Sub
-	10: StLoc[1](trials: u64)
+	10: StLoc[0](trials: u64)
 	11: LdU8(0)
 	12: Pop
 	13: Branch(2)
@@ -1538,9 +1514,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(17)
 B2:
-	8: Branch(17)
+	8: Branch(9)
 B3:
 	9: ImmBorrowLoc[0](r: u64)
 	10: ReadRef
@@ -1565,9 +1541,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(16)
 B2:
-	8: Branch(16)
+	8: Branch(9)
 B3:
 	9: ImmBorrowLoc[0](r: u64)
 	10: Pop
@@ -1591,9 +1567,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU8(1)
@@ -1621,9 +1597,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU8(1)
@@ -1649,9 +1625,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU8(1)
@@ -1679,9 +1655,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU8(1)
@@ -1707,9 +1683,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -1737,9 +1713,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -1754,23 +1730,22 @@ B4:
 	18: Ret
 }
 entry public test_calibrate_unpack() {
-L0:	_num: ObjectWithU8Field
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(16)
 B2:
-	6: Branch(16)
+	6: Branch(7)
 B3:
-	7: MoveLoc[1](trials: u64)
+	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Sub
-	10: StLoc[1](trials: u64)
+	10: StLoc[0](trials: u64)
 	11: LdU8(0)
 	12: Pack[1](ObjectWithU8Field)
 	13: Unpack[1](ObjectWithU8Field)
@@ -1780,23 +1755,22 @@ B4:
 	16: Ret
 }
 entry public test_calibrate_unpack__baseline() {
-L0:	_num: ObjectWithU8Field
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(15)
 B2:
-	6: Branch(15)
+	6: Branch(7)
 B3:
-	7: MoveLoc[1](trials: u64)
+	7: MoveLoc[0](trials: u64)
 	8: LdU64(1)
 	9: Sub
-	10: StLoc[1](trials: u64)
+	10: StLoc[0](trials: u64)
 	11: LdU8(0)
 	12: Pack[1](ObjectWithU8Field)
 	13: Pop
@@ -1814,15 +1788,15 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(18)
 B2:
-	6: Branch(18)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: ImmBorrowLoc[0](hash: vector<u8>)
 	10: LdU64(0)
-	11: VecImmBorrow(15)
+	11: VecImmBorrow(7)
 	12: Pop
 	13: MoveLoc[1](trials: u64)
 	14: LdU64(1)
@@ -1842,9 +1816,9 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(18)
 B2:
-	6: Branch(18)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
@@ -1870,14 +1844,14 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(17)
 B2:
-	6: Branch(17)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: ImmBorrowLoc[0](hash: vector<u8>)
-	10: VecLen(15)
+	10: VecLen(7)
 	11: Pop
 	12: MoveLoc[1](trials: u64)
 	13: LdU64(1)
@@ -1897,9 +1871,9 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(16)
 B2:
-	6: Branch(16)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
@@ -1923,15 +1897,15 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(18)
 B2:
-	6: Branch(18)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: MutBorrowLoc[0](hash: vector<u8>)
 	10: LdU64(0)
-	11: VecMutBorrow(15)
+	11: VecMutBorrow(7)
 	12: Pop
 	13: MoveLoc[1](trials: u64)
 	14: LdU64(1)
@@ -1951,9 +1925,9 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(18)
 B2:
-	6: Branch(18)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
@@ -1978,9 +1952,9 @@ B1:
 	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(15)
 B2:
-	6: Branch(15)
+	6: Branch(7)
 B3:
 	7: CopyLoc[0](trials: u64)
 	8: VecPack(4, 1)
@@ -2002,9 +1976,9 @@ B1:
 	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
 	7: CopyLoc[0](trials: u64)
 	8: Pop
@@ -2027,15 +2001,15 @@ B1:
 	2: CopyLoc[2](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(17)
 B2:
-	6: Branch(17)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: MutBorrowLoc[0](hash: vector<u8>)
 	10: LdU8(0)
-	11: VecPushBack(15)
+	11: VecPushBack(7)
 	12: MoveLoc[2](trials: u64)
 	13: LdU64(1)
 	14: Sub
@@ -2048,14 +2022,14 @@ B5:
 	19: CopyLoc[2](trials: u64)
 	20: LdU64(0)
 	21: Gt
-	22: BrTrue(24)
+	22: BrFalse(34)
 B6:
-	23: Branch(34)
+	23: Branch(24)
 B7:
 	24: LdConst[2](Vector(U8): [2, 1, 52])
 	25: StLoc[1](hash#1: vector<u8>)
 	26: MutBorrowLoc[1](hash#1: vector<u8>)
-	27: VecPopBack(15)
+	27: VecPopBack(7)
 	28: Pop
 	29: MoveLoc[2](trials: u64)
 	30: LdU64(1)
@@ -2076,15 +2050,15 @@ B1:
 	2: CopyLoc[2](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(17)
 B2:
-	6: Branch(17)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: MutBorrowLoc[0](hash: vector<u8>)
 	10: LdU8(0)
-	11: VecPushBack(15)
+	11: VecPushBack(7)
 	12: MoveLoc[2](trials: u64)
 	13: LdU64(1)
 	14: Sub
@@ -2097,9 +2071,9 @@ B5:
 	19: CopyLoc[2](trials: u64)
 	20: LdU64(0)
 	21: Gt
-	22: BrTrue(24)
+	22: BrFalse(33)
 B6:
-	23: Branch(33)
+	23: Branch(24)
 B7:
 	24: LdConst[2](Vector(U8): [2, 1, 52])
 	25: StLoc[1](hash#1: vector<u8>)
@@ -2123,15 +2097,15 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(17)
 B2:
-	6: Branch(17)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: MutBorrowLoc[0](hash: vector<u8>)
 	10: LdU8(0)
-	11: VecPushBack(15)
+	11: VecPushBack(7)
 	12: MoveLoc[1](trials: u64)
 	13: LdU64(1)
 	14: Sub
@@ -2150,9 +2124,9 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(18)
 B2:
-	6: Branch(18)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
@@ -2178,16 +2152,16 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(18)
 B2:
-	6: Branch(18)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
 	9: MutBorrowLoc[0](hash: vector<u8>)
 	10: LdU64(0)
 	11: LdU64(1)
-	12: VecSwap(15)
+	12: VecSwap(7)
 	13: MoveLoc[1](trials: u64)
 	14: LdU64(1)
 	15: Sub
@@ -2206,9 +2180,9 @@ B1:
 	2: CopyLoc[1](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(20)
 B2:
-	6: Branch(20)
+	6: Branch(7)
 B3:
 	7: LdConst[2](Vector(U8): [2, 1, 52])
 	8: StLoc[0](hash: vector<u8>)
@@ -2227,49 +2201,47 @@ B4:
 	20: Ret
 }
 entry public test_calibrate_vec_unpack() {
-L0:	hash: vector<u8>
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
 	7: LdConst[3](Vector(U8): [0])
-	8: VecUnpack(15, 0)
-	9: MoveLoc[1](trials: u64)
+	8: VecUnpack(7, 0)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
 }
 entry public test_calibrate_vec_unpack__baseline() {
-L0:	_hash: vector<u8>
-L1:	trials: u64
+L0:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
+	1: StLoc[0](trials: u64)
 B1:
-	2: CopyLoc[1](trials: u64)
+	2: CopyLoc[0](trials: u64)
 	3: LdU64(0)
 	4: Gt
-	5: BrTrue(7)
+	5: BrFalse(14)
 B2:
-	6: Branch(14)
+	6: Branch(7)
 B3:
 	7: LdConst[3](Vector(U8): [0])
 	8: Pop
-	9: MoveLoc[1](trials: u64)
+	9: MoveLoc[0](trials: u64)
 	10: LdU64(1)
 	11: Sub
-	12: StLoc[1](trials: u64)
+	12: StLoc[0](trials: u64)
 	13: Branch(2)
 B4:
 	14: Ret
@@ -2286,9 +2258,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(17)
 B2:
-	8: Branch(17)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](trials: u64)
 	10: MutBorrowLoc[0](r: u64)
@@ -2313,9 +2285,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: CopyLoc[1](trials: u64)
 	10: Pop
@@ -2341,9 +2313,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(20)
 B2:
-	8: Branch(20)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)
@@ -2371,9 +2343,9 @@ B1:
 	4: CopyLoc[1](trials: u64)
 	5: LdU64(0)
 	6: Gt
-	7: BrTrue(9)
+	7: BrFalse(18)
 B2:
-	8: Branch(18)
+	8: Branch(9)
 B3:
 	9: MoveLoc[0](num: u64)
 	10: LdU64(1)

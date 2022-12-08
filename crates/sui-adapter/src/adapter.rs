@@ -72,10 +72,13 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
         VMConfig {
             verifier: VerifierConfig {
                 max_loop_depth: Some(MAX_LOOP_DEPTH),
-                treat_friend_as_private: true,
                 max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
                 max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
                 max_basic_blocks: Some(MAX_BASIC_BLOCKS),
+                max_value_stack_size: MAX_VALUE_STACK_SIZE,
+                max_type_nodes: Some(MAX_TYPE_NODES),
+                max_push_size: Some(MAX_PUSH_SIZE),
+                max_dependency_depth: MAX_DEPENDENCY_DEPTH,
             },
             max_binary_format_version: MOVE_BINARY_FORMAT_VERSION,
             paranoid_type_checks: false,
