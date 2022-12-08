@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignatureScheme } from '../cryptography/publickey';
+import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
+import { Base64DataBuffer } from '../serialization/base64';
 import {
-  CoinDenominationInfoResponse,
   GetObjectDataResponse,
   SuiObjectInfo,
   GatewayTxSeqNumber,
@@ -25,14 +25,14 @@ import {
   SuiAddress,
   EventQuery,
   EventId,
-  ObjectOwner,
-  SuiEvents,
   PaginatedTransactionDigests,
   TransactionQuery,
   PaginatedEvents,
   RpcApiVersion,
   FaucetResponse,
   Order,
+  TransactionEffects,
+  CoinMetadata,
 } from '../types';
 
 ///////////////////////////////
@@ -46,6 +46,15 @@ export abstract class Provider {
    * connected to, or undefined if any error occurred
    */
   abstract getRpcApiVersion(): Promise<RpcApiVersion | undefined>;
+
+  /**
+   * Fetch CoinMetadata for a given coin type
+   *
+   * @param coinType fully qualified type names for the coin (e.g.,
+   * 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+   *
+   */
+  abstract getCoinMetadata(coinType: string): Promise<CoinMetadata>;
 
   // Faucet
   /**
@@ -115,25 +124,6 @@ export abstract class Provider {
   ): Promise<GetObjectDataResponse[]>;
 
   /**
-   * Method to look up denomination of a specific type of coin.
-   * TODO: now only SUI coins are supported, will scale to other types
-   * based on their definitions in Move.
-   *
-   * @param coin_type coin type, e.g., '0x2::sui::SUI'
-   * @return denomination info of the coin including,
-   * coin type, the same as input coin type
-   * basic unit, the min unit of the coin, e.g., MIST;
-   * canonical unit, the commonly used unit, e.g., SUI;
-   * denomination, the value of 1 canonical over 1 basic unit,
-   * for example 1_000_000_000 = 1 SUI / 1 MIST;
-   * decimal number, the number of zeros in the denomination,
-   * e.g., 9 here for SUI coin.
-   */
-  abstract getCoinDenominationInfo(
-    coin_type: string
-  ): CoinDenominationInfoResponse;
-
-  /**
    * Get details about an object
    */
   abstract getObject(objectId: string): Promise<GetObjectDataResponse>;
@@ -177,10 +167,10 @@ export abstract class Provider {
    * Gateway
    */
   abstract executeTransaction(
-    txnBytes: string,
+    txnBytes: Base64DataBuffer,
     signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string,
+    signature: Base64DataBuffer,
+    pubkey: PublicKey,
     requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse>;
 
@@ -236,119 +226,11 @@ export abstract class Provider {
    * @param order - event query ordering
    */
   abstract getEvents(
-      query: EventQuery,
-      cursor: EventId | null,
-      limit: number | null,
-      order: Order,
+    query: EventQuery,
+    cursor: EventId | null,
+    limit: number | null,
+    order: Order
   ): Promise<PaginatedEvents>;
-
-  /**
-   * Get events for one transaction
-   * @param digest transaction digest to search by
-   * @param count max result count
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsByTransaction(
-    digest: TransactionDigest,
-    count: number
-  ): Promise<SuiEvents>;
-
-  /**
-   * Get events emitted from within the specified Move module
-   * @param packageId Move package object ID
-   * @param module Move module name
-   * @param count max result count
-   * @param startTime start of time range
-   * @param endTime end of time range, exclusive
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsByModule(
-    packageId: ObjectId,
-    module: string,
-    count: number,
-    startTime: number,
-    endTime: number
-  ): Promise<SuiEvents>;
-
-  /**
-   * Get events with a matching Move type name
-   * @param moveEventStructName Move struct type name
-   * @param count max result count
-   * @param startTime start of time range to search
-   * @param endTime end of time range
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsByMoveEventStructName(
-    moveEventStructName: string,
-    count: number,
-    startTime: number,
-    endTime: number
-  ): Promise<SuiEvents>;
-
-  /**
-   * Get events from transactions sent by a specific address
-   * @param sender Sui address of the sender of the transaction that generated the event
-   * @param count max result count
-   * @param startTime start of time range to search
-   * @param endTime end of time range
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsBySender(
-    sender: SuiAddress,
-    count: number,
-    startTime: number,
-    endTime: number
-  ): Promise<SuiEvents>;
-
-  /**
-   * Get events with a matching recipient
-   * @param recipient object owner that received the transaction that generated the event
-   * @param count max result count
-   * @param startTime start of time range to search
-   * @param endTime end of time range
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsByRecipient(
-    recipient: ObjectOwner,
-    count: number,
-    startTime: number,
-    endTime: number
-  ): Promise<SuiEvents>;
-
-  /**
-   * Get events involving the given object
-   * @param object object id created, mutated, or deleted in events
-   * @param count max result count
-   * @param startTime start of time range to search
-   * @param endTime end of time range
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsByObject(
-    object: ObjectId,
-    count: number,
-    startTime: number,
-    endTime: number
-  ): Promise<SuiEvents>;
-
-  /**
-   * Get all events within the given time span
-   * @param count max result count
-   * @param startTime start of time range to search
-   * @param endTime end of time range
-   *
-   * @deprecated The method will be replaced by 'getEvents'
-   */
-  abstract getEventsByTimeRange(
-    count: number,
-    startTime: number,
-    endTime: number
-  ): Promise<SuiEvents>;
 
   /**
    * Subscribe to get notifications whenever an event matching the filter occurs
@@ -366,4 +248,6 @@ export abstract class Provider {
    */
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
   // TODO: add more interface methods
+
+  abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
 }

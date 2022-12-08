@@ -28,14 +28,20 @@ const initState: SearchDataType = {
 };
 
 const querySearchParams = async (input: string, network: Network | string) => {
+    const version = await rpc(network).getRpcApiVersion();
     let searchPromises = [];
-    if (isValidTransactionDigest(input)) {
+    if (
+        isValidTransactionDigest(
+            input,
+            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
+        )
+    ) {
         searchPromises.push(
             rpc(network)
                 .getTransactionWithEffects(input)
                 .then((data) => [
                     {
-                        category: 'transactions',
+                        category: 'transaction',
                         data: data,
                     },
                 ])
@@ -49,7 +55,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
                         throw new Error('No objects for Address');
 
                     return {
-                        category: 'addresses',
+                        category: 'address',
                         data: data,
                     };
                 }),
@@ -60,7 +66,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
                         throw new Error('no object found');
                     }
                     return {
-                        category: 'objects',
+                        category: 'object',
                         data: data,
                     };
                 }),

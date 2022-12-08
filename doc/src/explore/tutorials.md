@@ -92,7 +92,7 @@ ECF53CE22D1B2FB588573924057E9ADDAD1D8385
 DB4C7667636471AFF396B900EB7B63FACAF629B6
 A6BBB1930E01495EE93CE912EA01C29695E07890
 ```
-Note that since these addresses are randomly generated, they are different from the values you see when you run the command. We need three addresses to play TicTacToe. Let's pick the first three addresses. Let's call them ADMIN, PLAYER_X and PLAYER_O. 
+Note that since these addresses are randomly generated, they are different from the values you see when you run the command. We need three addresses to play TicTacToe. Let's pick the first three addresses. Let's call them ADMIN, PLAYER_X and PLAYER_O.
 
 Since we will be using these addresses and gas objects repeatedly in the rest of this tutorial, let's make them environment variables so that we don't have to retype them every time:
 ```
@@ -201,21 +201,21 @@ Mutated Objects:
 ```
 The preceding call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
 ```
-$ sui client object --id 5851B7EA07B93E68696BC0CF811D2E266DFB880D
+$ sui client object 5851B7EA07B93E68696BC0CF811D2E266DFB880D
 Owner: AddressOwner(k#251cf224b6ba3a019d04b6041357c20490f7a322)
 Version: 1
 ID: 5851B7EA07B93E68696BC0CF811D2E266DFB880D
 Readonly: false
 Type: 0xa613a7ff8cb03e0dfc0d157e232bba50c5f19d17::TicTacToe::MarkMintCap
 
-$ sui client object --id A6D3B507D4533822E690291166891D42694A2721
+$ sui client object A6D3B507D4533822E690291166891D42694A2721
 Owner: AddressOwner(k#7b61da6aaced7f28c1187d998955f10464beae55)
 Version: 1
 ID: A6D3B507D4533822E690291166891D42694A2721
 Readonly: false
 Type: 0xa613a7ff8cb03e0dfc0d157e232bba50c5f19d17::TicTacToe::MarkMintCap
 
-$ sui client object --id F1B8161BD97D3CD6627E739AD675089C5ACFB452
+$ sui client object F1B8161BD97D3CD6627E739AD675089C5ACFB452
 Owner: AddressOwner(k#ecf53ce22d1b2fb588573924057e9addad1d8385)
 Version: 1
 ID: F1B8161BD97D3CD6627E739AD675089C5ACFB452
@@ -404,7 +404,7 @@ Mutated Objects:
 
 Cool! The last transaction created a new object. Let's find out what object was created:
 ```shell
-$ sui client object --id 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
+$ sui client object 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
 ```
 
 See output resembling:

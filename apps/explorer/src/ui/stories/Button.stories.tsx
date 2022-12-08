@@ -38,6 +38,9 @@ export const Primary: StoryObj<ButtonProps> = {
             <Button onClick={() => alert('on click')} size="lg" {...props}>
                 Large Button
             </Button>
+            <Button disabled {...props}>
+                Disabled
+            </Button>
         </div>
     ),
     args: { variant: 'primary' },

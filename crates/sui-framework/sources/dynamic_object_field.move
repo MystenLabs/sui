@@ -12,22 +12,10 @@ use sui::dynamic_field::{
     Self as field,
     add_child_object,
     borrow_child_object,
+    borrow_child_object_mut,
     remove_child_object,
 };
 use sui::object::{Self, UID, ID};
-
-/// The object already has a dynamic field with this name (with the value and type specified)
-const EFieldAlreadyExists: u64 = 0;
-
-/// Cannot load dynamic field.
-/// The object does not have a dynamic field with this name (with the value and type specified)
-const EFieldDoesNotExist: u64 = 1;
-
-/// The object has a field with that name, but the value type does not match
-const EFieldTypeMismatch: u64 = 2;
-
-/// Failed to serialize the field's name
-const EBCSSerializationFailure: u64 = 3;
 
 // Internal object used for storing the field and the name associated with the value
 // The separate type is necessary to prevent key collision with direct usage of dynamic_field
@@ -46,8 +34,8 @@ public fun add<Name: copy + drop + store, Value: key + store>(
     let key = Wrapper { name };
     let id = object::id(&value);
     field::add(object, key, id);
-    let (field_id, _) = field::field_ids<Wrapper<Name>>(object, key);
-    add_child_object(field_id, value);
+    let (field, _) = field::field_info<Wrapper<Name>>(object, key);
+    add_child_object(object::uid_to_address(field), value);
 }
 
 /// Immutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -59,8 +47,8 @@ public fun borrow<Name: copy + drop + store, Value: key + store>(
     name: Name,
 ): &Value {
     let key = Wrapper { name };
-    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    borrow_child_object<Value>(field_id, value_id)
+    let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
+    borrow_child_object<Value>(field, value_id)
 }
 
 /// Mutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -72,8 +60,8 @@ public fun borrow_mut<Name: copy + drop + store, Value: key + store>(
     name: Name,
 ): &mut Value {
     let key = Wrapper { name };
-    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    borrow_child_object<Value>(field_id, value_id)
+    let (field, value_id) = field::field_info_mut<Wrapper<Name>>(object, key);
+    borrow_child_object_mut<Value>(field, value_id)
 }
 
 /// Removes the `object`s dynamic object field with the name specified by `name: Name` and returns
@@ -86,8 +74,8 @@ public fun remove<Name: copy + drop + store, Value: key + store>(
     name: Name,
 ): Value {
     let key = Wrapper { name };
-    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    let value = remove_child_object<Value>(field_id, value_id);
+    let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
+    let value = remove_child_object<Value>(object::uid_to_address(field), value_id);
     field::remove<Wrapper<Name>, ID>(object, key);
     value
 }
@@ -110,8 +98,8 @@ public fun exists_with_type<Name: copy + drop + store, Value: key + store>(
 ): bool {
     let key = Wrapper { name };
     if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) return false;
-    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    field::has_child_object_with_ty<Value>(field_id, value_id)
+    let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
+    field::has_child_object_with_ty<Value>(object::uid_to_address(field), value_id)
 }
 
 /// Returns the ID of the object associated with the dynamic object field
@@ -122,7 +110,7 @@ public fun id<Name: copy + drop + store>(
 ): Option<ID> {
     let key = Wrapper { name };
     if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) return option::none();
-    let (_field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
+    let (_field, value_id) = field::field_info<Wrapper<Name>>(object, key);
     option::some(object::id_from_address(value_id))
 }
 

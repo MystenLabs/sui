@@ -9,7 +9,6 @@ import {
   isGetTxnDigestsResponse,
   isPaginatedEvents,
   isPaginatedTransactionDigests,
-  isSuiEvents,
   isSuiExecuteTransactionResponse,
   isSuiMoveFunctionArgTypes,
   isSuiMoveNormalizedFunction,
@@ -17,26 +16,23 @@ import {
   isSuiMoveNormalizedModules,
   isSuiMoveNormalizedStruct,
   isSuiTransactionResponse,
+  isTransactionEffects,
+  isCoinMetadata,
+  isSuiTransactionAuthSignersResponse,
 } from '../types/index.guard';
 import {
   Coin,
-  DEFAULT_END_TIME,
-  DEFAULT_START_TIME,
-  EVENT_QUERY_MAX_LIMIT,
   ExecuteTransactionRequestType,
-  CoinDenominationInfoResponse,
   GatewayTxSeqNumber,
   GetObjectDataResponse,
   getObjectReference,
   GetTxnDigestsResponse,
   ObjectId,
-  ObjectOwner,
   PaginatedTransactionDigests,
   SubscriptionId,
   SuiAddress,
   SuiEventEnvelope,
   SuiEventFilter,
-  SuiEvents,
   SuiExecuteTransactionResponse,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -49,7 +45,6 @@ import {
   TransactionDigest,
   TransactionQuery,
   SUI_TYPE_ARG,
-  normalizeSuiAddress,
   RpcApiVersion,
   parseVersionFromString,
   EventQuery,
@@ -57,8 +52,13 @@ import {
   PaginatedEvents,
   FaucetResponse,
   Order,
+  TransactionEffects,
+  CoinMetadata,
+  versionToString,
+  normalizeSuiAddress,
+  SuiTransactionAuthSignersResponse,
 } from '../types';
-import { SignatureScheme } from '../cryptography/publickey';
+import { PublicKey, SignatureScheme, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
@@ -66,6 +66,8 @@ import {
 } from '../rpc/websocket-client';
 import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
+import { lt } from '@suchipi/femver';
+import { Base64DataBuffer } from '../serialization/base64';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -169,6 +171,41 @@ export class JsonRpcProvider extends Provider {
       console.warn('Error fetching version number of the RPC API', err);
     }
     return undefined;
+  }
+
+  async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
+    try {
+      const version = await this.getRpcApiVersion();
+      // TODO: clean up after 0.17.0 is deployed on both DevNet and TestNet
+      if (version && lt(versionToString(version), '0.17.0')) {
+        const [packageId, module, symbol] = coinType.split('::');
+        if (
+          normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
+          module != 'sui' ||
+          symbol !== 'SUI'
+        ) {
+          throw new Error(
+            'only SUI coin is supported in getCoinMetadata for RPC version priort to 0.17.0.'
+          );
+        }
+        return {
+          decimals: 9,
+          name: 'Sui',
+          symbol: 'SUI',
+          description: '',
+          iconUrl: null,
+          id: null,
+        };
+      }
+      return await this.client.requestWithType(
+        'sui_getCoinMetadata',
+        [coinType],
+        isCoinMetadata,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(`Error fetching CoinMetadata for ${coinType}: ${err}`);
+    }
   }
 
   async requestSuiFromFaucet(
@@ -296,25 +333,6 @@ export class JsonRpcProvider extends Provider {
   async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
-  }
-
-  getCoinDenominationInfo(coinType: string): CoinDenominationInfoResponse {
-    const [packageId, module, symbol] = coinType.split('::');
-    if (
-      normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-      module != 'sui' ||
-      symbol !== 'SUI'
-    ) {
-      throw new Error(
-        'only SUI coin is supported in getCoinDenominationInfo for now.'
-      );
-    }
-
-    return {
-      coinType: coinType,
-      basicUnit: 'MIST',
-      decimalNumber: 9,
-    };
   }
 
   async getCoinBalancesOwnedByAddress(
@@ -528,19 +546,36 @@ export class JsonRpcProvider extends Provider {
   }
 
   async executeTransaction(
-    txnBytes: string,
+    txnBytes: Base64DataBuffer,
     signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string,
+    signature: Base64DataBuffer,
+    pubkey: PublicKey,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
   ): Promise<SuiExecuteTransactionResponse> {
     try {
-      const resp = await this.client.requestWithType(
-        'sui_executeTransaction',
-        [txnBytes, signatureScheme, signature, pubkey, requestType],
-        isSuiExecuteTransactionResponse,
-        this.options.skipDataValidation
-      );
+      let resp;
+      let version = await this.getRpcApiVersion();
+      if (version?.major === 0 && version?.minor < 18) {
+        resp = await this.client.requestWithType(
+          'sui_executeTransaction',
+          [txnBytes.toString(), signatureScheme, signature.toString(), pubkey.toString(), requestType],
+          isSuiExecuteTransactionResponse,
+          this.options.skipDataValidation
+        );
+      } else {
+        // Serialize sigature field as: `flag || signature || pubkey`
+        const serialized_sig = new Uint8Array(1 + signature.getLength() + pubkey.toBytes().length);
+        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+        serialized_sig.set(signature.getData(), 1);
+        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
+
+        resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [txnBytes.toString(), new Base64DataBuffer(serialized_sig).toString(), requestType],
+          isSuiExecuteTransactionResponse,
+          this.options.skipDataValidation
+        );
+      };
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}}`);
@@ -579,161 +614,40 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getTransactionAuthSigners(
+    digest: TransactionDigest
+  ): Promise<SuiTransactionAuthSignersResponse> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getTransactionAuthSigners',
+        [digest],
+        isSuiTransactionAuthSignersResponse,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching transaction auth signers: ${err}`
+      );
+    }
+  }
+
   // Events
   async getEvents(
-      query: EventQuery,
-      cursor: EventId | null,
-      limit: number | null,
-      order: Order = 'descending'
+    query: EventQuery,
+    cursor: EventId | null,
+    limit: number | null,
+    order: Order = 'descending'
   ): Promise<PaginatedEvents> {
     try {
       return await this.client.requestWithType(
-          'sui_getEvents',
-          [query, cursor, limit, order === 'descending'],
-          isPaginatedEvents,
-          this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-          `Error getting events for query: ${err} for query ${query}`
-      );
-    }
-  }
-
-  async getEventsByTransaction(
-    digest: TransactionDigest,
-    count: number = EVENT_QUERY_MAX_LIMIT
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByTransaction',
-        [digest, count],
-        isSuiEvents,
+        'sui_getEvents',
+        [query, cursor, limit, order === 'descending'],
+        isPaginatedEvents,
         this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error getting events by transaction: ${digest}, with error: ${err}`
-      );
-    }
-  }
-
-  async getEventsByModule(
-    package_: string,
-    module: string,
-    count: number = EVENT_QUERY_MAX_LIMIT,
-    startTime: number = DEFAULT_START_TIME,
-    endTime: number = DEFAULT_END_TIME
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByModule',
-        [package_, module, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by transaction module: ${package_}::${module}, with error: ${err}`
-      );
-    }
-  }
-
-  async getEventsByMoveEventStructName(
-    moveEventStructName: string,
-    count: number = EVENT_QUERY_MAX_LIMIT,
-    startTime: number = DEFAULT_START_TIME,
-    endTime: number = DEFAULT_END_TIME
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByMoveEventStructName',
-        [moveEventStructName, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by move event struct name: ${moveEventStructName}, with error: ${err}`
-      );
-    }
-  }
-
-  async getEventsBySender(
-    sender: SuiAddress,
-    count: number = EVENT_QUERY_MAX_LIMIT,
-    startTime: number = DEFAULT_START_TIME,
-    endTime: number = DEFAULT_END_TIME
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsBySender',
-        [sender, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by sender: ${sender}, with error: ${err}`
-      );
-    }
-  }
-
-  async getEventsByRecipient(
-    recipient: ObjectOwner,
-    count: number = EVENT_QUERY_MAX_LIMIT,
-    startTime: number = DEFAULT_START_TIME,
-    endTime: number = DEFAULT_END_TIME
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByRecipient',
-        [recipient, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by receipient: ${recipient}, with error: ${err}`
-      );
-    }
-  }
-
-  async getEventsByObject(
-    object: ObjectId,
-    count: number = EVENT_QUERY_MAX_LIMIT,
-    startTime: number = DEFAULT_START_TIME,
-    endTime: number = DEFAULT_END_TIME
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByObject',
-        [object, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by object: ${object}, with error: ${err}`
-      );
-    }
-  }
-
-  async getEventsByTimeRange(
-    count: number = EVENT_QUERY_MAX_LIMIT,
-    startTime: number = DEFAULT_START_TIME,
-    endTime: number = DEFAULT_END_TIME
-  ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByTimeRange',
-        [count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by time range: ${startTime} thru ${endTime}, with error: ${err}`
+        `Error getting events for query: ${err} for query ${query}`
       );
     }
   }
@@ -747,5 +661,21 @@ export class JsonRpcProvider extends Provider {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     return this.wsClient.unsubscribeEvent(id);
+  }
+
+  async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_dryRunTransaction',
+        [txBytes],
+        isTransactionEffects,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error dry running transaction with request type: ${err}`
+      );
+    }
   }
 }

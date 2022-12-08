@@ -1,10 +1,10 @@
 ---
-title: Learn About Sui
+title: Learn about Sui
 ---
 
-*Sui: pronounced "sweet" without the "T" - with Transactions (loads of them), things are SWEET indeed. :-)*
+Sui *(swē)* is the water element in Japanese philosophy. The power of the sui element lies in its fluidity---its ability to easily adapt to and transform any environment. Similarly, the Sui platform seeks to provide a flexible network that you can leverage to shape the web3 landscape. 
 
-Welcome to the documentation for the Sui platform. Sui is built on the core [Move](https://github.com/MystenLabs/awesome-move) programming language. This documentation assumes that you have a basic working knowledge of Move. To learn more about the differences between core Move and Sui Move, see [How Sui Move differs from core Move](../learn/sui-move-diffs.md).
+The Sui platform is built on Sui Move, which is derived from the core [Move](https://github.com/MystenLabs/awesome-move) programming language. This documentation assumes that you have a basic working knowledge of Move. To learn more about the differences between core Move and Sui Move, see [How Sui Move differs from core Move](../learn/sui-move-diffs.md).
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 

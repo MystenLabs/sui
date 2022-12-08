@@ -1,5 +1,33 @@
 # @mysten/sui.js
 
+## 0.18.0
+
+### Minor Changes
+
+- 66021884e: Send serialized signature with new executeTransactionSerializedSig endpoint
+- 7a67d61e2: Unify TxnSerializer interface
+- 2a0b8e85d: Add base58 encoding for TransactionDigest
+
+### Patch Changes
+
+- 45293b6ff: Replace `getCoinDenominationInfo` with `getCoinMetadata`
+- 7a67d61e2: Add method in SignerWithProvider for calculating transaction digest
+
+## 0.17.1
+
+### Patch Changes
+
+- 623505886: Fix callArg serialization bug in LocalTxnSerializer
+
+## 0.17.0
+
+### Minor Changes
+
+- a9602e533: Remove deprecated events API
+- db22728c1: \* adds dryRunTransaction support
+  - adds getGasCostEstimation to the signer-with-provider that estimates the gas cost for a transaction
+- 3b510d0fc: adds coin transfer method to framework that uses pay and paySui
+
 ## 0.16.0
 
 ### Minor Changes

@@ -18,6 +18,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
+use mysten_metrics::{monitored_future, spawn_monitored_task};
 use network::anemo_ext::NetworkExt;
 use network::{P2pNetwork, UnreliableNetwork};
 use rand::{rngs::SmallRng, SeedableRng};
@@ -27,7 +28,6 @@ use std::{
 };
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
-use sui_metrics::{monitored_future, spawn_monitored_task};
 use thiserror::Error;
 use tokio::{
     sync::{mpsc::Sender, watch},

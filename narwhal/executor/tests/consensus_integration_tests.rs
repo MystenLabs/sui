@@ -5,8 +5,8 @@ use consensus::bullshark::Bullshark;
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
+use narwhal_executor::get_restored_consensus_output;
 use narwhal_executor::MockExecutionState;
-use narwhal_executor::{get_restored_consensus_output, ExecutionIndices};
 use prometheus::Registry;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -50,6 +50,7 @@ async fn test_recovery() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -70,6 +71,7 @@ async fn test_recovery() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
@@ -88,23 +90,19 @@ async fn test_recovery() {
 
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
-    let mut consensus_index_counter = 0;
+    let consensus_index_counter = 4;
     let num_of_committed_certificates = 5;
 
     let committed_sub_dag = rx_output.recv().await.unwrap();
-    let leader_round = committed_sub_dag.leader.round();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for i in 1..=num_of_committed_certificates {
         let output = sequence.next().unwrap();
-        assert_eq!(output.consensus_index, consensus_index_counter);
 
         if i < 5 {
-            assert_eq!(output.certificate.round(), 1);
+            assert_eq!(output.round(), 1);
         } else {
-            assert_eq!(output.certificate.round(), 2);
+            assert_eq!(output.round(), 2);
         }
-
-        consensus_index_counter += 1;
     }
 
     // Now assume that we want to recover from a crash. We are testing all the recovery cases
@@ -113,14 +111,9 @@ async fn test_recovery() {
     for last_executed_certificate_index in 0..consensus_index_counter {
         let mut execution_state = MockExecutionState::new();
         execution_state
-            .expect_load_execution_indices()
+            .expect_last_executed_sub_dag_index()
             .times(1)
-            .returning(move || ExecutionIndices {
-                next_certificate_index: last_executed_certificate_index,
-                next_batch_index: 0,
-                next_transaction_index: 0,
-                last_committed_round: leader_round,
-            });
+            .returning(|| 1);
 
         let consensus_output = get_restored_consensus_output(
             consensus_store.clone(),

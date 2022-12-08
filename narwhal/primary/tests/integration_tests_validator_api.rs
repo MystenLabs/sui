@@ -29,7 +29,7 @@ use types::{
     ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
-use worker::{metrics::initialise_metrics, Worker};
+use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_get_collections() {
@@ -103,6 +103,7 @@ async fn test_get_collections() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -119,8 +120,9 @@ async fn test_get_collections() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store,
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
+        tx_new_certificates,
+        rx_feedback,
+        rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
@@ -143,6 +145,7 @@ async fn test_get_collections() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
+        TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics,
     );
@@ -298,6 +301,7 @@ async fn test_remove_collections() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
@@ -313,8 +317,9 @@ async fn test_remove_collections() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
+        tx_new_certificates,
+        rx_feedback,
+        rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -361,6 +366,7 @@ async fn test_remove_collections() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
+        TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics,
     );
@@ -500,6 +506,7 @@ async fn test_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -524,8 +531,9 @@ async fn test_read_causal_signed_certificates() {
         primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
+        tx_new_certificates,
+        rx_feedback,
+        rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -538,6 +546,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -563,8 +572,9 @@ async fn test_read_causal_signed_certificates() {
         primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
-        /* tx_consensus */ tx_new_certificates_2,
-        /* rx_consensus */ rx_feedback_2,
+        tx_new_certificates_2,
+        rx_feedback_2,
+        rx_consensus_round_updates_2,
         /* external_consensus */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
@@ -718,6 +728,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -735,8 +746,9 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
+        tx_new_certificates,
+        rx_feedback,
+        rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -749,6 +761,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -767,8 +780,9 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
-        /* tx_consensus */ tx_new_certificates_2,
-        /* rx_consensus */ rx_feedback_2,
+        tx_new_certificates_2,
+        rx_feedback_2,
+        rx_consensus_round_updates_2,
         /* external_consensus */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
@@ -918,6 +932,7 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -934,8 +949,9 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_1.proposer_store,
         store_primary_1.payload_store,
         store_primary_1.vote_digest_store,
-        /* tx_consensus */ tx_new_certificates_1,
-        /* rx_consensus */ rx_feedback_1,
+        tx_new_certificates_1,
+        rx_feedback_1,
+        rx_consensus_round_updates,
         /* external_consensus */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
@@ -958,6 +974,7 @@ async fn test_get_collections_with_missing_certificates() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters_1.clone(),
+        TrivialTransactionValidator::default(),
         store_primary_1.batch_store,
         metrics_1,
     );
@@ -966,6 +983,7 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_new_certificates_2, _) = test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -994,8 +1012,9 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_2.proposer_store,
         store_primary_2.payload_store,
         store_primary_2.vote_digest_store,
-        /* tx_consensus */ tx_new_certificates_2,
-        /* rx_consensus */ rx_feedback_2,
+        tx_new_certificates_2,
+        rx_feedback_2,
+        rx_consensus_round_updates,
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
@@ -1016,6 +1035,7 @@ async fn test_get_collections_with_missing_certificates() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters_2.clone(),
+        TrivialTransactionValidator::default(),
         store_primary_2.batch_store,
         metrics_2,
     );

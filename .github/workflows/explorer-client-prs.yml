@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isClient: ${{ contains(fromJson(steps.pnpm.outputs.packages), 'sui-explorer') || steps.diff.outputs.isRust }}
+      isClient: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-explorer')) || steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes (pnpm)
@@ -58,7 +58,7 @@ jobs:
       - name: Install Cypress
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
-        uses: cypress-io/github-action@v4
+        uses: cypress-io/github-action@v5
         with:
           install: false
           start: pnpm dev:static
@@ -86,7 +86,7 @@ jobs:
       - name: Install Cypress
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
-        uses: cypress-io/github-action@v4
+        uses: cypress-io/github-action@v5
         with:
           install: false
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'

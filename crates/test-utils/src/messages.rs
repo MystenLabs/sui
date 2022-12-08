@@ -36,7 +36,7 @@ use sui_types::messages::{
 use sui_types::object::Object;
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 100_000;
+pub const MAX_GAS: u64 = 2_000;
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -442,10 +442,11 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
             {
                 tx_certs.push(tx_cert.verify(committee).unwrap());
                 let effects = dummy_transaction_effects(&tx);
-                let signed_effects = effects.to_sign_effects(
+                let signed_effects = SignedTransactionEffects::new(
                     committee.epoch(),
-                    &AuthorityPublicKeyBytes::from(key.public()),
+                    effects,
                     &key,
+                    AuthorityPublicKeyBytes::from(key.public()),
                 );
                 effect_sigs.push(signed_effects);
                 break;

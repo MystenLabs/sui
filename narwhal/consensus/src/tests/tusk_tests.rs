@@ -40,6 +40,7 @@ async fn commit_one() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -57,6 +58,7 @@ async fn commit_one() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         tusk,
         metrics,
@@ -76,10 +78,10 @@ async fn commit_one() {
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=4 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 1);
+        assert_eq!(output.round(), 1);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.certificate.round(), 2);
+    assert_eq!(output.round(), 2);
 }
 
 // Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
@@ -105,6 +107,7 @@ async fn dead_node() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -122,6 +125,7 @@ async fn dead_node() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         tusk,
         metrics,
@@ -149,10 +153,10 @@ async fn dead_node() {
     for i in 1..=15 {
         let output = sequence.next().unwrap();
         let expected = ((i - 1) / keys.len() as u64) + 1;
-        assert_eq!(output.certificate.round(), expected);
+        assert_eq!(output.round(), expected);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.certificate.round(), 6);
+    assert_eq!(output.round(), 6);
 }
 
 // Run for 6 dag rounds. The leaders of round 2 does not have enough support, but the leader of
@@ -224,6 +228,7 @@ async fn not_enough_support() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -241,6 +246,7 @@ async fn not_enough_support() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         tusk,
         metrics,
@@ -259,23 +265,23 @@ async fn not_enough_support() {
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 1);
+        assert_eq!(output.round(), 1);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.certificate.round(), 2);
+    assert_eq!(output.round(), 2);
 
     let committed_sub_dag = rx_output.recv().await.unwrap();
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 2);
+        assert_eq!(output.round(), 2);
     }
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 3);
+        assert_eq!(output.round(), 3);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.certificate.round(), 4);
+    assert_eq!(output.round(), 4);
 }
 
 // Run for 6 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
@@ -312,6 +318,7 @@ async fn missing_leader() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -329,6 +336,7 @@ async fn missing_leader() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         tusk,
         metrics,
@@ -347,18 +355,18 @@ async fn missing_leader() {
     let mut sequence = committed_sub_dag.certificates.into_iter();
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 1);
+        assert_eq!(output.round(), 1);
     }
     for _ in 1..=3 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 2);
+        assert_eq!(output.round(), 2);
     }
     for _ in 1..=4 {
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.round(), 3);
+        assert_eq!(output.round(), 3);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.certificate.round(), 4);
+    assert_eq!(output.round(), 4);
 }
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
@@ -373,6 +381,7 @@ async fn epoch_change() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -390,6 +399,7 @@ async fn epoch_change() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         tusk,
         metrics,
@@ -430,12 +440,12 @@ async fn epoch_change() {
         let mut sequence = committed_sub_dag.certificates.into_iter();
         for _ in 1..=4 {
             let output = sequence.next().unwrap();
-            assert_eq!(output.certificate.epoch(), epoch);
-            assert_eq!(output.certificate.round(), 1);
+            assert_eq!(output.epoch(), epoch);
+            assert_eq!(output.round(), 1);
         }
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.epoch(), epoch);
-        assert_eq!(output.certificate.round(), 2);
+        assert_eq!(output.epoch(), epoch);
+        assert_eq!(output.round(), 2);
 
         // Move to the next epoch.
         committee.epoch = epoch + 1;
@@ -458,6 +468,7 @@ async fn restart_with_new_committee() {
         let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+        let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
         let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
@@ -474,6 +485,7 @@ async fn restart_with_new_committee() {
             rx_reconfigure,
             rx_waiter,
             tx_primary,
+            tx_consensus_round_updates,
             tx_output,
             tusk,
             metrics.clone(),
@@ -511,12 +523,12 @@ async fn restart_with_new_committee() {
         let mut sequence = committed_sub_dag.certificates.into_iter();
         for _ in 1..=4 {
             let output = sequence.next().unwrap();
-            assert_eq!(output.certificate.epoch(), epoch);
-            assert_eq!(output.certificate.round(), 1);
+            assert_eq!(output.epoch(), epoch);
+            assert_eq!(output.round(), 1);
         }
         let output = sequence.next().unwrap();
-        assert_eq!(output.certificate.epoch(), epoch);
-        assert_eq!(output.certificate.round(), 2);
+        assert_eq!(output.epoch(), epoch);
+        assert_eq!(output.round(), 2);
 
         // Move to the next epoch.
         committee.epoch = epoch + 1;

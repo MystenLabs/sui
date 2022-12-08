@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getObjectId } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createSelector,
@@ -12,14 +13,19 @@ import { isKeyringPayload } from '_payloads/keyring';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 
-import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
+import type {
+    ObjectId,
+    SuiAddress,
+    SuiMoveObject,
+    ExportedKeypair,
+} from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const createVault = createAsyncThunk<
-    string,
+    ExportedKeypair,
     {
         importedEntropy?: string;
         password: string;
@@ -36,10 +42,10 @@ export const createVault = createAsyncThunk<
         if (!isKeyringPayload(payload, 'create')) {
             throw new Error('Unknown payload');
         }
-        if (!payload.return?.entropy) {
-            throw new Error('Empty entropy in payload');
+        if (!payload.return?.keypair) {
+            throw new Error('Empty keypair in payload');
         }
-        return payload.return.entropy;
+        return payload.return.keypair;
     }
 );
 
@@ -183,3 +189,11 @@ export const accountNftsSelector = createSelector(
         return allSuiObjects.filter((anObj) => !Coin.isCoin(anObj));
     }
 );
+
+export function createAccountNftByIdSelector(nftId: ObjectId) {
+    return createSelector(
+        accountNftsSelector,
+        (allNfts) =>
+            allNfts.find((nft) => getObjectId(nft.reference) === nftId) || null
+    );
+}

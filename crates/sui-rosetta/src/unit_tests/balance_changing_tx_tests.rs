@@ -17,6 +17,7 @@ use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
 };
+use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
@@ -31,20 +32,15 @@ use crate::operations::Operation;
 use crate::state::extract_balance_changes_from_ops;
 use crate::types::SignedValue;
 
-#[cfg(msim)]
-use sui_sdk::embedded_gateway::SuiClient;
-#[cfg(not(msim))]
-use sui_sdk::SuiClient;
-
 #[tokio::test]
-async fn test_all_transaction_type() {
+async fn test_transfer_sui() {
     let port = get_available_port();
     let network = TestClusterBuilder::new()
         .set_fullnode_rpc_port(port)
         .build()
         .await
         .unwrap();
-    let client = network.wallet.client;
+    let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
     // Test Transfer Sui
@@ -55,6 +51,18 @@ async fn test_all_transaction_type() {
         amount: Some(50000),
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_transfer_sui_whole_coin() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test transfer sui whole coin
     let sender = get_random_address(&network.accounts, vec![]);
@@ -64,6 +72,18 @@ async fn test_all_transaction_type() {
         amount: None,
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_transfer_object() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test transfer object
     let sender = get_random_address(&network.accounts, vec![]);
@@ -74,6 +94,18 @@ async fn test_all_transaction_type() {
         object_ref,
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_publish_and_move_call() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test publish
     let sender = get_random_address(&network.accounts, vec![]);
@@ -107,6 +139,7 @@ async fn test_all_transaction_type() {
             }
         })
         .unwrap();
+
     // Get object ref from effect
     let package = effect
         .created
@@ -115,7 +148,7 @@ async fn test_all_transaction_type() {
         .unwrap();
     let package = package.clone().reference.to_object_ref();
     // TODO: Improve tx response to make it easier to find objects.
-    let treasury = find_module_object(&effect, "managed").unwrap();
+    let treasury = find_module_object(&effect, "managed", "TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let tx = SingleTransactionKind::Call(MoveCall {
@@ -130,9 +163,21 @@ async fn test_all_transaction_type() {
         ],
     });
     test_transaction(&client, keystore, vec![], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_split_coin() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test spilt coin
-    let sender = recipient;
+    let sender = get_random_address(&network.accounts, vec![]);
     let coin = get_random_sui(&client, sender, vec![]).await;
     let tx = client
         .transaction_builder()
@@ -141,6 +186,18 @@ async fn test_all_transaction_type() {
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
     test_transaction(&client, keystore, vec![], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_merge_coin() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test merge coin
     let sender = get_random_address(&network.accounts, vec![]);
@@ -153,6 +210,18 @@ async fn test_all_transaction_type() {
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
     test_transaction(&client, keystore, vec![], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_pay() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test Pay
     let sender = get_random_address(&network.accounts, vec![]);
@@ -164,6 +233,18 @@ async fn test_all_transaction_type() {
         amounts: vec![100000],
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_pay_multiple_coin_multiple_recipient() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test Pay multiple coin multiple recipient
     let sender = get_random_address(&network.accounts, vec![]);
@@ -185,6 +266,42 @@ async fn test_all_transaction_type() {
         None,
     )
     .await;
+}
+
+#[tokio::test]
+async fn test_pay_sui_multiple_coin_same_recipient() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
+
+    // Test Pay multiple coin same recipient
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient1 = get_random_address(&network.accounts, vec![sender]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let tx = SingleTransactionKind::PaySui(PaySui {
+        coins: vec![coin1, coin2],
+        recipients: vec![recipient1, recipient1, recipient1],
+        amounts: vec![100000, 100000, 100000],
+    });
+    test_transaction(&client, keystore, vec![recipient1], sender, tx, Some(coin1)).await;
+}
+
+#[tokio::test]
+async fn test_pay_sui() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test Pay Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -206,6 +323,18 @@ async fn test_all_transaction_type() {
         Some(coin1),
     )
     .await;
+}
+
+#[tokio::test]
+async fn test_pay_all_sui() {
+    let port = get_available_port();
+    let network = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await
+        .unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
 
     // Test Pay All Sui
     let sender = get_random_address(&network.accounts, vec![]);
@@ -219,18 +348,23 @@ async fn test_all_transaction_type() {
     test_transaction(&client, keystore, vec![recipient], sender, tx, Some(coin1)).await;
 }
 
-fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<OwnedObjectRef> {
-    effects
+fn find_module_object(
+    effects: &SuiTransactionEffects,
+    module: &str,
+    object_type_name: &str,
+) -> OwnedObjectRef {
+    let mut results: Vec<_> = effects
         .events
         .iter()
-        .find_map(|event| {
+        .filter_map(|event| {
             if let SuiEvent::NewObject {
                 transaction_module,
                 object_id,
+                object_type,
                 ..
             } = event
             {
-                if transaction_module == module {
+                if transaction_module == module && object_type.contains(object_type_name) {
                     return effects
                         .created
                         .iter()
@@ -240,6 +374,10 @@ fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<O
             None
         })
         .cloned()
+        .collect();
+    // Check that there is only one object found, and hence no ambiguity.
+    assert_eq!(results.len(), 1);
+    results.pop().unwrap()
 }
 
 // Record current Sui balance of an address then execute the transaction,

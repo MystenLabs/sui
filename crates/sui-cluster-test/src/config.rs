@@ -7,6 +7,7 @@ pub enum Env {
     Devnet,
     Staging,
     Ci,
+    CiNomad,
     Testnet,
     CustomRemote,
     NewLocal,
@@ -21,8 +22,6 @@ pub struct ClusterTestOpt {
     pub faucet_address: Option<String>,
     #[clap(long)]
     pub fullnode_address: Option<String>,
-    #[clap(long)]
-    pub websocket_address: Option<String>,
 }
 
 impl ClusterTestOpt {
@@ -31,7 +30,6 @@ impl ClusterTestOpt {
             env: Env::NewLocal,
             faucet_address: None,
             fullnode_address: None,
-            websocket_address: None,
         }
     }
 }

@@ -40,7 +40,6 @@ COPY narwhal narwhal
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
-    --bin rpc-server \
     --bin sui-faucet \
     --bin stress \
     --bin sui-cluster-test
@@ -50,7 +49,6 @@ FROM debian:bullseye-slim AS runtime
 WORKDIR sui
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
-COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin

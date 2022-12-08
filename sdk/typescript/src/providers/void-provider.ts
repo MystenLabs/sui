@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignatureScheme } from '../cryptography/publickey';
+import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
+import { Base64DataBuffer } from '../serialization/base64';
 import {
   CertifiedTransaction,
-  CoinDenominationInfoResponse,
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
@@ -22,10 +22,8 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
-  ObjectOwner,
   SuiAddress,
   ObjectId,
-  SuiEvents,
   TransactionQuery,
   PaginatedTransactionDigests,
   EventQuery,
@@ -34,6 +32,8 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
+  TransactionEffects,
+  CoinMetadata,
 } from '../types';
 import { Provider } from './provider';
 
@@ -41,6 +41,10 @@ export class VoidProvider extends Provider {
   // API Version
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
     throw this.newError('getRpcApiVersion');
+  }
+
+  getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
+    throw new Error('getCoinMetadata');
   }
 
   // Faucet
@@ -60,10 +64,6 @@ export class VoidProvider extends Provider {
     _address: string
   ): Promise<SuiObjectInfo[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
-  }
-
-  getCoinDenominationInfo(_coin_type: string): CoinDenominationInfoResponse {
-    throw this.newError('getCoinDenominationInfo');
   }
 
   async getCoinBalancesOwnedByAddress(
@@ -107,13 +107,17 @@ export class VoidProvider extends Provider {
   }
 
   async executeTransaction(
-    _txnBytes: string,
+    _txnBytes: Base64DataBuffer,
     _signatureScheme: SignatureScheme,
-    _signature: string,
-    _pubkey: string,
+    _signature: Base64DataBuffer,
+    _pubkey: PublicKey,
     _requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
+  }
+
+  dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
+    throw this.newError('dryRunTransaction');
   }
 
   async getTotalTransactionNumber(): Promise<number> {
@@ -168,67 +172,6 @@ export class VoidProvider extends Provider {
     throw this.newError('syncAccountState');
   }
 
-  async getEventsByTransaction(
-    _digest: TransactionDigest,
-    _count: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByTransaction');
-  }
-
-  async getEventsByModule(
-    _package: string,
-    _module: string,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByTransactionModule');
-  }
-
-  async getEventsByMoveEventStructName(
-    _moveEventStructName: string,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByMoveEventStructName');
-  }
-
-  async getEventsBySender(
-    _sender: SuiAddress,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsBySender');
-  }
-
-  async getEventsByRecipient(
-    _recipient: ObjectOwner,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByRecipient');
-  }
-
-  async getEventsByObject(
-    _object: ObjectId,
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByObject');
-  }
-
-  async getEventsByTimeRange(
-    _count: number,
-    _startTime: number,
-    _endTime: number
-  ): Promise<SuiEvents> {
-    throw this.newError('getEventsByTimeRange');
-  }
-
   async subscribeEvent(
     _filter: SuiEventFilter,
     _onMessage: (event: SuiEventEnvelope) => void
@@ -245,19 +188,19 @@ export class VoidProvider extends Provider {
   }
 
   async getTransactions(
-      _query: TransactionQuery,
-      _cursor: TransactionDigest | null,
-      _limit: number | null,
-      _order: Order
+    _query: TransactionQuery,
+    _cursor: TransactionDigest | null,
+    _limit: number | null,
+    _order: Order
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
   }
 
   async getEvents(
-      _query: EventQuery,
-      _cursor: EventId | null,
-      _limit: number | null,
-      _order: Order
+    _query: EventQuery,
+    _cursor: EventId | null,
+    _limit: number | null,
+    _order: Order
   ): Promise<PaginatedEvents> {
     throw this.newError('getEvents');
   }

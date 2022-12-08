@@ -23,7 +23,7 @@ pub fn test_validatdor_metadata(
 ) -> ValidatorMetadata {
     let network_keypair: NetworkKeyPair = get_key_pair().1;
     ValidatorMetadata {
-        sui_address: sui_address.into(),
+        sui_address,
         pubkey_bytes: pubkey_bytes.as_bytes().to_vec(),
         network_pubkey_bytes: network_keypair.public().as_bytes().to_vec(),
         proof_of_possession_bytes: vec![],
@@ -38,7 +38,7 @@ pub fn test_validatdor_metadata(
 
 pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPool {
     StakingPool {
-        validator_address: sui_address.into(),
+        validator_address: sui_address,
         starting_epoch: 0,
         sui_balance,
         rewards_pool: Balance::new(0),

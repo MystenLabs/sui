@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_adapter::execution_mode;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -60,11 +61,8 @@ use sui_json_rpc_types::{
 use sui_types::error::SuiError::ObjectLockConflict;
 
 use crate::epoch::committee_store::CommitteeStore;
+use sui_config::genesis::Genesis;
 use tap::TapFallible;
-
-#[cfg(test)]
-#[path = "unit_tests/gateway_state_tests.rs"]
-mod gateway_state_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
@@ -185,7 +183,7 @@ pub struct GatewayState<A> {
 
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
-    pub fn new(
+    pub async fn new(
         base_path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
@@ -195,7 +193,15 @@ impl<A> GatewayState<A> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = Arc::new(SafeClientMetrics::new(prometheus_registry));
-        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None)?);
+        let gateway_store = Arc::new(
+            GatewayStore::open_with_committee(
+                &base_path.join("store"),
+                None,
+                &committee,
+                &Genesis::get_default_genesis(),
+            )
+            .await?,
+        );
         let committee_store = Arc::new(CommitteeStore::new(
             base_path.join("epochs"),
             &committee,
@@ -253,7 +259,7 @@ impl<A> GatewayState<A> {
 }
 
 impl GatewayState<NetworkAuthorityClient> {
-    pub fn create_client(
+    pub async fn create_client(
         config: &GatewayConfig,
         prometheus_registry: Option<&Registry>,
     ) -> Result<GatewayClient, anyhow::Error> {
@@ -268,13 +274,16 @@ impl GatewayState<NetworkAuthorityClient> {
             network_metrics.clone(),
         );
 
-        Ok(Arc::new(GatewayState::new(
-            &config.db_folder_path,
-            committee,
-            authority_clients,
-            prometheus_registry,
-            network_metrics,
-        )?))
+        Ok(Arc::new(
+            GatewayState::new(
+                &config.db_folder_path,
+                committee,
+                authority_clients,
+                prometheus_registry,
+                network_metrics,
+            )
+            .await?,
+        ))
     }
 }
 
@@ -548,11 +557,12 @@ where
                 | TypeTag::Address
                 | TypeTag::Signer => (),
                 TypeTag::Vector(inner) => used_packages(packages, inner),
-                TypeTag::Struct(StructTag {
-                    address,
-                    type_params,
-                    ..
-                }) => {
+                TypeTag::Struct(st) => {
+                    let StructTag {
+                        address,
+                        type_params,
+                        ..
+                    } = &**st;
                     packages.push((*address).into());
                     for t in type_params {
                         used_packages(packages, t)
@@ -682,14 +692,14 @@ where
 
         debug!(
             tx_digest = ?tx_digest,
-            ?effects.effects,
+            effects = ?effects.data(),
             "Transaction completed successfully"
         );
 
         // Download the latest content of every mutated object from the authorities.
         let mut mutated_object_kinds = BTreeMap::new();
         let mut mutated_object_refs = BTreeSet::new();
-        for (obj_ref, _, kind) in effects.effects.all_mutated() {
+        for (obj_ref, _, kind) in effects.data().all_mutated() {
             mutated_object_kinds.insert(obj_ref.0, kind);
             mutated_object_refs.insert(*obj_ref);
         }
@@ -712,7 +722,7 @@ where
                 mutated_objects_with_kind,
                 new_certificate.clone(),
                 seq,
-                effects.clone().to_unsigned_effects(),
+                effects.clone().into_unsigned(),
                 effects.digest(),
             )
             .await?;
@@ -794,7 +804,7 @@ where
             .execute_transaction_impl_inner(input_objects, transaction)
             .await
             .tap_ok(|(_, effects)| {
-                if effects.effects.shared_objects.len() > 1 {
+                if effects.data().shared_objects.len() > 1 {
                     self.metrics.shared_obj_tx.inc();
                 }
             });
@@ -1172,7 +1182,7 @@ where
     ) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
         let mut coins = Vec::new();
         for info in self.store.get_owner_objects(Owner::AddressOwner(address))? {
-            if info.type_ == GasCoin::type_().to_string() {
+            if info.type_.is_gas_coin() {
                 let object = self.get_object_internal(&info.object_id).await?;
                 let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
                 coins.push((info.into(), gas_coin.value()));
@@ -1278,7 +1288,7 @@ where
             .try_as_package()
             .ok_or_else(|| anyhow!("Cannot get package from object"))?
             .deserialize_module(&module)?;
-        resolve_and_type_check(
+        resolve_and_type_check::<execution_mode::Normal>(
             &objects,
             &compiled_module,
             &function,
@@ -1379,7 +1389,7 @@ where
 
                         // Okay to unwrap() since we checked that this is Ok
                         let (certificate, effects) = res.unwrap();
-                        let effects = effects.effects;
+                        let effects = effects.into_data();
 
                         debug!(?tx_digest, "Transaction succeeded");
                         (certificate, effects)

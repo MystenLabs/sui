@@ -22,4 +22,4 @@ export type DataType = CertifiedTransaction & {
     timestamp_ms: number | null;
 };
 
-export type Category = 'objects' | 'transactions' | 'addresses' | 'unknown';
+export type Category = 'object' | 'transaction' | 'address' | 'unknown';

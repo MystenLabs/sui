@@ -35,7 +35,7 @@ def main():
         for j in range(args.nw):
             workers[j] = {
                 "transactions": "/dns/worker_{:02d}/tcp/{}/http".format(i, port+1),
-                "worker_address": "/dns/worker_{:02d}/tcp/{}/http".format(i, port+2)
+                "worker_address": "/dns/worker_{:02d}/udp/{}".format(i, port+2)
             }
             port += 3
         temp[k['name']] = workers

@@ -12,5 +12,5 @@ publish = false
 [dependencies]
 async-trait = "0.1.56"
 eyre = "0.6.8"
-tokio = { version = "1.21.2", features = ["sync", "macros", "rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["sync", "macros", "rt", "rt-multi-thread"] }
 workspace-hack.workspace = true

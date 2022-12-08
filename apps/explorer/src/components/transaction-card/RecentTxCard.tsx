@@ -10,7 +10,6 @@ import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { useSearchParams } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
@@ -27,11 +26,12 @@ import styles from './RecentTxCard.module.css';
 
 import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
+import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { PlayPause } from '~/ui/PlayPause';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -40,6 +40,8 @@ const DEFAULT_PAGINATION_TYPE = 'more button';
 // We refresh transactions at checkpoint boundaries (currently ~10s).
 const TRANSACTION_POLL_TIME_SECONDS = 10;
 const TRANSACTION_POLL_TIME = TRANSACTION_POLL_TIME_SECONDS * 1000;
+
+const AUTO_REFRESH_ID = 'auto-refresh';
 
 type PaginationType = 'more button' | 'pagination' | 'none';
 
@@ -134,7 +136,7 @@ export function LatestTxCard({
     );
 
     const rpc = useRpc();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParamsMerged();
 
     const [pageIndex, setPageIndex] = useState(
         parseInt(searchParams.get('p') || '1', 10) || 1
@@ -143,11 +145,11 @@ export function LatestTxCard({
     const handlePageChange = useCallback(
         (newPage: number) => {
             setPageIndex(newPage);
-            const newSearchParams = new URLSearchParams(searchParams);
-            newSearchParams.set('p', newPage.toString());
-            setSearchParams(newSearchParams);
+            setSearchParams({
+                p: newPage.toString(),
+            });
         },
-        [searchParams, setSearchParams]
+        [setSearchParams]
     );
 
     const countQuery = useQuery(
@@ -191,7 +193,7 @@ export function LatestTxCard({
 
     const stats = {
         count: countQuery?.data || 0,
-        stats_text: 'Total transactions',
+        stats_text: 'Total Transactions',
         loadState: statusToLoadState[countQuery.status],
     };
 
@@ -200,10 +202,11 @@ export function LatestTxCard({
         if (paused) {
             countQuery.refetch();
             toast.success(
-                `Auto-refreshing on - every ${TRANSACTION_POLL_TIME_SECONDS} seconds`
+                `Auto-refreshing on - every ${TRANSACTION_POLL_TIME_SECONDS} seconds`,
+                { id: AUTO_REFRESH_ID }
             );
         } else {
-            toast.success('Auto-refresh paused');
+            toast.success('Auto-refresh paused', { id: AUTO_REFRESH_ID });
         }
 
         setPaused((paused) => !paused);
@@ -220,11 +223,18 @@ export function LatestTxCard({
                 stats={stats}
             />
         ) : (
-            <TabFooter stats={stats}>
-                <LinkWithQuery className={styles.moretxbtn} to="/transactions">
-                    <div>More Transactions</div> <ArrowRight />
-                </LinkWithQuery>
-            </TabFooter>
+            <div className="mt-3">
+                <TabFooter stats={stats}>
+                    <div className="w-full">
+                        <Link to="/transactions">
+                            <div className="flex items-center gap-2">
+                                More Transactions{' '}
+                                <ArrowRight fill="currentColor" />
+                            </div>
+                        </Link>
+                    </div>
+                </TabFooter>
+            </div>
         );
 
     if (countQuery.isError) {
@@ -250,7 +260,7 @@ export function LatestTxCard({
                     <TabList>
                         <Tab>Transactions</Tab>
                     </TabList>
-                    <div className="absolute inset-y-0 right-0">
+                    <div className="absolute inset-y-0 right-0 -top-1">
                         <PlayPause
                             paused={paused}
                             onChange={handlePauseChange}

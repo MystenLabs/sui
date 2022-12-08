@@ -1,41 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::anemo_ext::NetworkExt;
 use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
-    traits::{Lucky, ReliableNetwork, UnreliableNetwork},
-    BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
+    traits::{ReliableNetwork, UnreliableNetwork},
+    CancelOnDropHandler, RetryConfig,
 };
 use anemo::PeerId;
 use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::{traits::KeyPair, NetworkPublicKey};
-use rand::{rngs::SmallRng, SeedableRng as _};
-use std::collections::HashMap;
 use std::time::Duration;
-use tokio::{runtime::Handle, task::JoinHandle};
+use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
-    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
-    WorkerToPrimaryClient, WorkerToWorkerClient,
+    GetCertificatesRequest, GetCertificatesResponse, PrimaryMessage, PrimaryToPrimaryClient,
+    PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
-
-fn default_executor() -> BoundedExecutor {
-    BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current())
-}
 
 pub struct P2pNetwork {
     network: anemo::Network,
     retry_config: RetryConfig,
-    /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
-    rng: SmallRng,
-    // One bounded executor per address
-    executors: HashMap<PeerId, BoundedExecutor>,
 }
 
 impl P2pNetwork {
@@ -49,8 +37,6 @@ impl P2pNetwork {
         Self {
             network,
             retry_config,
-            rng: SmallRng::from_entropy(),
-            executors: HashMap::new(),
         }
     }
 
@@ -97,19 +83,14 @@ impl P2pNetwork {
             anemo::Error::msg(format!("Network has no connection with peer {peer_id}"))
         })?;
 
-        self.executors
-            .entry(peer_id)
-            .or_insert_with(default_executor)
-            .try_spawn(async move {
-                f(peer)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("RPC error: {e:?}"))
-            })
-            .map_err(|e| anemo::Error::msg(e.to_string()))
+        Ok(tokio::spawn(async move {
+            f(peer)
+                .await
+                .map_err(|e| anyhow::anyhow!("RPC error: {e:?}"))
+        }))
     }
 
-    // TODO: remove async in a cleanup, this doesn't need it anymore.
-    async fn send<F, R, Fut>(
+    fn send<F, R, Fut>(
         &mut self,
         peer: NetworkPublicKey,
         f: F,
@@ -124,7 +105,6 @@ impl P2pNetwork {
         // Here the callers are [`PrimaryNetwork::broadcast`] and [`PrimaryNetwork::send`],
         // at respectively N and K calls per round.
         //  (where N is the number of primaries, K the number of workers for this primary)
-        // See the TODO on spawn_with_retries for lifting this restriction.
 
         let network = self.network.clone();
         let peer_id = PeerId(peer.0.to_bytes());
@@ -147,19 +127,9 @@ impl P2pNetwork {
             }
         };
 
-        let handle = self
-            .executors
-            .entry(peer_id)
-            .or_insert_with(default_executor)
-            .spawn_with_retries(self.retry_config, message_send);
+        let task = tokio::spawn(self.retry_config.retry(message_send));
 
-        CancelOnDropHandler(handle)
-    }
-}
-
-impl Lucky for P2pNetwork {
-    fn rng(&mut self) -> &mut SmallRng {
-        &mut self.rng
+        CancelOnDropHandler(task)
     }
 }
 
@@ -184,10 +154,9 @@ impl UnreliableNetwork<PrimaryMessage> for P2pNetwork {
     }
 }
 
-#[async_trait]
 impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &PrimaryMessage,
@@ -202,7 +171,7 @@ impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
             }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
@@ -238,22 +207,6 @@ impl PrimaryToPrimaryRpc for anemo::Network {
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body())
     }
-
-    async fn get_latest_header(
-        &self,
-        peer: &NetworkPublicKey,
-        request: LatestHeaderRequest,
-    ) -> Result<LatestHeaderResponse> {
-        const LATEST_HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-        let request = anemo::Request::new(request).with_timeout(LATEST_HEADER_REQUEST_TIMEOUT);
-        let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self.waiting_peer(peer_id);
-        let response = PrimaryToPrimaryClient::new(peer)
-            .get_latest_header(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body())
-    }
 }
 
 //
@@ -273,10 +226,10 @@ impl UnreliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
         self.unreliable_send(peer, f)
     }
 }
-#[async_trait]
+
 impl ReliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerReconfigureMessage,
@@ -287,7 +240,7 @@ impl ReliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
             async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
@@ -312,32 +265,13 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
     }
 }
 
-#[async_trait]
-impl ReliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
-    type Response = ();
-    async fn send(
-        &mut self,
-        peer: NetworkPublicKey,
-        message: &WorkerSynchronizeMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move { PrimaryToWorkerClient::new(peer).synchronize(message).await }
-        };
-
-        self.send(peer, f).await
-    }
-}
-
 //
 // Worker-to-Primary
 //
 
-#[async_trait]
 impl ReliableNetwork<WorkerOurBatchMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerOurBatchMessage,
@@ -352,14 +286,13 @@ impl ReliableNetwork<WorkerOurBatchMessage> for P2pNetwork {
             }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
-#[async_trait]
 impl ReliableNetwork<WorkerOthersBatchMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerOthersBatchMessage,
@@ -374,7 +307,7 @@ impl ReliableNetwork<WorkerOthersBatchMessage> for P2pNetwork {
             }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 
@@ -396,10 +329,9 @@ impl UnreliableNetwork<WorkerBatchMessage> for P2pNetwork {
     }
 }
 
-#[async_trait]
 impl ReliableNetwork<WorkerBatchMessage> for P2pNetwork {
     type Response = ();
-    async fn send(
+    fn send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerBatchMessage,
@@ -410,7 +342,7 @@ impl ReliableNetwork<WorkerBatchMessage> for P2pNetwork {
             async move { WorkerToWorkerClient::new(peer).report_batch(message).await }
         };
 
-        self.send(peer, f).await
+        self.send(peer, f)
     }
 }
 

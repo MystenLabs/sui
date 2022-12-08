@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority_active::ActiveAuthority;
 use crate::authority_aggregator::authority_aggregator_tests::{
     crate_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     init_local_authorities, transfer_object_move_transaction,
 };
-use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 use crate::test_utils::wait_for_tx;
-use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
-use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,14 +15,13 @@ use std::time::Duration;
 use itertools::Itertools;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
-use sui_types::messages::ExecutionStatus;
 use sui_types::messages::VerifiedCertificate;
 use sui_types::object::Object;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::timeout;
 use tracing::info;
-use typed_store::Map;
 
+#[allow(dead_code)]
 async fn wait_for_certs(
     stream: &mut UnboundedReceiver<VerifiedCertificate>,
     certs: &Vec<VerifiedCertificate>,
@@ -52,6 +49,8 @@ async fn wait_for_certs(
     }
 }
 
+/*
+TODO: Re-enable after we have checkpoint v2.
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn pending_exec_notify_ready_certificates() {
     use telemetry_subscribers::init_for_testing;
@@ -96,7 +95,7 @@ async fn pending_exec_notify_ready_certificates() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.data().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
@@ -187,7 +186,7 @@ async fn pending_exec_full() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.data().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
@@ -215,6 +214,8 @@ async fn pending_exec_full() {
         wait_for_tx(*cert.digest(), authority_state.clone()).await;
     }
 }
+
+ */
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_transaction_manager() {

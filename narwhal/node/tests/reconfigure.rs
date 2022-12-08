@@ -7,9 +7,9 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{ExecutionIndices, ExecutionState};
+use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
 use node::{restarter::NodeRestarter, Node};
 use prometheus::Registry;
@@ -23,8 +23,9 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::ConsensusOutput;
+use types::{ConsensusOutput, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
+use worker::TrivialTransactionValidator;
 
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
@@ -73,17 +74,34 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    async fn handle_consensus_transaction(
-        &self,
-        _consensus_output: &Arc<ConsensusOutput>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
-    ) {
-        let transaction: u64 = bincode::deserialize(&transaction).unwrap();
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+        let mut i = 0;
+        for (_, batches) in consensus_output.batches {
+            for batch in batches {
+                for transaction in batch.transactions.into_iter() {
+                    i += 1;
+                    let mut change_epoch = false;
+                    if i % 3 == 0 {
+                        change_epoch = true
+                    }
+                    self.process_transaction(transaction, change_epoch).await;
+                }
+            }
+        }
+    }
+
+    async fn last_executed_sub_dag_index(&self) -> u64 {
+        0
+    }
+}
+
+impl SimpleExecutionState {
+    async fn process_transaction(&self, transaction: Transaction, change_epoch: bool) {
+        let _transaction: u64 = bincode::deserialize(&transaction).unwrap();
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
+        if change_epoch {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
@@ -109,10 +127,6 @@ impl ExecutionState for SimpleExecutionState {
         }
 
         let _ = self.tx_output.send(epoch).await;
-    }
-
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        ExecutionIndices::default()
     }
 }
 
@@ -161,18 +175,13 @@ async fn run_client(
     }
 }
 
+#[ignore]
 #[tokio::test]
 async fn restart() {
     telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-
-    let parameters = Parameters {
-        batch_size: 200,
-        max_header_num_of_batches: 1,
-        ..Parameters::default()
-    };
 
     // Spawn the nodes.
     let mut rx_nodes = Vec::new();
@@ -196,7 +205,13 @@ async fn restart() {
 
         let committee = committee.clone();
         let worker_cache = worker_cache.clone();
-        let parameters = parameters.clone();
+
+        let parameters = Parameters {
+            batch_size: 200,
+            max_header_num_of_batches: 1,
+            ..Parameters::default()
+        };
+
         let keypair = a.keypair().copy();
         let network_keypair = a.network_keypair().copy();
         tokio::spawn(async move {
@@ -209,6 +224,7 @@ async fn restart() {
                 /* base_store_path */ test_utils::temp_dir(),
                 execution_state,
                 parameters,
+                TrivialTransactionValidator::default(),
                 rx_node_reconfigure,
                 &Registry::new(),
             )
@@ -239,7 +255,9 @@ async fn restart() {
     for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
         handles.push(tokio::spawn(async move {
             let mut current_epoch = 0u64;
+
             while let Some(epoch) = rx.recv().await {
+                println!("Received epoch {}", epoch);
                 if epoch == 5 {
                     return;
                 }
@@ -248,11 +266,19 @@ async fn restart() {
                     tx.send(current_epoch).await.unwrap();
                 }
             }
+
+            if current_epoch < 5 {
+                panic!("Node never reached epoch 5, something broke our connection");
+            }
         }));
     }
-    join_all(handles).await;
+
+    try_join_all(handles)
+        .await
+        .expect("No error should occurred");
 }
 
+#[ignore]
 #[tokio::test]
 async fn epoch_change() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
@@ -334,6 +360,7 @@ async fn epoch_change() {
             worker_cache.clone(),
             &store,
             p,
+            TrivialTransactionValidator::default(),
             &Registry::new(),
         );
 

@@ -31,7 +31,9 @@ impl Test {
         build::Build::execute_internal(
             &rerooted_path,
             BuildConfig {
-                test_mode: true, // make sure to verify tests
+                // TODO: test_mode should be true - flip it when calling init function from test
+                // code issue is resolved
+                test_mode: false, // make sure to verify tests
                 ..build_config.clone()
             },
             dump_bytecode_as_base64,

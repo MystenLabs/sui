@@ -73,7 +73,7 @@ public fun contains<K: copy + drop + store>(bag: &ObjectBag, k: K): bool {
 }
 
 /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &ObjectBag`
-/// with an assigned value of type `Value`
+/// with an assigned value of type `V`
 public fun contains_with_type<K: copy + drop + store, V: key + store>(bag: &ObjectBag, k: K): bool {
     ofield::exists_with_type<K, V>(&bag.id, k)
 }

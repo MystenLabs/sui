@@ -37,9 +37,8 @@ fn test_move_value_to_sui_coin() {
     let id = ObjectID::random();
     let value = 10000;
     let coin = GasCoin::new(id, value);
-    let bcs = coin.to_bcs_bytes();
 
-    let move_object = MoveObject::new_gas_coin(SequenceNumber::new(), bcs);
+    let move_object = MoveObject::new_gas_coin(SequenceNumber::new(), id, value);
     let layout = GasCoin::layout();
 
     let move_struct = move_object.to_move_struct(&layout).unwrap();

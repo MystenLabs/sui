@@ -76,8 +76,8 @@ pub fn share_object(
     let obj = args.pop_back().unwrap();
     let transfer_result = object_runtime_transfer(
         context,
-        // Dummy version, to be filled with the correct initial version when the transaction is
-        // finalized.
+        // Dummy version, to be filled with the correct initial version when the effects of the
+        // transaction are written to storage.
         Owner::Shared {
             initial_shared_version: SequenceNumber::new(),
         },
@@ -111,5 +111,5 @@ fn object_runtime_transfer(
         }
     };
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.transfer(owner, ty, tag, obj)
+    obj_runtime.transfer(owner, ty, *tag, obj)
 }

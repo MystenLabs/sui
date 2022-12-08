@@ -36,15 +36,13 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use sui_adapter::{adapter::new_move_vm, genesis};
+use sui_adapter::{adapter::new_move_vm, execution_mode, genesis};
 use sui_core::{execution_engine, test_utils::to_sender_signed_transaction};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-        SUI_ADDRESS_LENGTH,
+        ObjectDigest, ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH,
     },
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
@@ -55,6 +53,7 @@ use sui_types::{
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{in_memory_storage::InMemoryStorage, object::PACKAGE_VERSION};
 pub(crate) type FakeID = u64;
 
 // initial value for fake object ID mapping
@@ -283,11 +282,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let package_ref = match self.storage.get_object(&package_id) {
             Some(obj) => obj.compute_object_reference(),
             // object not found
-            None => (
-                package_id,
-                SequenceNumber::from(1),
-                ObjectDigest::new([0; 32]),
-            ),
+            None => (package_id, PACKAGE_VERSION, ObjectDigest::new([0; 32])),
         };
 
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
@@ -493,7 +488,7 @@ impl<'a> SuiTestAdapter<'a> {
                 ..
             },
             execution_error,
-        ) = execution_engine::execute_transaction_to_effects(
+        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
             transaction.into_inner().into_data().data,
@@ -505,33 +500,43 @@ impl<'a> SuiTestAdapter<'a> {
             // TODO: Support different epochs in transactional tests.
             0,
         );
-        let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
-        let mut created_ids: Vec<_> = created_set.iter().copied().collect();
-        let mut written_ids: Vec<_> = mutated
-            .iter()
-            .chain(&unwrapped)
-            .map(|((id, _, _), _)| *id)
-            .collect();
+
+        let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();
+        let unwrapped_ids: Vec<_> = unwrapped.iter().map(|((id, _, _), _)| *id).collect();
+        let mut written_ids: Vec<_> = mutated.iter().map(|((id, _, _), _)| *id).collect();
         let mut deleted_ids: Vec<_> = deleted
             .iter()
             .chain(&wrapped)
             .map(|(id, _, _)| *id)
             .collect();
+
         // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
             .finish(inner.written, inner.deleted);
-        // enumerate objects after written to storage, sort by a "stable" sorting as the
-        // object ID is not stable
-        let mut created_ids_vec = created_set.iter().collect::<Vec<_>>();
-        created_ids_vec.sort_by_key(|id| self.get_object_sorting_key(id));
-        for id in created_ids_vec {
-            self.enumerate_fake(*id);
+
+        // make sure objects that have previously not been in storage get assigned a fake id.
+        let mut might_need_fake_id: Vec<_> = created_ids
+            .iter()
+            .chain(unwrapped_ids.iter())
+            .copied()
+            .collect();
+
+        // Use a stable sort before assigning fake ids, so test output remains stable.
+        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        for id in might_need_fake_id {
+            self.enumerate_fake(id);
         }
+
+        // Treat unwrapped objects as writes (even though sometimes this is the first time we can
+        // refer to them at their id in storage).
+        written_ids.extend(unwrapped_ids.into_iter());
+
         // sort by fake id
         created_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+
         match status {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
                 created: created_ids,
@@ -543,7 +548,7 @@ impl<'a> SuiTestAdapter<'a> {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
                     "Transaction Effects Status: {}\nExecution Error: {}",
                     error,
-                    execution_error.expect(
+                    execution_error.expect_err(
                         "to have an execution error if a transaction's status is a failure"
                     )
                 ))))

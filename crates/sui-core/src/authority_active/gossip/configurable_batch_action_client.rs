@@ -5,9 +5,7 @@
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::*;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
-use crate::authority_client::{
-    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
-};
+use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
@@ -21,11 +19,11 @@ use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
 use sui_types::error::SuiError;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, CheckpointStreamRequest, CommitteeInfoRequest, CommitteeInfoResponse,
-    ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionInfoRequest,
-    TransactionInfoResponse,
+    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
+    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -65,16 +63,7 @@ pub struct ConfigurableBatchActionClient {
 impl ConfigurableBatchActionClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair) -> Self {
-        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-        let state = AuthorityState::new_for_testing(
-            committee,
-            &secret,
-            None,
-            None,
-            None,
-            tx_reconfigure_consensus,
-        )
-        .await;
+        let state = AuthorityState::new_for_testing(committee, &secret, None, None).await;
 
         ConfigurableBatchActionClient {
             state: Arc::new(state),
@@ -106,7 +95,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        let certificate = certificate.verify(&self.state.committee.load()).unwrap();
+        let certificate = certificate.verify(&self.state.committee()).unwrap();
         state
             .handle_certificate(&certificate)
             .await
@@ -200,14 +189,6 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         });
 
         Ok(Box::pin(tokio_stream::iter(items)))
-    }
-
-    async fn handle_checkpoint_stream(
-        &self,
-        request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        let stream = self.state.handle_checkpoint_streaming(request).await?;
-        Ok(Box::pin(stream))
     }
 
     async fn handle_checkpoint(

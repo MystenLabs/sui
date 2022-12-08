@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::AuthorityName;
+use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    EmptySignInfo, Signable,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -49,6 +50,11 @@ impl<T: Message, S> Envelope<T, S> {
             ..
         } = self;
         (data, auth_signature)
+    }
+
+    /// Remove the authority signatures `S` from this envelope.
+    pub fn into_unsigned(self) -> Envelope<T, EmptySignInfo> {
+        Envelope::<T, EmptySignInfo>::new(self.into_data())
     }
 
     pub fn auth_sig(&self) -> &S {
@@ -111,10 +117,6 @@ where
 
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
-    }
-
-    pub fn into_unsigned(self) -> Envelope<T, EmptySignInfo> {
-        Envelope::<T, EmptySignInfo>::new(self.into_data())
     }
 
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
@@ -259,9 +261,7 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
 
     /// Remove the authority signatures `S` from this envelope.
     pub fn into_unsigned(self) -> VerifiedEnvelope<T, EmptySignInfo> {
-        VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(Envelope::<T, EmptySignInfo>::new(
-            self.into_inner().into_data(),
-        ))
+        VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(self.into_inner().into_unsigned())
     }
 }
 
@@ -311,5 +311,33 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0 .0)
+    }
+}
+
+impl<T: Message> Envelope<T, CertificateProof> {
+    pub fn new(data: T, validity: CertificateProof) -> Self {
+        Self {
+            digest: OnceCell::new(),
+            data,
+            auth_signature: validity,
+        }
+    }
+}
+
+// Note: There are many cases where its okay to construct an Envelope with CertificateProof
+// from AuthorityWeakQuorumSignInfo, including effects, checkpoint summaries, etc, which in
+// general only require that one honest validator has attested to it. But, we only offer a blanket
+// implementation for AuthorityStrongQuorumSignInfo to avoid accidentally promoting a case where
+// AuthorityWeakQuorumSignInfo is insufficient, such as a CertifiedTransaction.
+//
+// Cases where AuthorityWeakQuorumSignInfo is sufficient should all be special cased.
+impl<T: Message> From<Envelope<T, AuthorityStrongQuorumSignInfo>>
+    for Envelope<T, CertificateProof>
+{
+    fn from(env: Envelope<T, AuthorityStrongQuorumSignInfo>) -> Envelope<T, CertificateProof> {
+        Envelope::<T, CertificateProof>::new(
+            env.data,
+            CertificateProof::from_certified(env.auth_signature.epoch),
+        )
     }
 }

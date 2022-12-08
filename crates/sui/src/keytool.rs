@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use bip32::{DerivationPath, Mnemonic};
 use clap::*;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use signature::rand_core::OsRng;
 use sui_keys::key_derive::derive_key_pair_from_path;
@@ -16,7 +16,6 @@ use tracing::info;
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
     get_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair,
     SignatureScheme, SuiKeyPair, SuiSignatureInner,
@@ -95,7 +94,7 @@ impl KeyToolCommand {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
                 match res {
                     Ok(keypair) => {
-                        println!("Public Key: {}", encode_bytes_hex(keypair.public()));
+                        println!("Public Key: {}", Base64::encode(keypair.public()));
                         println!("Flag: {}", keypair.public().flag());
                     }
                     Err(e) => {
@@ -126,9 +125,9 @@ impl KeyToolCommand {
                 info!("Data to sign : {}", data);
                 info!("Address : {}", address);
                 let message = Base64::decode(&data).map_err(|e| anyhow!(e))?;
-                let signature = keystore.sign(&address, &message)?;
+                let sui_signature = keystore.sign(&address, &message)?;
                 // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
-                let signature_string = format!("{:?}", signature);
+                let signature_string = format!("{:?}", sui_signature);
                 let sig_split = signature_string.split('@').collect::<Vec<_>>();
                 let flag = sig_split
                     .first()
@@ -142,6 +141,7 @@ impl KeyToolCommand {
                 info!("Flag Base64: {}", flag);
                 info!("Public Key Base64: {}", pub_key);
                 info!("Signature : {}", signature);
+                info!("Serialized signature Base64: {:?}", sui_signature);
             }
             KeyToolCommand::Import {
                 mnemonic_phrase,
@@ -232,7 +232,10 @@ pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
     let bytes = Base64::decode(value.as_str()).map_err(|e| anyhow::anyhow!(e))?;
     if let Some(flag) = bytes.first() {
         if flag == &Ed25519SuiSignature::SCHEME.flag() {
-            let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
+            let priv_key_bytes = bytes
+                .get(1 + Ed25519PublicKey::LENGTH..)
+                .ok_or_else(|| anyhow!("Invalid length"))?;
+            let sk = Ed25519PrivateKey::from_bytes(priv_key_bytes)?;
             return Ok(<Ed25519KeyPair as From<Ed25519PrivateKey>>::from(sk));
         }
     }

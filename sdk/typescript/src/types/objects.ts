@@ -38,16 +38,6 @@ export type SuiMoveObject = {
 
 export const MIST_PER_SUI: BigInt = BigInt(1000000000);
 
-export type CoinDenominationInfoResponse = {
-  /** Coin type like "0x2::sui::SUI" */
-  coinType: string;
-  /** min unit, like MIST */
-  basicUnit?: string;
-  /** number of zeros in the denomination,
-   * e.g., 9 here for SUI. */
-  decimalNumber: number;
-};
-
 export type SuiMovePackage = {
   /** A mapping from module name to disassembled Move bytecode */
   disassembled: MovePackageContent;
@@ -246,7 +236,7 @@ export function getSharedObjectInitialVersion(
 
 export function isSharedObject(resp: GetObjectDataResponse): boolean {
   const owner = getObjectOwner(resp);
-  return owner === 'Shared' || (typeof owner === 'object' && 'Shared' in owner);
+  return typeof owner === 'object' && 'Shared' in owner;
 }
 
 export function isImmutableObject(resp: GetObjectDataResponse): boolean {

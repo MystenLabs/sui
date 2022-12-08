@@ -4,9 +4,9 @@
 module.exports = {
     stories: [
         {
-            directory: '../src/ui/stories/',
+            directory: '../src/ui/stories',
             titlePrefix: 'UI',
-            files: '*.stories.*',
+            files: '**/*.stories.*',
         },
     ],
     addons: ['@storybook/addon-a11y', '@storybook/addon-essentials'],

@@ -421,6 +421,18 @@ See more here: https://en.wikipedia.org/wiki/LEB128
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> intrinsic = <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_bcs_peel_vec_address"></a>
 
 ## Function `peel_vec_address`

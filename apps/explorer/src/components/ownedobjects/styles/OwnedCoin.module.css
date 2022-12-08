@@ -1,6 +1,6 @@
 .oneline,
 .oneline div {
-    @apply truncate min-w-0;
+    @apply min-w-0 truncate;
 }
 
 .oneline a {
@@ -12,7 +12,7 @@
 }
 
 .firstrow {
-    @apply grid gap-[15px] uppercase font-medium text-sui-grey-80 text-subtitle py-[10px] tracking-wider;
+    @apply grid gap-[15px] py-[10px] text-subtitle font-medium uppercase tracking-wider text-gray-80;
 
     grid-template-columns: 35% 30% 35%;
 }
@@ -22,7 +22,7 @@
 }
 
 .summary {
-    @apply grid gap-[15px] py-[8px] px-0 cursor-pointer break-words;
+    @apply grid cursor-pointer gap-[15px] break-words py-[8px] px-0;
 
     grid-template-columns: 35% 30% 35%;
 }
@@ -32,16 +32,16 @@
 }
 
 .closedgroup {
-    @apply text-sui-grey-90 hover:bg-sui-light;
+    @apply text-gray-90 hover:bg-sui-light;
 }
 
 .openbody {
-    @apply max-h-[210px] overflow-auto bg-sui-grey-40 flex flex-col items-start gap-[12px]
+    @apply flex max-h-[210px] flex-col items-start gap-[12px] overflow-auto bg-gray-40
     p-[10px] pl-[15px];
 }
 
 .singlecoin {
-    @apply flex flex-col items-start p-0 gap-[6px];
+    @apply flex flex-col items-start gap-[6px] p-0;
 }
 
 .openrow {
@@ -49,11 +49,11 @@
 }
 
 .label {
-    @apply w-[80px] text-sui-grey-80;
+    @apply w-[80px] text-gray-80;
 }
 
 .value {
-    @apply max-w-[50vw] text-sui-grey-80;
+    @apply max-w-[50vw] text-gray-80;
 }
 
 .closedgroup .summary:hover {
@@ -61,14 +61,14 @@
 }
 
 .coinname svg path {
-    @apply fill-sui-grey-60;
+    @apply fill-gray-60;
 }
 
 .coinname .oneline {
-    @apply text-sui-grey-90;
+    @apply text-gray-90;
 }
 
 .objcount,
 .balance {
-    @apply text-sui-grey-80;
+    @apply text-gray-80;
 }

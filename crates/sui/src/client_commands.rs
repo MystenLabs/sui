@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::fmt;
+use std::sync::Arc;
 use std::{
     collections::BTreeSet,
     fmt::{Debug, Display, Formatter, Write},
@@ -21,9 +22,12 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use tracing::info;
-
 use sui_framework::build_move_package;
+use sui_source_validation::BytecodeSourceVerifier;
+use tokio::sync::RwLock;
+use tracing::{info, warn};
+
+use crate::config::{Config, PersistedConfig, SuiClientConfig};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -46,12 +50,9 @@ use sui_types::{
     messages::TransactionData,
 };
 
-#[cfg(msim)]
-use sui_sdk::embedded_gateway::SuiClient;
-#[cfg(not(msim))]
 use sui_sdk::SuiClient;
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
+use crate::config::SuiEnv;
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -98,7 +99,7 @@ pub enum SuiClientCommands {
     #[clap(name = "object")]
     Object {
         /// Object ID of the object to fetch
-        #[clap(long)]
+        #[clap(name = "object_id")]
         id: ObjectID,
     },
 
@@ -107,8 +108,7 @@ pub enum SuiClientCommands {
     Publish {
         /// Path to directory containing a Move package
         #[clap(
-            long = "path",
-            short = 'p',
+            name = "package_path",
             global = true,
             parse(from_os_str),
             default_value = "."
@@ -127,6 +127,11 @@ pub enum SuiClientCommands {
         /// Gas budget for running module initializers
         #[clap(long)]
         gas_budget: u64,
+
+        /// Confirms that compiling dependencies from source results in bytecode matching the
+        /// dependency found on-chain.
+        #[clap(long)]
+        verify_dependencies: bool,
     },
 
     /// Call Move function
@@ -281,11 +286,12 @@ pub enum SuiClientCommands {
         derivation_path: Option<DerivationPath>,
     },
 
-    /// Obtain all objects owned by the address.
+    /// Obtain all objects owned by the address
     #[clap(name = "objects")]
     Objects {
         /// Address owning the objects
-        #[clap(long)]
+        /// Shows all objects owned by `sui client active-address` if no argument is passed
+        #[clap(name = "owner_address")]
         address: Option<SuiAddress>,
     },
 
@@ -293,7 +299,7 @@ pub enum SuiClientCommands {
     #[clap(name = "gas")]
     Gas {
         /// Address owning the objects
-        #[clap(long)]
+        #[clap(name = "owner_address")]
         address: Option<SuiAddress>,
     },
 
@@ -386,15 +392,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         tx_data: String,
 
-        /// Signature scheme used to sign the transaction.
-        #[clap(long)]
-        scheme: SignatureScheme,
-
-        /// Public key that the signature can be verified with.
-        #[clap(long)]
-        pubkey: String,
-
-        /// Base64 encoded signature committed to the transaction data.
+        /// Base64 encoded signature `flag || signature || pubkey`.
         #[clap(long)]
         signature: String,
     },
@@ -411,21 +409,31 @@ impl SuiClientCommands {
                 gas,
                 build_config,
                 gas_budget,
+                verify_dependencies,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package(
+                let compiled_package = build_move_package(
                     &package_path,
                     BuildConfig {
                         config: build_config,
                         run_bytecode_verifier: true,
                         print_diags_to_stderr: true,
                     },
-                )?
-                .get_package_bytes();
-                let data = context
-                    .client
+                )?;
+
+                let compiled_modules = compiled_package.get_package_bytes();
+
+                let client = context.get_client().await?;
+                if verify_dependencies {
+                    BytecodeSourceVerifier::new(client.read_api(), false)
+                        .verify_deployed_dependencies(&compiled_package.package)
+                        .await?;
+                    println!("Successfully verified dependencies on-chain against source.");
+                }
+
+                let data = client
                     .transaction_builder()
                     .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
@@ -439,7 +447,8 @@ impl SuiClientCommands {
 
             SuiClientCommands::Object { id } => {
                 // Fetch the object ref
-                let object_read = context.client.read_api().get_parsed_object(id).await?;
+                let client = context.get_client().await?;
+                let object_read = client.read_api().get_parsed_object(id).await?;
                 SuiClientCommandResult::Object(object_read)
             }
             SuiClientCommands::Call {
@@ -467,8 +476,8 @@ impl SuiClientCommands {
                 let from = context.get_object_owner(&object_id).await?;
                 let time_start = Instant::now();
 
-                let data = context
-                    .client
+                let client = context.get_client().await?;
+                let data = client
                     .transaction_builder()
                     .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
@@ -494,8 +503,8 @@ impl SuiClientCommands {
             } => {
                 let from = context.get_object_owner(&object_id).await?;
 
-                let data = context
-                    .client
+                let client = context.get_client().await?;
+                let data = client
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
@@ -536,8 +545,8 @@ impl SuiClientCommands {
                     ),
                 );
                 let from = context.get_object_owner(&input_coins[0]).await?;
-                let data = context
-                    .client
+                let client = context.get_client().await?;
+                let data = client
                     .transaction_builder()
                     .pay(from, input_coins, recipients, amounts, gas, gas_budget)
                     .await?;
@@ -579,8 +588,8 @@ impl SuiClientCommands {
                     ),
                 );
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let data = context
-                    .client
+                let client = context.get_client().await?;
+                let data = client
                     .transaction_builder()
                     .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
                     .await?;
@@ -610,8 +619,8 @@ impl SuiClientCommands {
                     "PayAllSui transaction requires a non-empty list of input coins"
                 );
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let data = context
-                    .client
+                let client = context.get_client().await?;
+                let data = client
                     .transaction_builder()
                     .pay_all_sui(signer, input_coins, recipient, gas_budget)
                     .await?;
@@ -638,13 +647,12 @@ impl SuiClientCommands {
 
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
-                let mut address_object = context
-                    .client
+                let client = context.get_client().await?;
+                let mut address_object = client
                     .read_api()
                     .get_objects_owned_by_address(address)
                     .await?;
-                let object_objects = context
-                    .client
+                let object_objects = client
                     .read_api()
                     .get_objects_owned_by_object(address.into())
                     .await?;
@@ -682,10 +690,10 @@ impl SuiClientCommands {
                 gas_budget,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
+                let client = context.get_client().await?;
                 let data = match (amounts, count) {
                     (Some(amounts), None) => {
-                        context
-                            .client
+                        client
                             .transaction_builder()
                             .split_coin(signer, coin_id, amounts, gas, gas_budget)
                             .await?
@@ -694,8 +702,7 @@ impl SuiClientCommands {
                         if count == 0 {
                             return Err(anyhow!("Coin split count must be greater than 0"));
                         }
-                        context
-                            .client
+                        client
                             .transaction_builder()
                             .split_coin_equal(signer, coin_id, count, gas, gas_budget)
                             .await?
@@ -716,9 +723,9 @@ impl SuiClientCommands {
                 gas,
                 gas_budget,
             } => {
+                let client = context.get_client().await?;
                 let signer = context.get_object_owner(&primary_coin).await?;
-                let data = context
-                    .client
+                let data = client
                     .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
@@ -781,7 +788,8 @@ impl SuiClientCommands {
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
-                let object_read = context.client.read_api().get_parsed_object(nft_id).await?;
+                let client = context.get_client().await?;
+                let object_read = client.read_api().get_parsed_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
 
@@ -792,21 +800,15 @@ impl SuiClientCommands {
                 amount,
             } => {
                 let from = context.get_object_owner(&object_id).await?;
-
-                let data = context
-                    .client
+                let client = context.get_client().await?;
+                let data = client
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
                 SuiClientCommandResult::SerializeTransferSui(data.to_base64())
             }
 
-            SuiClientCommands::ExecuteSignedTx {
-                tx_data,
-                scheme,
-                pubkey,
-                signature,
-            } => {
+            SuiClientCommands::ExecuteSignedTx { tx_data, signature } => {
                 let data = TransactionData::from_signable_bytes(
                     &Base64::try_from(tx_data)
                         .map_err(|e| anyhow!(e))?
@@ -816,12 +818,10 @@ impl SuiClientCommands {
                 let signed_tx = Transaction::from_data(
                     data,
                     Signature::from_bytes(
-                        &[
-                            vec![scheme.flag()],
-                            Base64::decode(signature.as_str()).map_err(|e| anyhow!(e))?,
-                            Base64::decode(pubkey.as_str()).map_err(|e| anyhow!(e))?,
-                        ]
-                        .concat(),
+                        &Base64::try_from(signature)
+                            .map_err(|e| anyhow!(e))?
+                            .to_vec()
+                            .map_err(|e| anyhow!(e))?,
                     )?,
                 )
                 .verify()?;
@@ -864,7 +864,8 @@ impl SuiClientCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
-    pub client: SuiClient,
+    request_timeout: Option<std::time::Duration>,
+    client: Arc<RwLock<Option<SuiClient>>>,
 }
 
 impl WalletContext {
@@ -878,19 +879,35 @@ impl WalletContext {
                 config_path
             ))
         })?;
-        #[cfg(not(msim))]
-        let client = config
-            .get_active_env()?
-            .create_rpc_client(request_timeout)
-            .await?;
-        #[cfg(msim)]
-        let client = sui_sdk::embedded_gateway::SuiClient::new(&config_path.parent().unwrap())?;
-        #[cfg(msim)]
-        let _request_timeout = request_timeout; // silence linter.
 
         let config = config.persisted(config_path);
-        let context = Self { config, client };
+        let context = Self {
+            config,
+            request_timeout,
+            client: Default::default(),
+        };
         Ok(context)
+    }
+
+    pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
+        let read = self.client.read().await;
+
+        Ok(if let Some(client) = read.as_ref() {
+            client.clone()
+        } else {
+            drop(read);
+            let client = self
+                .config
+                .get_active_env()?
+                .create_rpc_client(self.request_timeout)
+                .await?;
+
+            if let Err(e) = client.check_api_version() {
+                warn!("{e}");
+                println!("{}", format!("[warn] {e}").yellow().bold());
+            }
+            self.client.write().await.insert(client).clone()
+        })
     }
 
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
@@ -916,7 +933,8 @@ impl WalletContext {
         &self,
         object_id: ObjectID,
     ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
-        self.client.read_api().get_object(object_id).await
+        let client = self.get_client().await?;
+        client.read_api().get_object(object_id).await
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
@@ -924,8 +942,8 @@ impl WalletContext {
         &self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
-        let object_refs = self
-            .client
+        let client = self.get_client().await?;
+        let object_refs = client
             .read_api()
             .get_objects_owned_by_address(address)
             .await?;
@@ -933,11 +951,7 @@ impl WalletContext {
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
         for oref in object_refs {
-            let response = self
-                .client
-                .read_api()
-                .get_parsed_object(oref.object_id)
-                .await?;
+            let response = client.read_api().get_parsed_object(oref.object_id).await?;
             match response {
                 GetObjectDataResponse::Exists(o) => {
                     if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
@@ -954,12 +968,8 @@ impl WalletContext {
     }
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
-        let object = self
-            .client
-            .read_api()
-            .get_object(*id)
-            .await?
-            .into_object()?;
+        let client = self.get_client().await?;
+        let object = client.read_api().get_object(*id).await?.into_object()?;
         Ok(object.owner.get_owner_address()?)
     }
 
@@ -998,8 +1008,8 @@ impl WalletContext {
     ) -> anyhow::Result<SuiTransactionResponse> {
         let tx_digest = *tx.digest();
 
-        let result = self
-            .client
+        let client = self.get_client().await?;
+        let result = client
             .quorum_driver()
             .execute_transaction(
                 tx,
@@ -1199,8 +1209,8 @@ pub async fn call_move(
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
-    let data = context
-        .client
+    let client = context.get_client().await?;
+    let data = client
         .transaction_builder()
         .move_call(
             sender,

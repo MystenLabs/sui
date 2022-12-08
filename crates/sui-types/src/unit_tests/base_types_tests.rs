@@ -68,7 +68,7 @@ fn test_gas_coin_ser_deser_roundtrip() {
 }
 
 #[test]
-fn test_increment_version() {
+fn test_update_contents() {
     let id = ObjectID::random();
     let version = SequenceNumber::from(257);
     let value = 10;
@@ -79,18 +79,32 @@ fn test_increment_version() {
     let mut coin_obj = coin.to_object(version);
     assert_eq!(&coin_obj.id(), coin.id());
 
-    // update contents, which should increase sequence number, but leave
-    // everything else the same
+    // update contents should not touch the version number or ID.
     let old_contents = coin_obj.contents().to_vec();
     let old_type_specific_contents = coin_obj.type_specific_contents().to_vec();
-    coin_obj.update_contents_and_increment_version(old_contents);
-    assert_eq!(coin_obj.version(), version.increment());
+    coin_obj.update_contents(old_contents).unwrap();
     assert_eq!(&coin_obj.id(), coin.id());
     assert_eq!(
         coin_obj.type_specific_contents(),
         old_type_specific_contents
     );
     assert_eq!(GasCoin::try_from(&coin_obj).unwrap().value(), coin.value());
+}
+
+#[test]
+fn test_lamport_increment_version() {
+    let versions = [
+        SequenceNumber::from(1),
+        SequenceNumber::from(3),
+        SequenceNumber::from(257),
+        SequenceNumber::from(42),
+    ];
+
+    let incremented = SequenceNumber::lamport_increment(versions);
+
+    for version in versions {
+        assert!(version < incremented, "Expected: {version} < {incremented}");
+    }
 }
 
 #[test]
@@ -101,8 +115,7 @@ fn test_object_id_display() {
     let hex = "ca843279e3427144cead5e4d5999a3d05999a3d0";
     let upper_hex = "CA843279E3427144CEAD5E4D5999A3D05999A3D0";
 
-    let id = ObjectID::from_hex(hex).unwrap();
-
+    let id = ObjectID::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
     assert_eq!(format!("{:X}", id), upper_hex);
     assert_eq!(format!("{:x}", id), hex);
@@ -112,9 +125,9 @@ fn test_object_id_display() {
 
 #[test]
 fn test_object_id_str_lossless() {
-    let id = ObjectID::from_hex("0000000000c0f1f95c5b1c5f0eda533eff269000").unwrap();
-    let id_empty = ObjectID::from_hex("0000000000000000000000000000000000000000").unwrap();
-    let id_one = ObjectID::from_hex("0000000000000000000000000000000000000001").unwrap();
+    let id = ObjectID::from_str("0000000000c0f1f95c5b1c5f0eda533eff269000").unwrap();
+    let id_empty = ObjectID::from_str("0000000000000000000000000000000000000000").unwrap();
+    let id_one = ObjectID::from_str("0000000000000000000000000000000000000001").unwrap();
 
     assert_eq!(id.short_str_lossless(), "c0f1f95c5b1c5f0eda533eff269000",);
     assert_eq!(id_empty.short_str_lossless(), "0",);
@@ -127,7 +140,7 @@ fn test_object_id_from_hex_literal() {
     let hex = "0000000000000000000000000000000000000001";
 
     let obj_id_from_literal = ObjectID::from_hex_literal(hex_literal).unwrap();
-    let obj_id = ObjectID::from_hex(hex).unwrap();
+    let obj_id = ObjectID::from_str(hex).unwrap();
 
     assert_eq!(obj_id_from_literal, obj_id);
     assert_eq!(hex_literal, obj_id.to_hex_literal());
@@ -202,9 +215,9 @@ fn test_object_id_zero_padding() {
     let hex = "0x2";
     let long_hex = "0x0000000000000000000000000000000000000002";
     let long_hex_alt = "0000000000000000000000000000000000000002";
-    let obj_id_1 = ObjectID::from_hex_literal(hex).unwrap();
-    let obj_id_2 = ObjectID::from_hex_literal(long_hex).unwrap();
-    let obj_id_3 = ObjectID::from_hex(long_hex_alt).unwrap();
+    let obj_id_1 = ObjectID::from_str(hex).unwrap();
+    let obj_id_2 = ObjectID::from_str(long_hex).unwrap();
+    let obj_id_3 = ObjectID::from_str(long_hex_alt).unwrap();
     let obj_id_4: ObjectID = serde_json::from_str(&format!("\"{}\"", hex)).unwrap();
     let obj_id_5: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex)).unwrap();
     let obj_id_6: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex_alt)).unwrap();
@@ -245,7 +258,7 @@ fn test_address_serde_not_human_readable() {
 fn test_address_serde_human_readable() {
     let address = SuiAddress::random_for_testing_only();
     let serialized = serde_json::to_string(&address).unwrap();
-    assert_eq!(format!("\"0x{}\"", hex::encode(address)), serialized);
+    assert_eq!(format!("\"0x{}\"", Hex::encode(address)), serialized);
     let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
@@ -280,7 +293,7 @@ fn test_transaction_digest_serde_not_human_readable() {
 fn test_transaction_digest_serde_human_readable() {
     let digest = TransactionDigest::random();
     let serialized = serde_json::to_string(&digest).unwrap();
-    assert_eq!(format!("\"{}\"", Base64::encode(digest.0)), serialized);
+    assert_eq!(format!("\"{}\"", Base58::encode(digest.0)), serialized);
     let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }
@@ -332,7 +345,7 @@ fn test_move_object_size_for_gas_metering() {
 #[test]
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
-    let package = Object::new_package(vec![module], TransactionDigest::genesis());
+    let package = Object::new_package(vec![module], TransactionDigest::genesis()).unwrap();
     let size = package.object_size_for_gas_metering();
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.
@@ -359,11 +372,10 @@ fn derive_sample_address() -> (SuiAddress, AccountKeyPair) {
 // Required to capture address derivation algorithm updates that break some tests and deployments.
 #[test]
 fn test_address_backwards_compatibility() {
-    use hex;
     let (address, _) = derive_sample_address();
     assert_eq!(
         address.to_vec(),
-        hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),
+        Hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),
         "If this test broke, then the algorithm for deriving addresses from public keys has \
                changed. If this was intentional, please compute a new sample address in hex format \
                from `derive_sample_address` and update the SAMPLE_ADDRESS const above with the new \

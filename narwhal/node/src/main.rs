@@ -32,10 +32,7 @@ use tracing::info;
 use tracing::subscriber::set_global_default;
 #[cfg(feature = "benchmark")]
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
-
-#[cfg(feature = "dhat-heap")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
+use worker::TrivialTransactionValidator;
 
 #[tokio::main]
 async fn main() -> Result<(), eyre::Report> {
@@ -272,6 +269,8 @@ async fn run(
                 worker_cache,
                 &store,
                 parameters.clone(),
+                /* tx_validator */
+                TrivialTransactionValidator::default(),
                 &registry,
             )
         }

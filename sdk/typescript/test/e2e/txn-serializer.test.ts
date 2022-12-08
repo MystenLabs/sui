@@ -3,14 +3,17 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
+  deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
+  RawSigner,
   RpcTxnDataSerializer,
   SuiMoveObject,
   UnserializedSignableTransaction,
 } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
+  publishPackage,
   setup,
   SUI_SYSTEM_STATE_OBJECT_ID,
   TestToolbox,
@@ -20,6 +23,7 @@ describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
   let localSerializer: LocalTxnDataSerializer;
   let rpcSerializer: RpcTxnDataSerializer;
+  let packageId: string;
 
   beforeAll(async () => {
     toolbox = await setup();
@@ -27,19 +31,23 @@ describe('Transaction Serialization and deserialization', () => {
     rpcSerializer = new RpcTxnDataSerializer(
       toolbox.provider.endpoints.fullNode
     );
+    const signer = new RawSigner(toolbox.keypair, toolbox.provider);
+    const packagePath = __dirname + '/./data/serializer';
+    packageId = await publishPackage(signer, false, packagePath);
   });
 
   async function serializeAndDeserialize(
     moveCall: MoveCallTransaction
   ): Promise<MoveCallTransaction> {
-    const rpcTxnBytes = await rpcSerializer.newMoveCall(
+    const rpcTxnBytes = await rpcSerializer.serializeToBytes(
       toolbox.address(),
-      moveCall
+      { kind: 'moveCall', data: moveCall }
     );
-    const localTxnBytes = await localSerializer.newMoveCall(
+    const localTxnBytes = await localSerializer.serializeToBytes(
       toolbox.address(),
-      moveCall
+      { kind: 'moveCall', data: moveCall }
     );
+
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const deserialized =
@@ -47,6 +55,13 @@ describe('Transaction Serialization and deserialization', () => {
         localTxnBytes
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
+
+    const deserializedTxnData =
+      deserializeTransactionBytesToTransactionData(localTxnBytes);
+    const reserialized = await localSerializer.serializeTransactionData(
+      deserializedTxnData
+    );
+    expect(reserialized).toEqual(localTxnBytes);
     if ('moveCall' === deserialized.kind) {
       const normalized = {
         ...deserialized.data,
@@ -79,6 +94,22 @@ describe('Transaction Serialization and deserialization', () => {
 
     const deserialized = await serializeAndDeserialize(moveCall);
     expect(deserialized).toEqual(moveCall);
+  });
+
+  it('Move Call With Type Tags', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    const moveCall = {
+      packageObjectId: packageId,
+      module: 'serializer_tests',
+      function: 'list',
+      typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>', '0x2::sui::SUI'],
+      arguments: [coins[0].objectId],
+      gasBudget: DEFAULT_GAS_BUDGET,
+    };
+
+    await serializeAndDeserialize(moveCall);
   });
 
   it('Move Shared Object Call', async () => {

@@ -7,15 +7,15 @@ module sui::vec_map_tests {
     use sui::vec_map::{Self, VecMap};
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = vec_map::EKeyAlreadyExists)]
     fun duplicate_key_abort() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 1, true);
-        vec_map::insert(&mut m, 1, false);    
+        vec_map::insert(&mut m, 1, false);
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
     fun nonexistent_key_get() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 1, true);
@@ -24,7 +24,7 @@ module sui::vec_map_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
     fun nonexistent_key_get_idx_or_abort() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 1, true);
@@ -33,7 +33,7 @@ module sui::vec_map_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3)]
+    #[expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
     fun out_of_bounds_get_entry_by_idx() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 1, true);
@@ -42,7 +42,7 @@ module sui::vec_map_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 3)]
+    #[expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
     fun out_of_bounds_remove_entry_by_idx() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 10, true);
@@ -67,7 +67,7 @@ module sui::vec_map_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = vec_map::EMapNotEmpty)]
     fun destroy_non_empty() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 1, true);

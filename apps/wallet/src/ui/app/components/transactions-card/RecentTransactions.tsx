@@ -30,7 +30,7 @@ function RecentTransactions({ coinType }: Props) {
     );
 
     useEffect(() => {
-        dispatch(getTransactionsByAddress()).unwrap();
+        dispatch(getTransactionsByAddress());
     }, [dispatch]);
 
     return (

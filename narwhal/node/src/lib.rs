@@ -20,7 +20,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{metered_channel, Certificate, ReconfigureNotification, Round};
-use worker::{metrics::initialise_metrics, Worker};
+use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
 pub mod execution_state;
 pub mod metrics;
@@ -85,7 +85,8 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
-        let (rx_executor_network, tx_executor_network) = oneshot::channel();
+        let (tx_executor_network, rx_executor_network) = oneshot::channel();
+        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -97,7 +98,7 @@ impl Node {
         } else {
             let consensus_handles = Self::spawn_consensus(
                 name.clone(),
-                tx_executor_network,
+                rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),
                 store,
@@ -106,27 +107,14 @@ impl Node {
                 &tx_reconfigure,
                 rx_new_certificates,
                 tx_committed_certificates.clone(),
+                tx_consensus_round_updates,
                 registry,
             )
             .await?;
 
             handles.extend(consensus_handles);
+
             (None, NetworkModel::PartiallySynchronous)
-        };
-
-        // Inject memory profiling here if we build with dhat-heap feature flag
-        // Put name of primary in heap profile to distinguish diff primaries
-        #[cfg(feature = "dhat-heap")]
-        let profiler = {
-            use fastcrypto::traits::EncodeDecodeBase64;
-            use std::path::Path;
-
-            let heap_file = format!("dhat-heap-{}.json", name.encode_base64());
-            Arc::new(
-                dhat::Profiler::builder()
-                    .file_name(Path::new(&heap_file))
-                    .build(),
-            )
         };
 
         // Spawn the primary.
@@ -144,31 +132,15 @@ impl Node {
             store.vote_digest_store.clone(),
             tx_new_certificates,
             rx_committed_certificates,
+            rx_consensus_round_updates,
             dag,
             network_model,
             tx_reconfigure,
             tx_committed_certificates,
             registry,
-            Some(rx_executor_network),
+            Some(tx_executor_network),
         );
         handles.extend(primary_handles);
-
-        // Let's spin off a separate thread that waits a while then dumps the profile,
-        // otherwise this function exits immediately and the profile is dumped way too soon.
-        // See https://github.com/nnethercote/dhat-rs/issues/19 for a panic that happens,
-        // but at least 2 primaries should complete and dump their profiles.
-        #[cfg(feature = "dhat-heap")]
-        {
-            use std::time::Duration;
-
-            #[allow(clippy::redundant_clone)]
-            let profiler2 = profiler.clone();
-            std::thread::spawn(|| {
-                std::thread::sleep(Duration::from_secs(240));
-                println!("Dropping DHAT profiler...");
-                drop(profiler2);
-            });
-        }
 
         Ok(handles)
     }
@@ -176,7 +148,7 @@ impl Node {
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
         name: PublicKey,
-        network: oneshot::Receiver<P2pNetwork>,
+        rx_executor_network: oneshot::Receiver<P2pNetwork>,
         worker_cache: SharedWorkerCache,
         committee: SharedCommittee,
         store: &NodeStorage,
@@ -185,6 +157,7 @@ impl Node {
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
+        tx_consensus_round_updates: watch::Sender<Round>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
@@ -197,7 +170,7 @@ impl Node {
         let (tx_sequence, rx_sequence) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
 
-        // Check for any certs that have been sent by consensus but were not processed by the executor.
+        // Check for any sub-dags that have been sent by consensus but were not processed by the executor.
         let restored_consensus_output = get_restored_consensus_output(
             store.consensus_store.clone(),
             store.certificate_store.clone(),
@@ -205,16 +178,15 @@ impl Node {
         )
         .await?;
 
-        let num_leaders = restored_consensus_output.len() as u64;
-        let num_certificates: usize = restored_consensus_output.iter().map(|x| x.len()).sum();
-        if num_leaders > 0 {
+        let num_sub_dags = restored_consensus_output.len() as u64;
+        if num_sub_dags > 0 {
             info!(
-                "Consensus output on its way to the executor was restored for {num_leaders} leaders and {num_certificates} certificates",
+                "Consensus output on its way to the executor was restored for {num_sub_dags} sub-dags",
             );
         }
         consensus_metrics
             .recovered_consensus_output
-            .inc_by(num_certificates as u64);
+            .inc_by(num_sub_dags as u64);
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
@@ -230,6 +202,7 @@ impl Node {
             tx_reconfigure.subscribe(),
             rx_new_certificates,
             tx_committed_certificates,
+            tx_consensus_round_updates,
             tx_sequence,
             ordering_engine,
             consensus_metrics.clone(),
@@ -240,7 +213,7 @@ impl Node {
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
             name,
-            network,
+            rx_executor_network,
             worker_cache,
             (**committee.load()).clone(),
             execution_state,
@@ -270,6 +243,8 @@ impl Node {
         store: &NodeStorage,
         // The configuration parameters.
         parameters: Parameters,
+        // The transaction validator defining Tx acceptance,
+        tx_validator: impl TransactionValidator,
         // The prometheus metrics Registry
         registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
@@ -285,6 +260,7 @@ impl Node {
                 committee.clone(),
                 worker_cache.clone(),
                 parameters.clone(),
+                tx_validator.clone(),
                 store.batch_store.clone(),
                 metrics.clone(),
             );

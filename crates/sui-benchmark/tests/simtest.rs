@@ -9,9 +9,7 @@ mod test {
     use std::time::Duration;
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
-    use test_utils::{
-        messages::get_gas_object_with_wallet_context, network::init_cluster_builder_env_aware,
-    };
+    use test_utils::{messages::get_gas_object_with_wallet_context, network::TestClusterBuilder};
 
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -51,7 +49,11 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
-        let test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 4))
+            .build()
+            .await
+            .unwrap();
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
         let sender = test_cluster.get_address_0();
@@ -85,7 +87,12 @@ mod test {
         );
 
         for w in workloads.iter_mut() {
-            w.workload.init(5, proxy.clone()).await;
+            w.workload
+                .init(
+                    get_var("SIM_STRESS_TEST_NUM_SHARED_OBJECTS", 5),
+                    proxy.clone(),
+                )
+                .await;
         }
 
         let driver = BenchDriver::new(5);

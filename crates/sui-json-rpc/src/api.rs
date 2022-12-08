@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use std::collections::BTreeMap;
-
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
+use std::collections::BTreeMap;
+use sui_types::sui_system_state::SuiSystemState;
 
 use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
-    MoveFunctionArgType, RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
-    SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
+    MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
+    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionFilter,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
@@ -31,36 +32,6 @@ use sui_types::query::{EventQuery, TransactionQuery};
 /// To avoid unnecessary dependency on that crate, we have a reference here
 /// for document purposes.
 pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
-
-#[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
-#[rpc(server, client, namespace = "sui")]
-pub trait RpcGatewayApi {
-    /// Execute the transaction using the transaction data, signature and public key.
-    #[method(name = "executeTransaction")]
-    async fn execute_transaction(
-        &self,
-        /// transaction data bytes, as base-64 encoded string
-        tx_bytes: Base64,
-        /// Flag of the signature scheme that is used.
-        sig_scheme: SignatureScheme,
-        /// transaction signature, as base-64 encoded string
-        signature: Base64,
-        /// signer's public key, as base-64 encoded string
-        pub_key: Base64,
-    ) -> RpcResult<SuiTransactionResponse>;
-}
-
-#[open_rpc(namespace = "sui", tag = "Wallet Sync API")]
-#[rpc(server, client, namespace = "sui")]
-pub trait WalletSyncApi {
-    /// Synchronize client state with validators.
-    #[method(name = "syncAccountState")]
-    async fn sync_account_state(
-        &self,
-        /// the Sui address to be synchronized
-        address: SuiAddress,
-    ) -> RpcResult<()>;
-}
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -103,6 +74,14 @@ pub trait RpcReadApi {
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse>;
 
+    /// Return the authority public keys that commits to the authority signature of the transaction.
+    #[method(name = "getTransactionAuthSigners")]
+    async fn get_transaction_auth_signers(
+        &self,
+        /// the digest of the queried transaction
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiTransactionAuthSignersResponse>;
+
     /// Return the object information for a specified object
     #[method(name = "getObject")]
     async fn get_object(
@@ -117,6 +96,14 @@ pub trait RpcReadApi {
 pub trait RpcFullNodeReadApi {
     #[method(name = "dryRunTransaction")]
     async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
+
+    /// Return metadata(e.g., symbol, decimals) for a coin
+    #[method(name = "getCoinMetadata")]
+    async fn get_coin_metadata(
+        &self,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: String,
+    ) -> RpcResult<SuiCoinMetadata>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.
@@ -195,6 +182,10 @@ pub trait RpcFullNodeReadApi {
         /// The epoch of interest. If None, default to the latest epoch
         epoch: Option<EpochId>,
     ) -> RpcResult<CommitteeInfoResponse>;
+
+    /// Return SuiSystemState
+    #[method(name = "getSuiSystemState")]
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
@@ -468,6 +459,7 @@ pub trait TransactionExecutionApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
+    // TODO(joyqvq): remove this and rename executeTransactionSerializedSig to executeTransaction
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
@@ -482,25 +474,17 @@ pub trait TransactionExecutionApi {
         /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
-}
 
-#[open_rpc(
-    namespace = "sui",
-    tag = "Estimator API to estimate gas quantities for a transactions."
-)]
-#[rpc(server, client, namespace = "sui")]
-pub trait EstimatorApi {
-    /// Execute the transaction and wait for results if desired
-    #[method(name = "estimateTransactionComputationCost")]
-    async fn estimate_transaction_computation_cost(
+    #[method(name = "executeTransactionSerializedSig")]
+    async fn execute_transaction_serialized_sig(
         &self,
         /// transaction data bytes, as base-64 encoded string
         tx_bytes: Base64,
-        computation_gas_unit_price: Option<u64>,
-        storage_gas_unit_price: Option<u64>,
-        mutated_object_sizes_after: Option<usize>,
-        storage_rebate: Option<u64>,
-    ) -> RpcResult<SuiGasCostSummary>;
+        /// `flag || signature || pubkey` bytes, as base-64 encoded string
+        signature: Base64,
+        /// The request type
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse>;
 }
 
 pub fn cap_page_limit(limit: Option<usize>) -> Result<usize, anyhow::Error> {

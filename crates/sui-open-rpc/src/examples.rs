@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
+use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -19,15 +20,18 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     EventPage, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
     SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead,
-    SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
-    SuiTransactionResponse, TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
+    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransactionAuthSignersResponse,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
+    TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectInfo, SequenceNumber, SuiAddress, TransactionDigest,
+    ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, Signature};
+use sui_types::crypto::{
+    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature,
+};
 use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -35,7 +39,7 @@ use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
-use sui_types::object::Owner;
+use sui_types::object::{Owner, PACKAGE_VERSION};
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -76,8 +80,10 @@ impl RpcExampleProvider {
             self.get_raw_object(),
             self.get_total_transaction_number(),
             self.get_transaction(),
+            self.get_transaction_auth_signers(),
             self.get_transactions(),
             self.get_events(),
+            self.execute_transaction_serialized_sig_example(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -113,7 +119,7 @@ impl RpcExampleProvider {
                 SingleTransactionKind::Call(MoveCall {
                     package: (
                         SUI_FRAMEWORK_OBJECT_ID,
-                        SequenceNumber::from_u64(1),
+                        PACKAGE_VERSION,
                         ObjectDigest::new(self.rng.gen()),
                     ),
                     module: Identifier::from_str("devnet_nft").unwrap(),
@@ -189,6 +195,27 @@ impl RpcExampleProvider {
         )
     }
 
+    fn execute_transaction_serialized_sig_example(&mut self) -> Examples {
+        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
+        let tx_bytes = TransactionBytes::from_data(data).unwrap();
+
+        Examples::new(
+            "sui_executeTransactionSerializedSig",
+            vec![ExamplePairing::new(
+                "Execute an transaction with serialized signature",
+                vec![
+                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
+                    ("signature", json!(Base64::from_bytes(signature.as_ref()))),
+                    (
+                        "request_type",
+                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
+                    ),
+                ],
+                json!(result),
+            )],
+        )
+    }
+
     fn get_object_example(&mut self) -> Examples {
         let object_id = ObjectID::new(self.rng.gen());
 
@@ -254,11 +281,11 @@ impl RpcExampleProvider {
     fn get_objects_owned_by_address(&mut self) -> Examples {
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let result = (0..4)
-            .map(|_| ObjectInfo {
+            .map(|_| SuiObjectInfo {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: GasCoin::type_().to_string(),
+                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
                 owner: Owner::AddressOwner(owner),
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
             })
@@ -276,11 +303,11 @@ impl RpcExampleProvider {
     fn get_objects_owned_by_object(&mut self) -> Examples {
         let owner = ObjectID::new(self.rng.gen());
         let result = (0..4)
-            .map(|_| ObjectInfo {
+            .map(|_| SuiObjectInfo {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: GasCoin::type_().to_string(),
+                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
                 owner: Owner::ObjectOwner(SuiAddress::from(owner)),
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
             })
@@ -348,6 +375,32 @@ impl RpcExampleProvider {
                 vec![(
                     "digest",
                     json!(result.certificate.transaction_digest.clone()),
+                )],
+                json!(result),
+            )],
+        )
+    }
+
+    fn get_transaction_auth_signers(&mut self) -> Examples {
+        let (_, _, _, _, tx_result, _) = self.get_transfer_data_response();
+        let sec1: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+        let sec2: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1;
+        let sec3: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([2; 32])).1;
+
+        let result = SuiTransactionAuthSignersResponse {
+            signers: vec![
+                AuthorityPublicKeyBytes::from(sec1.public()),
+                AuthorityPublicKeyBytes::from(sec2.public()),
+                AuthorityPublicKeyBytes::from(sec3.public()),
+            ],
+        };
+        Examples::new(
+            "sui_getTransactionAuthSigners",
+            vec![ExamplePairing::new(
+                "Return the list of authorities that committed to the authority signature of the specified transaction digest",
+                vec![(
+                    "digest",
+                    json!(tx_result.certificate.transaction_digest.clone()),
                 )],
                 json!(result),
             )],
@@ -497,7 +550,13 @@ impl RpcExampleProvider {
                             result.certificate.transaction_digest
                         )),
                     ),
-                    ("cursor", json!("10:0")),
+                    (
+                        "cursor",
+                        json!(EventID {
+                            event_seq: 10,
+                            tx_seq: 500
+                        }),
+                    ),
                     ("limit", json!(events.len())),
                     ("descending_order", json!(false)),
                 ],

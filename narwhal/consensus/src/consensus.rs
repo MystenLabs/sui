@@ -8,13 +8,13 @@ use crate::{metrics::ConsensusMetrics, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
+use mysten_metrics::spawn_monitored_task;
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,
     sync::Arc,
 };
 use storage::CertificateStore;
-use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
@@ -33,9 +33,11 @@ pub type Dag = HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate
 pub struct ConsensusState {
     /// The last committed round.
     pub last_committed_round: Round,
-    // Keeps the last committed round for each authority. This map is used to clean up the dag and
-    // ensure we don't commit twice the same certificate.
+    /// Keeps the last committed round for each authority. This map is used to clean up the dag and
+    /// ensure we don't commit twice the same certificate.
     pub last_committed: HashMap<PublicKey, Round>,
+    /// Used to populate the index in the sub-dag construction.
+    pub latest_sub_dag_index: SequenceNumber,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -56,6 +58,7 @@ impl ConsensusState {
                 .iter()
                 .map(|(x, (_, y))| (x.clone(), y.round()))
                 .collect(),
+            latest_sub_dag_index: 0,
             dag: [(0, genesis)]
                 .iter()
                 .cloned()
@@ -68,6 +71,7 @@ impl ConsensusState {
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
+        latest_sub_dag_index: SequenceNumber,
         cert_store: CertificateStore,
         gc_depth: Round,
     ) -> Self {
@@ -92,6 +96,7 @@ impl ConsensusState {
         Self {
             last_committed_round,
             last_committed: recover_last_committed,
+            latest_sub_dag_index,
             dag,
             metrics,
         }
@@ -202,8 +207,6 @@ pub trait ConsensusProtocol {
         &mut self,
         // The state of the consensus protocol.
         state: &mut ConsensusState,
-        // The latest consensus index.
-        consensus_index: SequenceNumber,
         // The new certificate.
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>>;
@@ -222,12 +225,10 @@ pub struct Consensus<ConsensusProtocol> {
     rx_new_certificates: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
     tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
+    /// Outputs the highest committed round in the consensus. Controls GC round downstream.
+    tx_consensus_round_updates: watch::Sender<Round>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
-
-    /// The (global) consensus index. We assign one index to each sequenced certificate. this is
-    /// helpful for clients.
-    consensus_index: SequenceNumber,
 
     /// The consensus protocol to run.
     protocol: ConsensusProtocol,
@@ -251,6 +252,7 @@ where
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
+        tx_consensus_round_updates: watch::Sender<Round>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
@@ -259,24 +261,26 @@ where
         // The consensus state (everything else is immutable).
         let genesis = Certificate::genesis(&committee);
         let recovered_last_committed = store.read_last_committed();
+        let latest_sub_dag_index = store.get_latest_sub_dag_index();
         let state = ConsensusState::new_from_store(
             genesis,
             metrics.clone(),
             recovered_last_committed,
+            latest_sub_dag_index,
             cert_store,
             gc_depth,
         );
-        let consensus_index = store
-            .read_last_consensus_index()
-            .expect("Failed to load consensus index from store");
+        tx_consensus_round_updates
+            .send(state.last_committed_round)
+            .expect("Failed to send last_committed_round on initialization!");
 
         let s = Self {
             committee,
             rx_reconfigure,
             rx_new_certificates,
             tx_committed_certificates,
+            tx_consensus_round_updates,
             tx_sequence,
-            consensus_index,
             protocol,
             metrics,
             state,
@@ -288,8 +292,9 @@ where
     fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
         self.committee = new_committee.clone();
         self.protocol.update_committee(new_committee)?;
-
-        self.consensus_index = 0;
+        self.tx_consensus_round_updates
+            .send(0)
+            .expect("Failed to reset last_committed_round!");
 
         let genesis = Certificate::genesis(&self.committee);
         Ok(ConsensusState::new(genesis, self.metrics.clone()))
@@ -331,14 +336,10 @@ where
                     }
 
                     // Process the certificate using the selected consensus protocol.
-                    let commit_round_leader = certificate.header.round;
                     let committed_sub_dags =
                         self.protocol
-                            .process_certificate(&mut self.state, self.consensus_index, certificate)?;
+                            .process_certificate(&mut self.state, certificate)?;
 
-                    // Update the consensus index.
-                    let total_commits: usize = committed_sub_dags.iter().map(|x| x.len()).sum();
-                    self.consensus_index += total_commits as u64;
 
                     // We extract a list of headers from this specific validator that
                     // have been agreed upon, and signal this back to the narwhal sub-system
@@ -346,13 +347,15 @@ where
                     let mut commited_certificates = Vec::new();
 
                     // Output the sequence in the right order.
+                    let mut i = 0;
                     for committed_sub_dag in committed_sub_dags {
-                        for output in &committed_sub_dag.certificates {
-                            let certificate = &output.certificate;
-                            tracing::debug!("Commit in Sequence {:?}", output);
+                         tracing::debug!("Commit in Sequence {:?}", committed_sub_dag.sub_dag_index);
+
+                        for certificate in &committed_sub_dag.certificates {
+                            i+=1;
 
                             #[cfg(not(feature = "benchmark"))]
-                            if output.consensus_index % 5_000 == 0 {
+                            if i % 5_000 == 0 {
                                 tracing::debug!("Committed {}", certificate.header);
                             }
 
@@ -365,13 +368,13 @@ where
                             // Update DAG size metric periodically to limit computation cost.
                             // TODO: this should be triggered on collection when library support for
                             // closure metrics is available.
-                            if output.consensus_index % 1_000 == 0 {
+                            if i % 1_000 == 0 {
                                 self.metrics
                                     .dag_size_bytes
                                     .set((mysten_util_mem::malloc_size(&self.state.dag) + std::mem::size_of::<Dag>()) as i64);
                             }
 
-                            commited_certificates.push(output.certificate.clone());
+                            commited_certificates.push(certificate.clone());
                         }
 
                         // NOTE: The size of the sub-dag can be arbitrarily large (depending on the network condition
@@ -382,10 +385,14 @@ where
                     }
 
                     if !commited_certificates.is_empty(){
+                        // Highest committed certificate round is the leader round / commit round
+                        // expected by primary.
+                        let leader_commit_round = commited_certificates.iter().map(|c| c.round()).max().unwrap();
                         self.tx_committed_certificates
-                        .send((commit_round_leader, commited_certificates))
+                        .send((leader_commit_round, commited_certificates))
                         .await
-                        .expect("Failed to send certificate to primary");
+                        .expect("Failed to send committed round and certificates to primary");
+                        self.tx_consensus_round_updates.send(leader_commit_round).expect("Failed to notify primary about committed round!");
                     }
 
                     self.metrics

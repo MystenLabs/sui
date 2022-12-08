@@ -11,4 +11,4 @@ xclippy = [
 xlint = "run --package x --bin x -- lint"
 
 [build]
-rustflags = ["-C", "force-frame-pointers=yes"]
+rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]

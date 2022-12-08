@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 
-import DelegationCard from './delegation-card';
+import { FEATURES } from '../../experimentation/features';
+import { usePendingDelegation } from '../usePendingDelegation';
+import { ActiveDelegation } from './ActiveDelegation';
+import { DelegationCard, DelegationState } from './DelegationCard';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -12,7 +16,6 @@ import Button from '_app/shared/button';
 import CoinBalance from '_app/shared/coin-balance';
 import PageTitle from '_app/shared/page-title';
 import StatsCard, { StatsRow, StatsItem } from '_app/shared/stats-card';
-import { STAKING_ENABLED } from '_app/staking';
 import {
     activeDelegationIDsSelector,
     totalActiveStakedSelector,
@@ -29,6 +32,17 @@ function StakeHome() {
     const { loading, error, showError } = useObjectsState();
     const totalStaked = useAppSelector(totalActiveStakedSelector);
     const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+    const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
+        usePendingDelegation();
+
+    const totalStakedIncludingPending =
+        totalStaked +
+        pendingDelegations.reduce((acc, { staked }) => acc + staked, 0n);
+
+    const hasDelegations =
+        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
+
     return (
         <div className={st.container}>
             <PageTitle title="Stake & Earn" className={st.pageTitle} />
@@ -49,9 +63,15 @@ function StakeHome() {
                             <StatsItem
                                 title="Total Staked"
                                 value={
-                                    <Loading loading={loading}>
+                                    <Loading
+                                        loading={
+                                            loading || pendingDelegationsLoading
+                                        }
+                                    >
                                         <CoinBalance
-                                            balance={totalStaked}
+                                            balance={
+                                                totalStakedIncludingPending
+                                            }
                                             type={GAS_TYPE_ARG}
                                             diffSymbol={true}
                                         />
@@ -77,44 +97,43 @@ function StakeHome() {
                         <span className={st.sectionTitle}>
                             Currently Staking
                         </span>
-                        <Button
-                            size="small"
-                            mode="primary"
-                            disabled={true}
-                            title="Currently not available"
-                        >
-                            <span>Claim All Rewards</span>
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className={st.arrowIcon}
-                            />
-                        </Button>
                     </div>
                     <div className={st.stakedContainer}>
-                        {
-                            <Loading
-                                loading={loading}
-                                className={st.stakedInfoContainer}
-                            >
-                                {activeDelegationIDs.length ? (
-                                    activeDelegationIDs.map((delegationID) => (
-                                        <DelegationCard
+                        <Loading
+                            loading={loading || pendingDelegationsLoading}
+                            className={st.stakedInfoContainer}
+                        >
+                            {hasDelegations ? (
+                                <>
+                                    {pendingDelegations.map(
+                                        ({ name, staked }, index) => (
+                                            <DelegationCard
+                                                key={index}
+                                                name={name}
+                                                staked={staked}
+                                                state={DelegationState.WARM_UP}
+                                            />
+                                        )
+                                    )}
+
+                                    {activeDelegationIDs.map((delegationID) => (
+                                        <ActiveDelegation
                                             key={delegationID}
                                             id={delegationID}
                                         />
-                                    ))
-                                ) : (
-                                    <div
-                                        className={cl(
-                                            st.stakedInfoContainer,
-                                            st.empty
-                                        )}
-                                    >
-                                        No active stakes found
-                                    </div>
-                                )}
-                            </Loading>
-                        }
+                                    ))}
+                                </>
+                            ) : (
+                                <div
+                                    className={cl(
+                                        st.stakedInfoContainer,
+                                        st.empty
+                                    )}
+                                >
+                                    No active stakes found
+                                </div>
+                            )}
+                        </Loading>
                     </div>
                 </Content>
                 <Menu stuckClass={st.shadow}>
@@ -136,7 +155,7 @@ function StakeHome() {
                         className={st.action}
                         href="new"
                         title="Currently disabled"
-                        disabled={!STAKING_ENABLED}
+                        disabled={!stakingEnabled}
                     >
                         Stake Coins
                         <Icon

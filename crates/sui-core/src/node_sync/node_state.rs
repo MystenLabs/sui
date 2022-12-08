@@ -9,9 +9,9 @@ use crate::{
 
 use tokio_stream::{Stream, StreamExt};
 
+use mysten_metrics::monitored_future;
+use mysten_metrics::spawn_monitored_task;
 use std::collections::{hash_map, BTreeSet, HashMap};
-use sui_metrics::monitored_future;
-use sui_metrics::spawn_monitored_task;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{
@@ -357,7 +357,7 @@ where
         epoch_id: EpochId,
     ) -> SuiResult<bool> {
         // Check if the tx is final.
-        let committee = self.state().committee.load();
+        let committee = self.state().committee();
         check_epoch!(committee.epoch, epoch_id);
         let stake = committee.weight(peer);
         let quorum_threshold = committee.quorum_threshold();
@@ -553,7 +553,7 @@ where
         // Must release permit before enqueuing new work to prevent deadlock.
         drop(permit);
 
-        let missing_parents = self.get_missing_parents(&effects.effects)?;
+        let missing_parents = self.get_missing_parents(effects.data())?;
         self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, false)
             .await?;
 
@@ -572,19 +572,14 @@ where
         epoch_id: EpochId,
         permit: OwnedSemaphorePermit,
         digest: &TransactionDigest,
-        bypass_validator_halt: bool,
+        // TODO: This call path will all be deleted.
+        _bypass_validator_halt: bool,
     ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
 
         let cert = self.get_cert(epoch_id, digest).await?;
 
-        let result = if bypass_validator_halt {
-            self.state()
-                .handle_certificate_bypass_validator_halt(&cert)
-                .await
-        } else {
-            self.state().handle_certificate(&cert).await
-        };
+        let result = self.state().handle_certificate(&cert).await;
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
@@ -598,19 +593,13 @@ where
                 // Must release permit before enqueuing new work to prevent deadlock.
                 drop(permit);
 
-                let missing_parents = self.get_missing_parents(&effects.effects)?;
+                let missing_parents = self.get_missing_parents(effects.data())?;
                 self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, true)
                     .await?;
 
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
-                if bypass_validator_halt {
-                    self.state()
-                        .handle_certificate_bypass_validator_halt(&cert)
-                        .await
-                } else {
-                    self.state().handle_certificate(&cert).await
-                }?;
+                self.state().handle_certificate(&cert).await?;
                 Ok(SyncStatus::CertExecuted)
             }
             Err(e) => Err(e),
@@ -759,7 +748,7 @@ where
             "wait_for_parents timed out, actively processing parents"
         );
 
-        let missing_parents = self.get_missing_parents(&effects.effects)?;
+        let missing_parents = self.get_missing_parents(effects.data())?;
 
         if let Err(err) = self
             .enqueue_parent_execution_requests(
@@ -771,7 +760,7 @@ where
             .await
         {
             let msg = "enqueue_parent_execution_requests failed";
-            debug!(?digest, parents = ?effects.effects.dependencies, "{}", msg);
+            debug!(?digest, parents = ?effects.data().dependencies, "{}", msg);
             Err(err)
         } else {
             debug!(?digest, "All parent certificates executed");
@@ -828,7 +817,7 @@ where
         // Must drop the permit before waiting to avoid deadlock.
         drop(permit);
 
-        for parent in effects.effects.dependencies.iter() {
+        for parent in effects.data().dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
 
             if self.state().database.effects_exists(parent)? {
@@ -846,7 +835,7 @@ where
         }
 
         if cfg!(debug_assertions) {
-            for parent in effects.effects.dependencies.iter() {
+            for parent in effects.data().dependencies.iter() {
                 debug_assert!(self.state().database.effects_exists(parent).unwrap());
             }
         }

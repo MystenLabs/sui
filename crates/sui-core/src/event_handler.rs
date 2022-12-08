@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use core::time::Duration;
 use std::sync::Arc;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use tokio_stream::Stream;
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_storage::event_store::{EventStore, EventStoreType};
@@ -45,6 +46,17 @@ impl EventHandler {
         }
     }
 
+    /// Run a regular cleanup task on the store
+    pub fn regular_cleanup_task(&self) {
+        let store_copy = self.event_store.clone();
+        match store_copy.as_ref() {
+            EventStoreType::SqlEventStore(db) => {
+                // Start periodic task to clean up WAL
+                let _handle = db.wal_cleanup_thread(Some(Duration::from_secs(300)));
+            }
+        }
+    }
+
     #[instrument(level = "debug", skip_all, fields(seq=?seq_num, tx_digest=?effects.transaction_digest), err)]
     pub async fn process_events(
         &self,
@@ -69,7 +81,17 @@ impl EventHandler {
         let envelopes = res?;
 
         // Ingest all envelopes together at once (for efficiency) into Event Store
-        self.event_store.add_events(&envelopes).await?;
+        let row_inserted: u64 = self.event_store.add_events(&envelopes).await?;
+
+        if row_inserted != envelopes.len() as u64 {
+            warn!(
+                num_events = envelopes.len(),
+                row_inserted = row_inserted,
+                tx_digest =? effects.transaction_digest,
+                "Inserted event record is less than expected."
+            );
+        }
+
         trace!(
             num_events = envelopes.len(),
             tx_digest =? effects.transaction_digest,

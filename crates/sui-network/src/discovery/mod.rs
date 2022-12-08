@@ -13,8 +13,10 @@ use std::{
 };
 use sui_config::p2p::{P2pConfig, SeedPeer};
 use tap::{Pipe, TapFallible};
-use tokio::sync::oneshot;
-use tokio::task::{AbortHandle, JoinSet};
+use tokio::{
+    sync::oneshot,
+    task::{AbortHandle, JoinSet},
+};
 use tracing::{debug, info, trace};
 
 const TIMEOUT: Duration = Duration::from_secs(1);
@@ -80,7 +82,7 @@ impl DiscoveryEventLoop {
 
         let mut interval = tokio::time::interval(DISCOVERY_INTERVAL_PERIOD);
         let mut peer_events = {
-            let (subscriber, _peers) = self.network.subscribe();
+            let (subscriber, _peers) = self.network.subscribe().unwrap();
             subscriber
         };
 
@@ -444,7 +446,10 @@ pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types:
         (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
             Some((hostname.as_ref(), port).into())
         }
-        _ => None,
+        _ => {
+            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
+            None
+        }
     }
 }
 

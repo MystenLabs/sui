@@ -407,6 +407,10 @@ pub struct WorkerInfo {
     pub transactions: Multiaddr,
     /// Address to receive messages from other workers (WAN) and our primary.
     pub worker_address: Multiaddr,
+    /// Optional alternative address preferentially used by a primary to talk to its own workers.
+    /// For example, this could be used to connect to co-located workers over a private LAN
+    /// address.
+    pub internal_worker_address: Option<Multiaddr>,
 }
 
 pub type SharedWorkerCache = Arc<ArcSwap<WorkerCache>>;
@@ -449,7 +453,13 @@ impl std::fmt::Display for WorkerCache {
             self.epoch(),
             self.workers
                 .iter()
-                .map(|(k, v)| { format!("{}: {}", k.encode_base64().get(0..16).unwrap(), v) })
+                .map(|(k, v)| {
+                    if let Some(x) = k.encode_base64().get(0..16) {
+                        format!("{}: {}", x, v)
+                    } else {
+                        format!("Invalid key: {}", k)
+                    }
+                })
                 .collect::<Vec<_>>()
         )
     }
@@ -505,7 +515,7 @@ impl WorkerCache {
 
     /// Returns the addresses of all workers with a specific id except the ones of the authority
     /// specified by `myself`.
-    pub fn others_workers(
+    pub fn others_workers_by_id(
         &self,
         myself: &PublicKey,
         id: &WorkerId,
@@ -516,6 +526,15 @@ impl WorkerCache {
             .flat_map(
                 |(name, authority)|  authority.0.iter().flat_map(
                     |v| match_opt::match_opt!(v,(worker_id, addresses) if worker_id == id => (name.clone(), addresses.clone()))))
+            .collect()
+    }
+
+    /// Returns the addresses of all workers that are not of our node.
+    pub fn others_workers(&self, myself: &PublicKey) -> Vec<(PublicKey, WorkerInfo)> {
+        self.workers
+            .iter()
+            .filter(|(name, _)| *name != myself)
+            .flat_map(|(name, authority)| authority.0.iter().map(|v| (name.clone(), v.1.clone())))
             .collect()
     }
 
@@ -571,7 +590,13 @@ impl std::fmt::Display for Committee {
             self.epoch(),
             self.authorities
                 .keys()
-                .map(|x| { x.encode_base64().get(0..16).unwrap().to_string() })
+                .map(|x| {
+                    if let Some(k) = x.encode_base64().get(0..16) {
+                        k.to_owned()
+                    } else {
+                        format!("Invalid key: {}", x)
+                    }
+                })
                 .collect::<Vec<_>>()
         )
     }

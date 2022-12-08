@@ -3,6 +3,7 @@
 
 import { useParams } from 'react-router-dom';
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transaction-card/TxForID';
@@ -35,12 +36,16 @@ function AddressResult() {
                 <div>
                     <h1>Owned Objects</h1>
                     <div>
-                        <OwnedObjects id={addressID} byAddress />
+                        <ErrorBoundary>
+                            <OwnedObjects id={addressID} byAddress />
+                        </ErrorBoundary>
                     </div>
                 </div>
                 <div>
                     <h1>Transactions</h1>
-                    <TxForID id={addressID} category="address" />
+                    <ErrorBoundary>
+                        <TxForID id={addressID} category="address" />
+                    </ErrorBoundary>
                 </div>
             </>
         );

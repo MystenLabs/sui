@@ -4,10 +4,10 @@ use crate::api::TransactionStreamingApiServer;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use futures::{StreamExt, TryStream};
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee_core::error::SubscriptionClosed;
-use jsonrpsee_core::server::rpc_module::RpcModule;
-use jsonrpsee_core::server::rpc_module::SubscriptionSink;
+use jsonrpsee::{RpcModule, SubscriptionSink};
+use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -17,7 +17,6 @@ use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiTransactionEffects;
 use sui_json_rpc_types::SuiTransactionFilter;
 use sui_json_rpc_types::SuiTransactionResponse;
-use sui_metrics::spawn_monitored_task;
 use sui_open_rpc::Module;
 use sui_types::filter::TransactionFilter;
 use tracing::warn;
@@ -52,7 +51,7 @@ impl TransactionStreamingApiServer for TransactionStreamingApiImpl {
             async move {
                 let sui_tx_cert = SuiCertifiedTransaction::try_from(tx_cert)?;
                 let sui_tx_effects = SuiTransactionEffects::try_from(
-                    signed_effects.effects,
+                    signed_effects.into_data(),
                     state_clone.module_cache.as_ref(),
                 )?;
                 let digest = sui_tx_cert.transaction_digest;

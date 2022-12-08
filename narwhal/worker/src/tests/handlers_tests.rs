@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use crate::TrivialTransactionValidator;
 use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
 use types::{MockWorkerToWorker, WorkerToWorkerServer};
@@ -31,6 +32,7 @@ async fn synchronize() {
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
+        validator: TrivialTransactionValidator,
     };
 
     // Set up mock behavior for child RequestBatches RPC.
@@ -103,6 +105,7 @@ async fn synchronize_when_batch_exists() {
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
+        validator: TrivialTransactionValidator,
     };
 
     // Store the batch.
@@ -154,6 +157,7 @@ async fn delete_batches() {
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
+        validator: TrivialTransactionValidator,
     };
     let message = WorkerDeleteBatchesMessage {
         digests: vec![digest],

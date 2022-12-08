@@ -10,18 +10,18 @@ edition = "2021"
 workspace-hack.workspace = true
 sui-types = {path = "../sui-types"}
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 bcs = "0.1.4"
-serde_json = "1.0.83"
+serde_json = "1.0.88"
 sui-cost-tables = { path = "../sui-cost-tables"}
 sui-adapter = { path = "../sui-adapter"}
 sui-core = { path = "../sui-core" }
 
 [dev-dependencies]
-insta = { version = "1.19.1", features = ["redactions", "json"] }
+insta = { version = "1.21.1", features = ["redactions", "json"] }
 test-utils = { path = "../test-utils" }
 sui-config = {path = "../sui-config"}
 move-cli.workspace = true

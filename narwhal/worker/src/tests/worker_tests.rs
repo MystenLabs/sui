@@ -2,19 +2,123 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::metrics::initialise_metrics;
+use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use fastcrypto::hash::Hash;
+use fastcrypto::{
+    encoding::{Encoding, Hex},
+    hash::Hash,
+};
 use futures::stream::FuturesOrdered;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::time::Duration;
 use storage::NodeStorage;
 use store::rocks;
-use test_utils::{batch, temp_dir, CommitteeFixture};
-use types::{MockWorkerToPrimary, MockWorkerToWorker, TransactionsClient, WorkerToPrimaryServer};
+use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
+use types::{
+    MockWorkerToPrimary, MockWorkerToWorker, TransactionsClient, WorkerBatchMessage,
+    WorkerToPrimaryServer, WorkerToWorkerClient,
+};
+
+// A test validator that rejects every transaction / batch
+#[derive(Clone)]
+struct NilTxValidator;
+impl TransactionValidator for NilTxValidator {
+    type Error = eyre::Report;
+
+    fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
+        eyre::bail!("Invalid transaction");
+    }
+    fn validate_batch(&self, _txs: &Batch) -> Result<(), Self::Error> {
+        eyre::bail!("Invalid batch");
+    }
+}
+
+#[tokio::test]
+async fn reject_invalid_clients_transactions() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+
+    let worker_id = 0;
+    let my_primary = fixture.authorities().next().unwrap();
+    let myself = my_primary.worker(worker_id);
+    let name = my_primary.public_key();
+
+    let parameters = Parameters {
+        batch_size: 200, // Two transactions.
+        ..Parameters::default()
+    };
+
+    // Create a new test store.
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let store = Store::new(db);
+
+    let registry = Registry::new();
+    let metrics = initialise_metrics(&registry);
+
+    // Spawn a `Worker` instance with a reject-all validator.
+    Worker::spawn(
+        name.clone(),
+        myself.keypair(),
+        worker_id,
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
+        parameters,
+        NilTxValidator,
+        store,
+        metrics,
+    );
+
+    // Wait till other services have been able to start up
+    tokio::task::yield_now().await;
+    // Send enough transactions to create a batch.
+    let address = worker_cache
+        .load()
+        .worker(&name, &worker_id)
+        .unwrap()
+        .transactions;
+    let config = mysten_network::config::Config::new();
+    let channel = config.connect_lazy(&address).unwrap();
+    let mut client = TransactionsClient::new(channel);
+    let tx = transaction();
+    let txn = TransactionProto {
+        transaction: Bytes::from(tx.clone()),
+    };
+
+    // Check invalid transactions are rejected
+    let res = client.submit_transaction(txn).await;
+    assert!(res.is_err());
+
+    let worker_pk = worker_cache.load().worker(&name, &worker_id).unwrap().name;
+
+    let batch = batch();
+    let batch_message = WorkerBatchMessage {
+        batch: batch.clone(),
+    };
+
+    // setup network : impersonate a send from another worker
+    let another_primary = fixture.authorities().nth(2).unwrap();
+    let another_worker = another_primary.worker(worker_id);
+    let network = test_network(
+        another_worker.keypair(),
+        &another_worker.info().worker_address,
+    );
+    // ensure that the networks are connected
+    network
+        .connect(network::multiaddr_to_address(&myself.info().worker_address).unwrap())
+        .await
+        .unwrap();
+    let peer = network.peer(PeerId(worker_pk.0.to_bytes())).unwrap();
+
+    // Check invalid batches are rejected
+    let res = WorkerToWorkerClient::new(peer)
+        .report_batch(batch_message)
+        .await;
+    assert!(res.is_err());
+}
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -47,6 +151,7 @@ async fn handle_clients_transactions() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters,
+        TrivialTransactionValidator::default(),
         store,
         metrics,
     );
@@ -63,9 +168,7 @@ async fn handle_clients_transactions() {
         .withf(move |request| {
             let message = request.body();
 
-            message.digest == batch_digest
-                && message.worker_id == worker_id
-                && message.metadata.created_at > 0
+            message.digest == batch_digest && message.worker_id == worker_id
         })
         .times(1)
         .returning(move |_| {
@@ -147,6 +250,7 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -164,8 +268,9 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
+        tx_new_certificates,
+        rx_feedback,
+        rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
@@ -196,12 +301,13 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_1_parameters.clone(),
+        TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics_1.clone(),
     );
 
-    let primary_1_peer_id = hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
-    let worker_1_peer_id = hex::encode(worker_1_keypair.copy().public().0.as_bytes());
+    let primary_1_peer_id = Hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
+    let worker_1_peer_id = Hex::encode(worker_1_keypair.copy().public().0.as_bytes());
 
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -258,6 +364,7 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -275,8 +382,9 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        /* tx_consensus */ tx_new_certificates_2,
-        /* rx_consensus */ rx_feedback_2,
+        tx_new_certificates_2,
+        rx_feedback_2,
+        rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
@@ -307,6 +415,7 @@ async fn get_network_peers_from_admin_server() {
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         worker_2_parameters.clone(),
+        TrivialTransactionValidator::default(),
         store.batch_store,
         metrics_2.clone(),
     );
@@ -315,8 +424,8 @@ async fn get_network_peers_from_admin_server() {
     // have  a chance to connect to each other.
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let primary_2_peer_id = hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
-    let worker_2_peer_id = hex::encode(worker_2_keypair.copy().public().0.as_bytes());
+    let primary_2_peer_id = Hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
+    let worker_2_peer_id = Hex::encode(worker_2_keypair.copy().public().0.as_bytes());
 
     // Test getting all known peers for worker 2 (worker at index 0 for primary 2)
     let resp = reqwest::get(format!(
@@ -378,29 +487,27 @@ async fn get_network_peers_from_admin_server() {
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Assert network connectivity metrics are also set as expected
-    let mut m = std::collections::HashMap::new();
-    m.insert("peer_id", resp.get(0).unwrap().as_str());
-    assert_eq!(
-        1,
-        metrics_2
-            .clone()
-            .network_connection_metrics
-            .unwrap()
-            .network_peer_connected
-            .get_metric_with(&m)
-            .unwrap()
-            .get()
-    );
+    let filters = vec![
+        (primary_2_peer_id.as_str(), "our_primary"),
+        (primary_1_peer_id.as_str(), "other_primary"),
+        (worker_1_peer_id.as_str(), "other_worker"),
+    ];
 
-    m.insert("peer_id", resp.get(1).unwrap().as_str());
-    assert_eq!(
-        1,
-        metrics_2
-            .network_connection_metrics
-            .unwrap()
-            .network_peer_connected
-            .get_metric_with(&m)
-            .unwrap()
-            .get()
-    );
+    for f in filters {
+        let mut m = HashMap::new();
+        m.insert("peer_id", f.0);
+        m.insert("type", f.1);
+
+        assert_eq!(
+            1,
+            metrics_2
+                .clone()
+                .network_connection_metrics
+                .unwrap()
+                .network_peer_connected
+                .get_metric_with(&m)
+                .unwrap()
+                .get()
+        );
+    }
 }

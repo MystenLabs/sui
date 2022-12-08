@@ -8,7 +8,6 @@ import {
   getObjectReference,
   getSharedObjectInitialVersion,
   ID_STRUCT_NAME,
-  isSharedObject,
   isValidSuiAddress,
   MOVE_STDLIB_ADDRESS,
   normalizeSuiObjectId,
@@ -19,7 +18,6 @@ import {
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
 import { bcs, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
-import { shouldUseOldSharedObjectAPI } from './local-txn-data-serializer';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
@@ -68,9 +66,7 @@ export class CallArgSerializer {
       .map((arg) => {
         if ('Object' in arg) {
           const objectArg = arg.Object;
-          if ('Shared_Deprecated' in objectArg) {
-            return objectArg.Shared_Deprecated;
-          } else if ('Shared' in objectArg) {
+          if ('Shared' in objectArg) {
             return objectArg.Shared.objectId;
           } else {
             return objectArg.ImmOrOwned.objectId;
@@ -140,17 +136,9 @@ export class CallArgSerializer {
 
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
-    const version = await this.provider.getRpcApiVersion();
-
-    if (shouldUseOldSharedObjectAPI(version)) {
-      if (isSharedObject(object)) {
-        return { Shared_Deprecated: objectId };
-      }
-    } else {
-      const initialSharedVersion = getSharedObjectInitialVersion(object);
-      if (initialSharedVersion) {
-        return { Shared: { objectId, initialSharedVersion } };
-      }
+    const initialSharedVersion = getSharedObjectInitialVersion(object);
+    if (initialSharedVersion) {
+      return { Shared: { objectId, initialSharedVersion } };
     }
 
     return { ImmOrOwned: getObjectReference(object)! };
@@ -168,7 +156,10 @@ export class CallArgSerializer {
     }
 
     const structVal = extractStructTag(expectedType);
-    if (structVal != null) {
+    if (
+      structVal != null ||
+      (typeof expectedType === 'object' && 'TypeParameter' in expectedType)
+    ) {
       if (typeof argVal !== 'string') {
         throw new Error(
           `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${JSON.stringify(
@@ -208,11 +199,8 @@ export class CallArgSerializer {
   private extractIdFromObjectArg(arg: ObjectArg) {
     if ('ImmOrOwned' in arg) {
       return arg.ImmOrOwned.objectId;
-    } else if ('Shared' in arg) {
-      return arg.Shared.objectId;
     }
-    // TODO: remove after DevNet 0.13.0
-    return arg.Shared_Deprecated;
+    return arg.Shared.objectId;
   }
 
   private async deserializeCallArg(

@@ -4,7 +4,7 @@
 use crate::{
     legacy_emit_cost,
     natives::{
-        get_object_id,
+        get_nested_struct_field, get_object_id,
         object_runtime::{object_store::ObjectResult, ObjectRuntime},
     },
 };
@@ -18,7 +18,10 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    natives::function::NativeResult,
+    pop_arg,
+    values::{StructRef, Value},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -94,7 +97,9 @@ pub fn hash_type_and_key(
     let hash = hasher.finalize();
 
     // truncate into an ObjectID and return
+    // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
     let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::address(id.into())],
@@ -131,13 +136,15 @@ pub fn add_child_object(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    object_runtime.add_child_object(parent, child_id, &child_ty, tag, child)?;
+    object_runtime.add_child_object(parent, child_id, &child_ty, *tag, child)?;
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![]))
 }
 
 // throws `E_KEY_DOES_NOT_EXIST` if a child does not exist with that ID at that type
 // or throws `E_FIELD_TYPE_MISMATCH` if the type does not match
-// native fun borrow_child_object<Child: key>(parent: address, id: address): &mut Child;
+// native fun borrow_child_object<Child: key>(parent: &UID, id: address): &Child;
+// and (as the runtime does not distinguish different reference types)
+// native fun borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child;
 pub fn borrow_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -146,7 +153,15 @@ pub fn borrow_child_object(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
     let child_id = pop_arg!(args, AccountAddress).into();
-    let parent = pop_arg!(args, AccountAddress).into();
+
+    let parent_uid = pop_arg!(args, StructRef).read_ref().unwrap();
+    // UID { id: ID { bytes: address } }
+    let parent = get_nested_struct_field(parent_uid, &[0, 0])
+        .unwrap()
+        .value_as::<AccountAddress>()
+        .unwrap()
+        .into();
+
     assert!(args.is_empty());
     let global_value_result = get_or_fetch_object!(context, ty_args, parent, child_id);
     let global_value = match global_value_result {
@@ -235,7 +250,7 @@ pub fn has_child_object_with_ty(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let has_child = object_runtime.child_object_exists_and_has_type(parent, child_id, tag)?;
+    let has_child = object_runtime.child_object_exists_and_has_type(parent, child_id, *tag)?;
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::bool(has_child)],
@@ -259,5 +274,5 @@ fn get_tag_and_layout(
             )
         }
     };
-    Ok(Some((layout, tag)))
+    Ok(Some((layout, *tag)))
 }

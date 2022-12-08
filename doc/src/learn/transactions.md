@@ -24,7 +24,7 @@ In addition to the common metadata above, a call transaction includes the follow
 * Module: A UTF-8 string specifying the name of a Move module in the package.
 * Function: A UTF-8 string specifying the name of a function inside the module. The function must be a valid entry point.
 * Type Inputs: A list of Move types that will be bound to the type parameters of the function.
-* Object Inputs: A list of unique object references pointing to objects that will be passed to this function. Each object must either be owned by the sender or immutable. *The gas input object from above cannot also appear as an object input.*
+* Object Inputs: A list of unique object references pointing to objects that will be passed to this function. Each object must either be owned by the sender, immutable or shared. *The gas input object from above cannot also appear as an object input.*
 * Pure Inputs: A list of BCS-encoded values that will be bound to the parameters of the function. Pure inputs must be primitive types (i.e. addresses, object IDs, strings, bytes, integers, or booleans)--they cannot be objects.
 
 ## Move publish transaction

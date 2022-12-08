@@ -30,12 +30,12 @@ use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, Header, HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse,
+    RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, Transaction, Vote,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -124,26 +124,16 @@ pub fn random_key() -> KeyPair {
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
-    const SUB_DAG_CF: &str = "sub_dag";
 
-    let rocksdb = rocks::open_cf(
-        store_path,
-        None,
-        &[LAST_COMMITTED_CF, SEQUENCE_CF, SUB_DAG_CF],
-    )
-    .expect("Failed creating database");
+    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
+        .expect("Failed creating database");
 
-    let (last_committed_map, sequence_map, sub_dag_map) = reopen!(&rocksdb,
+    let (last_committed_map, sequence_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<PublicKey, Round>,
-        SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
-        SUB_DAG_CF;<Round, CommittedSubDagShell>
+        SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 
-    Arc::new(ConsensusStore::new(
-        last_committed_map,
-        sequence_map,
-        sub_dag_map,
-    ))
+    Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
 }
 
 pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, WorkerId> {
@@ -212,6 +202,12 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         Ok(anemo::Response::new(()))
     }
 
+    async fn request_vote(
+        &self,
+        _request: anemo::Request<RequestVoteRequest>,
+    ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
     async fn get_certificates(
         &self,
         _request: anemo::Request<GetCertificatesRequest>,
@@ -229,13 +225,6 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         &self,
         _request: anemo::Request<PayloadAvailabilityRequest>,
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn get_latest_header(
-        &self,
-        _request: anemo::Request<LatestHeaderRequest>,
-    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -890,7 +879,7 @@ impl AuthorityFixture {
         let keypair = KeyPair::generate(&mut rng);
         let network_keypair = NetworkKeyPair::generate(&mut rng);
         let host = "127.0.0.1";
-        let address: Multiaddr = format!("/ip4/{}/tcp/{}/http", host, get_port(host))
+        let address: Multiaddr = format!("/ip4/{}/udp/{}", host, get_port(host))
             .parse()
             .unwrap();
 
@@ -944,7 +933,7 @@ impl WorkerFixture {
         let keypair = NetworkKeyPair::generate(&mut StdRng::from_rng(rng).unwrap());
         let worker_name = keypair.public().clone();
         let host = "127.0.0.1";
-        let worker_address = format!("/ip4/{}/tcp/{}/http", host, get_port(host))
+        let worker_address = format!("/ip4/{}/udp/{}", host, get_port(host))
             .parse()
             .unwrap();
         let transactions = format!("/ip4/{}/tcp/{}/http", host, get_port(host))
@@ -957,6 +946,7 @@ impl WorkerFixture {
             info: WorkerInfo {
                 name: worker_name,
                 worker_address,
+                internal_worker_address: None,
                 transactions,
             },
         }

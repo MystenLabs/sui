@@ -4,19 +4,25 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_types::coin::CoinMetadata;
+use sui_types::event::Event;
+use sui_types::gas_coin::GAS;
+use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
 use fastcrypto::encoding::Base64;
+use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiCoinMetadata, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectInfo, SuiTransactionAuthSignersResponse, SuiTransactionEffects,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -130,6 +136,28 @@ impl RpcReadApiServer for ReadApi {
             parsed_data: None,
         })
     }
+
+    async fn get_transaction_auth_signers(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiTransactionAuthSignersResponse> {
+        let (cert, _effects) = self
+            .state
+            .get_transaction(digest)
+            .await
+            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
+
+        let mut signers = Vec::new();
+        let committee = self.state.committee();
+        for authority_index in cert.auth_sig().signers_map.iter() {
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or_else(|| anyhow!("Failed to get authority"))?;
+            signers.push(*authority);
+        }
+
+        Ok(SuiTransactionAuthSignersResponse { signers })
+    }
 }
 
 impl SuiRpcModule for ReadApi {
@@ -149,6 +177,78 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
         let txn_digest = TransactionDigest::new(sha3_hash(&tx_data));
         Ok(self.state.dry_exec_transaction(tx_data, txn_digest).await?)
+    }
+
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
+        let coin_struct = coin_type.parse::<StructTag>().map_err(|e| anyhow!("{e}"))?;
+        if GAS::is_gas(&coin_struct) {
+            // TODO: We need to special case for `CoinMetadata<0x2::sui::SUI> because `get_transaction`
+            // will fail for genesis transaction. However, instead of hardcoding the values here, We
+            // can store the object id for `CoinMetadata<0x2::sui::SUI>` in the Sui System object
+            return Ok(SuiCoinMetadata {
+                id: None,
+                decimals: 9,
+                symbol: "SUI".to_string(),
+                name: "Sui".to_string(),
+                description: "".to_string(),
+                icon_url: None,
+            });
+        }
+        let publish_txn_digest = self
+            .state
+            .get_object_read(&coin_struct.address.into())
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .into_object()
+            .map_err(|e| anyhow!("{e}"))?
+            .previous_transaction;
+        let (_, effects) = self.state.get_transaction(publish_txn_digest).await?;
+        let event = effects
+            .events
+            .into_iter()
+            .find(|e| {
+                if let Event::NewObject { object_type, .. } = e {
+                    return object_type.parse::<StructTag>().map_or(false, |tag| {
+                        CoinMetadata::is_coin_metadata(&tag)
+                            && tag.type_params.len() == 1
+                            && tag.type_params[0].to_canonical_string()
+                                == coin_struct.to_canonical_string()
+                    });
+                }
+                false
+            })
+            .ok_or(0)
+            .map_err(|_| anyhow!("No NewObject event was emitted for CoinMetaData"))?;
+
+        let metadata_object_id = event
+            .object_id()
+            .ok_or(0)
+            .map_err(|_| anyhow!("No object id is found in NewObject event"))?;
+
+        Ok(self
+            .state
+            .get_object_read(&metadata_object_id)
+            .await
+            .map_err(|e| {
+                debug!(?metadata_object_id, "Failed to get object: {:?}", e);
+                anyhow!("{e}")
+            })?
+            .into_object()
+            .map_err(|e| {
+                debug!(
+                    ?metadata_object_id,
+                    "Failed to convert ObjectRead to Object: {:?}", e
+                );
+                anyhow!("{e}")
+            })?
+            .try_into()
+            .map_err(|e| {
+                debug!(
+                    ?metadata_object_id,
+                    "Failed to convert object to CoinMetadata: {:?}", e
+                );
+                anyhow!("{e}")
+            })?)
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -296,6 +396,14 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         Ok(self
             .state
             .handle_committee_info_request(&CommitteeInfoRequest { epoch })
+            .map_err(|e| anyhow!("{e}"))?)
+    }
+
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
+        Ok(self
+            .state
+            .get_sui_system_state_object()
+            .await
             .map_err(|e| anyhow!("{e}"))?)
     }
 }

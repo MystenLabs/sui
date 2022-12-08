@@ -89,7 +89,7 @@ module sui::rewards_distribution_tests {
 
         // 10 SUI rewards for each 120 SUI of stake
         advance_epoch_with_reward_amounts(0, 160, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, 500, scenario); 
+        undelegate(DELEGATOR_ADDR_2, 0, 0, 600, scenario); // unstake 600 principal SUI
         governance_test_utils::advance_epoch(scenario); 
         // compared to at line 87, additional 600 SUI of principal and 50 SUI of rewards withdrawn to Coin<SUI>
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 770, 0); 

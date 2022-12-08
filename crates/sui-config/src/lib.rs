@@ -20,6 +20,7 @@ mod swarm;
 pub mod utils;
 
 pub use node::{ConsensusConfig, NodeConfig, ValidatorInfo};
+pub use swarm::FullnodeConfigBuilder;
 pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
@@ -104,6 +105,10 @@ where
 
     pub fn into_inner(self) -> C {
         self.inner
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 

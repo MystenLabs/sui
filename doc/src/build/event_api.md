@@ -138,17 +138,17 @@ Users can query the full node using `EventQuery` criteria object to get the exac
 
 ### List of queryable criteria
 
-| Query       | Description                                                      |                               JSON-RPC Parameter Example                               |
-|-------------|------------------------------------------------------------------|:--------------------------------------------------------------------------------------:|
-| All         | All events                                                       |                                        {"All"}                                         |
-| Transaction | Events emitted by the given transaction.                         |                         {"Transaction":"<Transaction Digest>"}                         |
-| MoveModule  | Events emitted in a specified Move module                        |                {"MoveModule":{"package":"0x2", "module":"devnet_nft"}}                 |
-| MoveEvent   | Move struct name of the event                                    |                      {"MoveEvent":"0x2::event_nft::MintNFTEvent"}                      |
-| EventType   | Type of event described in the [Events](#type-of-events) section |                               {"EventType": "NewObject"}                               |
-| Sender      | Query by sender address                                          |                {"Sender":"0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}                 |
-| Recipient   | Query by recipient                                               |      {"Recipient":{"AddressOwner":"0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}}       |
-| Object      | Return events associated with the given object                   |                {"Object":"0xe3a6bc7bf1dba4d17a91724009c461bd69870719"}                 |
-| TimeRange   | Return events emitted in [start_time, end_time] interval         | {"TimeRange":{"start":<milliseconds since epoch>, "start":<milliseconds since epoch>}} |
+| Query       | Description                                                      |                         JSON-RPC Parameter Example                          |
+|-------------|------------------------------------------------------------------|:---------------------------------------------------------------------------:|
+| All         | All events                                                       |                                   {"All"}                                   |
+| Transaction | Events emitted by the given transaction.                         |       {"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}        |
+| MoveModule  | Events emitted in a specified Move module                        |           {"MoveModule":{"package":"0x2", "module":"devnet_nft"}}           |
+| MoveEvent   | Move struct name of the event                                    |                {"MoveEvent":"0x2::event_nft::MintNFTEvent"}                 |
+| EventType   | Type of event described in the [Events](#type-of-events) section |                         {"EventType": "NewObject"}                          |
+| Sender      | Query by sender address                                          |           {"Sender":"0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}           |
+| Recipient   | Query by recipient                                               | {"Recipient":{"AddressOwner":"0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}} |
+| Object      | Return events associated with the given object                   |           {"Object":"0xe3a6bc7bf1dba4d17a91724009c461bd69870719"}           |
+| TimeRange   | Return events emitted in [start_time, end_time] interval         |     {"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}      |
 
 ## Pagination
 
@@ -173,7 +173,7 @@ curl --location --request POST '127.0.0.1:9000' \
     {"MoveModule":{"package":"0x2", "module":"devnet_nft"}},
     null,
     null,
-    "Descending"
+    true
   ]
 }'
 ```

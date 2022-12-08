@@ -34,6 +34,7 @@ RUN cargo build --profile $PROFILE
 # Copy in the rest of the crates (and an unmodified Cargo.toml and Cargo.lock)
 # and build the application. At this point no dependencies should need to be
 # built as they were built and cached by the previous layer.
+ARG GIT_REVISION
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
@@ -43,7 +44,9 @@ RUN cargo build --profile $PROFILE --bin sui-node
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
+# Use jemalloc as memory allocator
 RUN apt-get update && apt-get install -y libjemalloc-dev
+ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 ARG PROFILE=release
 WORKDIR sui
 # Both bench and release profiles copy from release dir

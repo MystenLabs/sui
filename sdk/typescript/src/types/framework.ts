@@ -17,6 +17,7 @@ import { normalizeSuiObjectId, SuiAddress } from './common';
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { isSuiMoveObject } from './index.guard';
+import { SignerWithProvider } from '../signers/signer-with-provider';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
@@ -24,8 +25,6 @@ export const OBJECT_MODULE_NAME = 'object';
 export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
-
-export const COIN_TYPE = `${SUI_FRAMEWORK_ADDRESS}::coin::Coin`;
 
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
@@ -36,13 +35,22 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
 
+export type CoinMetadata = {
+  decimals: number;
+  name: string;
+  symbol: string;
+  description: string;
+  iconUrl: string | null;
+  id: ObjectId | null;
+};
+
 /**
  * Utility class for 0x2::coin
  * as defined in https://github.com/MystenLabs/sui/blob/ca9046fd8b1a9e8634a4b74b0e7dabdc7ea54475/sui_programmability/framework/sources/Coin.move#L4
  */
 export class Coin {
   static isCoin(data: ObjectData): boolean {
-    return Coin.getType(data)?.startsWith(COIN_TYPE) ?? false;
+    return Coin.getType(data)?.match(COIN_TYPE_ARG_REGEX) != null;
   }
 
   static getCoinType(type: string) {
@@ -201,6 +209,110 @@ export class Coin {
       return getMoveObjectType(data);
     }
     return data.type;
+  }
+
+  /**
+   * Creates and executes a transaction to transfer coins to a recipient address.
+   * @param signer User's signer
+   * @param allCoins All the coins that are owned by the user. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.
+   * @param coinTypeArg The coin type argument (Coin<T> the T) of the coin to send
+   * @param amountToSend Total amount to send to recipient
+   * @param recipient Recipient's address
+   * @param gasBudget Gas budget for the tx
+   * @throws in case of insufficient funds, network errors etc
+   */
+  public static async transfer(
+    signer: SignerWithProvider,
+    allCoins: SuiMoveObject[],
+    coinTypeArg: string,
+    amountToSend: bigint,
+    recipient: SuiAddress,
+    gasBudget: number
+  ) {
+    const tx = await Coin.newTransferTx(
+      signer,
+      allCoins,
+      coinTypeArg,
+      amountToSend,
+      recipient,
+      gasBudget
+    );
+    return signer.signAndExecuteTransaction(tx);
+  }
+
+  /**
+   * Create a new transaction for sending coins ready to be signed and executed.
+   * @param signer User's signer
+   * @param allCoins All the coins that are owned by the user. Can be only the relevant type of coins for the transfer, Sui for gas and the coins with the same type as the type to send.
+   * @param coinTypeArg The coin type argument (Coin<T> the T) of the coin to send
+   * @param amountToSend Total amount to send to recipient
+   * @param recipient Recipient's address
+   * @param gasBudget Gas budget for the tx
+   * @throws in case of insufficient funds, network errors etc
+   */
+  private static async newTransferTx(
+    signer: SignerWithProvider,
+    allCoins: SuiMoveObject[],
+    coinTypeArg: string,
+    amountToSend: bigint,
+    recipient: SuiAddress,
+    gasBudget: number
+  ) {
+    const isSuiTransfer = coinTypeArg === SUI_TYPE_ARG;
+    const coinsOfTransferType = allCoins.filter(
+      (aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg
+    );
+    const totalAmountIncludingGas =
+      amountToSend + BigInt(isSuiTransfer ? gasBudget : 0);
+    const inputCoinObjs =
+      await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+        coinsOfTransferType,
+        totalAmountIncludingGas
+      );
+    if (!inputCoinObjs.length) {
+      const totalBalanceOfTransferType = Coin.totalBalance(coinsOfTransferType);
+      const suggestedAmountToSend =
+        totalBalanceOfTransferType - BigInt(isSuiTransfer ? gasBudget : 0);
+      // TODO: denomination for values?
+      throw new Error(
+        `Coin balance ${totalBalanceOfTransferType} is not sufficient to cover the transfer amount ` +
+          `${amountToSend}. Try reducing the transfer amount to ${suggestedAmountToSend}.`
+      );
+    }
+    if (!isSuiTransfer) {
+      const allGasCoins = allCoins.filter((aCoin) => Coin.isSUI(aCoin));
+      const gasCoin = Coin.selectCoinWithBalanceGreaterThanOrEqual(
+        allGasCoins,
+        BigInt(gasBudget)
+      );
+      if (!gasCoin) {
+        // TODO: denomination for gasBudget?
+        throw new Error(
+          `Unable to find a coin to cover the gas budget ${gasBudget}`
+        );
+      }
+    }
+    const signerAddress = await signer.getAddress();
+    const inputCoins = inputCoinObjs.map(Coin.getID);
+    const txCommon = {
+      inputCoins,
+      recipients: [recipient],
+      // TODO: change this to string to avoid losing precision
+      amounts: [Number(amountToSend)],
+      gasBudget: Number(gasBudget),
+    };
+    if (isSuiTransfer) {
+      return signer.serializer.serializeToBytes(signerAddress, {
+        kind: 'paySui',
+        data: { ...txCommon },
+      });
+    }
+    return signer.serializer.serializeToBytes(signerAddress, {
+      kind: 'pay',
+      data: { ...txCommon },
+      // we know there is a gas coin with enough balance to cover
+      // the gas budget let rpc select one for us
+    });
   }
 }
 

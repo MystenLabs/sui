@@ -27,13 +27,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::coin::CoinMetadata;
 use tracing::warn;
 
 use fastcrypto::encoding::{Base64, Encoding};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    TransactionEffectsDigest,
+    AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
+    TransactionDigest, TransactionEffectsDigest,
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
@@ -323,6 +324,11 @@ pub struct SuiTransactionResponse {
     pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiTransactionAuthSignersResponse {
+    pub signers: Vec<AuthorityName>,
+}
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 pub enum SuiParsedTransactionResponse {
     Publish(SuiParsedPublishResponse),
@@ -408,6 +414,46 @@ impl SuiExecuteTransactionResponse {
                     confirmed_local_execution: is_executed_locally,
                 }
             }
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiCoinMetadata {
+    /// Number of decimal places the coin uses.
+    pub decimals: u8,
+    /// Name for the token
+    pub name: String,
+    /// Symbol for the token
+    pub symbol: String,
+    /// Description of the token
+    pub description: String,
+    /// URL for the token logo
+    pub icon_url: Option<String>,
+    /// Object id for the CoinMetadata object
+    pub id: Option<ObjectID>,
+}
+
+impl TryFrom<Object> for SuiCoinMetadata {
+    type Error = SuiError;
+    fn try_from(object: Object) -> Result<Self, Self::Error> {
+        let metadata: CoinMetadata = object.try_into()?;
+        let CoinMetadata {
+            decimals,
+            name,
+            symbol,
+            description,
+            icon_url,
+            id,
+        } = metadata;
+        Ok(Self {
+            id: Some(*id.object_id()),
+            decimals,
+            name,
+            symbol,
+            description,
+            icon_url,
         })
     }
 }
@@ -500,10 +546,10 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
-                    )
+                    )?
                 })
             }
-            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)),
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
         };
         Ok(Object {
             data,
@@ -1774,10 +1820,12 @@ impl SuiCertifiedTransactionEffects {
         cert: CertifiedTransactionEffects,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
+        let digest = *cert.digest();
+        let (effects, auth_sign_info) = cert.into_data_and_sig();
         Ok(Self {
-            transaction_effects_digest: *cert.digest(),
-            effects: SuiTransactionEffects::try_from(cert.effects, resolver)?,
-            auth_sign_info: cert.auth_signature,
+            transaction_effects_digest: digest,
+            effects: SuiTransactionEffects::try_from(effects, resolver)?,
+            auth_sign_info,
         })
     }
 }
@@ -2301,6 +2349,20 @@ impl SuiEvent {
             },
         })
     }
+
+    pub fn get_event_type(&self) -> String {
+        match self {
+            SuiEvent::MoveEvent { .. } => "MoveEvent".to_string(),
+            SuiEvent::Publish { .. } => "Publish".to_string(),
+            SuiEvent::TransferObject { .. } => "TransferObject".to_string(),
+            SuiEvent::DeleteObject { .. } => "DeleteObject".to_string(),
+            SuiEvent::NewObject { .. } => "NewObject".to_string(),
+            SuiEvent::EpochChange(..) => "EpochChange".to_string(),
+            SuiEvent::Checkpoint(..) => "CheckPoint".to_string(),
+            SuiEvent::CoinBalanceChange { .. } => "CoinBalanceChange".to_string(),
+            SuiEvent::MutateObject { .. } => "MutateObject".to_string(),
+        }
+    }
 }
 
 impl PartialEq<SuiEventEnvelope> for EventEnvelope {
@@ -2582,7 +2644,7 @@ impl From<ObjectInfo> for SuiObjectInfo {
             object_id: info.object_id,
             version: info.version,
             digest: info.digest,
-            type_: info.type_,
+            type_: format!("{}", info.type_),
             owner: info.owner,
             previous_transaction: info.previous_transaction,
         }

@@ -27,9 +27,13 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use sui_protocol_constants::*;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
+
+/// Packages are immutable, version is always 1
+pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -72,31 +76,62 @@ impl MoveObject {
         has_public_transfer: bool,
         version: SequenceNumber,
         contents: Vec<u8>,
-    ) -> Self {
+    ) -> Result<Self, ExecutionError> {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
         debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
-        Self {
+        if contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::MoveObjectTooBig {
+                    object_size: contents.len() as u64,
+                    max_object_size: MAX_MOVE_OBJECT_SIZE,
+                },
+            ));
+        }
+        Ok(Self {
             type_,
             has_public_transfer,
             version,
             contents,
+        })
+    }
+
+    pub fn new_gas_coin(version: SequenceNumber, id: ObjectID, value: u64) -> Self {
+        // unwrap safe because coins are always smaller than the max object size
+        unsafe {
+            Self::new_from_execution(
+                GasCoin::type_(),
+                true,
+                version,
+                GasCoin::new(id, value).to_bcs_bytes(),
+            )
+            .unwrap()
         }
     }
 
-    pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, contents) }
-    }
-
-    pub fn new_coin(coin_type: StructTag, version: SequenceNumber, contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(coin_type, true, version, contents) }
+    pub fn new_coin(
+        coin_type: StructTag,
+        version: SequenceNumber,
+        id: ObjectID,
+        value: u64,
+    ) -> Self {
+        // unwrap safe because coins are always smaller than the max object size
+        unsafe {
+            Self::new_from_execution(
+                coin_type,
+                true,
+                version,
+                GasCoin::new(id, value).to_bcs_bytes(),
+            )
+            .unwrap()
+        }
     }
 
     pub fn has_public_transfer(&self) -> bool {
         self.has_public_transfer
     }
-
     pub fn id(&self) -> ObjectID {
+        // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
         ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
     }
 
@@ -107,40 +142,41 @@ impl MoveObject {
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
+    #[cfg(test)]
     pub fn type_specific_contents(&self) -> &[u8] {
         &self.contents[ID_END_INDEX..]
     }
 
-    pub fn id_contents(&self) -> &[u8] {
-        &self.contents[..ID_END_INDEX]
-    }
-
-    /// Update the contents of this object and increment its version
-    pub fn update_contents_and_increment_version(&mut self, new_contents: Vec<u8>) {
-        self.update_contents_without_version_change(new_contents);
-        self.increment_version();
-    }
-
     /// Update the contents of this object but does not increment its version
-    pub fn update_contents_without_version_change(&mut self, new_contents: Vec<u8>) {
+    pub fn update_contents(&mut self, new_contents: Vec<u8>) -> Result<(), ExecutionError> {
+        if new_contents.len() as u64 > MAX_MOVE_OBJECT_SIZE {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::MoveObjectTooBig {
+                    object_size: new_contents.len() as u64,
+                    max_object_size: MAX_MOVE_OBJECT_SIZE,
+                },
+            ));
+        }
+
         #[cfg(debug_assertions)]
         let old_id = self.id();
-        #[cfg(debug_assertions)]
-        let old_version = self.version();
-
         self.contents = new_contents;
 
+        // Update should not modify ID
         #[cfg(debug_assertions)]
-        {
-            // caller should never overwrite ID or version
-            debug_assert_eq!(self.id(), old_id);
-            debug_assert_eq!(self.version(), old_version);
-        }
+        debug_assert_eq!(self.id(), old_id);
+
+        Ok(())
     }
 
-    /// Increase the version of this object by one
-    pub fn increment_version(&mut self) {
-        self.version = self.version.increment();
+    /// Sets the version of this object to a new value which is assumed to be higher (and checked to
+    /// be higher in debug).
+    pub fn increment_version_to(&mut self, next: SequenceNumber) {
+        self.version.increment_to(next);
+    }
+
+    pub fn decrement_version_to(&mut self, prev: SequenceNumber) {
+        self.version.decrement_to(prev);
     }
 
     pub fn contents(&self) -> &[u8] {
@@ -167,7 +203,7 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        let type_ = TypeTag::Struct(struct_tag);
+        let type_ = TypeTag::Struct(Box::new(struct_tag));
         let layout = if format.include_types {
             TypeLayoutBuilder::build_with_types(&type_, resolver)
         } else {
@@ -369,13 +405,13 @@ impl Object {
     pub fn new_package(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
-    ) -> Self {
-        Object {
-            data: Data::Package(MovePackage::from_iter(modules)),
+    ) -> Result<Self, ExecutionError> {
+        Ok(Object {
+            data: Data::Package(MovePackage::from_module_iter(modules)?),
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
-        }
+        })
     }
 
     pub fn is_immutable(&self) -> bool {
@@ -427,7 +463,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Package(_) => SequenceNumber::from(1), // modules are immutable, version is always 1
+            Package(_) => PACKAGE_VERSION,
         }
     }
 
@@ -471,18 +507,9 @@ impl Object {
         meta_data_size + data_size
     }
 
-    /// Change the owner of `self` to `new_owner`. This function does not increase the version
-    /// number of the object.
-    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) {
+    /// Change the owner of `self` to `new_owner`.
+    pub fn transfer(&mut self, new_owner: SuiAddress) {
         self.owner = Owner::AddressOwner(new_owner);
-    }
-
-    /// Change the owner of `self` to `new_owner`. This function will increment the version
-    /// number of the object after transfer.
-    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) {
-        self.transfer_without_version_change(new_owner);
-        let data = self.data.try_as_move_mut().unwrap();
-        data.increment_version();
     }
 
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
@@ -561,8 +588,7 @@ impl Object {
     /// Generate a new gas coin worth `value` with a random object ID and owner
     /// For testing purposes only
     pub fn new_gas_coin_for_testing(value: u64, owner: SuiAddress) -> Self {
-        let content = GasCoin::new(ObjectID::random(), value);
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::random(), value);
         Object::new_move(
             obj,
             Owner::AddressOwner(owner),

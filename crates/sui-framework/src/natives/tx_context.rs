@@ -11,7 +11,7 @@ use smallvec::smallvec;
 use std::{collections::VecDeque, convert::TryFrom};
 use sui_types::base_types::TransactionDigest;
 
-use crate::{legacy_create_signer_cost, legacy_emit_cost, natives::object_runtime::ObjectRuntime};
+use crate::{legacy_create_signer_cost, natives::object_runtime::ObjectRuntime};
 
 pub fn derive_id(
     context: &mut NativeContext,
@@ -35,21 +35,4 @@ pub fn derive_id(
     let cost = legacy_create_signer_cost();
 
     Ok(NativeResult::ok(cost, smallvec![Value::address(address)]))
-}
-
-/// Create a new signer (for test only) from an address.
-pub fn new_signer_from_address(
-    _context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert_eq!(args.len(), 1);
-
-    let address = pop_arg!(args, AccountAddress);
-    let signer = Value::signer(address);
-
-    // Gas amount doesn't matter as this is test only.
-    let cost = legacy_emit_cost();
-    Ok(NativeResult::ok(cost, smallvec![signer]))
 }

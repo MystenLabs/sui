@@ -51,6 +51,7 @@ async fn test_simple_epoch_change() {
         let (tx_feedback, rx_feedback) =
             test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
+        let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -70,8 +71,9 @@ async fn test_simple_epoch_change() {
             store.proposer_store.clone(),
             store.payload_store.clone(),
             store.vote_digest_store.clone(),
-            /* tx_consensus */ tx_new_certificates,
-            /* rx_consensus */ rx_feedback,
+            tx_new_certificates,
+            rx_feedback,
+            rx_consensus_round_updates,
             /* dag */ None,
             NetworkModel::Asynchronous,
             tx_reconfigure,
@@ -172,6 +174,8 @@ async fn test_partial_committee_change() {
         let (tx_feedback, rx_feedback) =
             test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         epoch_0_tx_channels.push(tx_feedback.clone());
+        let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
@@ -190,8 +194,9 @@ async fn test_partial_committee_change() {
             store.proposer_store.clone(),
             store.payload_store.clone(),
             store.vote_digest_store.clone(),
-            /* tx_consensus */ tx_new_certificates,
-            /* rx_consensus */ rx_feedback,
+            tx_new_certificates,
+            rx_feedback,
+            rx_consensus_round_updates,
             /* dag */ None,
             NetworkModel::Asynchronous,
             tx_reconfigure,
@@ -259,6 +264,7 @@ async fn test_partial_committee_change() {
         let (tx_feedback, rx_feedback) =
             test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         epoch_1_tx_channels.push(tx_feedback.clone());
+        let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_1.clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -278,8 +284,9 @@ async fn test_partial_committee_change() {
             store.proposer_store.clone(),
             store.payload_store,
             store.vote_digest_store,
-            /* tx_consensus */ tx_new_certificates,
-            /* rx_consensus */ rx_feedback,
+            tx_new_certificates,
+            rx_feedback,
+            rx_consensus_round_updates,
             /* dag */ None,
             NetworkModel::Asynchronous,
             tx_reconfigure,
@@ -338,6 +345,7 @@ async fn test_restart_with_new_committee_change() {
         let (tx_feedback, rx_feedback) =
             test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
+        let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -357,8 +365,9 @@ async fn test_restart_with_new_committee_change() {
             store.proposer_store.clone(),
             store.payload_store.clone(),
             store.vote_digest_store.clone(),
-            /* tx_consensus */ tx_new_certificates,
-            /* rx_consensus */ rx_feedback,
+            tx_new_certificates,
+            rx_feedback,
+            rx_consensus_round_updates,
             /* dag */ None,
             NetworkModel::Asynchronous,
             tx_reconfigure,
@@ -426,6 +435,7 @@ async fn test_restart_with_new_committee_change() {
             let (tx_feedback, rx_feedback) =
                 test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
             tx_channels.push(tx_feedback.clone());
+            let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
             let initial_committee = ReconfigureNotification::NewEpoch(new_committee.clone());
             let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -445,8 +455,9 @@ async fn test_restart_with_new_committee_change() {
                 store.proposer_store.clone(),
                 store.payload_store.clone(),
                 store.vote_digest_store.clone(),
-                /* tx_consensus */ tx_new_certificates,
-                /* rx_consensus */ rx_feedback,
+                tx_new_certificates,
+                rx_feedback,
+                rx_consensus_round_updates,
                 /* dag */ None,
                 NetworkModel::Asynchronous,
                 tx_reconfigure,
@@ -528,6 +539,7 @@ async fn test_simple_committee_update() {
         let (tx_feedback, rx_feedback) =
             test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
+        let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -547,8 +559,9 @@ async fn test_simple_committee_update() {
             store.proposer_store.clone(),
             store.payload_store.clone(),
             store.vote_digest_store.clone(),
-            /* tx_consensus */ tx_new_certificates,
-            /* rx_consensus */ rx_feedback,
+            tx_new_certificates,
+            rx_feedback,
+            rx_consensus_round_updates,
             /* dag */ None,
             NetworkModel::Asynchronous,
             tx_reconfigure,

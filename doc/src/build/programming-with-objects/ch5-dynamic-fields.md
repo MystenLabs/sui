@@ -11,8 +11,7 @@ In previous chapters, we walked through various ways to use object fields to sto
 Fortunately, Sui provides *dynamic fields* with arbitrary names (not just identifiers), added and removed on-the-fly (not fixed at publish), which only affect gas when they are accessed, and can store heterogeneous values. This chapter introduces the libraries for interacting with this kind of field.
 
 ### Current Limitations
-There are some aspects of dynamic fields that are not yet behaving as designed in this early release. We are actively working on these areas, but watch out for: - `remove` for dynamic fields not giving a full storage refund.
-- The lack of an `exists_` API for `dynamic_field` to check whether a field with a particular name is already defined on an object.
+There are some aspects of dynamic fields that are not yet behaving as designed in this early release. We are actively working on these areas, but watch out for:
 - Potential durability/consistency issues with dynamic field objects:  When a validator goes down and comes back up while processing a transaction with dynamic fields, it might be unable to process further transactions involving those objects.
 
 ### Fields vs Object Fields

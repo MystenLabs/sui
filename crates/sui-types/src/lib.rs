@@ -22,6 +22,7 @@ pub mod error;
 pub mod balance;
 pub mod base_types;
 pub mod batch;
+pub mod certificate_proof;
 pub mod coin;
 pub mod collection_types;
 pub mod committee;

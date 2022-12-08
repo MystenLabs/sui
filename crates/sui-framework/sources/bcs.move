@@ -117,7 +117,7 @@ module sui::bcs {
             value = value + (byte << i);
             i = i + 8;
         };
-        
+
         value
     }
 
@@ -155,6 +155,10 @@ module sui::bcs {
             shift = shift + 7;
         };
         total
+    }
+
+    spec peel_vec_length {
+        pragma intrinsic = true;
     }
 
     /// Peel a vector of `address` from serialized bytes.
@@ -270,7 +274,7 @@ module sui::bcs {
     struct Info has drop { a: bool, b: u8, c: u64, d: u128, k: vector<bool>, s: address }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = ELenOutOfRange)]
     fun test_uleb_len_fail() {
         let value = vector[0xff, 0xff, 0xff, 0xff, 0xff];
         let bytes = new(to_bytes(&value));
@@ -279,7 +283,7 @@ module sui::bcs {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
+    #[expected_failure(abort_code = ENotBool)]
     fun test_bool_fail() {
         let bytes = new(to_bytes(&10u8));
         let _fail = peel_bool(&mut bytes);

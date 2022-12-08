@@ -71,8 +71,12 @@ function MenuList() {
                     mode="secondary"
                     size="large"
                     onClick={async () => {
-                        await dispatch(lockWallet()).unwrap();
-                        navigate('/locked', { replace: true });
+                        try {
+                            await dispatch(lockWallet()).unwrap();
+                            navigate('/locked', { replace: true });
+                        } catch (e) {
+                            // Do nothing
+                        }
                     }}
                 >
                     <Icon icon={SuiIcons.Lock} />

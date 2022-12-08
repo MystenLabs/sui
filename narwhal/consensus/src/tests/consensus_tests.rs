@@ -15,7 +15,7 @@ use tokio::sync::watch;
 use crate::bullshark::Bullshark;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
-use types::{Certificate, ConsensusOutput, ReconfigureNotification};
+use types::{Certificate, ReconfigureNotification};
 
 /// This test is trying to compare the output of the Consensus algorithm when:
 /// (1) running without any crash for certificates processed from round 1 to 5 (inclusive)
@@ -54,6 +54,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee.clone());
@@ -74,6 +75,7 @@ async fn test_consensus_recovery_with_bullshark() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics.clone(),
@@ -96,27 +98,26 @@ async fn test_consensus_recovery_with_bullshark() {
     // * 1 certificate from round 4 (the leader of last round)
     //
     // In total we should see 13 certificates committed
-    let mut consensus_index_counter = 0;
+    let mut consensus_index_counter = 1;
 
     // hold all the certificates that get committed when consensus runs
     // without any crash.
-    let mut committed_output_no_crash: Vec<ConsensusOutput> = Vec::new();
+    let mut committed_output_no_crash: Vec<Certificate> = Vec::new();
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
+        assert_eq!(sub_dag.sub_dag_index, consensus_index_counter);
         for output in sub_dag.certificates {
-            assert_eq!(output.consensus_index, consensus_index_counter);
-            assert!(output.certificate.round() <= 4);
+            assert!(output.round() <= 4);
 
             committed_output_no_crash.push(output.clone());
 
-            consensus_index_counter += 1;
-
             // we received the leader of round 4, now stop as we don't expect to see any other
             // certificate from that or higher round.
-            if output.certificate.round() == 4 {
+            if output.round() == 4 {
                 break 'main;
             }
         }
+        consensus_index_counter += 1;
     }
 
     // AND the last committed store should be updated correctly
@@ -143,6 +144,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let storage = NodeStorage::reopen(temp_dir());
 
@@ -163,6 +165,7 @@ async fn test_consensus_recovery_with_bullshark() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics.clone(),
@@ -187,24 +190,23 @@ async fn test_consensus_recovery_with_bullshark() {
     // So in total we expect to have committed certificates:
     // * 4 certificates of round 1
     // * 1 certificate of round 2 (the leader)
-    let mut consensus_index_counter = 0;
-    let mut committed_output_before_crash: Vec<ConsensusOutput> = Vec::new();
+    let mut consensus_index_counter = 1;
+    let mut committed_output_before_crash: Vec<Certificate> = Vec::new();
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
+        assert_eq!(sub_dag.sub_dag_index, consensus_index_counter);
         for output in sub_dag.certificates {
-            assert_eq!(output.consensus_index, consensus_index_counter);
-            assert!(output.certificate.round() <= 2);
+            assert!(output.round() <= 2);
 
             committed_output_before_crash.push(output.clone());
 
-            consensus_index_counter += 1;
-
             // we received the leader of round 2, now stop as we don't expect to see any other
             // certificate from that or higher round.
-            if output.certificate.round() == 2 {
+            if output.round() == 2 {
                 break 'main;
             }
         }
+        consensus_index_counter += 1;
     }
 
     // AND shutdown (crash) consensus
@@ -215,6 +217,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
     let bullshark = Bullshark::new(
         committee.clone(),
@@ -230,6 +233,7 @@ async fn test_consensus_recovery_with_bullshark() {
         rx_reconfigure,
         rx_waiter,
         tx_primary,
+        tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics.clone(),
@@ -245,20 +249,17 @@ async fn test_consensus_recovery_with_bullshark() {
     }
 
     // AND capture the committed output
-    let mut committed_output_after_crash: Vec<ConsensusOutput> = Vec::new();
+    let mut committed_output_after_crash: Vec<Certificate> = Vec::new();
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
         for output in sub_dag.certificates {
-            assert_eq!(output.consensus_index, consensus_index_counter);
-            assert!(output.certificate.round() >= 2);
+            assert!(output.round() >= 2);
 
             committed_output_after_crash.push(output.clone());
 
-            consensus_index_counter += 1;
-
             // we received the leader of round 4, now stop as we don't expect to see any other
             // certificate from that or higher round.
-            if output.certificate.round() == 4 {
+            if output.round() == 4 {
                 break 'main;
             }
         }

@@ -4,7 +4,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-const cardStyles = cva('bg-sui-grey-40', {
+const cardStyles = cva('bg-gray-40', {
     variants: {
         spacing: {
             sm: 'px-5 py-4 rounded-lg',

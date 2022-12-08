@@ -30,13 +30,11 @@ async fn test_simple_request() {
 
     // The following two fields are only needed for shared objects (not by this bench).
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
-        tx_consensus_listener,
     );
 
     let server_handle = server.spawn_for_test().await.unwrap();
@@ -64,14 +62,12 @@ async fn test_subscription() {
 
     // The following two fields are only needed for shared objects (not by this bench).
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
     let mut server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
-        tx_consensus_listener,
     );
     server.min_batch_size = 10;
     server.max_delay = Duration::from_secs(5);
@@ -94,7 +90,7 @@ async fn test_subscription() {
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
-        let ticket = state.batch_notifier.ticket(false).expect("all good");
+        let ticket = state.batch_notifier.ticket().expect("all good");
         db.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -146,10 +142,7 @@ async fn test_subscription() {
     let _handle2 = tokio::spawn(async move {
         for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
-            let ticket = inner_server2
-                .batch_notifier
-                .ticket(false)
-                .expect("all good");
+            let ticket = inner_server2.batch_notifier.ticket().expect("all good");
             db2.perpetual_tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
@@ -224,10 +217,7 @@ async fn test_subscription() {
 
     loop {
         // Send a transaction
-        let ticket = inner_server2
-            .batch_notifier
-            .ticket(false)
-            .expect("all good");
+        let ticket = inner_server2.batch_notifier.ticket().expect("all good");
         db3.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -269,7 +259,6 @@ async fn test_subscription_safe_client() {
 
     // The following two fields are only needed for shared objects (not by this bench).
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
     let state = Arc::new(authority_state);
@@ -277,7 +266,6 @@ async fn test_subscription_safe_client() {
         "/ip4/127.0.0.1/tcp/998/http".parse().unwrap(),
         state.clone(),
         consensus_address,
-        tx_consensus_listener,
     ));
 
     let db = server.state.db().clone();
@@ -303,7 +291,7 @@ async fn test_subscription_safe_client() {
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
-        let ticket = server.state.batch_notifier.ticket(false).expect("all good");
+        let ticket = server.state.batch_notifier.ticket().expect("all good");
         db.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -365,7 +353,7 @@ async fn test_subscription_safe_client() {
             let ticket = inner_server2
                 .state
                 .batch_notifier
-                .ticket(false)
+                .ticket()
                 .expect("all good");
             db2.perpetual_tables
                 .executed_sequence
@@ -439,7 +427,7 @@ async fn test_subscription_safe_client() {
         let ticket = inner_server2
             .state
             .batch_notifier
-            .ticket(false)
+            .ticket()
             .expect("all good");
         db3.perpetual_tables
             .executed_sequence

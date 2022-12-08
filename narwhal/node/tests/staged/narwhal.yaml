@@ -3,8 +3,7 @@ Authority:
   STRUCT:
     - stake: U64
     - primary_address: BYTES
-    - network_key:
-        TYPENAME: Ed25519PublicKey
+    - network_key: STR
 BLS12381AggregateSignature:
   STRUCT:
     - sig:
@@ -46,13 +45,12 @@ Committee:
           VALUE:
             TYPENAME: Authority
     - epoch: U64
-Ed25519PublicKey:
-  NEWTYPESTRUCT: STR
 Header:
   STRUCT:
     - author: STR
     - round: U64
     - epoch: U64
+    - created_at: U64
     - payload:
         SEQ:
           TUPLE:
@@ -63,8 +61,6 @@ Header:
           TYPENAME: CertificateDigest
     - signature:
         TYPENAME: BLS12381Signature
-    - metadata:
-        TYPENAME: Metadata
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -89,10 +85,11 @@ WorkerIndex:
         TYPENAME: WorkerInfo
 WorkerInfo:
   STRUCT:
-    - name:
-        TYPENAME: Ed25519PublicKey
+    - name: STR
     - transactions: BYTES
     - worker_address: BYTES
+    - internal_worker_address:
+        OPTION: BYTES
 WorkerOthersBatchMessage:
   STRUCT:
     - digest:

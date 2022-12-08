@@ -16,10 +16,10 @@ export function ListItem({ active, children, onClick }: ListItemProps) {
             <button
                 type="button"
                 className={clsx(
-                    'cursor-pointer px-3 py-2 rounded-md text-body block w-full border-1 border-solid text-left',
+                    'block w-full cursor-pointer rounded-md border py-2 px-2.5 text-left text-body',
                     active
-                        ? 'bg-sui-grey-45 text-sui-grey-90 font-semibold border-sui-grey-50 shadow-sm'
-                        : 'bg-white text-sui-grey-80 font-medium border-transparent'
+                        ? 'border-solid border-gray-50 bg-gray-45 font-semibold text-gray-90 shadow-sm'
+                        : 'border-transparent bg-white font-medium text-gray-80'
                 )}
                 onClick={onClick}
             >
@@ -34,5 +34,5 @@ export interface VerticalListProps {
 }
 
 export function VerticalList({ children }: VerticalListProps) {
-    return <ul className="flex flex-col p-0 m-0 gap-1">{children}</ul>;
+    return <ul className="m-0 flex flex-col gap-1 p-0">{children}</ul>;
 }

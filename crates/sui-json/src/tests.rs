@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use fastcrypto::encoding::{Encoding, Hex};
 use move_core_types::u256::U256;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
@@ -334,7 +335,7 @@ fn test_basic_args_linter_pure_args_good() {
         (
             Value::from(good_hex_val),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
+            bcs::to_bytes(&Hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
                 .unwrap(),
         ),
         // u8 vector from u8 array
@@ -401,7 +402,8 @@ fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
     let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
-    let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let example_package =
+        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("geniteam").unwrap();
@@ -503,7 +505,8 @@ fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
     let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
-    let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let example_package =
+        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
     let framework_pkg = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("object_basics").unwrap();
@@ -582,7 +585,8 @@ fn test_basic_args_linter_top_level() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../sui-core/src/unit_tests/data/entry_point_vector");
     let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
-    let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let example_package =
+        Object::new_package(compiled_modules, TransactionDigest::genesis()).unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("entry_point_vector").unwrap();

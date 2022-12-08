@@ -13,7 +13,7 @@ use serde::Serialize;
 pub const BALANCE_MODULE_NAME: &IdentStr = ident_str!("balance");
 pub const BALANCE_STRUCT_NAME: &IdentStr = ident_str!("Balance");
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Supply {
     pub value: u64,
 }
@@ -33,7 +33,7 @@ impl Balance {
             address: SUI_FRAMEWORK_ADDRESS,
             module: BALANCE_MODULE_NAME.to_owned(),
             name: BALANCE_STRUCT_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(type_param)],
+            type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
     }
 

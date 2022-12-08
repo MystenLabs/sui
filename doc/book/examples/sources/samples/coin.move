@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module examples::mycoin {
+    use std::option;
     use sui::coin;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -14,10 +15,8 @@ module examples::mycoin {
     /// Module initializer is called once on module publish. A treasury
     /// cap is sent to the publisher, who then controls minting and burning
     fun init(witness: MYCOIN, ctx: &mut TxContext) {
-        transfer::transfer(
-            // second parameter defines decimals of the Coin: 6
-            coin::create_currency(witness, 6, ctx),
-            tx_context::sender(ctx)
-        )
+        let (treasury, metadata) = coin::create_currency(witness, 6, b"MYCOIN", b"", b"", option::none(), ctx);
+        transfer::freeze_object(metadata);
+        transfer::transfer(treasury, tx_context::sender(ctx))
     }
 }

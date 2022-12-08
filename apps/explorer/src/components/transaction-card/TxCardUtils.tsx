@@ -9,7 +9,6 @@ import {
     getTransactionKindName,
     getTransferObjectTransaction,
     getTransferSuiTransaction,
-    getTransferSuiAmount,
     SUI_TYPE_ARG,
     type GetTxnDigestsResponse,
     type CertifiedTransaction,
@@ -23,9 +22,10 @@ import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import Longtext from '../../components/longtext/Longtext';
-import { TxTimeType } from '../../components/tx-time/TxTimeType';
+import { getAmount } from '../../utils/getAmount';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
+import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
 
@@ -36,7 +36,8 @@ export type TxnData = {
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
-    suiAmount: bigint;
+    suiAmount: bigint | number;
+    coinType?: string | null;
     kind: TransactionKindName | undefined;
     From: string;
     timestamp_ms?: number;
@@ -46,11 +47,11 @@ export type LinkObj = {
     url: string;
     name?: string;
     copy?: boolean;
-    category?: string;
+    category?: Category;
     isLink?: boolean;
 };
 
-type Category = 'objects' | 'transactions' | 'addresses' | 'unknown';
+type Category = 'object' | 'transaction' | 'address' | 'unknown';
 
 type TxStatus = {
     txTypeName: TransactionKindName | undefined;
@@ -60,7 +61,7 @@ type TxStatus = {
 export function SuiAmount({
     amount,
 }: {
-    amount: bigint | number | string | undefined;
+    amount: bigint | number | string | undefined | null;
 }) {
     const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
 
@@ -88,7 +89,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}
-                        category={(itm.category as Category) || 'unknown'}
+                        category={itm.category || 'unknown'}
                         isLink={itm?.isLink}
                         copyButton={itm?.copy ? '16' : 'none'}
                     />
@@ -133,7 +134,7 @@ export const genTableDataFromTxData = (
                         {
                             url: txn.txId,
                             name: truncate(txn.txId, truncateLength),
-                            category: 'transactions',
+                            category: 'transaction',
                             isLink: true,
                             copy: false,
                         },
@@ -146,7 +147,7 @@ export const genTableDataFromTxData = (
                         {
                             url: txn.From,
                             name: truncate(txn.From, truncateLength),
-                            category: 'addresses',
+                            category: 'address',
                             isLink: true,
                             copy: false,
                         },
@@ -155,10 +156,10 @@ export const genTableDataFromTxData = (
                                   {
                                       url: txn.To,
                                       name: truncate(txn.To, truncateLength),
-                                      category: 'addresses',
+                                      category: 'address',
                                       isLink: true,
                                       copy: false,
-                                  },
+                                  } as const,
                               ]
                             : []),
                     ]}
@@ -239,11 +240,14 @@ export const getDataOnTxDigests = (
                             getTransferObjectTransaction(txn)?.recipient ||
                             getTransferSuiTransaction(txn)?.recipient;
 
+                        const txnTransfer = getAmount(txn, txEff.effects)?.[0];
+
                         return {
                             txId: digest,
                             status: getExecutionStatusType(txEff)!,
                             txGas: getTotalGasUsed(txEff),
-                            suiAmount: getTransferSuiAmount(txn),
+                            suiAmount: txnTransfer?.amount || null,
+                            coinType: txnTransfer?.coinType || null,
                             kind: txKind,
                             From: res.data.sender,
                             timestamp_ms: txEff.timestamp_ms,

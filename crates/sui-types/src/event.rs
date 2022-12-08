@@ -10,13 +10,13 @@ use move_core_types::identifier::IdentStr;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::MoveStruct;
-use name_variant::NamedVariant;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
+use strum::IntoStaticStr;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 use tracing::error;
@@ -102,7 +102,7 @@ impl EventEnvelope {
     }
 
     pub fn event_type(&self) -> &'static str {
-        self.event.variant_name()
+        (&self.event).into()
     }
 }
 
@@ -135,12 +135,12 @@ pub enum TransferType {
     Debug,
     Clone,
     PartialEq,
-    NamedVariant,
     Deserialize,
     Serialize,
     Hash,
     EnumDiscriminants,
     EnumVariantNames,
+    IntoStaticStr,
 )]
 #[strum_discriminants(derive(strum_macros::EnumString))]
 #[strum_discriminants(name(EventType), derive(Serialize, Deserialize, JsonSchema))]

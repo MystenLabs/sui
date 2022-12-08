@@ -4,8 +4,8 @@
 
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
+use mysten_metrics::{monitored_future, spawn_monitored_task};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
-use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
@@ -66,7 +66,7 @@ impl PrimaryConnector {
                         continue;
                     }
 
-                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
+                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch);
                     futures.push( monitor(handle_future(handle, response)) );
                 },
                 Some(batch) = self.rx_others_batch.recv() => {
@@ -75,7 +75,7 @@ impl PrimaryConnector {
                         continue;
                     }
 
-                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
+                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch);
                     futures.push( monitor(handle_future(handle, None)) );
                 },
 

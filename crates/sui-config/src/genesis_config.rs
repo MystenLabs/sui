@@ -100,11 +100,13 @@ pub struct ValidatorGenesisInfo {
     #[serde_as(as = "KeyPairBase64")]
     pub network_key_pair: NetworkKeyPair,
     pub network_address: Multiaddr,
+    pub p2p_address: Multiaddr,
     pub stake: StakeUnit,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+    pub narwhal_internal_worker_address: Option<Multiaddr>,
     pub narwhal_consensus_address: Multiaddr,
 }
 
@@ -120,13 +122,15 @@ impl ValidatorGenesisInfo {
             worker_key_pair,
             account_key_pair,
             network_key_pair,
-            network_address: utils::new_network_address(),
+            network_address: utils::new_tcp_network_address(),
+            p2p_address: utils::new_udp_network_address(),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: utils::new_network_address(),
-            narwhal_worker_address: utils::new_network_address(),
-            narwhal_consensus_address: utils::new_network_address(),
+            narwhal_primary_address: utils::new_udp_network_address(),
+            narwhal_worker_address: utils::new_udp_network_address(),
+            narwhal_internal_worker_address: None,
+            narwhal_consensus_address: utils::new_tcp_network_address(),
         }
     }
 
@@ -142,21 +146,25 @@ impl ValidatorGenesisInfo {
     ) -> Self {
         assert!(port_offset < 1000);
         let port_offset: u16 = port_offset.try_into().unwrap();
-        let make_addr =
+        let make_tcp_addr =
             |port: u16| -> Multiaddr { format!("/ip4/{}/tcp/{}/http", ip, port).parse().unwrap() };
+        let make_udp_addr =
+            |port: u16| -> Multiaddr { format!("/ip4/{}/udp/{}", ip, port).parse().unwrap() };
 
         ValidatorGenesisInfo {
             key_pair,
             worker_key_pair,
             account_key_pair,
             network_key_pair,
-            network_address: make_addr(1000 + port_offset),
+            network_address: make_tcp_addr(1000 + port_offset),
+            p2p_address: make_udp_addr(5000 + port_offset),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: make_addr(2000 + port_offset),
-            narwhal_worker_address: make_addr(3000 + port_offset),
-            narwhal_consensus_address: make_addr(4000 + port_offset),
+            narwhal_primary_address: make_udp_addr(2000 + port_offset),
+            narwhal_worker_address: make_udp_addr(3000 + port_offset),
+            narwhal_internal_worker_address: None,
+            narwhal_consensus_address: make_tcp_addr(4000 + port_offset),
         }
     }
 }

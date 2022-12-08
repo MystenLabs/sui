@@ -9,6 +9,7 @@ import type { Configuration } from 'webpack';
 
 const configProd: Configuration = {
     mode: 'production',
+    devtool: 'source-map',
 };
 
 async function getConfig() {

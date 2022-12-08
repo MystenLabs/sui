@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { FEATURES } from './experimentation/features';
 import { AppType } from './redux/slices/app/AppType';
-import { routes as stakeRoutes } from './staking';
+import StakeHome from './staking/home';
+import StakeNew from './staking/stake';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -20,6 +23,7 @@ import HomePage, {
     ReceiptPage,
     CoinsSelectorPage,
     AppsPage,
+    NftTransferPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -33,6 +37,7 @@ import { setNavVisibility } from '_redux/slices/app';
 const HIDDEN_MENU_PATHS = [
     '/stake',
     '/nft-details',
+    '/nft-transfer',
     '/receipt',
     '/send',
     '/send/select',
@@ -50,9 +55,13 @@ const App = () => {
     }, [isPopup]);
     const location = useLocation();
     useEffect(() => {
-        const menuVisible = !HIDDEN_MENU_PATHS.includes(location.pathname);
+        const menuVisible = !HIDDEN_MENU_PATHS.some((aPath) =>
+            location.pathname.startsWith(aPath)
+        );
         dispatch(setNavVisibility(menuVisible));
     }, [location, dispatch]);
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
     return (
         <Routes>
             <Route path="/*" element={<HomePage />}>
@@ -60,10 +69,17 @@ const App = () => {
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="apps/*" element={<AppsPage />} />
                 <Route path="nft-details" element={<NFTDetailsPage />} />
+                <Route
+                    path="nft-transfer/:nftId"
+                    element={<NftTransferPage />}
+                />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
-                {stakeRoutes}
+                <Route path="stake" element={<StakeHome />} />
+                {stakingEnabled ? (
+                    <Route path="stake/new" element={<StakeNew />} />
+                ) : null}
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}

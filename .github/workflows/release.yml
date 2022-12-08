@@ -48,11 +48,10 @@ jobs:
         run: |
           cargo build --release
 
-          echo ::set-output name=BIN_SUI::"target/release/sui"
-          echo ::set-output name=BIN_SUI_NODE::"target/release/sui-node"
-          echo ::set-output name=BIN_SUI_TOOL::"target/release/sui-tool"
-          echo ::set-output name=BIN_SUI_FAUCET::"target/release/sui-faucet"
-          echo ::set-output name=BIN_RPC_SERVER::"target/release/rpc-server"
+          echo BIN_SUI="target/release/sui" >> $GITHUB_OUTPUT
+          echo BIN_SUI_NODE="target/release/sui-node" >> $GITHUB_OUTPUT
+          echo BIN_SUI_TOOL="target/release/sui-tool" >> $GITHUB_OUTPUT
+          echo BIN_SUI_FAUCET="target/release/sui-faucet" >> $GITHUB_OUTPUT
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v3
@@ -63,7 +62,6 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_NODE }}
             ${{ steps.build.outputs.BIN_SUI_TOOL }}
             ${{ steps.build.outputs.BIN_SUI_FAUCET }}
-            ${{ steps.build.outputs.BIN_RPC_SERVER }}
 
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
@@ -74,6 +72,5 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_NODE }}
             ${{ steps.build.outputs.BIN_SUI_TOOL }}
             ${{ steps.build.outputs.BIN_SUI_FAUCET }}
-            ${{ steps.build.outputs.BIN_RPC_SERVER }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

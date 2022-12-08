@@ -3,6 +3,7 @@
 
 extern crate core;
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use futures::StreamExt;
 use futures_core::Stream;
 use jsonrpsee::core::client::{ClientT, Subscription};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 use rpc_types::{
@@ -33,7 +35,7 @@ use sui_json_rpc::api::TransactionExecutionApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
     EventPage, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope, SuiEventFilter,
-    SuiObjectInfo, SuiTransactionResponse, TransactionsPage,
+    SuiMoveNormalizedModule, SuiObjectInfo, SuiTransactionResponse, TransactionsPage,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
@@ -45,9 +47,6 @@ use types::base_types::SequenceNumber;
 use types::committee::EpochId;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::{CommitteeInfoResponse, ExecuteTransactionRequestType};
-
-#[cfg(msim)]
-pub mod embedded_gateway;
 
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
 
@@ -123,7 +122,7 @@ impl RpcClient {
         ws: &Option<WsClient>,
     ) -> Result<ServerInfo, anyhow::Error> {
         let rpc_spec: Value = http
-            .request("rpc.discover", None)
+            .request("rpc.discover", rpc_params![])
             .await
             .map_err(|e| anyhow!("Fail to connect to the RPC server: {e}"))?;
         let version = rpc_spec
@@ -134,7 +133,7 @@ impl RpcClient {
 
         let subscriptions = if let Some(ws) = ws {
             let rpc_spec: Value = ws
-                .request("rpc.discover", None)
+                .request("rpc.discover", rpc_params![])
                 .await
                 .map_err(|e| anyhow!("Fail to connect to the Websocket server: {e}"))?;
             Self::parse_methods(&rpc_spec)?
@@ -291,6 +290,17 @@ impl ReadApi {
             .api
             .http
             .get_transactions(query, cursor, limit, descending_order)
+            .await?)
+    }
+
+    pub async fn get_normalized_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> anyhow::Result<BTreeMap<String, SuiMoveNormalizedModule>> {
+        Ok(self
+            .api
+            .http
+            .get_normalized_move_modules_by_package(package)
             .await?)
     }
 }

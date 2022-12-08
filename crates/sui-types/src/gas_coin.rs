@@ -35,7 +35,11 @@ impl GAS {
     }
 
     pub fn type_tag() -> TypeTag {
-        TypeTag::Struct(Self::type_())
+        TypeTag::Struct(Box::new(Self::type_()))
+    }
+
+    pub fn is_gas(other: &StructTag) -> bool {
+        &Self::type_() == other
     }
 }
 
@@ -65,7 +69,7 @@ impl GasCoin {
     }
 
     pub fn to_object(&self, version: SequenceNumber) -> MoveObject {
-        MoveObject::new_gas_coin(version, self.to_bcs_bytes())
+        MoveObject::new_gas_coin(version, *self.id(), self.value())
     }
 
     pub fn layout() -> MoveStructLayout {

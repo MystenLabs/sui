@@ -59,10 +59,11 @@ pub enum EventQuery {
     /// Return events associated with the given object
     Object(ObjectID),
     /// Return events emitted in [start_time, end_time] interval
+    #[serde(rename_all = "camelCase")]
     TimeRange {
-        /// left endpoint of time interval, inclusive
+        /// left endpoint of time interval, milliseconds since epoch, inclusive
         start_time: u64,
-        /// right endpoint of time interval, exclusive
+        /// right endpoint of time interval, milliseconds since epoch, exclusive
         end_time: u64,
     },
 }

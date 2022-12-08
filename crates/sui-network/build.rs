@@ -88,16 +88,6 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("checkpoint_info")
-                .route_name("FollowCheckpointStream")
-                .input_type("sui_types::messages::CheckpointStreamRequest")
-                .output_type("sui_types::messages::CheckpointStreamResponseItem")
-                .server_streaming()
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
                 .name("committee_info")
                 .route_name("CommitteeInfo")
                 .input_type("sui_types::messages::CommitteeInfoRequest")
@@ -143,7 +133,48 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .build();
 
+    let state_sync = anemo_build::manual::Service::builder()
+        .name("StateSync")
+        .package("sui")
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("push_checkpoint_summary")
+                .route_name("PushCheckpointSummary")
+                .request_type("sui_types::messages_checkpoint::CertifiedCheckpointSummary")
+                .response_type("()")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_checkpoint_summary")
+                .route_name("GetCheckpointSummary")
+                .request_type("crate::state_sync::GetCheckpointSummaryRequest")
+                .response_type("Option<sui_types::messages_checkpoint::CertifiedCheckpointSummary>")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_checkpoint_contents")
+                .route_name("GetCheckpointContents")
+                .request_type("sui_types::messages_checkpoint::CheckpointContentsDigest")
+                .response_type("Option<sui_types::messages_checkpoint::CheckpointContents>")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_transaction_and_effects")
+                .route_name("GetTransactionAndEffects")
+                .request_type("sui_types::base_types::ExecutionDigests")
+                .response_type("Option<(sui_types::messages::CertifiedTransaction, sui_types::messages::TransactionEffects)>")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .build();
+
     anemo_build::manual::Builder::new()
         .out_dir(out_dir)
-        .compile(&[discovery]);
+        .compile(&[discovery, state_sync]);
 }

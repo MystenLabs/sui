@@ -45,6 +45,11 @@ pub fn all_natives(
         ),
         (
             "dynamic_field",
+            "borrow_child_object_mut",
+            make_native!(dynamic_field::borrow_child_object),
+        ),
+        (
+            "dynamic_field",
             "remove_child_object",
             make_native!(dynamic_field::remove_child_object),
         ),
@@ -208,14 +213,19 @@ pub fn all_natives(
             make_native!(tx_context::derive_id),
         ),
         (
-            "tx_context",
-            "new_signer_from_address",
-            make_native!(tx_context::new_signer_from_address),
-        ),
-        (
             "types",
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
+        ),
+        (
+            "groth16",
+            "verify_groth16_proof_internal",
+            make_native!(crypto::verify_groth16_proof_internal),
+        ),
+        (
+            "groth16",
+            "prepare_verifying_key",
+            make_native!(crypto::prepare_verifying_key),
         ),
     ];
     sui_natives
@@ -242,7 +252,7 @@ pub fn all_natives(
         .collect()
 }
 
-// Object { info: Info { id: ID { bytes: address } } .. }
+// Object { id: UID { id: ID { bytes: address } } .. }
 // Extract the first field of the struct 3 times to get the id bytes.
 pub fn get_object_id(object: Value) -> Result<Value, PartialVMError> {
     get_nested_struct_field(object, &[0, 0, 0])

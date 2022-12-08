@@ -13,6 +13,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
 use sui_adapter::adapter::resolve_and_type_check;
+use sui_adapter::execution_mode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_json_rpc_types::SuiObjectInfo;
@@ -63,7 +64,12 @@ impl TransactionBuilder {
             for obj in gas_objs {
                 let response = self.0.get_object(obj.object_id).await?;
                 let obj = response.object()?;
-                let gas: GasCoin = bcs::from_bytes(&obj.data.try_as_move().unwrap().bcs_bytes)?;
+                let gas: GasCoin = bcs::from_bytes(
+                    &obj.data
+                        .try_as_move()
+                        .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
+                        .bcs_bytes,
+                )?;
                 if !input_objects.contains(&obj.id()) && gas.value() >= budget {
                     return Ok(obj.reference.to_object_ref());
                 }
@@ -315,7 +321,7 @@ impl TransactionBuilder {
             .try_as_package()
             .cloned()
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
-        let package: MovePackage = MovePackage::new(package.id, &package.module_map);
+        let package: MovePackage = MovePackage::new(package.id, &package.module_map)?;
 
         let json_args = resolve_move_function_args(
             &package,
@@ -344,7 +350,8 @@ impl TransactionBuilder {
         }
         let compiled_module = package.deserialize_module(module)?;
 
-        resolve_and_type_check(
+        // TODO set the Mode from outside?
+        resolve_and_type_check::<execution_mode::Normal>(
             &objects,
             &compiled_module,
             function,

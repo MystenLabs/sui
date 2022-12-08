@@ -21,10 +21,12 @@ use tracing::info;
 const DEVNET_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
+const CONTINUOUS_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.ci.sui.io:443";
 const TESTNET_FAUCET_ADDR: &str = "https://faucet.testnet.sui.io:443";
 const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
+const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
 const TESTNET_FULLNODE_ADDR: &str = "https://fullnode.testnet.sui.io:443";
 
 pub struct ClusterFactory;
@@ -48,7 +50,6 @@ pub trait Cluster {
         Self: Sized;
 
     fn fullnode_url(&self) -> &str;
-    fn websocket_url(&self) -> Option<&str>;
     fn user_key(&self) -> AccountKeyPair;
 
     /// Returns faucet url in a remote cluster.
@@ -80,6 +81,10 @@ impl Cluster for RemoteRunningCluster {
                 String::from(CONTINUOUS_FULLNODE_ADDR),
                 String::from(CONTINUOUS_FAUCET_ADDR),
             ),
+            Env::CiNomad => (
+                String::from(CONTINUOUS_NOMAD_FULLNODE_ADDR),
+                String::from(CONTINUOUS_NOMAD_FAUCET_ADDR),
+            ),
             Env::Testnet => (
                 String::from(TESTNET_FULLNODE_ADDR),
                 String::from(TESTNET_FAUCET_ADDR),
@@ -107,9 +112,7 @@ impl Cluster for RemoteRunningCluster {
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
     }
-    fn websocket_url(&self) -> Option<&str> {
-        None
-    }
+
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
@@ -126,7 +129,6 @@ pub struct LocalNewCluster {
     test_cluster: TestCluster,
     fullnode_url: String,
     faucet_key: AccountKeyPair,
-    websocket_url: Option<String>,
 }
 
 impl LocalNewCluster {
@@ -149,19 +151,12 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
-        let websocket_port = options.websocket_address.as_ref().map(|addr| {
-            addr.parse::<SocketAddr>()
-                .expect("Unable to parse fullnode address")
-                .port()
-        });
-
-        let mut cluster_builder = TestClusterBuilder::new().set_genesis_config(genesis_config);
+        let mut cluster_builder = TestClusterBuilder::new()
+            .set_genesis_config(genesis_config)
+            .enable_fullnode_events();
 
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
-        }
-        if let Some(ws_port) = websocket_port {
-            cluster_builder = cluster_builder.set_fullnode_ws_port(ws_port);
         }
 
         let mut test_cluster = cluster_builder.build().await?;
@@ -172,12 +167,7 @@ impl Cluster for LocalNewCluster {
         info!(?faucet_address, "faucet_address");
 
         // This cluster has fullnode handle, safe to unwrap
-        let fullnode_url = test_cluster
-            .fullnode_handle
-            .as_ref()
-            .unwrap()
-            .rpc_url
-            .clone();
+        let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -187,16 +177,11 @@ impl Cluster for LocalNewCluster {
             test_cluster,
             fullnode_url,
             faucet_key,
-            websocket_url: options.websocket_address.clone(),
         })
     }
 
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
-    }
-
-    fn websocket_url(&self) -> Option<&str> {
-        self.websocket_url.as_deref()
     }
 
     fn user_key(&self) -> AccountKeyPair {
@@ -222,10 +207,6 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
     fn fullnode_url(&self) -> &str {
         (**self).fullnode_url()
-    }
-
-    fn websocket_url(&self) -> Option<&str> {
-        (**self).websocket_url()
     }
 
     fn user_key(&self) -> AccountKeyPair {

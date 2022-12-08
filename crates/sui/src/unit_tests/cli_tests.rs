@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
+use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
 use move_package::BuildConfig;
 use serde_json::json;
+use tokio::time::sleep;
 
 use sui::client_commands::SwitchResponse;
 use sui::{
@@ -32,7 +33,7 @@ use sui_types::crypto::{
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::network::init_cluster_builder_env_aware;
+use test_utils::network::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
@@ -45,6 +46,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Start network without authorities
     let start = SuiCommand::Start {
         config: Some(config),
+        no_full_node: false,
     }
     .execute()
     .await;
@@ -102,7 +104,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
-    let test_cluster = init_cluster_builder_env_aware().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await?;
     let mut context = test_cluster.wallet;
 
     // Add 3 accounts
@@ -125,7 +127,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -136,9 +138,8 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?
     .print(true);
-
-    let _object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let _object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -146,9 +147,57 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+// fixing issue https://github.com/MystenLabs/sui/issues/6546
+#[tokio::test]
+async fn test_regression_6546() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
+        address: Some(address),
+    }
+        .execute(context)
+        .await? else{
+        panic!()
+    };
+
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+
+    // test cluster will not response if this call is in the same thread
+    let out = thread::spawn(move || {
+        cmd.args([
+            "client",
+            "--client.config",
+            config_path.to_str().unwrap(),
+            "call",
+            "--package",
+            "0x2",
+            "--module",
+            "sui",
+            "--function",
+            "transfer",
+            "--args",
+            &coins.first().unwrap().object_id.to_string(),
+            &test_cluster.get_address_1().to_string(),
+            "--gas-budget",
+            "10000",
+        ])
+        .assert()
+    });
+
+    while !out.is_finished() {
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    out.join().unwrap().success();
+    Ok(())
+}
+
 #[sim_test]
 async fn test_create_example_nft_command() {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
+    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -195,7 +244,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         }],
         gas_object_ranges: None,
     });
-    let mut cluster = init_cluster_builder_env_aware()
+    let mut cluster = TestClusterBuilder::new()
         .set_genesis_config(config)
         .build()
         .await?;
@@ -217,13 +266,13 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -241,12 +290,12 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -287,15 +336,15 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address1 = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
     let address2 = SuiAddress::random_for_testing_only();
 
+    let client = context.get_client().await?;
     // publish the object basics package
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
@@ -308,6 +357,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
+        verify_dependencies: true,
     }
     .execute(context)
     .await?;
@@ -326,9 +376,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
@@ -454,12 +503,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -476,6 +525,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
+        verify_dependencies: true,
     }
     .execute(context)
     .await?;
@@ -505,14 +555,13 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
     let recipient = SuiAddress::random_for_testing_only();
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -580,8 +629,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     assert_eq!(gas.owner.get_owner_address().unwrap(), address);
     assert_eq!(obj.owner.get_owner_address().unwrap(), recipient);
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -630,7 +678,7 @@ fn test_bug_1078() {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let addr2 = cluster.get_address_1();
     let context = cluster.wallet_mut();
 
@@ -649,8 +697,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     };
 
     // Check that we indeed fetched for addr1
-    let mut actual_objs = context
-        .client
+    let client = context.get_client().await?;
+    let mut actual_objs = client
         .read_api()
         .get_objects_owned_by_address(addr1)
         .await
@@ -719,7 +767,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let context = cluster.wallet_mut();
 
     // keypairs loaded from config are Ed25519
@@ -759,7 +807,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let context = cluster.wallet_mut();
 
     // Get the active address
@@ -800,12 +848,8 @@ fn get_gas_value(o: &SuiParsedObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiParsedObject> {
-    let response = context
-        .client
-        .read_api()
-        .get_parsed_object(id)
-        .await
-        .unwrap();
+    let client = context.get_client().await.unwrap();
+    let response = client.read_api().get_parsed_object(id).await.unwrap();
     if let GetObjectDataResponse::Exists(o) = response {
         Some(o)
     } else {
@@ -825,12 +869,11 @@ async fn get_parsed_object_assert_existence(
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -871,8 +914,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     // Check that old coin is deleted
     assert_eq!(get_object(coin_to_merge, context).await, None);
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -918,12 +960,11 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -970,9 +1011,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert_eq!(get_gas_value(&updated_coin) + 1000 + 10, orig_value);
     assert!((get_gas_value(&new_coins[0]) == 1000) || (get_gas_value(&new_coins[0]) == 10));
     assert!((get_gas_value(&new_coins[1]) == 1000) || (get_gas_value(&new_coins[1]) == 10));
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -1025,8 +1065,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert_eq!(get_gas_value(&new_coins[0]), orig_value / 3);
     assert_eq!(get_gas_value(&new_coins[1]), orig_value / 3);
 
-    let object_refs = context
-        .client
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -1098,16 +1137,14 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
     let mut txns = make_transactions_with_wallet_context(context, 1).await;
     let txn = txns.swap_remove(0);
 
-    let (tx_data, scheme, signature, pubkey) = txn.to_network_data_for_execution();
+    let (tx_data, signature) = txn.to_tx_bytes_and_signature();
     SuiClientCommands::ExecuteSignedTx {
         tx_data: tx_data.encoded(),
-        scheme,
-        pubkey: pubkey.encoded(),
         signature: signature.encoded(),
     }
     .execute(context)
@@ -1117,13 +1154,12 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_serialize_tx() -> Result<(), anyhow::Error> {
-    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
-
-    let object_refs = context
-        .client
+    let client = context.get_client().await?;
+    let object_refs = client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use clap::Parser;
+use fastcrypto::encoding::{Encoding, Hex};
 use serde_json::{json, Value};
 use tracing::info;
 
@@ -17,7 +18,7 @@ use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KE
 use sui_node::{metrics, SuiNode};
 use sui_rosetta::types::{AccountIdentifier, CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_types::base_types::{encode_bytes_hex, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
 
 #[derive(Parser)]
@@ -28,6 +29,10 @@ pub enum RosettaServerCommand {
         keystore_path: Option<PathBuf>,
         #[clap(long, default_value = "localnet")]
         env: SuiEnv,
+        #[clap(long, default_value = "http://rosetta-online:9002")]
+        online_url: String,
+        #[clap(long, default_value = "http://rosetta-offline:9003")]
+        offline_url: String,
     },
     StartOnlineServer {
         #[clap(long, default_value = "localnet")]
@@ -48,7 +53,12 @@ pub enum RosettaServerCommand {
 impl RosettaServerCommand {
     async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
-            RosettaServerCommand::GenerateRosettaCLIConfig { keystore_path, env } => {
+            RosettaServerCommand::GenerateRosettaCLIConfig {
+                keystore_path,
+                env,
+                online_url,
+                offline_url,
+            } => {
                 let path = keystore_path
                     .unwrap_or_else(|| sui_config_dir().unwrap().join(SUI_KEYSTORE_FILENAME));
 
@@ -63,6 +73,11 @@ impl RosettaServerCommand {
                 let mut config: Value =
                     serde_json::from_str(include_str!("../resources/rosetta_cli.json"))?;
 
+                config
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("online_url".into(), json!(online_url));
+
                 // Set network.
                 let network = config.pointer_mut("/network").ok_or_else(|| {
                     anyhow!("Cannot find construction config in default config file.")
@@ -70,17 +85,16 @@ impl RosettaServerCommand {
                 network
                     .as_object_mut()
                     .unwrap()
-                    .insert("network".to_string(), json!(env));
+                    .insert("network".into(), json!(env));
 
                 // Add prefunded accounts.
                 let construction = config.pointer_mut("/construction").ok_or_else(|| {
                     anyhow!("Cannot find construction config in default config file.")
                 })?;
 
-                construction
-                    .as_object_mut()
-                    .unwrap()
-                    .insert("prefunded_accounts".to_string(), json!(prefunded_accounts));
+                let construction = construction.as_object_mut().unwrap();
+                construction.insert("prefunded_accounts".into(), json!(prefunded_accounts));
+                construction.insert("offline_url".into(), json!(offline_url));
 
                 let config_path = PathBuf::from(".").join("rosetta_cli.json");
                 fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
@@ -149,14 +163,12 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .into_iter()
         .map(|(address, key)| {
             let (privkey, curve_type) = match key {
-                SuiKeyPair::Ed25519SuiKeyPair(k) => (
-                    encode_bytes_hex(k.private().as_bytes()),
-                    CurveType::Edwards25519,
-                ),
-                SuiKeyPair::Secp256k1SuiKeyPair(k) => (
-                    encode_bytes_hex(k.private().as_bytes()),
-                    CurveType::Secp256k1,
-                ),
+                SuiKeyPair::Ed25519SuiKeyPair(k) => {
+                    (Hex::encode(k.private().as_bytes()), CurveType::Edwards25519)
+                }
+                SuiKeyPair::Secp256k1SuiKeyPair(k) => {
+                    (Hex::encode(k.private().as_bytes()), CurveType::Secp256k1)
+                }
             };
             PrefundedAccount {
                 privkey,

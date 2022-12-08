@@ -2,9 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{
-    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
-};
+use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
@@ -235,7 +233,7 @@ impl<C> SafeClient<C> {
         } = response;
 
         let signed_transaction = if let Some(signed_transaction) = signed_transaction {
-            committee = Some(self.get_committee(&signed_transaction.auth_sig().epoch)?);
+            committee = Some(self.get_committee(&signed_transaction.epoch())?);
             // Check the transaction signature
             let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;
             // Check it has the right signer
@@ -262,7 +260,7 @@ impl<C> SafeClient<C> {
         let certified_transaction = match certified_transaction {
             Some(certificate) => {
                 if committee.is_none() {
-                    committee = Some(self.get_committee(&certificate.auth_sig().epoch)?);
+                    committee = Some(self.get_committee(&certificate.epoch())?);
                 }
                 // Check signatures and quorum
                 let certificate = certificate.verify(committee.as_ref().unwrap())?;
@@ -281,13 +279,13 @@ impl<C> SafeClient<C> {
 
         if let Some(signed_effects) = &signed_effects {
             if committee.is_none() {
-                committee = Some(self.get_committee(&signed_effects.auth_signature.epoch)?);
+                committee = Some(self.get_committee(&signed_effects.epoch())?);
             }
             // Check signature
-            signed_effects.verify(committee.as_ref().unwrap())?;
+            signed_effects.verify_signature(committee.as_ref().unwrap())?;
             // Check it has the right signer
             fp_ensure!(
-                signed_effects.auth_signature.authority == self.address,
+                signed_effects.auth_sig().authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Unexpected validator address in the signed effects signature"
@@ -296,7 +294,7 @@ impl<C> SafeClient<C> {
             );
             // Checks it concerns the right tx
             fp_ensure!(
-                signed_effects.effects.transaction_digest == *digest,
+                signed_effects.data().transaction_digest == *digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Unexpected tx digest in the signed effects".to_string()
@@ -339,7 +337,7 @@ impl<C> SafeClient<C> {
         let parent_certificate = if skip_committee_check_during_reconfig {
             parent_certificate.map(VerifiedCertificate::new_unchecked)
         } else if let Some(certificate) = parent_certificate {
-            let epoch = certificate.auth_sig().epoch;
+            let epoch = certificate.epoch();
             Some(certificate.verify(&self.get_committee(&epoch)?)?)
         } else {
             None
@@ -414,7 +412,7 @@ impl<C> SafeClient<C> {
             let signed_transaction = if let Some(signed_transaction) = lock {
                 // We cannot reuse the committee fetched above since they may not be from the same
                 // epoch.
-                let epoch = signed_transaction.auth_sig().epoch;
+                let epoch = signed_transaction.epoch();
                 let signed_transaction = signed_transaction.verify(&self.get_committee(&epoch)?)?;
                 // Check it has the right signer
                 fp_ensure!(
@@ -456,7 +454,7 @@ impl<C> SafeClient<C> {
         )>,
     ) -> SuiResult {
         // check the signature of the batch
-        let epoch = signed_batch.auth_sig().epoch;
+        let epoch = signed_batch.epoch();
         signed_batch.verify_signature(&self.get_committee(&epoch)?)?;
 
         // ensure transactions enclosed match requested range
@@ -740,67 +738,20 @@ where
         // Verify response data was correct for request
         match &request.request_type {
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
-                if let CheckpointResponse::AuthenticatedCheckpoint {
+                let CheckpointResponse::AuthenticatedCheckpoint {
                     checkpoint,
                     contents,
-                } = &response
-                {
-                    // Checks that the sequence number is correct.
-                    self.verify_checkpoint_sequence(*seq, checkpoint)?;
-                    self.verify_contents_exist(request.detail, checkpoint, contents)?;
-                    // Verify signature.
-                    match checkpoint {
-                        Some(c) => {
-                            let epoch_id = c.summary().epoch;
-                            c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
-                        }
-                        None => Ok(()),
+                } = &response;
+                // Checks that the sequence number is correct.
+                self.verify_checkpoint_sequence(*seq, checkpoint)?;
+                self.verify_contents_exist(request.detail, checkpoint, contents)?;
+                // Verify signature.
+                match checkpoint {
+                    Some(c) => {
+                        let epoch_id = c.summary().epoch;
+                        c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
                     }
-                } else {
-                    Err(SuiError::from(
-                        "Invalid AuthorityCheckpointInfo type in the response",
-                    ))
-                }
-            }
-            CheckpointRequestType::CheckpointProposal => {
-                if let CheckpointResponse::CheckpointProposal {
-                    proposal,
-                    prev_cert,
-                    proposal_contents,
-                } = &response
-                {
-                    // Verify signature.
-                    if let Some(signed_proposal) = proposal {
-                        let mut committee =
-                            self.get_committee(&signed_proposal.auth_signature.epoch)?;
-                        signed_proposal.verify(&committee, proposal_contents.as_ref())?;
-                        if signed_proposal.summary.sequence_number > 0 {
-                            let cert = prev_cert.as_ref().ok_or_else(|| {
-                                SuiError::from("No checkpoint cert provided along with proposal")
-                            })?;
-                            if cert.auth_signature.epoch != signed_proposal.auth_signature.epoch {
-                                // It's possible that the previous checkpoint cert is from the
-                                // previous epoch, and in that case we verify them using different
-                                // committee.
-                                fp_ensure!(
-                                    cert.auth_signature.epoch + 1
-                                        == signed_proposal.auth_signature.epoch,
-                                    SuiError::from("Unexpected epoch for checkpoint cert")
-                                );
-                                committee = self.get_committee(&cert.auth_signature.epoch)?;
-                            }
-                            cert.verify(&committee, None)?;
-                            fp_ensure!(
-                                signed_proposal.summary.sequence_number - 1 == cert.summary.sequence_number,
-                                SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
-                            );
-                        }
-                    }
-                    self.verify_contents_exist(request.detail, proposal, proposal_contents)
-                } else {
-                    Err(SuiError::from(
-                        "Invalid AuthorityCheckpointInfo type in the response",
-                    ))
+                    None => Ok(()),
                 }
             }
         }
@@ -819,29 +770,6 @@ where
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
-    }
-
-    pub async fn handle_checkpoint_stream(
-        &self,
-        request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        let checkpoint_info_items = self
-            .authority_client
-            .handle_checkpoint_stream(request)
-            .await?;
-
-        let client = self.clone();
-
-        let stream = Box::pin(checkpoint_info_items.scan((), move |_, item| {
-            let process_item = |item: SuiResult<CheckpointStreamResponseItem>| -> SuiResult<CheckpointStreamResponseItem> {
-                let item = item?;
-                let CheckpointStreamResponseItem { ref checkpoint, .. } = item;
-                checkpoint.verify(&client.get_committee(&checkpoint.epoch())?, None)?;
-                Ok(item)
-            };
-            futures::future::ready(Some(process_item(item)))
-        }));
-        Ok(Box::pin(stream))
     }
 
     /// Handle Batch information requests for this authority.

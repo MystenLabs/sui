@@ -17,9 +17,9 @@ const buttonStyles = cva(
                 primary:
                     'bg-sui-dark text-sui-light hover:text-white border-none',
                 secondary:
-                    'bg-sui-grey-90 text-sui-grey-50 hover:text-white border-none',
+                    'bg-gray-90 text-gray-50 hover:text-white border-none',
                 outline:
-                    'bg-white border border-solid border-sui-grey-55 text-sui-grey-70 hover:text-sui-grey-90 hover:border-sui-grey-65 active:text-sui-grey-100 active:border-sui-grey-75',
+                    'bg-white border border-solid border-steel text-steel-dark hover:text-steel-darker hover:border-steel-dark active:text-steel active:border-steel disabled:border-gray-45 disabled:text-steel-dark',
             },
             size: {
                 md: 'px-3 py-2 rounded-md text-bodySmall font-semibold',

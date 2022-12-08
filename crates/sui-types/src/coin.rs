@@ -9,8 +9,8 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::TransactionDigest;
-use crate::object::{MoveObject, Owner, OBJECT_START_VERSION};
+use crate::base_types::SequenceNumber;
+use crate::object::{MoveObject, Owner};
 use crate::storage::{DeleteKind, SingleTxContext, WriteKind};
 use crate::temporary_store::TemporaryStore;
 use crate::{
@@ -18,6 +18,7 @@ use crate::{
     error::{ExecutionError, ExecutionErrorKind},
     object::{Data, Object},
 };
+use crate::{base_types::TransactionDigest, error::SuiError};
 use crate::{
     base_types::{ObjectID, SuiAddress},
     id::UID,
@@ -27,6 +28,7 @@ use schemars::JsonSchema;
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
 pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
+pub const COIN_METADATA_STRUCT_NAME: &IdentStr = ident_str!("CoinMetadata");
 
 pub const PAY_MODULE_NAME: &IdentStr = ident_str!("pay");
 pub const PAY_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
@@ -53,13 +55,14 @@ impl Coin {
             address: SUI_FRAMEWORK_ADDRESS,
             name: COIN_STRUCT_NAME.to_owned(),
             module: COIN_MODULE_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(type_param)],
+            type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
     }
 
     /// Is this other StructTag representing a Coin?
     pub fn is_coin(other: &StructTag) -> bool {
-        other.module.as_ident_str() == COIN_MODULE_NAME
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
             && other.name.as_ident_str() == COIN_STRUCT_NAME
     }
 
@@ -155,11 +158,7 @@ pub fn transfer_coin<S>(
     previous_transaction: TransactionDigest,
 ) {
     let new_coin = Object::new_move(
-        MoveObject::new_coin(
-            coin_type,
-            OBJECT_START_VERSION,
-            bcs::to_bytes(coin).expect("Serializing coin value cannot fail"),
-        ),
+        MoveObject::new_coin(coin_type, SequenceNumber::new(), *coin.id(), coin.value()),
         Owner::AddressOwner(recipient),
         previous_transaction,
     );
@@ -177,18 +176,13 @@ pub fn update_input_coins<S>(
     recipient: Option<SuiAddress>,
 ) {
     let mut gas_coin_obj = coin_objects.remove(0);
+    let new_contents = bcs::to_bytes(gas_coin).expect("Coin serialization should not fail");
     // unwrap is safe because we checked that it was a coin object above.
-    // update_contents_without_version_change b/c this is the gas coin,
-    // whose version will be bumped upon gas payment.
-    gas_coin_obj
-        .data
-        .try_as_move_mut()
-        .unwrap()
-        .update_contents_without_version_change(
-            bcs::to_bytes(gas_coin).expect("Coin serialization should not fail"),
-        );
+    let move_obj = gas_coin_obj.data.try_as_move_mut().unwrap();
+    // unwrap is safe because size of coin contents should never change
+    move_obj.update_contents(new_contents).unwrap();
     if let Some(recipient) = recipient {
-        gas_coin_obj.transfer_without_version_change(recipient);
+        gas_coin_obj.transfer(recipient);
     }
     temporary_store.write_object(ctx, gas_coin_obj, WriteKind::Mutate);
 
@@ -199,5 +193,55 @@ pub fn update_input_coins<S>(
             coin_object.version(),
             DeleteKind::Normal,
         )
+    }
+}
+
+// Rust version of the Move sui::coin::CoinMetadata type
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
+pub struct CoinMetadata {
+    pub id: UID,
+    /// Number of decimal places the coin uses.
+    pub decimals: u8,
+    /// Name for the token
+    pub name: String,
+    /// Symbol for the token
+    pub symbol: String,
+    /// Description of the token
+    pub description: String,
+    /// URL for the token logo
+    pub icon_url: Option<String>,
+}
+
+impl CoinMetadata {
+    /// Is this other StructTag representing a CoinMetadata?
+    pub fn is_coin_metadata(other: &StructTag) -> bool {
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
+            && other.name.as_ident_str() == COIN_METADATA_STRUCT_NAME
+    }
+
+    /// Create a coin from BCS bytes
+    pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
+        bcs::from_bytes(content).map_err(|err| SuiError::TypeError {
+            error: format!("Unable to deserialize CoinMetadata object: {:?}", err),
+        })
+    }
+}
+
+impl TryFrom<Object> for CoinMetadata {
+    type Error = SuiError;
+    fn try_from(object: Object) -> Result<Self, Self::Error> {
+        match &object.data {
+            Data::Move(o) => {
+                if CoinMetadata::is_coin_metadata(&o.type_) {
+                    return CoinMetadata::from_bcs_bytes(o.contents());
+                }
+            }
+            Data::Package(_) => {}
+        }
+
+        Err(SuiError::TypeError {
+            error: format!("Object type is not a CoinMetadata: {:?}", object),
+        })
     }
 }

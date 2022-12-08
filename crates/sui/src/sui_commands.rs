@@ -8,16 +8,15 @@ use std::{fs, io};
 
 use anyhow::{anyhow, bail};
 use clap::*;
-use colored::Colorize;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
-use tracing::{info, warn};
+use tracing::info;
 
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
-    sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
-    SUI_NETWORK_CONFIG,
+    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
+    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
@@ -45,6 +44,8 @@ pub enum SuiCommand {
     Start {
         #[clap(long = "network.config")]
         config: Option<PathBuf>,
+        #[clap(long = "no-full-node")]
+        no_full_node: bool,
     },
     #[clap(name = "network")]
     Network {
@@ -116,7 +117,10 @@ pub enum SuiCommand {
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
-            SuiCommand::Start { config } => {
+            SuiCommand::Start {
+                config,
+                no_full_node,
+            } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
                     genesis(None, None, None, false).await?;
@@ -134,15 +138,20 @@ impl SuiCommand {
                         ))
                     })?;
 
-                let mut swarm = Swarm::builder()
-                    .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
-                    .from_network_config(sui_config_dir()?, network_config);
+                let mut swarm = if no_full_node {
+                    Swarm::builder()
+                } else {
+                    Swarm::builder()
+                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
+                }
+                .from_network_config(sui_config_dir()?, network_config);
+
                 swarm.launch().await?;
 
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
                 loop {
                     for node in swarm.validators_mut() {
-                        node.health_check().await?;
+                        node.health_check(true).await?;
                     }
 
                     interval.tick().await;
@@ -193,24 +202,8 @@ impl SuiCommand {
             SuiCommand::Client { config, cmd, json } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path).await?;
-
-                // Server switch need to happen before context creation, or else it might fail due to previously misconfigured url.
-                if let Some(SuiClientCommands::Switch { env: Some(env), .. }) = &cmd {
-                    let config: SuiClientConfig = PersistedConfig::read(&config_path)?;
-                    let mut config = config.persisted(&config_path);
-                    SuiClientCommands::switch_env(&mut config, env)?;
-                    // This will init the client to check if the urls are correct and reachable
-                    config.get_active_env()?.create_rpc_client(None).await?;
-                    config.save()?;
-                }
-
                 let mut context = WalletContext::new(&config_path, None).await?;
-
                 if let Some(cmd) = cmd {
-                    if let Err(e) = context.client.check_api_version() {
-                        warn!("{e}");
-                        println!("{}", format!("[warn] {e}").yellow().bold());
-                    };
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -346,9 +339,12 @@ async fn genesis(
 
     info!("Client keystore is stored in {:?}.", keystore_path);
 
-    let mut fullnode_config = network_config.generate_fullnode_config();
+    let mut fullnode_config = network_config
+        .fullnode_config_builder()
+        .with_dir(FULL_NODE_DB_PATH.into())
+        .build()?;
+
     fullnode_config.json_rpc_address = sui_config::node::default_json_rpc_address();
-    fullnode_config.websocket_address = sui_config::node::default_websocket_address();
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
 
     for (i, validator) in network_config

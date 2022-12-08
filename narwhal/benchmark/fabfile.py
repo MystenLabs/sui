@@ -21,7 +21,6 @@ def local(ctx, debug=True):
         'rate': 50_000,
         'tx_size': 512,
         'duration': 20,
-        'mem_profiling': False
     }
     node_params = {
         'header_num_of_batches_threshold': 32,
@@ -71,7 +70,6 @@ def demo(ctx, debug=True):
         'rate': 50_000,
         'tx_size': 512,
         'duration': 10,
-        'mem_profiling': False
     }
     node_params = {
         "batch_size": 500000,
@@ -123,7 +121,6 @@ def seed(ctx, starting_data_port):
         'rate': 50_000,
         'tx_size': 512,
         'duration': 20,
-        'mem_profiling': False
     }
     try:
         SeedData(bench_params).run(int(starting_data_port))
@@ -197,7 +194,6 @@ def remote(ctx, debug=False):
         'tx_size': 512,
         'duration': 300,
         'runs': 2,
-        'mem_profiling': False
     }
     node_params = {
         'header_num_of_batches_threshold': 32,

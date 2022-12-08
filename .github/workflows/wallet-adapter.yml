@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isWalletAdapter: ${{ contains(fromJson(steps.diff.outputs.packages), 'sui-wallet-adapter') }}
+      isWalletAdapter: ${{ (steps.diff.outputs.packages && contains(fromJson(steps.diff.outputs.packages), 'sui-wallet-adapter')) }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes

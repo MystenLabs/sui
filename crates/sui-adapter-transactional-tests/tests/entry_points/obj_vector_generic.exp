@@ -32,7 +32,7 @@ created: object(115)
 written: object(114)
 
 task 8 'run'. lines 137-140:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::ObjAny<T0>, but found type Test::M::AnotherObjAny<Test::M::Any>") } }
 
 task 9 'run'. lines 142-142:
@@ -44,7 +44,7 @@ created: object(120)
 written: object(119)
 
 task 11 'run'. lines 146-149:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::ObjAny<T0>, but found type Test::M::AnotherObjAny<Test::M::Any>") } }
 
 task 12 'run'. lines 151-151:
@@ -52,7 +52,7 @@ created: object(123)
 written: object(122)
 
 task 13 'run'. lines 153-156:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
+Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
 
 task 14 'run'. lines 158-158:

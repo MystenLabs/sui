@@ -1,5 +1,5 @@
 ---
-title: The Sui Token
+title: The SUI Token
 ---
 
 Sui’s native asset is called SUI and we generally use the capitalized version of SUI to distinguish the token from the Sui platform.
@@ -8,7 +8,7 @@ The total supply of SUI is capped at 10,000,000,000 (i.e. ten billion tokens). A
 
 The SUI token serves four purposes on the Sui platform:
 
-* SUI can be staked within an epoch in order to participate in the proof-of-stake mechanism. 
+* You can stake SUI to participate in the proof-of-stake mechanism. 
 * SUI is the asset denomination needed for paying the gas fees required to execute and store transactions or other operations on the Sui platform. 
 * SUI can be used as a versatile and liquid asset for various applications including the standard features of money – a unit of account, a medium of exchange, or a store of value – and more complex functionality enabled by smart contracts, interoperability, and composability across the Sui ecosystem. 
 * SUI token plays an important role in governance by acting as a right to participate in on-chain voting on issues such as protocol upgrades.

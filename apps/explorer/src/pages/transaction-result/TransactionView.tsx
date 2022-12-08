@@ -10,12 +10,12 @@ import {
     getTransferObjectTransaction,
     getMovePackageContent,
     getObjectId,
-    getTransferSuiTransaction,
-    getTransferSuiAmount,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
-import cl from 'clsx';
+import clsx from 'clsx';
+import { useState } from 'react';
 
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
     eventToDisplay,
     getAddressesLinks,
@@ -26,8 +26,7 @@ import {
     type LinkObj,
     TxAddresses,
 } from '../../components/transaction-card/TxCardUtils';
-import { convertNumberToDate } from '../../utils/timeUtils';
-import SendReceiveView from './SendReceiveView';
+import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
 import type { DataType, Category } from './TransactionResultType';
@@ -35,7 +34,6 @@ import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
-    Pay,
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
@@ -46,9 +44,17 @@ import styles from './TransactionResult.module.css';
 
 import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
+import { DateCard } from '~/ui/DateCard';
+import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
+import { ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
+import { SenderRecipient } from '~/ui/SenderRecipient';
+import { StatAmount } from '~/ui/StatAmount';
+import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
+import { Tooltip } from '~/ui/Tooltip';
+import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 type TxDataProps = CertifiedTransaction & {
@@ -95,16 +101,16 @@ function formatByTransactionKind(
                 sender: {
                     value: sender,
                     link: true,
-                    category: 'addresses',
+                    category: 'address',
                 },
                 objectId: {
                     value: transfer.objectRef.objectId,
                     link: true,
-                    category: 'objects',
+                    category: 'object',
                 },
                 recipient: {
                     value: transfer.recipient,
-                    category: 'addresses',
+                    category: 'address',
                     link: true,
                 },
             };
@@ -115,12 +121,12 @@ function formatByTransactionKind(
                 sender: {
                     value: sender,
                     link: true,
-                    category: 'addresses',
+                    category: 'address',
                 },
                 package: {
                     value: getObjectId(moveCall.package),
                     link: true,
-                    category: 'objects',
+                    category: 'object',
                 },
                 module: {
                     value: moveCall.module,
@@ -149,7 +155,7 @@ function formatByTransactionKind(
                           sender: {
                               value: sender,
                               link: true,
-                              category: 'addresses',
+                              category: 'address',
                           },
                       }
                     : {}),
@@ -198,7 +204,7 @@ function ItemView({ data }: { data: TxItemView }) {
                     return (
                         <div
                             key={index}
-                            className={cl(
+                            className={clsx(
                                 styles.itemviewcontentitem,
                                 label && styles.singleitem
                             )}
@@ -209,7 +215,7 @@ function ItemView({ data }: { data: TxItemView }) {
                                 </div>
                             )}
                             <div
-                                className={cl(
+                                className={clsx(
                                     styles.itemviewcontentvalue,
                                     item.monotypeClass && styles.mono
                                 )}
@@ -243,13 +249,15 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
-const isPayType = (
-    txdetails: SuiTransactionKind
-): txdetails is { Pay: Pay } => {
-    return 'Pay' in txdetails;
-};
-
-function GasAmount({ amount }: { amount: bigint | number }) {
+function GasAmount({
+    amount,
+    expandable,
+    expanded,
+}: {
+    amount?: bigint | number;
+    expandable?: boolean;
+    expanded?: boolean;
+}) {
     const [formattedAmount, symbol] = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
@@ -257,49 +265,59 @@ function GasAmount({ amount }: { amount: bigint | number }) {
     );
 
     return (
-        <div className="flex items-center gap-1 h-full">
-            <div className="text-sui-grey-90 flex items-baseline gap-0.5">
+        <div className="flex h-full items-center gap-1">
+            <div className="flex items-baseline gap-0.5 text-gray-90">
                 <Text variant="body">{formattedAmount}</Text>
                 <Text variant="subtitleSmall">{symbol}</Text>
             </div>
+
             <Text variant="bodySmall">
-                <div className="text-sui-grey-65 flex items-center">
+                <div className="flex items-center text-steel">
                     (
                     <div className="flex items-baseline gap-0.5">
-                        <div>{amount.toLocaleString()}</div>
+                        <div>{amount?.toLocaleString()}</div>
                         <Text variant="subtitleSmall">MIST</Text>
                     </div>
                     )
                 </div>
             </Text>
+
+            {expandable && (
+                <ChevronDownIcon
+                    height={12}
+                    width={12}
+                    className={clsx('text-steel', expanded && 'rotate-180')}
+                />
+            )}
         </div>
     );
 }
 
-const convertAmounts = (
-    amounts: (number | bigint | null)[]
-): bigint[] | undefined =>
-    amounts.every((amount) => amount)
-        ? amounts.map((amount) => BigInt(amount!))
-        : undefined;
-
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
-    const amounts = isPayType(txdetails)
-        ? convertAmounts(txdetails.Pay.amounts)
-        : convertAmounts([getTransferSuiAmount(txdetails)]);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
+    const gasUsed = txdata.transaction?.effects.gasUsed;
 
-    const recipient =
-        getTransferObjectTransaction(txdetails)?.recipient ||
-        getTransferSuiTransaction(txdetails)?.recipient;
+    const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
-    const recipients = isPayType(txdetails)
-        ? txdetails.Pay.recipients
-        : recipient
-        ? [recipient]
-        : undefined;
+    const txnTransfer = getAmount(txdetails, txdata.transaction?.effects);
+    const sendReceiveRecipients = txnTransfer?.map((item) => ({
+        address: item.recipientAddress,
+        ...(item?.amount
+            ? {
+                  coin: {
+                      amount: item.amount,
+                      coinType: item?.coinType || null,
+                  },
+              }
+            : {}),
+    }));
+
+    const [formattedAmount, symbol] = useFormatCoin(
+        txnTransfer?.[0].amount,
+        txnTransfer?.[0].coinType
+    );
 
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
@@ -363,31 +381,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const createdMutateData = generateMutatedCreated(txdata);
 
-    const sendreceive = {
-        sender: sender,
-        recipient: recipients,
-        amount: amounts,
-        objects: txdata.created,
-    };
-    const GasStorageFees = {
-        title: 'Gas & Storage Fees',
-        content: [
-            {
-                label: 'Gas Payment',
-                value: txdata.data.gasPayment.objectId,
-                link: true,
-            },
-            {
-                label: 'Gas Budget',
-                value: <GasAmount amount={txdata.data.gasBudget} />,
-            },
-            {
-                label: 'Total Gas Fee',
-                value: <GasAmount amount={txdata.gasFee} />,
-            },
-            //TODO: Add Storage Fees
-        ],
-    };
     const typearguments =
         txKindData.title === 'Call' && txKindData.package
             ? {
@@ -397,14 +390,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                           label: 'Package ID',
                           monotypeClass: true,
                           link: true,
-                          category: 'objects',
+                          category: 'object',
                           value: txKindData.package.value,
                       },
                       {
                           label: 'Module',
                           monotypeClass: true,
                           value: txKindData.module.value,
-                          href: `/objects/${txKindData.package.value}?module=${txKindData.module.value}`,
+                          href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
                       },
                       {
                           label: 'Function',
@@ -439,7 +432,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const hasEvents = txEventData && txEventData.length > 0;
 
     return (
-        <div className={cl(styles.txdetailsbg)}>
+        <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
                     type={txKindName}
@@ -466,7 +459,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         >
                             {typearguments && (
                                 <section
-                                    className={cl([
+                                    className={clsx([
                                         styles.txcomponent,
                                         styles.txgridcolspan2,
                                         styles.packagedetails,
@@ -476,33 +469,39 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 </section>
                             )}
                             <section
-                                className={cl([
+                                className={clsx([
                                     styles.txcomponent,
                                     styles.txsender,
+                                    'md:ml-4',
                                 ])}
+                                data-testid="transaction-timestamp"
                             >
-                                {txdata.timestamp_ms && (
-                                    <h3
-                                        data-testid="transaction-timestamp"
-                                        className={styles.datetime}
-                                    >
-                                        {convertNumberToDate(
-                                            txdata.timestamp_ms
-                                        )}
-                                    </h3>
+                                {txnTransfer?.[0].amount ? (
+                                    <section className="mb-10">
+                                        <StatAmount
+                                            amount={formattedAmount}
+                                            symbol={symbol}
+                                            date={txdata.timestamp_ms}
+                                        />
+                                    </section>
+                                ) : (
+                                    txdata.timestamp_ms && (
+                                        <div className="mb-3">
+                                            <DateCard
+                                                date={txdata.timestamp_ms}
+                                            />
+                                        </div>
+                                    )
                                 )}
-                                <SendReceiveView
-                                    sender={sendreceive.sender}
-                                    recipient={sendreceive.recipient}
-                                    amount={sendreceive.amount}
-                                    objects={sendreceive.objects.map(
-                                        (obj) => obj.objectId
-                                    )}
+                                <SenderRecipient
+                                    sender={sender}
+                                    transferCoin={txnTransfer?.[0].isCoin}
+                                    recipients={sendReceiveRecipients}
                                 />
                             </section>
 
                             <section
-                                className={cl([
+                                className={clsx([
                                     styles.txcomponent,
                                     styles.txgridcolspan2,
                                 ])}
@@ -516,20 +515,99 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
                             {modules && (
                                 <section
-                                    className={cl([
+                                    className={clsx([
                                         styles.txcomponent,
                                         styles.txgridcolspan3,
                                     ])}
                                 >
-                                    <ModulesWrapper
-                                        id={txKindData.objectId?.value}
-                                        data={modules}
-                                    />
+                                    <ErrorBoundary>
+                                        <ModulesWrapper
+                                            id={txKindData.objectId?.value}
+                                            data={modules}
+                                        />
+                                    </ErrorBoundary>
                                 </section>
                             )}
                         </div>
-                        <div className={styles.txgridcomponent}>
-                            <ItemView data={GasStorageFees} />
+                        <div className="mt-8">
+                            <TableHeader>Gas & Storage Fees</TableHeader>
+
+                            <DescriptionList>
+                                <DescriptionItem title="Gas Payment">
+                                    <ObjectLink
+                                        noTruncate
+                                        objectId={
+                                            txdata.data.gasPayment.objectId
+                                        }
+                                    />
+                                </DescriptionItem>
+
+                                <DescriptionItem title="Gas Budget">
+                                    <GasAmount amount={txdata.data.gasBudget} />
+                                </DescriptionItem>
+
+                                {gasFeesExpanded && (
+                                    <>
+                                        <DescriptionItem title="Computation Fee">
+                                            <GasAmount
+                                                amount={
+                                                    gasUsed?.computationCost
+                                                }
+                                            />
+                                        </DescriptionItem>
+
+                                        <DescriptionItem title="Storage Fee">
+                                            <GasAmount
+                                                amount={gasUsed?.storageCost}
+                                            />
+                                        </DescriptionItem>
+
+                                        <DescriptionItem title="Storage Rebate">
+                                            <GasAmount
+                                                amount={gasUsed?.storageRebate}
+                                            />
+                                        </DescriptionItem>
+
+                                        <div className="h-px bg-gray-45" />
+                                    </>
+                                )}
+
+                                <DescriptionItem
+                                    title={
+                                        <Text
+                                            variant="body"
+                                            weight="semibold"
+                                            color="steel-darker"
+                                        >
+                                            Total Gas Fee
+                                        </Text>
+                                    }
+                                >
+                                    <Tooltip
+                                        tip={
+                                            gasFeesExpanded
+                                                ? 'Hide Gas Fee breakdown'
+                                                : 'Show Gas Fee breakdown'
+                                        }
+                                    >
+                                        <button
+                                            className="cursor-pointer border-none bg-inherit p-0"
+                                            type="button"
+                                            onClick={() =>
+                                                setGasFeesExpanded(
+                                                    (expanded) => !expanded
+                                                )
+                                            }
+                                        >
+                                            <GasAmount
+                                                amount={txdata.gasFee}
+                                                expanded={gasFeesExpanded}
+                                                expandable
+                                            />
+                                        </button>
+                                    </Tooltip>
+                                </DescriptionItem>
+                            </DescriptionList>
                         </div>
                     </TabPanel>
                     {hasEvents && (

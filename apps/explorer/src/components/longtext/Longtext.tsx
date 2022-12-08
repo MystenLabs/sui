@@ -27,12 +27,7 @@ function Longtext({
     extra,
 }: {
     text: string;
-    category:
-        | 'objects'
-        | 'transactions'
-        | 'addresses'
-        | 'validators'
-        | 'unknown';
+    category: 'object' | 'transaction' | 'address' | 'validators' | 'unknown';
     isLink?: boolean;
     alttext?: string;
     copyButton?: '16' | '24' | 'none';
@@ -85,7 +80,7 @@ function Longtext({
 
     // temporary hack to make display of the genesis transaction clearer
     if (
-        category === 'transactions' &&
+        category === 'transaction' &&
         text === 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
     ) {
         text = 'Genesis';

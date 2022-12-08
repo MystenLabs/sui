@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::ToFromBytes;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use mysten_metrics::spawn_monitored_task;
 use mysten_network::config::Config;
 use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
@@ -15,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_metrics::spawn_monitored_task;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetAddresses;
@@ -72,11 +72,6 @@ pub trait AuthorityAPI {
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
 
-    async fn handle_checkpoint_stream(
-        &self,
-        request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError>;
-
     async fn handle_committee_info_request(
         &self,
         request: CommitteeInfoRequest,
@@ -84,8 +79,6 @@ pub trait AuthorityAPI {
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
-pub type CheckpointStreamResponseItemStream =
-    BoxStream<'static, Result<CheckpointStreamResponseItem, SuiError>>;
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
@@ -250,21 +243,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
-    /// Stream checkpoint notifications
-    async fn handle_checkpoint_stream(
-        &self,
-        request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        let stream = self
-            .client()
-            .checkpoint_info(request)
-            .await
-            .map(tonic::Response::into_inner)?
-            .map_err(Into::into);
-
-        Ok(Box::pin(stream))
-    }
-
     async fn handle_committee_info_request(
         &self,
         request: CommitteeInfoRequest,
@@ -286,7 +264,7 @@ pub fn make_network_authority_client_sets_from_system_state(
     sui_system_state: &SuiSystemState,
     network_config: &Config,
     network_metrics: Arc<NetworkAuthorityClientMetrics>,
-) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in &sui_system_state.validators.active_validators {
         let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
@@ -294,8 +272,8 @@ pub fn make_network_authority_client_sets_from_system_state(
             .connect_lazy(&address)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
-        let name: &[u8] = &validator.metadata.name;
-        let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
+        let name: &[u8] = &validator.metadata.pubkey_bytes;
+        let public_key_bytes = AuthorityName::from_bytes(name)?;
         authority_clients.insert(public_key_bytes, client);
     }
     Ok(authority_clients)
@@ -305,7 +283,7 @@ pub fn make_network_authority_client_sets_from_committee(
     committee: &CommitteeWithNetAddresses,
     network_config: &Config,
     network_metrics: Arc<NetworkAuthorityClientMetrics>,
-) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for (name, _stakes) in &committee.committee.voting_rights {
         let address = committee.net_addresses.get(name).ok_or_else(|| {
@@ -469,14 +447,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_checkpoint_request(&request)
     }
 
-    async fn handle_checkpoint_stream(
-        &self,
-        request: CheckpointStreamRequest,
-    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
-        let stream = self.state.handle_checkpoint_streaming(request).await?;
-        Ok(Box::pin(stream))
-    }
-
     async fn handle_committee_info_request(
         &self,
         request: CommitteeInfoRequest,
@@ -490,16 +460,7 @@ impl AuthorityAPI for LocalAuthorityClient {
 impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
-        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-        let state = AuthorityState::new_for_testing(
-            committee,
-            &secret,
-            None,
-            Some(genesis),
-            None,
-            tx_reconfigure_consensus,
-        )
-        .await;
+        let state = AuthorityState::new_for_testing(committee, &secret, None, Some(genesis)).await;
         Self {
             state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),
@@ -545,7 +506,7 @@ impl LocalAuthorityClient {
         let response = match state.get_tx_info_already_executed(&tx_digest).await {
             Ok(Some(response)) => response,
             _ => {
-                let certificate = certificate.verify(&state.committee.load())?;
+                let certificate = certificate.verify(&state.committee())?;
                 state.handle_certificate(&certificate).await?
             }
         };

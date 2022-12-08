@@ -54,29 +54,25 @@ impl Timestamp for TimestampMs {
 }
 // Returns the current time expressed as UNIX
 // timestamp in milliseconds
-fn now() -> TimestampMs {
+pub fn now() -> TimestampMs {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(n) => n.as_millis() as TimestampMs,
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
 }
 
-// Additional metadata information for an entity. Those data
+// Additional metadata information for an entity.
+//
+// The structure as a whole is not signed. As a result this data
 // should not be treated as trustworthy data and should be used
 // for NON CRITICAL purposes only. For example should not be used
 // for any processes that are part of our protocol that can affect
 // safety or liveness.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
     pub created_at: TimestampMs,
-}
-
-impl Default for Metadata {
-    fn default() -> Self {
-        Metadata { created_at: now() }
-    }
 }
 
 pub type Transaction = Vec<u8>;
@@ -90,7 +86,7 @@ impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Batch {
             transactions,
-            metadata: Metadata::default(),
+            metadata: Metadata { created_at: now() },
         }
     }
 }
@@ -119,7 +115,11 @@ impl fmt::Debug for BatchDigest {
 
 impl fmt::Display for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
+        write!(
+            f,
+            "{}",
+            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+        )
     }
 }
 
@@ -151,13 +151,13 @@ pub struct Header {
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
+    pub created_at: TimestampMs,
     #[serde(with = "indexmap::serde_seq")]
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
     pub signature: Signature,
-    pub metadata: Metadata,
 }
 
 impl HeaderBuilder {
@@ -169,11 +169,11 @@ impl HeaderBuilder {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
             epoch: self.epoch.unwrap(),
+            created_at: self.created_at.unwrap_or(0),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
 
@@ -205,17 +205,17 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let header = Self {
             author,
             round,
             epoch,
+            created_at: now(),
             payload,
             parents,
             digest: OnceCell::default(),
             signature: Signature::default(),
-            metadata: Metadata::default(),
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
@@ -299,7 +299,11 @@ impl fmt::Debug for HeaderDigest {
 
 impl fmt::Display for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
+        write!(
+            f,
+            "{}",
+            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+        )
     }
 }
 
@@ -311,6 +315,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
         hasher.update(&self.author);
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
+        hasher.update(self.created_at.to_le_bytes());
         for (x, y) in self.payload.iter() {
             hasher.update(Digest::from(*x));
             hasher.update(y.to_le_bytes());
@@ -365,7 +370,7 @@ impl Vote {
     pub async fn new(
         header: &Header,
         author: &PublicKey,
-        signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let vote = Self {
             digest: header.digest(),
@@ -442,7 +447,11 @@ impl fmt::Debug for VoteDigest {
 
 impl fmt::Display for VoteDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
+        write!(
+            f,
+            "{}",
+            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+        )
     }
 }
 
@@ -519,6 +528,17 @@ impl Certificate {
         votes: Vec<(PublicKey, Signature)>,
     ) -> DagResult<Certificate> {
         Self::new_unsafe(committee, header, votes, false)
+    }
+
+    pub fn new_test_empty(author: PublicKey) -> Self {
+        let header = Header {
+            author,
+            ..Default::default()
+        };
+        Self {
+            header,
+            ..Default::default()
+        }
     }
 
     fn new_unsafe(
@@ -676,6 +696,7 @@ impl Certificate {
     Ord,
     Arbitrary,
 )]
+
 pub struct CertificateDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl CertificateDigest {
@@ -711,7 +732,11 @@ impl fmt::Debug for CertificateDigest {
 
 impl fmt::Display for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
+        write!(
+            f,
+            "{}",
+            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+        )
     }
 }
 
@@ -767,9 +792,26 @@ impl Affiliated for Certificate {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PrimaryMessage {
-    Header(Header),
-    Vote(Vote),
     Certificate(Certificate),
+}
+
+/// Used by the primary to request a vote from other primaries on newly produced headers.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestVoteRequest {
+    pub header: Header,
+
+    // Optional parent certificates provided by the requester, in case this primary doesn't yet
+    // have them and requires them in order to offer a vote.
+    pub parents: Vec<Certificate>,
+}
+
+/// Used by the primary to reply to RequestVoteRequest.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestVoteResponse {
+    pub vote: Option<Vote>,
+
+    // Indicates digests of missing certificates without which a vote cannot be provided.
+    pub missing: Vec<CertificateDigest>,
 }
 
 /// Used by the primary to get specific certificates from other primaries.
@@ -879,14 +921,6 @@ impl PayloadAvailabilityResponse {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LatestHeaderRequest {}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct LatestHeaderResponse {
-    pub header: Option<Header>,
-}
-
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ReconfigureNotification {
@@ -983,7 +1017,9 @@ pub struct WorkerInfoResponse {
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct RoundVoteDigestPair {
+pub struct VoteInfo {
+    /// The latest Epoch for which a vote was sent to given authority
+    pub epoch: Epoch,
     /// The latest round for which a vote was sent to given authority
     pub round: Round,
     /// The hash of the vote used to ensure equality

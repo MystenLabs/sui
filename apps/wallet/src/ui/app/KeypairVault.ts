@@ -1,19 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '@mysten/sui.js';
+import { fromExportedKeypair } from '@mysten/sui.js';
 
-import { toEntropy, entropyToMnemonic } from '_shared/utils/bip39';
-
-import type { Keypair } from '@mysten/sui.js';
+import type { Keypair, ExportedKeypair } from '@mysten/sui.js';
 
 export default class KeypairVault {
     private _keypair: Keypair | null = null;
 
-    public set entropy(entropy: string) {
-        this._keypair = Ed25519Keypair.deriveKeypair(
-            entropyToMnemonic(toEntropy(entropy))
-        );
+    public set keypair(keypair: ExportedKeypair) {
+        this._keypair = fromExportedKeypair(keypair);
     }
 
     public getAccount(): string | null {
@@ -24,7 +20,7 @@ export default class KeypairVault {
         return address;
     }
 
-    public getKeyPair() {
+    public getKeypair() {
         if (!this._keypair) {
             throw new Error('Account keypair is not set');
         }

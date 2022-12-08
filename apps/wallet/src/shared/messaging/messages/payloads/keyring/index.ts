@@ -3,12 +3,13 @@
 
 import { isBasePayload } from '_payloads';
 
+import type { ExportedKeypair } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 type MethodToPayloads = {
     create: {
         args: { password: string; importedEntropy?: string };
-        return: { entropy: string };
+        return: { keypair: ExportedKeypair };
     };
     getEntropy: {
         args: string | undefined;
@@ -23,7 +24,8 @@ type MethodToPayloads = {
         return: Partial<{
             isLocked: boolean;
             isInitialized: boolean;
-            entropy: string;
+            // we can replace keypair (once we stop signing from the UI) with the account address
+            activeAccount: ExportedKeypair;
         }>;
     };
     lock: {

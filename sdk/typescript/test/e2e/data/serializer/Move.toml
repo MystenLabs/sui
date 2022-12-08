@@ -1,0 +1,9 @@
+[package]
+name = "serializer"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../../crates/sui-framework" }
+
+[addresses]
+serializer =  "0x0"

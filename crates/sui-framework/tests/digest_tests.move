@@ -8,14 +8,14 @@ module sui::digest_tests {
     const EHASH_LENGTH_MISMATCH: u64 = 0;
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = sui::digest::EHashLengthMismatch)]
     fun test_too_short_hash() {
         let hash = x"badf012345";
         let _ = sha3_256_digest_from_bytes(hash);
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = sui::digest::EHashLengthMismatch)]
     fun test_too_long_hash() {
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef123456";
         let _ = sha3_256_digest_from_bytes(hash);

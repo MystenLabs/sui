@@ -11,7 +11,7 @@ validators:
   quorum_stake_threshold: 1
   active_validators:
     - metadata:
-        sui_address: 21b60aa9a8cb189ccbe20461dbfad2202fdef55b
+        sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
         pubkey_bytes:
           - 153
           - 242
@@ -215,7 +215,7 @@ validators:
       pending_withdraw: 0
       gas_price: 1
       delegation_staking_pool:
-        validator_address: 21b60aa9a8cb189ccbe20461dbfad2202fdef55b
+        validator_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
         starting_epoch: 1
         sui_balance: 0
         rewards_pool:
@@ -228,7 +228,7 @@ validators:
   pending_validators: []
   pending_removals: []
   next_epoch_validators:
-    - sui_address: 21b60aa9a8cb189ccbe20461dbfad2202fdef55b
+    - sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
       pubkey_bytes:
         - 153
         - 242

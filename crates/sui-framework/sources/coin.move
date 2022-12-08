@@ -5,10 +5,14 @@
 /// tokens and coins. `Coin` can be described as a secure wrapper around
 /// `Balance` type.
 module sui::coin {
+    use std::string;
+    use std::ascii;
+    use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
     use sui::transfer;
+    use sui::url::{Self, Url};
     use std::vector;
     use sui::event;
 
@@ -25,6 +29,25 @@ module sui::coin {
     struct Coin<phantom T> has key, store {
         id: UID,
         balance: Balance<T>
+    }
+
+    /// Each Coin type T created through `create_currency` function will have a 
+    /// unique instance of CoinMetadata<T> that stores the metadata for this coin type.
+    struct CoinMetadata<phantom T> has key, store {
+        id: UID,
+        /// Number of decimal places the coin uses.
+        /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
+        /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
+        /// This is metadata for display usage only.
+        decimals: u8,
+        /// Name for the token
+        name: string::String,
+        /// Symbol for the token
+        symbol: ascii::String,
+        /// Description of the token
+        description: string::String,
+        /// URL for the token logo
+        icon_url: Option<Url>
     }
 
     /// Capability allowing the bearer to mint and burn
@@ -176,8 +199,12 @@ module sui::coin {
     public fun create_currency<T: drop>(
         witness: T,
         decimals: u8,
+        symbol: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        icon_url: Option<Url>,
         ctx: &mut TxContext
-    ): TreasuryCap<T> {
+    ): (TreasuryCap<T>, CoinMetadata<T>) {
         // Make sure there's only one instance of the type T
         assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
@@ -186,10 +213,20 @@ module sui::coin {
             decimals
         });
 
-        TreasuryCap {
-            id: object::new(ctx),
-            total_supply: balance::create_supply(witness)
-        }
+        (
+            TreasuryCap {
+                id: object::new(ctx),
+                total_supply: balance::create_supply(witness)
+            },
+            CoinMetadata {
+                id: object::new(ctx),
+                decimals,
+                name: string::utf8(name),
+                symbol: ascii::string(symbol),
+                description: string::utf8(description),
+                icon_url
+            }
+        )
     }
 
     /// Create a coin worth `value`. and increase the total supply
@@ -232,6 +269,36 @@ module sui::coin {
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
         burn(c, coin);
+    }
+
+    // === Update coin metadata ===
+
+    /// Update name of the coin in `CoinMetadata`
+    public entry fun update_name<T>(
+        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, name: string::String
+    ) {
+        metadata.name = name;
+    }
+
+    /// Update the symbol of the coin in `CoinMetadata`
+    public entry fun update_symbol<T>(
+        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, symbol: ascii::String
+    ) {
+        metadata.symbol = symbol;
+    }
+
+    /// Update the description of the coin in `CoinMetadata`
+    public entry fun update_description<T>(
+        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, description: string::String
+    ) {
+        metadata.description = description;
+    }
+
+    /// Update the url of the coin in `CoinMetadata`
+    public entry fun update_icon_url<T>(
+        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, url: ascii::String
+    ) {
+        metadata.icon_url = option::some(url::new_unsafe(url));
     }
 
     // === Test-only code ===

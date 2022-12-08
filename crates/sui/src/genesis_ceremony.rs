@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
+use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
 use signature::{Signer, Verifier};
 use std::{fs, path::PathBuf};
@@ -12,7 +13,7 @@ use sui_config::{
     SUI_GENESIS_FILENAME,
 };
 use sui_types::{
-    base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress},
+    base_types::{ObjectID, SuiAddress},
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, AuthorityPublicKey,
         AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, NetworkKeyPair, SuiKeyPair,
@@ -60,9 +61,13 @@ pub enum CeremonyCommand {
         #[clap(long)]
         network_address: Multiaddr,
         #[clap(long)]
+        p2p_address: Multiaddr,
+        #[clap(long)]
         narwhal_primary_address: Multiaddr,
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
+        #[clap(long)]
+        narwhal_internal_worker_address: Option<Multiaddr>,
         #[clap(long)]
         narwhal_consensus_address: Multiaddr,
     },
@@ -107,8 +112,10 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             account_key_file,
             network_key_file,
             network_address,
+            p2p_address,
             narwhal_primary_address,
             narwhal_worker_address,
+            narwhal_internal_worker_address,
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
@@ -129,8 +136,10 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     gas_price: 1,
                     commission_rate: 0,
                     network_address,
+                    p2p_address,
                     narwhal_primary_address,
                     narwhal_worker_address,
+                    narwhal_internal_worker_address,
                     narwhal_consensus_address,
                 },
                 pop,
@@ -162,7 +171,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             println!("Successfully built {SUI_GENESIS_FILENAME}");
             println!(
                 "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                hex::encode(genesis.sha3())
+                Hex::encode(genesis.sha3())
             );
         }
 
@@ -196,13 +205,13 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
 
-            let hex_name = encode_bytes_hex(AuthorityPublicKeyBytes::from(keypair.public()));
+            let hex_name = Hex::encode(AuthorityPublicKeyBytes::from(keypair.public()));
             fs::write(signature_dir.join(hex_name), signature)?;
 
             println!("Successfully verified {SUI_GENESIS_FILENAME}");
             println!(
                 "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                hex::encode(built_genesis.sha3())
+                Hex::encode(built_genesis.sha3())
             );
         }
 
@@ -225,8 +234,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 let name = path
                     .file_name()
                     .ok_or_else(|| anyhow::anyhow!("Invalid signature file"))?;
-                let public_key =
-                    AuthorityPublicKeyBytes::from_bytes(&decode_bytes_hex::<Vec<u8>>(name)?[..])?;
+                let public_key = AuthorityPublicKeyBytes::from_bytes(
+                    &Hex::decode(name).map_err(|e| anyhow!(e))?[..],
+                )?;
                 signatures.insert(public_key, signature);
             }
 
@@ -256,7 +266,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             println!("Successfully finalized Genesis!");
             println!(
                 "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                hex::encode(genesis.sha3())
+                Hex::encode(genesis.sha3())
             );
         }
     }
@@ -295,10 +305,12 @@ mod test {
                     delegation: 0,
                     gas_price: 1,
                     commission_rate: 0,
-                    network_address: utils::new_network_address(),
-                    narwhal_primary_address: utils::new_network_address(),
-                    narwhal_worker_address: utils::new_network_address(),
-                    narwhal_consensus_address: utils::new_network_address(),
+                    network_address: utils::new_tcp_network_address(),
+                    p2p_address: utils::new_udp_network_address(),
+                    narwhal_primary_address: utils::new_udp_network_address(),
+                    narwhal_worker_address: utils::new_udp_network_address(),
+                    narwhal_internal_worker_address: None,
+                    narwhal_consensus_address: utils::new_tcp_network_address(),
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();
@@ -354,8 +366,12 @@ mod test {
                     network_key_file: network_key_file.into(),
                     account_key_file: account_key_file.into(),
                     network_address: validator.network_address().to_owned(),
+                    p2p_address: validator.p2p_address().to_owned(),
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
+                    narwhal_internal_worker_address: validator
+                        .narwhal_internal_worker_address
+                        .clone(),
                     narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                 },
             };

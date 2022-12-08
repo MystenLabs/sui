@@ -50,7 +50,7 @@ impl SuiClient {
 }
 
 impl SuiClient {
-    pub fn new(sui_config_dir: &Path) -> Result<Self, anyhow::Error> {
+    pub async fn new(sui_config_dir: &Path) -> Result<Self, anyhow::Error> {
         let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
         let network_conf: NetworkConfig = PersistedConfig::read(&network_path)?;
         let db_folder_path = sui_config_dir.join("gateway_client_db");
@@ -59,7 +59,7 @@ impl SuiClient {
             db_folder_path,
             ..Default::default()
         };
-        let api = GatewayState::create_client(&gateway_conf, None)?;
+        let api = GatewayState::create_client(&gateway_conf, None).await?;
         let read_api = Arc::new(ReadApi { api: api.clone() });
         let quorum_driver = QuorumDriver { api: api.clone() };
         let transaction_builder =

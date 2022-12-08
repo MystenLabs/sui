@@ -62,7 +62,7 @@ To run E2E tests against DevNet
 
 ```
 cd sdk/typescript
-VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm test:e2e
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' vitest e2e
 ```
 
 ## Connecting to Sui Network
@@ -101,7 +101,7 @@ import { JsonRpcProvider } from '@mysten/sui.js';
 // connect to a custom RPC server
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io', {
   // you can also skip providing this field if you don't plan to interact with the faucet
-  faucetURL: 'https://faucet.devnet.sui.io',
+  faucetURL: 'https://faucet.devnet.sui.io/gas',
 });
 // get tokens from a custom faucet server
 await provider.requestSuiFromFaucet(

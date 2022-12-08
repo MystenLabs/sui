@@ -56,7 +56,7 @@ async fn test_execute_transaction_immediate() {
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.data().transaction_digest, digest);
     });
     assert!(matches!(
         quorum_driver
@@ -83,7 +83,7 @@ async fn test_execute_transaction_wait_for_cert() {
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.data().transaction_digest, digest);
     });
     if let QuorumDriverResponse::TxCert(cert) = quorum_driver
         .execute_transaction(QuorumDriverRequest {
@@ -112,7 +112,7 @@ async fn test_execute_transaction_wait_for_effects() {
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.data().transaction_digest, digest);
     });
     if let QuorumDriverResponse::EffectsCert(result) = quorum_driver
         .execute_transaction(QuorumDriverRequest {
@@ -124,7 +124,7 @@ async fn test_execute_transaction_wait_for_effects() {
     {
         let (cert, effects) = *result;
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.data().transaction_digest, digest);
     } else {
         unreachable!();
     }
@@ -210,7 +210,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
             assert_eq!(conflicting_tx_digest, *tx.digest());
             assert!(!conflicting_tx_retry_success);
         },
-        // If aggregator gets two good responses from client 2 and 3 before two bad responses from 0 and 1, 
+        // If aggregator gets two good responses from client 2 and 3 before two bad responses from 0 and 1,
         // tx will not be retried.
         Err(SuiError::QuorumFailedToProcessTransaction {..}) => (),
         _ => panic!("expect Err(SuiError::QuorumFailedToProcessTransactionWithConflictingTransactionRetried) or QuorumFailedToProcessTransaction but got {:?}", res),

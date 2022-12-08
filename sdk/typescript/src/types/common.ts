@@ -1,33 +1,47 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../serialization/base64';
+import { Base58DataBuffer } from '../serialization/base58';
 import { ObjectId } from './objects';
+import { bcs, TransactionData } from './sui-bcs';
+import {
+  PublicKey,
+  PublicKeyInitData,
+  SIGNATURE_SCHEME_TO_FLAG,
+  SignatureScheme,
+} from '../cryptography/publickey';
+import { sha256Hash } from '../cryptography/hash';
+import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
+import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
+import { Base64DataBuffer } from '../serialization/base64';
 
-/** Base64 string representing the object digest */
 export type TransactionDigest = string;
 export type SuiAddress = string;
 export type ObjectOwner =
   | { AddressOwner: SuiAddress }
   | { ObjectOwner: SuiAddress }
   | { Shared: { initial_shared_version: number } }
-  | 'Shared' /* deprecated */
   | 'Immutable';
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
 const TX_DIGEST_LENGTH = 32;
-// taken from https://rgxdb.com/r/1NUN74O6
-const VALID_BASE64_REGEX =
-  /^(?:[a-zA-Z0-9+\/]{4})*(?:|(?:[a-zA-Z0-9+\/]{3}=)|(?:[a-zA-Z0-9+\/]{2}==)|(?:[a-zA-Z0-9+\/]{1}===))$/;
 
+/** Returns whether the tx digest is valid based on the serialization format */
 export function isValidTransactionDigest(
-  value: string
+  value: string, serializationFmt: 'base64' | 'base58'
 ): value is TransactionDigest {
-  return (
-    new Base64DataBuffer(value).getLength() === TX_DIGEST_LENGTH &&
-    VALID_BASE64_REGEX.test(value)
-  );
+  let buffer;
+  try {
+    if (serializationFmt === 'base58') {
+      buffer = new Base58DataBuffer(value);
+    } else {
+      buffer = new Base64DataBuffer(value);
+    }
+    return buffer.getLength() === TX_DIGEST_LENGTH;
+  } catch (e) {
+    return false;
+  }
 }
 
 // TODO - can we automatically sync this with rust length definition?
@@ -72,6 +86,71 @@ export function normalizeSuiObjectId(
   forceAdd0x: boolean = false
 ): ObjectId {
   return normalizeSuiAddress(value, forceAdd0x);
+}
+
+/**
+ * Generate transaction digest.
+ *
+ * @param data transaction data
+ * @param signatureScheme signature scheme
+ * @param signature signature as a base64 string
+ * @param publicKey public key
+ */
+export function generateTransactionDigest(
+  data: TransactionData,
+  signatureScheme: SignatureScheme,
+  signature: string | Base64DataBuffer,
+  publicKey: PublicKeyInitData | PublicKey,
+  serializationFmt: 'base64' | 'base58',
+  excludeSig: boolean = false
+): string {
+  const signatureBytes = (
+    typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
+  ).getData();
+
+  let pk: PublicKey;
+  switch (signatureScheme) {
+    case 'ED25519':
+      pk =
+        publicKey instanceof Ed25519PublicKey
+          ? publicKey
+          : new Ed25519PublicKey(publicKey as PublicKeyInitData);
+      break;
+    case 'Secp256k1':
+      pk =
+        publicKey instanceof Secp256k1PublicKey
+          ? publicKey
+          : new Secp256k1PublicKey(publicKey as PublicKeyInitData);
+  }
+  const publicKeyBytes = pk.toBytes();
+  const schemeByte = new Uint8Array([
+    SIGNATURE_SCHEME_TO_FLAG[signatureScheme],
+  ]);
+
+  const txSignature = new Uint8Array(
+    1 + signatureBytes.length + publicKeyBytes.length
+  );
+  txSignature.set(schemeByte);
+  txSignature.set(signatureBytes, 1);
+  txSignature.set(publicKeyBytes, 1 + signatureBytes.length);
+
+  const senderSignedData = {
+    data,
+    txSignature,
+  };
+  const senderSignedDataBytes = bcs
+    .ser('SenderSignedData', senderSignedData)
+    .toBytes();
+
+  let hash;
+  if (excludeSig) {
+    const txBytes = bcs.ser('TransactionData', data).toBytes();
+    hash = sha256Hash('TransactionData', txBytes);
+  } else {
+    hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
+  }
+
+  return serializationFmt === 'base58' ? new Base58DataBuffer(hash).toString() : new Base64DataBuffer(hash).toString();
 }
 
 function isHex(value: string): boolean {

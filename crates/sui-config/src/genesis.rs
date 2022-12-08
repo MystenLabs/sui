@@ -4,7 +4,7 @@
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
@@ -16,8 +16,8 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
-use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
+use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{AuthorityPublicKey, ToFromBytes};
@@ -32,7 +32,7 @@ use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
-    base_types::{encode_bytes_hex, TxContext},
+    base_types::TxContext,
     committee::{Committee, EpochId},
     error::SuiResult,
     object::Object,
@@ -57,6 +57,10 @@ impl Genesis {
 
     pub fn validator_set(&self) -> &[ValidatorInfo] {
         &self.validator_set
+    }
+
+    pub fn into_validator_set(self) -> Vec<ValidatorInfo> {
+        self.validator_set
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
@@ -111,6 +115,7 @@ impl Genesis {
                             .expect("Can't get worker key"),
                         transactions: validator.narwhal_consensus_address.clone(),
                         worker_address: validator.narwhal_worker_address.clone(),
+                        internal_worker_address: validator.narwhal_internal_worker_address.clone(),
                     },
                 )]
                 .into_iter()
@@ -401,7 +406,7 @@ impl Builder {
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = encode_bytes_hex(object.digest());
+            let hex_digest = Hex::encode(object.digest());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
@@ -411,7 +416,7 @@ impl Builder {
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = encode_bytes_hex(validator.info.protocol_key());
+            let hex_name = Hex::encode(validator.info.protocol_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
         }
 
@@ -560,7 +565,7 @@ pub fn generate_genesis_system_object(
         commission_rates.push(validator.commission_rate());
     }
 
-    adapter::execute(
+    adapter::execute::<execution_mode::Normal, _, _>(
         move_vm,
         &mut temporary_store,
         ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
@@ -636,10 +641,12 @@ mod test {
             delegation: 0,
             gas_price: 1,
             commission_rate: 0,
-            network_address: utils::new_network_address(),
-            narwhal_primary_address: utils::new_network_address(),
-            narwhal_worker_address: utils::new_network_address(),
-            narwhal_consensus_address: utils::new_network_address(),
+            network_address: utils::new_tcp_network_address(),
+            p2p_address: utils::new_udp_network_address(),
+            narwhal_primary_address: utils::new_udp_network_address(),
+            narwhal_worker_address: utils::new_udp_network_address(),
+            narwhal_internal_worker_address: None,
+            narwhal_consensus_address: utils::new_tcp_network_address(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
         let builder = Builder::new()

@@ -258,7 +258,10 @@ impl<T: Affiliated> Default for NodeDag<T> {
 mod tests {
     use std::{collections::HashSet, fmt};
 
-    use fastcrypto::hash::{Digest, Hash};
+    use fastcrypto::{
+        encoding::{Encoding, Hex},
+        hash::{Digest, Hash},
+    };
     use proptest::prelude::*;
 
     use super::*;
@@ -274,13 +277,13 @@ mod tests {
 
     impl fmt::Debug for TestDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", hex::encode(self.0).get(0..16).unwrap())
+            write!(f, "{}", Hex::encode(self.0).get(0..16).ok_or(fmt::Error)?)
         }
     }
 
     impl fmt::Display for TestDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", hex::encode(self.0).get(0..16).unwrap())
+            write!(f, "{}", Hex::encode(self.0).get(0..16).ok_or(fmt::Error)?)
         }
     }
 

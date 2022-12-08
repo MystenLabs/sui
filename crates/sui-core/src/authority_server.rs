@@ -4,11 +4,8 @@
 
 use crate::{
     authority::{AuthorityState, ReconfigConsensusMessage},
-    consensus_adapter::{
-        CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusAdapterMetrics,
-        ConsensusListener, ConsensusListenerMessage,
-    },
-    metrics::start_timer,
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    consensus_validator::SuiTxValidator,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -30,17 +27,18 @@ use sui_network::{
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
 use tokio::time::sleep;
-use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
-    task::JoinHandle,
-};
+use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 
-use sui_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
-use crate::consensus_adapter::SubmitToConsensus;
+use crate::checkpoints::{
+    CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
+    SubmitCheckpointToConsensus,
+};
 use crate::consensus_handler::ConsensusHandler;
+use narwhal_types::TransactionsClient;
 use tracing::{debug, info, Instrument};
 
 #[cfg(test)]
@@ -49,10 +47,6 @@ mod server_tests;
 
 const MIN_BATCH_SIZE: u64 = 1000;
 const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
-
-// Assuming 200 consensus tps * 5 sec consensus latency = 1000 inflight consensus txns.
-// Leaving a bit more headroom to cap the max inflight consensus txns to 1000*2 = 2000.
-const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 2000;
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -87,7 +81,7 @@ impl AuthorityServerHandle {
 pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
-    consensus_adapter: ConsensusAdapter,
+    consensus_adapter: Arc<ConsensusAdapter>,
     min_batch_size: u64,
     max_delay: Duration,
     pub metrics: Arc<ValidatorServiceMetrics>,
@@ -98,18 +92,14 @@ impl AuthorityServer {
         address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
-        tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
-        use narwhal_types::TransactionsClient;
         let consensus_client = Box::new(TransactionsClient::new(
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         ));
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
-            state.clone_committee(),
-            tx_consensus_listener,
-            Duration::from_secs(20),
+            state.clone(),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -158,8 +148,7 @@ impl AuthorityServer {
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
                 state: self.state,
-                consensus_adapter: Arc::new(self.consensus_adapter),
-                _checkpoint_consensus_handle: None,
+                consensus_adapter: self.consensus_adapter,
                 metrics: self.metrics.clone(),
             }))
             .bind(&address)
@@ -261,7 +250,6 @@ impl ValidatorServiceMetrics {
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    _checkpoint_consensus_handle: Option<JoinHandle<()>>,
     metrics: Arc<ValidatorServiceMetrics>,
 }
 
@@ -269,30 +257,58 @@ impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
     pub async fn new(
-        consensus_client: Box<dyn SubmitToConsensus>,
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        checkpoint_store: Arc<CheckpointStore>,
+        state_sync_handle: sui_network::state_sync::Handle,
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
-        let (tx_consensus_listener, rx_consensus_listener) = channel(1_000);
-
-        // Spawn the consensus node of this authority.
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+
+        let consensus_address = consensus_config.address().to_owned();
+        let consensus_client = TransactionsClient::new(
+            mysten_network::client::connect_lazy(&consensus_address)
+                .expect("Failed to connect to consensus"),
+        );
+
+        let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
+
+        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
+        // The consensus adapter allows the authority to send user certificates through consensus.
+        let consensus_adapter =
+            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
+
+        let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
+            sender: consensus_adapter.clone(),
+            signer: state.secret.clone(),
+            authority: config.protocol_public_key(),
+        });
+
+        let checkpoint_service = CheckpointService::spawn(
+            state.clone(),
+            checkpoint_store,
+            Box::new(state.database.clone()),
+            checkpoint_output,
+            Box::new(certified_checkpoint_output),
+            CheckpointMetrics::new(&prometheus_registry),
+        );
+
         let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_worker_keypair = config.worker_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state =
-            ConsensusHandler::new(state.clone(), tx_consensus_listener.clone());
+        let consensus_execution_state = ConsensusHandler::new(state.clone(), checkpoint_service);
         let consensus_execution_state = Arc::new(consensus_execution_state);
+
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
+        let tx_validator = SuiTxValidator::new(state.clone());
         spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
             consensus_keypair,
             network_keypair,
@@ -302,51 +318,14 @@ impl ValidatorService {
             consensus_storage_base_path,
             consensus_execution_state,
             consensus_parameters,
+            tx_validator,
             rx_reconfigure_consensus,
             &registry,
         ));
 
-        // Spawn a consensus listener. It listen for consensus outputs and notifies the
-        // authority server when a sequenced transaction is ready for execution.
-        ConsensusListener::spawn(rx_consensus_listener);
-
-        let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
-        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
-
-        // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter = ConsensusAdapter::new(
-            consensus_client,
-            state.clone_committee(),
-            tx_consensus_listener.clone(),
-            timeout,
-            ca_metrics.clone(),
-        );
-
-        // Update the checkpoint store with a consensus client.
-        let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
-        let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
-        state
-            .checkpoints
-            .lock()
-            .set_consensus(Box::new(consensus_sender))?;
-
-        let checkpoint_consensus_handle = Some(
-            CheckpointConsensusAdapter::new(
-                /* consensus_address */ consensus_config.address().to_owned(),
-                /* tx_consensus_listener */ tx_consensus_listener,
-                rx_checkpoint_consensus_adapter,
-                /* checkpoint_locals */ state.checkpoints(),
-                /* retry_delay */ timeout,
-                /* max_pending_transactions */ 10_000,
-                ca_metrics,
-            )
-            .spawn(),
-        );
-
         Ok(Self {
             state,
-            consensus_adapter: Arc::new(consensus_adapter),
-            _checkpoint_consensus_handle: checkpoint_consensus_handle,
+            consensus_adapter,
             metrics: Arc::new(ValidatorServiceMetrics::new(&prometheus_registry)),
         })
     }
@@ -357,19 +336,22 @@ impl ValidatorService {
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let transaction = request.into_inner();
+
         let is_consensus_tx = transaction.contains_shared_object();
 
-        let _metrics_guard = start_timer(if is_consensus_tx {
-            metrics.handle_transaction_consensus_latency.clone()
+        let _metrics_guard = if is_consensus_tx {
+            metrics.handle_transaction_consensus_latency.start_timer()
         } else {
-            metrics.handle_transaction_non_consensus_latency.clone()
-        });
-        let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
+            metrics
+                .handle_transaction_non_consensus_latency
+                .start_timer()
+        };
+        let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
         let transaction = transaction.verify().tap_err(|_| {
             metrics.signature_errors.inc();
         })?;
-        drop(tx_verif_metrics_guard);
+        tx_verif_metrics_guard.stop_and_record();
 
         let tx_digest = transaction.digest();
 
@@ -412,40 +394,34 @@ impl ValidatorService {
         }
 
         // 2) Verify cert signatures
-        let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
-        let certificate = certificate.verify(&state.committee.load())?;
-        drop(cert_verif_metrics_guard);
+        let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
+        let certificate = certificate.verify(&state.committee())?;
+        cert_verif_metrics_guard.stop_and_record();
 
-        // 3) If the validator is already halted, we stop here, to avoid
-        // sending the transaction to consensus.
-        if state.is_halted() && !certificate.data().data.kind.is_system_tx() {
-            return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
-        }
-
-        // 4) All certificates are sent to consensus (at least by some authorities)
+        // 3) All certificates are sent to consensus (at least by some authorities)
         // For shared objects this will wait until either timeout or we have heard back from consensus.
         // For owned objects this will return without waiting for certificate to be sequenced
         // First do quick dirty non-async check
         if !state.consensus_message_processed(&certificate)? {
-            // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
-            // This backpressure should not affect system transactions, e.g. for checkpointing.
-            if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
-                return Err(tonic::Status::resource_exhausted("Reached {MAX_PENDING_CONSENSUS_TRANSACTIONS} concurrent consensus transactions",
-                ));
-            }
             let _metrics_guard = if shared_object_tx {
                 Some(metrics.consensus_latency.start_timer())
             } else {
                 None
             };
-            // Acquire more expensive registration
-            let processed_waiter = state.consensus_message_processed_notify(certificate.digest());
-            consensus_adapter
-                .submit(&state.name, &certificate, processed_waiter)
-                .await?;
+            let transaction = ConsensusTransaction::new_certificate_message(
+                &state.name,
+                certificate.clone().into(),
+            );
+            let waiter = consensus_adapter.submit(transaction)?;
+            if certificate.contains_shared_object() {
+                // This is expect on tokio JoinHandle result, not SuiResult
+                waiter
+                    .await
+                    .expect("Tokio runtime failure when waiting for consensus result");
+            }
         }
 
-        // 5) Execute the certificate.
+        // 4) Execute the certificate.
         // Often we cannot execute a cert due to dependenties haven't been executed, and we will
         // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
         // succeed.
@@ -583,20 +559,6 @@ impl Validator for ValidatorService {
         let response = self.state.handle_checkpoint_request(&request)?;
 
         return Ok(tonic::Response::new(response));
-    }
-
-    type FollowCheckpointStreamStream =
-        BoxStream<'static, Result<CheckpointStreamResponseItem, tonic::Status>>;
-    async fn checkpoint_info(
-        &self,
-        request: tonic::Request<CheckpointStreamRequest>,
-    ) -> Result<tonic::Response<Self::FollowCheckpointStreamStream>, tonic::Status> {
-        let request = request.into_inner();
-        let xstream = self.state.handle_checkpoint_streaming(request).await?;
-
-        let response = xstream.map_err(tonic::Status::from);
-
-        Ok(tonic::Response::new(Box::pin(response)))
     }
 
     async fn committee_info(

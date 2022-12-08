@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
+import { Base64DataBuffer } from '../serialization/base64';
 import { SuiObjectRef } from './objects';
 
 const bcs = new BCS(getSuiMoveConfig());
@@ -89,12 +90,11 @@ export type PayAllSuiTx = {
   };
 };
 
-bcs
-  .registerStructType('PayTx', {
-    coins: 'vector<SuiObjectRef>',
-    recipients: 'vector<address>',
-    amounts: 'vector<u64>',
-  });
+bcs.registerStructType('PayTx', {
+  coins: 'vector<SuiObjectRef>',
+  recipients: 'vector<address>',
+  amounts: 'vector<u64>',
+});
 
 bcs.registerStructType('PaySuiTx', {
   coins: 'vector<SuiObjectRef>',
@@ -163,8 +163,7 @@ export type SharedObjectRef = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef }
-  | { Shared_Deprecated: string };
+  | { Shared: SharedObjectRef };
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -232,7 +231,7 @@ export type TypeTag =
   | { struct: StructTag }
   | { u16: null }
   | { u32: null }
-  | { u256: null }  ;
+  | { u256: null };
 
 bcs
   .registerEnumType('TypeTag', {
@@ -270,14 +269,13 @@ export type MoveCallTx = {
   };
 };
 
-bcs
-  .registerStructType('MoveCallTx', {
-    package: 'SuiObjectRef',
-    module: 'string',
-    function: 'string',
-    typeArguments: 'vector<TypeTag>',
-    arguments: 'vector<CallArg>',
-  });
+bcs.registerStructType('MoveCallTx', {
+  package: 'SuiObjectRef',
+  module: 'string',
+  function: 'string',
+  typeArguments: 'vector<TypeTag>',
+  arguments: 'vector<CallArg>',
+});
 
 // ========== TransactionData ===========
 
@@ -309,11 +307,10 @@ export type TransactionKind =
   | { Single: Transaction }
   | { Batch: Transaction[] };
 
-bcs
-  .registerEnumType('TransactionKind', {
-    Single: 'Transaction',
-    Batch: 'vector<Transaction>',
-  });
+bcs.registerEnumType('TransactionKind', {
+  Single: 'Transaction',
+  Batch: 'vector<Transaction>',
+});
 
 /**
  * The TransactionData to be signed and sent to the RPC service.
@@ -337,49 +334,25 @@ bcs.registerStructType('TransactionData', {
   gasBudget: 'u64',
 });
 
-// ========== Deprecated ===========
+export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
+  (e) => e.charCodeAt(0)
+);
+
+export function deserializeTransactionBytesToTransactionData(
+  bytes: Base64DataBuffer
+): TransactionData {
+  return bcs.de(
+    'TransactionData',
+    bytes.getData().slice(TRANSACTION_DATA_TYPE_TAG.length)
+  );
+}
 
 /**
- * Temporary support for older protocol types that don't require an initial
- * shared version to be provided when referring to a shared object.  Remove
- * after the devnet launch that adds support for the new protocol.
+ * Signed transaction data needed to generate transaction digest.
  */
-bcs
-  .registerEnumType('ObjectArg_Deprecated', {
-    ImmOrOwned: 'SuiObjectRef',
-    Shared_Deprecated: 'address',
-  })
-  .registerEnumType('CallArg_Deprecated', {
-    Pure: 'vector<u8>',
-    Object: 'ObjectArg_Deprecated',
-    ObjVec: 'vector<ObjectArg_Deprecated>',
-  })
-  .registerStructType('MoveCallTx_Deprecated', {
-    package: 'SuiObjectRef',
-    module: 'string',
-    function: 'string',
-    typeArguments: 'vector<TypeTag>',
-    arguments: 'vector<CallArg_Deprecated>',
-  })
-  .registerEnumType('Transaction_Deprecated', {
-    TransferObject: 'TransferObjectTx',
-    Publish: 'PublishTx',
-    Call: 'MoveCallTx_Deprecated',
-    TransferSui: 'TransferSuiTx',
-    Pay: 'PayTx',
-    PaySui: 'PaySuiTx',
-    PayAllSui: 'PayAllSuiTx',
-  })
-  .registerEnumType('TransactionKind_Deprecated', {
-    Single: 'Transaction_Deprecated',
-    Batch: 'vector<Transaction_Deprecated>',
-  })
-  .registerStructType('TransactionData_Deprecated', {
-    kind: 'TransactionKind_Deprecated',
-    sender: 'address',
-    gasPayment: 'SuiObjectRef',
-    gasPrice: 'u64',
-    gasBudget: 'u64',
-  });
+bcs.registerStructType('SenderSignedData', {
+  data: 'TransactionData',
+  txSignature: 'vector<u8>',
+});
 
 export { bcs };

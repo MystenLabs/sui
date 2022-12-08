@@ -61,6 +61,15 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("request_vote")
+                .route_name("RequestVote")
+                .request_type("crate::RequestVoteRequest")
+                .response_type("crate::RequestVoteResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("get_payload_availability")
                 .route_name("GetPayloadAvailability")
                 .request_type("crate::PayloadAvailabilityRequest")
@@ -83,15 +92,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")
                 .response_type("crate::FetchCertificatesResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("get_latest_header")
-                .route_name("GetLatestHeader")
-                .request_type("crate::LatestHeaderRequest")
-                .response_type("crate::LatestHeaderResponse")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
         )
