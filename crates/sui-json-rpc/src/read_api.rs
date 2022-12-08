@@ -41,7 +41,7 @@ use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
 use crate::SuiRpcModule;
 
-// An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
+// An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,

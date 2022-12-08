@@ -438,12 +438,8 @@ pub enum SuiError {
         errors: Vec<(AuthorityName, SuiError)>,
         action: String,
     },
-    #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
-    InconsistentGatewayResult { error: String },
-    #[error("Invalid transaction range query to the gateway: {:?}", error)]
-    GatewayInvalidTxRangeQuery { error: String },
-    #[error("Gateway checking transaction validity failed: {:?}", error)]
-    GatewayTransactionPrepError { error: String },
+    #[error("Invalid transaction range query to the fullnode: {:?}", error)]
+    FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]

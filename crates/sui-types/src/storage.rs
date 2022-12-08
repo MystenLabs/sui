@@ -63,9 +63,6 @@ impl SingleTxContext {
     pub fn transfer_object(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("transfer_object"), sender)
     }
-    pub fn gateway(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("native"), sender)
-    }
     pub fn pay(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("pay"), sender)
     }

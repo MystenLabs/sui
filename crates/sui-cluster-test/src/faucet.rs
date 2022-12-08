@@ -61,7 +61,7 @@ impl RemoteFaucetClient {
 #[async_trait]
 impl FaucetClient for RemoteFaucetClient {
     /// Request test SUI coins from faucet.
-    /// It also verifies the effects are observed by gateway/fullnode.
+    /// It also verifies the effects are observed by fullnode.
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let gas_url = format!("{}/gas", self.remote_url);
         debug!("Getting coin from remote faucet {}", gas_url);

@@ -245,7 +245,7 @@ pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: boo
 /// --num-server-threads 10 \
 /// --num-transfer-accounts 2 \
 /// --primary-gas-id 0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f \
-/// --gateway-config-path /tmp/gateway.yaml \
+/// --genesis-blob-path /tmp/genesis.blob \
 /// --keystore-path /tmp/sui.keystore bench \
 /// --target-qps 100 \
 /// --in-flight-ratio 2 \

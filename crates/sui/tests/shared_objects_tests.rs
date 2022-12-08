@@ -61,8 +61,8 @@ async fn many_shared_object_transactions() {
         .unwrap();
 }
 
-/// End-to-end shared transaction test for a Sui validator. It does not test the client, wallet,
-/// or gateway but tests the end-to-end flow from Sui to consensus.
+/// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,
+/// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]
 async fn call_shared_object_contract() {
     let mut gas_objects = test_gas_objects();

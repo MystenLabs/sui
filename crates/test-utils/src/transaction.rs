@@ -131,7 +131,7 @@ pub async fn publish_package_with_wallet(
         .to_object_ref()
 }
 
-/// A helper function to submit a move transaction using gateway API
+/// A helper function to submit a move transaction
 pub async fn submit_move_transaction(
     context: &WalletContext,
     module: &'static str,
