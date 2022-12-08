@@ -3,6 +3,7 @@
 
 use std::env;
 use std::net::SocketAddr;
+use std::str::FromStr;
 
 use hyper::header::HeaderValue;
 use hyper::Method;
@@ -10,12 +11,14 @@ pub use jsonrpsee::server::ServerHandle;
 use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
+use tap::TapFallible;
 use tower::util::option_layer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::info;
+use tracing::{info, warn};
+
+use sui_open_rpc::{Module, Project};
 
 use crate::metrics::MetricsLayer;
-use sui_open_rpc::{Module, Project};
 
 pub mod api;
 pub mod bcs_api;
@@ -106,7 +109,17 @@ impl JsonRpcServerBuilder {
             .layer(cors)
             .layer(metrics_layer);
 
+        let max_connection = env::var("RPC_MAX_CONNECTION")
+            .ok()
+            .and_then(|o| {
+                u32::from_str(&o)
+                    .tap_err(|e| warn!("Cannot parse RPC_MAX_CONNECTION to u32: {e}"))
+                    .ok()
+            })
+            .unwrap_or(u32::MAX);
+
         let server = ServerBuilder::default()
+            .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
             .build(listen_address)
