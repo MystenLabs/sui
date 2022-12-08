@@ -7,7 +7,6 @@ use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::traits::KeyPair;
 use fastcrypto::hash::Hash;
 use futures::future::join_all;
-use network::P2pNetwork;
 use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
@@ -44,7 +43,7 @@ async fn test_successful_blocks_delete() {
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
         tx_removed_certificates,
     );
 
@@ -208,7 +207,7 @@ async fn test_failed_blocks_delete() {
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
         tx_removed_certificates,
     );
 

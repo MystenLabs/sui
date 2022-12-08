@@ -33,7 +33,6 @@ use fastcrypto::{
 };
 use multiaddr::{Multiaddr, Protocol};
 use network::metrics::MetricsMakeCallbackHandler;
-use network::P2pNetwork;
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::{
@@ -105,7 +104,7 @@ impl Primary {
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
-        tx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
+        tx_executor_network: Option<oneshot::Sender<anemo::Network>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -370,13 +369,11 @@ impl Primary {
         );
 
         if let Some(tx_executor_network) = tx_executor_network {
-            let executor_network = P2pNetwork::new(network.clone());
-            if tx_executor_network.send(executor_network).is_err() {
+            if tx_executor_network.send(network.clone()).is_err() {
                 panic!("Executor shut down before primary has a chance to start");
             }
         }
 
-        let core_primary_network = P2pNetwork::new(network.clone());
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -395,7 +392,7 @@ impl Primary {
             tx_new_certificates,
             tx_parents,
             node_metrics.clone(),
-            core_primary_network,
+            network.clone(),
         );
 
         let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
@@ -412,14 +409,13 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
-        let block_synchronizer_network = P2pNetwork::new(network.clone());
         let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (**committee.load()).clone(),
             worker_cache.clone(),
             tx_reconfigure.subscribe(),
             rx_block_synchronizer_commands,
-            block_synchronizer_network,
+            network.clone(),
             payload_store.clone(),
             certificate_store.clone(),
             parameters.clone(),
@@ -430,7 +426,7 @@ impl Primary {
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             (**committee.load()).clone(),
-            P2pNetwork::new(network.clone()),
+            network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
             parameters.gc_depth,
@@ -470,22 +466,20 @@ impl Primary {
             rx_state_handler,
             tx_reconfigure,
             Some(tx_commited_own_headers),
-            P2pNetwork::new(network.clone()),
+            network.clone(),
         );
 
         let consensus_api_handle = if !internal_consensus {
             // Retrieves a block's data by contacting the worker nodes that contain the
             // underlying batches and their transactions.
-            let block_waiter_primary_network = P2pNetwork::new(network.clone());
             let block_waiter = BlockWaiter::new(
                 name.clone(),
                 worker_cache.clone(),
-                block_waiter_primary_network,
+                network.clone(),
                 block_synchronizer_handler.clone(),
             );
 
             // Orchestrates the removal of blocks across the primary and worker nodes.
-            let block_remover_primary_network = P2pNetwork::new(network);
             let block_remover = BlockRemover::new(
                 name.clone(),
                 worker_cache,
@@ -493,7 +487,7 @@ impl Primary {
                 header_store,
                 payload_store,
                 dag.clone(),
-                block_remover_primary_network,
+                network,
                 tx_committed_certificates,
             );
 

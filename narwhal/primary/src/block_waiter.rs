@@ -9,7 +9,7 @@ use futures::{
     stream::{FuturesOrdered, StreamExt as _},
     FutureExt,
 };
-use network::{P2pNetwork, WorkerRpc};
+use network::WorkerRpc;
 use std::{collections::HashSet, sync::Arc};
 
 use tracing::{debug, instrument};
@@ -44,7 +44,7 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
     worker_cache: SharedWorkerCache,
 
     /// Network driver allowing to send messages.
-    worker_network: P2pNetwork,
+    worker_network: anemo::Network,
 
     /// We use the handler of the block synchronizer to interact with the
     /// block synchronizer in a synchronous way. Share a reference of this
@@ -57,7 +57,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     pub fn new(
         name: PublicKey,
         worker_cache: SharedWorkerCache,
-        worker_network: P2pNetwork,
+        worker_network: anemo::Network,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
     ) -> BlockWaiter<SynchronizerHandler> {
         Self {
