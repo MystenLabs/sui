@@ -420,7 +420,6 @@ pub async fn submit_single_owner_transaction(
         .0
         .pop()
         .unwrap();
-    println!("~~cert {:?}", certificate);
     let mut responses = Vec::new();
     for config in configs {
         let client = get_client(config);
@@ -428,13 +427,9 @@ pub async fn submit_single_owner_transaction(
             .handle_certificate(certificate.clone().into())
             .await
             .unwrap();
-        println!("~~reply {:?}", reply);
         responses.push(reply);
     }
-    println!("~~responses {:?}", responses);
-    let x = get_unique_effects(responses);
-    println!("~~get_unique_effects {:?}", x);
-    x
+    get_unique_effects(responses)
 }
 
 /// Keep submitting the certificates of a shared-object transaction until it is sequenced by

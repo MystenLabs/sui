@@ -5051,7 +5051,7 @@
             }
           },
           "txBytes": {
-            "description": "transaction bytes, as base-64 encoded string",
+            "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/Base64"

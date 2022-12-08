@@ -862,16 +862,26 @@ impl SuiClientCommands {
                 ))
             }
 
-            SuiClientCommands::ExecuteSignedTx { tx_data, signature } => {
+            SuiClientCommands::ExecuteSignedTx {
+                tx_bytes,
+                signature,
+            } => {
                 let data = bcs::from_bytes(
                     &Base64::try_from(tx_bytes)
                         .map_err(|e| anyhow!(e))?
                         .to_vec()
                         .map_err(|e| anyhow!(e))?,
-                )
-                .verify()?;
+                )?;
+                let signature = Signature::from_bytes(
+                    &Base64::try_from(signature)
+                        .map_err(|e| anyhow!(e))?
+                        .to_vec()
+                        .map_err(|e| anyhow!(e))?,
+                )?;
+                let verified =
+                    Transaction::from_data(data, Intent::default(), signature).verify()?;
 
-                let response = context.execute_transaction(signed_tx).await?;
+                let response = context.execute_transaction(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
             SuiClientCommands::NewEnv { alias, rpc, ws } => {

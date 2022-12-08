@@ -51,7 +51,7 @@ describe('Transaction Serialization and deserialization', () => {
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const version = await toolbox.provider.getRpcApiVersion();
-    const useIntentSigning = version?.major === 0 && version?.minor > 17;
+    const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
     const deserialized =
       (await localSerializer.deserializeTransactionBytesToSignableTransaction(
         useIntentSigning,

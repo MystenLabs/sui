@@ -50,8 +50,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       const version = await this.provider.getRpcApiVersion();
+      const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
       return await this.serializeTransactionData(
-        version?.major === 0 && version?.minor > 17,
+        useIntentSigning,
         await this.constructTransactionData(signerAddress, txn)
       );
     } catch (e) {
@@ -326,7 +327,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
     if (useIntentSigning) {
-      // If use intent signing, do not append type tag. This is mirroed in the rpc tx data serializer TransactionBytes::from_data.
+      // If use intent signing, do not append type tag. This is mirrored in the rpc tx data serializer TransactionBytes::from_data.
       return new Base64DataBuffer(dataBytes);
     } else {
       const serialized = new Uint8Array(

@@ -669,6 +669,7 @@ impl<'de> Deserialize<'de> for Signature {
 }
 
 impl Signature {
+    #[warn(deprecated)]
     pub fn new<T>(value: &T, secret: &dyn Signer<Signature>) -> Signature
     where
         T: Signable<Vec<u8>>,

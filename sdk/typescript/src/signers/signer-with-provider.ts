@@ -105,7 +105,7 @@ export abstract class SignerWithProvider implements Signer {
       const version = await this.provider.getRpcApiVersion();
       let dataToSign;
       let txBytesToSubmit;
-      if (version?.major == 0 && version?.minor < 18) {
+      if (version?.major == 0 && version?.minor < 19) {
         dataToSign = txBytes;
         txBytesToSubmit = txBytes;
       } else {
@@ -148,7 +148,7 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
     const version = await this.provider.getRpcApiVersion();
-    const useIntentSigning = version?.major == 0 && version?.minor > 17;
+    const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
     let dataToSign;
     if (useIntentSigning) {
       const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.getLength());

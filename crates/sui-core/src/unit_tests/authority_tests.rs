@@ -479,21 +479,16 @@ async fn test_handle_transfer_transaction_ok() {
     );
 
     // Check the final state of the locks
-    assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
-        .await
-        .unwrap()
-        .is_some());
+    let Some(envelope) = authority_state.get_transaction_lock(
+        &(object_id, before_object_version, object.digest()),
+        0,
+    ).await.unwrap() else {
+        panic!("No verified envelope for transaction");
+    };
+
     assert_eq!(
-        authority_state
-            .get_transaction_lock(&(object_id, 0.into(), object.digest()), 0)
-            .await
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .data()
-            .intent_message,
-        transfer_transaction.data().intent_message
+        envelope.data().intent_message.value,
+        transfer_transaction.data().intent_message.value
     );
 }
 

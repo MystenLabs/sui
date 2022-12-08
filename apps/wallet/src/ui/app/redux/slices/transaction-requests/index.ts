@@ -82,9 +82,11 @@ export const deserializeTxn = createAsyncThunk<
         const version = await api.instance.fullNode.getRpcApiVersion();
 
         //TODO: Error handling - either show the error or use the serialized txn
+        const useIntentSigning =
+            version != null && version.major >= 0 && version.minor > 18;
         const deserializeTx =
             (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-                version?.major === 0 && version?.minor > 17,
+                useIntentSigning,
                 txnBytes
             )) as UnserializedSignableTransaction;
 
