@@ -27,6 +27,12 @@ impl ChainId {
     }
 }
 
+impl Default for ChainId {
+    fn default() -> Self {
+        Self::TESTING
+    }
+}
+
 impl<'de> serde::Deserialize<'de> for ChainId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
