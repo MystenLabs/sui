@@ -1,5 +1,19 @@
 # @mysten/sui.js
 
+## 0.19.0
+
+### Minor Changes
+
+- 6c1f81228: Remove signature from trasaction digest hash
+- 519e11551: Allow keypairs to be exported
+- b03bfaec2: Add getTransactionAuthSigners endpoint
+
+### Patch Changes
+
+- b8257cecb: add missing int types
+- f9be28a42: Fix bug in Coin.isCoin
+- 24987df35: Regex change for account index for supporting multiple accounts
+
 ## 0.18.0
 
 ### Minor Changes
