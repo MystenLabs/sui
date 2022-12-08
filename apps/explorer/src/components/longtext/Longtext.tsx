@@ -107,7 +107,7 @@ function Longtext({
         }
     } else {
         textComponent = (
-            <div className="text-sui-grey-90 font-medium font-mono">
+            <div className="text-sui-grey-90 font-mono font-medium">
                 {alttext ? alttext : text}
             </div>
         );
