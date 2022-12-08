@@ -127,9 +127,9 @@ impl RosettaServerCommand {
                 });
 
                 let config = NodeConfig::load(&node_config)?;
-                let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+                let registry_service = metrics::start_prometheus_server(config.metrics_address);
                 // Staring a full node for the rosetta server.
-                let node = SuiNode::start(&config, prometheus_registry).await?;
+                let node = SuiNode::start(&config, registry_service).await?;
                 let quorum_driver = node
                     .transaction_orchestrator()
                     .ok_or_else(|| anyhow!("Quorum driver is None"))?

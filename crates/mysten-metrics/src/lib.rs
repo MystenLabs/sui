@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use dashmap::DashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
@@ -12,6 +14,7 @@ use tap::TapFallible;
 use tracing::warn;
 
 pub use scopeguard;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Metrics {
@@ -162,5 +165,164 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.f.as_mut().poll(cx)
+    }
+}
+
+type RegistryID = Uuid;
+
+/// A service to manage the prometheus registries. This service allow us to create
+/// a new Registry on demand and keep it accessible for processing/polling.
+/// The service can be freely cloned/shared across threads.
+#[derive(Clone)]
+pub struct RegistryService {
+    // Holds a Registry that is supposed to be used
+    default_registry: Registry,
+    registries_by_id: Arc<DashMap<Uuid, Registry>>,
+}
+
+impl RegistryService {
+    // Creates a new registry service and also adds the main/default registry that is supposed to
+    // be preserved and never get removed
+    pub fn new(default_registry: Registry) -> Self {
+        Self {
+            default_registry,
+            registries_by_id: Arc::new(DashMap::new()),
+        }
+    }
+
+    // Returns the default registry for the service that someone can use
+    // if they don't want to create a new one.
+    pub fn default_registry(&self) -> Registry {
+        self.default_registry.clone()
+    }
+
+    // Adds a new registry to the service. The corresponding RegistryID is returned so can later be
+    // used for removing the Registry. Method panics if we try to insert a registry with the same id.
+    // As this can be quite serious for the operation of the node we don't want to accidentally
+    // swap an existing registry - we expected a removal to happen explicitly.
+    pub fn add(&self, registry: Registry) -> RegistryID {
+        let registry_id = Uuid::new_v4();
+        if self
+            .registries_by_id
+            .insert(registry_id, registry)
+            .is_some()
+        {
+            panic!("Other Registry already detected for the same id {registry_id}");
+        }
+
+        registry_id
+    }
+
+    // Removes the registry from the service. If Registry existed then this method returns true,
+    // otherwise false is returned instead.
+    pub fn remove(&self, registry_id: RegistryID) -> bool {
+        self.registries_by_id.remove(&registry_id).is_some()
+    }
+
+    // Returns all the registries of the service
+    pub fn get_all(&self) -> Vec<Registry> {
+        let mut registries: Vec<Registry> = self
+            .registries_by_id
+            .iter()
+            .map(|r| r.value().clone())
+            .collect();
+        registries.push(self.default_registry.clone());
+
+        registries
+    }
+
+    // Returns all the metric families from the registries that a service holds.
+    pub fn gather_all(&self) -> Vec<prometheus::proto::MetricFamily> {
+        self.get_all().iter().flat_map(|r| r.gather()).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::RegistryService;
+    use prometheus::{IntCounter, Registry};
+
+    #[test]
+    fn registry_service() {
+        // GIVEN
+        let default_registry = Registry::new_custom(Some("default".to_string()), None).unwrap();
+
+        let registry_service = RegistryService::new(default_registry.clone());
+        let default_counter = IntCounter::new("counter", "counter_desc").unwrap();
+        default_counter.inc();
+        default_registry
+            .register(Box::new(default_counter))
+            .unwrap();
+
+        // AND add a metric to the default registry
+
+        // AND a registry with one metric
+        let registry_1 = Registry::new_custom(Some("narwhal".to_string()), None).unwrap();
+        registry_1
+            .register(Box::new(
+                IntCounter::new("counter_1", "counter_1_desc").unwrap(),
+            ))
+            .unwrap();
+
+        // WHEN
+        let registry_1_id = registry_service.add(registry_1);
+
+        // THEN
+        let mut metrics = registry_service.gather_all();
+        metrics.sort_by(|m1, m2| Ord::cmp(m1.get_name(), m2.get_name()));
+
+        assert_eq!(metrics.len(), 2);
+
+        let metric_default = metrics.remove(0);
+        assert_eq!(metric_default.get_name(), "default_counter");
+        assert_eq!(metric_default.get_help(), "counter_desc");
+
+        let metric_1 = metrics.remove(0);
+        assert_eq!(metric_1.get_name(), "narwhal_counter_1");
+        assert_eq!(metric_1.get_help(), "counter_1_desc");
+
+        // AND add a second registry with a metric
+        let registry_2 = Registry::new_custom(Some("sui".to_string()), None).unwrap();
+        registry_2
+            .register(Box::new(
+                IntCounter::new("counter_2", "counter_2_desc").unwrap(),
+            ))
+            .unwrap();
+        let _registry_2_id = registry_service.add(registry_2);
+
+        // THEN all the metrics should be returned
+        let mut metrics = registry_service.gather_all();
+        metrics.sort_by(|m1, m2| Ord::cmp(m1.get_name(), m2.get_name()));
+
+        assert_eq!(metrics.len(), 3);
+
+        let metric_default = metrics.remove(0);
+        assert_eq!(metric_default.get_name(), "default_counter");
+        assert_eq!(metric_default.get_help(), "counter_desc");
+
+        let metric_1 = metrics.remove(0);
+        assert_eq!(metric_1.get_name(), "narwhal_counter_1");
+        assert_eq!(metric_1.get_help(), "counter_1_desc");
+
+        let metric_2 = metrics.remove(0);
+        assert_eq!(metric_2.get_name(), "sui_counter_2");
+        assert_eq!(metric_2.get_help(), "counter_2_desc");
+
+        // AND remove first registry
+        assert!(registry_service.remove(registry_1_id));
+
+        // THEN metrics should now not contain metric of registry_1
+        let mut metrics = registry_service.gather_all();
+        metrics.sort_by(|m1, m2| Ord::cmp(m1.get_name(), m2.get_name()));
+
+        assert_eq!(metrics.len(), 2);
+
+        let metric_default = metrics.remove(0);
+        assert_eq!(metric_default.get_name(), "default_counter");
+        assert_eq!(metric_default.get_help(), "counter_desc");
+
+        let metric_1 = metrics.remove(0);
+        assert_eq!(metric_1.get_name(), "sui_counter_2");
+        assert_eq!(metric_1.get_help(), "counter_2_desc");
     }
 }

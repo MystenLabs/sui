@@ -261,11 +261,13 @@ async fn main() -> Result<()> {
     }
     let _guard = config.with_env().init();
 
-    let registry: Arc<Registry> = Arc::new(metrics::start_prometheus_server(
+    let registry_service = metrics::start_prometheus_server(
         format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
             .parse()
             .unwrap(),
-    ));
+    );
+    let registry: Arc<Registry> = Arc::new(registry_service.default_registry());
+
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let (primary_gas_id, owner, keypair, aggregator) = if opts.local {

@@ -10,6 +10,7 @@ use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::value::MoveStructLayout;
+use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{
@@ -1068,7 +1069,8 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 async fn test_validator_node_has_no_transaction_orchestrator() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
-    let node = SuiNode::start(validator_config, Registry::new())
+    let registry_service = RegistryService::new(Registry::new());
+    let node = SuiNode::start(validator_config, registry_service)
         .await
         .unwrap();
     assert!(node.transaction_orchestrator().is_none());

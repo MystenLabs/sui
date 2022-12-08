@@ -7,6 +7,7 @@ use crypto::{KeyPair, NetworkKeyPair};
 use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
+use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
@@ -35,7 +36,7 @@ impl NodeRestarter {
             Vec<(WorkerId, NetworkKeyPair)>,
             WorkerCache,
         )>,
-        registry: &Registry,
+        registry_service: RegistryService,
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
@@ -46,10 +47,16 @@ impl NodeRestarter {
         let mut committee = committee.clone();
 
         let mut handles = Vec::new();
+        let mut registry_id;
 
         // Listen for new committees.
         loop {
             tracing::info!("Starting epoch E{}", committee.epoch());
+
+            // TODO: eventually replace this with a prefixed version of it
+            // for all metrics can start with narwhal_
+            let registry = Registry::new();
+            registry_id = registry_service.add(registry.clone());
 
             // Get a fresh store for the new epoch.
             let mut store_path = storage_base_path.clone();
@@ -66,7 +73,7 @@ impl NodeRestarter {
                 parameters.clone(),
                 /* consensus */ true,
                 execution_state.clone(),
-                registry,
+                &registry,
             )
             .await
             .unwrap();
@@ -79,7 +86,7 @@ impl NodeRestarter {
                 &store,
                 parameters.clone(),
                 tx_validator.clone(),
-                registry,
+                &registry,
             );
 
             handles.extend(primary_handles);
@@ -137,6 +144,9 @@ impl NodeRestarter {
             worker_ids_and_keypairs = new_worker_ids_and_keypairs;
             committee = new_committee;
             worker_cache.swap(Arc::new(new_worker_cache));
+
+            // remove the previous registry
+            registry_service.remove(registry_id);
         }
     }
 }
