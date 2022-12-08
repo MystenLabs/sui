@@ -252,7 +252,15 @@ pub struct GenesisValidatorInfo {
     pub proof_of_possession: AuthoritySignature,
 }
 
+/// Initial set of parameters for a chain.
+#[derive(Default, Serialize, Deserialize)]
+pub struct GenesisChainParameters {
+    chain_id: ChainId,
+    // In the future we can add the initial gas schedule or other parameters here
+}
+
 pub struct Builder {
+    parameters: GenesisChainParameters,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
 }
@@ -266,9 +274,15 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Self {
         Self {
+            parameters: Default::default(),
             objects: Default::default(),
             validators: Default::default(),
         }
+    }
+
+    pub fn set_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.parameters.chain_id = chain_id;
+        self
     }
 
     pub fn add_object(mut self, object: Object) -> Self {
@@ -313,7 +327,13 @@ impl Builder {
             .into_iter()
             .map(|(_, v)| v)
             .collect::<Vec<_>>();
-        let objects = create_genesis_objects(&mut genesis_ctx, &modules, &objects, &validators);
+        let objects = create_genesis_objects(
+            &mut genesis_ctx,
+            self.parameters.chain_id,
+            &modules,
+            &objects,
+            &validators,
+        );
 
         let genesis = Genesis {
             objects,
@@ -360,6 +380,10 @@ impl Builder {
             bail!("path must be a directory");
         }
 
+        // Load parameters
+        let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
+        let parameters = serde_yaml::from_slice(&fs::read(parameters_file)?)?;
+
         // Load Objects
         let mut objects = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
@@ -390,6 +414,7 @@ impl Builder {
         }
 
         Ok(Self {
+            parameters,
             objects,
             validators: committee,
         })
@@ -400,6 +425,10 @@ impl Builder {
         trace!("Writing Genesis Builder to {}", path.display());
 
         fs::create_dir_all(path)?;
+
+        // Write parameters
+        let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
+        fs::write(parameters_file, serde_yaml::to_vec(&self.parameters)?)?;
 
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
@@ -427,6 +456,7 @@ impl Builder {
 
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
+    chain_id: ChainId,
     modules: &[Vec<CompiledModule>],
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
@@ -452,7 +482,8 @@ fn create_genesis_objects(
         store.insert_object(object.to_owned());
     }
 
-    generate_genesis_system_object(&mut store, &move_vm, validators, genesis_ctx).unwrap();
+    generate_genesis_system_object(&mut store, &move_vm, chain_id, validators, genesis_ctx)
+        .unwrap();
 
     store
         .into_inner()
@@ -533,6 +564,7 @@ fn process_package(
 pub fn generate_genesis_system_object(
     store: &mut InMemoryStorage,
     move_vm: &MoveVM,
+    chain_id: ChainId,
     committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
 ) -> Result<()> {
@@ -540,7 +572,6 @@ pub fn generate_genesis_system_object(
     let mut temporary_store =
         TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
-    let chain_id = ChainId::TESTING;
     let mut pubkeys = Vec::new();
     let mut network_pubkeys = Vec::new();
     let mut proof_of_possessions = Vec::new();
@@ -603,6 +634,7 @@ pub fn generate_genesis_system_object(
 
 const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
+const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
 
 #[cfg(test)]
 mod test {
