@@ -1962,6 +1962,31 @@ impl AuthorityState {
         // If the transaction was executed in previous epochs, the validator will
         // re-sign the effects with new current epoch so that a client is always able to
         // obtain an effects certificate at the current epoch.
+        //
+        // Why is this necessary? Consider the following case:
+        // - assume there are 4 validators
+        // - Quorum driver gets 2 signed effects before reconfig halt
+        // - The tx makes it into final checkpoint.
+        // - 2 validators go away and are replaced in the new epoch.
+        // - The new epoch begins.
+        // - The quorum driver cannot complete the partial effects cert from the previous epoch,
+        //   because it may not be able to reach either of the 2 former validators.
+        // - But, if the 2 validators that stayed are willing to re-sign the effects in the new
+        //   epoch, the QD can make a new effects cert and return it to the client.
+        //
+        // This is a considered a short-term workaround. Eventually, Quorum Driver should be able
+        // to return either an effects certificate, -or- a proof of inclusion in a checkpoint. In
+        // the case above, the Quorum Driver would return a proof of inclusion in the final
+        // checkpoint, and this code would no longer be necessary.
+        //
+        // Alternatively, some of the confusion around re-signing could be resolved if
+        // CertifiedTransactionEffects included both the epoch in which the transaction became
+        // final, as well as the epoch at which the effects were certified. In this case, there
+        // would be nothing terribly odd about the validators from epoch N certifying that a
+        // given TX became final in epoch N - 1. The confusion currently arises from the fact that
+        // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
+        // the authority's signature, as well as to identify in which epoch the transaction was
+        // executed.
         if let Some(effects) = info.signed_effects.take() {
             let cur_epoch = self.epoch();
             let new_effects = if effects.epoch() < cur_epoch {
