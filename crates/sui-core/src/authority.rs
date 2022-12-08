@@ -673,7 +673,7 @@ impl AuthorityState {
             .handle_node_sync_certificate_latency
             .start_timer();
         let digest = *certificate.digest();
-        debug!(?digest, "handle_certificate_with_effects");
+        debug!(tx_digest = ?digest, "handle_certificate_with_effects");
         fp_ensure!(
             effects.data().transaction_digest == digest,
             SuiError::ErrorWhileProcessingCertificate {
@@ -978,7 +978,9 @@ impl AuthorityState {
         //
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
-        self.transaction_manager.objects_committed(output_keys);
+        self.transaction_manager
+            .objects_committed(output_keys)
+            .await;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1074,6 +1076,11 @@ impl AuthorityState {
         let signed_effects =
             SignedTransactionEffects::new(self.epoch(), effects, &*self.secret, self.name);
         Ok((inner_temp_store, signed_effects))
+    }
+
+    /// Notifies TransactionManager about an executed certificate.
+    pub async fn certificate_executed(&self, digest: &TransactionDigest) {
+        self.transaction_manager.certificate_executed(digest).await
     }
 
     pub async fn dry_exec_transaction(

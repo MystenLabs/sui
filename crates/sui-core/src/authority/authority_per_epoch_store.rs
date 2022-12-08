@@ -308,11 +308,6 @@ where
             .collect())
     }
 
-    /// Checks if a certificate is in the pending queue.
-    pub fn pending_certificate_exists(&self, tx: &TransactionDigest) -> Result<bool, SuiError> {
-        Ok(self.tables.pending_certificates.contains_key(tx)?)
-    }
-
     /// Deletes one pending certificate.
     pub fn remove_pending_certificate(&self, digest: &TransactionDigest) -> SuiResult<()> {
         self.tables.pending_certificates.remove(digest)?;
