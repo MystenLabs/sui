@@ -94,5 +94,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         },
         reference_gas_price: 1,
         validator_report_records: VecMap { contents: vec![] },
+        next_epoch_stake_subsidy: 0,
     }
 }

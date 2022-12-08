@@ -5082,6 +5082,7 @@
           "chain_id",
           "epoch",
           "info",
+          "next_epoch_stake_subsidy",
           "parameters",
           "reference_gas_price",
           "storage_fund",
@@ -5100,6 +5101,11 @@
           },
           "info": {
             "$ref": "#/components/schemas/UID"
+          },
+          "next_epoch_stake_subsidy": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"

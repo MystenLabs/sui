@@ -150,6 +150,7 @@ pub struct SuiSystemState {
     pub parameters: SystemParameters,
     pub reference_gas_price: u64,
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
+    pub next_epoch_stake_subsidy: u64,
     // TODO: Use getters instead of all pub.
 }
 

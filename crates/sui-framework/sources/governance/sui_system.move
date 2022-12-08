@@ -61,6 +61,9 @@ module sui::sui_system {
         /// them. If a validator has never been reported they don't have an entry in this map.
         /// This map resets every epoch.
         validator_report_records: VecMap<address, VecSet<address>>,
+        /// The amount of stake subsidies to be given out in the next epoch, updated at
+        /// epoch boundaries.
+        next_epoch_stake_subsidy: u64,
     }
 
     // Errors
@@ -71,6 +74,10 @@ module sui::sui_system {
     const EREPORT_RECORD_NOT_FOUND: u64 = 4;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
+
+    // Placeholder numbers for stake subsidies.
+    const STAKE_SUBSIDY_DECREASE_RATE: u128 = 1000; // in basis point
+    const STAKE_SUBSIDY_PERIOD_LENGTH: u64 = 30; // in number of epochs
 
     // ==== functions that can only be called by genesis ====
 
@@ -84,6 +91,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         storage_gas_price: u64,
+        next_epoch_stake_subsidy: u64,
     ) {
         assert!(chain_id >= 1 && chain_id <= 127, 1);
         let validators = validator_set::new(validators);
@@ -103,6 +111,7 @@ module sui::sui_system {
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
+            next_epoch_stake_subsidy,
         };
         transfer::share_object(state);
     }
@@ -367,6 +376,10 @@ module sui::sui_system {
         let storage_reward = balance::create_staking_rewards(storage_charge);
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
+        // Include stake subsidy in the rewards given out to validators and delegators.
+        let stake_subsidy = balance::increase_supply(&mut self.sui_supply, self.next_epoch_stake_subsidy);
+        balance::join(&mut computation_reward, stake_subsidy);
+
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
         let storage_fund_balance = balance::value(&self.storage_fund);
@@ -412,6 +425,9 @@ module sui::sui_system {
         assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
         balance::destroy_storage_rebates(balance::split(&mut self.storage_fund, storage_rebate));
         
+        // Update the amount of subsidy to be given out in the next epoch.
+        update_stake_subsidy_amount(self, new_epoch);
+
         // Validator reports are only valid for the epoch.
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
@@ -421,6 +437,15 @@ module sui::sui_system {
         /// Total supply of SUI shouldn't change.
         ensures balance::supply_value(self.sui_supply) 
             == old(balance::supply_value(self.sui_supply));
+    }
+
+    fun update_stake_subsidy_amount(self: &mut SuiSystemState, new_epoch: u64) {
+        // Decrease the subsidy amount only when the current period ends.
+        if (new_epoch % STAKE_SUBSIDY_PERIOD_LENGTH == 0) {
+            let decrease_amount = (self.next_epoch_stake_subsidy as u128)
+                * STAKE_SUBSIDY_DECREASE_RATE / BASIS_POINT_DENOMINATOR;
+            self.next_epoch_stake_subsidy = self.next_epoch_stake_subsidy - (decrease_amount as u64)
+        };
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
