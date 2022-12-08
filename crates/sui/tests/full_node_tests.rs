@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
 use std::ops::Neg;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -537,18 +538,25 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
         )
         .await
         .unwrap();
-    let mut digests = Vec::with_capacity(3);
+
+    let mut expected_digests = HashSet::new();
     for _i in 0..3 {
         let (_, _, _, digest, _, _) = transfer_coin(context).await?;
-        digests.push(digest);
+        expected_digests.insert(digest);
     }
-    wait_for_all_txes(digests.clone(), node.state().clone()).await;
+
+    wait_for_all_txes(
+        expected_digests.iter().cloned().collect(),
+        node.state().clone(),
+    )
+    .await;
 
     // Wait for streaming
-    for digest in digests.iter().take(3) {
+    let mut actual_digests = HashSet::new();
+    for _ in &expected_digests {
         match timeout(Duration::from_secs(3), sub.next()).await {
             Ok(Some(Ok(resp))) => {
-                assert_eq!(&resp.certificate.transaction_digest, digest);
+                actual_digests.insert(resp.certificate.transaction_digest);
             }
             other => panic!(
                 "Failed to get Ok item from transaction streaming, but {:?}",
@@ -565,6 +573,10 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
             other
         ),
     }
+
+    // Check the digests match
+    assert_eq!(expected_digests, actual_digests);
+
     Ok(())
 }
 
@@ -1261,7 +1273,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(context).await?;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(3)).await;
 
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
