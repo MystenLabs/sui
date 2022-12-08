@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use arc_swap::{ArcSwap, Guard};
+use arc_swap::Guard;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -19,7 +19,6 @@ use prometheus::{
 };
 use std::cmp::Ordering as CmpOrdering;
 use std::hash::Hash;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -58,7 +57,7 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::crypto::{AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
@@ -81,6 +80,7 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
@@ -510,10 +510,6 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
 
-    // Epoch related information.
-    /// Committee of this Sui instance.
-    committee: ArcSwap<Committee>,
-
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
     pub(crate) move_vm: Arc<MoveVM>,
@@ -562,7 +558,7 @@ pub struct AuthorityState {
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
     pub fn is_validator(&self) -> bool {
-        self.committee.load().authority_exists(&self.name)
+        self.epoch_store().committee().authority_exists(&self.name)
     }
 
     pub fn is_fullnode(&self) -> bool {
@@ -575,7 +571,7 @@ impl AuthorityState {
     }
 
     pub fn epoch(&self) -> EpochId {
-        self.committee().epoch
+        self.database.epoch_store().epoch()
     }
 
     pub fn committee_store(&self) -> &Arc<CommitteeStore> {
@@ -685,7 +681,7 @@ impl AuthorityState {
             }
         );
 
-        let epoch_store = self.database.epoch_store();
+        let epoch_store = self.epoch_store();
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         if certificate.contains_shared_object() {
@@ -751,7 +747,7 @@ impl AuthorityState {
             ?tx_digest,
             tx_kind = certificate.data().data.kind_as_str()
         );
-        let epoch_store = self.database.epoch_store();
+        let epoch_store = self.epoch_store();
         let tx_guard = epoch_store
             .acquire_tx_guard(certificate)
             .instrument(span)
@@ -783,7 +779,6 @@ impl AuthorityState {
         );
 
         let shared_locks: HashMap<_, _> = self
-            .database
             .epoch_store()
             .get_shared_locks(transaction_digest)?
             .into_iter()
@@ -844,7 +839,7 @@ impl AuthorityState {
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
-        let epoch_store = self.database.epoch_store();
+        let epoch_store = self.epoch_store();
         if let Some((inner_temporary_storage, signed_effects)) = epoch_store
             .wal()
             .get_execution_output(certificate.digest())?
@@ -1444,7 +1439,6 @@ impl AuthorityState {
             adapter::new_move_vm(native_functions.clone())
                 .expect("We defined natives to not fail here"),
         );
-        let committee = committee_store.get_latest_committee();
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
         let event_handler = event_store.map(|es| {
             let handler = EventHandler::new(es, module_cache.clone());
@@ -1460,7 +1454,6 @@ impl AuthorityState {
         let mut state = AuthorityState {
             name,
             secret,
-            committee: ArcSwap::from(Arc::new(committee)),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -1567,16 +1560,14 @@ impl AuthorityState {
     pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
         self.node_sync_store
             .batch_store_certs(certs.iter().cloned())?;
-        self.database
-            .epoch_store()
-            .insert_pending_certificates(&certs)?;
+        self.epoch_store().insert_pending_certificates(&certs)?;
         self.transaction_manager.enqueue(certs).await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::MAX);
-        let epoch_store = self.database.epoch_store();
+        let epoch_store = self.epoch_store();
         while limit > 0 {
             limit -= 1;
             if let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
@@ -1619,8 +1610,6 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        let new_committee = Arc::new(new_committee);
-        self.committee.swap(new_committee.clone());
         self.db().reopen_epoch_db(new_committee);
         Ok(())
     }
@@ -1629,17 +1618,17 @@ impl AuthorityState {
         self.database.clone()
     }
 
-    pub fn committee(&self) -> Guard<Arc<Committee>> {
-        self.committee.load()
+    pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore<AuthoritySignInfo>>> {
+        self.database.epoch_store()
     }
 
     pub fn clone_committee(&self) -> Committee {
-        self.committee().clone().deref().clone()
+        self.epoch_store().committee().clone()
     }
 
     // This method can only be called from ConsensusAdapter::begin_reconfiguration
     pub fn close_user_certs(&self, lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
-        self.database.epoch_store().close_user_certs(lock_guard)
+        self.epoch_store().close_user_certs(lock_guard)
     }
 
     pub(crate) async fn get_object(
@@ -2244,7 +2233,6 @@ impl AuthorityState {
                 );
 
                 if !self
-                    .database
                     .epoch_store()
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()

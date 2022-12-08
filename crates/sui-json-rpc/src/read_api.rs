@@ -148,9 +148,10 @@ impl RpcReadApiServer for ReadApi {
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
 
         let mut signers = Vec::new();
-        let committee = self.state.committee();
+        let epoch_store = self.state.epoch_store();
         for authority_index in cert.auth_sig().signers_map.iter() {
-            let authority = committee
+            let authority = epoch_store
+                .committee()
                 .authority_by_index(authority_index)
                 .ok_or_else(|| anyhow!("Failed to get authority"))?;
             signers.push(*authority);

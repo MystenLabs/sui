@@ -357,7 +357,8 @@ where
         epoch_id: EpochId,
     ) -> SuiResult<bool> {
         // Check if the tx is final.
-        let committee = self.state().committee();
+        let epoch_store = self.state().epoch_store();
+        let committee = epoch_store.committee();
         check_epoch!(committee.epoch, epoch_id);
         let stake = committee.weight(peer);
         let quorum_threshold = committee.quorum_threshold();

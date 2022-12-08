@@ -3,18 +3,17 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
 
 pub struct StakeAggregator<V, const STRENGTH: bool> {
     data: HashMap<AuthorityName, V>,
     stake: StakeUnit,
-    committee: Arc<Committee>,
+    committee: Committee,
 }
 
 impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
-    pub fn new(committee: Arc<Committee>) -> Self {
+    pub fn new(committee: Committee) -> Self {
         Self {
             data: Default::default(),
             stake: Default::default(),
@@ -23,7 +22,7 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
     }
 
     pub fn from_iter<I: Iterator<Item = (AuthorityName, V)>>(
-        committee: Arc<Committee>,
+        committee: Committee,
         data: I,
     ) -> Self {
         let mut this = Self::new(committee);
@@ -57,7 +56,7 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
         self.data.contains_key(authority)
     }
 
-    pub fn committee(&self) -> &Arc<Committee> {
+    pub fn committee(&self) -> &Committee {
         &self.committee
     }
 }

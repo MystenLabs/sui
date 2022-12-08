@@ -101,8 +101,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         perpetual_tables: AuthorityPerpetualTables<S>,
         committee: Committee,
     ) -> SuiResult<Self> {
-        let committee = Arc::new(committee);
-
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
             committee,
             path,
@@ -138,7 +136,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(store)
     }
 
-    pub(crate) fn reopen_epoch_db(&self, new_committee: Arc<Committee>) {
+    pub(crate) fn reopen_epoch_db(&self, new_committee: Committee) {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
             new_committee,

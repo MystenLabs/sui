@@ -532,7 +532,7 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: StakeAggregator::new(self.state.committee().clone()),
+                    signatures: StakeAggregator::new(self.state.clone_committee()),
                 });
                 self.current.as_mut().unwrap()
             };
