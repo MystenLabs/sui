@@ -360,8 +360,8 @@ multihash = { version = "0.16", default-features = false, features = ["alloc", "
 mysten-network = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "44615b3f56a7a72ccc4a1b4f4e696b9f44fc7e2e", default-features = false }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "44615b3f56a7a72ccc4a1b4f4e696b9f44fc7e2e", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-a490c3000a992113 = { package = "nom", version = "6", features = ["alloc", "bitvec", "funty", "lexical", "lexical-core", "std"] }
@@ -1041,8 +1041,8 @@ multimap = { version = "0.8", default-features = false }
 mysten-network = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "8df9c4ea982e2be6b528e7b288a82d79d2d4bf20", default-features = false }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "44615b3f56a7a72ccc4a1b4f4e696b9f44fc7e2e", default-features = false }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "44615b3f56a7a72ccc4a1b4f4e696b9f44fc7e2e", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-a490c3000a992113 = { package = "nom", version = "6", features = ["alloc", "bitvec", "funty", "lexical", "lexical-core", "std"] }

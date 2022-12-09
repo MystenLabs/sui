@@ -1,4 +1,5 @@
 # Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 import subprocess
 from math import ceil
 from os.path import basename, splitext
