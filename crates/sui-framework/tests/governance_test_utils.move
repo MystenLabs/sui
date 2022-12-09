@@ -37,6 +37,7 @@ module sui::governance_test_utils {
         validators: vector<Validator>, sui_supply_amount: u64, storage_fund_amount: u64
     ) {
         sui_system::create(
+            127,
             validators,
             balance::create_supply_for_testing(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund

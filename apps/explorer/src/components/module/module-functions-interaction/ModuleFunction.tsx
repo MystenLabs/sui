@@ -8,13 +8,17 @@ import {
 import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
+import { useMemo } from 'react';
+import { useWatch } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
 import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
+import { useFunctionTypeArguments } from './useFunctionTypeArguments';
 
 import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
+import type { TypeOf } from 'zod';
 
 import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
@@ -22,7 +26,8 @@ import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
-    params: z.optional(z.array(z.object({ value: z.string().trim().min(1) }))),
+    params: z.optional(z.array(z.string().trim().min(1))),
+    types: z.optional(z.array(z.string().trim().min(1))),
 });
 
 export type ModuleFunctionProps = {
@@ -41,20 +46,34 @@ export function ModuleFunction({
     functionDetails,
 }: ModuleFunctionProps) {
     const { connected, signAndExecuteTransaction } = useWallet();
-    const paramsDetails = useFunctionParamsDetails(functionDetails.parameters);
-    const { handleSubmit, formState, register } = useZodForm({
+    const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
+    const typeArguments = useFunctionTypeArguments(
+        functionDetails.type_parameters
+    );
+    const formTypeInputs = useWatch({ control, name: 'types' });
+    const resolvedTypeArguments = useMemo(
+        () =>
+            typeArguments.map(
+                (aType, index) => formTypeInputs?.[index] || aType
+            ),
+        [typeArguments, formTypeInputs]
+    );
+    const paramsDetails = useFunctionParamsDetails(
+        functionDetails.parameters,
+        resolvedTypeArguments
+    );
     const execute = useMutation({
-        mutationFn: async (params: string[]) => {
+        mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const result = await signAndExecuteTransaction({
                 kind: 'moveCall',
                 data: {
                     packageObjectId: packageId,
                     module: moduleName,
                     function: functionName,
-                    arguments: params,
-                    typeArguments: [], // TODO: currently move calls that expect type argument will fail
+                    arguments: params || [],
+                    typeArguments: types || [],
                     gasBudget: 2000,
                 },
             });
@@ -74,29 +93,34 @@ export function ModuleFunction({
     return (
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
-                onSubmit={handleSubmit(({ params }) =>
+                onSubmit={handleSubmit((formData) =>
                     toast
-                        .promise(
-                            execute.mutateAsync(
-                                (params || []).map(({ value }) => value)
-                            ),
-                            {
-                                loading: 'Executing...',
-                                error: (e) => 'Transaction failed',
-                                success: 'Done',
-                            }
-                        )
+                        .promise(execute.mutateAsync(formData), {
+                            loading: 'Executing...',
+                            error: (e) => 'Transaction failed',
+                            success: 'Done',
+                        })
                         .catch((e) => null)
                 )}
                 autoComplete="off"
                 className="flex flex-col flex-nowrap items-stretch gap-4"
             >
+                {typeArguments.map((aTypeArgument, index) => {
+                    return (
+                        <Input
+                            key={index}
+                            label={`Type${index}`}
+                            {...register(`types.${index}` as const)}
+                            placeholder={aTypeArgument}
+                        />
+                    );
+                })}
                 {paramsDetails.map(({ paramTypeText }, index) => {
                     return (
                         <Input
                             key={index}
                             label={`Arg${index}`}
-                            {...register(`params.${index}.value` as const)}
+                            {...register(`params.${index}` as const)}
                             placeholder={paramTypeText}
                         />
                     );

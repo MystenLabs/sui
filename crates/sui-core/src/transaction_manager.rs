@@ -3,11 +3,11 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, RwLock};
 use tracing::{debug, error};
 
 use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
@@ -27,8 +27,16 @@ pub(crate) struct TransactionManager {
 
 #[derive(Default)]
 struct Inner {
+    // Maps missing input objects to transactions in pending_certificates.
     missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
+
+    // A transaction enqueued to TransactionManager must be in either pending_certificates or
+    // executing_certificates.
+
+    // Maps transactions to their missing input objects.
     pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
+    // Transactions that have all input objects available, but have not finished execution.
+    executing_certificates: BTreeSet<TransactionDigest>,
 }
 
 impl TransactionManager {
@@ -68,16 +76,7 @@ impl TransactionManager {
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
     pub(crate) async fn enqueue(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
-        // Skip processing of any certificates that are already enqueued.
-        let certs: Vec<_> = {
-            let inner = self.inner.read().unwrap();
-            certs
-                .into_iter()
-                .filter(|cert| !inner.pending_certificates.contains_key(cert.digest()))
-                .collect()
-        };
-
-        let mut missing_inputs = Vec::new();
+        let inner = &mut self.inner.write().await;
         for cert in certs {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
@@ -85,10 +84,24 @@ impl TransactionManager {
             let epoch_store = self.authority_store.epoch_store();
             let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
-            // skip txes that are executed already
-            if self.authority_store.effects_exists(&digest)? {
+            // skip already pending txes
+            if inner.pending_certificates.contains_key(&digest) {
                 continue;
             }
+            // skip already executing txes
+            if inner.executing_certificates.contains(&digest) {
+                continue;
+            }
+            // skip already executed txes
+            if self.authority_store.effects_exists(&digest)? {
+                // also ensure the transaction will not be retried after restart.
+                let _ = self
+                    .authority_store
+                    .epoch_store()
+                    .remove_pending_certificate(&digest);
+                continue;
+            }
+
             let missing = self
                 .authority_store
                 .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
@@ -97,19 +110,11 @@ impl TransactionManager {
 
             if missing.is_empty() {
                 debug!(tx_digest = ?digest, "certificate ready");
+                assert!(inner.executing_certificates.insert(digest));
                 self.certificate_ready(cert);
                 continue;
-            } else {
-                debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
             }
 
-            for obj_key in missing {
-                missing_inputs.push((obj_key, digest));
-            }
-        }
-
-        let inner = &mut self.inner.write().unwrap();
-        for (obj_key, digest) in missing_inputs.iter() {
             // A missing input object in TransactionManager will definitely be notified via
             // objects_committed(), when the object actually gets committed, because:
             // 1. Assume rocksdb is strongly consistent, writing the object to the objects
@@ -118,13 +123,15 @@ impl TransactionManager {
             // into the objects table.
             // 3. TransactionManager is protected by a mutex. The notification via
             // objects_committed() can only arrive after the current enqueue() call finishes.
-            // TODO: verify the key does not already exist.
-            inner.missing_inputs.insert(*obj_key, *digest);
+            debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
+            inner
+                .missing_inputs
+                .extend(missing.clone().into_iter().map(|obj_key| (obj_key, digest)));
             inner
                 .pending_certificates
-                .entry(*digest)
+                .entry(digest)
                 .or_default()
-                .insert(*obj_key);
+                .extend(missing);
         }
 
         self.metrics
@@ -137,11 +144,11 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager that the given objects have been committed.
-    pub(crate) fn objects_committed(&self, object_keys: Vec<ObjectKey>) {
+    pub(crate) async fn objects_committed(&self, object_keys: Vec<ObjectKey>) {
         let mut ready_digests = Vec::new();
 
         {
-            let inner = &mut self.inner.write().unwrap();
+            let inner = &mut self.inner.write().await;
             for object_key in object_keys {
                 let Some(digest) = inner.missing_inputs.remove(&object_key) else {
                     continue;
@@ -152,6 +159,7 @@ impl TransactionManager {
                 if set.is_empty() {
                     debug!(tx_digest = ?digest, "certificate ready");
                     inner.pending_certificates.remove(&digest);
+                    assert!(inner.executing_certificates.insert(digest));
                     ready_digests.push(digest);
                 } else {
                     debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
@@ -193,7 +201,19 @@ impl TransactionManager {
         }
     }
 
-    /// Marks the given certificate as ready to be executed.
+    /// Notifies TransactionManager about a certificate that has been executed.
+    pub(crate) async fn certificate_executed(&self, digest: &TransactionDigest) {
+        {
+            let inner = &mut self.inner.write().await;
+            inner.executing_certificates.remove(digest);
+        }
+        let _ = self
+            .authority_store
+            .epoch_store()
+            .remove_pending_certificate(digest);
+    }
+
+    /// Sends the ready certificate for execution.
     fn certificate_ready(&self, certificate: VerifiedCertificate) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);

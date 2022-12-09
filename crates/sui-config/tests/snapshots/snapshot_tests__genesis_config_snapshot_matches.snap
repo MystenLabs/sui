@@ -3,6 +3,8 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis_config
 ---
 validator_genesis_info: ~
+parameters:
+  chain_id: 127
 committee_size: 4
 grpc_load_shed: ~
 grpc_concurrency_limit: 20000000000

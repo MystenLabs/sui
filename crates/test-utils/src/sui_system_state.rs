@@ -4,6 +4,7 @@
 use bcs::to_bytes;
 use sui_types::balance::{Balance, Supply};
 use sui_types::base_types::SuiAddress;
+use sui_types::chain_id::ChainId;
 use sui_types::collection_types::VecMap;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -79,6 +80,7 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
     };
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
+        chain_id: ChainId::TESTING,
         epoch,
         validators: validator_set,
         treasury_cap: Supply { value: 0 },

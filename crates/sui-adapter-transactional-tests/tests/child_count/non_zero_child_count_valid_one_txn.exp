@@ -13,5 +13,5 @@ written: object(106)
 
 task 3 'view-object'. lines 40-40:
 Owner: Shared
-Version: 1
+Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}

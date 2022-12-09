@@ -194,7 +194,7 @@ async fn test_dry_run_transaction() {
         .unwrap()
         .unwrap()
         .version();
-    assert_eq!(gas_object_version, SequenceNumber::new());
+    assert_eq!(gas_object_version, OBJECT_START_VERSION);
     let shared_object_version = authority
         .get_object(&shared_object_id)
         .await
@@ -597,7 +597,7 @@ pub async fn send_and_confirm_transaction_with_shared(
     let vote = response.signed_transaction.unwrap().into_inner();
 
     // Collect signatures from a quorum of authorities
-    let committee = authority.committee();
+    let committee = authority.clone_committee();
     let certificate = CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -823,7 +823,7 @@ async fn test_handle_move_transaction() {
     assert_eq!(effects.mutated.len(), 1);
 
     let created_object_id = effects.created[0].0 .0;
-    // check that transaction actually created an object with the expected ID, owner, sequence number
+    // check that transaction actually created an object with the expected ID, owner
     let created_obj = authority_state
         .get_object(&created_object_id)
         .await
@@ -831,7 +831,6 @@ async fn test_handle_move_transaction() {
         .unwrap();
     assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
-    assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 }
 
 #[tokio::test]
@@ -1040,7 +1039,6 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(OBJECT_START_VERSION, account.version());
 
     assert!(authority_state
         .parent(&(object_id, account.version(), account.digest()))
@@ -1116,11 +1114,11 @@ async fn test_handle_confirmation_transaction_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), old_account.digest()), 0)
+        .get_transaction_lock(&(object_id, 1.into(), old_account.digest()), 0)
         .await
         .is_err());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), new_account.digest()), 0)
+        .get_transaction_lock(&(object_id, 2.into(), new_account.digest()), 0)
         .await
         .expect("Exists")
         .is_none());
@@ -1239,7 +1237,7 @@ async fn test_handle_certificate_interrupted_retry() {
         }
         interrupted_count += 1;
 
-        let epoch_store = authority_state.database.epoch_store();
+        let epoch_store = authority_state.epoch_store();
         let g = epoch_store
             .acquire_tx_guard(&shared_object_cert)
             .await
@@ -2473,14 +2471,14 @@ fn init_certified_transaction(
         authority_state.name,
         &*authority_state.secret,
     );
-    let committee = authority_state.committee();
+    let epoch_store = authority_state.epoch_store();
     CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
-        &committee,
+        epoch_store.committee(),
     )
     .unwrap()
-    .verify(&committee)
+    .verify(epoch_store.committee())
     .unwrap()
 }
 
@@ -2666,7 +2664,7 @@ async fn make_test_transaction(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 
-    let committee = authorities[0].committee();
+    let committee = authorities[0].clone_committee();
     let mut sigs = vec![];
 
     for authority in authorities {
@@ -2880,11 +2878,9 @@ async fn test_consensus_message_processed() {
     // verify the two validators are in sync.
     assert_eq!(
         authority1
-            .database
             .epoch_store()
             .get_next_object_version(&shared_object_id),
         authority2
-            .database
             .epoch_store()
             .get_next_object_version(&shared_object_id),
     );

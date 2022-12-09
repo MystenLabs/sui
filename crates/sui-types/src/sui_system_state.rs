@@ -9,6 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::{AuthorityName, SuiAddress};
+use crate::chain_id::ChainId;
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
@@ -139,6 +140,7 @@ pub struct ValidatorSet {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
     pub info: UID,
+    pub chain_id: ChainId,
     pub epoch: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,

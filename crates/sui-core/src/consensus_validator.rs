@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use eyre::WrapErr;
+use mysten_metrics::monitored_scope;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 
 use narwhal_worker::TransactionValidator;
@@ -18,11 +20,14 @@ pub struct SuiTxValidator {
     // a pointer to the Authority state, mostly in order to get access to consensus
     // todo - change it to AuthorityPerEpochStore to avoid race conditions
     state: Arc<AuthorityState>,
+    metrics: Arc<SuiTxValidatorMetrics>,
 }
 
 impl SuiTxValidator {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<AuthorityState>, registry: &Registry) -> Self {
+        let metrics = SuiTxValidatorMetrics::new(registry);
+        let metrics = Arc::new(metrics);
+        Self { state, metrics }
     }
 }
 
@@ -40,32 +45,39 @@ impl TransactionValidator for SuiTxValidator {
     }
 
     fn validate_batch(&self, b: &narwhal_types::Batch) -> Result<(), Self::Error> {
+        let _scope = monitored_scope("ValidateBatch");
         let txs = b
             .transactions
             .iter()
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
-        let committee = self.state.committee();
+        let epoch_store = self.state.epoch_store();
 
         let mut obligation = VerificationObligation::default();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
+                    self.metrics.certificate_signatures_verified.inc();
                     // todo - verify user signature when we pin signature in certificate
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
                     certificate.auth_sig().add_to_verification_obligation(
-                        &committee,
+                        epoch_store.committee(),
                         &mut obligation,
                         idx,
                     )?;
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
+                    self.metrics.checkpoint_signatures_verified.inc();
                     let summary = signature.summary.summary;
                     let idx = obligation.add_message(&summary, summary.epoch);
                     signature
                         .summary
                         .auth_signature
-                        .add_to_verification_obligation(&committee, &mut obligation, idx)?;
+                        .add_to_verification_obligation(
+                            epoch_store.committee(),
+                            &mut obligation,
+                            idx,
+                        )?;
                 }
                 ConsensusTransactionKind::EndOfPublish(_) => {}
             }
@@ -74,6 +86,30 @@ impl TransactionValidator for SuiTxValidator {
         obligation
             .verify_all()
             .wrap_err("Malformed batch (failed to verify)")
+    }
+}
+
+pub struct SuiTxValidatorMetrics {
+    certificate_signatures_verified: IntCounter,
+    checkpoint_signatures_verified: IntCounter,
+}
+
+impl SuiTxValidatorMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            certificate_signatures_verified: register_int_counter_with_registry!(
+                "certificate_signatures_verified",
+                "Number of certificates verified in narwhal batch verifier",
+                registry
+            )
+            .unwrap(),
+            checkpoint_signatures_verified: register_int_counter_with_registry!(
+                "checkpoint_signatures_verified",
+                "Number of checkpoint verified in narwhal batch verifier",
+                registry
+            )
+            .unwrap(),
+        }
     }
 }
 
@@ -129,7 +165,7 @@ mod tests {
         )
         .unwrap();
 
-        let validator = SuiTxValidator::new(Arc::new(state));
+        let validator = SuiTxValidator::new(Arc::new(state), &Default::default());
         let res = validator.validate(&first_transaction_bytes);
         assert!(res.is_ok(), "{res:?}");
 

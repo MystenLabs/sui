@@ -20,7 +20,7 @@ use futures::{
 };
 use mysten_metrics::{monitored_future, spawn_monitored_task};
 use network::anemo_ext::NetworkExt;
-use network::{P2pNetwork, UnreliableNetwork};
+use network::UnreliableNetwork;
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
     collections::{HashMap, HashSet},
@@ -169,7 +169,7 @@ pub struct BlockSynchronizer {
     pending_requests: HashMap<PendingIdentifier, Vec<ResultSender>>,
 
     /// Send network requests
-    network: P2pNetwork,
+    network: anemo::Network,
 
     /// The store that holds the certificates
     certificate_store: CertificateStore,
@@ -195,7 +195,7 @@ impl BlockSynchronizer {
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
-        network: P2pNetwork,
+        network: anemo::Network,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate_store: CertificateStore,
         parameters: Parameters,
@@ -401,7 +401,7 @@ impl BlockSynchronizer {
 
         // Now create the future that will send the requests.
         let timeout = self.payload_availability_timeout;
-        let network = self.network.network();
+        let network = self.network.clone();
         Some(
             monitored_future!(Self::send_payload_availability_requests(
                 timeout,
@@ -458,7 +458,7 @@ impl BlockSynchronizer {
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
-        let network = self.network.network();
+        let network = self.network.clone();
         let timeout = self.certificates_synchronize_timeout;
         let committee = self.committee.clone();
         let worker_cache = self.worker_cache.clone();

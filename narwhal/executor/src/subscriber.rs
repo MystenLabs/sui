@@ -9,7 +9,6 @@ use futures::stream::FuturesOrdered;
 use futures::FutureExt;
 use futures::StreamExt;
 
-use network::P2pNetwork;
 use network::WorkerRpc;
 
 use anyhow::bail;
@@ -54,7 +53,7 @@ struct Fetcher<Network> {
 
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     name: PublicKey,
-    network: oneshot::Receiver<P2pNetwork>,
+    network: oneshot::Receiver<anemo::Network>,
     worker_cache: SharedWorkerCache,
     committee: Committee,
     tx_reconfigure: &watch::Sender<ReconfigureNotification>,
@@ -115,7 +114,7 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
 
 async fn create_and_run_subscriber(
     name: PublicKey,
-    network: oneshot::Receiver<P2pNetwork>,
+    network: oneshot::Receiver<anemo::Network>,
     worker_cache: SharedWorkerCache,
     committee: Committee,
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -409,7 +408,7 @@ pub trait SubscriberNetwork: Send + Sync {
 
 struct SubscriberNetworkImpl {
     name: PublicKey,
-    network: P2pNetwork,
+    network: anemo::Network,
     worker_cache: SharedWorkerCache,
     committee: Committee,
 }

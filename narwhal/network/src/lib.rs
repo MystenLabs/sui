@@ -12,13 +12,13 @@
 pub mod admin;
 pub mod anemo_ext;
 pub mod connectivity;
+pub mod failpoints;
 pub mod metrics;
 mod p2p;
 mod retry;
 mod traits;
 
 pub use crate::{
-    p2p::P2pNetwork,
     retry::RetryConfig,
     traits::{
         PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork, UnreliableNetwork, WorkerRpc,

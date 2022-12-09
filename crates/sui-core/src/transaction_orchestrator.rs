@@ -136,7 +136,10 @@ where
             }
             QuorumDriverResponse::EffectsCert(result) => {
                 let (tx_cert, effects_cert) = *result;
-                let tx_cert = tx_cert.verify(&self.validator_state.committee())?;
+                let tx_cert = {
+                    let epoch_store = self.validator_state.epoch_store();
+                    tx_cert.verify(epoch_store.committee())?
+                };
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         tx_cert.into(),
@@ -240,15 +243,18 @@ where
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
-                    let tx_cert = match tx_cert.verify(&validator_state.committee()) {
-                        Err(err) => {
-                            error!(
+                    let tx_cert = {
+                        let epoch_store = validator_state.epoch_store();
+                        match tx_cert.verify(epoch_store.committee()) {
+                            Err(err) => {
+                                error!(
                                 "received certificate from quorum driver with bad signatures! {}",
                                 err
                             );
-                            continue;
+                                continue;
+                            }
+                            Ok(c) => c,
                         }
-                        Ok(c) => c,
                     };
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,

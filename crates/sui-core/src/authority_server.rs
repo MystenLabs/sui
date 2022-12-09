@@ -308,7 +308,7 @@ impl ValidatorService {
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
-        let tx_validator = SuiTxValidator::new(state.clone());
+        let tx_validator = SuiTxValidator::new(state.clone(), &registry);
         spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
             consensus_keypair,
             network_keypair,
@@ -395,7 +395,10 @@ impl ValidatorService {
 
         // 2) Verify cert signatures
         let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
-        let certificate = certificate.verify(&state.committee())?;
+        let certificate = {
+            let epoch_store = state.epoch_store();
+            certificate.verify(epoch_store.committee())?
+        };
         cert_verif_metrics_guard.stop_and_record();
 
         // 3) All certificates are sent to consensus (at least by some authorities)

@@ -44,7 +44,6 @@ pub struct SafeClientMetrics {
     pub(crate) total_requests_by_address_method: IntCounterVec,
     pub(crate) total_responses_by_address_method: IntCounterVec,
     pub(crate) follower_streaming_from_seq_number_by_address: IntGaugeVec,
-    pub(crate) follower_streaming_reconnect_times_by_address: IntCounterVec,
     latency: HistogramVec,
 }
 
@@ -68,13 +67,6 @@ impl SafeClientMetrics {
             follower_streaming_from_seq_number_by_address: register_int_gauge_vec_with_registry!(
                 "safe_client_follower_streaming_from_seq_number_by_address",
                 "The seq number with which to request follower streaming, group by address",
-                &["address"],
-                registry,
-            )
-            .unwrap(),
-            follower_streaming_reconnect_times_by_address: register_int_counter_vec_with_registry!(
-                "safe_client_follower_streaming_reconnect_times_by_address",
-                "Total times that a follower stream is closed and reconnected, group by address",
                 &["address"],
                 registry,
             )
@@ -115,8 +107,6 @@ pub struct SafeClient<C> {
     metrics_total_requests_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
     metrics_total_ok_responses_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
     pub(crate) metrics_seq_number_to_handle_batch_stream: GenericGauge<prometheus::core::AtomicI64>,
-    pub(crate) metrics_total_times_reconnect_follower_stream:
-        GenericCounter<prometheus::core::AtomicU64>,
     metrics_handle_transaction_latency: Histogram,
     metrics_handle_certificate_latency: Histogram,
     metrics_handle_obj_info_latency: Histogram,
@@ -164,9 +154,6 @@ impl<C> SafeClient<C> {
         let metrics_seq_number_to_handle_batch_stream = safe_client_metrics
             .follower_streaming_from_seq_number_by_address
             .with_label_values(&[&validator_address]);
-        let metrics_total_times_reconnect_follower_stream = safe_client_metrics
-            .follower_streaming_reconnect_times_by_address
-            .with_label_values(&[&validator_address]);
 
         let metrics_handle_transaction_latency = safe_client_metrics
             .latency
@@ -194,7 +181,6 @@ impl<C> SafeClient<C> {
             metrics_total_requests_handle_batch_stream,
             metrics_total_ok_responses_handle_batch_stream,
             metrics_seq_number_to_handle_batch_stream,
-            metrics_total_times_reconnect_follower_stream,
             metrics_handle_transaction_latency,
             metrics_handle_certificate_latency,
             metrics_handle_obj_info_latency,

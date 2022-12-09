@@ -17,7 +17,7 @@ written: object(107), object(108)
 
 task 4 'view-object'. lines 76-76:
 Owner: Account Address ( A )
-Version: 2
+Version: 3
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
 
 task 5 'run'. lines 78-78:

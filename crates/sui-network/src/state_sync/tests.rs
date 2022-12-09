@@ -85,7 +85,7 @@ async fn server_get_checkpoint() {
     let requests = [
         GetCheckpointSummaryRequest::Latest,
         GetCheckpointSummaryRequest::BySequenceNumber(9),
-        GetCheckpointSummaryRequest::ByDigest([10; 32]),
+        GetCheckpointSummaryRequest::ByDigest(CheckpointDigest([10; 32])),
     ];
     for request in requests {
         let response = server

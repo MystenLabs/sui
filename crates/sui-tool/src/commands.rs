@@ -98,7 +98,7 @@ pub enum ToolCommand {
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
     },
-    /// Tool to read validator & gateway db.
+    /// Tool to read validator & node db.
     #[clap(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
