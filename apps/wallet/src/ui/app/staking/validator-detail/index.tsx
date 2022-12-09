@@ -107,6 +107,10 @@ function ValidatorDetailCard({
     const apy = 7.5;
     const commission_rate = 0.42;
 
+    const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(
+        validatorAddress
+    )}`;
+
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full">
             <BottomMenuLayout>
@@ -195,7 +199,7 @@ function ValidatorDetailCard({
                             <Button
                                 size="large"
                                 mode="outline"
-                                href="new"
+                                href={stakeByValidatorAddress}
                                 className="bg-gray-50 w-1/2"
                             >
                                 <Icon icon={SuiIcons.Add} />
