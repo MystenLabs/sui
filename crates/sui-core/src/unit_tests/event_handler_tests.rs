@@ -40,15 +40,15 @@ fn test_to_json_value() {
     let json_value = sui_move_struct.to_json_value().unwrap();
     dbg!(&json_value);
     assert_eq!(
-        Some(&json!(1000000)),
+        Some(&json!("1000000")),
         json_value.pointer("/coins/0/balance")
     );
     assert_eq!(
-        Some(&json!(2000000)),
+        Some(&json!("2000000")),
         json_value.pointer("/coins/1/balance")
     );
     assert_eq!(
-        Some(&json!(3000000)),
+        Some(&json!("3000000")),
         json_value.pointer("/coins/2/balance")
     );
     assert_eq!(
@@ -59,9 +59,9 @@ fn test_to_json_value() {
         Some(&json!(format!("{:#x}", move_event.creator))),
         json_value.pointer("/creator")
     );
-    assert_eq!(Some(&json!(100)), json_value.pointer("/data/0"));
-    assert_eq!(Some(&json!(200)), json_value.pointer("/data/1"));
-    assert_eq!(Some(&json!(300)), json_value.pointer("/data/2"));
+    assert_eq!(Some(&json!("100")), json_value.pointer("/data/0"));
+    assert_eq!(Some(&json!("200")), json_value.pointer("/data/1"));
+    assert_eq!(Some(&json!("300")), json_value.pointer("/data/2"));
     assert_eq!(Some(&json!("test_event")), json_value.pointer("/name"));
 }
 

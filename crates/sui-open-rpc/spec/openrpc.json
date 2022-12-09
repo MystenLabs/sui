@@ -990,7 +990,7 @@
                   "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>",
                   "has_public_transfer": true,
                   "fields": {
-                    "balance": 10000,
+                    "balance": "10000",
                     "id": {
                       "id": "0x686464524a876b463d1297603568c40e814d9d53"
                     }
@@ -2369,7 +2369,7 @@
                   "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>",
                   "has_public_transfer": true,
                   "fields": {
-                    "balance": 10000,
+                    "balance": "10000",
                     "id": {
                       "id": "0x818dd7234e049913233eb918c11638af89d575be"
                     }
@@ -3732,9 +3732,6 @@
             "items": {
               "$ref": "#/components/schemas/MoveValue"
             }
-          },
-          {
-            "$ref": "#/components/schemas/Base64"
           },
           {
             "type": "string"

@@ -10,6 +10,7 @@ import { useAppSelector } from '../hooks';
 import { api } from '../redux/store/thunk-extras';
 
 const STATE_OBJECT = '0x5';
+const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
 
 // TODO: Generalize into SDK:
 interface SystemStateObject {
@@ -19,7 +20,7 @@ interface SystemStateObject {
                 fields: {
                     metadata: {
                         fields: {
-                            name: string;
+                            name: string | number[];
                         };
                     };
                     delegation_staking_pool: {
@@ -86,11 +87,16 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
 
                     if (!filteredDelegations.length) return null;
 
-                    // TODO: Follow-up about why this is base64 encoded:
-                    const name = Buffer.from(
-                        validator.fields.metadata.fields.name,
-                        'base64'
-                    ).toString();
+                    let name: string;
+                    const rawName = validator.fields.metadata.fields.name;
+                    if (Array.isArray(rawName)) {
+                        name = String.fromCharCode(...rawName);
+                    } else {
+                        name = Buffer.from(rawName, 'base64').toString();
+                        if (!VALDIATOR_NAME.test(name)) {
+                            name = rawName;
+                        }
+                    }
 
                     return {
                         name,

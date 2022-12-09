@@ -960,9 +960,11 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
-                    if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                        return Ok(GasCoin::new(*id, *balance));
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
+                    if let Ok(balance) = balance.parse::<u64>() {
+                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                            return Ok(GasCoin::new(*id, balance));
+                        }
                     }
                 }
             }
@@ -1182,7 +1184,6 @@ pub enum SuiMoveValue {
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
-    Bytearray(Base64),
     String(String),
     UID { id: ObjectID },
     Struct(SuiMoveStruct),
@@ -1207,13 +1208,6 @@ impl Display for SuiMoveValue {
                     vec.iter().map(|value| format!("{value}")).join(",\n")
                 )?;
             }
-            SuiMoveValue::Bytearray(value) => {
-                write!(
-                    writer,
-                    "{:?}",
-                    value.clone().to_vec().map_err(fmt::Error::custom)?
-                )?;
-            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1225,16 +1219,12 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U16(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U32(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U64(value) => SuiMoveValue::Number(value),
+            MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
-                if let Some(bytes) = to_bytearray(&values) {
-                    SuiMoveValue::Bytearray(Base64::from_bytes(&bytes))
-                } else {
-                    SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
-                }
+                SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
             }
             MoveValue::Struct(value) => {
                 // Best effort Sui core type conversion
