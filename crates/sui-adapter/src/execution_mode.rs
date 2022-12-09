@@ -111,7 +111,8 @@ impl ExecutionMode for DevInspect {
         let mutable_reference_outputs = mutable_reference_outputs
             .iter()
             .map(|(i, bytes, _)| {
-                let ty = subst_ty(&loaded_function.parameters[(*i as usize)], ty_args)?;
+                let ty =
+                    remove_ref_and_subst_ty(&loaded_function.parameters[(*i as usize)], ty_args)?;
                 let tag = type_to_type_tag(&ty);
                 Ok((*i, bytes.clone(), tag))
             })
@@ -120,7 +121,7 @@ impl ExecutionMode for DevInspect {
             .iter()
             .enumerate()
             .map(|(i, (bytes, _))| {
-                let ty = subst_ty(&loaded_function.parameters[i], ty_args)?;
+                let ty = remove_ref_and_subst_ty(&loaded_function.parameters[i], ty_args)?;
                 Ok((bytes.clone(), type_to_type_tag(&ty)))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
@@ -140,7 +141,11 @@ impl ExecutionMode for DevInspect {
     }
 }
 
-fn subst_ty(ty: &Type, ty_args: &[Type]) -> Result<Type, ExecutionError> {
+fn remove_ref_and_subst_ty(ty: &Type, ty_args: &[Type]) -> Result<Type, ExecutionError> {
+    let ty = match ty {
+        Type::Reference(inner) | Type::MutableReference(inner) => inner,
+        _ => ty,
+    };
     ty.subst(ty_args).map_err(|_| {
         ExecutionError::new_with_source(
             sui_types::error::ExecutionErrorKind::InvariantViolation,
