@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::reopen;
+use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -9,16 +10,17 @@ fn temp_dir() -> std::path::PathBuf {
         .into_path()
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_open() {
-    let _db = DBMap::<u32, String>::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_open(#[values(true, false)] is_transactional: bool) {
+    let _db = open_map::<_, u32, String>(temp_dir(), None, is_transactional);
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_reopen() {
+async fn test_reopen(#[values(true, false)] is_transactional: bool) {
     let arc = {
-        let db =
-            DBMap::<u32, String>::open(temp_dir(), None, None).expect("Failed to open storage");
+        let db = open_map::<_, u32, String>(temp_dir(), None, is_transactional);
         db.insert(&123456789, &"123456789".to_string())
             .expect("Failed to insert");
         db
@@ -48,16 +50,18 @@ async fn test_reopen_macro() {
     assert!(db_map_2.multi_insert(keys_vals_cf2).is_ok());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_wrong_reopen() {
-    let rocks = open_cf(temp_dir(), None, &["foo", "bar", "baz"]).unwrap();
+async fn test_wrong_reopen(#[values(true, false)] is_transactional: bool) {
+    let rocks = open_rocksdb(temp_dir(), &["foo", "bar", "baz"], is_transactional);
     let db = DBMap::<u8, u8>::reopen(&rocks, Some("quux"));
     assert!(db.is_err());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_contains_key() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_contains_key(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
@@ -69,9 +73,10 @@ async fn test_contains_key() {
         .expect("Failed to call contains key"));
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_get() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_get(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
@@ -82,9 +87,10 @@ async fn test_get() {
     assert_eq!(None, db.get(&000000000).expect("Failed to get"));
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_get_raw() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_get_raw(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
@@ -105,9 +111,10 @@ async fn test_get_raw() {
     );
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_multi_get() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_multi_get(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123, &"123".to_string())
         .expect("Failed to insert");
@@ -232,9 +239,10 @@ async fn test_iter_skip_to_previous_gap() {
     );
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_remove() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_remove(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
@@ -547,6 +555,37 @@ async fn test_multi_remove() {
 }
 
 #[tokio::test]
+async fn test_transactional() {
+    let key = "key";
+    let path = temp_dir();
+    let opt = rocksdb::Options::default();
+    let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
+    let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
+
+    // write batch operations not supported by transactional db
+    let mut batch = db.batch();
+    batch = batch
+        .insert_batch(&db, vec![(key.to_string(), key.to_string())])
+        .unwrap();
+    assert!(batch.write().is_err());
+
+    // transaction is used instead
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    tx2 = tx2
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+
+    tx1.commit().expect("failed to commit first transaction");
+    assert!(tx2.commit().is_err());
+    assert_eq!(db.get(&key.to_string()).unwrap(), Some("1".to_string()));
+}
+
+#[tokio::test]
 async fn open_as_secondary_test() {
     let primary_path = temp_dir();
 
@@ -582,4 +621,29 @@ async fn open_as_secondary_test() {
 
     // New value should be present
     assert_eq!(secondary_db.get(&0).unwrap(), Some("10".to_string()));
+}
+
+fn open_map<P: AsRef<Path>, K, V>(
+    path: P,
+    opt_cf: Option<&str>,
+    is_transactional: bool,
+) -> DBMap<K, V> {
+    if is_transactional {
+        let cf = opt_cf.unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME);
+        open_cf_opts_transactional(path, None, &[(cf, &default_db_options().options)])
+            .map(|db| DBMap::new(db, cf))
+            .expect("failed to open rocksdb")
+    } else {
+        DBMap::<K, V>::open(path, None, opt_cf).expect("failed to open rocksdb")
+    }
+}
+
+fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str], is_transactional: bool) -> Arc<RocksDB> {
+    if is_transactional {
+        let options = default_db_options().options;
+        let cfs: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
+        open_cf_opts_transactional(path, None, &cfs).expect("failed to open rocksdb")
+    } else {
+        open_cf(path, None, opt_cfs).expect("failed to open rocksdb")
+    }
 }

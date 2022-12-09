@@ -471,6 +471,7 @@ ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_ce
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
+rstest = { version = "0.16", features = ["async-timeout"] }
 rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
@@ -1173,12 +1174,15 @@ ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_ce
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
+rstest = { version = "0.16", features = ["async-timeout"] }
+rstest_macros = { version = "0.16", default-features = false, features = ["async-timeout"] }
 rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
-rustc_version = { version = "0.3", default-features = false }
+rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
+rustc_version-9fbad63c4bcf4a8f = { package = "rustc_version", version = "0.4", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "quic", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }

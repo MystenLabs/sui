@@ -158,6 +158,24 @@ async fn macro_test() {
     assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
 }
 
+#[tokio::test]
+async fn macro_transactional_test() {
+    let key = "key".to_string();
+    let primary_path = temp_dir();
+    let tables = Tables::open_tables_transactional(primary_path, None, None);
+    let mut transaction = tables
+        .table1
+        .transaction()
+        .expect("failed to init transaction");
+    transaction = transaction
+        .insert_batch(&tables.table1, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    transaction
+        .commit()
+        .expect("failed to commit first transaction");
+    assert_eq!(tables.table1.get(&key), Ok(Some("1".to_string())));
+}
+
 /// We show that custom functions can be applied
 #[derive(DBMapUtils)]
 struct TablesCustomOptions {
@@ -225,21 +243,6 @@ struct TablesMemUsage {
     table2: DBMap<i32, String>,
     table3: DBMap<i32, String>,
     table4: DBMap<i32, String>,
-}
-
-#[tokio::test]
-async fn macro_test_get_memory_usage() {
-    let primary_path = temp_dir();
-    let tables = TablesMemUsage::open_tables_read_write(primary_path, None, None);
-
-    let keys_vals_1 = (1..1000).map(|i| (i.to_string(), i.to_string()));
-    tables
-        .table1
-        .multi_insert(keys_vals_1)
-        .expect("Failed to multi-insert");
-
-    let (mem_table, _) = tables.get_memory_usage().unwrap();
-    assert!(mem_table > 0);
 }
 
 #[derive(DBMapUtils)]

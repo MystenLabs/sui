@@ -7242,6 +7242,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "rstest"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b07f2d176c472198ec1e6551dc7da28f1c089652f66a7b722676c2238ebc0edf"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "rstest_macros",
+ "rustc_version 0.4.0",
+]
+
+[[package]]
+name = "rstest_macros"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7229b505ae0706e64f37ffc54a9c163e11022a6636d58fe1f3f52018257ff9f7"
+dependencies = [
+ "cfg-if",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "rustc_version 0.4.0",
+ "syn 1.0.105",
+ "unicode-ident",
+]
+
+[[package]]
 name = "rust-ini"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10170,6 +10196,7 @@ dependencies = [
  "prometheus",
  "quote 1.0.21",
  "rocksdb",
+ "rstest",
  "serde 1.0.150",
  "syn 1.0.105",
  "tap",
@@ -11369,12 +11396,15 @@ dependencies = [
  "ripemd",
  "roaring",
  "rocksdb",
+ "rstest",
+ "rstest_macros",
  "rust-ini",
  "rust_decimal",
  "rustc-demangle",
  "rustc-hash",
  "rustc-hex",
  "rustc_version 0.3.3",
+ "rustc_version 0.4.0",
  "rusticata-macros",
  "rustix",
  "rustls",
