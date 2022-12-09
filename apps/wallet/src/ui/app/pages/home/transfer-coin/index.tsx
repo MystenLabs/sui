@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
+import {
+    Coin as CoinAPI,
+    SUI_TYPE_ARG,
+    getTransactionDigest,
+} from '@mysten/sui.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import StepOne from './TransferCoinForm/StepOne';
 import StepTwo from './TransferCoinForm/StepTwo';
+import { parseAmount } from './TransferCoinForm/utils';
 import {
     createValidationSchemaStepOne,
     createValidationSchemaStepTwo,
@@ -17,12 +21,17 @@ import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
-import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
+import {
+    useAppSelector,
+    useAppDispatch,
+    useCoinDecimals,
+    useIndividualCoinMaxBalance,
+} from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountCoinsSelector,
 } from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
 
@@ -44,46 +53,37 @@ const DEFAULT_FORM_STEP = 1;
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const coinType = searchParams.get('type');
-
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
         () => (coinType && aggregateBalances[coinType]) || BigInt(0),
         [coinType, aggregateBalances]
     );
-
     const gasAggregateBalance = useMemo(
-        () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
+        () => aggregateBalances[SUI_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
-
     const coinSymbol = useMemo(
-        () => (coinType && Coin.getCoinSymbol(coinType)) || '',
+        () => (coinType && CoinAPI.getCoinSymbol(coinType)) || '',
         [coinType]
     );
-
+    const allCoins = useAppSelector(accountCoinsSelector);
+    const allCoinsOfTransferType = useMemo(
+        () => allCoins.filter((aCoin) => aCoin.type === coinType),
+        [allCoins, coinType]
+    );
     const [sendError, setSendError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
     const [formData] = useState<FormValues>(initialValues);
-
     const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfSelectedTypeArg = useMemo(
-        () =>
-            allCoins.filter(
-                (aCoin) => coinType && Coin.getCoinTypeArg(aCoin) === coinType
-            ),
-        [coinType, allCoins]
-    );
+    const [gasDecimals] = useCoinDecimals(SUI_TYPE_ARG);
     const [amountToSend, setAmountToSend] = useState(BigInt(0));
-    const gasBudget = useMemo(
-        () =>
-            Coin.computeGasBudgetForPay(
-                allCoinsOfSelectedTypeArg,
-                amountToSend
-            ),
-        [allCoinsOfSelectedTypeArg, amountToSend]
-    );
+    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
+    const gasBudgetEstimation = useMemo(() => {
+        return Coin.computeGasBudgetForPay(
+            allCoinsOfTransferType,
+            amountToSend
+        );
+    }, [allCoinsOfTransferType, amountToSend]);
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
@@ -93,7 +93,8 @@ function TransferCoinPage() {
                 gasAggregateBalance,
                 coinDecimals,
                 gasDecimals,
-                gasBudget
+                gasBudgetEstimation || 0,
+                maxSuiSingleCoinBalance
             ),
         [
             coinType,
@@ -102,7 +103,8 @@ function TransferCoinPage() {
             coinDecimals,
             gasDecimals,
             gasAggregateBalance,
-            gasBudget,
+            gasBudgetEstimation,
+            maxSuiSingleCoinBalance,
         ]
     );
     const validationSchemaStepTwo = useMemo(
@@ -117,7 +119,7 @@ function TransferCoinPage() {
             { to, amount }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
-            if (coinType === null) {
+            if (coinType === null || !gasBudgetEstimation) {
                 return;
             }
             setSendError(null);
@@ -125,17 +127,13 @@ function TransferCoinPage() {
                 props: { coinType },
             });
             try {
-                const bigIntAmount = BigInt(
-                    new BigNumber(amount)
-                        .shiftedBy(coinDecimals)
-                        .integerValue()
-                        .toString()
-                );
+                const bigIntAmount = parseAmount(amount, coinDecimals);
                 const response = await dispatch(
                     sendTokens({
                         amount: bigIntAmount,
                         recipientAddress: to,
                         tokenTypeArg: coinType,
+                        gasBudget: gasBudgetEstimation,
                     })
                 ).unwrap();
 
@@ -150,7 +148,7 @@ function TransferCoinPage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
+        [dispatch, navigate, coinType, coinDecimals, gasBudgetEstimation]
     );
 
     const handleNextStep = useCallback(
@@ -201,9 +199,10 @@ function TransferCoinPage() {
         >
             <StepTwo
                 submitError={sendError}
-                gasBudget={gasBudget}
                 coinSymbol={coinSymbol}
                 coinType={coinType}
+                gasBudgetEstimation={gasBudgetEstimation}
+                gasCostEstimation={gasBudgetEstimation}
                 onClearSubmitError={handleOnClearSubmitError}
             />
         </Formik>
