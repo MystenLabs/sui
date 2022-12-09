@@ -2212,6 +2212,26 @@ impl AuthorityState {
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
+        if let Some(certificate) = self
+            .process_consensus_transaction(transaction, checkpoint_service)
+            .await?
+        {
+            // The certificate has already been inserted into the pending_certificates table by
+            // process_consensus_transaction() above.
+            self.transaction_manager.enqueue(vec![certificate]).await?;
+        }
+        Ok(())
+    }
+
+    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
+    /// - Verify and initialize the state to execute the certificate.
+    ///   Returns a VerifiedCertificate only if this succeeds.
+    /// - Or update the state for checkpoint or epoch change protocol. Returns None.
+    pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
+        &self,
+        transaction: VerifiedSequencedConsensusTransaction,
+        checkpoint_service: &Arc<C>,
+    ) -> SuiResult<Option<VerifiedCertificate>> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             certificate: consensus_output,
@@ -2228,7 +2248,7 @@ impl AuthorityState {
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
                     // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
                     warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
-                    return Ok(());
+                    return Ok(None);
                 }
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
@@ -2247,7 +2267,7 @@ impl AuthorityState {
                 {
                     debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
                     certificate.digest());
-                    return Ok(());
+                    return Ok(None);
                 }
 
                 if certificate.contains_shared_object() {
@@ -2268,21 +2288,21 @@ impl AuthorityState {
                         .await?;
                 }
 
-                // The certificate was already inserted into pending_certificates by
-                // finish_consensus_message_process.
-                self.transaction_manager.enqueue(vec![certificate]).await
+                Ok(Some(certificate))
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
                 checkpoint_service.notify_checkpoint_signature(info)?;
                 self.database
                     .record_consensus_transaction_processed(&transaction, consensus_index)
-                    .await
+                    .await?;
+                Ok(None)
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 debug!("Received EndOfPublish from {:?}", authority.concise());
                 self.database
                     .record_end_of_publish(*authority, &transaction, consensus_index)
-                    .await
+                    .await?;
+                Ok(None)
             }
         }
     }
