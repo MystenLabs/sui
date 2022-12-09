@@ -202,15 +202,23 @@ impl AuthorityStore {
     // Methods to read the store
     pub fn get_owner_objects(&self, owner: Owner) -> Result<Vec<ObjectInfo>, SuiError> {
         debug!(?owner, "get_owner_objects");
+        Ok(self.get_owner_objects_iterator(owner)?.collect())
+    }
+
+    // Methods to read the store
+    pub fn get_owner_objects_iterator(
+        &self,
+        owner: Owner,
+    ) -> Result<impl Iterator<Item = ObjectInfo> + '_, SuiError> {
+        debug!(?owner, "get_owner_objects");
         Ok(self
             .perpetual_tables
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, ObjectID::ZERO))?
-            .take_while(|((object_owner, _), _)| (object_owner == &owner))
-            .map(|(_, object_info)| object_info)
-            .collect())
+            .take_while(move |((object_owner, _), _)| (object_owner == &owner))
+            .map(|(_, object_info)| object_info))
     }
 
     pub fn get_object_by_key(

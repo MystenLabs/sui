@@ -61,6 +61,7 @@ mod handle;
 pub use handle::SuiNodeHandle;
 use sui_core::authority::ReconfigConsensusMessage;
 use sui_core::checkpoints::CheckpointStore;
+use sui_json_rpc::coin_api::CoinReadApi;
 use sui_types::committee::EpochId;
 
 type ValidatorServerInfo = (
@@ -506,6 +507,7 @@ pub async fn build_server(
     let mut server = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
+    server.register_module(CoinReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
     server.register_module(FullNodeTransactionBuilderApi::new(state.clone()))?;

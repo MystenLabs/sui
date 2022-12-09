@@ -10,14 +10,15 @@ use sui_types::sui_system_state::SuiSystemState;
 use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    EventPage, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
-    MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
+    Balance, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
+    GetRawObjectDataResponse, MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata,
+    SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
     SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionFilter,
     SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
+use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
@@ -32,6 +33,50 @@ use sui_types::query::{EventQuery, TransactionQuery};
 /// To avoid unnecessary dependency on that crate, we have a reference here
 /// for document purposes.
 pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
+
+#[open_rpc(namespace = "sui", tag = "Coin Query API")]
+#[rpc(server, client, namespace = "sui")]
+pub trait CoinReadApi {
+    /// Return the list of Coin objects owned by an address.
+    #[method(name = "getCoins")]
+    async fn get_coins(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: Option<String>,
+        /// optional paging cursor
+        cursor: Option<ObjectID>,
+        /// maximum number of items per page
+        limit: Option<usize>,
+    ) -> RpcResult<CoinPage>;
+
+    /// Return the total coin balance for each coin type.
+    #[method(name = "getBalance")]
+    async fn get_balances(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: Option<String>,
+    ) -> RpcResult<Vec<Balance>>;
+
+    /// Return metadata(e.g., symbol, decimals) for a coin
+    #[method(name = "getCoinMetadata")]
+    async fn get_coin_metadata(
+        &self,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: String,
+    ) -> RpcResult<SuiCoinMetadata>;
+
+    /// Return total supply for a coin
+    #[method(name = "getTotalSupply")]
+    async fn get_total_supply(
+        &self,
+        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: String,
+    ) -> RpcResult<Supply>;
+}
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -96,14 +141,6 @@ pub trait RpcReadApi {
 pub trait RpcFullNodeReadApi {
     #[method(name = "dryRunTransaction")]
     async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
-
-    /// Return metadata(e.g., symbol, decimals) for a coin
-    #[method(name = "getCoinMetadata")]
-    async fn get_coin_metadata(
-        &self,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
-        coin_type: String,
-    ) -> RpcResult<SuiCoinMetadata>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.

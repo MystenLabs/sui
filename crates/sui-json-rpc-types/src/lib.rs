@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
+use fastcrypto::encoding::{Base64, Encoding};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -27,15 +28,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-use sui_types::coin::CoinMetadata;
 use tracing::warn;
 
-use fastcrypto::encoding::{Base64, Encoding};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
     TransactionDigest, TransactionEffectsDigest,
 };
+use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
 use sui_types::error::SuiError;
@@ -63,8 +63,26 @@ mod rpc_types_tests;
 
 pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
-
 pub type EventPage = Page<SuiEventEnvelope, EventID>;
+pub type CoinPage = Page<Coin, ObjectID>;
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Balance {
+    pub coin_type: String,
+    pub coin_object_count: usize,
+    pub total_balance: u128,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Coin {
+    pub coin_type: String,
+    pub coin_object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    pub balance: u64,
+}
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
@@ -418,7 +436,7 @@ impl SuiExecuteTransactionResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiCoinMetadata {
     /// Number of decimal places the coin uses.

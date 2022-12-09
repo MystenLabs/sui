@@ -1749,6 +1749,13 @@ impl AuthorityState {
         self.database.get_owner_objects(owner)
     }
 
+    pub fn get_owner_objects_iterator(
+        &self,
+        owner: Owner,
+    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
+        self.database.get_owner_objects_iterator(owner)
+    }
+
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
         QueryHelpers::get_total_transaction_number(&self.database)
     }
