@@ -55,7 +55,11 @@ import {
   TransactionEffects,
   CoinMetadata,
   versionToString,
+  isValidTransactionDigest,
+  isValidSuiAddress,
+  isValidSuiObjectId,
   normalizeSuiAddress,
+  normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
 } from '../types';
 import { PublicKey, SignatureScheme, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
@@ -315,8 +319,11 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Objects
-  async getObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
+  async getObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
     try {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+        throw new Error('Invalid Sui address');
+      }
       return await this.client.requestWithType(
         'sui_getObjectsOwnedByAddress',
         [address],
@@ -330,13 +337,13 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
+  async getGasObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
   async getCoinBalancesOwnedByAddress(
-    address: string,
+    address: SuiAddress,
     typeArg?: string
   ): Promise<GetObjectDataResponse[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
@@ -352,7 +359,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async selectCoinsWithBalanceGreaterThanOrEqual(
-    address: string,
+    address: SuiAddress,
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
@@ -366,7 +373,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-    address: string,
+    address: SuiAddress,
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
@@ -379,8 +386,11 @@ export class JsonRpcProvider extends Provider {
     )) as GetObjectDataResponse[];
   }
 
-  async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
+  async getObjectsOwnedByObject(objectId: ObjectId): Promise<SuiObjectInfo[]> {
     try {
+      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
+        throw new Error('Invalid Sui Object id');
+      }
       return await this.client.requestWithType(
         'sui_getObjectsOwnedByObject',
         [objectId],
@@ -394,8 +404,11 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getObject(objectId: string): Promise<GetObjectDataResponse> {
+  async getObject(objectId: ObjectId): Promise<GetObjectDataResponse> {
     try {
+      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
+        throw new Error('Invalid Sui Object id');
+      }
       return await this.client.requestWithType(
         'sui_getObject',
         [objectId],
@@ -407,24 +420,29 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getObjectRef(objectId: string): Promise<SuiObjectRef | undefined> {
+  async getObjectRef(objectId: ObjectId): Promise<SuiObjectRef | undefined> {
     const resp = await this.getObject(objectId);
     return getObjectReference(resp);
   }
 
-  async getObjectBatch(objectIds: string[]): Promise<GetObjectDataResponse[]> {
-    const requests = objectIds.map((id) => ({
-      method: 'sui_getObject',
-      args: [id],
-    }));
+  async getObjectBatch(objectIds: ObjectId[]): Promise<GetObjectDataResponse[]> {
     try {
+      const requests = objectIds.map((id) => {
+        if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
+          throw new Error(`Invalid Sui Object id ${id}`);
+        }
+        return { 
+          method: 'sui_getObject',
+          args: [id],
+        };
+      });
       return await this.client.batchRequestWithType(
         requests,
         isGetObjectDataResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
+      throw new Error(`Error fetching object info: ${err} for ids [${objectIds}]`);
     }
   }
 
@@ -450,7 +468,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getTransactionsForObject(
-    objectID: string,
+    objectID: ObjectId,
     descendingOrder: boolean = true
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
@@ -465,6 +483,9 @@ export class JsonRpcProvider extends Provider {
     ];
 
     try {
+      if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
+        throw new Error('Invalid Sui Object id');
+      }
       const results = await this.client.batchRequestWithType(
         requests,
         isPaginatedTransactionDigests,
@@ -479,7 +500,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getTransactionsForAddress(
-    addressID: string,
+    addressID: SuiAddress,
     descendingOrder: boolean = true
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
@@ -493,6 +514,9 @@ export class JsonRpcProvider extends Provider {
       },
     ];
     try {
+      if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
+        throw new Error('Invalid Sui address');
+      }
       const results = await this.client.batchRequestWithType(
         requests,
         isPaginatedTransactionDigests,
@@ -510,6 +534,9 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest
   ): Promise<SuiTransactionResponse> {
     try {
+      if (!isValidTransactionDigest(digest, "base58")) {
+        throw new Error('Invalid Transaction digest');
+      }
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
@@ -523,24 +550,28 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
-
+ 
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
   ): Promise<SuiTransactionResponse[]> {
-    const requests = digests.map((d) => ({
-      method: 'sui_getTransaction',
-      args: [d],
-    }));
     try {
+      const requests = digests.map((d) => {
+        if (!isValidTransactionDigest(d, "base58")) {
+          throw new Error(`Invalid Transaction digest ${d}`);
+        }
+        return { 
+          method: 'sui_getTransaction',
+          args: [d],
+        };
+      });
       return await this.client.batchRequestWithType(
         requests,
         isSuiTransactionResponse,
         this.options.skipDataValidation
       );
     } catch (err) {
-      const list = digests.join(', ').substring(0, -2);
       throw new Error(
-        `Error getting transaction effects: ${err} for digests [${list}]`
+        `Error getting transaction effects: ${err} for digests [${digests}]`
       );
     }
   }
