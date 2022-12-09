@@ -3,7 +3,6 @@
 
 use std::path::Path;
 
-#[cfg(not(msim))]
 use std::str::FromStr;
 
 use sui_config::utils::get_available_port;
