@@ -25,9 +25,9 @@ describe('Object id/Address/Transaction digest validation', () => {
     //empty id
     expect(toolbox.provider.getObject('')).rejects.toThrowError(/Invalid Sui Object id/);
     
-    //more than 20bytes
-    expect(toolbox.provider.getObjectsOwnedByObject('0x4ce52ee7b659b610d59a1ced129291b3d0d4216322')).rejects.toThrowError(/Invalid Sui Object id/);
-    expect(toolbox.provider.getTransactionsForObject('4ce52ee7b659b610d59a1ced129291b3d0d421632')).rejects.toThrowError(/Invalid Sui Object id/);
+    //more than 32bytes
+    expect(toolbox.provider.getObjectsOwnedByObject('0x0000000000000000000000004ce52ee7b659b610d59a1ced129291b3d0d4216322')).rejects.toThrowError(/Invalid Sui Object id/);
+    expect(toolbox.provider.getTransactionsForObject('0000000000000000000000004ce52ee7b659b610d59a1ced129291b3d0d421632')).rejects.toThrowError(/Invalid Sui Object id/);
     
     //wrong batch request
     let objectIds = ['0xBABE', '0xCAFE', '0xWRONG', '0xFACE'];

@@ -71,10 +71,10 @@ describe('String type guards', () => {
     it('accepts hex strings of the correct length, regardless of 0x prefix', () => {
       expectAll(
         [
-          '9edd26f2ef1c1796f9feaa703c8628e5a70618c8',
-          '5f713bef531629b47dd1bdbb382acec5224fc9ab',
-          '0Xdce47e3e523b5e52a36d74295c0d83d91f80b47c',
-          '0x4288ba9932cc115784794fcfb709213f30d40a54',
+          '0x152de351f97b10b032c54dd7ee38729f8af117ee99943eec82a381270f73bfc0',
+          '0X500354b0b774944d83aa668aa709fa8168bdf6b5e9886d91afea3d54a081a87f',
+          '0xd54e55c5001235b8821201183123e76af03cbf3a1d7ee64f0636af4210f348b3',
+          '0xaa57a42eba21ca32437dc6fa11a1d7416b4851e31fc05d78377eae764775fa64',
         ],
         isValidSuiAddress,
         true
@@ -92,7 +92,7 @@ describe('String type guards', () => {
           '0X000000000000000000000000000000000000002',
         ],
         normalizeSuiAddress,
-        '0x0000000000000000000000000000000000000002'
+        '0x0000000000000000000000000000000000000000000000000000000000000002'
       );
     });
   });

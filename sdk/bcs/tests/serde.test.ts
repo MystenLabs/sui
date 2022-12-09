@@ -26,31 +26,31 @@ describe('serde', () => {
         expect(serde(bcs, 'bool', true)).toEqual(true);
         expect(serde(bcs, 'bool', false)).toEqual(false);
 
-        expect(serde(bcs, 'address', '0xe3edac2c684ddbba5ad1a2b90fb361100b2094af')).toEqual('e3edac2c684ddbba5ad1a2b90fb361100b2094af');
+        expect(serde(bcs, 'address', '0x000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af')).toEqual('000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af');
     });
 
     it('should serde structs', () => {
         let bcs = new BCS(getSuiMoveConfig());
 
-        bcs.registerAddressType('address', 20, 'hex');
+        bcs.registerAddressType('address', 32, 'hex');
         bcs.registerStructType('Beep', { id: 'address', value: 'u64' });
 
-        let bytes = bcs.ser('Beep', { id: '0x45aacd9ed90a5a8e211502ac3fa898a3819f23b2', value: 10000000 }).toBytes();
+        let bytes = bcs.ser('Beep', { id: '0x00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2', value: 10000000 }).toBytes();
         let struct = bcs.de('Beep', bytes);
 
-        expect(struct.id).toEqual('45aacd9ed90a5a8e211502ac3fa898a3819f23b2');
+        expect(struct.id).toEqual('00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2');
         expect(struct.value.toString(10)).toEqual('10000000');
     });
 
     it('should serde enums', () => {
         let bcs = new BCS(getSuiMoveConfig());
-        bcs.registerAddressType('address', 20, 'hex');
+        bcs.registerAddressType('address', 32, 'hex');
         bcs.registerEnumType('Enum', {
             with_value: 'address',
             no_value: null
         });
 
-        let addr = '45aacd9ed90a5a8e211502ac3fa898a3819f23b2';
+        let addr = '00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2';
 
         expect(addr).toEqual(bcs.de('Enum', bcs.ser('Enum', { with_value: addr }).toBytes()).with_value);
         expect('no_value' in bcs.de('Enum', bcs.ser('Enum', { no_value: null }).toBytes())).toBeTruthy();
@@ -81,10 +81,10 @@ describe('serde', () => {
 
         {
             let value = [
-                'e3edac2c684ddbba5ad1a2b90fb361100b2094af',
-                '0000000000000000000000000000000000000001',
-                '0000000000000000000000000000000000000002',
-                'c0ffeec0ffeec0ffeec0ffeec0ffeec0ffee1337',
+                '000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af',
+                '0000000000000000000000000000000000000000000000000000000000000001',
+                '0000000000000000000000000000000000000000000000000000000000000002',
+                '000000000000000000000000c0ffeec0ffeec0ffeec0ffeec0ffeec0ffee1337',
             ];
 
             expect(serde(bcs, 'vector<address>', value)).toEqual(value);
@@ -123,7 +123,7 @@ describe('serde', () => {
 
         {
             let value = {
-                owner: '0000000000000000000000000000000000000001',
+                owner: '0000000000000000000000000000000000000000000000000000000000000001',
                 is_active: true,
                 item: { balance: { value: '10000' } }
             };

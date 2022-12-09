@@ -47,8 +47,8 @@ module sui::bcs {
     /// For when ULEB byte is out of range (or not found).
     const ELenOutOfRange: u64 = 2;
 
-    /// Address length in Sui is 20 bytes.
-    const SUI_ADDRESS_LENGTH: u64 = 20;
+    /// Address length in Sui is 32 bytes.
+    const SUI_ADDRESS_LENGTH: u64 = 32;
 
     /// A helper struct that saves resources on operations. For better
     /// vector performance, it stores reversed bytes of the BCS and
@@ -82,7 +82,7 @@ module sui::bcs {
     public fun peel_address(bcs: &mut BCS): address {
         assert!(v::length(&bcs.bytes) >= SUI_ADDRESS_LENGTH, EOutOfRange);
         let (addr_bytes, i) = (v::empty(), 0);
-        while (i < 20) {
+        while (i < SUI_ADDRESS_LENGTH) {
             v::push_back(&mut addr_bytes, v::pop_back(&mut bcs.bytes));
             i = i + 1;
         };

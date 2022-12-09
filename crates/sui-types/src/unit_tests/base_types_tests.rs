@@ -208,8 +208,8 @@ fn test_object_id_serde_with_expected_value() {
 #[test]
 fn test_object_id_zero_padding() {
     let hex = "0x2";
-    let long_hex = "0x0000000000000000000000000000000000000002";
-    let long_hex_alt = "0000000000000000000000000000000000000002";
+    let long_hex = "0x0000000000000000000000000000000000000000000000000000000000000002";
+    let long_hex_alt = "0000000000000000000000000000000000000000000000000000000000000002";
     let obj_id_1 = ObjectID::from_str(hex).unwrap();
     let obj_id_2 = ObjectID::from_str(long_hex).unwrap();
     let obj_id_3 = ObjectID::from_str(long_hex_alt).unwrap();

@@ -34,6 +34,18 @@ fn public_key_equality() {
     assert_ne!(k1_pk1, k1_pk2);
 }
 
+#[test]
+fn test_proof_of_possession() {
+    let (address, _) = random_key_pair_by_type(SignatureScheme::ED25519).unwrap();
+    let kp: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let pop = generate_proof_of_possession(&kp, address);
+    let mut msg = vec![];
+    msg.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
+    msg.extend_from_slice(kp.public().as_bytes());
+    msg.extend_from_slice(address.as_ref());
+    assert!(kp.public().verify(&msg, &pop).is_ok());
+}
+
 proptest! {
     // Check those functions do not panic
     #[test]
@@ -72,6 +84,4 @@ proptest! {
         let _skp: Result<SuiKeyPair, _> = bincode::deserialize(&bytes);
         let _pk: Result<PublicKey, _> = bincode::deserialize(&bytes);
     }
-
-
 }

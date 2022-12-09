@@ -6,6 +6,6 @@ module id_entry_args::test {
     use sui::object::{Self, ID};
 
     public entry fun test_id(id: ID, _ctx: &mut TxContext) {
-        assert!(object::id_to_address(&id) == @0xc2b5625c221264078310a084df0a3137956d20ee, 0);
+        assert!(object::id_to_address(&id) == @0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee, 0);
     }
 }

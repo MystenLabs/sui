@@ -632,8 +632,8 @@ export class BCS {
   /**
    * Register an address type which is a sequence of U8s of specified length.
    * @example
-   * bcs.registerAddressType('address', 20);
-   * let addr = bcs.de('address', 'ca27601ec5d915dd40d42e36c395d4a156b24026');
+   * bcs.registerAddressType('address', 32);
+   * let addr = bcs.de('address', '000000000000000000000000ca27601ec5d915dd40d42e36c395d4a156b24026');
    *
    * @param name Name of the address type.
    * @param length Byte length of the address.
@@ -1100,7 +1100,7 @@ export function getRustConfig(): BcsConfig {
   return {
     genericSeparators: ["<", ">"],
     vectorType: "Vec",
-    addressLength: 20,
+    addressLength: 32,
     addressEncoding: "hex",
   };
 }
@@ -1109,7 +1109,7 @@ export function getSuiMoveConfig(): BcsConfig {
   return {
     genericSeparators: ["<", ">"],
     vectorType: "vector",
-    addressLength: 20,
+    addressLength: 32,
     addressEncoding: "hex",
   };
 }

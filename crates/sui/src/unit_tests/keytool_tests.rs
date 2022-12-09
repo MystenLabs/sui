@@ -187,7 +187,7 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     keystore.addresses().iter().for_each(|addr| {
         assert_eq!(
             addr.to_string(),
-            "0xed17b3f435c03ff69c2cdc6d394932e68375f20f"
+            "0xed17b3f435c03ff69c2cdc6d394932e68375f20ff3576f626ed3e7994cf64a4e"
         );
     });
     Ok(())

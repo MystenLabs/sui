@@ -10,24 +10,24 @@ import { Ed25519PublicKey } from '../../../src';
 // ../sui/target/debug/sui keytool list
 let TEST_CASES = new Map<string, string>([
   [
-    'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
-    '3415400a4bfdf924aefa55446e5f4cd6e9a9399f',
+    'uk5FNwcG3P5Z51optEAfuJKUoytfwoRD2gLco2m0SqQ=',
+    '16be190399e25dc1a62be805fd6b6007a716d6db613c63ef39e5d252ed018520',
   ],
   [
-    '0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
-    '2e6dad710b343b8655825bc420783aaa5ade08c2',
+    'IeWrDXtC+DAUef25EEA6avPHFp5iXJbV97UVZ+QMWSc=',
+    '500354b0b774944d83aa668aa709fa8168bdf6b5e9886d91afea3d54a081a87f',
   ],
   [
-    '6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
-    '607a2403069d547c3fbba4b9e22793c7d78abb1f',
+    'o4mXpCJ9+9VB6s7dbx4amjxw18840pg5Jp8tdTWuXqM=',
+    'aa57a42eba21ca32437dc6fa11a1d7416b4851e31fc05d78377eae764775fa64',
   ],
   [
-    '6qZ88i8NJjaD+qZety3qXi4pLptGKS3wwO8bfDmUD+Y=',
-    '7a4b0fd76cce17ef014d64ec5e073117bfc0b4de',
+    'ZofmxM8S+/1HOehEzPfh7/LyLWGyZfVEMlCm3JJ/b0Q=',
+    'f8e47b7ccdc3da2fa1884980493d9c3210fd15bd52a98ffce990b02a71958cdc',
   ],
   [
-    'RgdFhZXGe21x48rhe9X+Kh/WyFCo9ft6e9nQKZYHpi0=',
-    'ecd7ef15f92a26bc8f22a88a7786fe1aae1051c6',
+    'uk5FNwcG3P5Z51optEAfuJKUoytfwoRD2gLco2m0SqQ=',
+    '16be190399e25dc1a62be805fd6b6007a716d6db613c63ef39e5d252ed018520',
   ],
 ]);
 
@@ -81,13 +81,6 @@ describe('Ed25519PublicKey', () => {
     const key = new Ed25519PublicKey(VALID_KEY_BASE64);
     expect(key.toBytes().length).toBe(32);
     expect(new Ed25519PublicKey(key.toBytes()).equals(key)).toBe(true);
-  });
-
-  it('toSuiAddress', () => {
-    const key = new Ed25519PublicKey(new Uint8Array(BASE64_KEY_BYTES));
-    expect(key.toSuiAddress()).toEqual(
-      '98fc1c8179b95274327069cf3b0ed051fb14e0bc'
-    );
   });
 
   TEST_CASES.forEach((address, base64) => {

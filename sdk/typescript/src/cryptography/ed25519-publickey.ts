@@ -72,6 +72,6 @@ export class Ed25519PublicKey {
     let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['ED25519']]);
     tmp.set(this.toBytes(), 1);
-    return sha3.sha3_256(tmp).slice(0, 40);
+    return sha3.sha3_256(tmp).slice(0, 64);
   }
 }
