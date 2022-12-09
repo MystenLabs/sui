@@ -13,6 +13,7 @@ import type {
 
 import st from './Button.module.scss';
 
+//TODO use CVA
 export type ButtonProps = {
     className?: string;
     mode?: 'neutral' | 'primary' | 'outline' | 'secondary';

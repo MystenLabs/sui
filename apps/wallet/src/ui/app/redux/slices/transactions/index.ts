@@ -70,6 +70,7 @@ export const sendTokens = createAsyncThunk<
 type StakeTokensTXArgs = {
     tokenTypeArg: string;
     amount: bigint;
+    validator_address?: string;
 };
 
 export const StakeTokens = createAsyncThunk<
@@ -79,7 +80,7 @@ export const StakeTokens = createAsyncThunk<
 >(
     'sui-objects/stake',
     async (
-        { tokenTypeArg, amount },
+        { tokenTypeArg, amount, validator_address },
         { getState, extra: { api, keypairVault }, dispatch }
     ) => {
         const state = getState();
@@ -100,7 +101,8 @@ export const StakeTokens = createAsyncThunk<
         );
         const first_validator = activeValidators[0];
         const metadata = (first_validator as SuiMoveObject).fields.metadata;
-        const validatorAddress = (metadata as SuiMoveObject).fields.sui_address;
+        const validatorAddress =
+            validator_address ?? (metadata as SuiMoveObject).fields.sui_address;
         const response = await Coin.stakeCoin(
             api.getSignerInstance(keypairVault.getKeypair()),
             coins,

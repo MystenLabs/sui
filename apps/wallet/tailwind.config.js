@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module.exports = {
-    ...require('@mysten/core/tailwind.config'),
+    presets: [require('@mysten/core/tailwind.config')],
 
     /*
      * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
@@ -11,5 +11,16 @@ module.exports = {
      */
     corePlugins: {
         preflight: false,
+    },
+    theme: {
+        extend: {
+            height: {
+                header: '68px',
+                icon: '30px',
+            },
+            width: {
+                icon: '30px',
+            },
+        },
     },
 };

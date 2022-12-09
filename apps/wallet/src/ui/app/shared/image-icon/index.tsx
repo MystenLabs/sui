@@ -11,7 +11,7 @@ const imageStyle = cva([], {
             medium: 'w-icon h-icon',
         },
         variant: {
-            rounded: 'rounded-full',
+            rounded: 'rounded-full overflow-hidden',
             square: 'rounded-none',
         },
         fillers: {
@@ -40,7 +40,13 @@ export interface IconProps extends VariantProps<typeof imageStyle> {
 export function ImageIcon({ src, alt, ...styleProps }: IconProps) {
     return (
         <div className={imageStyle(styleProps)}>
-            {src && <img src={src} className="h-full w-full" alt={alt} />}
+            {src ? (
+                <img src={src} className="h-full w-full" alt={alt} />
+            ) : (
+                <div className="h-full w-full flex items-center justify-center font-semibold text-body text-hero-dark capitalize">
+                    {alt.charAt(0)}
+                </div>
+            )}
         </div>
     );
 }

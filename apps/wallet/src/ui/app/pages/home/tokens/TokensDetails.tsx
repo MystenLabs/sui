@@ -5,13 +5,11 @@ import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
-import { usePendingDelegation } from '../../../staking/usePendingDelegation';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetMessageInfo from '_app/shared/faucet/message-info';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
-import { activeDelegationIDsSelector } from '_app/staking/selectors';
 import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -87,13 +85,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || GAS_TYPE_ARG;
     const balances = useAppSelector(accountAggregateBalancesSelector);
-    const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
-
-    const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
-        usePendingDelegation();
-
-    const hasDelegations =
-        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
 
     const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);

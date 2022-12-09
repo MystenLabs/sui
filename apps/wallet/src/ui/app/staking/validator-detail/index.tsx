@@ -9,12 +9,13 @@ import { Text } from '../../shared/Text';
 // import { IconTooltip } from '../../shared/Tooltip';
 import { ImageIcon } from '../../shared/image-icon';
 import { usePendingDelegation } from '../usePendingDelegation';
+import { StakingReward } from './StakingRewards';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import Card, { CardRow, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
 import {
-    //  activeDelegationIDsSelector,
+    activeDelegationIDsSelector,
     getValidatorSelector,
     totalActiveStakedSelector,
 } from '_app/staking/selectors';
@@ -53,12 +54,9 @@ export function ValidatorDetail() {
     const logo = null;
     const pageTitle = (
         <div className="flex gap-2 items-center capitalize">
-            <ImageIcon
-                src={logo}
-                alt={validatorName}
-                fillers={!!logo}
-                variant="rounded"
-            />
+            {logo && (
+                <ImageIcon src={logo} alt={validatorName} variant="rounded" />
+            )}
             {validatorName}
         </div>
     );
@@ -91,7 +89,7 @@ function ValidatorDetailCard({
 }: {
     validatorAddress: string;
 }) {
-    // const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
+    const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
     /*const validatorByAddress = useAppSelector(
         getValidatorSelector(validatorAddress)
     );*/
@@ -103,125 +101,137 @@ function ValidatorDetailCard({
         totalStaked +
         pendingDelegations.reduce((acc, { staked }) => acc + staked, 0n);
 
+    const hasDelegations =
+        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
+
     const apy = 7.5;
     const commission_rate = 0.42;
 
     return (
-        <BottomMenuLayout>
-            <Content>
-                <Loading
-                    loading={pendingDelegationsLoading}
-                    className="justify-center w-full h-full flex items-center"
+        <div className="flex flex-col flex-nowrap flex-grow h-full">
+            <BottomMenuLayout>
+                <Content>
+                    <Loading
+                        loading={pendingDelegationsLoading}
+                        className="justify-center w-full h-full flex items-center"
+                    >
+                        <Card className="mb-4">
+                            <CardHeader>
+                                <CardItem
+                                    title="Your Stake"
+                                    value={
+                                        <CoinBalance
+                                            balance={
+                                                totalStakedIncludingPending
+                                            }
+                                            type={GAS_TYPE_ARG}
+                                            diffSymbol={true}
+                                        />
+                                    }
+                                />
+
+                                <CardItem
+                                    title="EARNED"
+                                    value={
+                                        <CoinBalance
+                                            balance={BigInt(0)}
+                                            type={GAS_TYPE_ARG}
+                                            mode="positive"
+                                            diffSymbol={true}
+                                            title="This value currently is not available"
+                                        />
+                                    }
+                                />
+                            </CardHeader>
+                            <CardRow>
+                                <CardItem
+                                    title="APY"
+                                    value={
+                                        <div className="flex gap-0.5 items-baseline ">
+                                            <Text
+                                                variant="heading4"
+                                                weight="semibold"
+                                                color="gray-90"
+                                            >
+                                                {apy}
+                                            </Text>
+
+                                            <Text
+                                                variant="subtitleSmall"
+                                                weight="medium"
+                                                color="steel-dark"
+                                            >
+                                                %
+                                            </Text>
+                                        </div>
+                                    }
+                                />
+
+                                <CardItem
+                                    title="Commission"
+                                    value={
+                                        <div className="flex gap-0.5 items-baseline ">
+                                            <Text
+                                                variant="heading4"
+                                                weight="semibold"
+                                                color="gray-90"
+                                            >
+                                                {commission_rate}
+                                            </Text>
+
+                                            <Text
+                                                variant="subtitleSmall"
+                                                weight="medium"
+                                                color="steel-dark"
+                                            >
+                                                %
+                                            </Text>
+                                        </div>
+                                    }
+                                />
+                            </CardRow>
+                        </Card>
+                        <div className="flex gap-2.5 mb-8">
+                            <Button
+                                size="large"
+                                mode="outline"
+                                href="new"
+                                className="bg-gray-50 w-1/2"
+                            >
+                                <Icon icon={SuiIcons.Add} />
+                                Stake SUI
+                            </Button>
+                            {hasDelegations && (
+                                <Button
+                                    size="large"
+                                    mode="outline"
+                                    href="new"
+                                    className=" "
+                                >
+                                    <Icon
+                                        icon={SuiIcons.Remove}
+                                        className="text-heading6"
+                                    />
+                                    Unstake SUI
+                                </Button>
+                            )}
+                        </div>
+                    </Loading>
+                    <StakingReward />
+                </Content>
+                <Button
+                    size="large"
+                    mode="neutral"
+                    href="/stake"
+                    className="!text-steel-darker"
                 >
-                    <Card className="mb-4">
-                        <CardHeader>
-                            <CardItem
-                                title="Your Stake"
-                                value={
-                                    <CoinBalance
-                                        balance={totalStakedIncludingPending}
-                                        type={GAS_TYPE_ARG}
-                                        diffSymbol={true}
-                                    />
-                                }
-                            />
-
-                            <CardItem
-                                title="EARNED"
-                                value={
-                                    <CoinBalance
-                                        balance={BigInt(0)}
-                                        type={GAS_TYPE_ARG}
-                                        mode="positive"
-                                        diffSymbol={true}
-                                        title="This value currently is not available"
-                                    />
-                                }
-                            />
-                        </CardHeader>
-                        <CardRow>
-                            <CardItem
-                                title="APY"
-                                value={
-                                    <div className="flex gap-0.5 items-baseline ">
-                                        <Text
-                                            variant="heading4"
-                                            weight="semibold"
-                                            color="gray-90"
-                                        >
-                                            {apy}
-                                        </Text>
-
-                                        <Text
-                                            variant="subtitleSmall"
-                                            weight="medium"
-                                            color="steel-dark"
-                                        >
-                                            %
-                                        </Text>
-                                    </div>
-                                }
-                            />
-
-                            <CardItem
-                                title="Commission"
-                                value={
-                                    <div className="flex gap-0.5 items-baseline ">
-                                        <Text
-                                            variant="heading4"
-                                            weight="semibold"
-                                            color="gray-90"
-                                        >
-                                            {commission_rate}
-                                        </Text>
-
-                                        <Text
-                                            variant="subtitleSmall"
-                                            weight="medium"
-                                            color="steel-dark"
-                                        >
-                                            %
-                                        </Text>
-                                    </div>
-                                }
-                            />
-                        </CardRow>
-                    </Card>
-                    <div className="flex gap-2.5 mb-4">
-                        <Button
-                            size="large"
-                            mode="outline"
-                            href="new"
-                            className="bg-gray-50 w-1/2"
-                        >
-                            Stake SUI
-                            <Icon icon={SuiIcons.ArrowRight} />
-                        </Button>
-                        <Button
-                            size="large"
-                            mode="outline"
-                            href="new"
-                            className="bg-gray-50 w-1/2 border border-steel-dark text-steel-dark"
-                        >
-                            Unstake SUI
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className="text-caption font-thin"
-                            />
-                        </Button>
-                    </div>
-                </Loading>
-            </Content>
-
-            <Button
-                size="large"
-                mode="neutral"
-                href="new"
-                title="Currently disabled"
-            >
-                Back
-                <Icon icon={SuiIcons.ArrowRight} />
-            </Button>
-        </BottomMenuLayout>
+                    <Icon
+                        icon={SuiIcons.ArrowLeft}
+                        className="text-body text-gray-60 font-normal"
+                    />
+                    Back
+                </Button>
+            </BottomMenuLayout>
+        </div>
     );
 }

@@ -192,12 +192,13 @@ function StakedCard({
                     href="new"
                     title="Currently disabled"
                     disabled={!stakingEnabled}
+                    className="!text-steel-darker"
                 >
-                    Stake Coins
                     <Icon
-                        icon={SuiIcons.ArrowRight}
-                        className={st.arrowActionIcon}
+                        icon={SuiIcons.Plus}
+                        className="text-body text-gray-65 font-normal"
                     />
+                    Stake SUI
                 </Button>
             </BottomMenuLayout>
         </div>

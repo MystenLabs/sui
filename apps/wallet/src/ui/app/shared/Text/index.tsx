@@ -34,6 +34,7 @@ const textStyles = cva([], {
             steel: 'text-steel',
             'steel-dark': 'text-steel-dark',
             'steel-darker': 'text-steel-darker',
+            'hero-dark': 'text-hero-dark',
         },
         italic: {
             true: 'italic',
