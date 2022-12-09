@@ -9049,6 +9049,7 @@ dependencies = [
  "criterion",
  "enum_dispatch",
  "eyre",
+ "fastcrypto",
  "fdlimit",
  "flexstr",
  "futures",

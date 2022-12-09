@@ -18,6 +18,7 @@ use std::usize;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
+use fastcrypto::encoding::{Base64, Encoding};
 use flexstr::SharedStr;
 use futures::prelude::stream::BoxStream;
 use move_core_types::identifier::Identifier;
@@ -337,9 +338,12 @@ impl StoredEvent {
     }
 
     fn object_digest(&self) -> Result<Option<ObjectDigest>, anyhow::Error> {
-        Ok(self.extract_string_field(OBJECT_DIGEST_KEY)?
-        .map(|opt| ObjectDigest::try_from(opt.as_bytes()))
-        .transpose()?)
+        Ok(self
+            .extract_string_field(OBJECT_DIGEST_KEY)?
+            .map(|opt| Base64::decode(&opt).map_err(|e| anyhow!(e))
+            .and_then(|op| ObjectDigest::try_from(op.as_ref())
+            .map_err(|e| anyhow!(e))))
+            .transpose()?)
     }
 
     fn change_type(&self) -> Result<Option<BalanceChangeType>, anyhow::Error> {

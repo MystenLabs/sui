@@ -7,7 +7,6 @@ use core::time::Duration;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
-use fastcrypto::encoding::{Encoding, Hex};
 
 
 use async_trait::async_trait;
@@ -279,7 +278,7 @@ impl SqlEventStore {
                 fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
             }
             if let Some(digest) = event.event.digest() {
-                fields.insert(OBJECT_DIGEST_KEY, Hex::encode(digest.0));
+                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::encode(&digest));
             }
             json!(fields).to_string()
         }
