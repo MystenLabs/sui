@@ -18,7 +18,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
-use mysten_metrics::{monitored_future, spawn_monitored_task};
+use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
 use network::UnreliableNetwork;
 use rand::{rngs::SmallRng, SeedableRng};
@@ -200,31 +200,34 @@ impl BlockSynchronizer {
         certificate_store: CertificateStore,
         parameters: Parameters,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            let _ = &parameters;
-            Self {
-                name,
-                committee,
-                worker_cache,
-                rx_reconfigure,
-                rx_block_synchronizer_commands,
-                pending_requests: HashMap::new(),
-                network,
-                payload_store,
-                certificate_store,
-                certificates_synchronize_timeout: parameters
-                    .block_synchronizer
-                    .certificates_synchronize_timeout,
-                payload_synchronize_timeout: parameters
-                    .block_synchronizer
-                    .payload_availability_timeout,
-                payload_availability_timeout: parameters
-                    .block_synchronizer
-                    .payload_availability_timeout,
-            }
-            .run()
-            .await;
-        })
+        spawn_logged_monitored_task!(
+            async move {
+                let _ = &parameters;
+                Self {
+                    name,
+                    committee,
+                    worker_cache,
+                    rx_reconfigure,
+                    rx_block_synchronizer_commands,
+                    pending_requests: HashMap::new(),
+                    network,
+                    payload_store,
+                    certificate_store,
+                    certificates_synchronize_timeout: parameters
+                        .block_synchronizer
+                        .certificates_synchronize_timeout,
+                    payload_synchronize_timeout: parameters
+                        .block_synchronizer
+                        .payload_availability_timeout,
+                    payload_availability_timeout: parameters
+                        .block_synchronizer
+                        .payload_availability_timeout,
+                }
+                .run()
+                .await;
+            },
+            "BlockSynchronizerTask"
+        )
     }
 
     pub async fn run(&mut self) {

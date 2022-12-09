@@ -17,7 +17,7 @@ use std::{sync::Arc, time::Duration, vec};
 
 use async_trait::async_trait;
 use fastcrypto::hash::Hash;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_logged_monitored_task;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use tokio::time::Instant;
@@ -74,18 +74,24 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     let rx_reconfigure_subscriber = tx_reconfigure.subscribe();
 
     vec![
-        spawn_monitored_task!(run_notify(state, rx_notifier, rx_reconfigure_notify)),
-        spawn_monitored_task!(create_and_run_subscriber(
-            name,
-            network,
-            worker_cache,
-            committee,
-            rx_reconfigure_subscriber,
-            rx_sequence,
-            metrics,
-            restored_consensus_output,
-            tx_notifier,
-        )),
+        spawn_logged_monitored_task!(
+            run_notify(state, rx_notifier, rx_reconfigure_notify),
+            "SubscriberNotifyTask"
+        ),
+        spawn_logged_monitored_task!(
+            create_and_run_subscriber(
+                name,
+                network,
+                worker_cache,
+                committee,
+                rx_reconfigure_subscriber,
+                rx_sequence,
+                metrics,
+                restored_consensus_output,
+                tx_notifier,
+            ),
+            "SubscriberTask"
+        ),
     ]
 }
 
