@@ -556,7 +556,7 @@ export class JsonRpcProvider extends Provider {
   ): Promise<SuiTransactionResponse[]> {
     try {
       const requests = digests.map((d) => {
-        if (!isValidTransactionDigest(d, "base64") && !isValidTransactionDigest(d, "base58")) {
+        if (!isValidTransactionDigest(d, "base58")) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
         return { 
