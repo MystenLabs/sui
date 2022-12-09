@@ -1,43 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
 import { Form, Field, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useMemo } from 'react';
+import { useEffect, useRef, memo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import AddressInput from '_components/address-input';
+import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector, useSigner } from '_hooks';
-import { accountAggregateBalancesSelector } from '_redux/slices/account';
-import {
-    DEFAULT_NFT_TRANSFER_GAS_FEE,
-    GAS_TYPE_ARG,
-} from '_redux/slices/sui-objects/Coin';
+import { useIndividualCoinMaxBalance } from '_hooks';
 
 import type { FormValues } from '.';
-import type { ObjectId } from '@mysten/sui.js';
 
 import st from './TransferNFTForm.module.scss';
 
 export type TransferNFTFormProps = {
-    nftID: ObjectId;
     submitError: string | null;
+    gasBudget: number;
     onClearSubmitError: () => void;
 };
 
 function TransferNFTForm({
-    nftID,
     submitError,
+    gasBudget,
     onClearSubmitError,
 }: TransferNFTFormProps) {
     const {
         isSubmitting,
         isValid,
-        isValidating,
         values: { to },
     } = useFormikContext<FormValues>();
     const onClearRef = useRef(onClearSubmitError);
@@ -45,36 +39,8 @@ function TransferNFTForm({
     useEffect(() => {
         onClearRef.current();
     }, [to]);
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-    const gasAggregateBalance = useMemo(
-        () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
-        [aggregateBalances]
-    );
-    const signer = useSigner();
-    const gasEstimationEnabled = !!(isValid && !isValidating && nftID && to);
-    const gasEstimationResult = useQuery({
-        queryKey: ['nft-transfer', nftID, 'gas-estimation', to],
-        queryFn: async () => {
-            const tx = await signer.serializer.serializeToBytes(
-                await signer.getAddress(),
-                {
-                    kind: 'transferObject',
-                    data: {
-                        objectId: nftID,
-                        recipient: to,
-                        gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
-                    },
-                }
-            );
-            return signer.getGasCostEstimation(tx);
-        },
-        enabled: gasEstimationEnabled,
-    });
-    const gasEstimation = gasEstimationResult.isError
-        ? DEFAULT_NFT_TRANSFER_GAS_FEE
-        : gasEstimationResult.data ?? null; // make undefined null
-    const isInsufficientGas =
-        gasEstimation !== null ? gasAggregateBalance < gasEstimation : null;
+    const maxGasCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
+    const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudget);
     return (
         <div className={st.sendNft}>
             <Content>
@@ -98,12 +64,18 @@ function TransferNFTForm({
                         />
                     </div>
                     {isInsufficientGas ? (
-                        <div className={st.error}>
-                            * Insufficient balance to cover transfer cost
+                        <div className="mt-2.5">
+                            <Alert>
+                                Insufficient balance, no individual coin found
+                                with enough balance to cover for the transfer
+                                cost
+                            </Alert>
                         </div>
                     ) : null}
                     {submitError ? (
-                        <div className={st.error}>{submitError}</div>
+                        <div className="mt-2.5">
+                            <Alert>{submitError}</Alert>
+                        </div>
                     ) : null}
                     <div className={st.formcta}>
                         <Button
@@ -114,13 +86,11 @@ function TransferNFTForm({
                                 !isValid ||
                                 isSubmitting ||
                                 isInsufficientGas ||
-                                gasEstimationResult.isLoading
+                                gasBudget === null
                             }
                             className={cl(st.action, 'btn', st.sendNftBtn)}
                         >
-                            {isSubmitting ||
-                            (gasEstimationEnabled &&
-                                gasEstimationResult.isLoading) ? (
+                            {isSubmitting ? (
                                 <LoadingIndicator />
                             ) : (
                                 <>
