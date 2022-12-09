@@ -7,9 +7,11 @@ use crate::schema::objects::dsl::{
     object_id as object_id_column, object_status as object_status_column, objects as objects_table,
     version as version_column,
 };
+use crate::PgPoolConnection;
 
 use diesel::pg::upsert::excluded;
 use diesel::prelude::*;
+use diesel::result::Error;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::SuiEvent;
 use sui_types::object::Owner;
@@ -43,50 +45,63 @@ pub struct NewObject {
 }
 
 pub fn commit_new_objects(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     new_objects: Vec<NewObject>,
 ) -> Result<usize, IndexerError> {
     if new_objects.is_empty() {
         return Ok(0);
     }
-    diesel::insert_into(objects::table)
-        .values(&new_objects)
-        .on_conflict(object_id_column)
-        .do_nothing()
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed inserting new objects into database with objects {:?} and error: {:?}",
-                new_objects, e
-            ))
-        })
+    let new_obj_commit_result = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+            diesel::insert_into(objects::table)
+                .values(&new_objects)
+                .on_conflict(object_id_column)
+                .do_nothing()
+                .execute(conn)
+        });
+
+    new_obj_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed inserting new objects into database with objects {:?} and error: {:?}",
+            new_objects, e
+        ))
+    })
 }
 
 pub fn commit_object_transfers(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     object_transfers: Vec<NewObject>,
 ) -> Result<usize, IndexerError> {
     if object_transfers.is_empty() {
         return Ok(0);
     }
-    diesel::insert_into(objects::table)
-        .values(&object_transfers)
-        .on_conflict(object_id_column)
-        .do_nothing()
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed inserting object transfers into database with objects {:?} and error: {:?}",
-                object_transfers, e
-            ))
-        })
+
+    let obj_transfer_commit_result = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+            diesel::insert_into(objects::table)
+                .values(&object_transfers)
+                .on_conflict(object_id_column)
+                .do_nothing()
+                .execute(conn)
+        });
+
+    obj_transfer_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed inserting object transfers into database with objects {:?} and error: {:?}",
+            object_transfers, e
+        ))
+    })
 }
 
 // Multi-row update is not supported by Diesel, see https://github.com/diesel-rs/diesel/discussions/2879
 // even though Postgres can do it via UPDATE ... FROM.
 // As a work-around, this function will read all related rows into memory, update the columns and upsert back to DB.
 pub fn commit_object_mutations(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     object_mutations: Vec<(String, (i64, String))>,
 ) -> Result<usize, IndexerError> {
     if object_mutations.is_empty() {
@@ -94,11 +109,22 @@ pub fn commit_object_mutations(
     }
     let object_map = BTreeMap::from_iter(object_mutations.into_iter());
     let object_ids: Vec<String> = object_map.keys().cloned().collect();
-    let objs = objects_table.filter(object_id_column.eq_any(object_ids)).load::<Object>(conn).map_err(
-        |e| IndexerError::PostgresReadError(
-            format!("Failed reading selected objects from database for object mutations with error: {:?}", e)
-        )
-    )?;
+
+    let obj_read_result: Result<Vec<Object>, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+        objects_table
+            .filter(object_id_column.eq_any(object_ids))
+            .load::<Object>(conn)
+    });
+
+    let objs = obj_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading selected objects from database for object mutations with error: {:?}",
+            e
+        ))
+    })?;
     let updated_new_objs: Vec<NewObject> = objs
         .into_iter()
         .map(|obj| {
@@ -122,31 +148,48 @@ pub fn commit_object_mutations(
         })
         .collect();
 
-    diesel::insert_into(objects::table)
-        .values(&updated_new_objs)
-        .on_conflict(object_id_column).do_update()
-        .set(
-        (version_column.eq(excluded(version_column)), object_status_column.eq(excluded(object_status_column)))
-    ).execute(conn).map_err(|e| IndexerError::PostgresWriteError(
+    let obj_mutation_commit_result = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+            diesel::insert_into(objects::table)
+                .values(&updated_new_objs)
+                .on_conflict(object_id_column)
+                .do_update()
+                .set((
+                    version_column.eq(excluded(version_column)),
+                    object_status_column.eq(excluded(object_status_column)),
+                ))
+                .execute(conn)
+        });
+
+    obj_mutation_commit_result.map_err(|e| IndexerError::PostgresWriteError(
         format!("Failed writing object mutations to Postgres DB with mutations updated_new_objs {:?} and error: {:?} ", updated_new_objs, e) ))
 }
 
 pub fn commit_object_deletions(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     object_deletions: Vec<String>,
 ) -> Result<usize, IndexerError> {
     if object_deletions.is_empty() {
         return Ok(0);
     }
-    diesel::update(objects::table.filter(object_id_column.eq_any(object_deletions.clone())))
-        .set(object_status_column.eq(DELETED_STATUS.to_string()))
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing object deletions to Postgres DB with IDs {:?} and error: {:?} ",
-                object_deletions, e
-            ))
-        })
+
+    let obj_deletion_commit_result = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+            diesel::update(objects::table.filter(object_id_column.eq_any(object_deletions.clone())))
+                .set(object_status_column.eq(DELETED_STATUS.to_string()))
+                .execute(conn)
+        });
+
+    obj_deletion_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed writing object deletions to Postgres DB with IDs {:?} and error: {:?} ",
+            object_deletions, e
+        ))
+    })
 }
 
 // return owner_type, owner_address and initial_shared_version
@@ -173,7 +216,7 @@ const TRANSFERRED_STATUS: &str = "TRANSFERRED";
 const DELETED_STATUS: &str = "DELETED";
 
 pub fn commit_objects_from_events(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     events: Vec<SuiEvent>,
 ) -> Result<(), IndexerError> {
     let mut new_objects = vec![];
@@ -243,10 +286,10 @@ pub fn commit_objects_from_events(
             _ => {}
         }
     }
-    commit_new_objects(conn, new_objects)?;
-    commit_object_transfers(conn, object_transfers)?;
-    commit_object_mutations(conn, object_mutations)?;
-    commit_object_deletions(conn, object_deletions)?;
+    commit_new_objects(pg_pool_conn, new_objects)?;
+    commit_object_transfers(pg_pool_conn, object_transfers)?;
+    commit_object_mutations(pg_pool_conn, object_mutations)?;
+    commit_object_deletions(pg_pool_conn, object_deletions)?;
 
     Ok(())
 }

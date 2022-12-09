@@ -6,9 +6,11 @@ use crate::schema::events;
 use crate::schema::events::dsl::{events as events_table, id};
 use crate::schema::events::{event_sequence, transaction_sequence};
 use crate::utils::log_errors_to_pg;
+use crate::PgPoolConnection;
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use diesel::result::Error;
 use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope};
 
 #[derive(Queryable, Debug)]
@@ -34,20 +36,26 @@ pub struct NewEvent {
 }
 
 pub fn read_events(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     last_processed_id: i64,
     limit: usize,
 ) -> Result<Vec<Event>, IndexerError> {
-    events_table
-        .filter(id.gt(last_processed_id))
-        .limit(limit as i64)
-        .load::<Event>(conn)
-        .map_err(|e| {
-            IndexerError::PostgresReadError(format!(
-                "Failed reading events with last_processed_id {} and error: {:?}",
-                last_processed_id, e
-            ))
-        })
+    let event_read_result: Result<Vec<Event>, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            events_table
+                .filter(id.gt(last_processed_id))
+                .limit(limit as i64)
+                .load::<Event>(conn)
+        });
+
+    event_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading events with last_processed_id {} and error: {:?}",
+            last_processed_id, e
+        ))
+    })
 }
 
 // NOTE: no need to retry here b/c errors here are not transient,
@@ -76,7 +84,7 @@ pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError>
 }
 
 pub fn commit_events(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     event_page: EventPage,
 ) -> Result<usize, IndexerError> {
     let events = event_page.data;
@@ -87,21 +95,31 @@ pub fn commit_events(
         .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
 
-    log_errors_to_pg(conn, errors);
-    diesel::insert_into(events::table)
-        .values(&new_events)
-        .on_conflict((transaction_sequence, event_sequence))
-        .do_nothing()
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing events to PostgresDB with events {:?} and error: {:?}",
-                new_events, e
-            ))
-        })
+    log_errors_to_pg(pg_pool_conn, errors);
+
+    let event_commit_result: Result<usize, Error> = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+        diesel::insert_into(events::table)
+            .values(&new_events)
+            .on_conflict((transaction_sequence, event_sequence))
+            .do_nothing()
+            .execute(conn)
+    });
+
+    event_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed writing events to PostgresDB with events {:?} and error: {:?}",
+            new_events, e
+        ))
+    })
 }
 
-pub fn events_to_sui_events(conn: &mut PgConnection, events: Vec<Event>) -> Vec<SuiEvent> {
+pub fn events_to_sui_events(
+    pg_pool_conn: &mut PgPoolConnection,
+    events: Vec<Event>,
+) -> Vec<SuiEvent> {
     let mut errors = vec![];
     let sui_events_to_process: Vec<SuiEvent> = events
         .into_iter()
@@ -122,6 +140,7 @@ pub fn events_to_sui_events(conn: &mut PgConnection, events: Vec<Event>) -> Vec<
                 .ok()
         })
         .collect();
-    log_errors_to_pg(conn, errors);
+
+    log_errors_to_pg(pg_pool_conn, errors);
     sui_events_to_process
 }

@@ -3,6 +3,8 @@
 
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use std::sync::Arc;
+use sui_indexer::PgConnectionPool;
 use sui_sdk::SuiClient;
 use tracing::{error, info, warn};
 
@@ -11,20 +13,24 @@ use crate::processors::object_processor::ObjectProcessor;
 use crate::processors::package_processor::PackageProcessor;
 
 pub struct ProcessorOrchestrator {
-    pub rpc_client: SuiClient,
-    pub db_url: String,
+    rpc_client: SuiClient,
+    conn_pool: Arc<PgConnectionPool>,
 }
 
 impl ProcessorOrchestrator {
-    pub fn new(rpc_client: SuiClient, db_url: String) -> Self {
-        Self { rpc_client, db_url }
+    pub fn new(rpc_client: SuiClient, conn_pool: Arc<PgConnectionPool>) -> Self {
+        Self {
+            rpc_client,
+            conn_pool,
+        }
     }
 
     pub async fn run_forever(&mut self) {
         info!("Processor orchestrator started...");
-        let address_processor = AddressProcessor::new(self.db_url.clone());
-        let object_processor = ObjectProcessor::new(self.db_url.clone());
-        let package_processor = PackageProcessor::new(self.rpc_client.clone(), self.db_url.clone());
+        let address_processor = AddressProcessor::new(self.conn_pool.clone());
+        let object_processor = ObjectProcessor::new(self.conn_pool.clone());
+        let package_processor =
+            PackageProcessor::new(self.rpc_client.clone(), self.conn_pool.clone());
 
         tokio::task::spawn(async move {
             let addr_result = retry(ExponentialBackoff::default(), || async {
