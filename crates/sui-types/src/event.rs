@@ -474,7 +474,7 @@ impl Event {
             | Event::MutateObject { version, .. }
             | Event::CoinBalanceChange { version, .. }
             | Event::NewObject { version, .. }
-            | Event::DeleteObject { version, .. } 
+            | Event::DeleteObject { version, .. }
             | Event::Publish { version, .. } => Some(version),
             _ => None,
         }

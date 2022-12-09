@@ -7,7 +7,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use serde_json::json;
 
-use crate::base_types::{SuiAddress, TransactionDigest, ObjectDigest};
+use crate::base_types::{ObjectDigest, SuiAddress, TransactionDigest};
 use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
 use crate::filter::{EventFilter, Filter};
@@ -120,11 +120,11 @@ fn test_publish_filter() {
     let version = PACKAGE_VERSION;
     let digest = ObjectDigest::random();
     // Create a test publish event.
-    let move_event = Event::Publish { 
-        sender, 
-        package_id, 
-        version, 
-        digest 
+    let move_event = Event::Publish {
+        sender,
+        package_id,
+        version,
+        digest,
     };
     let envelope = EventEnvelope {
         timestamp: 0,

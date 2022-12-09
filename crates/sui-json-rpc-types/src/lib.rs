@@ -2142,13 +2142,13 @@ impl TryFrom<SuiEvent> for Event {
                 type_: parse_sui_struct_tag(&type_)?,
                 contents: bcs,
             },
-            SuiEvent::Publish { 
-                sender, 
-                package_id, 
+            SuiEvent::Publish {
+                sender,
+                package_id,
                 version,
                 digest,
-            } => Event::Publish { 
-                sender, 
+            } => Event::Publish {
+                sender,
                 package_id,
                 version,
                 digest,
@@ -2272,14 +2272,14 @@ impl SuiEvent {
                     bcs,
                 }
             }
-            Event::Publish { 
-                sender, 
-                package_id, 
+            Event::Publish {
+                sender,
+                package_id,
                 version,
                 digest,
-            } => SuiEvent::Publish { 
-                sender, 
-                package_id, 
+            } => SuiEvent::Publish {
+                sender,
+                package_id,
                 version,
                 digest,
             },
@@ -2428,14 +2428,14 @@ impl PartialEq<SuiEvent> for Event {
                 version: self_version,
                 digest: self_digest,
             } => {
-                if let SuiEvent::Publish { 
-                    package_id, 
-                    sender, 
+                if let SuiEvent::Publish {
+                    package_id,
+                    sender,
                     version,
                     digest,
-                } = other 
+                } = other
                 {
-                    package_id == self_package_id 
+                    package_id == self_package_id
                         && self_sender == sender
                         && self_version == version
                         && self_digest == digest

@@ -29,7 +29,9 @@ use tokio_stream::StreamExt;
 
 pub use sql::SqlEventStore;
 use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope};
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest, ObjectDigest};
+use sui_types::base_types::{
+    ObjectDigest, ObjectID, SequenceNumber, SuiAddress, TransactionDigest,
+};
 use sui_types::error::SuiError;
 use sui_types::error::SuiError::{StorageCorruptedFieldError, StorageMissingFieldError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
@@ -127,11 +129,11 @@ impl StoredEvent {
         let digest = self.object_digest()?.ok_or_else(|| {
             anyhow::anyhow!("Can't extract object digest from StoredEvent: {self:?}")
         })?;
-        Ok(SuiEvent::Publish { 
-            sender, 
-            package_id, 
+        Ok(SuiEvent::Publish {
+            sender,
+            package_id,
             version,
-            digest
+            digest,
         })
     }
 
@@ -339,9 +341,11 @@ impl StoredEvent {
 
     fn object_digest(&self) -> Result<Option<ObjectDigest>, anyhow::Error> {
         self.extract_string_field(OBJECT_DIGEST_KEY)?
-        .map(|opt| Base64::decode(&opt).map_err(|e| anyhow!(e))
-            .and_then(|op| ObjectDigest::try_from(op.as_ref())
-            .map_err(|e| anyhow!(e))))
+            .map(|opt| {
+                Base64::decode(&opt)
+                    .map_err(|e| anyhow!(e))
+                    .and_then(|op| ObjectDigest::try_from(op.as_ref()).map_err(|e| anyhow!(e)))
+            })
             .transpose()
     }
 
