@@ -201,7 +201,7 @@ impl CoinReadApiServer for CoinReadApi {
                 ?metadata_object_id,
                 "Failed to convert object to CoinMetadata: {:?}", e
             );
-            anyhow!(e)
+            Error::from(e)
         })?)
     }
 
