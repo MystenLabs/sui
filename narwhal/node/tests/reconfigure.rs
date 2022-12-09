@@ -115,9 +115,12 @@ impl SimpleExecutionState {
             guard.epoch = epoch;
         }
 
-        let worker_keypairs = self.worker_keypairs.iter().map(|kp| kp.copy());
-        let worker_ids = 0..self.worker_keypairs.len() as u32;
-        let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs).collect();
+        let worker_ids_and_keypairs = self
+            .worker_keypairs
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (i as WorkerId, k.copy()))
+            .collect();
 
         let new_committee = self.committee.lock().unwrap().clone();
 
@@ -213,9 +216,12 @@ async fn restart() {
 
         validators_execution_states.push(execution_state.clone());
 
-        let worker_keypairs = a.worker_keypairs();
-        let worker_ids = 0..worker_keypairs.len() as u32;
-        let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs.into_iter()).collect();
+        let worker_ids_and_keypairs = a
+            .worker_keypairs()
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (i as WorkerId, k.copy()))
+            .collect();
 
         let committee = committee.clone();
         let worker_cache = worker_cache.clone();
@@ -278,12 +284,12 @@ async fn restart() {
             // Repeatedly send transactions.
             let mut interval = interval(Duration::from_secs(3));
             interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-            tokio::pin!(interval);
 
             loop {
                 tokio::select! {
                     result = rx.recv() => {
-                        // channel broke - we need to exit the loop
+                        // channel closed, we won't be able to receive any further epoch updates so
+                        // we need to exit the loop
                         if result.is_none() {
                             break;
                         }
