@@ -15,6 +15,7 @@ import NFTDisplayCard from '_components/nft-display';
 import { useAppSelector, useAppDispatch, useObjectsState } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import { transferNFT } from '_redux/slices/sui-objects';
+import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -55,8 +56,9 @@ function NftTransferPage() {
             try {
                 const resp = await dispatch(
                     transferNFT({
-                        recipientAddress: to,
-                        nftId: objectId,
+                        recipient: to,
+                        objectId,
+                        gasBudget: DEFAULT_NFT_TRANSFER_GAS_FEE,
                     })
                 ).unwrap();
                 resetForm();
@@ -105,8 +107,8 @@ function NftTransferPage() {
                                 onSubmit={onHandleSubmit}
                             >
                                 <TransferNFTForm
-                                    nftID={objectId}
                                     submitError={sendError}
+                                    gasBudget={DEFAULT_NFT_TRANSFER_GAS_FEE}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
