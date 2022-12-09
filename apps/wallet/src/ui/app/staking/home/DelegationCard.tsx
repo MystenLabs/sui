@@ -33,7 +33,6 @@ const STATE_TO_COPY = {
 const APY_TOOLTIP = 'Annual Percentage Yield';
 
 // TODO: Add these classes when we add delegation detail page.
-// cursor-pointer hover:bg-sui/10 hover:border-sui/30
 
 export function DelegationCard({
     name,
