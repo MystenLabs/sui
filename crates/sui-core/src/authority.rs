@@ -1195,7 +1195,7 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
     ) -> Result<DevInspectResults, anyhow::Error> {
         let (gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, &transaction)
+            transaction_input_checker::check_dev_inspect_input(&self.database, &transaction)
                 .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 

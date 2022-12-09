@@ -113,7 +113,7 @@ impl ExecutionMode for DevInspect {
             .map(|(i, bytes, _)| {
                 let ty =
                     remove_ref_and_subst_ty(&loaded_function.parameters[(*i as usize)], ty_args)?;
-                let tag = type_to_type_tag(&ty);
+                let tag = type_to_type_tag(session, &ty)?;
                 Ok((*i, bytes.clone(), tag))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
@@ -122,7 +122,8 @@ impl ExecutionMode for DevInspect {
             .enumerate()
             .map(|(i, (bytes, _))| {
                 let ty = remove_ref_and_subst_ty(&loaded_function.parameters[i], ty_args)?;
-                Ok((bytes.clone(), type_to_type_tag(&ty)))
+                let tag = type_to_type_tag(session, &ty)?;
+                Ok((bytes.clone(), tag))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         Ok((mutable_reference_outputs, return_values))
@@ -141,6 +142,18 @@ impl ExecutionMode for DevInspect {
     }
 }
 
+fn type_to_type_tag<S: MoveResolver>(
+    session: &Session<S>,
+    ty: &Type,
+) -> Result<TypeTag, ExecutionError> {
+    session.get_type_tag(ty).map_err(|_| {
+        ExecutionError::new_with_source(
+            sui_types::error::ExecutionErrorKind::InvariantViolation,
+            "The type should make a type tag, as the function was already executed",
+        )
+    })
+}
+
 fn remove_ref_and_subst_ty(ty: &Type, ty_args: &[Type]) -> Result<Type, ExecutionError> {
     let ty = match ty {
         Type::Reference(inner) | Type::MutableReference(inner) => inner,
@@ -152,8 +165,4 @@ fn remove_ref_and_subst_ty(ty: &Type, ty_args: &[Type]) -> Result<Type, Executio
             "The type should subst, as the function was already executed",
         )
     })
-}
-
-fn type_to_type_tag(_ty: &Type) -> TypeTag {
-    todo!()
 }
