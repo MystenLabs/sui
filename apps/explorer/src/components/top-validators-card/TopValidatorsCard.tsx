@@ -18,10 +18,12 @@ import { Text } from '~/ui/Text';
 const VALIDATORS_OBJECT_ID = '0x05';
 const NUMBER_OF_VALIDATORS = 10;
 
+const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
+
 export type ValidatorMetadata = {
     type: '0x2::validator::ValidatorMetadata';
     fields: {
-        name: string;
+        name: string | number[];
         net_address: string;
         next_epoch_stake: number;
         pubkey_bytes: string;
@@ -129,14 +131,19 @@ function StakeColumn(prop: { stake: bigint; stakePercent: number }) {
 
 export function processValidators(set: Validator[], totalStake: bigint) {
     return set.map((av) => {
+        let name: string;
         const rawName = av.fields.metadata.fields.name;
-        const name = textDecoder.decode(
-            new Base64DataBuffer(rawName).getData()
-        );
+        if (Array.isArray(rawName)) {
+            name = String.fromCharCode(...rawName);
+        } else {
+            name = textDecoder.decode(new Base64DataBuffer(rawName).getData());
+            if (!VALDIATOR_NAME.test(name)) {
+                name = rawName;
+            }
+        }
         return {
-            name: name,
+            name,
             address: av.fields.metadata.fields.sui_address,
-            pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
             stake: av.fields.stake_amount,
             stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
             delegation_count: av.fields.delegation_count || 0,
