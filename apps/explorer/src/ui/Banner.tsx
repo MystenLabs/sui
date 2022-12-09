@@ -4,10 +4,11 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
+import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
 
 const bannerStyles = cva(
-    'inline-flex items-center gap-2 text-p2 font-medium rounded-lg px-3 py-2',
+    'inline-flex text-p2 font-medium rounded-lg overflow-hidden box-border gap-2 items-center flex-nowrap relative',
     {
         variants: {
             variant: {
@@ -23,9 +24,14 @@ const bannerStyles = cva(
             fullWidth: {
                 true: 'w-full',
             },
+            spacing: {
+                md: 'px-3 py-2',
+                lg: 'p-5',
+            },
         },
         defaultVariants: {
             variant: 'message',
+            spacing: 'md',
         },
     }
 );
@@ -33,6 +39,7 @@ const bannerStyles = cva(
 export interface BannerProps extends VariantProps<typeof bannerStyles> {
     icon?: ReactNode | null;
     children: ReactNode;
+    onDismiss?: () => void;
 }
 
 export function Banner({
@@ -41,13 +48,32 @@ export function Banner({
     variant,
     align,
     fullWidth,
+    spacing,
+    onDismiss,
 }: BannerProps) {
     return (
-        <div className={bannerStyles({ variant, align, fullWidth })}>
+        <div
+            className={bannerStyles({
+                variant,
+                align,
+                fullWidth,
+                spacing,
+                class: onDismiss && 'pr-9',
+            })}
+        >
             {icon && (
                 <div className="flex items-center justify-center">{icon}</div>
             )}
-            {children}
+            <div className="overflow-hidden break-words">{children}</div>
+            {onDismiss ? (
+                <div className="absolute top-0 right-0">
+                    <IconButton
+                        icon="x"
+                        onClick={onDismiss}
+                        aria-label="Close"
+                    />
+                </div>
+            ) : null}
         </div>
     );
 }

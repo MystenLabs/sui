@@ -202,6 +202,8 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                 <div className="h-verticalListLong overflow-auto">
                                     {id && selectedModule ? (
                                         <ModuleFunctionsInteraction
+                                            // force recreating everything when we change modules
+                                            key={`${id}-${selectedModule}`}
                                             packageId={id}
                                             moduleName={selectedModule}
                                         />

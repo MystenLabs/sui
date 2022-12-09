@@ -3,11 +3,12 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { LoadingSpinner } from './LoadingSpinner';
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 const buttonStyles = cva(
     [
-        'inline-flex items-center justify-center',
+        'inline-flex items-center justify-center relative',
         // TODO: Remove when CSS reset is applied.
         'cursor-pointer no-underline',
     ],
@@ -35,10 +36,33 @@ const buttonStyles = cva(
 
 export interface ButtonProps
     extends VariantProps<typeof buttonStyles>,
-        ButtonOrLinkProps {}
+        ButtonOrLinkProps {
+    loading?: boolean;
+}
 
-export function Button({ variant, size, ...props }: ButtonProps) {
+export function Button({
+    variant,
+    size,
+    loading,
+    children,
+    ...props
+}: ButtonProps) {
     return (
-        <ButtonOrLink className={buttonStyles({ variant, size })} {...props} />
+        <ButtonOrLink
+            className={buttonStyles({ variant, size })}
+            {...props}
+            disabled={props.disabled || loading}
+        >
+            {loading ? (
+                <>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <LoadingSpinner />
+                    </div>
+                    <div className="text-transparent">{children}</div>
+                </>
+            ) : (
+                children
+            )}
+        </ButtonOrLink>
     );
 }
