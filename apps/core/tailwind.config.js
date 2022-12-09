@@ -133,10 +133,6 @@ module.exports = {
       },
       height: {
         header: "68px",
-        icon: '30px'
-      },
-      width: {
-        icon: '30px',
       },
       transitionTimingFunction: {
         "ease-in-out-cubic": "cubic-bezier(0.65, 0, 0.35, 1)",
