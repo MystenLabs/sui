@@ -823,7 +823,7 @@ async fn test_handle_move_transaction() {
     assert_eq!(effects.mutated.len(), 1);
 
     let created_object_id = effects.created[0].0 .0;
-    // check that transaction actually created an object with the expected ID, owner, sequence number
+    // check that transaction actually created an object with the expected ID, owner
     let created_obj = authority_state
         .get_object(&created_object_id)
         .await
@@ -831,7 +831,6 @@ async fn test_handle_move_transaction() {
         .unwrap();
     assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
-    assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 }
 
 #[tokio::test]
@@ -1040,7 +1039,6 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(OBJECT_START_VERSION, account.version());
 
     assert!(authority_state
         .parent(&(object_id, account.version(), account.digest()))
