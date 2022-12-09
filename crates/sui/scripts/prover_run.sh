@@ -1,4 +1,4 @@
-# Copyright (c) Mysten Labs
+# Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 # This script runs the Move Prover on Sui's Move framework code.
