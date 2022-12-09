@@ -67,8 +67,8 @@ pub async fn check_certificate_input(
     store: &AuthorityStore,
     cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    let gas_status = get_gas_status(store, &cert.data().data).await?;
-    let input_object_kinds = cert.data().data.input_objects()?;
+    let gas_status = get_gas_status(store, &cert.data().intent_message.value).await?;
+    let input_object_kinds = cert.data().intent_message.value.input_objects()?;
     let tx_data = &cert.data().intent_message.value;
     let input_object_data = if tx_data.kind.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
