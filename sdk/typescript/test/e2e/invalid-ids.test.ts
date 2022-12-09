@@ -39,7 +39,7 @@ describe('Object id/Address/Transaction digest validation', () => {
     expect(toolbox.provider.getTransactionWithEffects('')).rejects.toThrowError(/Invalid Transaction digest/);
     
     //wrong batch request
-    let digests = ['XymFuQ7CQ6UFKsIzjbDWt62JFRtrWsIlTMYB+hELtSw=','wrong'];
+    let digests = ['AQ7FA8JTGs368CvMkXj2iFz2WUWwzP6AAWgsLpPLxUmr','wrong'];
     expect(toolbox.provider.getTransactionWithEffectsBatch(digests)).rejects.toThrowError(/Invalid Transaction digest wrong/);
   })
 });
