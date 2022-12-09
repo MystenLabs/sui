@@ -47,17 +47,18 @@ export const sendTokens = createAsyncThunk<
         const state = getState();
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
         const signer = api.getSignerInstance(keypairVault.getKeypair());
-        const response = await CoinAPI.transfer(
-            signer,
-            coins,
-            tokenTypeArg,
-            amount,
-            recipientAddress,
-            Coin.computeGasBudgetForPay(
-                coins.filter(
-                    (aCoin) => Coin.getCoinTypeArg(aCoin) === tokenTypeArg
-                ),
-                amount
+        const response = await signer.signAndExecuteTransaction(
+            await CoinAPI.newPayTransaction(
+                coins,
+                tokenTypeArg,
+                amount,
+                recipientAddress,
+                Coin.computeGasBudgetForPay(
+                    coins.filter(
+                        (aCoin) => Coin.getCoinTypeArg(aCoin) === tokenTypeArg
+                    ),
+                    amount
+                )
             )
         );
         // TODO: better way to sync latest objects
