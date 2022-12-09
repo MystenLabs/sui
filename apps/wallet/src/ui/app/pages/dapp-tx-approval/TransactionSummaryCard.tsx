@@ -15,8 +15,10 @@ import {
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
-import type { CoinsMetaProps } from '../../hooks/useExecuteDryRunTransactionRequest';
-import type { SignableTransaction, Base64DataBuffer } from '@mysten/sui.js';
+import type {
+    CoinsMetaProps,
+    TransactionDryRun,
+} from '../../hooks/useTransactionDryRun';
 import type { TransactionRequest } from '_payloads/transactions';
 
 import st from './DappTxApprovalPage.module.scss';
@@ -179,7 +181,7 @@ export function TransactionSummaryCard({
     txRequest: TransactionRequest;
     address: string;
 }) {
-    const txData =
+    const txData: TransactionDryRun =
         txRequest.tx.type === 'move-call'
             ? {
                   kind: 'moveCall',
@@ -188,8 +190,7 @@ export function TransactionSummaryCard({
             : txRequest.tx.data;
 
     const txReqData = {
-        id: txRequest.id,
-        txData: txData as string | SignableTransaction | Base64DataBuffer,
+        txData: txData,
         activeAddress: address,
     };
 

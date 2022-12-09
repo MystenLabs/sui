@@ -8,11 +8,7 @@ import { useMemo } from 'react';
 import { notEmpty } from '_helpers';
 import { useSigner } from '_hooks';
 
-import type {
-    Base64DataBuffer,
-    SignableTransaction,
-    TransactionEffects,
-} from '@mysten/sui.js';
+import type { SignerWithProvider, TransactionEffects } from '@mysten/sui.js';
 
 export type CoinsMetaProps = {
     amount: number;
@@ -102,23 +98,23 @@ export function getEventsSummary(
     };
 }
 
-export type TxData = string | SignableTransaction | Base64DataBuffer;
+export type TransactionDryRun = Parameters<
+    SignerWithProvider['dryRunTransaction']
+>['0'];
 
 type ExecuteDryRunTransactionRequestProps = {
-    txData: TxData;
-    id: string;
+    txData: TransactionDryRun;
     activeAddress: string;
 };
 
 interface ExecuteDryRunTransactionReqResponse {
-    txRequestID: string;
     txnMeta?: TxnMetaResponse;
     txGasEstimation?: number;
 }
-export function useExecuteDryRunTransactionRequest(txData: TxData) {
+export function useTransactionDryRun(txData: TransactionDryRun) {
     const signer = useSigner();
 
-    const response = useQuery(['executedryRunTxn'], async () => {
+    const response = useQuery(['executedryRunTxn', txData], async () => {
         return signer.dryRunTransaction(txData);
     });
 
@@ -127,10 +123,9 @@ export function useExecuteDryRunTransactionRequest(txData: TxData) {
 
 export function useGetRequestTxnMeta({
     txData,
-    id,
     activeAddress,
 }: ExecuteDryRunTransactionRequestProps): ExecuteDryRunTransactionReqResponse {
-    const { data } = useExecuteDryRunTransactionRequest(txData);
+    const { data } = useTransactionDryRun(txData);
 
     const txnMeta = useMemo(
         () => (data ? getEventsSummary(data, activeAddress) : null),
@@ -139,7 +134,6 @@ export function useGetRequestTxnMeta({
     const txGasEstimation = data && getTotalGasUsed(data);
 
     return {
-        txRequestID: id,
         ...(txnMeta && { txnMeta }),
         ...(txGasEstimation && { txGasEstimation }),
     };
