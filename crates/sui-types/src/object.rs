@@ -516,7 +516,7 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            version: SequenceNumber::new(),
+            version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -531,7 +531,7 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            version: SequenceNumber::new(),
+            version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
         Self {
@@ -546,7 +546,7 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            version: SequenceNumber::new(),
+            version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {

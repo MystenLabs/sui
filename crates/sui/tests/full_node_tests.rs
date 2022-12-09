@@ -243,7 +243,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         change_type: BalanceChangeType::Pay,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(0),
+        version: SequenceNumber::from_u64(1),
         coin_object_id: transferred_object,
         amount: -100000000000000,
     };
@@ -254,7 +254,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         change_type: BalanceChangeType::Receive,
         owner: Owner::AddressOwner(receiver),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(1),
+        version: SequenceNumber::from_u64(2),
         coin_object_id: transferred_object,
         amount: 100000000000000,
     };
@@ -729,7 +729,7 @@ async fn test_full_node_event_read_api_ok() {
         change_type: BalanceChangeType::Pay,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(0),
+        version: SequenceNumber::from_u64(1),
         coin_object_id: transferred_object,
         amount: -100000000000000,
     };
@@ -740,7 +740,7 @@ async fn test_full_node_event_read_api_ok() {
         change_type: BalanceChangeType::Receive,
         owner: Owner::AddressOwner(receiver),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(1),
+        version: SequenceNumber::from_u64(2),
         coin_object_id: transferred_object,
         amount: 100000000000000,
     };
