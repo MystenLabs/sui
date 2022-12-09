@@ -77,7 +77,6 @@ pub struct SuiNode {
     _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
-    _execute_driver_handle: tokio::task::JoinHandle<()>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -171,20 +170,18 @@ impl SuiNode {
             None,
         ));
 
-        let state = Arc::new(
-            AuthorityState::new(
-                config.protocol_public_key(),
-                secret,
-                store,
-                node_sync_store,
-                committee_store.clone(),
-                index_store.clone(),
-                event_store,
-                transaction_streamer,
-                &prometheus_registry,
-            )
-            .await,
-        );
+        let state = AuthorityState::new(
+            config.protocol_public_key(),
+            secret,
+            store,
+            node_sync_store,
+            committee_store.clone(),
+            index_store.clone(),
+            event_store,
+            transaction_streamer,
+            &prometheus_registry,
+        )
+        .await;
 
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
@@ -234,7 +231,6 @@ impl SuiNode {
         } else {
             None
         };
-        let execute_driver_handle = active_authority.clone().spawn_execute_process().await;
 
         let validator_server_info = Self::start_grpc_validator_service(
             config,
@@ -259,7 +255,6 @@ impl SuiNode {
             validator_server_info,
             _json_rpc_service: json_rpc_service,
             _gossip_handle: gossip_handle,
-            _execute_driver_handle: execute_driver_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,

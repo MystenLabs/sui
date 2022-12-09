@@ -893,9 +893,7 @@ mod tests {
         let store = Box::new(store);
 
         let (keypair, committee) = committee();
-        let state = Arc::new(
-            AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await,
-        );
+        let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
         let checkpoint_service = CheckpointService::spawn(

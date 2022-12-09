@@ -121,7 +121,7 @@ fn compare_transaction_info_responses(
 
 async fn construct_shared_object_transaction_with_sequence_number(
     sequence_number: SequenceNumber,
-) -> (AuthorityState, VerifiedTransaction, ObjectID, ObjectID) {
+) -> (Arc<AuthorityState>, VerifiedTransaction, ObjectID, ObjectID) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -214,7 +214,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
-        Arc::new(init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await);
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1172,7 +1172,7 @@ impl<F: Future> Future for LimitedPoll<F> {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_handle_certificate_interrupted_retry() {
+async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     telemetry_subscribers::init_for_testing();
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -1216,6 +1216,8 @@ async fn test_handle_certificate_interrupted_retry() {
             .unwrap()
             .unwrap();
 
+        // The tested certificate must contain shared objects, background:
+        // https://github.com/MystenLabs/sui/pull/4579
         let shared_object_cert = make_test_transaction(
             &sender,
             &sender_key,
@@ -1227,7 +1229,9 @@ async fn test_handle_certificate_interrupted_retry() {
         )
         .await;
 
-        send_consensus(&authority_state, &shared_object_cert).await;
+        // Send the shared_object_cert to consensus without execution, because it is necessary
+        // to prepare the state for the explicit interrupted execution later.
+        send_consensus_no_execution(&authority_state, &shared_object_cert).await;
 
         let clone1 = shared_object_cert.clone();
         let state1 = authority_state.clone();
@@ -2328,14 +2332,14 @@ pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> 
 }
 
 #[cfg(test)]
-pub async fn init_state() -> AuthorityState {
+pub async fn init_state() -> Arc<AuthorityState> {
     init_state_with_committee(None).await
 }
 
 #[cfg(test)]
 pub async fn init_state_with_committee(
     committee: Option<(Committee, AuthorityKeyPair)>,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let (committee, authority_key): (_, AuthorityKeyPair) = match committee {
         Some(c) => c,
         None => {
@@ -2355,7 +2359,7 @@ pub async fn init_state_with_committee(
 #[cfg(test)]
 pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     objects: I,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
@@ -2369,7 +2373,7 @@ pub async fn init_state_with_ids_and_object_basics<
     I: IntoIterator<Item = (SuiAddress, ObjectID)>,
 >(
     objects: I,
-) -> (AuthorityState, ObjectRef) {
+) -> (Arc<AuthorityState>, ObjectRef) {
     use sui_framework_build::compiled_package::BuildConfig;
 
     let state = init_state().await;
@@ -2399,7 +2403,7 @@ pub async fn init_state_with_ids_and_versions<
     I: IntoIterator<Item = (SuiAddress, ObjectID, SequenceNumber)>,
 >(
     objects: I,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let state = init_state().await;
     for (address, object_id, version) in objects {
         let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
@@ -2408,14 +2412,16 @@ pub async fn init_state_with_ids_and_versions<
     state
 }
 
-pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
+    objects: I,
+) -> Arc<AuthorityState> {
     init_state_with_objects_and_committee(objects, None).await
 }
 
 pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
     objects: I,
     committee_and_keypair: Option<(Committee, AuthorityKeyPair)>,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let state = init_state_with_committee(committee_and_keypair).await;
     for o in objects {
         state.insert_genesis_object(o).await;
@@ -2424,20 +2430,11 @@ pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object
 }
 
 #[cfg(test)]
-pub async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
-    init_state_with_ids(std::iter::once((address, object))).await
-}
-
-#[cfg(test)]
-pub async fn update_state_with_object_id_and_version(
-    state: AuthorityState,
+pub async fn init_state_with_object_id(
     address: SuiAddress,
-    object_id: ObjectID,
-    version: SequenceNumber,
-) -> AuthorityState {
-    let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
-    state.insert_genesis_object(obj).await;
-    state
+    object: ObjectID,
+) -> Arc<AuthorityState> {
+    init_state_with_ids(std::iter::once((address, object))).await
 }
 
 #[cfg(test)]
@@ -2497,6 +2494,22 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
     if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
         authority
             .handle_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
+            .await
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
+async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {
+    let transaction = SequencedConsensusTransaction::new_test(
+        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
+    );
+
+    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+        // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+        // This allows testing cert execution independently.
+        authority
+            .process_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
             .await
             .unwrap();
     }
@@ -2689,7 +2702,7 @@ async fn make_test_transaction(
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn shared_object() {
+async fn test_shared_object_transaction() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.

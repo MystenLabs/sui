@@ -74,9 +74,8 @@ impl crate::authority::AuthorityState {
     /// crash by creating a last batch to include any trailing trasnactions not
     /// in a batch.
     ///
-    /// This needs exclusive access to the database at this point, so we take
-    /// the authority state as a &mut.
-    pub fn init_batches_from_database(&mut self) -> Result<AuthorityBatch, SuiError> {
+    /// Must have exclusive access to the database during the call.
+    pub fn init_batches_from_database(&self) -> Result<AuthorityBatch, SuiError> {
         // First read the last batch in the db
         let mut last_batch = match self
             .db()

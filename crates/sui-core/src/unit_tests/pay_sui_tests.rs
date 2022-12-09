@@ -418,7 +418,7 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
 }
 
 struct PaySuiTransactionExecutionResult {
-    pub authority_state: AuthorityState,
+    pub authority_state: Arc<AuthorityState>,
     pub txn_result: Result<TransactionInfoResponse, SuiError>,
 }
 

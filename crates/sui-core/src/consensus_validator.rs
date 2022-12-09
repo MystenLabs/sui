@@ -115,7 +115,7 @@ impl SuiTxValidatorMetrics {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::collections::BTreeMap;
 
     use fastcrypto::traits::KeyPair;
     use narwhal_types::Batch;
@@ -165,7 +165,7 @@ mod tests {
         )
         .unwrap();
 
-        let validator = SuiTxValidator::new(Arc::new(state), &Default::default());
+        let validator = SuiTxValidator::new(state, &Default::default());
         let res = validator.validate(&first_transaction_bytes);
         assert!(res.is_ok(), "{res:?}");
 
