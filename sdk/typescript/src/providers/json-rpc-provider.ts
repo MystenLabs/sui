@@ -534,7 +534,7 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest
   ): Promise<SuiTransactionResponse> {
     try {
-      if (!isValidTransactionDigest(digest, "base64") && !isValidTransactionDigest(digest, "base58")) {
+      if (!isValidTransactionDigest(digest, "base58")) {
         throw new Error('Invalid Transaction digest');
       }
       const resp = await this.client.requestWithType(
