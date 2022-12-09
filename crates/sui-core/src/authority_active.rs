@@ -58,10 +58,6 @@ use gossip::GossipMetrics;
 
 use crate::authority_client::NetworkAuthorityClientMetrics;
 
-pub mod execution_driver;
-
-use self::execution_driver::ExecutionDriverMetrics;
-
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
@@ -132,8 +128,6 @@ pub struct ActiveAuthority<A> {
     // This is only meaningful if A is of type NetworkAuthorityClient,
     // and stored here for reconfiguration purposes.
     pub network_metrics: Arc<NetworkAuthorityClientMetrics>,
-
-    pub execution_driver_metrics: ExecutionDriverMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -160,7 +154,6 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(net),
             gossip_metrics: GossipMetrics::new(prometheus_registry),
             network_metrics,
-            execution_driver_metrics: ExecutionDriverMetrics::new(prometheus_registry),
         })
     }
 
@@ -238,7 +231,6 @@ impl<A> Clone for ActiveAuthority<A> {
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
             network_metrics: self.network_metrics.clone(),
-            execution_driver_metrics: self.execution_driver_metrics.clone(),
         }
     }
 }

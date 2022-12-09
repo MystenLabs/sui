@@ -1188,20 +1188,7 @@ async fn test_handle_certificate_interrupted_retry() {
         .collect();
     objects.push((sender, gas_object_id));
 
-    let authority_state = Arc::new(init_state_with_ids(objects.clone()).await);
-
-    let shared_object_id = ObjectID::random();
-    let shared_object = {
-        use sui_types::object::MoveObject;
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
-        let owner = Owner::Shared {
-            initial_shared_version: obj.version(),
-        };
-        Object::new_move(obj, owner, TransactionDigest::genesis())
-    };
-    let initial_shared_version = shared_object.version();
-
-    authority_state.insert_genesis_object(shared_object).await;
+    let authority_state = init_state_with_ids(objects.clone()).await;
 
     let mut interrupted_count = 0;
     for (limit, _) in delays.iter().zip(objects) {
@@ -1212,20 +1199,20 @@ async fn test_handle_certificate_interrupted_retry() {
             .unwrap()
             .unwrap();
 
-        let shared_object_cert = make_test_transaction(
+        // Use owned object certificate for the LimitedPoll test.
+        // Shared object certificate requires more setup before execution. And if we rely on
+        // send_consensus() for setup, the certificate will also get executed as output in
+        // handle_consensus_transaction(), making the LimitedPoll test ineffective.
+        let owned_object_cert = make_owned_test_transaction(
             &sender,
             &sender_key,
-            shared_object_id,
-            initial_shared_version,
             &gas_object.compute_object_reference(),
-            &[&authority_state],
             16,
+            &[&authority_state],
         )
         .await;
 
-        send_consensus(&authority_state, &shared_object_cert).await;
-
-        let clone1 = shared_object_cert.clone();
+        let clone1 = owned_object_cert.clone();
         let state1 = authority_state.clone();
 
         let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
@@ -1241,7 +1228,7 @@ async fn test_handle_certificate_interrupted_retry() {
 
         let epoch_store = authority_state.epoch_store();
         let g = epoch_store
-            .acquire_tx_guard(&shared_object_cert)
+            .acquire_tx_guard(&owned_object_cert)
             .await
             .unwrap();
 
@@ -1251,7 +1238,7 @@ async fn test_handle_certificate_interrupted_retry() {
 
         // Now run the tx to completion
         let info = authority_state
-            .handle_certificate(&shared_object_cert)
+            .handle_certificate(&owned_object_cert)
             .await
             .unwrap();
 
@@ -2658,6 +2645,43 @@ async fn make_test_transaction(
     );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
+
+    let committee = authorities[0].clone_committee();
+    let mut sigs = vec![];
+
+    for authority in authorities {
+        let response = authority
+            .handle_transaction(transaction.clone())
+            .await
+            .unwrap();
+        let vote = response.signed_transaction.unwrap();
+        sigs.push(vote.auth_sig().clone());
+        if let Ok(cert) = CertifiedTransaction::new(vote.into_message(), sigs.clone(), &committee) {
+            return cert.verify(&committee).unwrap();
+        }
+    }
+
+    unreachable!("couldn't form cert")
+}
+
+#[cfg(test)]
+async fn make_owned_test_transaction(
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_ref: &ObjectRef,
+    amount: u64,
+    authorities: &[&AuthorityState],
+) -> VerifiedCertificate {
+    // Make a simple transaction.
+    let recipient = dbg_addr(2);
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        *sender,
+        Some(amount),
+        *gas_object_ref,
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(tx_data, sender_key);
 
     let committee = authorities[0].clone_committee();
     let mut sigs = vec![];

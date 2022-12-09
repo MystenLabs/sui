@@ -1,71 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use mysten_metrics::spawn_monitored_task;
-use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
-};
 use sui_types::messages::VerifiedCertificate;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::authority::AuthorityState;
 
 #[cfg(test)]
-pub(crate) mod tests;
+#[path = "unit_tests/execution_driver_tests.rs"]
+mod execution_driver_tests;
 
 // Execution should not encounter permanent failures, so any failure can and needs
 // to be retried.
 const EXECUTION_MAX_ATTEMPTS: usize = 10;
 const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
-#[derive(Clone)]
-pub struct ExecutionDriverMetrics {
-    executing_transactions: IntGauge,
-    executed_transactions: IntCounter,
-    execution_failures: IntCounter,
-}
-
-impl ExecutionDriverMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            executing_transactions: register_int_gauge_with_registry!(
-                "execution_driver_executing_transactions",
-                "Number of currently executing transactions in execution driver",
-                registry,
-            )
-            .unwrap(),
-            executed_transactions: register_int_counter_with_registry!(
-                "execution_driver_executed_transactions",
-                "Cumulative number of transaction executed by execution driver",
-                registry,
-            )
-            .unwrap(),
-            execution_failures: register_int_counter_with_registry!(
-                "execution_driver_execution_failures",
-                "Cumulative number of transactions failed to be executed by execution driver",
-                registry,
-            )
-            .unwrap(),
-        }
-    }
-
-    pub fn new_for_tests() -> Self {
-        let registry = Registry::new();
-        Self::new(&registry)
-    }
-}
-
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
 pub async fn execution_process(
-    authority_state: Arc<AuthorityState>,
+    authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<VerifiedCertificate>,
 ) {
     info!("Starting pending certificates execution process.");
@@ -78,16 +41,25 @@ pub async fn execution_process(
         let certificate = if let Some(cert) = rx_ready_certificates.recv().await {
             cert
         } else {
-            // Should not happen. Only possible if the AuthorityState has shut down.
-            warn!("Ready digest stream from authority state is broken. Retrying in 10s ...");
-            sleep(std::time::Duration::from_secs(10)).await;
-            continue;
+            // Should only happen after the AuthorityState has shut down and tx_ready_certificate
+            // has been dropped by TransactionManager.
+            info!("No more certificate will be received. Exiting ...");
+            return;
         };
+        let authority = if let Some(authority) = authority_state.upgrade() {
+            authority
+        } else {
+            // Terminate the execution if authority has already shutdown, even if there can be more
+            // items in rx_ready_certificates.
+            info!("Authority state has shutdown. Exiting ...");
+            return;
+        };
+
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
 
         // Process any tx that failed to commit.
-        if let Err(err) = authority_state.process_tx_recovery_log(None).await {
+        if let Err(err) = authority.process_tx_recovery_log(None).await {
             tracing::error!("Error processing tx recovery log: {:?}", err);
         }
 
@@ -95,13 +67,8 @@ pub async fn execution_process(
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
         let permit = limit.acquire_owned().await.unwrap();
-        let authority = authority_state.clone();
 
-        // authority
-        //     .execution_driver_metrics
-        //     .executing_transactions
-        //     .inc();
-
+        // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(certificate.digest()) {
@@ -114,7 +81,7 @@ pub async fn execution_process(
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
                         error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        // authority.execution_driver_metrics.execution_failures.inc();
+                        authority.metrics.execution_driver_execution_failures.inc();
                         return;
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
@@ -129,14 +96,10 @@ pub async fn execution_process(
             // Remove the certificate that finished execution from the pending_certificates table.
             authority.certificate_executed(&digest).await;
 
-            // authority
-            //     .execution_driver_metrics
-            //     .executed_transactions
-            //     .inc();
-            // authority
-            //     .execution_driver_metrics
-            //     .executing_transactions
-            //     .dec();
+            authority
+                .metrics
+                .execution_driver_executed_transactions
+                .inc();
         });
     }
 }

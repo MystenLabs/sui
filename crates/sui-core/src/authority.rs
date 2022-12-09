@@ -79,7 +79,6 @@ use sui_types::{
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority_active::execution_driver::execution_process;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
@@ -87,6 +86,7 @@ use crate::consensus_handler::{
 };
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::scoped_counter;
 use crate::{
@@ -166,7 +166,11 @@ pub struct AuthorityMetrics {
 
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
+    pub(crate) transaction_manager_num_executing_certificates: IntGauge,
     pub(crate) transaction_manager_num_ready: IntGauge,
+
+    pub(crate) execution_driver_executed_transactions: IntCounter,
+    pub(crate) execution_driver_execution_failures: IntCounter,
 
     skipped_consensus_txns: IntCounter,
 
@@ -325,13 +329,31 @@ impl AuthorityMetrics {
             .unwrap(),
             transaction_manager_num_pending_certificates: register_int_gauge_with_registry!(
                 "transaction_manager_num_pending_certificates",
-                "Current number of pending certificates in TransactionManager",
+                "Number of certificates pending in TransactionManager, with at least 1 missing input object",
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_num_executing_certificates: register_int_gauge_with_registry!(
+                "transaction_manager_num_executing_certificates",
+                "Nnumber of executing certificates, including queued and actually running certificates",
                 registry,
             )
             .unwrap(),
             transaction_manager_num_ready: register_int_gauge_with_registry!(
                 "transaction_manager_num_ready",
-                "Current number of ready transactions in TransactionManager",
+                "Number of ready transactions in TransactionManager",
+                registry,
+            )
+            .unwrap(),
+            execution_driver_executed_transactions: register_int_counter_with_registry!(
+                "execution_driver_executed_transactions",
+                "Cumulative number of transaction executed by execution driver",
+                registry,
+            )
+            .unwrap(),
+            execution_driver_execution_failures: register_int_counter_with_registry!(
+                "execution_driver_execution_failures",
+                "Cumulative number of transactions failed to be executed by execution driver",
                 registry,
             )
             .unwrap(),
@@ -1482,7 +1504,7 @@ impl AuthorityState {
             .expect("Init batches failed!");
 
         // Start a task to execute ready certificates.
-        let authority_state = state.clone();
+        let authority_state = Arc::downgrade(&state);
         spawn_monitored_task!(execution_process(authority_state, rx_ready_certificates));
 
         state

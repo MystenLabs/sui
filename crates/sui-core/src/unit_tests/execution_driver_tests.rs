@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_active::ActiveAuthority;
 use crate::authority_aggregator::authority_aggregator_tests::{
     crate_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     init_local_authorities, transfer_object_move_transaction,
@@ -9,7 +8,6 @@ use crate::authority_aggregator::authority_aggregator_tests::{
 use crate::test_utils::wait_for_tx;
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
