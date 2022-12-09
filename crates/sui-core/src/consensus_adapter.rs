@@ -23,7 +23,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
-use sui_types::crypto::AuthoritySignInfo;
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::ConsensusTransaction,
@@ -319,7 +318,7 @@ impl ConsensusAdapter {
     fn submit_unchecked(
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
-        epoch_store: Arc<AuthorityPerEpochStore<AuthoritySignInfo>>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
         let async_stage = self.clone().submit_and_wait(transaction, epoch_store);
@@ -331,7 +330,7 @@ impl ConsensusAdapter {
     async fn submit_and_wait(
         self: Arc<Self>,
         transaction: ConsensusTransaction,
-        epoch_store: Arc<AuthorityPerEpochStore<AuthoritySignInfo>>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         let epoch_terminated = epoch_store.wait_epoch_terminated().boxed();
         let submit_and_wait = self
@@ -348,7 +347,7 @@ impl ConsensusAdapter {
     async fn submit_and_wait_inner(
         self: Arc<Self>,
         transaction: ConsensusTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore<AuthoritySignInfo>>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let _guard = InflightDropGuard::acquire(&self);
         let processed_waiter = epoch_store

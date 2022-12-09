@@ -3,7 +3,6 @@
 
 use super::{authority_store::ObjectKey, *};
 use rocksdb::Options;
-use serde::{Deserialize, Serialize};
 use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
@@ -16,7 +15,7 @@ use typed_store_derive::DBMapUtils;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
-pub struct AuthorityPerpetualTables<S> {
+pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
     ///
@@ -56,7 +55,7 @@ pub struct AuthorityPerpetualTables<S> {
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
+    pub(crate) executed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
 
@@ -81,10 +80,7 @@ pub struct AuthorityPerpetualTables<S> {
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 }
 
-impl<S> AuthorityPerpetualTables<S>
-where
-    S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
-{
+impl AuthorityPerpetualTables {
     pub fn path(parent_path: &Path) -> PathBuf {
         parent_path.join("perpetual")
     }
@@ -93,7 +89,7 @@ where
         Self::open_tables_read_write(Self::path(parent_path), db_options, None)
     }
 
-    pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly<S> {
+    pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
         Self::get_read_only_handle(Self::path(parent_path), None, None)
     }
 

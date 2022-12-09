@@ -13,7 +13,7 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
-use sui_types::{base_types::EpochId, crypto::AuthoritySignInfo};
+use sui_types::base_types::EpochId;
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -62,16 +62,16 @@ pub fn dump_table(
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match store_name {
         StoreName::Validator => {
-            let epoch_tables = AuthorityEpochTables::<AuthoritySignInfo>::describe_tables();
+            let epoch_tables = AuthorityEpochTables::describe_tables();
             if epoch_tables.contains_key(table_name) {
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
-                AuthorityEpochTables::<AuthoritySignInfo>::open_readonly(epoch, &db_path).dump(
+                AuthorityEpochTables::open_readonly(epoch, &db_path).dump(
                     table_name,
                     page_size,
                     page_number,
                 )
             } else {
-                AuthorityPerpetualTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                AuthorityPerpetualTables::open_readonly(&db_path).dump(
                     table_name,
                     page_size,
                     page_number,
@@ -109,7 +109,6 @@ pub fn dump_table(
 mod test {
     use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-    use sui_types::crypto::AuthoritySignInfo;
 
     use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
 
@@ -118,22 +117,15 @@ mod test {
         let primary_path = tempfile::tempdir()?.into_path();
 
         // Open the DB for writing
-        let _: AuthorityEpochTables<AuthoritySignInfo> =
-            AuthorityEpochTables::open(0, &primary_path, None);
-        let _: AuthorityPerpetualTables<AuthoritySignInfo> =
-            AuthorityPerpetualTables::open(&primary_path, None);
+        let _: AuthorityEpochTables = AuthorityEpochTables::open(0, &primary_path, None);
+        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None);
 
         // Get all the tables for AuthorityEpochTables
         let tables = {
-            let mut epoch_tables = list_tables(AuthorityEpochTables::<AuthoritySignInfo>::path(
-                0,
-                &primary_path,
-            ))
-            .unwrap();
-            let mut perpetual_tables = list_tables(
-                AuthorityPerpetualTables::<AuthoritySignInfo>::path(&primary_path),
-            )
-            .unwrap();
+            let mut epoch_tables =
+                list_tables(AuthorityEpochTables::path(0, &primary_path)).unwrap();
+            let mut perpetual_tables =
+                list_tables(AuthorityPerpetualTables::path(&primary_path)).unwrap();
             epoch_tables.append(&mut perpetual_tables);
             epoch_tables
         };
