@@ -1,5 +1,5 @@
 {
-  "name": "sui-wallet-adapter",
+  "name": "sui-wallet-adapter-demo",
   "version": "0.0.1",
   "private": true,
   "dependencies": {
@@ -22,9 +22,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "clean": "pnpm -r --filter './packages/**' run clean",
-    "build": "pnpm -r --filter './packages/**' run build && vite build",
-    "test": "echo 'No tests.'"
+    "build": "vite build"
   },
   "eslintConfig": {
     "extends": [

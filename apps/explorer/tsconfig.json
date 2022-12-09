@@ -21,26 +21,24 @@
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
             "@mysten/bcs": ["../../sdk/bcs/src/"],
             "@mysten/wallet-adapter-base": [
-                "../../sdk/wallet-adapter/packages/adapters/base-adapter/src/"
+                "../../sdk/wallet-adapter/adapters/base-adapter/src/"
             ],
             "@mysten/wallet-standard": [
-                "../../sdk/wallet-adapter/packages/wallet-standard/src/"
+                "../../sdk/wallet-adapter/wallet-standard/src/"
             ],
             "@mysten/wallet-adapter-all-wallets": [
-                "../../sdk/wallet-adapter/packages/adapters/all-wallets/src/"
+                "../../sdk/wallet-adapter/adapters/all-wallets/src/"
             ],
             "@mysten/wallet-adapter-unsafe-burner": [
-                "../../sdk/wallet-adapter/packages/adapters/unsafe-burner/src/"
+                "../../sdk/wallet-adapter/adapters/unsafe-burner/src/"
             ],
             "@mysten/wallet-adapter-wallet-standard": [
-                "../../sdk/wallet-adapter/packages/adapters/wallet-standard-adapter/src/"
+                "../../sdk/wallet-adapter/adapters/wallet-standard-adapter/src/"
             ],
             "@mysten/wallet-adapter-react": [
-                "../../sdk/wallet-adapter/packages/react-providers/src/"
+                "../../sdk/wallet-adapter/react-providers/src/"
             ],
-            "@mysten/wallet-kit": [
-                "../../sdk/wallet-adapter/packages/wallet-kit/src/"
-            ]
+            "@mysten/wallet-kit": ["../../sdk/wallet-adapter/wallet-kit/src/"]
         }
     },
     "include": ["src"]

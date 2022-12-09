@@ -10,7 +10,7 @@
   "ignore": [
     "sui-explorer",
     "sui-wallet",
-    "sui-wallet-adapter",
+    "sui-wallet-adapter-demo",
     "@mysten/core"
   ]
 }

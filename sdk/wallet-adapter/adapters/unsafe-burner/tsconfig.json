@@ -5,8 +5,5 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "references": [
-    { "path": "../adapters/base-adapter" },
-    { "path": "../../../typescript" }
-  ]
+  "references": [{ "path": "../base-adapter" }, { "path": "../../../typescript" }]
 }
