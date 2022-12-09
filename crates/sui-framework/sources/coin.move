@@ -31,7 +31,7 @@ module sui::coin {
         balance: Balance<T>
     }
 
-    /// Each Coin type T created through `create_currency` function will have a 
+    /// Each Coin type T created through `create_currency` function will have a
     /// unique instance of CoinMetadata<T> that stores the metadata for this coin type.
     struct CoinMetadata<phantom T> has key, store {
         id: UID,
@@ -269,6 +269,38 @@ module sui::coin {
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
         burn(c, coin);
+    }
+
+    // === Get coin metadata ===
+
+    /// public getter for coin metadata object ID
+    public fun id<T>(coin_metadata: &CoinMetadata<T>): &UID {
+        &coin_metadata.id
+    }
+
+    /// public getter for coin decimals
+    public fun decimals<T>(coin_metadata: &CoinMetadata<T>): u8 {
+        coin_metadata.decimals
+    }
+
+    /// public getter for coin name
+    public fun name<T>(coin_metadata: &CoinMetadata<T>): string::String {
+        coin_metadata.name
+    }
+
+    /// public getter for coin symbol
+    public fun symbol<T>(coin_metadata: &CoinMetadata<T>): ascii::String {
+        coin_metadata.symbol
+    }
+
+    /// public getter for coin description
+    public fun description<T>(coin_metadata: &CoinMetadata<T>): string::String {
+        coin_metadata.description
+    }
+
+    /// public getter for coin icon url
+    public fun icon_url<T>(coin_metadata: &CoinMetadata<T>): Option<Url> {
+        coin_metadata.icon_url
     }
 
     // === Update coin metadata ===
