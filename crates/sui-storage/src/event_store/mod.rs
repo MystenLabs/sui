@@ -338,12 +338,11 @@ impl StoredEvent {
     }
 
     fn object_digest(&self) -> Result<Option<ObjectDigest>, anyhow::Error> {
-        Ok(self
-            .extract_string_field(OBJECT_DIGEST_KEY)?
-            .map(|opt| Base64::decode(&opt).map_err(|e| anyhow!(e))
+        self.extract_string_field(OBJECT_DIGEST_KEY)?
+        .map(|opt| Base64::decode(&opt).map_err(|e| anyhow!(e))
             .and_then(|op| ObjectDigest::try_from(op.as_ref())
             .map_err(|e| anyhow!(e))))
-            .transpose()?)
+            .transpose()
     }
 
     fn change_type(&self) -> Result<Option<BalanceChangeType>, anyhow::Error> {
