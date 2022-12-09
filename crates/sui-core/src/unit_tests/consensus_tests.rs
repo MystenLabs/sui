@@ -109,7 +109,6 @@ async fn submit_transaction_to_consensus_adapter() {
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
 
-    let state = Arc::new(state);
     let metrics = ConsensusAdapterMetrics::new_test();
 
     #[derive(Clone)]

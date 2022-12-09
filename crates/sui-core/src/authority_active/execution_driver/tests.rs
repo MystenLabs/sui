@@ -168,7 +168,6 @@ async fn pending_exec_full() {
                     .run_batch_service(1, Duration::from_secs(1))
                     .await
             });
-            active_state.clone().spawn_execute_process().await;
             active_state
                 .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
                 .await;
@@ -276,20 +275,12 @@ async fn test_transaction_manager() {
 
     // the 4th authority has never heard of either of these transactions. Tell it to execute the
     // cert, sends it the missing dependency and verify that it is able to fetch parents and apply.
-    let active_state = Arc::new(
-        ActiveAuthority::new_with_ephemeral_storage_for_test(
-            authorities[3].clone(),
-            aggregator.clone(),
-        )
-        .unwrap(),
-    );
     let batch_state = authorities[3].clone();
     tokio::task::spawn(async move {
         batch_state
             .run_batch_service(1, Duration::from_secs(1))
             .await
     });
-    active_state.clone().spawn_execute_process().await;
 
     // Basic test: add certs out of dependency order. They should still be executed.
     authorities[3]

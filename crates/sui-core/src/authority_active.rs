@@ -60,7 +60,7 @@ use crate::authority_client::NetworkAuthorityClientMetrics;
 
 pub mod execution_driver;
 
-use self::execution_driver::{execution_process, ExecutionDriverMetrics};
+use self::execution_driver::ExecutionDriverMetrics;
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -328,10 +328,5 @@ where
     pub async fn cancel_node_sync_process_for_tests(&self) {
         let mut lock_guard = self.node_sync_process.lock().await;
         Self::cancel_node_sync_process_impl(&mut lock_guard).await;
-    }
-
-    /// Spawn pending certificate execution process
-    pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
-        spawn_monitored_task!(execution_process(self))
     }
 }

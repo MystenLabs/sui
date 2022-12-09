@@ -8,11 +8,14 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
-use tokio::{sync::Semaphore, time::sleep};
+use sui_types::messages::VerifiedCertificate;
+use tokio::{
+    sync::{mpsc::UnboundedReceiver, Semaphore},
+    time::sleep,
+};
 use tracing::{debug, error, info, warn};
 
-use super::ActiveAuthority;
-use crate::authority_client::AuthorityAPI;
+use crate::authority::AuthorityState;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -61,26 +64,18 @@ impl ExecutionDriverMetrics {
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
-pub async fn execution_process<A>(active_authority: Arc<ActiveAuthority<A>>)
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+pub async fn execution_process(
+    authority_state: Arc<AuthorityState>,
+    mut rx_ready_certificates: UnboundedReceiver<VerifiedCertificate>,
+) {
     info!("Starting pending certificates execution process.");
 
     // Rate limit concurrent executions to # of cpus.
     let limit = Arc::new(Semaphore::new(num_cpus::get()));
 
-    let mut ready_certificates_stream = active_authority
-        .state
-        .ready_certificates_stream()
-        .await
-        .expect(
-            "Initialization failed: only the executiion driver should receive ready certificates!",
-        );
-
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let certificate = if let Some(cert) = ready_certificates_stream.recv().await {
+        let certificate = if let Some(cert) = rx_ready_certificates.recv().await {
             cert
         } else {
             // Should not happen. Only possible if the AuthorityState has shut down.
@@ -92,7 +87,7 @@ where
         debug!(?digest, "Pending certificate execution activated.");
 
         // Process any tx that failed to commit.
-        if let Err(err) = active_authority.state.process_tx_recovery_log(None).await {
+        if let Err(err) = authority_state.process_tx_recovery_log(None).await {
             tracing::error!("Error processing tx recovery log: {:?}", err);
         }
 
@@ -100,26 +95,26 @@ where
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
         let permit = limit.acquire_owned().await.unwrap();
-        let authority = active_authority.clone();
+        let authority = authority_state.clone();
 
-        authority
-            .execution_driver_metrics
-            .executing_transactions
-            .inc();
+        // authority
+        //     .execution_driver_metrics
+        //     .executing_transactions
+        //     .inc();
 
         spawn_monitored_task!(async move {
             let _guard = permit;
-            if let Ok(true) = authority.state.is_tx_already_executed(certificate.digest()) {
+            if let Ok(true) = authority.is_tx_already_executed(certificate.digest()) {
                 return;
             }
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.state.handle_certificate(&certificate).await;
+                let res = authority.handle_certificate(&certificate).await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
                         error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.execution_driver_metrics.execution_failures.inc();
+                        // authority.execution_driver_metrics.execution_failures.inc();
                         return;
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
@@ -132,16 +127,16 @@ where
             }
 
             // Remove the certificate that finished execution from the pending_certificates table.
-            authority.state.certificate_executed(&digest).await;
+            authority.certificate_executed(&digest).await;
 
-            authority
-                .execution_driver_metrics
-                .executed_transactions
-                .inc();
-            authority
-                .execution_driver_metrics
-                .executing_transactions
-                .dec();
+            // authority
+            //     .execution_driver_metrics
+            //     .executed_transactions
+            //     .inc();
+            // authority
+            //     .execution_driver_metrics
+            //     .executing_transactions
+            //     .dec();
         });
     }
 }

@@ -12,7 +12,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
@@ -29,7 +29,7 @@ use std::{
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::unbounded_channel;
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -79,6 +79,7 @@ use sui_types::{
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority_active::execution_driver::execution_process;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
@@ -528,13 +529,6 @@ pub struct AuthorityState {
 
     /// Manages pending certificates and their missing input objects.
     pub(crate) transaction_manager: Arc<TransactionManager>,
-
-    /// The contained receiver will stream out certificates that have all inputs available locally,
-    /// and are ready to be executed.
-    /// This member temporarily holds the receiver beginning from AuthorityState initialization,
-    /// until the receiver is extracted by execution driver. This a bit awkward because
-    /// AuthorityState is created before execution driver.
-    rx_ready_certificates: tokio::sync::Mutex<Option<UnboundedReceiver<VerifiedCertificate>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -1429,7 +1423,7 @@ impl AuthorityState {
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
         prometheus_registry: &Registry,
-    ) -> Self {
+    ) -> Arc<Self> {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -1449,7 +1443,7 @@ impl AuthorityState {
             TransactionManager::new(store.clone(), tx_ready_certificates, metrics.clone()).await,
         );
 
-        let mut state = AuthorityState {
+        let state = Arc::new(AuthorityState {
             name,
             secret,
             _native_functions: native_functions,
@@ -1464,14 +1458,13 @@ impl AuthorityState {
             transaction_streamer,
             committee_store,
             transaction_manager: transaction_manager.clone(),
-            rx_ready_certificates: tokio::sync::Mutex::new(Some(rx_ready_certificates)),
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store.clone(), prometheus_registry)
                     .expect("Notifier cannot start."),
             ),
             metrics,
-        };
+        });
 
         prometheus_registry
             .register(Box::new(ModuleCacheGauge::new(&state.module_cache)))
@@ -1488,6 +1481,10 @@ impl AuthorityState {
             .init_batches_from_database()
             .expect("Init batches failed!");
 
+        // Start a task to execute ready certificates.
+        let authority_state = state.clone();
+        spawn_monitored_task!(execution_process(authority_state, rx_ready_certificates));
+
         state
     }
 
@@ -1497,7 +1494,7 @@ impl AuthorityState {
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
-    ) -> Self {
+    ) -> Arc<Self> {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
             Some(path) => path,
@@ -1634,15 +1631,6 @@ impl AuthorityState {
         object_id: &ObjectID,
     ) -> Result<Option<Object>, SuiError> {
         self.database.get_object(object_id)
-    }
-
-    /// Extracts the stream of ready to execute certificates, published by the transaction manager.
-    /// Must only be called once, from execution driver only.
-    pub(crate) async fn ready_certificates_stream(
-        &self,
-    ) -> Option<UnboundedReceiver<VerifiedCertificate>> {
-        let mut rx_ready_certificates = self.rx_ready_certificates.lock().await;
-        rx_ready_certificates.take()
     }
 
     pub async fn get_framework_object_ref(&self) -> SuiResult<ObjectRef> {

@@ -462,7 +462,7 @@ impl LocalAuthorityClient {
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
         let state = AuthorityState::new_for_testing(committee, &secret, None, Some(genesis)).await;
         Self {
-            state: Arc::new(state),
+            state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
         }
     }
