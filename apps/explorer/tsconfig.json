@@ -38,9 +38,7 @@
             "@mysten/wallet-adapter-react": [
                 "../../sdk/wallet-adapter/react-providers/src/"
             ],
-            "@mysten/wallet-kit": [
-                "../../sdk/wallet-adapter/wallet-kit/src/"
-            ]
+            "@mysten/wallet-kit": ["../../sdk/wallet-adapter/wallet-kit/src/"]
         }
     },
     "include": ["src"]
