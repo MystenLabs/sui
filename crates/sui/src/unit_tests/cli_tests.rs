@@ -112,7 +112,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
+            .add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
     }
 
     // Print all addresses
@@ -1128,7 +1128,8 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
     assert_eq!(res.unwrap().flag(), SignatureScheme::Secp256k1.flag());
 
     let res = SignatureScheme::from_flag("2");
-    assert!(res.is_err());
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap().flag(), SignatureScheme::Secp256r1.flag());
 
     let res = SignatureScheme::from_flag("something");
     assert!(res.is_err());

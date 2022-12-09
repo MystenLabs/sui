@@ -371,6 +371,7 @@ impl TryInto<SuiAddress> for PublicKey {
 pub enum CurveType {
     Secp256k1,
     Edwards25519,
+    Secp256r1,
 }
 
 impl From<CurveType> for SignatureScheme {
@@ -378,6 +379,7 @@ impl From<CurveType> for SignatureScheme {
         match type_ {
             CurveType::Secp256k1 => SignatureScheme::Secp256k1,
             CurveType::Edwards25519 => SignatureScheme::ED25519,
+            CurveType::Secp256r1 => SignatureScheme::Secp256r1,
         }
     }
 }

@@ -7,10 +7,10 @@ use proptest::prelude::*;
 
 #[test]
 fn public_key_equality() {
-    let (_, ed_kp1) = random_key_pair_by_type(SignatureScheme::ED25519).unwrap();
-    let (_, ed_kp2) = random_key_pair_by_type(SignatureScheme::ED25519).unwrap();
-    let (_, k1_kp1) = random_key_pair_by_type(SignatureScheme::Secp256k1).unwrap();
-    let (_, k1_kp2) = random_key_pair_by_type(SignatureScheme::Secp256k1).unwrap();
+    let ed_kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let ed_kp2: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let k1_kp1: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair().1);
+    let k1_kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair().1);
 
     let ed_pk1 = ed_kp1.public();
     let ed_pk2 = ed_kp2.public();

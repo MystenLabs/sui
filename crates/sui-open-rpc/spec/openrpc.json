@@ -4411,6 +4411,9 @@
       "Secp256k1SuiSignature": {
         "$ref": "#/components/schemas/Base64"
       },
+      "Secp256r1SuiSignature": {
+        "$ref": "#/components/schemas/Base64"
+      },
       "SequenceNumber": {
         "type": "integer",
         "format": "uint64",
@@ -4441,6 +4444,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Secp256r1SuiSignature"
+            ],
+            "properties": {
+              "Secp256r1SuiSignature": {
+                "$ref": "#/components/schemas/Secp256r1SuiSignature"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -4449,6 +4464,7 @@
         "enum": [
           "ED25519",
           "Secp256k1",
+          "Secp256r1",
           "BLS12381"
         ]
       },

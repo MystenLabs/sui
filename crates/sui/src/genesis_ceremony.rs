@@ -306,25 +306,16 @@ mod test {
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();
 
                 let worker_key_file = dir.path().join(format!("{}.key", info.name));
-                write_keypair_to_file(
-                    &SuiKeyPair::Ed25519SuiKeyPair(worker_keypair),
-                    &worker_key_file,
-                )
-                .unwrap();
+                write_keypair_to_file(&SuiKeyPair::Ed25519(worker_keypair), &worker_key_file)
+                    .unwrap();
 
                 let network_key_file = dir.path().join(format!("{}-1.key", info.name));
-                write_keypair_to_file(
-                    &SuiKeyPair::Ed25519SuiKeyPair(network_keypair),
-                    &network_key_file,
-                )
-                .unwrap();
+                write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), &network_key_file)
+                    .unwrap();
 
                 let account_key_file = dir.path().join(format!("{}-2.key", info.name));
-                write_keypair_to_file(
-                    &SuiKeyPair::Ed25519SuiKeyPair(account_keypair),
-                    &account_key_file,
-                )
-                .unwrap();
+                write_keypair_to_file(&SuiKeyPair::Ed25519(account_keypair), &account_key_file)
+                    .unwrap();
 
                 (
                     key_file,

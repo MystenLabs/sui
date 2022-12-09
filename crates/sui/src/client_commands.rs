@@ -276,8 +276,8 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
+    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
     #[clap(name = "new-address")]
     NewAddress {
         key_scheme: SignatureScheme,
@@ -696,7 +696,7 @@ impl SuiClientCommands {
                 let (address, phrase, scheme) = context
                     .config
                     .keystore
-                    .generate_new_key(key_scheme, derivation_path)?;
+                    .generate_and_add_new_key(key_scheme, derivation_path)?;
                 SuiClientCommandResult::NewAddress((address, phrase, scheme))
             }
             SuiClientCommands::Gas { address } => {
@@ -1274,7 +1274,6 @@ pub async fn call_move(
             gas_budget,
         )
         .await?;
-
     let signature = context
         .config
         .keystore
