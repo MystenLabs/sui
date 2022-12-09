@@ -3,7 +3,6 @@ on: pull_request
 jobs:
   ci:
     name: Build
-    needs: diff
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
