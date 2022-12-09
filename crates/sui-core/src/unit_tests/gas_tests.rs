@@ -280,7 +280,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .as_ref()
         .unwrap()
         .data()
-        .data
+        .intent_message
+        .value
         .kind
         .single_transactions()
         .next()

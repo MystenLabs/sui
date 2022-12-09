@@ -49,6 +49,7 @@ fn test_signed_values() {
             random_object_ref(),
             10000,
         ),
+        Intent::default(),
         &sender_sec,
     )
     .verify()
@@ -62,6 +63,7 @@ fn test_signed_values() {
             random_object_ref(),
             10000,
         ),
+        Intent::default(),
         &sender_sec2,
     ));
 
@@ -124,6 +126,7 @@ fn test_certificates() {
             random_object_ref(),
             10000,
         ),
+        Intent::default(),
         &sender_sec,
     )
     .verify()
@@ -430,6 +433,7 @@ fn test_digest_caching() {
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
+        Intent::default(),
         &ssec2,
     )
     .verify()
@@ -445,7 +449,11 @@ fn test_digest_caching() {
 
     let initial_digest = *signed_tx.digest();
 
-    signed_tx.data_mut_for_testing().data.gas_budget += 1;
+    signed_tx
+        .data_mut_for_testing()
+        .intent_message
+        .value
+        .gas_budget += 1;
 
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
@@ -505,9 +513,11 @@ fn test_user_signature_committed_in_transactions() {
     let mut tx_data_2 = tx_data.clone();
     tx_data_2.gas_budget += 1;
 
-    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data_and_signer(tx_data, &sender_sec2);
-    let transaction_c = Transaction::from_data_and_signer(tx_data_2, &sender_sec2);
+    let transaction_a =
+        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), &sender_sec);
+    let transaction_b = Transaction::from_data_and_signer(tx_data, Intent::default(), &sender_sec2);
+    let transaction_c =
+        Transaction::from_data_and_signer(tx_data_2, Intent::default(), &sender_sec2);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -547,12 +557,14 @@ fn test_user_signature_committed_in_signed_transactions() {
         random_object_ref(),
         10000,
     );
-    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), &sender_sec)
-        .verify()
-        .unwrap();
+    let transaction_a =
+        Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), &sender_sec)
+            .verify()
+            .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
     let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         tx_data,
+        Intent::default(),
         &sender_sec2,
     ));
 
@@ -629,7 +641,7 @@ fn verify_sender_signature_correctly_with_flag() {
         10000,
     );
 
-    let transaction = Transaction::from_data_and_signer(tx_data, &sender_kp)
+    let transaction = Transaction::from_data_and_signer(tx_data, Intent::default(), &sender_kp)
         .verify()
         .unwrap();
 
@@ -662,6 +674,7 @@ fn verify_sender_signature_correctly_with_flag() {
             random_object_ref(),
             10000,
         ),
+        Intent::default(),
         &sender_kp_2,
     )
     .verify()

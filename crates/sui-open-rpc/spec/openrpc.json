@@ -112,7 +112,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "VHJhbnNhY3Rpb25EYXRhOjoBAgIAAAAAAAAAAAAAAAAAAAAAAAAAAgEAAAAAAAAAIJ0HWVK1gDbyp7VhRGWSQDxnLw2+Ep8eORE/n2Fk6ihnCmRldm5ldF9uZnQEbWludAADAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5AMYZFUxCocYb6ZAnF7JLjsFo/kiW7++Sy/RLWB8jIiwQkWsXo2m02gMBAAAAAAAAACD43szzw8UY8UbelVTwPyeoPVsRhfOece81fivZ4TliUZsHgV8ESX4uBdIsrDqgYUELIIaM9bcMyxDxpwXgYdD9+hiWGNKLDUQBAAAAAAAAACBrCkFAMnZDeyXw/76JfPR2wHd+nSRv85dKxfGzUKoWxAEAAAAAAAAA6AMAAAAAAAA=",
+              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAIBAAAAAAAAACCdB1lStYA28qe1YURlkkA8Zy8NvhKfHjkRP59hZOooZwpkZXZuZXRfbmZ0BG1pbnQAAwALRXhhbXBsZSBORlQAK0FuIE5GVCBjcmVhdGVkIGJ5IHRoZSBTdWkgQ29tbWFuZCBMaW5lIFRvb2wAQmlwZnM6Ly9iYWZrcmVpYm5ncWhsM2dhYTdkYW9iNGkydmNjemlheTJqamxwNDM1Y2Y2NnZob25vN25ydnd3NTN0eQDGGRVMQqHGG+mQJxeyS47BaP5Ilu/vksv0S1gfIyIsEJFrF6NptNoDAQAAAAAAAAAg+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlGbB4FfBEl+LgXSLKw6oGFBCyCGjPW3DMsQ8acF4GHQ/foYlhjSiw1EAQAAAAAAAAAgawpBQDJ2Q3sl8P++iXz0dsB3fp0kb/OXSsXxs1CqFsQBAAAAAAAAAOgDAAAAAAAA",
               "gas": {
                 "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
                 "version": 1,
@@ -177,7 +177,7 @@
       "params": [
         {
           "name": "tx_bytes",
-          "description": "transaction data bytes, as base-64 encoded string",
+          "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -193,7 +193,7 @@
         },
         {
           "name": "signature",
-          "description": "transaction signature, as base-64 encoded string",
+          "description": "Signature committed to the intent message of the transaction data, as base-64 encoded string.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -201,7 +201,7 @@
         },
         {
           "name": "pub_key",
-          "description": "signer's public key, as base-64 encoded string",
+          "description": "Signer's public key, as base-64 encoded string.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -209,7 +209,7 @@
         },
         {
           "name": "request_type",
-          "description": "The request type",
+          "description": "The request type.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ExecuteTransactionRequestType"
@@ -229,7 +229,7 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "VHJhbnNhY3Rpb25EYXRhOjoAAENs56klSzDSU+RWfMr6XzbOhMgKqLyb5k4NWueWiEJ0rvMAWuZzOAkCAAAAAAAAACAyE4rjTSLmOXrzqaceTvofutFssM+v3lsohIWOg/pBRhEgRALReoQVOKG0v7bv5ChQQhoKyOwdW4TdYonhk7n4jeSplDWMn4UCAAAAAAAAACBhNSNsPnWpJeHHesNBJ8i6776gk58VJHErTTegILKM3QEAAAAAAAAA6AMAAAAAAAA="
+              "value": "AABDbOepJUsw0lPkVnzK+l82zoTICqi8m+ZODVrnlohCdK7zAFrmczgJAgAAAAAAAAAgMhOK400i5jl686mnHk76H7rRbLDPr95bKISFjoP6QUYRIEQC0XqEFTihtL+27+QoUEIaCsjsHVuE3WKJ4ZO5+I3kqZQ1jJ+FAgAAAAAAAAAgYTUjbD51qSXhx3rDQSfIuu++oJOfFSRxK003oCCyjN0BAAAAAAAAAOgDAAAAAAAA"
             },
             {
               "name": "sig_scheme",
@@ -237,7 +237,7 @@
             },
             {
               "name": "signature",
-              "value": "pD7Ih0rV6bwO7x0T3+cK8ySQS26jc/YHwMrPwXHvVyaqYUaaZ8e4NtWqF07mawgnFgUGP/X0s3pbEpxZEhdeAA=="
+              "value": "ZIh08TpOJmkrxJhKAN57S/+ditrvNqR1LvQx/t/ji73mpurCc1Rfwnct6ah8N4sWMEQoIbg1Y4wlsrbpE09zAQ=="
             },
             {
               "name": "pub_key",
@@ -274,7 +274,7 @@
                   },
                   "gasBudget": 1000
                 },
-                "txSignature": "AKQ+yIdK1em8Du8dE9/nCvMkkEtuo3P2B8DKz8Fx71cmqmFGmmfHuDbVqhdO5msIJxYFBj/19LN6WxKcWRIXXgBx+rEBAzFCR9EqZuZwy6ymxQFHAR2C/1SDkX9nq7wm2w==",
+                "txSignature": "AGSIdPE6TiZpK8SYSgDee0v/nYra7zakdS70Mf7f44u95qbqwnNUX8J3LemofDeLFjBEKCG4NWOMJbK26RNPcwFx+rEBAzFCR9EqZuZwy6ymxQFHAR2C/1SDkX9nq7wm2w==",
                 "authSignInfo": {
                   "epoch": 0,
                   "signature": "",
@@ -365,7 +365,7 @@
       "params": [
         {
           "name": "tx_bytes",
-          "description": "transaction data bytes, as base-64 encoded string",
+          "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -373,7 +373,7 @@
         },
         {
           "name": "signature",
-          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string",
+          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -401,11 +401,11 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "VHJhbnNhY3Rpb25EYXRhOjoAAKkzuIme+yBzWk9q7IITbv9z5oGcc3d9KzFEBZ0QljNgU6vI0OhDcSICAAAAAAAAACDqaOyQzx91Z1qbOF9Hn+p8LdrQt3t1gDanT9tv2+pGo+JhlRlCAhmnCjpuH/a7YKo9QlK3pycU+/EOvBcDPFtMkZiSbdzWAw0CAAAAAAAAACDCwdmQCAtBWCNYxtQVcIIe0viL3JNO6NFizXBdod+gzQEAAAAAAAAA6AMAAAAAAAA="
+              "value": "AACpM7iJnvsgc1pPauyCE27/c+aBnHN3fSsxRAWdEJYzYFOryNDoQ3EiAgAAAAAAAAAg6mjskM8fdWdamzhfR5/qfC3a0Ld7dYA2p0/bb9vqRqPiYZUZQgIZpwo6bh/2u2CqPUJSt6cnFPvxDrwXAzxbTJGYkm3c1gMNAgAAAAAAAAAgwsHZkAgLQVgjWMbUFXCCHtL4i9yTTujRYs1wXaHfoM0BAAAAAAAAAOgDAAAAAAAA"
             },
             {
               "name": "signature",
-              "value": "AFZVSXdWqZxPpQCv0qbbSWXaXIlfrphkNaZJSJ5I/8OTSsPvJF9f1cKY0+vxFcVzjZa7oHdVeiKhjTa0CGLXLwZrcsROTZwfkUDdbwRmvqkE8UTLidenb8PFiZSW/zoONw=="
+              "value": "AEYFlSNOs3VXTafbryAH3/ZKoqy907QU+pP9oSkiOtmix/LsiwY4EjCHwj+ICLkIHNTGXx7LHGbKu++PomyH1QZrcsROTZwfkUDdbwRmvqkE8UTLidenb8PFiZSW/zoONw=="
             },
             {
               "name": "request_type",
@@ -438,7 +438,7 @@
                   },
                   "gasBudget": 1000
                 },
-                "txSignature": "AFZVSXdWqZxPpQCv0qbbSWXaXIlfrphkNaZJSJ5I/8OTSsPvJF9f1cKY0+vxFcVzjZa7oHdVeiKhjTa0CGLXLwZrcsROTZwfkUDdbwRmvqkE8UTLidenb8PFiZSW/zoONw==",
+                "txSignature": "AEYFlSNOs3VXTafbryAH3/ZKoqy907QU+pP9oSkiOtmix/LsiwY4EjCHwj+ICLkIHNTGXx7LHGbKu++PomyH1QZrcsROTZwfkUDdbwRmvqkE8UTLidenb8PFiZSW/zoONw==",
                 "authSignInfo": {
                   "epoch": 0,
                   "signature": "",
@@ -1376,7 +1376,7 @@
                   },
                   "gasBudget": 1000
                 },
-                "txSignature": "AFQCA34QO71gy26f8WcfCWubJ/ght4OIucz3s/o9V1S6fk2pqdbdujEQzssUUG9vO40nAijUGJET4NOVSDpuHQ6k8MuV4Ujxl9xtOeYgzm8Jf2BS6d0xIUr4jebbcPvoqQ==",
+                "txSignature": "ANMM5DC9TGa+L9jh25Bo6zR88WVklxXfpPGGyR/mid9bd1wTs6hHhl2W1PvNYXnf5fGRkrzdnnRtkdX8kio0CAGk8MuV4Ujxl9xtOeYgzm8Jf2BS6d0xIUr4jebbcPvoqQ==",
                 "authSignInfo": {
                   "epoch": 0,
                   "signature": "",
@@ -2476,7 +2476,7 @@
             "$ref": "#/components/schemas/TransactionDigest"
           },
           "txSignature": {
-            "description": "tx_signature is signed by the transaction sender, applied on `data`.",
+            "description": "tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/Signature"
@@ -5048,7 +5048,7 @@
             }
           },
           "txBytes": {
-            "description": "transaction data bytes, as base-64 encoded string",
+            "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/Base64"

@@ -22,6 +22,7 @@ use test_utils::messages::make_transactions_with_wallet_context;
 
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
+use sui_types::intent::Intent;
 use sui_types::{
     base_types::SuiAddress,
     messages::{Transaction, TransactionData, VerifiedTransaction},
@@ -133,7 +134,7 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction(
-                Transaction::from_data(txn_data, signature)
+                Transaction::from_data(txn_data, Intent::default(), signature)
                     .verify()
                     .unwrap(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),

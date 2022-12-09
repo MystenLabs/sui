@@ -79,10 +79,14 @@ export const deserializeTxn = createAsyncThunk<
         const signer = api.getSignerInstance(keypairVault.getKeypair());
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
+        const version = await api.instance.fullNode.getRpcApiVersion();
 
         //TODO: Error handling - either show the error or use the serialized txn
+        const useIntentSigning =
+            version != null && version.major >= 0 && version.minor > 18;
         const deserializeTx =
             (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+                useIntentSigning,
                 txnBytes
             )) as UnserializedSignableTransaction;
 

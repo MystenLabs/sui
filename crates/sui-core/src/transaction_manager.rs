@@ -104,7 +104,10 @@ impl TransactionManager {
 
             let missing = self
                 .authority_store
-                .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
+                .get_missing_input_objects(
+                    &digest,
+                    &cert.data().intent_message.value.input_objects()?,
+                )
                 .await
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 

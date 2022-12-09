@@ -359,7 +359,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "validator_state_process_tx",
             ?tx_digest,
-            tx_kind = transaction.data().data.kind_as_str()
+            tx_kind = transaction.data().intent_message.value.kind_as_str()
         );
 
         let info = state
@@ -435,7 +435,7 @@ impl ValidatorService {
             let span = tracing::debug_span!(
                 "validator_state_process_cert",
                 ?tx_digest,
-                tx_kind = certificate.data().data.kind_as_str()
+                tx_kind = certificate.data().intent_message.value.kind_as_str()
             );
             match state
                 .handle_certificate(&certificate)

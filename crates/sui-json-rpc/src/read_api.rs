@@ -8,6 +8,7 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_types::intent::{Intent, IntentMessage};
 use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
@@ -25,8 +26,8 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{sha3_hash, SignableBytes};
-use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
+use sui_types::crypto::sha3_hash;
+use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
 use sui_types::query::TransactionQuery;
@@ -171,9 +172,13 @@ impl SuiRpcModule for ReadApi {
 impl RpcFullNodeReadApiServer for FullNodeApi {
     async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
         let tx_data =
-            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
-        let txn_digest = TransactionDigest::new(sha3_hash(&tx_data));
-        Ok(self.state.dry_exec_transaction(tx_data, txn_digest).await?)
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+        let intent_msg = IntentMessage::new(Intent::default(), tx_data);
+        let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
+        Ok(self
+            .state
+            .dry_exec_transaction(intent_msg.value, txn_digest)
+            .await?)
     }
 
     async fn get_normalized_move_modules_by_package(
