@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 const imageStyle = cva([], {
     variants: {
         size: {
+            none: 'w-0 h-0',
             small: 'w-6 h-6',
             medium: 'w-icon h-icon',
         },
@@ -17,6 +18,13 @@ const imageStyle = cva([], {
             true: 'bg-gray-45',
         },
     },
+    compoundVariants: [
+        {
+            fillers: false,
+            variant: 'rounded',
+            class: 'w-0 h-0',
+        },
+    ],
     defaultVariants: {
         variant: 'rounded',
         size: 'medium',

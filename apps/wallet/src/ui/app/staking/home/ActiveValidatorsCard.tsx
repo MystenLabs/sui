@@ -1,28 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
-// import { cva, type VariantProps } from 'class-variance-authority';
+import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
 import { useMemo, useCallback, useState } from 'react';
 
 import { Text } from '../../shared/Text';
 import { IconTooltip } from '../../shared/Tooltip';
 import { ImageIcon } from '../../shared/image-icon';
+import { processValidators } from './ValidatorDataTypes';
 import Alert from '_components/alert';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject, useMiddleEllipsis } from '_hooks';
 
-import type { ValidatorState, Validator } from './ValidatorDataTypes';
+import type { ValidatorState } from './ValidatorDataTypes';
 
 const TRUNCATE_MAX_LENGTH = 10;
 const TRUNCATE_PREFIX_LENGTH = 6;
 const APY_TOOLTIP = 'Annual Percentage Yield';
 const VALIDATORS_OBJECT_ID = '0x05';
-
-const textDecoder = new TextDecoder();
 
 type ValidatorListItemProp = {
     name: string;
@@ -86,51 +83,6 @@ function ValidatorListItem({
         </div>
     );
 }
-
-export function processValidators(
-    set: Validator[],
-    totalStake: bigint,
-    current_epoch: number
-) {
-    return set.map((av) => {
-        const rawName = av.fields.metadata.fields.name;
-
-        const name = textDecoder.decode(
-            new Base64DataBuffer(rawName).getData()
-        );
-
-        /*
-         const {
-            sui_balance,
-            starting_epoch,
-
-            delegation_token_supply,
-        } = av.fields.delegation_staking_pool.fields;
-        const num_epochs_participated = current_epoch - starting_epoch;
-        const APY =
-            (1 +
-                (sui_balance - delegation_token_supply.fields.value) /
-                    delegation_token_supply.fields.value) ^
-            (365 / num_epochs_participated - 1);*/
-
-        return {
-            name: name,
-            address: av.fields.metadata.fields.sui_address,
-            pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
-            stake: av.fields.stake_amount,
-            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
-            delegation_count: av.fields.delegation_count || 0,
-            apy: 'N/A',
-            logo: null,
-        };
-    });
-}
-
-export const getStakePercent = (stake: bigint, total: bigint): number => {
-    const bnStake = new BigNumber(stake.toString());
-    const bnTotal = new BigNumber(total.toString());
-    return bnStake.div(bnTotal).multipliedBy(100).toNumber();
-};
 
 export function ActiveValidatorsCard() {
     const { data, isLoading, isError } = useGetObject(VALIDATORS_OBJECT_ID);

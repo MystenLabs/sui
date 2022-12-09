@@ -11,7 +11,7 @@ export type CardHeaderProps = {
 
 function CardHeader({ children }: CardHeaderProps) {
     return (
-        <div className="bg-gray-40 min-h-[30px] flex justify-center items-center rounded-t-2xl divide-x divide-gray-45">
+        <div className="bg-gray-40 min-h-[30px] flex justify-center items-center rounded-t-2xl divide-solid divide-gray-45 divide-y-0 w-full">
             {children}
         </div>
     );

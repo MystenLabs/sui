@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 import st from './Overlay.module.scss';
 
 type OverlayProps = {
-    title: string;
+    title: ReactNode;
     children: ReactNode | ReactNode[];
     showModal: boolean;
     closeOverlay?: () => void;

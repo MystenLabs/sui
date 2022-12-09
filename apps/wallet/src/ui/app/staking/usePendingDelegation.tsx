@@ -25,6 +25,7 @@ interface SystemStateObject {
                     };
                     delegation_staking_pool: {
                         fields: {
+                            validator_address: SuiAddress;
                             // TODO: Figure out why this is an empty string sometimes:
                             pending_delegations:
                                 | string
@@ -45,6 +46,7 @@ interface SystemStateObject {
 interface PendingDelegation {
     name: string;
     staked: bigint;
+    validator_address: SuiAddress;
 }
 
 /**
@@ -100,6 +102,9 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
 
                     return {
                         name,
+                        validator_address:
+                            validator.fields.delegation_staking_pool.fields
+                                .validator_address,
                         staked: filteredDelegations.reduce(
                             (acc, delegation) =>
                                 acc + BigInt(delegation.fields.sui_amount),
