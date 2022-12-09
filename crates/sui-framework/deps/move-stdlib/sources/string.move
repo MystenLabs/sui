@@ -3,8 +3,9 @@
 
 /// The `string` module defines the `String` type which represents UTF8 encoded strings.
 module std::string {
-    use std::vector;
+    use std::ascii;
     use std::option::{Self, Option};
+    use std::vector;
 
     /// An invalid UTF8 encoding.
     const EINVALID_UTF8: u64 = 1;
@@ -30,6 +31,11 @@ module std::string {
         } else {
             option::none()
         }
+    }
+
+    /// Convert an ASCII string to a UTF8 string
+    public fun from_ascii(ascii: ascii::String): String {
+        String { bytes: ascii::into_bytes(ascii) }
     }
 
     /// Returns a reference to the underlying byte vector.
@@ -87,7 +93,6 @@ module std::string {
     public fun index_of(s: &String, r: &String): u64 {
         internal_index_of(&s.bytes, &r.bytes)
     }
-
 
     // Native API
     native fun internal_check_utf8(v: &vector<u8>): bool;
