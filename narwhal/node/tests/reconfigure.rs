@@ -7,7 +7,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{ExecutionIndices, ExecutionState};
+use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
 use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
@@ -23,7 +23,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::ConsensusOutput;
+use types::{ConsensusOutput, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
 
@@ -74,17 +74,34 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    async fn handle_consensus_transaction(
-        &self,
-        _consensus_output: &Arc<ConsensusOutput>,
-        execution_indices: ExecutionIndices,
-        transaction: Vec<u8>,
-    ) {
-        let transaction: u64 = bincode::deserialize(&transaction).unwrap();
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+        let mut i = 0;
+        for (_, batches) in consensus_output.batches {
+            for batch in batches {
+                for transaction in batch.transactions.into_iter() {
+                    i += 1;
+                    let mut change_epoch = false;
+                    if i % 3 == 0 {
+                        change_epoch = true
+                    }
+                    self.process_transaction(transaction, change_epoch).await;
+                }
+            }
+        }
+    }
+
+    async fn last_executed_sub_dag_index(&self) -> u64 {
+        0
+    }
+}
+
+impl SimpleExecutionState {
+    async fn process_transaction(&self, transaction: Transaction, change_epoch: bool) {
+        let _transaction: u64 = bincode::deserialize(&transaction).unwrap();
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if transaction >= epoch && execution_indices.next_certificate_index % 3 == 0 {
+        if change_epoch {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
@@ -110,10 +127,6 @@ impl ExecutionState for SimpleExecutionState {
         }
 
         let _ = self.tx_output.send(epoch).await;
-    }
-
-    async fn load_execution_indices(&self) -> ExecutionIndices {
-        ExecutionIndices::default()
     }
 }
 
@@ -265,6 +278,7 @@ async fn restart() {
         .expect("No error should occurred");
 }
 
+#[ignore]
 #[tokio::test]
 async fn epoch_change() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();

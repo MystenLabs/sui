@@ -10,11 +10,12 @@ use std::path::Path;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use sqlx::ConnectOptions;
+use sqlx::pool::PoolOptions;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous},
     Executor, QueryBuilder, Row, SqlitePool,
 };
+use sqlx::{ConnectOptions, Sqlite};
 use strum::{EnumMessage, IntoEnumIterator};
 use tracing::{info, instrument, log, warn};
 
@@ -121,9 +122,13 @@ impl SqlEventStore {
             .pragma("wal_autocheckpoint", "400") // In pages of 4KB each
             .create_if_missing(true);
         options.log_statements(log::LevelFilter::Off);
-        let pool = SqlitePool::connect_with(options)
+
+        let pool = PoolOptions::<Sqlite>::new()
+            .max_connections(100)
+            .connect_with(options)
             .await
             .map_err(convert_sqlx_err)?;
+
         info!(?db_path, "Created/opened SQLite EventStore on disk");
 
         Ok(Self { pool })

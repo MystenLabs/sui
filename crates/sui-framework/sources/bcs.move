@@ -157,6 +157,10 @@ module sui::bcs {
         total
     }
 
+    spec peel_vec_length {
+        pragma intrinsic = true;
+    }
+
     /// Peel a vector of `address` from serialized bytes.
     public fun peel_vec_address(bcs: &mut BCS): vector<address> {
         let (len, i, res) = (peel_vec_length(bcs), 0, vector[]);

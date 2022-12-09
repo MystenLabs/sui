@@ -82,7 +82,7 @@ impl DiscoveryEventLoop {
 
         let mut interval = tokio::time::interval(DISCOVERY_INTERVAL_PERIOD);
         let mut peer_events = {
-            let (subscriber, _peers) = self.network.subscribe();
+            let (subscriber, _peers) = self.network.subscribe().unwrap();
             subscriber
         };
 

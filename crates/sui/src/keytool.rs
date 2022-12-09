@@ -125,9 +125,9 @@ impl KeyToolCommand {
                 info!("Data to sign : {}", data);
                 info!("Address : {}", address);
                 let message = Base64::decode(&data).map_err(|e| anyhow!(e))?;
-                let signature = keystore.sign(&address, &message)?;
+                let sui_signature = keystore.sign(&address, &message)?;
                 // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
-                let signature_string = format!("{:?}", signature);
+                let signature_string = format!("{:?}", sui_signature);
                 let sig_split = signature_string.split('@').collect::<Vec<_>>();
                 let flag = sig_split
                     .first()
@@ -141,6 +141,7 @@ impl KeyToolCommand {
                 info!("Flag Base64: {}", flag);
                 info!("Public Key Base64: {}", pub_key);
                 info!("Signature : {}", signature);
+                info!("Serialized signature Base64: {:?}", sui_signature);
             }
             KeyToolCommand::Import {
                 mnemonic_phrase,

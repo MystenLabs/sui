@@ -18,8 +18,6 @@ import {
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
-import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
-import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import Longtext from '../../components/longtext/Longtext';
 import { getAmount } from '../../utils/getAmount';
@@ -30,6 +28,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import styles from './RecentTxCard.module.css';
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
+import { TransactionType } from '~/ui/TransactionType';
 
 export type TxnData = {
     To?: string;
@@ -52,11 +51,6 @@ export type LinkObj = {
 };
 
 type Category = 'object' | 'transaction' | 'address' | 'unknown';
-
-type TxStatus = {
-    txTypeName: TransactionKindName | undefined;
-    status: ExecutionStatusType;
-};
 
 export function SuiAmount({
     amount,
@@ -96,26 +90,6 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                     {idx !== content.length - 1 && <ContentArrowRight />}
                 </Fragment>
             ))}
-        </section>
-    );
-}
-
-function TxStatusType({ content }: { content: TxStatus }) {
-    const TxStatus = {
-        success: ContentSuccessStatus,
-        fail: ContentFailedStatus,
-    };
-    const TxResultStatus =
-        content.status === 'success' ? TxStatus.success : TxStatus.fail;
-    return (
-        <section className={styles.statuswrapper}>
-            <div
-                className={
-                    content.status === 'success' ? styles.success : styles.fail
-                }
-            >
-                <TxResultStatus /> <div>{content.txTypeName}</div>
-            </div>
         </section>
     );
 }
@@ -166,11 +140,9 @@ export const genTableDataFromTxData = (
                 />
             ),
             txTypes: (
-                <TxStatusType
-                    content={{
-                        txTypeName: txn.kind,
-                        status: txn.status,
-                    }}
+                <TransactionType
+                    isSuccess={txn.status === 'success'}
+                    type={txn.kind}
                 />
             ),
             amounts: <SuiAmount amount={txn.suiAmount} />,

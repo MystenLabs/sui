@@ -6,7 +6,7 @@ use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use mysten_metrics::{monitored_future, monitored_scope, spawn_monitored_task};
-use network::{P2pNetwork, PrimaryToPrimaryRpc};
+use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -85,7 +85,7 @@ struct CertificateFetcherState {
     /// Identity of the current authority.
     name: PublicKey,
     /// Network client to fetch certificates from other primaries.
-    network: P2pNetwork,
+    network: anemo::Network,
     /// Loops fetched certificates back to the core. Certificates are ensured to have all parents.
     tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
     /// The metrics handler
@@ -97,7 +97,7 @@ impl CertificateFetcher {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        network: P2pNetwork,
+        network: anemo::Network,
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
@@ -347,7 +347,7 @@ async fn run_fetch_task(
 #[instrument(level = "debug", skip_all)]
 async fn fetch_certificates_helper(
     name: &PublicKey,
-    network: &P2pNetwork,
+    network: &anemo::Network,
     committee: &Committee,
     request: FetchCertificatesRequest,
 ) -> Option<FetchCertificatesResponse> {
@@ -369,7 +369,6 @@ async fn fetch_certificates_helper(
         // Loop until one peer returns with certificates, or no peer does.
         loop {
             if let Some(peer) = peers.pop() {
-                let network = network.network();
                 let request = request.clone();
                 fut.push(monitored_future!(async move {
                     debug!("Sending out fetch request in parallel to {peer}");

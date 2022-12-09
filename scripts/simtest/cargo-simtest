@@ -45,20 +45,18 @@ fi
 
 RUST_FLAGS=('"--cfg"' '"msim"')
 
-cargo_patch_args=(
-  --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"'
-  --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"'
-)
-
 if [ -n "$LOCAL_MSIM_PATH" ]; then
-  cargo_patch_args+=(
+  cargo_patch_args=(
     --config "patch.crates-io.tokio.path = \"$LOCAL_MSIM_PATH/msim-tokio\""
     --config "patch.'https://github.com/MystenLabs/mysten-sim'.msim.path = \"$LOCAL_MSIM_PATH/msim\""
+    --config "patch.crates-io.futures-timer.path = \"$LOCAL_MSIM_PATH/mocked-crates/futures-timer\""
   )
 else
-  cargo_patch_args+=(
+  cargo_patch_args=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "0667864838a8c1b5b9d19972102086ccf4a525ff"'
+    --config 'patch.crates-io.tokio.rev = "3aeccfeb0f021ad5801c1ab4dcf4004de7780847"'
+    --config 'patch.crates-io.futures-timer.git = "https://github.com/MystenLabs/mysten-sim.git"'
+    --config 'patch.crates-io.futures-timer.rev = "3aeccfeb0f021ad5801c1ab4dcf4004de7780847"'
   )
 fi
 
@@ -101,8 +99,6 @@ export TMPDIR=$(mktemp -d)
 cargo ${CARGO_COMMAND[@]} \
   --config "build.rustflags = [$RUST_FLAGS]" \
   "${cargo_patch_args[@]}" \
-  --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"' \
-  --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"' \
   "$@"
 
 STATUS=$?

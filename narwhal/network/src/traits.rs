@@ -14,7 +14,7 @@ pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
     type Response: Clone + Send + Sync;
 
     fn unreliable_send(
-        &mut self,
+        &self,
         peer: NetworkPublicKey,
         message: &Request,
     ) -> Result<JoinHandle<Result<anemo::Response<Self::Response>>>>;
@@ -22,7 +22,7 @@ pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
     /// Broadcasts a message to all `peers` passed as an argument.
     /// The attempts to send individual messages are best effort and will not be retried.
     fn unreliable_broadcast(
-        &mut self,
+        &self,
         peers: Vec<NetworkPublicKey>,
         message: &Request,
     ) -> Vec<Result<JoinHandle<Result<anemo::Response<Self::Response>>>>> {
@@ -39,13 +39,13 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
     type Response: Clone + Send + Sync;
 
     fn send(
-        &mut self,
+        &self,
         peer: NetworkPublicKey,
         message: &Request,
     ) -> CancelOnDropHandler<Result<anemo::Response<Self::Response>>>;
 
     fn broadcast(
-        &mut self,
+        &self,
         peers: Vec<NetworkPublicKey>,
         message: &Request,
     ) -> Vec<CancelOnDropHandler<Result<anemo::Response<Self::Response>>>> {

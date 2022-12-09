@@ -4,7 +4,7 @@
 use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
 use mysten_metrics::spawn_monitored_task;
-use network::{P2pNetwork, UnreliableNetwork};
+use network::UnreliableNetwork;
 use std::{collections::BTreeMap, sync::Arc};
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
@@ -31,7 +31,7 @@ pub struct StateHandler {
     /// A channel to update the committed rounds
     tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
-    network: P2pNetwork,
+    network: anemo::Network,
 }
 
 impl StateHandler {
@@ -44,7 +44,7 @@ impl StateHandler {
         rx_state_handler: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
-        network: P2pNetwork,
+        network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_monitored_task!(async move {
             Self {

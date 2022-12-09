@@ -124,7 +124,12 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
-                let mut config = network_config.generate_fullnode_config_with_random_dir_name(true);
+                let mut config = network_config
+                    .fullnode_config_builder()
+                    .with_random_dir()
+                    .build()
+                    .unwrap();
+
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }
@@ -149,7 +154,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-            let mut config = network_config.generate_fullnode_config_with_random_dir_name(true);
+            let mut config = network_config
+                .fullnode_config_builder()
+                .with_random_dir()
+                .build()
+                .unwrap();
             config.json_rpc_address = fullnode_rpc_addr;
             HashMap::from([(config.sui_address(), Node::new(config))])
         } else {

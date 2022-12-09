@@ -43,7 +43,6 @@ use sui_types::{
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
-use narwhal_types::Certificate;
 use tracing::info;
 
 pub enum TestCallArg {
@@ -598,7 +597,7 @@ pub async fn send_and_confirm_transaction_with_shared(
     let vote = response.signed_transaction.unwrap().into_inner();
 
     // Collect signatures from a quorum of authorities
-    let committee = authority.committee();
+    let committee = authority.clone_committee();
     let certificate = CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -1240,7 +1239,7 @@ async fn test_handle_certificate_interrupted_retry() {
         }
         interrupted_count += 1;
 
-        let epoch_store = authority_state.database.epoch_store();
+        let epoch_store = authority_state.epoch_store();
         let g = epoch_store
             .acquire_tx_guard(&shared_object_cert)
             .await
@@ -2474,14 +2473,14 @@ fn init_certified_transaction(
         authority_state.name,
         &*authority_state.secret,
     );
-    let committee = authority_state.committee();
+    let epoch_store = authority_state.epoch_store();
     CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
-        &committee,
+        epoch_store.committee(),
     )
     .unwrap()
-    .verify(&committee)
+    .verify(epoch_store.committee())
     .unwrap()
 }
 
@@ -2490,14 +2489,10 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
     let transaction = SequencedConsensusTransaction::new_test(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
-    let certificate = Certificate::new_test_empty(authority.name.try_into().unwrap());
-    let output = ConsensusOutput {
-        certificate,
-        ..Default::default()
-    };
-    if let Ok(transaction) = authority.verify_consensus_transaction(&output, transaction) {
+
+    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
         authority
-            .handle_consensus_transaction(&output, transaction, &Arc::new(CheckpointServiceNoop {}))
+            .handle_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
             .await
             .unwrap();
     }
@@ -2671,7 +2666,7 @@ async fn make_test_transaction(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 
-    let committee = authorities[0].committee();
+    let committee = authorities[0].clone_committee();
     let mut sigs = vec![];
 
     for authority in authorities {
@@ -2885,11 +2880,9 @@ async fn test_consensus_message_processed() {
     // verify the two validators are in sync.
     assert_eq!(
         authority1
-            .database
             .epoch_store()
             .get_next_object_version(&shared_object_id),
         authority2
-            .database
             .epoch_store()
             .get_next_object_version(&shared_object_id),
     );

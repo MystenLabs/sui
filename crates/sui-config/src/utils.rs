@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, TcpListener, TcpStream};
 
 /// Return an ephemeral, available port. On unix systems, the port returned will be in the
 /// TIME_WAIT state ensuring that the OS won't hand out this port for some grace period.
@@ -75,4 +75,15 @@ pub fn socket_address_to_udp_multiaddr(address: std::net::SocketAddr) -> multiad
     }
     .parse()
     .unwrap()
+}
+
+#[cfg(msim)]
+pub fn get_local_ip_for_tests() -> IpAddr {
+    let node = sui_simulator::runtime::NodeHandle::current();
+    node.ip().expect("Current node should have an IP")
+}
+
+#[cfg(not(msim))]
+pub fn get_local_ip_for_tests() -> IpAddr {
+    "127.0.0.1".parse().unwrap()
 }

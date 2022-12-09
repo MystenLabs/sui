@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Navigate, Route, Routes, useParams } from 'react-router-dom';
+import {
+    Navigate,
+    Route,
+    Routes,
+    useLocation,
+    useParams,
+} from 'react-router-dom';
 
 import AddressResult from '../address-result/AddressResult';
 import Home from '../home/Home';
@@ -14,7 +20,8 @@ import { ValidatorPageResult } from '../validators/Validators';
 
 function RedirectWithId({ base }: { base: string }) {
     const params = useParams();
-    return <Navigate to={`/${base}/${params.id}`} replace />;
+    const { search } = useLocation();
+    return <Navigate to={`/${base}/${params.id}${search}`} replace />;
 }
 
 function AppRoutes() {

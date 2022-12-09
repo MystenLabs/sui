@@ -3,16 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, SequenceNumber,
+    utils,
 };
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore, Round,
-    StoreResult,
-};
+use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(any(test))]
 #[path = "tests/tusk_tests.rs"]
@@ -31,12 +28,10 @@ impl ConsensusProtocol for Tusk {
     fn process_certificate(
         &mut self,
         state: &mut ConsensusState,
-        consensus_index: SequenceNumber,
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
-        let mut consensus_index = consensus_index;
 
         // Add the new certificate to the local storage.
         state
@@ -96,33 +91,28 @@ impl ConsensusProtocol for Tusk {
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
-                let digest = x.digest();
-
                 // Update and clean up internal state.
                 state.update(&x, self.gc_depth);
 
                 // Add the certificate to the sequence.
-                sequence.push(ConsensusOutput {
-                    certificate: x,
-                    consensus_index,
-                });
-
-                // Increase the global consensus index.
-                consensus_index += 1;
-
-                // Persist the update.
-                // TODO [issue #116]: Ensure this is not a performance bottleneck.
-                self.store.write_consensus_state(
-                    &state.last_committed,
-                    &consensus_index,
-                    &digest,
-                )?;
+                sequence.push(x);
             }
 
-            committed_sub_dags.push(CommittedSubDag {
+            let next_sub_dag_index = state.latest_sub_dag_index + 1;
+            let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-            });
+                sub_dag_index: next_sub_dag_index,
+            };
+
+            // Persist the update.
+            self.store
+                .write_consensus_state(&state.last_committed, &sub_dag)?;
+
+            // Increase the global consensus index.
+            state.latest_sub_dag_index = next_sub_dag_index;
+
+            committed_sub_dags.push(sub_dag);
         }
 
         // Log the latest committed round of every authority (for debug).
@@ -212,12 +202,10 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let consensus_index = 0;
         let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
-            tusk.process_certificate(&mut state, consensus_index, certificate)
-                .unwrap();
+            tusk.process_certificate(&mut state, certificate).unwrap();
         }
         // with "optimal" certificates (see `make_optimal_certificates`), and a round-robin between leaders,
         // we need at most 6 rounds lookbehind: we elect a leader at most at round r-2, and its round is
@@ -259,12 +247,10 @@ mod tests {
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
-        let consensus_index = 0;
         let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {
-            tusk.process_certificate(&mut state, consensus_index, certificate)
-                .unwrap();
+            tusk.process_certificate(&mut state, certificate).unwrap();
         }
 
         // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind

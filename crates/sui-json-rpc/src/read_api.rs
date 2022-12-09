@@ -12,6 +12,7 @@ use std::sync::Arc;
 use sui_types::coin::CoinMetadata;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
+use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
 use fastcrypto::encoding::Base64;
@@ -40,7 +41,7 @@ use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
 use crate::SuiRpcModule;
 
-// An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
+// An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,
@@ -147,9 +148,10 @@ impl RpcReadApiServer for ReadApi {
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
 
         let mut signers = Vec::new();
-        let committee = self.state.committee();
+        let epoch_store = self.state.epoch_store();
         for authority_index in cert.auth_sig().signers_map.iter() {
-            let authority = committee
+            let authority = epoch_store
+                .committee()
                 .authority_by_index(authority_index)
                 .ok_or_else(|| anyhow!("Failed to get authority"))?;
             signers.push(*authority);
@@ -395,6 +397,14 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         Ok(self
             .state
             .handle_committee_info_request(&CommitteeInfoRequest { epoch })
+            .map_err(|e| anyhow!("{e}"))?)
+    }
+
+    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
+        Ok(self
+            .state
+            .get_sui_system_state_object()
+            .await
             .map_err(|e| anyhow!("{e}"))?)
     }
 }

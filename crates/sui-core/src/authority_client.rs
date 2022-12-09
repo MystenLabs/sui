@@ -506,7 +506,10 @@ impl LocalAuthorityClient {
         let response = match state.get_tx_info_already_executed(&tx_digest).await {
             Ok(Some(response)) => response,
             _ => {
-                let certificate = certificate.verify(&state.committee())?;
+                let certificate = {
+                    let epoch_store = state.epoch_store();
+                    certificate.verify(epoch_store.committee())?
+                };
                 state.handle_certificate(&certificate).await?
             }
         };

@@ -1,4 +1,6 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 from collections import OrderedDict
 from fabric import Connection, ThreadingGroup as Group
 from fabric.exceptions import GroupException

@@ -17,7 +17,6 @@ import Permissions from '_src/background/Permissions';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
-import { entropyToSerialized } from '_src/shared/utils/bip39';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -60,9 +59,7 @@ export class UiConnection extends Connection {
                 method: 'walletStatusUpdate',
                 return: {
                     isLocked,
-                    entropy: Keyring.entropy
-                        ? entropyToSerialized(Keyring.entropy)
-                        : undefined,
+                    activeAccount: Keyring.keypair?.export(),
                     isInitialized: await Keyring.isWalletInitialized(),
                 },
             })

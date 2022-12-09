@@ -54,7 +54,7 @@ use tap::TapFallible;
 
 use tokio::time::Instant;
 pub mod gossip;
-use gossip::{gossip_process, GossipMetrics};
+use gossip::GossipMetrics;
 
 use crate::authority_client::NetworkAuthorityClientMetrics;
 
@@ -255,16 +255,6 @@ where
                 NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone())
             })
             .clone()
-    }
-
-    /// Spawn gossip process
-    pub async fn spawn_gossip_process(self: Arc<Self>, degree: usize) -> JoinHandle<()> {
-        // Number of tasks at most "degree" and no more than committee - 1
-        // (validators do not follow themselves for gossip)
-        let committee = self.state.clone_committee();
-        let target_num_tasks = usize::min(committee.num_members() - 1, degree);
-
-        spawn_monitored_task!(gossip_process(&self, target_num_tasks))
     }
 
     /// Restart the node sync process only if one currently exists.

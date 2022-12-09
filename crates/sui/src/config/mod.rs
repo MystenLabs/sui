@@ -64,7 +64,7 @@ impl SuiClientConfig {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SuiEnv {
     pub alias: String,
     pub rpc: String,

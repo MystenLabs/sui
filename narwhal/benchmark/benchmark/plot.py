@@ -1,4 +1,6 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 from re import findall, search, split
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tick

@@ -68,7 +68,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
-version = "0.18.0"
+version = "0.19.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -99,33 +99,34 @@ opt-level = 1
 tokio = "1.22.0"
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-cli = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-package = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-prover = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "5bb2ac5a4a69e6f2df06183aec9b69c6d940f9f7" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-cli = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-package = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-prover = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3ac9fa490f2d7eecd133c87a7c616328a217b66a", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6eb758ba78612e5e22a2748dd7a4b2c8b3724377" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6eb758ba78612e5e22a2748dd7a4b2c8b3724377", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "3716a5669c68bd61d6e4958db99674507e0160b4" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "3716a5669c68bd61d6e4958db99674507e0160b4" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "3716a5669c68bd61d6e4958db99674507e0160b4" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

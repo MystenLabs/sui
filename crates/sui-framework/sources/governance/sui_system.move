@@ -41,6 +41,8 @@ module sui::sui_system {
     /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
         id: UID,
+        /// Id of the chain, value in the range [1, 127].
+        chain_id: u8,
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// Contains all information about the validators.
@@ -75,6 +77,7 @@ module sui::sui_system {
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in genesis.
     public(friend) fun create(
+        chain_id: u8,
         validators: vector<Validator>,
         sui_supply: Supply<SUI>,
         storage_fund: Balance<SUI>,
@@ -82,11 +85,13 @@ module sui::sui_system {
         min_validator_stake: u64,
         storage_gas_price: u64,
     ) {
+        assert!(chain_id >= 1 && chain_id <= 127, 1);
         let validators = validator_set::new(validators);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let state = SuiSystemState {
             // Use a hardcoded ID.
             id: object::sui_system_state(),
+            chain_id,
             epoch: 0,
             validators,
             sui_supply,

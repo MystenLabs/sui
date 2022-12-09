@@ -8,7 +8,6 @@ use anemo::PeerId;
 use config::{BlockSynchronizerParameters, Parameters};
 use fastcrypto::hash::Hash;
 use futures::future::try_join_all;
-use network::P2pNetwork;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
@@ -85,7 +84,7 @@ async fn test_successful_headers_synchronization() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
         payload_store.clone(),
         certificate_store.clone(),
         Parameters::default(),
@@ -227,7 +226,7 @@ async fn test_successful_payload_synchronization() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
         payload_store.clone(),
         certificate_store.clone(),
         Parameters::default(),
@@ -406,7 +405,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        P2pNetwork::new(network),
+        network,
         payload_store.clone(),
         certificate_store.clone(),
         params.clone(),
@@ -493,7 +492,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         rx_reconfigure,
         rx_block_synchronizer_commands,
         pending_requests: Default::default(),
-        network: P2pNetwork::new(network),
+        network,
         certificate_store: certificate_store.clone(),
         payload_store,
         certificates_synchronize_timeout: Default::default(),
@@ -592,7 +591,7 @@ async fn test_reply_with_payload_already_in_storage() {
         rx_reconfigure,
         rx_block_synchronizer_commands,
         pending_requests: Default::default(),
-        network: P2pNetwork::new(network),
+        network,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
         certificates_synchronize_timeout: Default::default(),
@@ -696,7 +695,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         rx_reconfigure,
         rx_block_synchronizer_commands,
         pending_requests: Default::default(),
-        network: P2pNetwork::new(network),
+        network,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
         certificates_synchronize_timeout: Default::default(),

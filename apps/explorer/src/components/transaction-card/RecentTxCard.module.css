@@ -83,14 +83,6 @@ div.txadd {
     @apply fill-gray-75;
 }
 
-.success svg {
-    @apply fill-success;
-}
-
-.fail svg {
-    @apply fill-issue-dark;
-}
-
 .moretxbtn:hover svg,
 .moretxbtn:hover {
     @apply fill-gray-70 transition-colors duration-200 ease-in-out;
@@ -114,13 +106,4 @@ tbody tr td:hover .addresses {
 
 .addresses a {
     @apply font-mono;
-}
-
-.statuswrapper {
-    @apply flex flex-col items-start justify-center;
-}
-
-.success,
-.fail {
-    @apply flex items-center justify-center gap-[6px];
 }

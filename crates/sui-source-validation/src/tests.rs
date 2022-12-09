@@ -13,14 +13,14 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use test_utils::network::init_cluster_builder_env_aware;
+use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::publish_package_with_wallet;
 
 use crate::{BytecodeSourceVerifier, DependencyVerificationError};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
 
@@ -37,8 +37,8 @@ async fn successful_verification() -> anyhow::Result<()> {
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
     };
-
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
     verifier
         .verify_deployed_dependencies(&a_pkg.package)
         .await
@@ -49,7 +49,7 @@ async fn successful_verification() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
 
@@ -67,7 +67,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.client.clone();
+    let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     // Stop the network, so future RPC requests fail.
@@ -83,7 +83,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn package_not_found() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let context = &mut cluster.wallet;
 
     let a_pkg = {
@@ -94,7 +94,8 @@ async fn package_not_found() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     assert!(matches!(
         verifier.verify_deployed_dependencies(&a_pkg.package).await,
@@ -106,7 +107,7 @@ async fn package_not_found() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn dependency_is_an_object() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let context = &mut cluster.wallet;
 
     let a_pkg = {
@@ -116,8 +117,8 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
     };
-
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     assert!(matches!(
         verifier.verify_deployed_dependencies(&a_pkg.package).await,
@@ -132,7 +133,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_not_found_on_chain() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
 
@@ -150,8 +151,8 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
     };
-
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     let Err(err) = verifier.verify_deployed_dependencies(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -169,7 +170,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_not_found_locally() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
 
@@ -188,7 +189,8 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     let Err(err) = verifier.verify_deployed_dependencies(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -206,7 +208,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_bytecode_mismatch() -> anyhow::Result<()> {
-    let mut cluster = init_cluster_builder_env_aware().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
 
@@ -232,7 +234,8 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     let Err(err) = verifier.verify_deployed_dependencies(&a_pkg.package).await else {
         panic!("Expected verification to fail");

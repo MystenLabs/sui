@@ -83,7 +83,7 @@ impl TicTacToe {
                     SuiJsonValue::from_str(&player_x.to_string())?,
                     SuiJsonValue::from_str(&player_o.to_string())?,
                 ],
-                None, // The gateway server will pick a gas object belong to the signer if not provided.
+                None, // The node will pick a gas object belong to the signer if not provided.
                 1000,
             )
             .await?;

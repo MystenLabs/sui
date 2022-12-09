@@ -3,6 +3,7 @@
 
 extern crate core;
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -22,8 +23,6 @@ use rpc_types::{
     SuiParsedTransactionResponse, SuiTransactionEffects,
 };
 use serde_json::Value;
-pub use sui_config::gateway;
-use sui_core::gateway_state::TxSeqNumber;
 pub use sui_json as json;
 use sui_json_rpc::api::EventReadApiClient;
 use sui_json_rpc::api::EventStreamingApiClient;
@@ -34,11 +33,12 @@ use sui_json_rpc::api::TransactionExecutionApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
     EventPage, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope, SuiEventFilter,
-    SuiObjectInfo, SuiTransactionResponse, TransactionsPage,
+    SuiMoveNormalizedModule, SuiObjectInfo, SuiTransactionResponse, TransactionsPage,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::batch::TxSequenceNumber;
 use sui_types::event::EventID;
 use sui_types::messages::VerifiedTransaction;
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -46,9 +46,6 @@ use types::base_types::SequenceNumber;
 use types::committee::EpochId;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::{CommitteeInfoResponse, ExecuteTransactionRequestType};
-
-#[cfg(msim)]
-pub mod embedded_gateway;
 
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
 
@@ -261,8 +258,8 @@ impl ReadApi {
 
     pub async fn get_transactions_in_range(
         &self,
-        start: TxSeqNumber,
-        end: TxSeqNumber,
+        start: TxSequenceNumber,
+        end: TxSequenceNumber,
     ) -> anyhow::Result<Vec<TransactionDigest>> {
         Ok(self.api.http.get_transactions_in_range(start, end).await?)
     }
@@ -292,6 +289,17 @@ impl ReadApi {
             .api
             .http
             .get_transactions(query, cursor, limit, descending_order)
+            .await?)
+    }
+
+    pub async fn get_normalized_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> anyhow::Result<BTreeMap<String, SuiMoveNormalizedModule>> {
+        Ok(self
+            .api
+            .http
+            .get_normalized_move_modules_by_package(package)
             .await?)
     }
 }
@@ -335,10 +343,8 @@ pub struct QuorumDriver {
 }
 
 impl QuorumDriver {
-    /// Execute a transaction with a FullNode client or embedded Gateway.
-    /// `request_type` is ignored when the client is an embedded Gateway.
-    /// For Fullnode client, `request_type` defaults to
-    /// `ExecuteTransactionRequestType::WaitForLocalExecution`.
+    /// Execute a transaction with a FullNode client. `request_type`
+    /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
     /// but returned `confirmed_local_execution` is false, the client polls
     /// the fullnode untils the fullnode recognizes this transaction, or

@@ -113,6 +113,10 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn new_id(&mut self, id: ObjectID) {
+        // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
+        // and then re-added in a single transaction
+        self.state.deleted_ids.remove(&id);
+        // mark the id as new
         self.state.new_ids.insert(id, ());
     }
 
@@ -251,6 +255,9 @@ impl ObjectRuntimeState {
                 effect,
             } = child_object_effect;
             if let Some(v) = loaded_version {
+                // remove if from new_ids if it was loaded for case in dynamic fields where the
+                // Field object was removed and then re-added in a single transaction
+                self.new_ids.remove(&child);
                 loaded_child_objects.insert(child, v);
             }
             match effect {
@@ -275,6 +282,7 @@ impl ObjectRuntimeState {
                 // ID was deleted too was deleted so mark as deleted
                 Op::Delete if self.deleted_ids.contains_key(&child) => {
                     debug_assert!(!self.transfers.contains_key(&child));
+                    debug_assert!(!self.new_ids.contains_key(&child));
                 }
                 // was new so the object is transient and does not need to be marked as deleted
                 Op::Delete if self.new_ids.contains_key(&child) => {}

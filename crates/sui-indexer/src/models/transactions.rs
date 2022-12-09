@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::schema::transactions;
+use crate::schema::transactions::dsl::{id, transactions as transactions_table};
 use crate::utils::log_errors_to_pg;
 
 use chrono::NaiveDateTime;
@@ -31,6 +32,7 @@ pub struct Transaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub transaction_content: String,
 }
 
 #[derive(Debug, Insertable)]
@@ -53,6 +55,7 @@ pub struct NewTransaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub transaction_content: String,
 }
 
 pub fn commit_transactions(
@@ -67,7 +70,7 @@ pub fn commit_transactions(
     let new_txns: Vec<NewTransaction> = new_txn_iter
         .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
-    log_errors_to_pg(errors);
+    log_errors_to_pg(conn, errors);
 
     diesel::insert_into(transactions::table)
         .values(&new_txns)
@@ -76,8 +79,25 @@ pub fn commit_transactions(
         .execute(conn)
         .map_err(|e| {
             IndexerError::PostgresWriteError(format!(
-                "Failed writing events to PostgresDB with transactions {:?} and error: {:?}",
+                "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
                 new_txns, e
+            ))
+        })
+}
+
+pub fn read_transactions(
+    conn: &mut PgConnection,
+    last_processed_id: i64,
+    limit: usize,
+) -> Result<Vec<Transaction>, IndexerError> {
+    transactions_table
+        .filter(id.gt(last_processed_id))
+        .limit(limit as i64)
+        .load::<Transaction>(conn)
+        .map_err(|e| {
+            IndexerError::PostgresReadError(format!(
+                "Failed reading transactions with last_processed_id {} and err: {:?}",
+                last_processed_id, e
             ))
         })
 }
@@ -86,7 +106,15 @@ pub fn transaction_response_to_new_transaction(
     tx_resp: SuiTransactionResponse,
 ) -> Result<NewTransaction, IndexerError> {
     let cer = tx_resp.certificate;
-    let tx_digest = cer.transaction_digest.to_string();
+    let txn_json = serde_json::to_string(&cer).map_err(|err| {
+        IndexerError::InsertableParsingError(format!(
+            "Failed converting transaction {:?} to JSON with error: {:?}",
+            cer.clone(),
+            err
+        ))
+    })?;
+    // canonical txn digest string is Base64 encoded
+    let tx_digest = cer.transaction_digest.encode();
     let gas_budget = cer.data.gas_budget;
     let sender = cer.data.sender.to_string();
     let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());
@@ -136,7 +164,8 @@ pub fn transaction_response_to_new_transaction(
     let gas_object_ref = tx_resp.effects.gas_object.reference.clone();
     let gas_object_id = gas_object_ref.object_id.to_string();
     let gas_object_seq = gas_object_ref.version;
-    let gas_object_digest = gas_object_ref.digest.to_string();
+    // canonical object digest is Base64 encoded
+    let gas_object_digest = gas_object_ref.digest.encode();
 
     let gas_summary = tx_resp.effects.gas_used;
     let computation_cost = gas_summary.computation_cost;
@@ -159,10 +188,11 @@ pub fn transaction_response_to_new_transaction(
         // NOTE: cast u64 to i64 here is safe because
         // max value of i64 is 9223372036854775807 MISTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
         gas_budget: gas_budget as i64,
-        total_gas_cost: (computation_cost + storage_cost - storage_rebate) as i64,
+        total_gas_cost: (computation_cost + storage_cost) as i64 - (storage_rebate as i64),
         computation_cost: computation_cost as i64,
         storage_cost: storage_cost as i64,
         storage_rebate: storage_rebate as i64,
+        transaction_content: txn_json,
     })
 }
 
