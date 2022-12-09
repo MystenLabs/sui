@@ -3,19 +3,19 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
+import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { FEATURES } from '../../experimentation/features';
+import { Text } from '../../shared/Text';
 import { usePendingDelegation } from '../usePendingDelegation';
 import { ActiveDelegation } from './ActiveDelegation';
+import { ActiveValidatorsCard } from './ActiveValidatorsCard';
 import { DelegationCard, DelegationState } from './DelegationCard';
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
+import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
+import Card, { CardRow, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
-import PageTitle from '_app/shared/page-title';
-import StatsCard, { StatsRow, StatsItem } from '_app/shared/stats-card';
 import {
     activeDelegationIDsSelector,
     totalActiveStakedSelector,
@@ -23,6 +23,7 @@ import {
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
+import Overlay from '_components/overlay';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
@@ -30,12 +31,67 @@ import st from './StakeHome.module.scss';
 
 function StakeHome() {
     const { loading, error, showError } = useObjectsState();
-    const totalStaked = useAppSelector(totalActiveStakedSelector);
+
     const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
     const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
         usePendingDelegation();
 
+    const hasDelegations =
+        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
+    const [showModal, setShowModal] = useState(true);
+
+    const navigate = useNavigate();
+    const close = useCallback(() => {
+        navigate('/tokens');
+    }, [navigate]);
+
+    return (
+        <Overlay
+            showModal={showModal}
+            setShowModal={setShowModal}
+            title="Select a Validator"
+            closeIcon={SuiIcons.Close}
+            closeOverlay={close}
+        >
+            <div className={cl(st.container, 'w-full')}>
+                {showError && error ? (
+                    <Alert className={st.alert}>
+                        <strong>Sync error (data might be outdated).</strong>{' '}
+                        <small>{error.message}</small>
+                    </Alert>
+                ) : null}
+                <Loading
+                    loading={loading || pendingDelegationsLoading}
+                    className={st.stakedInfoContainer}
+                >
+                    {hasDelegations ? (
+                        <StakedCard
+                            activeDelegationIDs={activeDelegationIDs}
+                            pendingDelegations={pendingDelegations}
+                        />
+                    ) : (
+                        <ActiveValidatorsCard />
+                    )}
+                </Loading>
+            </div>
+        </Overlay>
+    );
+}
+
+type StakedCardProps = {
+    activeDelegationIDs: string[];
+    pendingDelegations: {
+        name: string;
+        staked: bigint;
+    }[];
+};
+
+function StakedCard({
+    activeDelegationIDs,
+    pendingDelegations,
+}: StakedCardProps) {
+    const totalStaked = useAppSelector(totalActiveStakedSelector);
     const totalStakedIncludingPending =
         totalStaked +
         pendingDelegations.reduce((acc, { staked }) => acc + staked, 0n);
@@ -43,44 +99,37 @@ function StakeHome() {
     const hasDelegations =
         activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
 
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
     return (
         <div className={st.container}>
-            <PageTitle title="Stake & Earn" className={st.pageTitle} />
-            {showError && error ? (
-                <Alert className={st.alert}>
-                    <strong>Sync error (data might be outdated).</strong>{' '}
-                    <small>{error.message}</small>
-                </Alert>
-            ) : null}
             <BottomMenuLayout>
                 <Content>
-                    <div className={st.pageDescription}>
-                        Staking SUI provides SUI holders with rewards in
-                        addition to market price gains.
-                    </div>
-                    <StatsCard className={st.stats}>
-                        <StatsRow>
-                            <StatsItem
-                                title="Total Staked"
+                    <Card className="mb-4">
+                        <CardHeader>
+                            <Text
+                                variant="captionSmall"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                STAKING ON 4 VALIDATORS
+                            </Text>
+                        </CardHeader>
+
+                        <CardRow>
+                            <CardItem
+                                title="Your Stake"
                                 value={
-                                    <Loading
-                                        loading={
-                                            loading || pendingDelegationsLoading
-                                        }
-                                    >
-                                        <CoinBalance
-                                            balance={
-                                                totalStakedIncludingPending
-                                            }
-                                            type={GAS_TYPE_ARG}
-                                            diffSymbol={true}
-                                        />
-                                    </Loading>
+                                    <CoinBalance
+                                        balance={totalStakedIncludingPending}
+                                        type={GAS_TYPE_ARG}
+                                        diffSymbol={true}
+                                    />
                                 }
                             />
                             {/* TODO: show the actual Rewards Collected value https://github.com/MystenLabs/sui/issues/3605 */}
-                            <StatsItem
-                                title="Rewards Collected"
+                            <CardItem
+                                title="EARNED"
                                 value={
                                     <CoinBalance
                                         balance={BigInt(0)}
@@ -91,79 +140,53 @@ function StakeHome() {
                                     />
                                 }
                             />
-                        </StatsRow>
-                    </StatsCard>
-                    <div className={st.titleSectionContainer}>
-                        <span className={st.sectionTitle}>
-                            Currently Staking
-                        </span>
-                    </div>
-                    <div className={st.stakedContainer}>
-                        <Loading
-                            loading={loading || pendingDelegationsLoading}
-                            className={st.stakedInfoContainer}
-                        >
-                            {hasDelegations ? (
-                                <>
-                                    {pendingDelegations.map(
-                                        ({ name, staked }, index) => (
-                                            <DelegationCard
-                                                key={index}
-                                                name={name}
-                                                staked={staked}
-                                                state={DelegationState.WARM_UP}
-                                            />
-                                        )
-                                    )}
+                        </CardRow>
+                    </Card>
 
-                                    {activeDelegationIDs.map((delegationID) => (
-                                        <ActiveDelegation
-                                            key={delegationID}
-                                            id={delegationID}
+                    <div className={st.stakedContainer}>
+                        {hasDelegations ? (
+                            <>
+                                {pendingDelegations.map(
+                                    ({ name, staked }, index) => (
+                                        <DelegationCard
+                                            key={index}
+                                            name={name}
+                                            staked={staked}
+                                            state={DelegationState.WARM_UP}
+                                            address=""
                                         />
-                                    ))}
-                                </>
-                            ) : (
-                                <div
-                                    className={cl(
-                                        st.stakedInfoContainer,
-                                        st.empty
-                                    )}
-                                >
-                                    No active stakes found
-                                </div>
-                            )}
-                        </Loading>
+                                    )
+                                )}
+
+                                {activeDelegationIDs.map((delegationID) => (
+                                    <ActiveDelegation
+                                        key={delegationID}
+                                        id={delegationID}
+                                    />
+                                ))}
+                            </>
+                        ) : (
+                            <div
+                                className={cl(st.stakedInfoContainer, st.empty)}
+                            >
+                                No active stakes found
+                            </div>
+                        )}
                     </div>
                 </Content>
-                <Menu stuckClass={st.shadow}>
-                    <Button
-                        size="large"
-                        mode="neutral"
-                        className={st.action}
-                        href="/tokens"
-                    >
-                        <Icon
-                            icon={SuiIcons.Close}
-                            className={st.closeActionIcon}
-                        />
-                        Cancel
-                    </Button>
-                    <Button
-                        size="large"
-                        mode="primary"
-                        className={st.action}
-                        href="new"
-                        title="Currently disabled"
-                        disabled={!stakingEnabled}
-                    >
-                        Stake Coins
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className={st.arrowActionIcon}
-                        />
-                    </Button>
-                </Menu>
+                <Button
+                    size="large"
+                    mode="neutral"
+                    href="new"
+                    title="Currently disabled"
+                    disabled={!stakingEnabled}
+                >
+                    Stake Coins
+                    <Icon
+                        icon={SuiIcons.ArrowRight}
+                        className={st.arrowActionIcon}
+                    />
+                </Button>
             </BottomMenuLayout>
         </div>
     );

@@ -50,6 +50,7 @@ export function ActiveDelegation({ id }: Props) {
             name={validatorName}
             staked={delegation.delegateAmount()}
             state={DelegationState.EARNING}
+            address={validatorAddress || ''}
         />
     );
 }

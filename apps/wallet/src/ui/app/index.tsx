@@ -35,7 +35,6 @@ import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
-    '/stake',
     '/nft-details',
     '/nft-transfer',
     '/receipt',

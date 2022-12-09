@@ -29,4 +29,6 @@
     &.diff-symbol {
         @include utils.typography('header/search-text');
     }
+
+    color: colors.$sui-steel-blue;
 }

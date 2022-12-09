@@ -10,6 +10,7 @@ import IconLink from './icon-link';
 import FaucetMessageInfo from '_app/shared/faucet/message-info';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
+import { totalActiveStakedSelector } from '_app/staking/selectors';
 import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -85,6 +86,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || GAS_TYPE_ARG;
     const balances = useAppSelector(accountAggregateBalancesSelector);
+    const totalStaked = useAppSelector(totalActiveStakedSelector);
     const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);
     const coinTypeWithBalance =

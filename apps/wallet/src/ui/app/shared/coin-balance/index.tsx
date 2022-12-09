@@ -29,8 +29,13 @@ function CoinBalance({
 
     return (
         <div className={cl(className, st.container, st[mode])} title={title}>
-            <span>{formatted}</span>
-            <span className={cl(st.symbol, { [st.diffSymbol]: diffSymbol })}>
+            <span>{formatted} </span>
+            <span
+                className={cl(
+                    { [st.diffSymbol]: diffSymbol },
+                    'text-steel text-body font-medium ml-1'
+                )}
+            >
                 {symbol}
             </span>
         </div>
