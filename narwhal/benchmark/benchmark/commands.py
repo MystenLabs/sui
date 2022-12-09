@@ -1,4 +1,6 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 from os.path import join
 
 from benchmark.utils import PathMaker

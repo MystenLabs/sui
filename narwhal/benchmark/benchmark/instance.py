@@ -1,4 +1,6 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 import boto3
 from botocore.exceptions import ClientError
 from collections import defaultdict, OrderedDict
