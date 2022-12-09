@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import RpcClient from 'jayson/lib/client/browser/index.js';
-import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
 import * as LosslessJSON from 'lossless-json';
 
