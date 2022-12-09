@@ -8,9 +8,6 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::coin::CoinMetadata;
-use sui_types::event::Event;
-use sui_types::gas_coin::GAS;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 

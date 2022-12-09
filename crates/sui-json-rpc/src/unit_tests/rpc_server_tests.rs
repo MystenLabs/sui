@@ -16,7 +16,6 @@ use sui_json_rpc_types::{
     SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_sdk::SuiClient;
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
@@ -214,7 +213,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let result: CoinPage = http_client.get_coins(*address, None, None, None).await?;
@@ -260,7 +259,7 @@ async fn test_get_balances() -> Result<(), anyhow::Error> {
         .set_fullnode_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let result: Vec<Balance> = http_client.get_balances(*address, None).await?;
@@ -276,7 +275,7 @@ async fn test_get_balances() -> Result<(), anyhow::Error> {
 async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -339,7 +338,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
 async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
-    let http_client = cluster.rpc_client().unwrap();
+    let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
