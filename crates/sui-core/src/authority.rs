@@ -35,7 +35,7 @@ use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
-pub use authority_store::{AuthorityStore, ResolverWrapper, SuiDataStore, UpdateType};
+pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
@@ -55,7 +55,7 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair};
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
@@ -1616,7 +1616,7 @@ impl AuthorityState {
         self.database.clone()
     }
 
-    pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore<AuthoritySignInfo>>> {
+    pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
         self.database.epoch_store()
     }
 

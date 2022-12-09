@@ -14,10 +14,11 @@ use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
+use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, SignedTransactionEffects,
-    TrustedCertificate, VerifiedCertificate,
+    TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
@@ -28,7 +29,7 @@ use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
-use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
+use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -47,9 +48,9 @@ pub struct ExecutionIndicesWithHash {
     pub hash: u64,
 }
 
-pub struct AuthorityPerEpochStore<S> {
+pub struct AuthorityPerEpochStore {
     committee: Committee,
-    tables: AuthorityEpochTables<S>,
+    tables: AuthorityEpochTables,
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
@@ -62,10 +63,10 @@ pub struct AuthorityPerEpochStore<S> {
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
 #[derive(DBMapUtils)]
-pub struct AuthorityEpochTables<S> {
+pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
-    transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, S>>,
+    transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
 
     /// The two tables below manage shared object locks / versions. There are two ways they can be
     /// updated:
@@ -135,19 +136,12 @@ pub struct AuthorityEpochTables<S> {
     final_epoch_checkpoint: DBMap<u64, u64>,
 }
 
-impl<S> AuthorityEpochTables<S>
-where
-    S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
-{
+impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(
-            AuthorityEpochTables::<S>::path(epoch, parent_path),
-            db_options,
-            None,
-        )
+        Self::open_tables_read_write(Self::path(epoch, parent_path), db_options, None)
     }
 
-    pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly<S> {
+    pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly {
         Self::get_read_only_handle(Self::path(epoch, parent_path), None, None)
     }
 
@@ -164,10 +158,7 @@ where
     }
 }
 
-impl<S> AuthorityPerEpochStore<S>
-where
-    S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
-{
+impl AuthorityPerEpochStore {
     pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Self {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options);
@@ -243,10 +234,7 @@ where
         )?)
     }
 
-    pub fn insert_transaction(
-        &self,
-        transaction: VerifiedEnvelope<SenderSignedData, S>,
-    ) -> SuiResult {
+    pub fn insert_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
         Ok(self
             .tables
             .transactions
@@ -256,7 +244,7 @@ where
     pub fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedEnvelope<SenderSignedData, S>>> {
+    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
     }
 
