@@ -107,10 +107,10 @@ type ExecuteDryRunTransactionRequestProps = {
     activeAddress: string;
 };
 
-interface ExecuteDryRunTransactionReqResponse {
-    txnMeta?: TxnMetaResponse;
-    txGasEstimation?: number;
-}
+type ExecuteDryRunTransactionReqResponse = [
+    TxnMetaResponse | null,
+    number | null
+];
 export function useTransactionDryRun(txData: TransactionDryRun) {
     const signer = useSigner();
 
@@ -121,20 +121,17 @@ export function useTransactionDryRun(txData: TransactionDryRun) {
     return response;
 }
 
-export function useGetRequestTxnMeta({
+export function useTransactionSummary({
     txData,
     activeAddress,
 }: ExecuteDryRunTransactionRequestProps): ExecuteDryRunTransactionReqResponse {
     const { data } = useTransactionDryRun(txData);
 
-    const txnMeta = useMemo(
+    const eventsSummary = useMemo(
         () => (data ? getEventsSummary(data, activeAddress) : null),
         [data, activeAddress]
     );
     const txGasEstimation = data && getTotalGasUsed(data);
 
-    return {
-        ...(txnMeta && { txnMeta }),
-        ...(txGasEstimation && { txGasEstimation }),
-    };
+    return [eventsSummary, txGasEstimation || null];
 }

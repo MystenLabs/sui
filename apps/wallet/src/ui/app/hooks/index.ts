@@ -18,7 +18,7 @@ export { useWaitForElement } from './useWaitForElement';
 export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
 export { useGetNFTMeta } from './useGetNFTMeta';
 export {
-    useGetRequestTxnMeta,
+    useTransactionSummary,
     useTransactionDryRun,
 } from './useTransactionDryRun';
 export { useRpc } from './useRpc';

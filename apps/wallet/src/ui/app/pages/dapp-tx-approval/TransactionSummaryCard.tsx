@@ -11,7 +11,7 @@ import {
     useFormatCoin,
     useGetNFTMeta,
     useAppSelector,
-    useGetRequestTxnMeta,
+    useTransactionSummary,
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
@@ -194,10 +194,8 @@ export function TransactionSummaryCard({
         activeAddress: address,
     };
 
-    const txnMeta = useGetRequestTxnMeta(txReqData);
-
-    const gasEstimation = txnMeta.txGasEstimation ?? null;
-    const transactionSummary = txnMeta.txnMeta;
+    const [transactionSummary, gasEstimation] =
+        useTransactionSummary(txReqData);
 
     if (!transactionSummary) {
         return null;
