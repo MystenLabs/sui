@@ -2,17 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::Ordering as CmpOrdering;
-use std::hash::Hash;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
-use std::{
-    collections::{HashMap, VecDeque},
-    pin::Pin,
-    sync::{atomic::Ordering, Arc},
-};
-
 use anyhow::anyhow;
 use arc_swap::Guard;
 use chrono::prelude::*;
@@ -28,14 +17,24 @@ use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
+use std::cmp::Ordering as CmpOrdering;
+use std::hash::Hash;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
+use std::{
+    collections::{HashMap, VecDeque},
+    pin::Pin,
+    sync::{atomic::Ordering, Arc},
+};
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{debug, error, instrument, warn, Instrument};
+use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
-use mysten_metrics::monitored_scope;
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
@@ -80,7 +79,6 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use typed_store::Map;
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
@@ -1328,19 +1326,22 @@ impl AuthorityState {
                         error!("Error processing object owner index for tx [{}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest);
                         continue;
                     };
-                match old_object.owner {
-                    Owner::AddressOwner(addr) => {
-                        deleted_owners.push((addr, *id));
+                if &old_object.owner != owner {
+                    match old_object.owner {
+                        Owner::AddressOwner(addr) => {
+                            deleted_owners.push((addr, *id));
+                        }
+                        Owner::ObjectOwner(object_id) => {
+                            deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                        }
+                        _ => {}
                     }
-                    Owner::ObjectOwner(object_id) => {
-                        deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
-                    }
-                    _ => {}
                 }
             }
 
             match owner {
                 Owner::AddressOwner(addr) => {
+                    // TODO: We can remove the object fetching after we added ObjectType to TransactionEffects
                     let Some(o) = self.database.get_object_by_key(id, oref.1)? else{
                         continue;
                     };
@@ -1367,6 +1368,7 @@ impl AuthorityState {
                         continue;
                     };
                     let Some(df_info) = self.try_create_dynamic_field_info(o)? else{
+                        // Skip indexing for non dynamic field objects.
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(*owner), *id), df_info))
@@ -2079,6 +2081,17 @@ impl AuthorityState {
     pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects(owner)
+        } else {
+            Err(SuiError::IndexStoreNotAvailable)
+        }
+    }
+
+    pub fn get_owner_objects_iterator(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
+        if let Some(indexes) = &self.indexes {
+            indexes.get_owner_objects_iterator(owner)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }

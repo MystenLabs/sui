@@ -2681,7 +2681,7 @@ async fn test_store_get_dynamic_object() {
     let add_cert = init_certified_transaction(add_txn, &authority_state);
 
     let add_effects = authority_state
-        .handle_certificate(&add_cert)
+        .execute_certificate_internal(&add_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2754,7 +2754,7 @@ async fn test_store_get_dynamic_field() {
     let add_cert = init_certified_transaction(add_txn, &authority_state);
 
     let add_effects = authority_state
-        .handle_certificate(&add_cert)
+        .execute_certificate_internal(&add_cert)
         .await
         .unwrap()
         .signed_effects

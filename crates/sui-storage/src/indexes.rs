@@ -7,6 +7,11 @@
 use move_core_types::identifier::Identifier;
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
+use typed_store::rocks::DBMap;
+use typed_store::rocks::DBOptions;
+use typed_store::traits::Map;
+use typed_store::traits::TypedStoreDebug;
+use typed_store_derive::DBMapUtils;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
@@ -14,11 +19,6 @@ use sui_types::batch::TxSequenceNumber;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::SuiResult;
 use sui_types::object::Owner;
-use typed_store::rocks::DBMap;
-use typed_store::rocks::DBOptions;
-use typed_store::traits::Map;
-use typed_store::traits::TypedStoreDebug;
-use typed_store_derive::DBMapUtils;
 
 use crate::default_db_options;
 
@@ -381,14 +381,21 @@ impl IndexStore {
 
     pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
         debug!(?owner, "get_owner_objects");
+        Ok(self.get_owner_objects_iterator(owner)?.collect())
+    }
+
+    pub fn get_owner_objects_iterator(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
+        debug!(?owner, "get_owner_objects");
         Ok(self
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, ObjectID::ZERO))?
-            .take_while(|((object_owner, _), _)| (object_owner == &owner))
-            .map(|(_, object_info)| object_info)
-            .collect())
+            .take_while(move |((object_owner, _), _)| (object_owner == &owner))
+            .map(|(_, object_info)| object_info))
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
