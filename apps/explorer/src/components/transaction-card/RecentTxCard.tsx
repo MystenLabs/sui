@@ -10,7 +10,6 @@ import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { useSearchParams } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
@@ -32,6 +31,7 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { PlayPause } from '~/ui/PlayPause';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -136,7 +136,7 @@ export function LatestTxCard({
     );
 
     const rpc = useRpc();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParamsMerged();
 
     const [pageIndex, setPageIndex] = useState(
         parseInt(searchParams.get('p') || '1', 10) || 1
@@ -145,11 +145,11 @@ export function LatestTxCard({
     const handlePageChange = useCallback(
         (newPage: number) => {
             setPageIndex(newPage);
-            const newSearchParams = new URLSearchParams(searchParams);
-            newSearchParams.set('p', newPage.toString());
-            setSearchParams(newSearchParams);
+            setSearchParams({
+                p: newPage.toString(),
+            });
         },
-        [searchParams, setSearchParams]
+        [setSearchParams]
     );
 
     const countQuery = useQuery(

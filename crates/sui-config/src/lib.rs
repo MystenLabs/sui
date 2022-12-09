@@ -11,7 +11,6 @@ use sui_types::committee::StakeUnit;
 use tracing::trace;
 
 pub mod builder;
-pub mod gateway;
 pub mod genesis;
 pub mod genesis_config;
 pub mod node;
@@ -20,6 +19,7 @@ mod swarm;
 pub mod utils;
 
 pub use node::{ConsensusConfig, NodeConfig, ValidatorInfo};
+pub use swarm::FullnodeConfigBuilder;
 pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
@@ -28,7 +28,6 @@ pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
 pub const SUI_KEYSTORE_FILENAME: &str = "sui.keystore";
-pub const SUI_GATEWAY_CONFIG: &str = "gateway.yaml";
 pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
 pub const SUI_DEV_NET_URL: &str = "https://fullnode.devnet.sui.io:443";
 
@@ -104,6 +103,10 @@ where
 
     pub fn into_inner(self) -> C {
         self.inner
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 

@@ -11,6 +11,10 @@ import {
     getMovePackageContent,
     getObjectId,
     SUI_TYPE_ARG,
+    getExecutionStatusType,
+    getTotalGasUsed,
+    getExecutionStatusError,
+    type SuiTransactionResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useState } from 'react';
@@ -29,15 +33,8 @@ import {
 import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
-import type { DataType, Category } from './TransactionResultType';
-import type {
-    CertifiedTransaction,
-    TransactionKindName,
-    ExecutionStatusType,
-    SuiTransactionKind,
-    SuiObjectRef,
-    SuiEvent,
-} from '@mysten/sui.js';
+import type { Category } from './TransactionResultType';
+import type { TransactionKindName, SuiTransactionKind } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
@@ -57,31 +54,21 @@ import { Tooltip } from '~/ui/Tooltip';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
-type TxDataProps = CertifiedTransaction & {
-    status: ExecutionStatusType;
-    timestamp_ms: number | null;
-    gasFee: number;
-    txError: string;
-    mutated: SuiObjectRef[];
-    created: SuiObjectRef[];
-    events?: SuiEvent[];
-};
-
-function generateMutatedCreated(tx: TxDataProps) {
+function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
-        ...(tx.mutated?.length
+        ...(tx.effects.mutated?.length
             ? [
                   {
                       label: 'Updated',
-                      links: tx.mutated,
+                      links: tx.effects.mutated.map((item) => item.reference),
                   },
               ]
             : []),
-        ...(tx.created?.length
+        ...(tx.effects.created?.length
             ? [
                   {
                       label: 'Created',
-                      links: tx.created,
+                      links: tx.effects.created?.map((item) => item.reference),
                   },
               ]
             : []),
@@ -293,15 +280,19 @@ function GasAmount({
     );
 }
 
-function TransactionView({ txdata }: { txdata: DataType }) {
-    const txdetails = getTransactions(txdata)[0];
+function TransactionView({
+    transaction,
+}: {
+    transaction: SuiTransactionResponse;
+}) {
+    const txdetails = getTransactions(transaction.certificate)[0];
     const txKindName = getTransactionKindName(txdetails);
-    const sender = getTransactionSender(txdata);
-    const gasUsed = txdata.transaction?.effects.gasUsed;
+    const sender = getTransactionSender(transaction.certificate);
+    const gasUsed = transaction?.effects.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
-    const txnTransfer = getAmount(txdetails, txdata.transaction?.effects);
+    const txnTransfer = getAmount(txdetails, transaction?.effects);
     const sendReceiveRecipients = txnTransfer?.map((item) => ({
         address: item.recipientAddress,
         ...(item?.amount
@@ -321,7 +312,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
-    const txEventData = txdata.events?.map(eventToDisplay);
+    const txEventData = transaction.effects.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
     const txEventDisplay = txEventData?.map((ed, index) => {
@@ -348,17 +339,17 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         content: [
             {
                 label: 'Signature',
-                value: txdata.txSignature,
+                value: transaction.certificate.txSignature,
                 monotypeClass: true,
             },
         ],
     };
 
     let validatorSignatureData;
-    if (Array.isArray(txdata.authSignInfo.signature)) {
+    if (Array.isArray(transaction.certificate.authSignInfo.signature)) {
         validatorSignatureData = {
             title: 'Validator Signatures',
-            content: txdata.authSignInfo.signature.map(
+            content: transaction.certificate.authSignInfo.signature.map(
                 (validatorSign, index) => ({
                     label: `Signature #${index + 1}`,
                     value: validatorSign,
@@ -372,14 +363,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
             content: [
                 {
                     label: `Signature`,
-                    value: txdata.authSignInfo.signature,
+                    value: transaction.certificate.authSignInfo.signature,
                     monotypeClass: true,
                 },
             ],
         };
     }
 
-    const createdMutateData = generateMutatedCreated(txdata);
+    const createdMutateData = generateMutatedCreated(transaction);
 
     const typearguments =
         txKindData.title === 'Call' && txKindData.package
@@ -431,17 +422,19 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const hasEvents = txEventData && txEventData.length > 0;
 
+    const txError = getExecutionStatusError(transaction);
+
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
                     type={txKindName}
-                    title={txdata.txId}
-                    status={txdata.status}
+                    title={transaction.certificate.transactionDigest}
+                    status={getExecutionStatusType(transaction)}
                 />
-                {txdata.txError && (
+                {txError && (
                     <div className="mt-2">
-                        <Banner variant="error">{txdata.txError}</Banner>
+                        <Banner variant="error">{txError}</Banner>
                     </div>
                 )}
             </div>
@@ -455,7 +448,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                     <TabPanel>
                         <div
                             className={styles.txgridcomponent}
-                            id={txdata.txId}
+                            // TODO: Change to test ID
+                            id={transaction.certificate.transactionDigest}
                         >
                             {typearguments && (
                                 <section
@@ -481,14 +475,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         <StatAmount
                                             amount={formattedAmount}
                                             symbol={symbol}
-                                            date={txdata.timestamp_ms}
+                                            date={transaction.timestamp_ms}
                                         />
                                     </section>
                                 ) : (
-                                    txdata.timestamp_ms && (
+                                    transaction.timestamp_ms && (
                                         <div className="mb-3">
                                             <DateCard
-                                                date={txdata.timestamp_ms}
+                                                date={transaction.timestamp_ms}
                                             />
                                         </div>
                                     )
@@ -537,13 +531,19 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     <ObjectLink
                                         noTruncate
                                         objectId={
-                                            txdata.data.gasPayment.objectId
+                                            transaction.certificate.data
+                                                .gasPayment.objectId
                                         }
                                     />
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={txdata.data.gasBudget} />
+                                    <GasAmount
+                                        amount={
+                                            transaction.certificate.data
+                                                .gasBudget
+                                        }
+                                    />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (
@@ -600,7 +600,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                             }
                                         >
                                             <GasAmount
-                                                amount={txdata.gasFee}
+                                                amount={getTotalGasUsed(
+                                                    transaction
+                                                )}
                                                 expanded={gasFeesExpanded}
                                                 expandable
                                             />

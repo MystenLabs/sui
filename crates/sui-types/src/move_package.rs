@@ -4,7 +4,6 @@
 use crate::{
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
-    object::MAX_MOVE_PACKAGE_SIZE,
 };
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -18,6 +17,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::BTreeMap;
+use sui_protocol_constants::*;
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]

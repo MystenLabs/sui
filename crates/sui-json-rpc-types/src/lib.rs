@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This file contain response types used by the GatewayAPI, most of the types mirrors it's internal type counterparts.
+/// This file contain response types used by RPC, most of the types mirrors it's internal type counterparts.
 /// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
 ///
 use std::collections::BTreeMap;
@@ -2242,7 +2242,6 @@ impl SuiEvent {
             } => {
                 let bcs = contents.to_vec();
 
-                // Resolver is not guaranteed to have knowledge of the event struct layout in the gateway server.
                 let (type_, fields) = if let Ok(move_struct) =
                     Event::move_event_to_move_struct(&type_, &contents, resolver)
                 {

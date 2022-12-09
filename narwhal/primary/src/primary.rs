@@ -4,7 +4,7 @@
 use crate::{
     block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::BlockWaiter,
-    certificate_waiter::CertificateWaiter,
+    certificate_fetcher::CertificateFetcher,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
     metrics::{initialise_metrics, PrimaryMetrics},
@@ -32,8 +32,7 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
-use network::metrics::MetricsMakeCallbackHandler;
-use network::P2pNetwork;
+use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::{
@@ -105,7 +104,7 @@ impl Primary {
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
-        tx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
+        tx_executor_network: Option<oneshot::Sender<anemo::Network>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -141,10 +140,10 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
-        let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
+        let (tx_certificate_fetcher, rx_certificate_fetcher) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_certificate_waiter,
-            &primary_channel_metrics.tx_certificate_waiter_total,
+            &primary_channel_metrics.tx_certificate_fetcher,
+            &primary_channel_metrics.tx_certificate_fetcher_total,
         );
         let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
             1, // Only one inflight item is possible.
@@ -192,7 +191,7 @@ impl Primary {
             worker_cache.clone(),
             certificate_store.clone(),
             payload_store.clone(),
-            tx_certificate_waiter,
+            tx_certificate_fetcher,
             rx_consensus_round_updates.clone(),
             dag.clone(),
         ));
@@ -263,6 +262,7 @@ impl Primary {
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
@@ -273,6 +273,7 @@ impl Primary {
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
             .into_inner();
 
         let anemo_config = {
@@ -370,16 +371,11 @@ impl Primary {
         );
 
         if let Some(tx_executor_network) = tx_executor_network {
-            let executor_network = P2pNetwork::new(network.clone());
-            if tx_executor_network.send(executor_network).is_err() {
+            if tx_executor_network.send(network.clone()).is_err() {
                 panic!("Executor shut down before primary has a chance to start");
             }
         }
 
-        // TODO (Laura): if we are restarting and not advancing, for the headers in the header
-        // TODO (Laura): store that do not have a matching certificate, re-create and send a vote
-        // The `Core` receives and handles headers, votes, and certificates from the other primaries.
-        let core_primary_network = P2pNetwork::new(network.clone());
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -398,7 +394,7 @@ impl Primary {
             tx_new_certificates,
             tx_parents,
             node_metrics.clone(),
-            core_primary_network,
+            network.clone(),
         );
 
         let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
@@ -415,30 +411,29 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
-        let block_synchronizer_network = P2pNetwork::new(network.clone());
         let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (**committee.load()).clone(),
             worker_cache.clone(),
             tx_reconfigure.subscribe(),
             rx_block_synchronizer_commands,
-            block_synchronizer_network,
+            network.clone(),
             payload_store.clone(),
             certificate_store.clone(),
             parameters.clone(),
         );
 
-        // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
+        // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
-        let certificate_waiter_handle = CertificateWaiter::spawn(
+        let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             (**committee.load()).clone(),
-            P2pNetwork::new(network.clone()),
+            network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            rx_certificate_waiter,
+            rx_certificate_fetcher,
             tx_certificates_loopback,
             node_metrics.clone(),
         );
@@ -473,22 +468,20 @@ impl Primary {
             rx_state_handler,
             tx_reconfigure,
             Some(tx_commited_own_headers),
-            P2pNetwork::new(network.clone()),
+            network.clone(),
         );
 
         let consensus_api_handle = if !internal_consensus {
             // Retrieves a block's data by contacting the worker nodes that contain the
             // underlying batches and their transactions.
-            let block_waiter_primary_network = P2pNetwork::new(network.clone());
             let block_waiter = BlockWaiter::new(
                 name.clone(),
                 worker_cache.clone(),
-                block_waiter_primary_network,
+                network.clone(),
                 block_synchronizer_handler.clone(),
             );
 
             // Orchestrates the removal of blocks across the primary and worker nodes.
-            let block_remover_primary_network = P2pNetwork::new(network);
             let block_remover = BlockRemover::new(
                 name.clone(),
                 worker_cache,
@@ -496,7 +489,7 @@ impl Primary {
                 header_store,
                 payload_store,
                 dag.clone(),
-                block_remover_primary_network,
+                network,
                 tx_committed_certificates,
             );
 
@@ -530,7 +523,7 @@ impl Primary {
         let mut handles = vec![
             core_handle,
             block_synchronizer_handle,
-            certificate_waiter_handle,
+            certificate_fetcher_handle,
             proposer_handle,
             state_handler_handle,
             connection_monitor_handle,
@@ -657,14 +650,14 @@ impl PrimaryReceiverHandler {
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
         let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
-        let mut narwhal_round = *rx_narwhal_round_updates.borrow();
-        ensure!(
-            narwhal_round <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
-        );
+        // Maximum header age is chosen to strike a balance between allowing for slightly older
+        // certificates to still have a chance to be included in the DAG while not wasting
+        // resources on very old vote requests. This value affects performance but not correctness
+        // of the algorithm.
+        const HEADER_AGE_LIMIT: Round = 3;
 
         // If requester has provided us with parent certificates, process them all
-        // before proceeding. This may advance our round, so do it before checking round.
+        // before proceeding.
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
             let (tx_notify, rx_notify) = oneshot::channel();
@@ -687,9 +680,9 @@ impl PrimaryReceiverHandler {
                 },
                 result = rx_narwhal_round_updates.changed() => {
                     result.unwrap();
-                    narwhal_round = *rx_narwhal_round_updates.borrow();
+                    let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
-                        narwhal_round <= header.round,
+                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
                         DagError::TooOld(header.digest().into(), header.round, narwhal_round)
                     )
                 },
@@ -707,9 +700,9 @@ impl PrimaryReceiverHandler {
 
         // Now that we've got all the required certificates, ensure we're voting on a
         // current Header.
-        narwhal_round = *rx_narwhal_round_updates.borrow();
+        let narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            narwhal_round <= header.round,
+            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
             DagError::TooOld(header.digest().into(), header.round, narwhal_round)
         );
 
@@ -1079,6 +1072,14 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
+
+        fail::fail_point!("report-our-batch", |_| {
+            Err(anemo::rpc::Status::internal(format!(
+                "Injected error in report our batch from worker_id {}",
+                message.worker_id
+            )))
+        });
+
         let (tx_ack, rx_ack) = oneshot::channel();
         let response = self
             .tx_our_digests

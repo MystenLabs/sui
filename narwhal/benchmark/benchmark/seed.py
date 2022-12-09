@@ -1,4 +1,5 @@
 # Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 import subprocess
 from math import ceil
 from os.path import basename, splitext
@@ -55,7 +56,7 @@ class SeedData:
             sleep(0.5)  # Removing the store may take time.
 
             # Recompile the latest code.
-            cmd = CommandMaker.compile(mem_profiling=self.mem_profile)
+            cmd = CommandMaker.compile()
             subprocess.run(cmd, check=True, cwd=PathMaker.node_crate_path())
 
             # Create alias for the client and nodes binary.

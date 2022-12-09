@@ -21,8 +21,8 @@ Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
 
 task 5 'run'. lines 65-65:
-written: object(107), object(109), object(111)
-deleted: object(110)
+written: object(107), object(111)
+deleted: object(109), object(110)
 
 task 6 'run'. lines 67-67:
 written: object(112)

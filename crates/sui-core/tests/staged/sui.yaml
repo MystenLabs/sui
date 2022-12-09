@@ -37,7 +37,6 @@ AuthoritySignInfo:
         TYPENAME: BLS12381Signature
 BLS12381KeyPair:
   STRUCT:
-    - type: STR
     - name: STR
     - secret: STR
 BLS12381Signature:
@@ -88,7 +87,6 @@ DeleteKind:
       Wrap: UNIT
 Ed25519KeyPair:
   STRUCT:
-    - type: STR
     - name: STR
     - secret: STR
 EntryArgumentError:

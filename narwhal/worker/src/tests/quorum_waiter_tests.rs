@@ -26,7 +26,7 @@ async fn wait_for_quorum() {
         worker_cache.clone(),
         rx_reconfiguration,
         rx_message,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Make a batch.
@@ -84,7 +84,7 @@ async fn pipeline_for_quorum() {
         worker_cache.clone(),
         rx_reconfiguration,
         rx_message,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Make a batch.

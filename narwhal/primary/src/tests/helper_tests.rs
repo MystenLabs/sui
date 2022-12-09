@@ -3,7 +3,6 @@
 use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage};
 use anemo::{types::PeerInfo, PeerId};
 use fastcrypto::{hash::Hash, traits::KeyPair};
-use network::P2pNetwork;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
@@ -51,7 +50,7 @@ async fn test_process_certificates_stream_mode() {
         certificate_store.clone(),
         rx_reconfigure,
         rx_primaries,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // AND some mock certificates
@@ -159,7 +158,7 @@ async fn test_process_certificates_batch_mode() {
         certificate_store.clone(),
         rx_reconfigure,
         rx_primaries,
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // AND some mock certificates

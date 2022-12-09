@@ -1,5 +1,6 @@
 # Copyright (c) 2021, Facebook, Inc. and its affiliates.
 # Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 import multiaddr
 from multiaddr.protocols import (
     P_DNS, P_DNS4, P_DNS6, P_HTTP, P_HTTPS, P_IP4, P_IP6, P_TCP, P_UDP)

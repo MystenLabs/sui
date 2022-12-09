@@ -1,3 +1,5 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 from time import sleep
 import matplotlib.pyplot as plt
 import subprocess

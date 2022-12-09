@@ -1,5 +1,23 @@
 # @mysten/wallet-kit
 
+## 0.1.1
+
+### Patch Changes
+
+- 3ae8b8c4c: Prevent AccountModal from appearing for a second after connecting
+  Dialog backdrop make it visible and clickable
+  Connect button defaults to type button
+- Updated dependencies [b8257cecb]
+- Updated dependencies [6c1f81228]
+- Updated dependencies [519e11551]
+- Updated dependencies [b03bfaec2]
+- Updated dependencies [f9be28a42]
+- Updated dependencies [24987df35]
+  - @mysten/sui.js@0.19.0
+  - @mysten/wallet-adapter-base@0.3.6
+  - @mysten/wallet-adapter-wallet-standard@0.3.5
+  - @mysten/wallet-adapter-react@10.0.0
+
 ## 0.1.0
 
 ### Minor Changes

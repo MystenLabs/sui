@@ -77,6 +77,10 @@ module sui::priority_queue {
         }
     }
 
+    spec restore_heap_recursive {
+        pragma opaque;
+    }
+
     fun max_heapify_recursive<T: drop>(v: &mut vector<Entry<T>>, len: u64, i: u64) {
         if (len == 0) {
             return
@@ -95,6 +99,10 @@ module sui::priority_queue {
             vector::swap(v, max, i);
             max_heapify_recursive(v, len, max);
         }
+    }
+
+    spec max_heapify_recursive {
+        pragma opaque;
     }
 
     #[test]

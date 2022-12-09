@@ -40,7 +40,7 @@ use sui_storage::{
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
 use tower::ServiceBuilder;
-use tracing::{info, warn};
+use tracing::info;
 use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
@@ -290,21 +290,20 @@ impl SuiNode {
             .with_metrics(prometheus_registry)
             .build();
 
-        // If this is a validator lets add all the other validators as seed peers
+        // TODO only configure validators as seed/preferred peers for validators and not for
+        // fullnodes once we've had a chance to re-work fullnode configuration generation.
         let mut p2p_config = config.p2p_config.clone();
-        if config.consensus_config().is_some() {
-            let our_network_public_key = config.network_key_pair.public();
-            let other_validators = config
-                .genesis()?
-                .validator_set()
-                .iter()
-                .filter(|validator| &validator.network_key != our_network_public_key)
-                .map(|validator| sui_config::p2p::SeedPeer {
-                    peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
-                    address: validator.p2p_address.clone(),
-                });
-            p2p_config.seed_peers.extend(other_validators);
-        }
+        let our_network_public_key = config.network_key_pair.public();
+        let other_validators = config
+            .genesis()?
+            .validator_set()
+            .iter()
+            .filter(|validator| &validator.network_key != our_network_public_key)
+            .map(|validator| sui_config::p2p::SeedPeer {
+                peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
+                address: validator.p2p_address.clone(),
+            });
+        p2p_config.seed_peers.extend(other_validators);
 
         let (discovery, discovery_server) = discovery::Builder::new().config(p2p_config).build();
 
@@ -490,13 +489,6 @@ pub async fn build_server(
 ) -> Result<Option<ServerHandle>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
-        return Ok(None);
-    }
-
-    if cfg!(msim) {
-        // jsonrpsee uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
-        // can't yet run it in the simulator.
-        warn!("disabling http servers in simulator");
         return Ok(None);
     }
 

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// <reference types="vitest" />
 import { pathAlias } from '@mysten/core/vite.config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -13,6 +14,10 @@ process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV;
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), svgr()],
+    test: {
+        globals: true,
+        environment: 'happy-dom',
+    },
     build: {
         // Set the output directory to match what CRA uses:
         outDir: 'build',

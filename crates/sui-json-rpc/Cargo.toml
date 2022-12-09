@@ -44,3 +44,6 @@ sui-framework-build = { path = "../sui-framework-build" }
 sui-keys = { path = "../sui-keys" }
 test-utils = { path = "../test-utils" }
 sui-sdk = { path = "../sui-sdk" }
+rand = "0.8.5"
+sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }

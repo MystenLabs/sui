@@ -14,7 +14,8 @@ import type { ReactNode } from 'react';
 
 import styles from './Longtext.module.css';
 
-import { LinkWithQuery, useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
+import { Link } from '~/ui/Link';
+import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function Longtext({
     text,
@@ -90,25 +91,25 @@ function Longtext({
     if (isLink) {
         if (category === 'unknown') {
             textComponent = (
-                <div className={styles.longtext} onClick={navigateUnknown}>
+                <Link variant="mono" onClick={navigateUnknown}>
                     {alttext ? alttext : text}
-                </div>
+                </Link>
             );
         } else {
             textComponent = (
-                <div>
-                    <LinkWithQuery
-                        className={styles.longtext}
-                        to={`/${category}/${encodeURIComponent(text)}`}
-                    >
-                        {alttext ? alttext : text} {iconButton}
-                    </LinkWithQuery>
-                </div>
+                <Link
+                    variant="mono"
+                    to={`/${category}/${encodeURIComponent(text)}`}
+                >
+                    {alttext ? alttext : text} {iconButton}
+                </Link>
             );
         }
     } else {
         textComponent = (
-            <div className={styles.linktext}>{alttext ? alttext : text}</div>
+            <div className="text-sui-grey-90 font-mono font-medium">
+                {alttext ? alttext : text}
+            </div>
         );
     }
 

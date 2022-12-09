@@ -23,9 +23,10 @@ use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
-use crate::authority::authority_notify_read::{NotifyRead, Registration};
+use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use sui_types::message_envelope::{TrustedEnvelope, VerifiedEnvelope};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -35,8 +36,8 @@ use typed_store_derive::DBMapUtils;
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
-
 const RECONFIG_STATE_INDEX: u64 = 0;
+const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 
 pub struct CertLockGuard(LockGuard);
 
@@ -47,12 +48,12 @@ pub struct ExecutionIndicesWithHash {
 }
 
 pub struct AuthorityPerEpochStore<S> {
-    #[allow(dead_code)]
-    epoch_id: EpochId,
+    committee: Committee,
     tables: AuthorityEpochTables<S>,
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
+    epoch_alive: NotifyOnce,
     end_of_publish: Mutex<StakeAggregator<(), true>>,
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
@@ -126,6 +127,12 @@ pub struct AuthorityEpochTables<S> {
 
     /// Validators that have sent EndOfPublish message in this epoch
     end_of_publish: DBMap<AuthorityName, ()>,
+
+    // todo - if we move processing of entire nw commit into single DB batch,
+    // we can potentially get rid of this table
+    /// Records narwhal consensus output index of the final checkpoint in epoch
+    /// This is a single entry table with key FINAL_EPOCH_CHECKPOINT_INDEX
+    final_epoch_checkpoint: DBMap<u64, u64>,
 }
 
 impl<S> AuthorityEpochTables<S>
@@ -161,19 +168,22 @@ impl<S> AuthorityPerEpochStore<S>
 where
     S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    pub fn new(committee: Arc<Committee>, parent_path: &Path, db_options: Option<Options>) -> Self {
+    pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Self {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options);
-        let end_of_publish = StakeAggregator::from_iter(committee, tables.end_of_publish.iter());
+        let end_of_publish =
+            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
         let wal_path = parent_path.join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
+        let epoch_alive = NotifyOnce::new();
         Self {
-            epoch_id,
+            committee,
             tables,
             reconfig_state_mem: RwLock::new(reconfig_state),
+            epoch_alive,
             consensus_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             wal,
@@ -185,6 +195,14 @@ where
     ) -> &Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>
     {
         &self.wal
+    }
+
+    pub fn committee(&self) -> &Committee {
+        &self.committee
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.committee.epoch
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
@@ -298,11 +316,6 @@ where
             .collect())
     }
 
-    /// Checks if a certificate is in the pending queue.
-    pub fn pending_certificate_exists(&self, tx: &TransactionDigest) -> Result<bool, SuiError> {
-        Ok(self.tables.pending_certificates.contains_key(tx)?)
-    }
-
     /// Deletes one pending certificate.
     pub fn remove_pending_certificate(&self, digest: &TransactionDigest) -> SuiResult<()> {
         self.tables.pending_certificates.remove(digest)?;
@@ -400,6 +413,18 @@ where
         Ok(self.tables.consensus_message_processed.contains_key(key)?)
     }
 
+    pub async fn consensus_message_processed_notify(
+        &self,
+        key: ConsensusTransactionKey,
+    ) -> Result<(), SuiError> {
+        let registration = self.consensus_notify_read.register_one(&key);
+        if self.is_consensus_message_processed(&key)? {
+            return Ok(());
+        }
+        registration.await;
+        Ok(())
+    }
+
     pub fn has_sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
         Ok(self
             .end_of_publish
@@ -408,20 +433,13 @@ where
             .contains_key(authority))
     }
 
-    pub fn register_consensus_message_notify(
-        &self,
-        key: &ConsensusTransactionKey,
-    ) -> Registration<ConsensusTransactionKey, ()> {
-        self.consensus_notify_read.register_one(key)
-    }
-
     /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
     pub fn record_end_of_publish(
         &self,
         authority: AuthorityName,
         key: ConsensusTransactionKey,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult<bool> {
+    ) -> SuiResult {
         let mut write_batch = self.tables.last_consensus_index.batch();
         // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
         // And this function itself is always executed from consensus task
@@ -448,6 +466,13 @@ where
             lock.close_all_certs();
             // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
             write_batch = self.store_reconfig_state_batch(&lock, write_batch)?;
+            write_batch = write_batch.insert_batch(
+                &self.tables.final_epoch_checkpoint,
+                [(
+                    &FINAL_EPOCH_CHECKPOINT_INDEX,
+                    &consensus_index.index.last_committed_round,
+                )],
+            )?;
             // Holding this lock until end of this function where we write batch to DB
             Some(lock)
         } else {
@@ -456,8 +481,7 @@ where
         // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
         // If some day we won't panic in ConsensusHandler on error we need to figure out here how
         // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
-        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)?;
-        Ok(collected_end_of_publish)
+        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
 
     pub fn finish_consensus_transaction_process(
@@ -544,13 +568,20 @@ where
         let transaction_digest = *certificate.digest();
         let batch = batch.insert_batch(
             &self.tables.consensus_message_order,
-            [(consensus_index.index.clone(), transaction_digest)],
+            [(consensus_index.index, transaction_digest)],
         )?;
         let batch = batch.insert_batch(
             &self.tables.pending_certificates,
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
+    }
+
+    pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
+        Ok(self
+            .tables
+            .final_epoch_checkpoint
+            .get(&FINAL_EPOCH_CHECKPOINT_INDEX)?)
     }
 
     pub fn get_reconfig_state_read_lock_guard(
@@ -573,6 +604,18 @@ where
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
+    }
+
+    /// Notify epoch is terminated, can only be called once on epoch store
+    pub fn epoch_terminated(&self) {
+        self.epoch_alive
+            .notify()
+            .expect("epoch_terminated called twice on same epoch store");
+    }
+
+    /// Waits for the notification about epoch termination
+    pub async fn wait_epoch_terminated(&self) {
+        self.epoch_alive.wait().await
     }
 }
 

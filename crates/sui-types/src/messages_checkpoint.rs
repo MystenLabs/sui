@@ -96,8 +96,35 @@ impl AuthenticatedCheckpoint {
     }
 }
 
-pub type CheckpointDigest = [u8; 32];
-pub type CheckpointContentsDigest = [u8; 32];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct CheckpointDigest(pub [u8; 32]);
+
+impl AsRef<[u8]> for CheckpointDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl AsRef<[u8; 32]> for CheckpointDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct CheckpointContentsDigest(pub [u8; 32]);
+
+impl AsRef<[u8]> for CheckpointContentsDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl AsRef<[u8; 32]> for CheckpointContentsDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
 
 // The constituent parts of checkpoints, signed and certified
 
@@ -146,7 +173,7 @@ impl CheckpointSummary {
     }
 
     pub fn digest(&self) -> CheckpointDigest {
-        sha3_hash(self)
+        CheckpointDigest(sha3_hash(self))
     }
 }
 
@@ -437,7 +464,7 @@ impl CheckpointContents {
     }
 
     pub fn digest(&self) -> CheckpointContentsDigest {
-        sha3_hash(self)
+        CheckpointContentsDigest(sha3_hash(self))
     }
 }
 

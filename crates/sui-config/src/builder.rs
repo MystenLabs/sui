@@ -236,7 +236,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         let (account_keys, objects) = initial_accounts_config.generate_accounts(&mut rng).unwrap();
 
         let genesis = {
-            let mut builder = genesis::Builder::new().add_objects(objects);
+            let mut builder = genesis::Builder::new()
+                .with_parameters(initial_accounts_config.parameters)
+                .add_objects(objects);
 
             for (validator, proof_of_possession) in validator_set {
                 builder = builder.add_validator(validator, proof_of_possession);

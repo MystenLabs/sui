@@ -21,9 +21,9 @@ module sui::math {
             y
         }
     }
-    
+
     /// Return the value of a base raised to a power
-    public fun pow(base: u64, exponent: u8): u64 {    
+    public fun pow(base: u64, exponent: u8): u64 {
         let res = 1;
         while (exponent >= 1) {
             if (exponent % 2 == 0) {

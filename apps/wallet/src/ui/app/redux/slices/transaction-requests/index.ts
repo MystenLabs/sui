@@ -76,7 +76,7 @@ export const deserializeTxn = createAsyncThunk<
     'deserialize-transaction',
     async (data, { dispatch, extra: { api, keypairVault } }) => {
         const { id, serializedTxn } = data;
-        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const signer = api.getSignerInstance(keypairVault.getKeypair());
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
 
@@ -138,7 +138,7 @@ export const respondToTransactionRequest = createAsyncThunk<
         let txResult: SuiTransactionResponse | undefined = undefined;
         let tsResultError: string | undefined;
         if (approved) {
-            const signer = api.getSignerInstance(keypairVault.getKeyPair());
+            const signer = api.getSignerInstance(keypairVault.getKeypair());
             try {
                 let response: SuiExecuteTransactionResponse;
                 if (

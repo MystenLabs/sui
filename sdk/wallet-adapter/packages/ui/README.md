@@ -1,1 +1,0 @@
-UI for the Sui Wallet Adapter

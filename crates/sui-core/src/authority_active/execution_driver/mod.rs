@@ -131,12 +131,8 @@ where
                 }
             }
 
-            // Remove the certificate that finished execution.
-            let _ = authority
-                .state
-                .database
-                .epoch_store()
-                .remove_pending_certificate(&digest);
+            // Remove the certificate that finished execution from the pending_certificates table.
+            authority.state.certificate_executed(&digest).await;
 
             authority
                 .execution_driver_metrics

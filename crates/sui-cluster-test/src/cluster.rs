@@ -21,10 +21,12 @@ use tracing::info;
 const DEVNET_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
+const CONTINUOUS_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.ci.sui.io:443";
 const TESTNET_FAUCET_ADDR: &str = "https://faucet.testnet.sui.io:443";
 const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
+const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
 const TESTNET_FULLNODE_ADDR: &str = "https://fullnode.testnet.sui.io:443";
 
 pub struct ClusterFactory;
@@ -78,6 +80,10 @@ impl Cluster for RemoteRunningCluster {
             Env::Ci => (
                 String::from(CONTINUOUS_FULLNODE_ADDR),
                 String::from(CONTINUOUS_FAUCET_ADDR),
+            ),
+            Env::CiNomad => (
+                String::from(CONTINUOUS_NOMAD_FULLNODE_ADDR),
+                String::from(CONTINUOUS_NOMAD_FAUCET_ADDR),
             ),
             Env::Testnet => (
                 String::from(TESTNET_FULLNODE_ADDR),
@@ -145,7 +151,9 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
-        let mut cluster_builder = TestClusterBuilder::new().set_genesis_config(genesis_config);
+        let mut cluster_builder = TestClusterBuilder::new()
+            .set_genesis_config(genesis_config)
+            .enable_fullnode_events();
 
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
@@ -159,12 +167,7 @@ impl Cluster for LocalNewCluster {
         info!(?faucet_address, "faucet_address");
 
         // This cluster has fullnode handle, safe to unwrap
-        let fullnode_url = test_cluster
-            .fullnode_handle
-            .as_ref()
-            .unwrap()
-            .rpc_url
-            .clone();
+        let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;

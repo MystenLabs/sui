@@ -3,11 +3,12 @@
 
 import nacl from 'tweetnacl';
 import { Base64DataBuffer } from '../serialization/base64';
-import { Keypair } from './keypair';
+import type { ExportedKeypair, Keypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { SignatureScheme } from './publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
 import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
+import { toB64 } from '@mysten/bcs';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
@@ -64,16 +65,21 @@ export class Ed25519Keypair implements Keypair {
    * @param secretKey secret key byte array
    * @param options: skip secret key validation
    */
-  static fromSecretKey(secretKey: Uint8Array, options?: { skipValidation?: boolean }): Ed25519Keypair {
+  static fromSecretKey(
+    secretKey: Uint8Array,
+    options?: { skipValidation?: boolean }
+  ): Ed25519Keypair {
     const secretKeyLength = secretKey.length;
     if (secretKeyLength != 64) {
       // Many users actually wanted to invoke fromSeed(seed: Uint8Array), especially when reading from keystore.
       if (secretKeyLength == 32) {
         throw new Error(
-            'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)'
+          'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)'
         );
       }
-      throw new Error(`Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`);
+      throw new Error(
+        `Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`
+      );
     }
     const keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
     if (!options || !options.skipValidation) {
@@ -139,5 +145,12 @@ export class Ed25519Keypair implements Keypair {
     fullPrivateKey.set(pubkey, 32);
 
     return new Ed25519Keypair({ publicKey: pubkey, secretKey: fullPrivateKey });
+  }
+
+  export(): ExportedKeypair {
+    return {
+      schema: 'ED25519',
+      privateKey: toB64(this.keypair.secretKey),
+    };
   }
 }

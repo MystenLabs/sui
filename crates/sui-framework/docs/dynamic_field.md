@@ -17,18 +17,20 @@ building block for core collection types
 -  [Function `borrow`](#0x2_dynamic_field_borrow)
 -  [Function `borrow_mut`](#0x2_dynamic_field_borrow_mut)
 -  [Function `remove`](#0x2_dynamic_field_remove)
+-  [Function `exists_`](#0x2_dynamic_field_exists_)
 -  [Function `exists_with_type`](#0x2_dynamic_field_exists_with_type)
--  [Function `field_ids`](#0x2_dynamic_field_field_ids)
+-  [Function `field_info`](#0x2_dynamic_field_field_info)
+-  [Function `field_info_mut`](#0x2_dynamic_field_field_info_mut)
 -  [Function `hash_type_and_key`](#0x2_dynamic_field_hash_type_and_key)
 -  [Function `add_child_object`](#0x2_dynamic_field_add_child_object)
 -  [Function `borrow_child_object`](#0x2_dynamic_field_borrow_child_object)
+-  [Function `borrow_child_object_mut`](#0x2_dynamic_field_borrow_child_object_mut)
 -  [Function `remove_child_object`](#0x2_dynamic_field_remove_child_object)
 -  [Function `has_child_object`](#0x2_dynamic_field_has_child_object)
 -  [Function `has_child_object_with_ty`](#0x2_dynamic_field_has_child_object_with_ty)
 
 
-<pre><code><b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<pre><code><b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 </code></pre>
 
 
@@ -64,7 +66,7 @@ Internal object used for storing the field and value
  The value for the name of this field
 </dd>
 <dt>
-<code>value: <a href="_Option">option::Option</a>&lt;Value&gt;</code>
+<code>value: Value</code>
 </dt>
 <dd>
  The value bound to this field
@@ -145,19 +147,13 @@ Aborts with <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExist
 ) {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>if</b> (!<a href="dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(object_addr, hash)) {
-        <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a> {
-            id: <a href="object.md#0x2_object_new_uid_from_hash">object::new_uid_from_hash</a>(hash),
-            name,
-            value: <a href="_none">option::none</a>&lt;Value&gt;(),
-        };
-        <a href="dynamic_field.md#0x2_dynamic_field_add_child_object">add_child_object</a>(object_addr, field)
+    <b>assert</b>!(!<a href="dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(object_addr, hash), <a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
+    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a> {
+        id: <a href="object.md#0x2_object_new_uid_from_hash">object::new_uid_from_hash</a>(hash),
+        name,
+        value,
     };
-    // TODO remove once we have lamport timestamps
-    <b>assert</b>!(<a href="dynamic_field.md#0x2_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash), <a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
-    <a href="_fill">option::fill</a>(&<b>mut</b> field.value, value);
+    <a href="dynamic_field.md#0x2_dynamic_field_add_child_object">add_child_object</a>(object_addr, field)
 }
 </code></pre>
 
@@ -190,9 +186,8 @@ type.
 ): &Value {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    <a href="_borrow">option::borrow</a>(&field.value)
+    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="object.md#0x2_object">object</a>, hash);
+    &field.value
 }
 </code></pre>
 
@@ -225,9 +220,8 @@ type.
 ): &<b>mut</b> Value {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    <a href="_borrow_mut">option::borrow_mut</a>(&<b>mut</b> field.value)
+    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="object.md#0x2_object">object</a>, hash);
+    &<b>mut</b> field.value
 }
 </code></pre>
 
@@ -261,9 +255,40 @@ type.
 ): Value {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    <a href="_extract">option::extract</a>(&<b>mut</b> field.value)
+    <b>let</b> <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="dynamic_field.md#0x2_dynamic_field_remove_child_object">remove_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
+    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    value
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_field_exists_"></a>
+
+## Function `exists_`
+
+Returns true if and only if the <code><a href="object.md#0x2_object">object</a></code> has a dynamic field with the name specified by
+<code>name: Name</code> but without specifying the <code>Value</code> type
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_exists_">exists_</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+    <a href="object.md#0x2_object">object</a>: &UID,
+    name: Name,
+): bool {
+    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
+    <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <a href="dynamic_field.md#0x2_dynamic_field_has_child_object">has_child_object</a>(object_addr, hash)
 }
 </code></pre>
 
@@ -294,9 +319,7 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 ): bool {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>if</b> (!<a href="dynamic_field.md#0x2_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash)) <b>return</b> <b>false</b>;
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
-    <a href="_is_some">option::is_some</a>(&field.value)
+    <a href="dynamic_field.md#0x2_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash)
 }
 </code></pre>
 
@@ -304,13 +327,13 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 
 </details>
 
-<a name="0x2_dynamic_field_field_ids"></a>
+<a name="0x2_dynamic_field_field_info"></a>
 
-## Function `field_ids`
+## Function `field_info`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_ids">field_ids</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): (<b>address</b>, <b>address</b>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_info">field_info</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): (&<a href="object.md#0x2_object_UID">object::UID</a>, <b>address</b>)
 </code></pre>
 
 
@@ -319,15 +342,44 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_ids">field_ids</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_info">field_info</a>&lt;Name: <b>copy</b> + drop + store&gt;(
     <a href="object.md#0x2_object">object</a>: &UID,
     name: Name,
-): (<b>address</b>, <b>address</b>) {
+): (&UID, <b>address</b>) {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    (<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&field.id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="_destroy_some">option::destroy_some</a>(field.value)))
+    <b>let</b> <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(<a href="object.md#0x2_object">object</a>, hash);
+    (id, <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(value))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_field_field_info_mut"></a>
+
+## Function `field_info_mut`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_info_mut">field_info_mut</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="object.md#0x2_object">object</a>: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, name: Name): (&<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_info_mut">field_info_mut</a>&lt;Name: <b>copy</b> + drop + store&gt;(
+    <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+): (&<b>mut</b> UID, <b>address</b>) {
+    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
+    <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
+    <b>let</b> <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a> { id, name: _, value } = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(<a href="object.md#0x2_object">object</a>, hash);
+    (id, <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(value))
 }
 </code></pre>
 
@@ -385,9 +437,10 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 
 throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if a child does not exist with that ID
 or throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match
+we need two versions to return a reference or a mutable reference
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): &<b>mut</b> Child
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, id: <b>address</b>): &Child
 </code></pre>
 
 
@@ -396,7 +449,29 @@ or throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): &<b>mut</b> Child;
+<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;Child: key&gt;(<a href="object.md#0x2_object">object</a>: &UID, id: <b>address</b>): &Child;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_field_borrow_child_object_mut"></a>
+
+## Function `borrow_child_object_mut`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(<a href="object.md#0x2_object">object</a>: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, id: <b>address</b>): &<b>mut</b> Child
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>native</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;Child: key&gt;(<a href="object.md#0x2_object">object</a>: &<b>mut</b> UID, id: <b>address</b>): &<b>mut</b> Child;
 </code></pre>
 
 

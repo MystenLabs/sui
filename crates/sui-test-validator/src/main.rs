@@ -28,10 +28,6 @@ struct Args {
     // #[clap(short, long, parse(from_os_str), value_hint = ValueHint::DirPath)]
     // config: Option<std::path::PathBuf>,
     /// Port to start the Fullnode RPC server on
-    /// Port to start the Gateway RPC server on
-    #[clap(long, default_value = "5001")]
-    gateway_rpc_port: u16,
-
     #[clap(long, default_value = "9000")]
     fullnode_rpc_port: u16,
 

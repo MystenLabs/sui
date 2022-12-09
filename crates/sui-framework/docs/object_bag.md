@@ -254,7 +254,7 @@ Returns true iff there is an value associated with the key <code>k: K</code> in 
 ## Function `contains_with_type`
 
 Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code><a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a></code>
-with an assigned value of type <code>Value</code>
+with an assigned value of type <code>V</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>, k: K): bool

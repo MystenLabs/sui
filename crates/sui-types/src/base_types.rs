@@ -488,6 +488,10 @@ impl TransactionDigest {
     pub fn into_bytes(self) -> [u8; TRANSACTION_DIGEST_LENGTH] {
         self.0
     }
+
+    pub fn encode(&self) -> String {
+        Base64::encode(self.0)
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
@@ -562,6 +566,10 @@ impl ObjectDigest {
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
         Self::new(random_bytes)
+    }
+
+    pub fn encode(&self) -> String {
+        Base64::encode(self.0)
     }
 }
 
@@ -1015,7 +1023,8 @@ impl FromStr for ObjectID {
     type Err = ObjectIDParseError;
 
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
-        decode_bytes_hex(s).map_err(|_| ObjectIDParseError::TryFromSliceError)
+        // Try to match both the literal (0xABC..) and the normal (ABC)
+        decode_bytes_hex(s).or_else(|_| Self::from_hex_literal(s))
     }
 }
 

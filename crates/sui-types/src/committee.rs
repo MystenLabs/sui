@@ -7,8 +7,9 @@ use crate::crypto::{sha3_hash, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use crate::messages::CommitteeInfo;
 use itertools::Itertools;
-use rand::rngs::OsRng;
+use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -136,20 +137,21 @@ impl Committee {
     /// Samples authorities by weight
     pub fn sample(&self) -> &AuthorityName {
         // unwrap safe unless committee is empty
-        Self::choose_multiple_weighted(&self.voting_rights[..], 1)
+        Self::choose_multiple_weighted(&self.voting_rights[..], 1, &mut ThreadRng::default())
             .next()
             .unwrap()
     }
 
-    fn choose_multiple_weighted(
-        slice: &[(AuthorityName, StakeUnit)],
+    fn choose_multiple_weighted<'a>(
+        slice: &'a [(AuthorityName, StakeUnit)],
         count: usize,
-    ) -> impl Iterator<Item = &AuthorityName> {
+        rng: &mut impl Rng,
+    ) -> impl Iterator<Item = &'a AuthorityName> {
         // unwrap is safe because we validate the committee composition in `new` above.
         // See https://docs.rs/rand/latest/rand/distributions/weighted/enum.WeightedError.html
         // for possible errors.
         slice
-            .choose_multiple_weighted(&mut OsRng, count, |(_, weight)| *weight as f64)
+            .choose_multiple_weighted(rng, count, |(_, weight)| *weight as f64)
             .unwrap()
             .map(|(a, _)| a)
     }
@@ -160,6 +162,17 @@ impl Committee {
         preferences: Option<&BTreeSet<AuthorityName>>,
         // only attempt from these authorities.
         restrict_to: Option<&BTreeSet<AuthorityName>>,
+    ) -> Vec<AuthorityName> {
+        self.shuffle_by_stake_with_rng(preferences, restrict_to, &mut ThreadRng::default())
+    }
+
+    pub fn shuffle_by_stake_with_rng(
+        &self,
+        // try these authorities first
+        preferences: Option<&BTreeSet<AuthorityName>>,
+        // only attempt from these authorities.
+        restrict_to: Option<&BTreeSet<AuthorityName>>,
+        rng: &mut impl Rng,
     ) -> Vec<AuthorityName> {
         let restricted = self
             .voting_rights
@@ -179,8 +192,8 @@ impl Committee {
             (Vec::new(), restricted.collect())
         };
 
-        Self::choose_multiple_weighted(&preferred, preferred.len())
-            .chain(Self::choose_multiple_weighted(&rest, rest.len()))
+        Self::choose_multiple_weighted(&preferred, preferred.len(), rng)
+            .chain(Self::choose_multiple_weighted(&rest, rest.len(), rng))
             .cloned()
             .collect()
     }

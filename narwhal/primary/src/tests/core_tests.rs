@@ -23,7 +23,7 @@ async fn propose_header() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -92,7 +92,7 @@ async fn propose_header() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -114,7 +114,7 @@ async fn propose_header() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Propose header and ensure that a certificate is formed by pulling it out of the
@@ -138,7 +138,7 @@ async fn propose_header_failure() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -190,7 +190,7 @@ async fn propose_header_failure() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -212,7 +212,7 @@ async fn propose_header_failure() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Propose header and verify we get no certificate back.
@@ -234,7 +234,7 @@ async fn process_certificates() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -253,7 +253,7 @@ async fn process_certificates() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -285,7 +285,7 @@ async fn process_certificates() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Send enough certificates to the core.
@@ -348,7 +348,7 @@ async fn recover_core() {
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -367,7 +367,7 @@ async fn recover_core() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -399,7 +399,7 @@ async fn recover_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send 2f+1 certificates to the core.
@@ -444,7 +444,7 @@ async fn recover_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network),
+        network,
     );
 
     // Ensure the core sends the parents of the certificates to the proposer.
@@ -489,7 +489,7 @@ async fn recover_core_partial_certs() {
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -508,7 +508,7 @@ async fn recover_core_partial_certs() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -541,7 +541,7 @@ async fn recover_core_partial_certs() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send one certificate to the core.
@@ -589,7 +589,7 @@ async fn recover_core_partial_certs() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send remaining 2f certs to the core.
@@ -626,7 +626,7 @@ async fn recover_core_expecting_header_of_previous_round() {
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -645,7 +645,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -677,7 +677,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Send 2f+1 certificates for round r, and 1 cert of round r + 1 to the core.
@@ -736,7 +736,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // the recovery flow sends message that contains the parents for the last round for which we
@@ -763,7 +763,7 @@ async fn shutdown_core() {
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -782,7 +782,7 @@ async fn shutdown_core() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -815,7 +815,7 @@ async fn shutdown_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Shutdown the core.
@@ -841,7 +841,7 @@ async fn reconfigure_core() {
     // All the channels to interface with the core.
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
@@ -860,7 +860,7 @@ async fn reconfigure_core() {
         worker_cache.clone(),
         certificate_store.clone(),
         payload_store.clone(),
-        tx_certificate_waiter,
+        tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
     ));
@@ -893,7 +893,7 @@ async fn reconfigure_core() {
         tx_consensus,
         tx_parents,
         metrics.clone(),
-        P2pNetwork::new(network.clone()),
+        network.clone(),
     );
 
     // Change committee

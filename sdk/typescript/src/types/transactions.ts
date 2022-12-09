@@ -147,6 +147,10 @@ export type SuiTransactionResponse = {
   parsed_data: SuiParsedTransactionResponse | null;
 };
 
+export type SuiTransactionAuthSignersResponse = {
+  signers: AuthorityName[]
+};
+
 // TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207
 export type SuiCertifiedTransactionEffects = {
   effects: TransactionEffects;

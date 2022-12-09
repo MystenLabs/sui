@@ -18,8 +18,8 @@ Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)
 
 task 4 'run'. lines 47-47:
 created: object(110)
-written: object(106), object(108), object(109)
-deleted: object(107)
+written: object(106), object(109)
+deleted: object(107), object(108)
 
 task 5 'run'. lines 50-50:
 created: object(112), object(113), object(114)
@@ -31,8 +31,8 @@ Version: 1
 Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
 
 task 7 'run'. lines 54-54:
-written: object(113), object(114), object(115)
-deleted: object(112)
+written: object(113), object(115)
+deleted: object(112), object(114)
 
 task 8 'run'. lines 57-57:
 created: object(117), object(118), object(119)
@@ -44,7 +44,8 @@ Version: 1
 Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(118)}}}
 
 task 10 'run'. lines 61-61:
-written: object(117), object(118), object(119), object(120)
+written: object(117), object(118), object(120)
+deleted: object(119)
 
 task 11 'view-object'. lines 63-63:
 Owner: Account Address ( A )
