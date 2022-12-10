@@ -1,32 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '@mysten/sui.js';
 import { useCallback, useState } from 'react';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 
-import { Text } from '../../shared/Text';
-// import { IconTooltip } from '../../shared/Tooltip';
-import { ImageIcon } from '../../shared/image-icon';
-import { usePendingDelegation } from '../usePendingDelegation';
 import { StakingReward } from './StakingRewards';
+import { Text } from '_app/shared/Text';
+import { IconTooltip } from '_app/shared/Tooltip';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import Card, { CardRow, CardItem, CardHeader } from '_app/shared/card';
+import Card, { CardContent, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
-import {
-    activeDelegationIDsSelector,
-    getValidatorSelector,
-    totalActiveStakedSelector,
-} from '_app/staking/selectors';
+import { ImageIcon } from '_app/shared/image-icon';
+import { totalActiveStakedSelector } from '_app/staking/selectors';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
-import { useAppSelector, useObjectsState } from '_hooks';
+import { useAppSelector, useObjectsState, useGetValidators } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
-const textDecoder = new TextDecoder();
+const APY_TOOLTIP = 'Annual Percentage Yield';
+const COMMISSION_TOOLTIP = 'Validator commission';
 
 export function ValidatorDetail() {
     const { loading, error, showError } = useObjectsState();
@@ -34,28 +29,32 @@ export function ValidatorDetail() {
     const validatorAddress = searchParams.get('address');
     const [showModal, setShowModal] = useState(true);
 
+    const accountAddress = useAppSelector(({ account }) => account.address);
+    const { validators, isLoading } = useGetValidators(accountAddress);
+
+    const validatorDataByAddress = validators.find(
+        ({ address }) => address === validatorAddress
+    );
+
     const navigate = useNavigate();
     const close = useCallback(() => {
-        navigate('/stake');
+        navigate('/');
     }, [navigate]);
 
-    const validatorDataByAddress = useAppSelector(
-        getValidatorSelector(validatorAddress || '')
-    );
-
-    const validatorName = textDecoder.decode(
-        new Base64DataBuffer(validatorDataByAddress?.fields.name).getData()
-    );
-
-    if (!validatorDataByAddress && !loading) {
+    if (!validatorAddress || (!validatorDataByAddress && !isLoading)) {
         return <Navigate to={'/stake'} replace={true} />;
     }
 
-    const logo = null;
+    const validatorName = validatorDataByAddress?.name || 'Loading...';
+
     const pageTitle = (
         <div className="flex gap-2 items-center capitalize">
-            {logo && (
-                <ImageIcon src={logo} alt={validatorName} variant="rounded" />
+            {validatorDataByAddress?.logo && (
+                <ImageIcon
+                    src={validatorDataByAddress.logo}
+                    alt={validatorName}
+                    variant="rounded"
+                />
             )}
             {validatorName}
         </div>
@@ -69,57 +68,79 @@ export function ValidatorDetail() {
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
-            <div className=" w-full ">
-                {showError && error ? (
+            <Loading
+                className="w-full flex justify-center items-center"
+                loading={loading || isLoading}
+            >
+                {showError && error && (
                     <Alert className="mb-2">
                         <strong>Sync error (data might be outdated).</strong>
                         <small>{error.message}</small>
                     </Alert>
-                ) : null}
-                <ValidatorDetailCard
-                    validatorAddress={validatorAddress || ''}
-                />
-            </div>
+                )}
+
+                {validatorDataByAddress && (
+                    <ValidatorDetailCard
+                        validatorAddress={validatorAddress}
+                        pendingDelegationAmount={
+                            validatorDataByAddress.pendingDelegationAmount
+                        }
+                        suiEarned={validatorDataByAddress.suiEarned}
+                        apy={validatorDataByAddress.apy}
+                        commissionRate={validatorDataByAddress.commissionRate}
+                    />
+                )}
+            </Loading>
         </Overlay>
     );
 }
 
+type ValidatorDetailCardProps = {
+    validatorAddress: string;
+    pendingDelegationAmount: bigint;
+    suiEarned: bigint;
+    apy: number | string;
+    commissionRate: number;
+};
+
 function ValidatorDetailCard({
     validatorAddress,
-}: {
-    validatorAddress: string;
-}) {
-    const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
-    /*const validatorByAddress = useAppSelector(
-        getValidatorSelector(validatorAddress)
-    );*/
-
-    const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
-        usePendingDelegation();
+    pendingDelegationAmount,
+    suiEarned,
+    apy,
+    commissionRate,
+}: ValidatorDetailCardProps) {
     const totalStaked = useAppSelector(totalActiveStakedSelector);
-    const totalStakedIncludingPending =
-        totalStaked +
-        pendingDelegations.reduce((acc, { staked }) => acc + staked, 0n);
-
-    const hasDelegations =
-        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
-
-    const apy = 7.5;
-    const commission_rate = 0.42;
+    const pendingStake = pendingDelegationAmount || 0n;
+    const totalStakedIncludingPending = totalStaked + pendingStake;
 
     const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(
         validatorAddress
     )}`;
 
+    const apyTitle = (
+        <div className="flex text-steel-darker gap-1 items-start">
+            APY
+            <div className="text-steel">
+                <IconTooltip tip={APY_TOOLTIP} placement="top" />
+            </div>
+        </div>
+    );
+
+    const commissionTitle = (
+        <div className="flex text-steel-darker gap-1">
+            Commission
+            <div className="text-steel">
+                <IconTooltip tip={COMMISSION_TOOLTIP} placement="top" />
+            </div>
+        </div>
+    );
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full">
             <BottomMenuLayout>
                 <Content>
-                    <Loading
-                        loading={pendingDelegationsLoading}
-                        className="justify-center w-full h-full flex items-center"
-                    >
-                        <Card className="mb-4">
+                    <div className="justify-center w-full flex flex-col items-center">
+                        <Card className="mb-4 w-full">
                             <CardHeader>
                                 <CardItem
                                     title="Your Stake"
@@ -138,7 +159,7 @@ function ValidatorDetailCard({
                                     title="EARNED"
                                     value={
                                         <CoinBalance
-                                            balance={BigInt(0)}
+                                            balance={suiEarned}
                                             type={GAS_TYPE_ARG}
                                             mode="positive"
                                             diffSymbol={true}
@@ -147,9 +168,9 @@ function ValidatorDetailCard({
                                     }
                                 />
                             </CardHeader>
-                            <CardRow>
+                            <CardContent>
                                 <CardItem
-                                    title="APY"
+                                    title={apyTitle}
                                     value={
                                         <div className="flex gap-0.5 items-baseline ">
                                             <Text
@@ -172,7 +193,7 @@ function ValidatorDetailCard({
                                 />
 
                                 <CardItem
-                                    title="Commission"
+                                    title={commissionTitle}
                                     value={
                                         <div className="flex gap-0.5 items-baseline ">
                                             <Text
@@ -180,7 +201,7 @@ function ValidatorDetailCard({
                                                 weight="semibold"
                                                 color="gray-90"
                                             >
-                                                {commission_rate}
+                                                {commissionRate}
                                             </Text>
 
                                             <Text
@@ -193,24 +214,26 @@ function ValidatorDetailCard({
                                         </div>
                                     }
                                 />
-                            </CardRow>
+                            </CardContent>
                         </Card>
-                        <div className="flex gap-2.5 mb-8">
+                        <div className="flex gap-2.5 mb-8 w-full">
                             <Button
                                 size="large"
                                 mode="outline"
                                 href={stakeByValidatorAddress}
-                                className="bg-gray-50 w-1/2"
+                                className="bg-gray-50 w-full"
                             >
                                 <Icon icon={SuiIcons.Add} />
                                 Stake SUI
                             </Button>
-                            {hasDelegations && (
+                            {totalStakedIncludingPending > 0 && (
                                 <Button
                                     size="large"
                                     mode="outline"
-                                    href="new"
-                                    className=" "
+                                    href={
+                                        stakeByValidatorAddress + '&unstake=1'
+                                    }
+                                    className="w-full"
                                 >
                                     <Icon
                                         icon={SuiIcons.Remove}
@@ -220,7 +243,7 @@ function ValidatorDetailCard({
                                 </Button>
                             )}
                         </div>
-                    </Loading>
+                    </div>
                     <StakingReward />
                 </Content>
                 <Button

@@ -4,14 +4,16 @@
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
-import Alert from '_components/alert';
+import { Text } from '_app/shared/Text';
+import { IconTooltip } from '_app/shared/Tooltip';
+import { Content, Menu } from '_app/shared/bottom-menu-layout';
+import Button from '_app/shared/button';
+import Card, { CardContent, CardFooter, CardHeader } from '_app/shared/card';
+import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
-import { useFormatCoin } from '_hooks';
-import {
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-    GAS_SYMBOL,
-} from '_redux/slices/sui-objects/Coin';
+// import { useFormatCoin } from '_hooks';
+// import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
@@ -19,7 +21,6 @@ import st from './StakeForm.module.scss';
 
 export type StakeFromProps = {
     submitError: string | null;
-    // TODO(ggao): remove this if needed
     coinBalance: string;
     coinType: string;
     onClearSubmitError: () => void;
@@ -27,7 +28,6 @@ export type StakeFromProps = {
 
 function StakeForm({
     submitError,
-    // TODO(ggao): remove this if needed
     coinBalance,
     coinType,
     onClearSubmitError,
@@ -44,50 +44,102 @@ function StakeForm({
         onClearRef.current();
     }, [amount]);
 
-    const [formatted, symbol] = useFormatCoin(coinBalance, coinType);
-
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
-            <div className={st.group}>
-                <label className={st.label}>Amount:</label>
-                <Field
-                    component={NumberInput}
-                    allowNegative={false}
-                    name="amount"
-                    placeholder={`Total ${symbol} to stake`}
-                    className={st.input}
-                    decimals
-                />
-                <div className={st.muted}>
-                    Available balance: {formatted} {symbol}
-                </div>
-                <ErrorMessage
-                    className={st.error}
-                    name="amount"
-                    component="div"
-                />
-            </div>
-            <div className={st.group}>
-                * Total transaction fee estimate (gas cost):{' '}
-                {DEFAULT_GAS_BUDGET_FOR_STAKE} {GAS_SYMBOL}
-            </div>
-            {submitError ? (
+            <Content>
                 <div className={st.group}>
-                    <Alert>
-                        <strong>Stake failed.</strong>{' '}
-                        <small>{submitError}</small>
-                    </Alert>
+                    <Card>
+                        <CardHeader background="transparent">
+                            <div className="p-3 w-full flex">
+                                <Field
+                                    component={NumberInput}
+                                    allowNegative={false}
+                                    name="amount"
+                                    className="w-full border-none text-hero-dark text-heading4 font-semibold  placeholder:text-gray-70 placeholder:font-medium"
+                                    decimals
+                                />
+                                <div
+                                    role="button"
+                                    className="border border-solid border-gray-60 rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:bg-gray-60 hover:text-white  text-bodySmall font-medium"
+                                >
+                                    Max
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent colored padding col gap>
+                            <div className="flex  gap-2 items-center justify-between ">
+                                <div className="flex gap-1 items-baseline text-steel">
+                                    <Text
+                                        variant="body"
+                                        weight="medium"
+                                        color="steel-darker"
+                                    >
+                                        Staking APY
+                                    </Text>
+                                    <IconTooltip tip="Annual Percentage Yield" />
+                                </div>
+
+                                <Text
+                                    variant="body"
+                                    weight="semibold"
+                                    color="gray-90"
+                                >
+                                    12.5%
+                                </Text>
+                            </div>
+                        </CardContent>
+                        <CardFooter className="bg-sui/10">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Your Staked SUI
+                            </Text>
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                0 SUI
+                            </Text>
+                        </CardFooter>
+                    </Card>
+                    <ErrorMessage
+                        className={st.error}
+                        name="amount"
+                        component="div"
+                    />
                 </div>
-            ) : null}
-            <div className={st.group}>
-                <button
-                    type="submit"
-                    disabled={!isValid || isSubmitting}
-                    className="btn"
+                {submitError ? (
+                    <div className={st.error}>{submitError}</div>
+                ) : null}
+            </Content>
+            <Menu stuckClass="flex pb-0">
+                <Button
+                    size="large"
+                    mode="neutral"
+                    href="new"
+                    title="Currently disabled"
+                    className="!text-steel-darker w-1/2"
                 >
-                    {isSubmitting ? <LoadingIndicator /> : 'Stake'}
-                </button>
-            </div>
+                    <Icon
+                        icon={SuiIcons.ArrowLeft}
+                        className="text-body text-gray-65 font-normal"
+                    />
+                    Back
+                </Button>
+                <Button
+                    size="large"
+                    mode="primary"
+                    type="submit"
+                    title="Currently disabled"
+                    className=" w-1/2"
+                    disabled={!isValid || isSubmitting}
+                >
+                    {isSubmitting ? <LoadingIndicator /> : 'Stake Now'}
+                </Button>
+            </Menu>
         </Form>
     );
 }

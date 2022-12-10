@@ -5,10 +5,13 @@ import { getTransactionDigest } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import StakeForm from './StakeForm';
+import { ValidateDetailFormCard } from './ValidatorDetailCard';
 import { createValidationSchema } from './validation';
+import { Text } from '_app/shared/Text';
+import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Loading from '_components/loading';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
@@ -39,6 +42,10 @@ export function StakingCard() {
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
     );
+    const [searchParams] = useSearchParams();
+    const validatorAddress = searchParams.get('address');
+    const isUnstaked = searchParams.get('unstake');
+
     const gasAggregateBalance = useMemo(
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
@@ -95,6 +102,7 @@ export function StakingCard() {
                     StakeTokens({
                         amount: bigIntAmount,
                         tokenTypeArg: coinType,
+                        validator_address: validatorAddress,
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
@@ -104,7 +112,7 @@ export function StakingCard() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
+        [coinType, coinDecimals, dispatch, validatorAddress, navigate]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
@@ -118,23 +126,41 @@ export function StakingCard() {
     }
 
     return (
-        <>
-            <h3>Stake {coinSymbol}</h3>
-            <Loading loading={loadingBalance}>
-                <Formik
-                    initialValues={initialValues}
-                    validateOnMount={false}
-                    validationSchema={validationSchema}
-                    onSubmit={onHandleSubmit}
-                >
-                    <StakeForm
-                        submitError={sendError}
-                        coinBalance={coinBalance.toString()}
-                        coinType={coinType}
-                        onClearSubmitError={handleOnClearSubmitError}
+        <div className="flex flex-col flex-nowrap flex-grow h-full w-full">
+            <BottomMenuLayout>
+                {validatorAddress && (
+                    <ValidateDetailFormCard
+                        validatorAddress={validatorAddress}
+                        unstake={!!isUnstaked}
                     />
-                </Formik>
-            </Loading>
-        </>
+                )}
+                <Content>
+                    <Loading loading={loadingBalance} className="w-full">
+                        <div className="flex flex-col justify-between items-center mb-2 mt-2 w-full">
+                            <Text
+                                variant="caption"
+                                color="gray-85"
+                                weight="semibold"
+                            >
+                                Enter the amount of SUI to stake
+                            </Text>
+                        </div>
+                        <Formik
+                            initialValues={initialValues}
+                            validateOnMount={true}
+                            validationSchema={validationSchema}
+                            onSubmit={onHandleSubmit}
+                        >
+                            <StakeForm
+                                submitError={sendError}
+                                coinBalance={coinBalance.toString()}
+                                coinType={coinType}
+                                onClearSubmitError={handleOnClearSubmitError}
+                            />
+                        </Formik>
+                    </Loading>
+                </Content>
+            </BottomMenuLayout>
+        </div>
     );
 }

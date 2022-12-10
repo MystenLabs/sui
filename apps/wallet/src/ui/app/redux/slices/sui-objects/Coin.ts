@@ -80,12 +80,21 @@ export class Coin {
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
+     * @param callType The type of the call
      */
-    public static async stakeCoin(
+    public static async stakeMethod(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
-        validator: SuiAddress
+        validator: SuiAddress,
+        callType:
+            | 'request_add_delegation'
+            | 'request_add_stake_with_locked_coin'
+            | 'request_withdraw_stake'
+            | 'request_add_delegation'
+            | 'request_add_delegation_with_locked_coin'
+            | 'request_withdraw_delegation'
+            | 'request_switch_delegation'
     ): Promise<SuiExecuteTransactionResponse> {
         const coin = await Coin.requestSuiCoinWithExactAmount(
             signer,
@@ -95,7 +104,7 @@ export class Coin {
         const txn = {
             packageObjectId: '0x2',
             module: 'sui_system',
-            function: 'request_add_delegation',
+            function: callType,
             typeArguments: [],
             arguments: [SUI_SYSTEM_STATE_OBJECT_ID, coin, validator],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,

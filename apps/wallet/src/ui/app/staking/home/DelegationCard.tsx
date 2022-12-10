@@ -3,11 +3,11 @@
 
 import { Link } from 'react-router-dom';
 
-import { useFormatCoin } from '../../hooks';
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
-import { Text } from '../../shared/Text';
-import { IconTooltip } from '../../shared/Tooltip';
-import { ImageIcon } from '../../shared/image-icon';
+import { useFormatCoin } from '_app/hooks';
+import { Text } from '_app/shared/Text';
+import { IconTooltip } from '_app/shared/Tooltip';
+import { ImageIcon } from '_app/shared/image-icon';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',
@@ -47,7 +47,9 @@ export function DelegationCard({
 
     return (
         <Link
-            to={`/stake/validator-details?address=${address}`}
+            to={`/stake/validator-details?address=${encodeURIComponent(
+                address
+            )}`}
             className="flex no-underline flex-col p-3.5 box-border h-36 w-full rounded-2xl border hover:bg-sui/10  border-solid border-gray-45 hover:border-sui/10 bg-transparent"
         >
             <div className="flex justify-between items-center mb-2">

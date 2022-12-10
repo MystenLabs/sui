@@ -19,3 +19,4 @@ export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
 export { useGetObject } from './useGetObject';
+export { useGetValidators } from './useGetValidators';

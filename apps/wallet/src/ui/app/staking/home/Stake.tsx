@@ -7,14 +7,17 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { FEATURES } from '../../experimentation/features';
-import { Text } from '../../shared/Text';
 import { usePendingDelegation } from '../usePendingDelegation';
 import { ActiveDelegation } from './ActiveDelegation';
 import { ActiveValidatorsCard } from './ActiveValidatorsCard';
 import { DelegationCard, DelegationState } from './DelegationCard';
-import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import { Text } from '_app/shared/Text';
+import BottomMenuLayout, {
+    Menu,
+    Content,
+} from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import Card, { CardRow, CardItem, CardHeader } from '_app/shared/card';
+import Card, { CardContent, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
 import {
     activeDelegationIDsSelector,
@@ -125,7 +128,7 @@ function StakedCard({
                             </Text>
                         </CardHeader>
 
-                        <CardRow>
+                        <CardContent>
                             <CardItem
                                 title="Your Stake"
                                 value={
@@ -149,7 +152,7 @@ function StakedCard({
                                     />
                                 }
                             />
-                        </CardRow>
+                        </CardContent>
                     </Card>
 
                     <div className={st.stakedContainer}>
@@ -186,20 +189,21 @@ function StakedCard({
                         )}
                     </div>
                 </Content>
-                <Button
-                    size="large"
-                    mode="neutral"
-                    href="new"
-                    title="Currently disabled"
-                    disabled={!stakingEnabled}
-                    className="!text-steel-darker"
-                >
-                    <Icon
-                        icon={SuiIcons.Plus}
-                        className="text-body text-gray-65 font-normal"
-                    />
-                    Stake SUI
-                </Button>
+                <Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
+                    <Button
+                        size="large"
+                        mode="neutral"
+                        href="new"
+                        disabled={!stakingEnabled}
+                        className="!text-steel-darker w-full"
+                    >
+                        <Icon
+                            icon={SuiIcons.Plus}
+                            className="text-body text-gray-65 font-normal"
+                        />
+                        Stake SUI
+                    </Button>
+                </Menu>
             </BottomMenuLayout>
         </div>
     );

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Text } from '../../shared/Text';
+import { Text } from '_app/shared/Text';
 // import { ImageIcon } from '../../shared/image-icon';
 
 export function StakingReward() {

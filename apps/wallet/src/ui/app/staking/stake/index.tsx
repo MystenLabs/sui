@@ -16,7 +16,7 @@ function StakePage() {
 
     const navigate = useNavigate();
     const close = useCallback(() => {
-        navigate('/stake');
+        navigate('/');
     }, [navigate]);
 
     return (
@@ -27,9 +27,7 @@ function StakePage() {
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
-            <div className=" w-full ">
-                {validatorAddress ? <StakingCard /> : <ActiveValidatorsCard />}
-            </div>
+            {validatorAddress ? <StakingCard /> : <ActiveValidatorsCard />}
         </Overlay>
     );
 }
