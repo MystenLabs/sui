@@ -96,8 +96,8 @@ Note that in the following sections, the object ID's, addresses, and authority s
    sui client active-address
    ```
 1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) Discord channel.
-  Send the follwoing message to the channel with your client address:
-  !faucet <Your client addess>
+  Send the following message to the channel with your client address:
+  !faucet <Your client address>
 
 ## Mint an example NFT
 
