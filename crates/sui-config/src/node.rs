@@ -4,7 +4,9 @@
 use crate::genesis;
 use crate::p2p::P2pConfig;
 use crate::Config;
+use anyhow::anyhow;
 use anyhow::Result;
+use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use serde::{Deserialize, Serialize};
@@ -15,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
@@ -23,6 +24,7 @@ use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{AccountKeyPair, AuthorityPublicKey};
 use sui_types::sui_serde::KeyPairBase64;
 
 // Default max number of concurrent requests served
@@ -163,13 +165,63 @@ impl NodeConfig {
     pub fn genesis(&self) -> Result<&genesis::Genesis> {
         self.genesis.genesis()
     }
+
+    #[allow(clippy::mutable_key_type)]
+    pub fn narwhal_worker_cache(&self) -> Result<narwhal_config::SharedWorkerCache> {
+        let genesis = self.genesis()?;
+        let consensus_config = self
+            .consensus_config()
+            .ok_or_else(|| anyhow!("cannot generate worker cache without ConsensusConfig"))?;
+        let workers = genesis
+            .validator_set()
+            .iter()
+            .map(|validator| {
+                let name = AuthorityPublicKey::from_bytes(validator.protocol_key().as_ref())
+                    .expect("Can't get protocol key");
+                let worker_address = if name != *self.protocol_key_pair().public() {
+                    validator.narwhal_worker_address.clone()
+                } else {
+                    // Use internal worker addresses for our own node if configured.
+                    consensus_config
+                        .internal_worker_address
+                        .as_ref()
+                        .unwrap_or(&validator.narwhal_worker_address)
+                        .clone()
+                };
+                let workers = [(
+                    0, // worker_id
+                    narwhal_config::WorkerInfo {
+                        name: NetworkPublicKey::from_bytes(validator.worker_key().as_ref())
+                            .expect("Can't get worker key"),
+                        transactions: consensus_config.address.clone(),
+                        worker_address,
+                    },
+                )]
+                .into_iter()
+                .collect();
+                let worker_index = narwhal_config::WorkerIndex(workers);
+
+                (name, worker_index)
+            })
+            .collect();
+        Ok(narwhal_config::WorkerCache {
+            workers,
+            epoch: genesis.epoch() as narwhal_config::Epoch,
+        }
+        .into())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConsensusConfig {
-    pub consensus_address: Multiaddr,
-    pub consensus_db_path: PathBuf,
+    pub address: Multiaddr,
+    pub db_path: PathBuf,
+
+    // Optional alternative address preferentially used by a primary to talk to its own worker.
+    // For example, this could be used to connect to co-located workers over a private LAN address.
+    pub internal_worker_address: Option<Multiaddr>,
+
     // Timeout to retry sending transaction to consensus internally.
     // Default to 60s.
     pub timeout_secs: Option<u64>,
@@ -179,11 +231,11 @@ pub struct ConsensusConfig {
 
 impl ConsensusConfig {
     pub fn address(&self) -> &Multiaddr {
-        &self.consensus_address
+        &self.address
     }
 
     pub fn db_path(&self) -> &Path {
-        &self.consensus_db_path
+        &self.db_path
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
@@ -209,11 +261,7 @@ pub struct ValidatorInfo {
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
-
-    //TODO remove all of these as they shouldn't be needed to be encoded in genesis
     pub narwhal_worker_address: Multiaddr,
-    pub narwhal_internal_worker_address: Option<Multiaddr>,
-    pub narwhal_consensus_address: Multiaddr,
 }
 
 impl ValidatorInfo {

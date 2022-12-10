@@ -88,8 +88,6 @@ WorkerInfo:
     - name: STR
     - transactions: BYTES
     - worker_address: BYTES
-    - internal_worker_address:
-        OPTION: BYTES
 WorkerOthersBatchMessage:
   STRUCT:
     - digest:
@@ -112,4 +110,3 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
-

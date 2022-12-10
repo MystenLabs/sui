@@ -114,8 +114,6 @@ pub async fn init_local_authorities(
             p2p_address: sui_config::utils::new_udp_network_address(),
             narwhal_primary_address: sui_config::utils::new_udp_network_address(),
             narwhal_worker_address: sui_config::utils::new_udp_network_address(),
-            narwhal_internal_worker_address: None,
-            narwhal_consensus_address: sui_config::utils::new_tcp_network_address(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);

@@ -309,7 +309,7 @@ async fn genesis(
         return Ok(());
     }
 
-    let validator_info = genesis_conf.validator_genesis_info.take();
+    let validator_info = genesis_conf.validator_config_info.take();
     let mut network_config = if let Some(validators) = validator_info {
         ConfigBuilder::new(sui_config_dir)
             .initial_accounts_config(genesis_conf)

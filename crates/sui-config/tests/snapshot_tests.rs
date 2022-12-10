@@ -81,8 +81,6 @@ fn populated_genesis_snapshot_matches() {
         p2p_address: Multiaddr::empty(),
         narwhal_primary_address: Multiaddr::empty(),
         narwhal_worker_address: Multiaddr::empty(),
-        narwhal_internal_worker_address: None,
-        narwhal_consensus_address: Multiaddr::empty(),
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());
 
@@ -93,7 +91,6 @@ fn populated_genesis_snapshot_matches() {
     assert_yaml_snapshot!(genesis.validator_set());
     assert_yaml_snapshot!(genesis.committee().unwrap());
     assert_yaml_snapshot!(genesis.narwhal_committee());
-    assert_yaml_snapshot!(genesis.narwhal_worker_cache());
     assert_yaml_snapshot!(genesis.sui_system_object());
     // Serialized `genesis` is not static and cannot be snapshot tested.
 }
@@ -123,8 +120,9 @@ fn network_config_snapshot_matches() {
         let primary_network_admin_server_port = 5678;
         let worker_network_admin_server_base_port = 8765;
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
-            consensus_config.consensus_address = Multiaddr::empty();
-            consensus_config.consensus_db_path = PathBuf::from("/tmp/foo/");
+            consensus_config.address = Multiaddr::empty();
+            consensus_config.db_path = PathBuf::from("/tmp/foo/");
+            consensus_config.internal_worker_address = Some(Multiaddr::empty());
             consensus_config
                 .narwhal_config
                 .consensus_api_grpc

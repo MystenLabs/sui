@@ -299,7 +299,7 @@ impl ValidatorService {
         let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_worker_keypair = config.worker_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
-        let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
+        let consensus_worker_cache = config.narwhal_worker_cache()?;
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = ConsensusHandler::new(state.clone(), checkpoint_service);
         let consensus_execution_state = Arc::new(consensus_execution_state);
