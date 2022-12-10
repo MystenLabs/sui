@@ -4,6 +4,7 @@
 /// Sui object identifiers
 module sui::object {
     use std::bcs;
+    use sui::address;
     use sui::tx_context::{Self, TxContext};
 
     friend sui::dynamic_field;
@@ -16,9 +17,6 @@ module sui::object {
 
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
-
-    /// Error from `address_from_bytes` when it is supplied too many or too few bytes.
-    const EAddressParseError: u64 = 0;
 
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
@@ -44,12 +42,6 @@ module sui::object {
         id: ID,
     }
 
-    // === address ===
-
-    /// Convert raw bytes into an address, aborts if supplied too many
-    /// or too few bytes.
-    public native fun address_from_bytes(bytes: vector<u8>): address;
-
     // === id ===
 
     /// Get the raw bytes of a `ID`
@@ -64,7 +56,7 @@ module sui::object {
 
     /// Make an `ID` from raw bytes.
     public fun id_from_bytes(bytes: vector<u8>): ID {
-        id_from_address(address_from_bytes(bytes))
+        id_from_address(address::from_bytes(bytes))
     }
 
     /// Make an `ID` from an address.
@@ -166,8 +158,9 @@ module sui::object {
     // Cost calibration functions
     #[test_only]
     public fun calibrate_address_from_bytes(bytes: vector<u8>) {
-        address_from_bytes(bytes);
+        sui::address::from_bytes(bytes);
     }
+    
     #[test_only]
     public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
         let _ = bytes;

@@ -3,6 +3,7 @@
 
 /// The Capy module. Defines the Capy type and its functions.
 module capy::capy {
+    use sui::hex;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
     use std::string::{Self, String};
@@ -14,8 +15,6 @@ module capy::capy {
 
     use std::vector as vec;
     use std::hash::sha3_256 as hash;
-
-    use capy::hex;
 
     /// Number of meaningful genes. Also marks the length
     /// of the hash used in the application: sha3_256.
@@ -400,7 +399,7 @@ module capy::capy {
     /// Construct an image URL for the capy.
     fun img_url(c: &UID): Url {
         let capy_url = *&IMAGE_URL;
-        vec::append(&mut capy_url, hex::to_hex(object::uid_to_bytes(c)));
+        vec::append(&mut capy_url, hex::encode(object::uid_to_bytes(c)));
         vec::append(&mut capy_url, b"/svg");
 
         url::new_unsafe_from_bytes(capy_url)
