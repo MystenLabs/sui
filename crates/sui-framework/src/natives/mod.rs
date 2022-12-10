@@ -22,12 +22,25 @@ use move_vm_types::{
 };
 use std::sync::Arc;
 
+use self::crypto::{bls12381, bulletproofs, ecdsa_k1, ed25519, elliptic_curve, groth16, hmac};
+
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     let sui_natives: &[(&str, &str, NativeFunction)] = &[
-        ("ecdsa", "ecrecover", make_native!(crypto::ecrecover)),
+        ("ecdsa_k1", "ecrecover", make_native!(ecdsa_k1::ecrecover)),
+        (
+            "ecdsa_k1",
+            "decompress_pubkey",
+            make_native!(ecdsa_k1::decompress_pubkey),
+        ),
+        ("ecdsa_k1", "keccak256", make_native!(ecdsa_k1::keccak256)),
+        (
+            "ecdsa_k1",
+            "secp256k1_verify",
+            make_native!(ecdsa_k1::secp256k1_verify),
+        ),
         (
             "dynamic_field",
             "hash_type_and_key",
@@ -64,25 +77,14 @@ pub fn all_natives(
             make_native!(dynamic_field::has_child_object_with_ty),
         ),
         (
-            "ecdsa",
-            "decompress_pubkey",
-            make_native!(crypto::decompress_pubkey),
-        ),
-        ("ecdsa", "keccak256", make_native!(crypto::keccak256)),
-        (
-            "ecdsa",
-            "secp256k1_verify",
-            make_native!(crypto::secp256k1_verify),
-        ),
-        (
             "bls12381",
             "bls12381_min_sig_verify",
-            make_native!(crypto::bls12381_min_sig_verify),
+            make_native!(bls12381::bls12381_min_sig_verify),
         ),
         (
             "bls12381",
             "bls12381_min_pk_verify",
-            make_native!(crypto::bls12381_min_pk_verify),
+            make_native!(bls12381::bls12381_min_pk_verify),
         ),
         ("event", "emit", make_native!(event::emit)),
         (
@@ -100,42 +102,42 @@ pub fn all_natives(
         (
             "bulletproofs",
             "native_verify_full_range_proof",
-            make_native!(crypto::verify_range_proof),
+            make_native!(bulletproofs::verify_range_proof),
         ),
         (
             "elliptic_curve",
             "native_add_ristretto_point",
-            make_native!(crypto::add_ristretto_point),
+            make_native!(elliptic_curve::add_ristretto_point),
         ),
         (
             "elliptic_curve",
             "native_subtract_ristretto_point",
-            make_native!(crypto::subtract_ristretto_point),
+            make_native!(elliptic_curve::subtract_ristretto_point),
         ),
         (
             "elliptic_curve",
             "native_create_pedersen_commitment",
-            make_native!(crypto::pedersen_commit),
+            make_native!(elliptic_curve::pedersen_commit),
         ),
         (
             "elliptic_curve",
             "native_scalar_from_u64",
-            make_native!(crypto::scalar_from_u64),
+            make_native!(elliptic_curve::scalar_from_u64),
         ),
         (
             "elliptic_curve",
             "native_scalar_from_bytes",
-            make_native!(crypto::scalar_from_bytes),
+            make_native!(elliptic_curve::scalar_from_bytes),
         ),
         (
             "ed25519",
             "ed25519_verify",
-            make_native!(crypto::ed25519_verify),
+            make_native!(ed25519::ed25519_verify),
         ),
         (
             "hmac",
             "native_hmac_sha3_256",
-            make_native!(crypto::hmac_sha3_256),
+            make_native!(hmac::hmac_sha3_256),
         ),
         (
             "test_scenario",
@@ -220,12 +222,12 @@ pub fn all_natives(
         (
             "groth16",
             "verify_groth16_proof_internal",
-            make_native!(crypto::verify_groth16_proof_internal),
+            make_native!(groth16::verify_groth16_proof_internal),
         ),
         (
             "groth16",
             "prepare_verifying_key",
-            make_native!(crypto::prepare_verifying_key),
+            make_native!(groth16::prepare_verifying_key),
         ),
     ];
     sui_natives

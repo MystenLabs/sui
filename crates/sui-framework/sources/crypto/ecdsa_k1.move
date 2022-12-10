@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::ecdsa {
+module sui::ecdsa_k1 {
 
     // TODO document this
     const EFailToRecoverPubKey: u64 = 0;
