@@ -31,7 +31,7 @@ use crate::authority::AuthorityState;
 use crate::authority_client::make_authority_clients;
 use crate::authority_client::{
     AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
-    LocalAuthorityClientFaultConfig, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+    LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
 };
 use crate::test_utils::to_sender_signed_transaction;
 use crate::validator_info::make_committee;
@@ -55,7 +55,6 @@ async fn init_network_authorities(
         configs.validator_set(),
         DEFAULT_CONNECT_TIMEOUT_SEC,
         DEFAULT_REQUEST_TIMEOUT_SEC,
-        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
 
     let registry = prometheus::Registry::new();
@@ -65,7 +64,6 @@ async fn init_network_authorities(
         auth_clients,
         AuthAggMetrics::new(&registry),
         Arc::new(SafeClientMetrics::new(&registry)),
-        Arc::new(NetworkAuthorityClientMetrics::new(&registry)),
     )
 }
 
@@ -162,7 +160,6 @@ pub async fn init_local_authorities_with_genesis(
             clients,
             AuthAggMetrics::new_for_tests(),
             Arc::new(SafeClientMetrics::new_for_tests()),
-            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
             timeouts,
         ),
         states,
@@ -921,7 +918,6 @@ fn get_agg(
         clients,
         AuthAggMetrics::new_for_tests(),
         Arc::new(SafeClientMetrics::new_for_tests()),
-        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
         TimeoutConfig {
             serial_authority_request_interval: Duration::from_millis(50),
             ..Default::default()

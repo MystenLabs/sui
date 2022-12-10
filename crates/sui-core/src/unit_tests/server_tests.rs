@@ -5,8 +5,7 @@ use super::*;
 use crate::{
     authority::authority_tests::init_state_with_object_id,
     authority_client::{
-        AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig,
-        NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+        AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
     },
     safe_client::SafeClientMetrics,
 };
@@ -39,12 +38,9 @@ async fn test_simple_request() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(
-        server_handle.address(),
-        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-    )
-    .await
-    .unwrap();
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let req = ObjectInfoRequest::latest_object_info_request(
         object_id,
@@ -79,12 +75,9 @@ async fn test_subscription() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(
-        server_handle.address(),
-        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-    )
-    .await
-    .unwrap();
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 

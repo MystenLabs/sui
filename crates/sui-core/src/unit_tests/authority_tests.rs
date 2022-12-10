@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_client::{AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics},
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
     test_utils::to_sender_signed_transaction,
@@ -244,12 +244,9 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
-    let client = NetworkAuthorityClient::connect(
-        server_handle.address(),
-        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-    )
-    .await
-    .unwrap();
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();

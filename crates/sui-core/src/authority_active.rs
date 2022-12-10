@@ -56,8 +56,6 @@ use tokio::time::Instant;
 pub mod gossip;
 use gossip::GossipMetrics;
 
-use crate::authority_client::NetworkAuthorityClientMetrics;
-
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
@@ -124,10 +122,6 @@ pub struct ActiveAuthority<A> {
     // Gossip Metrics including gossip between validators and
     // node sync process between fullnode and validators
     pub gossip_metrics: GossipMetrics,
-
-    // This is only meaningful if A is of type NetworkAuthorityClient,
-    // and stored here for reconfiguration purposes.
-    pub network_metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -139,7 +133,6 @@ impl<A> ActiveAuthority<A> {
         let committee = authority.clone_committee();
 
         let net = Arc::new(net);
-        let network_metrics = net.network_client_metrics.clone();
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
@@ -153,7 +146,6 @@ impl<A> ActiveAuthority<A> {
             node_sync_process: Default::default(),
             net: ArcSwap::from(net),
             gossip_metrics: GossipMetrics::new(prometheus_registry),
-            network_metrics,
         })
     }
 
@@ -230,7 +222,6 @@ impl<A> Clone for ActiveAuthority<A> {
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
-            network_metrics: self.network_metrics.clone(),
         }
     }
 }
