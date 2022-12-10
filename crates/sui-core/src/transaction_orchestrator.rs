@@ -289,6 +289,9 @@ where
     /// Execute a finalized transaction locally.
     /// Firstly it tries to execute it optimistically. If there are missing
     /// dependencies, it then leverages Node Sync to process the parents.
+    ///
+    /// TODO: replace this function with AuthorityState::execute_certificate_with_effects(),
+    /// after checkpoint v2 becomes the default for fullnode synchronization.
     async fn execute_impl(
         state: &Arc<AuthorityState>,
         node_sync_handle: &NodeSyncHandle,
@@ -297,11 +300,26 @@ where
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
         let tx_digest = tx_cert.digest();
-        let res = state
-            .execute_certificate_with_effects(tx_cert, effects_cert)
-            .await;
+        if tx_cert.contains_shared_object() {
+            state
+                .database
+                .acquire_shared_locks_from_effects(tx_cert, effects_cert.data())
+                .await?;
+        }
+        let res = state.execute_certificate_internal(tx_cert).await;
         match res {
-            Ok(_) => {
+            Ok(info) => {
+                if let Some(effects) = info.signed_effects {
+                    if effects.digest() != effects_cert.digest() {
+                        return Err(SuiError::from(
+                            "Tx from orchestrator failed to be executed. Effects mismatch!",
+                        ));
+                    }
+                } else {
+                    return Err(SuiError::from(
+                        "Tx from orchestrator failed to be executed. No effect returned!",
+                    ));
+                }
                 debug!(
                     ?tx_digest,
                     "Orchestrator optimistically executed transaction successfully."
@@ -309,10 +327,8 @@ where
                 metrics.tx_directly_executed.inc();
                 Ok(())
             }
-            // TODO: Delete this branch because this error should be impossible to happen with
-            // execute_certificate_with_effects().
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
-                error!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
+                debug!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
 
                 match node_sync_handle
                     .handle_parents_request(state.epoch(), std::iter::once(*tx_digest))
