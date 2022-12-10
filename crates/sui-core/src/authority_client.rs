@@ -27,7 +27,6 @@ use sui_types::{error::SuiError, messages::*};
 #[cfg(test)]
 use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
 
-use crate::epoch::reconfiguration::Reconfigurable;
 use sui_network::tonic::transport::Channel;
 
 #[async_trait]
@@ -115,17 +114,6 @@ impl NetworkAuthorityClient {
 
     fn client(&self) -> ValidatorClient<Channel> {
         self.client.clone()
-    }
-}
-
-#[async_trait]
-impl Reconfigurable for NetworkAuthorityClient {
-    fn needs_network_recreation() -> bool {
-        true
-    }
-
-    fn recreate(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
-        NetworkAuthorityClient::new(channel, metrics)
     }
 }
 
@@ -353,16 +341,6 @@ impl LocalAuthorityClientFaultConfig {
 pub struct LocalAuthorityClient {
     pub state: Arc<AuthorityState>,
     pub fault_config: LocalAuthorityClientFaultConfig,
-}
-
-impl Reconfigurable for LocalAuthorityClient {
-    fn needs_network_recreation() -> bool {
-        false
-    }
-
-    fn recreate(_channel: Channel, _metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
-        unreachable!(); // this function should not get called because the above function returns false
-    }
 }
 
 #[async_trait]

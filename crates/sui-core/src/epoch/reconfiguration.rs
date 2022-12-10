@@ -1,21 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::NetworkAuthorityClientMetrics;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use sui_network::tonic;
-
-#[async_trait]
-pub trait Reconfigurable {
-    fn needs_network_recreation() -> bool;
-
-    fn recreate(
-        channel: tonic::transport::Channel,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> Self;
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ReconfigCertStatus {
