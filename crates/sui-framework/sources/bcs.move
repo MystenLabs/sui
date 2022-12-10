@@ -35,7 +35,7 @@
 module sui::bcs {
     use std::option::{Self, Option};
     use std::vector as v;
-    use sui::object;
+    use sui::address;
     use std::bcs;
 
     /// For when bytes length is less than required for deserialization.
@@ -86,7 +86,7 @@ module sui::bcs {
             v::push_back(&mut addr_bytes, v::pop_back(&mut bcs.bytes));
             i = i + 1;
         };
-        object::address_from_bytes(addr_bytes)
+        address::from_bytes(addr_bytes)
     }
 
     /// Read a `bool` value from bcs-serialized bytes.

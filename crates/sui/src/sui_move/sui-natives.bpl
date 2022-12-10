@@ -2,6 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // ==================================================================================
+// Native address
+
+
+procedure {:inline 1} $2_address_from_bytes(bytes: Vec (int)) returns (res: int);
+
+procedure {:inline 1} $2_address_to_u256(addr: int) returns (res: int);
+
+procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
+
+// ==================================================================================
 // Native transfer
 
 
@@ -25,7 +35,6 @@ procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}});
 // ==================================================================================
 // Native object
 
-procedure {:inline 1} $2_object_address_from_bytes(bytes: Vec (int)) returns (res: int);
 
 procedure {:inline 1} $2_object_delete_impl(id: int);
 
@@ -161,6 +170,3 @@ function UpdateDynField<T, V>(o: T, addr: int, v: V): T;
 
 // placeholder - need to add support for bitwise operators in Boogie to implement this
 procedure {:inline 1} $2_bcs_peel_vec_length(bcs: $Mutation $2_bcs_BCS) returns (res: int, m: $Mutation $2_bcs_BCS);
-
-
-

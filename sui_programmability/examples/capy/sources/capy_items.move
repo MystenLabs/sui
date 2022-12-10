@@ -5,13 +5,13 @@
 /// Every capy can have up to X items at the same time.
 module capy::capy_items {
     use sui::event::emit;
+    use sui::hex;
     use sui::url::{Self, Url};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::TxContext;
     use std::string::{Self, String};
     use std::vector as vec;
 
-    use capy::hex;
     use capy::capy::CapyManagerCap;
 
     /// Base path for `CapyItem.url` attribute. Is temporary and improves
@@ -70,7 +70,7 @@ module capy::capy_items {
     /// Construct an image URL for the `CapyItem`.
     fun img_url(c: &UID): Url {
         let capy_url = *&IMAGE_URL;
-        vec::append(&mut capy_url, hex::to_hex(object::uid_to_bytes(c)));
+        vec::append(&mut capy_url, hex::encode(object::uid_to_bytes(c)));
         vec::append(&mut capy_url, b"/svg");
 
         url::new_unsafe_from_bytes(capy_url)

@@ -63,7 +63,7 @@ let leftovers = bcs::into_remainder_bytes(prepared);
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
-<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
 </code></pre>
 
 
@@ -247,7 +247,7 @@ Read address from the bcs-serialized bytes.
         v::push_back(&<b>mut</b> addr_bytes, v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes));
         i = i + 1;
     };
-    <a href="object.md#0x2_object_address_from_bytes">object::address_from_bytes</a>(addr_bytes)
+    <a href="address.md#0x2_address_from_bytes">address::from_bytes</a>(addr_bytes)
 }
 </code></pre>
 

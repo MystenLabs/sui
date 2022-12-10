@@ -9,7 +9,6 @@ Sui object identifiers
 -  [Struct `ID`](#0x2_object_ID)
 -  [Struct `UID`](#0x2_object_UID)
 -  [Constants](#@Constants_0)
--  [Function `address_from_bytes`](#0x2_object_address_from_bytes)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
 -  [Function `id_from_bytes`](#0x2_object_id_from_bytes)
@@ -32,6 +31,7 @@ Sui object identifiers
 
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
+<b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
@@ -108,16 +108,6 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 ## Constants
 
 
-<a name="0x2_object_EAddressParseError"></a>
-
-Error from <code>address_from_bytes</code> when it is supplied too many or too few bytes.
-
-
-<pre><code><b>const</b> <a href="object.md#0x2_object_EAddressParseError">EAddressParseError</a>: u64 = 0;
-</code></pre>
-
-
-
 <a name="0x2_object_SUI_SYSTEM_STATE_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Sui System State Object.
@@ -127,30 +117,6 @@ The hardcoded ID for the singleton Sui System State Object.
 </code></pre>
 
 
-
-<a name="0x2_object_address_from_bytes"></a>
-
-## Function `address_from_bytes`
-
-Convert raw bytes into an address, aborts if supplied too many
-or too few bytes.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>;
-</code></pre>
-
-
-
-</details>
 
 <a name="0x2_object_id_to_bytes"></a>
 
@@ -219,7 +185,7 @@ Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from raw bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="object.md#0x2_object_ID">ID</a> {
-    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(<a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes))
+    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(<a href="address.md#0x2_address_from_bytes">address::from_bytes</a>(bytes))
 }
 </code></pre>
 
