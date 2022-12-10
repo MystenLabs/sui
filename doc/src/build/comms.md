@@ -11,4 +11,4 @@ The pages in this section provide various options for communicating with Sui:
 * Run a [Sui Full node](fullnode.md) yourself to store the full Sui blockchain state and history.
 * Filter and subscribe to a [real-time event stream](event_api.md#subscribe-to-sui-events) on your Sui Full node using the WebSocket API.
 
-See the [Sui Reference Documentation](reference.md) for information on our API and SuiJSON format.
+See the [Sui Reference Documentation](../reference/index.md) for information on the Sui API and SuiJSON format.

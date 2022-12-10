@@ -39,7 +39,7 @@ The Sui Client CLI supports the following commands:
 | `transfer` | Transfer object |
 | `transfer-sui` | Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object. |
 
-> **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
+**Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
 Use `sui client -h` to see a list of supported commands.
 
@@ -52,7 +52,7 @@ You can start the client in two modes: interactive shell or command line interfa
 To start the interactive shell:
 
 ```shell
-$ sui console
+sui console
 ```
 
 The console command looks for the client configuration file
@@ -61,7 +61,7 @@ override this setting by providing a path to the directory where this
 file is stored:
 
 ```shell
-$ sui console --config /workspace/config-files
+sui console --config /workspace/config-files
 ```
 
 The Sui interactive client console supports the following shell functionality:
@@ -85,7 +85,7 @@ For example, the following command returns the list of
 account addresses available on the platform:
 
 ```shell
-$ sui client addresses
+sui client addresses
 ```
 
 ### Active address
@@ -95,7 +95,7 @@ You can specify an active address or default address to use to execute commands.
 Sui sets a default address to use for commands. It uses the active address for commands that require an address. To view the current active address, use the `active-address` command.
 
 ```shell
-$ sui client active-address
+sui client active-address
 ```
 
 The response to the request resembles the following:
@@ -107,7 +107,7 @@ The response to the request resembles the following:
 To change the default address, use the `switch` command:
 
 ```shell
-$ sui client switch --address 0x913cf36f370613ed131868ac6f9da2420166062e
+sui client switch --address 0x913cf36f370613ed131868ac6f9da2420166062e
 ```
 
 The response resembles the following:
@@ -120,13 +120,14 @@ You can call the `objects` command with or without specifying an address.
 Sui uses the active address if you do not specify one.
 
 ```shell
-$ sui client objects
+sui client objects
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
+
 ```shell
-$ sui client objects 0x913cf36f370613ed131868ac6f9da2420166062e
+sui client objects 0x913cf36f370613ed131868ac6f9da2420166062e
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
@@ -149,13 +150,13 @@ transaction with gas object X. The gas selection logic checks for this and rejec
 To see how much gas is in an account, use the `gas` command. Note that this command uses the `active-address`, unless otherwise specified.
 
 ```shell
-$ sui client gas
+sui client gas
 ```
 
 You can specify an address to see the amount of gas for that address instead of the active address.
 
 ```shell
-$ sui client gas 0x562f07cf6369e8d22dbf226a5bfedc6300014837
+sui client gas 0x562f07cf6369e8d22dbf226a5bfedc6300014837
 ```
 
 ## Create new account addresses
@@ -165,7 +166,7 @@ Sui Client CLI includes 1 address by default. To add more, create new addresses 
 ### Create a new account address
 
 ```shell
-$ sui client new-address ed25519
+sui client new-address ed25519
 ```
 
 You must specify the key scheme, either `ed25519` or `secp256k1`.
@@ -187,7 +188,7 @@ sui client objects
 To view the objects for a different address than the active address, specify the address to see objects for.
 
 ```shell
-$ sui client objects 0x66af3898e7558b79e115ab61184a958497d1905a
+sui client objects 0x66af3898e7558b79e115ab61184a958497d1905a
 ```
 
 To view more information about an object, use the `object` command.
@@ -237,7 +238,7 @@ To transfer an object to a recipient, you need the recipient's address,
 the object ID of the object to transfer, and, optionally, the ID of the coin object for the transaction fee payment. If not specified, a coin that meets the budget is picked. Gas budget sets a cap for how much gas to spend. We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
 ```shell
-$ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
 ```
 
 ## Create an example NFT
@@ -245,7 +246,7 @@ $ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-i
 You can add an example NFT to an address using the `create-example-nft` command. The command adds an NFT to the active address.
 
 ```shell
-$ sui client create-example-nft
+sui client create-example-nft
 ```
 
 The command invokes the `mint` function in the `devnet_nft` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
@@ -307,13 +308,13 @@ You need at lease three coin objects to merge coins, two coins to merge and one 
 Use the following command to view the objects that the specified address owns.
 
 ```shell
-$ sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 Use the IDs returns from the previous command in the `merge-coin` command.
 
 ```shell
-$ sui client merge-coin --primary-coin 0x1e90389f5d70d7fa6ce973155460e1c04deae194 --coin-to-merge 0x351f08f03709cebea85dcd20e24b00fbc1851c92 --gas-budget 1000
+sui client merge-coin --primary-coin 0x1e90389f5d70d7fa6ce973155460e1c04deae194 --coin-to-merge 0x351f08f03709cebea85dcd20e24b00fbc1851c92 --gas-budget 1000
 ```
 
 ### Split coins
@@ -337,7 +338,7 @@ To split a coin you need at least 2 coin objects, one to split and one to pay fo
 
 Use the following command to view the objects the address owns.
 ```shell
-$ sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
+sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
 ```
 
 Then use the IDs returned in the `split-coin` command.
@@ -345,19 +346,19 @@ Then use the IDs returned in the `split-coin` command.
 The following example splits one coin into three coins of different amounts, 1000, 5000, and 3000. The `--amounts` argument accepts a list of values.
 
 ```shell
-$ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --amounts 1000 5000 3000 --gas-budget 1000
+sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --amounts 1000 5000 3000 --gas-budget 1000
 ```
 
 Use the `objects` command to view the new coin objects.
 
 ```
-$ sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
+sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
 ```
 
 The following example splits a coin into three equal parts. To split a coin evenly, don't include the `--amount` argument in the command.
 
 ```shell
-$ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --count 3 --gas-budget 1000
+sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --count 3 --gas-budget 1000
 ```
 
 ## Calling Move code
@@ -382,7 +383,8 @@ simplicity.
 Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
 
 ```shell
-$ sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
+sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
+
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x471c8e241d0473c34753461529b70f9c4ed3151b |     0      | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
@@ -404,7 +406,7 @@ We will perform the transfer by calling the `transfer` function from
 the sui module using the following Sui client command:
 
 ```shell
-$ sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
+sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -473,7 +475,7 @@ of the `transfer` function) by querying objects that are now owned by
 the sender:
 
 ```shell
-$ sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
+sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
@@ -488,7 +490,7 @@ And if we inspect this object, we can see it has the new
 owner, different from the original one:
 
 ```shell
-$ sui client object 0x471c8e241d0473c34753461529b70f9c4ed3151b
+sui client object 0x471c8e241d0473c34753461529b70f9c4ed3151b
 ```
 
 Resulting in:
@@ -513,13 +515,12 @@ Refer to the [Move developer documentation](move/index.md) for a
 description on how to [write a simple Move code package](move/write-package.md),
 which you can then publish using the Sui client `publish` command.
 
-> **Important:** You must remove all calls to functions in the `debug` module from no-test code
-> before you can publish the new module (test code is marked with the `#[test]` annotation).
+**Important:** You must remove all calls to functions in the `debug` module from no-test code before you can publish the new module (test code is marked with the `#[test]` annotation).
 
 Use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`) which now has four objects left:
 
 ```shell
-$ sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 Outputting:
@@ -540,7 +541,7 @@ that the location of the package sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-$ sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
+sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
 ```
 
 The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:
@@ -601,9 +602,7 @@ initializers](move/debug-publish.md#module-initializers) for more details.
 You might notice that the gas object that was used to pay for
 publishing was updated as well.
 
-> **Important:** If the publishing attempt results in an error regarding verification failure,
-> [build your package locally](../build/move/build-test.md#building-a-package) (using the `sui move build` command)
-> to get a more verbose error message.
+**Important:** If the publishing attempt results in an error regarding verification failure, [build your package locally](../build/move/build-test.md#building-a-package) (using the `sui move build` command) to get a more verbose error message.
 
 ## Customize genesis
 
@@ -611,7 +610,7 @@ The genesis process can be customized by providing a genesis configuration
 file using the `--config` flag.
 
 ```shell
-$ sui genesis --config <Path to genesis config file>
+sui genesis --config <Path to genesis config file>
 ```
 
 Example `genesis.yaml`:
