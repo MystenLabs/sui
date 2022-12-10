@@ -21,7 +21,7 @@ use sui_types::{
     },
     object::{Object, Owner},
 };
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
@@ -39,12 +39,6 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
             panic!("timed out waiting for effects of digest! {e}");
         }
     }
-
-    // A small delay is needed so that the batch process can finish notifying other subscribers,
-    // which tests may depend on. Otherwise tests can pass or fail depending on whether the
-    // subscriber in this function was notified first or last.
-    // TODO: remove after batch service deprecations.
-    sleep(Duration::from_millis(10)).await;
 }
 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
@@ -60,12 +54,6 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
             panic!("timed out waiting for effects of digests! {e}");
         }
     }
-
-    // A small delay is needed so that the batch process can finish notifying other subscribers,
-    // which tests may depend on. Otherwise tests can pass or fail depending on whether the
-    // subscriber in this function was notified first or last.
-    // TODO: remove after batch service deprecations.
-    sleep(Duration::from_millis(10)).await;
 }
 
 // Creates a fake sender-signed transaction for testing. This transaction will
