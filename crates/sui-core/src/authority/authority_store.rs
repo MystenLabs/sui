@@ -52,7 +52,8 @@ pub struct AuthorityStore {
     path: PathBuf,
     db_options: Option<Options>,
 
-    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    // Implementation detail to support notify_read_effects().
+    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
 }
 
 impl AuthorityStore {
@@ -646,7 +647,7 @@ impl AuthorityStore {
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
-    /// version, and then writes locks, objects, certificates, parents atomically.
+    /// version, and then writes bjects, certificates, parents and clean up locks atomically.
     pub async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,
@@ -677,8 +678,7 @@ impl AuthorityStore {
             )
             .await?;
 
-        self.effects_notify_read
-            .notify(transaction_digest, effects.data());
+        self.effects_notify_read.notify(transaction_digest, effects);
 
         // Clean up the locks of shared objects. This should be done after we write effects, as
         // effects_exists is used as the guard to avoid re-writing locks for a previously
@@ -1059,15 +1059,19 @@ impl AuthorityStore {
     }
 
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
-    /// of that transaction. Used by the nodes, which don't listen to consensus.
-    pub fn acquire_shared_locks_from_effects(
+    /// of that transaction. Used by full nodes, which don't listen to consensus.
+    pub async fn acquire_shared_locks_from_effects(
         &self,
         certificate: &VerifiedCertificate,
         effects: &TransactionEffects,
-        // Do not remove unused arg - ensures that this function is not called without holding a
-        // lock.
-        _tx_guard: &CertTxGuard<'_>,
     ) -> SuiResult {
+        let _tx_lock = self
+            .epoch_store()
+            .acquire_tx_lock(certificate.digest())
+            .await;
+        if self.effects_exists(certificate.digest())? {
+            return Ok(());
+        }
         self.epoch_store().set_assigned_shared_object_versions(
             certificate.digest(),
             &effects
@@ -1456,21 +1460,18 @@ pub trait EffectsStore {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<TransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
 }
 
 impl EffectsStore for Arc<AuthorityStore> {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
         Ok(self
             .perpetual_tables
             .executed_effects
-            .multi_get(transactions)?
-            .into_iter()
-            .map(|item| item.map(|x| x.into_data()))
-            .collect())
+            .multi_get(transactions)?)
     }
 }
 

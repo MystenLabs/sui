@@ -29,7 +29,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::{SignedTransactionEffects, TransactionEffects};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
@@ -288,7 +288,7 @@ impl CheckpointBuilder {
             .inc_by(roots.len() as u64);
         let roots = self
             .effects_store
-            .notify_read(roots)
+            .notify_read_effects(roots)
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
         let _scope = monitored_scope("CheckpointBuilder");
@@ -425,7 +425,7 @@ impl CheckpointBuilder {
             .await?;
         let signed_effect = self
             .state
-            .handle_certificate(&cert)
+            .execute_certificate(&cert)
             .await?
             .signed_effects
             .unwrap();
@@ -437,7 +437,7 @@ impl CheckpointBuilder {
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already
     fn complete_checkpoint_effects(
         &self,
-        mut roots: Vec<TransactionEffects>,
+        mut roots: Vec<SignedTransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let mut results = vec![];
         let mut seen = HashSet::new();
@@ -453,7 +453,7 @@ impl CheckpointBuilder {
                         pending.insert(*dependency);
                     }
                 }
-                results.push(effect);
+                results.push(effect.into_data());
             }
             if pending.is_empty() {
                 break;
@@ -876,24 +876,41 @@ mod tests {
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
         let tempdir = tempdir().unwrap();
-        let mut store: HashMap<TransactionDigest, TransactionEffects> = HashMap::new();
+        let (keypair, committee) = committee();
+        let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
+
+        let mut store = HashMap::<TransactionDigest, SignedTransactionEffects>::new();
         store.insert(
             d(1),
-            e(d(1), vec![d(2), d(3)], GasCostSummary::new(11, 12, 13)),
+            e(
+                &state,
+                d(1),
+                vec![d(2), d(3)],
+                GasCostSummary::new(11, 12, 13),
+            ),
         );
         store.insert(
             d(2),
-            e(d(2), vec![d(3), d(4)], GasCostSummary::new(21, 22, 23)),
+            e(
+                &state,
+                d(2),
+                vec![d(3), d(4)],
+                GasCostSummary::new(21, 22, 23),
+            ),
         );
-        store.insert(d(3), e(d(3), vec![], GasCostSummary::new(31, 32, 33)));
-        store.insert(d(4), e(d(4), vec![], GasCostSummary::new(41, 42, 43)));
+        store.insert(
+            d(3),
+            e(&state, d(3), vec![], GasCostSummary::new(31, 32, 33)),
+        );
+        store.insert(
+            d(4),
+            e(&state, d(4), vec![], GasCostSummary::new(41, 42, 43)),
+        );
+
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
         let (certified_output, mut certified_result) =
             mpsc::channel::<CertifiedCheckpointSummary>(10);
         let store = Box::new(store);
-
-        let (keypair, committee) = committee();
-        let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
         let checkpoint_service = CheckpointService::spawn(
@@ -961,11 +978,11 @@ mod tests {
     }
 
     #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionDigest, TransactionEffects> {
-        async fn notify_read(
+    impl EffectsNotifyRead for HashMap<TransactionDigest, SignedTransactionEffects> {
+        async fn notify_read_effects(
             &self,
             digests: Vec<TransactionDigest>,
-        ) -> SuiResult<Vec<TransactionEffects>> {
+        ) -> SuiResult<Vec<SignedTransactionEffects>> {
             Ok(digests
                 .into_iter()
                 .map(|d| self.get(d.as_ref()).expect("effects not found").clone())
@@ -975,7 +992,7 @@ mod tests {
         fn get_effects(
             &self,
             digests: &[TransactionDigest],
-        ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
             Ok(digests
                 .iter()
                 .map(|d| self.get(d.as_ref()).cloned())
@@ -1013,16 +1030,18 @@ mod tests {
     }
 
     fn e(
+        state: &AuthorityState,
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
         gas_used: GasCostSummary,
-    ) -> TransactionEffects {
-        TransactionEffects {
+    ) -> SignedTransactionEffects {
+        let effects = TransactionEffects {
             transaction_digest,
             dependencies,
             gas_used,
             ..Default::default()
-        }
+        };
+        SignedTransactionEffects::new(state.epoch(), effects, &*state.secret, state.name)
     }
 
     fn committee() -> (AuthorityKeyPair, Committee) {
