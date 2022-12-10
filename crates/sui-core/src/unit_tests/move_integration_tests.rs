@@ -3,13 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::{
-    authority::authority_tests::{
-        call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
-        TestCallArg,
-    },
-    test_utils::to_sender_signed_transaction,
+use crate::authority::authority_tests::{
+    call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
+    TestCallArg,
 };
+use sui_types::utils::to_sender_signed_transaction;
 
 use move_core_types::{
     language_storage::TypeTag,

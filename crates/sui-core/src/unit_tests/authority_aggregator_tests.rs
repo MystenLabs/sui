@@ -33,8 +33,8 @@ use crate::authority_client::{
     AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
     LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
 };
-use crate::test_utils::to_sender_signed_transaction;
 use crate::validator_info::make_committee;
+use sui_types::utils::to_sender_signed_transaction;
 
 use tokio::time::Instant;
 

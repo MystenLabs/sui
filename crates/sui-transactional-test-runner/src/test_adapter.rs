@@ -37,9 +37,10 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, execution_mode, genesis};
-use sui_core::{execution_engine, test_utils::to_sender_signed_transaction};
+use sui_core::execution_engine;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::temporary_store::TemporaryStore;
+use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH,

@@ -5,10 +5,10 @@ use super::*;
 
 use crate::authority::authority_tests::{init_state, send_and_confirm_transaction};
 use crate::authority::AuthorityState;
-use crate::test_utils::to_sender_signed_transaction;
 use futures::future::join_all;
 use std::collections::HashMap;
 use sui_types::crypto::AccountKeyPair;
+use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::dbg_addr,
     crypto::get_key_pair,

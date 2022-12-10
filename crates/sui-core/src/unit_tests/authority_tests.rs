@@ -2,14 +2,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::*;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
-    test_utils::to_sender_signed_transaction,
 };
-
-use super::*;
 use bcs;
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
@@ -28,6 +26,7 @@ use std::fs;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use sui_types::utils::to_sender_signed_transaction;
 
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;

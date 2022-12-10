@@ -14,7 +14,6 @@ use serde_json::json;
 use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
-use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     EventPage, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
@@ -41,6 +40,7 @@ use sui_types::messages::{
 use sui_types::object::{Owner, PACKAGE_VERSION};
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
+use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 struct Examples {

@@ -5,13 +5,13 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
-use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
+use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     messages::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
