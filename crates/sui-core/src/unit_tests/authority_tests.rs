@@ -1493,7 +1493,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         authority_state.insert_genesis_object(sender_object).await;
     }
 
-    // Explanation: providing an old cert that has already need applied
+    // Explanation: providing an old cert that has already been applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
         .execute_certificate_internal(&certified_transfer_transaction)
@@ -1540,7 +1540,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         &authority_state,
     );
     let response = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .execute_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     response.signed_effects.unwrap().into_data().status.unwrap();
@@ -1594,7 +1594,7 @@ async fn test_handle_confirmation_transaction_ok() {
         .unwrap();
 
     let info = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction.clone())
+        .execute_certificate(&certified_transfer_transaction.clone())
         .await
         .unwrap();
     info.signed_effects.unwrap().into_data().status.unwrap();
@@ -1803,13 +1803,13 @@ async fn test_handle_confirmation_transaction_idempotent() {
     );
 
     let info = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .execute_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(info.signed_effects.as_ref().unwrap().data().status.is_ok());
 
     let info2 = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .execute_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(info2.signed_effects.as_ref().unwrap().data().status.is_ok());
@@ -1948,7 +1948,7 @@ async fn test_move_call_insufficient_gas() {
         &authority_state,
     );
     let effects = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .execute_certificate(&certified_transfer_transaction)
         .await
         .unwrap()
         .signed_effects
@@ -2299,7 +2299,7 @@ async fn test_idempotent_reversed_confirmation() {
         &authority_state,
     );
     let result1 = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .execute_certificate(&certified_transfer_transaction)
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
@@ -2349,7 +2349,7 @@ async fn test_transfer_sui_no_amount() {
 
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .execute_certificate_internal(&certificate)
+        .execute_certificate(&certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().into_data();
@@ -2387,7 +2387,7 @@ async fn test_transfer_sui_with_amount() {
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .execute_certificate_internal(&certificate)
+        .execute_certificate(&certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().into_data();
@@ -2441,7 +2441,7 @@ async fn test_store_revert_transfer_sui() {
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
-        .execute_certificate_internal(&certificate)
+        .execute_certificate(&certificate)
         .await
         .unwrap();
 
@@ -2510,7 +2510,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrap_digest = *wrap_cert.digest();
 
     let wrap_effects = authority_state
-        .execute_certificate_internal(&wrap_cert)
+        .execute_certificate(&wrap_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2597,7 +2597,7 @@ async fn test_store_revert_unwrap_move_call() {
     let unwrap_digest = *unwrap_cert.digest();
 
     let unwrap_effects = authority_state
-        .execute_certificate_internal(&unwrap_cert)
+        .execute_certificate(&unwrap_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2830,7 +2830,7 @@ async fn test_store_revert_add_ofield() {
     let add_digest = *add_cert.digest();
 
     let add_effects = authority_state
-        .execute_certificate_internal(&add_cert)
+        .execute_certificate(&add_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2942,7 +2942,7 @@ async fn test_store_revert_remove_ofield() {
     let remove_ofield_digest = *remove_ofield_cert.digest();
 
     let remove_effects = authority_state
-        .execute_certificate_internal(&remove_ofield_cert)
+        .execute_certificate(&remove_ofield_cert)
         .await
         .unwrap()
         .signed_effects
