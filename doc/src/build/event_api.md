@@ -70,11 +70,11 @@ Publish event attributes:
 }
 ```
 
-### Transfer object event
+## Transfer object event
 
 Transfer object events occur when for each object transferred from one address to another.
 
-#### Attributes
+### Attributes
 
 Transfer event attributes:
  * `packageId`
@@ -85,7 +85,7 @@ Transfer event attributes:
  * `version`
  * `type`
 
-#### Example Transfer object event
+### Example Transfer object event
 
 ```json
 {
@@ -103,18 +103,18 @@ Transfer event attributes:
 }
 ```
 
-### Delete object event
+## Delete object event
 
 Delete object events occur for each object deleted.
 
-#### Attributes
+### Attributes
 
  * `packageId`
  * `transactionModule`
  * `sender`
  * `objectId`  
 
-#### Example Delete object event
+### Example Delete object event
 
 ```json
 {
@@ -127,11 +127,11 @@ Delete object events occur for each object deleted.
 }
 ```
 
-### New object event
+## New object event
 
 New object events occur for each new object created on the network.
 
-#### Attributes
+### Attributes
 
 New object event attributes:
  * `packageId`
@@ -140,7 +140,7 @@ New object event attributes:
  * `recipient`
  * `objectId`
 
-#### Example New object event
+### Example New object event
 
 ```json
 {
@@ -156,15 +156,15 @@ New object event attributes:
 }
 ```
 
-### Epoch change event
+## Epoch change event
 
 Epoch change events occur when an epoch ends and a new epoch starts.
 
-#### Attributes
+### Attributes
 
 None, Epoch change events do not have any attributes. The event includes an Epoch ID associated with the `epochChange`.
 
-#### Example Epoch change event
+### Example Epoch change event
 
 ```json
 {
@@ -172,15 +172,15 @@ None, Epoch change events do not have any attributes. The event includes an Epoc
 }
 ```
 
-### Checkpoint event
+## Checkpoint event
 
 A checkpoint event occurs for each checkpoint.
 
-#### Attributes
+### Attributes
 
 None, Checkpoint events do not have any attributes. The event includes the Checkpoint sequence number associated with the checkpoint.
 
-#### Example Checkpoint event
+### Example Checkpoint event
 
 ```json
 {
@@ -188,11 +188,9 @@ None, Checkpoint events do not have any attributes. The event includes the Check
 }
 ```
 
-## Sui event queries
+## Sui event query criteria
 
 You can use the `EventQuery` criteria object to query a Sui node and retrieve events that match query criteria.
-
-### Event query criteria
 
 | Query | Description | JSON-RPC Parameter Example |
 | ----- | ----------- | -------------------------- |
@@ -210,10 +208,9 @@ You can use the `EventQuery` criteria object to query a Sui node and retrieve ev
 
 The Event Query API provides cursor-based pagination to make it easier to work with large result sets. You can provide a `cursor` parameter in paginated query to indicate the starting position of the query. The query returns the number of results specified by `limit`, and returns the `next_cursor` value when there are additional results. The maximum `limit` is 1000 per query.
 
-### Example Pagination queries
 The following examples demonstrate how to create queries that use pagination for the results.
 
-#### 1. Get all events emitted by the devnet_nft module, in descending time order
+### 1. Get all events emitted by the devnet_nft module, in descending time order
 
 **Request**
 ```shell
@@ -327,7 +324,7 @@ curl --location --request POST '127.0.0.1:9000' \
 }
 ```
 
-#### 2. Get all `0x2::devnet_nft::MintNFTEvent` events
+### 2. Get all `0x2::devnet_nft::MintNFTEvent` events
 
 **Request**
 ```shell
@@ -402,7 +399,7 @@ curl --location --request POST '127.0.0.1:9000' \
     "id": 1
 }
 ```
-#### 3. Get all events and return 2 items per page in descending time order
+### 3. Get all events and return 2 items per page in descending time order
 
 **Request**
 ```shell
