@@ -82,19 +82,11 @@ export class Coin {
      * @param validator The sui address of the chosen validator
      * @param callType The type of the call
      */
-    public static async stakeMethod(
+    public static async stakeCoin(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
-        validator: SuiAddress,
-        callType:
-            | 'request_add_delegation'
-            | 'request_add_stake_with_locked_coin'
-            | 'request_withdraw_stake'
-            | 'request_add_delegation'
-            | 'request_add_delegation_with_locked_coin'
-            | 'request_withdraw_delegation'
-            | 'request_switch_delegation'
+        validator: SuiAddress
     ): Promise<SuiExecuteTransactionResponse> {
         const coin = await Coin.requestSuiCoinWithExactAmount(
             signer,
@@ -104,7 +96,7 @@ export class Coin {
         const txn = {
             packageObjectId: '0x2',
             module: 'sui_system',
-            function: callType,
+            function: 'request_add_delegation',
             typeArguments: [],
             arguments: [SUI_SYSTEM_STATE_OBJECT_ID, coin, validator],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,

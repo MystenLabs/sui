@@ -65,8 +65,6 @@ function processValidators(
             metadata: av.fields.metadata,
             // TODO: update
             pendingDelegationsCount: pending_delegations.length,
-            pendingDelegationWithdrawAmount:
-                av.fields.pending_delegation_withdraw,
             totalPendingDelegationAmount: pending_delegations
                 ? pending_delegations.reduce(
                       (acc, fields) =>

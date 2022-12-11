@@ -103,13 +103,12 @@ export const StakeTokens = createAsyncThunk<
         const metadata = (first_validator as SuiMoveObject).fields.metadata;
         const validatorAddress =
             validator_address ?? (metadata as SuiMoveObject).fields.sui_address;
-        const callType = 'request_add_delegation';
-        const response = await Coin.stakeMethod(
+
+        const response = await Coin.stakeCoin(
             api.getSignerInstance(keypairVault.getKeypair()),
             coins,
             amount,
-            validatorAddress,
-            callType
+            validatorAddress
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
         return response;
