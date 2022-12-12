@@ -149,6 +149,11 @@ pub fn all_natives(
             make_native!(object::record_new_uid),
         ),
         (
+            "randomness",
+            "native_verify_tbls_signature",
+            make_native!(tbls::verify_tbls_signature),
+        ),
+        (
             "test_scenario",
             "take_from_address_by_id",
             make_native!(test_scenario::take_from_address_by_id),
