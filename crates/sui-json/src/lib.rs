@@ -275,7 +275,7 @@ fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
         Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<bool>(bytes) {
         Ok(JsonValue::Bool(v))
-    } else if let Ok(v) = bcs::from_bytes::<Vec<u64>>(bytes) {
+    } else if let Ok(v) = bcs::from_bytes::<Vec<u32>>(bytes) {
         let v = v
             .into_iter()
             .map(|v| JsonValue::Number(Number::from(v)))

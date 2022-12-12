@@ -152,7 +152,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     let json_args = vec![
         SuiJsonValue::from_object_id(coin.object_id),
-        SuiJsonValue::from_str("10")?,
+        SuiJsonValue::from_str("\"10\"")?,
     ];
 
     let transaction_bytes: TransactionBytes = http_client
@@ -205,7 +205,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_coins() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -251,7 +251,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_balances() -> Result<(), anyhow::Error> {
     let port = get_available_port();
     let cluster = TestClusterBuilder::new()
@@ -270,7 +270,7 @@ async fn test_get_balances() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
@@ -333,7 +333,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
@@ -425,7 +425,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
             vec![coin_type.into()],
             vec![
                 SuiJsonValue::from_str(&treasury_cap.to_string()).unwrap(),
-                SuiJsonValue::from_str("100000").unwrap(),
+                SuiJsonValue::from_str("\"100000\"").unwrap(),
                 SuiJsonValue::from_str(&address.to_string()).unwrap(),
             ],
             Some(gas.object_id),
