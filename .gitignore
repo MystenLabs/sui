@@ -28,6 +28,7 @@ storage/
 node_modules
 .tsbuildinfo
 tsconfig.tsbuildinfo
+.turbo
 
 # logs
 wallet.log.*

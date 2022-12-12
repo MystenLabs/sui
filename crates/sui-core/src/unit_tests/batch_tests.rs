@@ -23,7 +23,6 @@ use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use futures::stream;
 use std::collections::BTreeMap;
 use std::env;
@@ -59,7 +58,7 @@ pub(crate) async fn init_state(
     committee: Committee,
     authority_key: AuthorityKeyPair,
     store: Arc<AuthorityStore>,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let name = authority_key.public().into();
     let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
@@ -113,7 +112,7 @@ async fn test_open_manager() {
             .await
             .unwrap(),
         );
-        let mut authority_state = init_state(committee, authority_key, store.clone()).await;
+        let authority_state = init_state(committee, authority_key, store.clone()).await;
 
         // TEST 1: init from an empty database should return to a zero block
         let last_block = authority_state
@@ -153,7 +152,7 @@ async fn test_open_manager() {
             .await
             .unwrap(),
         );
-        let mut authority_state = init_state(committee, authority_key, store.clone()).await;
+        let authority_state = init_state(committee, authority_key, store.clone()).await;
 
         let last_block = authority_state
             .init_batches_from_database()
@@ -189,7 +188,7 @@ async fn test_open_manager() {
             .await
             .unwrap(),
         );
-        let mut authority_state = init_state(committee, authority_key, store.clone()).await;
+        let authority_state = init_state(committee, authority_key, store.clone()).await;
 
         let last_block = authority_state.init_batches_from_database().unwrap();
 
@@ -487,7 +486,7 @@ async fn test_handle_move_order_with_batch() {
 }
 
 #[derive(Clone)]
-struct TrustworthyAuthorityClient(Arc<Mutex<AuthorityState>>);
+struct TrustworthyAuthorityClient(Arc<AuthorityState>);
 
 #[async_trait]
 impl AuthorityAPI for TrustworthyAuthorityClient {
@@ -558,8 +557,8 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        let secret = self.0.lock().await.secret.clone();
-        let name = self.0.lock().await.name;
+        let secret = self.0.secret.clone();
+        let name = self.0.name;
         let batch_size = 3;
 
         let mut items = Vec::new();
@@ -603,13 +602,13 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
 }
 
 impl TrustworthyAuthorityClient {
-    fn new(state: AuthorityState) -> Self {
-        Self(Arc::new(Mutex::new(state)))
+    fn new(state: Arc<AuthorityState>) -> Self {
+        Self(state)
     }
 }
 
 #[derive(Clone)]
-struct ByzantineAuthorityClient(Arc<Mutex<AuthorityState>>);
+struct ByzantineAuthorityClient(Arc<AuthorityState>);
 
 #[async_trait]
 impl AuthorityAPI for ByzantineAuthorityClient {
@@ -681,8 +680,8 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        let secret = self.0.lock().await.secret.clone();
-        let name = self.0.lock().await.name;
+        let secret = self.0.secret.clone();
+        let name = self.0.name;
         let batch_size = 3;
 
         let mut items = Vec::new();
@@ -732,8 +731,8 @@ impl AuthorityAPI for ByzantineAuthorityClient {
 }
 
 impl ByzantineAuthorityClient {
-    fn new(state: AuthorityState) -> Self {
-        Self(Arc::new(Mutex::new(state)))
+    fn new(state: Arc<AuthorityState>) -> Self {
+        Self(state)
     }
 }
 

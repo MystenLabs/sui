@@ -22,9 +22,17 @@ use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
 use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
 
+// All information needed to build a NodeConfig for a validator.
+#[derive(Serialize, Deserialize)]
+pub struct ValidatorConfigInfo {
+    pub genesis_info: ValidatorGenesisInfo,
+    pub consensus_address: Multiaddr,
+    pub consensus_internal_worker_address: Option<Multiaddr>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
-    pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
+    pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,
     pub parameters: GenesisChainParameters,
     pub committee_size: usize,
     pub grpc_load_shed: Option<bool>,
@@ -108,8 +116,6 @@ pub struct ValidatorGenesisInfo {
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
-    pub narwhal_internal_worker_address: Option<Multiaddr>,
-    pub narwhal_consensus_address: Multiaddr,
 }
 
 impl ValidatorGenesisInfo {
@@ -131,8 +137,6 @@ impl ValidatorGenesisInfo {
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
-            narwhal_internal_worker_address: None,
-            narwhal_consensus_address: utils::new_tcp_network_address(),
         }
     }
 
@@ -165,8 +169,6 @@ impl ValidatorGenesisInfo {
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_udp_addr(2000 + port_offset),
             narwhal_worker_address: make_udp_addr(3000 + port_offset),
-            narwhal_internal_worker_address: None,
-            narwhal_consensus_address: make_tcp_addr(4000 + port_offset),
         }
     }
 }
@@ -295,7 +297,7 @@ impl GenesisConfig {
 impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
-            validator_genesis_info: None,
+            validator_config_info: None,
             parameters: Default::default(),
             committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
             grpc_load_shed: None,

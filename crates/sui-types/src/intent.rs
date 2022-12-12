@@ -9,21 +9,26 @@ use serde_repr::Serialize_repr;
 #[path = "unit_tests/intent_tests.rs"]
 mod intent_tests;
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentVersion {
     V0 = 0,
 }
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
-pub enum ChainId {
-    Testing = 0,
+pub enum AppId {
+    Sui = 0,
 }
 
+impl Default for AppId {
+    fn default() -> Self {
+        Self::Sui
+    }
+}
 pub trait SecureIntent: Serialize + private::SealedIntent {}
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentScope {
     TransactionData = 0,
@@ -33,42 +38,47 @@ pub enum IntentScope {
     PersonalMessage = 4,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]
 pub struct Intent {
-    version: IntentVersion,
-    chain_id: ChainId,
     scope: IntentScope,
+    version: IntentVersion,
+    app_id: AppId,
 }
 
 impl Intent {
-    pub fn new(version: IntentVersion, chain_id: ChainId, scope: IntentScope) -> Self {
-        Self {
-            version,
-            chain_id,
-            scope,
-        }
+    pub fn with_app_id(mut self, app_id: AppId) -> Self {
+        self.app_id = app_id;
+        self
     }
 
-    pub fn default_with_scope(scope: IntentScope) -> Self {
+    pub fn with_scope(mut self, scope: IntentScope) -> Self {
+        self.scope = scope;
+        self
+    }
+}
+
+impl Default for Intent {
+    fn default() -> Self {
         Self {
             version: IntentVersion::V0,
-            chain_id: ChainId::Testing,
-            scope,
+            scope: IntentScope::TransactionData,
+            app_id: AppId::Sui,
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
-pub struct IntentMessage<'a, T> {
-    intent: Intent,
-    value: &'a T,
+#[derive(Debug, PartialEq, Eq, Serialize, Clone, Hash, Deserialize)]
+pub struct IntentMessage<T> {
+    pub intent: Intent,
+    pub value: T,
 }
 
-impl<'a, T> IntentMessage<'a, T> {
-    pub fn new(intent: Intent, value: &'a T) -> Self {
+impl<T> IntentMessage<T> {
+    pub fn new(intent: Intent, value: T) -> Self {
         Self { intent, value }
     }
 }
+
 // --- PersonalMessage intent ---
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct PersonalMessage {
@@ -79,5 +89,5 @@ pub(crate) mod private {
     use super::IntentMessage;
 
     pub trait SealedIntent {}
-    impl<'a, T> SealedIntent for IntentMessage<'a, T> {}
+    impl<T> SealedIntent for IntentMessage<T> {}
 }

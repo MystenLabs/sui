@@ -10,10 +10,10 @@ import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo } from 'react';
 import { useWatch } from 'react-hook-form';
-import toast from 'react-hot-toast';
 import { z } from 'zod';
 
 import { ReactComponent as ArrowRight } from '../../../assets/SVGIcons/12px/ArrowRight.svg';
+import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
 
@@ -94,42 +94,34 @@ export function ModuleFunction({
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
                 onSubmit={handleSubmit((formData) =>
-                    toast
-                        .promise(execute.mutateAsync(formData), {
-                            loading: 'Executing...',
-                            error: (e) => 'Transaction failed',
-                            success: 'Done',
-                        })
-                        .catch((e) => null)
+                    execute.mutateAsync(formData)
                 )}
                 autoComplete="off"
                 className="flex flex-col flex-nowrap items-stretch gap-4"
             >
-                {typeArguments.map((aTypeArgument, index) => {
-                    return (
-                        <Input
-                            key={index}
-                            label={`Type${index}`}
-                            {...register(`types.${index}` as const)}
-                            placeholder={aTypeArgument}
-                        />
-                    );
-                })}
-                {paramsDetails.map(({ paramTypeText }, index) => {
-                    return (
-                        <Input
-                            key={index}
-                            label={`Arg${index}`}
-                            {...register(`params.${index}` as const)}
-                            placeholder={paramTypeText}
-                        />
-                    );
-                })}
+                {typeArguments.map((aTypeArgument, index) => (
+                    <Input
+                        key={index}
+                        label={`Type${index}`}
+                        {...register(`types.${index}` as const)}
+                        placeholder={aTypeArgument}
+                    />
+                ))}
+                {paramsDetails.map(({ paramTypeText }, index) => (
+                    <Input
+                        key={index}
+                        label={`Arg${index}`}
+                        {...register(`params.${index}` as const)}
+                        placeholder={paramTypeText}
+                        disabled={formState.isSubmitting}
+                    />
+                ))}
                 <div className="flex items-stretch justify-end gap-1.5">
                     <Button
                         variant="primary"
                         type="submit"
                         disabled={isExecuteDisabled}
+                        loading={execute.isLoading}
                     >
                         Execute
                     </Button>
@@ -152,6 +144,19 @@ export function ModuleFunction({
                         )}
                     />
                 </div>
+                {execute.error || execute.data ? (
+                    <FunctionExecutionResult
+                        error={
+                            execute.error
+                                ? (execute.error as Error).message || 'Error'
+                                : false
+                        }
+                        result={execute.data || null}
+                        onClear={() => {
+                            execute.reset();
+                        }}
+                    />
+                ) : null}
             </form>
         </DisclosureBox>
     );

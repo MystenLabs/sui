@@ -5,13 +5,12 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
+use fastcrypto::encoding::Base64;
 use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
-
-use fastcrypto::encoding::Base64;
 use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
@@ -168,14 +167,16 @@ impl RpcExampleProvider {
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signature, _, _, result, _) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
             "sui_executeTransaction",
             vec![ExamplePairing::new(
                 "Execute an object transfer transaction",
                 vec![
-                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
+                    (
+                        "tx_bytes",
+                        json!(Base64::from_bytes(bcs::to_bytes(&data).unwrap().as_slice())),
+                    ),
                     ("sig_scheme", json!(signature.scheme())),
                     (
                         "signature",
@@ -467,7 +468,7 @@ impl RpcExampleProvider {
 
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
-        let signature = tx.into_inner().into_data().tx_signature;
+        let signature = tx.into_inner().tx_signature.clone();
 
         let tx_digest = tx1.digest();
         let sui_event = SuiEvent::TransferObject {

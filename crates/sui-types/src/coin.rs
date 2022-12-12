@@ -29,6 +29,7 @@ use schemars::JsonSchema;
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
 pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
 pub const COIN_METADATA_STRUCT_NAME: &IdentStr = ident_str!("CoinMetadata");
+pub const COIN_TREASURE_CAP_NAME: &IdentStr = ident_str!("TreasuryCap");
 
 pub const PAY_MODULE_NAME: &IdentStr = ident_str!("pay");
 pub const PAY_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
@@ -143,10 +144,28 @@ impl Coin {
 }
 
 // Rust version of the Move sui::coin::TreasuryCap type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct TreasuryCap {
     pub id: UID,
     pub total_supply: Supply,
+}
+
+impl TreasuryCap {
+    /// Create a TreasuryCap from BCS bytes
+    pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
+        bcs::from_bytes(content).map_err(|err| SuiError::TypeError {
+            error: format!("Unable to deserialize TreasuryCap object: {:?}", err),
+        })
+    }
+
+    pub fn type_(type_param: StructTag) -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: COIN_TREASURE_CAP_NAME.to_owned(),
+            module: COIN_MODULE_NAME.to_owned(),
+            type_params: vec![TypeTag::Struct(Box::new(type_param))],
+        }
+    }
 }
 
 pub fn transfer_coin<S>(
@@ -225,6 +244,15 @@ impl CoinMetadata {
         bcs::from_bytes(content).map_err(|err| SuiError::TypeError {
             error: format!("Unable to deserialize CoinMetadata object: {:?}", err),
         })
+    }
+
+    pub fn type_(type_param: StructTag) -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: COIN_METADATA_STRUCT_NAME.to_owned(),
+            module: COIN_MODULE_NAME.to_owned(),
+            type_params: vec![TypeTag::Struct(Box::new(type_param))],
+        }
     }
 }
 

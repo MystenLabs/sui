@@ -2,7 +2,7 @@
 source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis_config
 ---
-validator_genesis_info: ~
+validator_config_info: ~
 parameters:
   chain_id: 127
 committee_size: 4
@@ -74,4 +74,3 @@ accounts:
       - object_id: "0x33d3e552666edc4f048c74e0d2776d0b18171e31"
         gas_value: 100000000000000
     gas_object_ranges: []
-

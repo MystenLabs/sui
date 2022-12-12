@@ -24,6 +24,8 @@ serde = { version = "1.0.144", features = ["derive"] }
 futures = "0.3.23"
 tokio = { workspace = true, features = ["full"] }
 signature = "1.6.0"
+thiserror = "1.0.37"
+bcs = "0.1.4"
 
 tap = "1.0"
 

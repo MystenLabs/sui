@@ -67,7 +67,10 @@ async fn advance_epoch_tx_test() {
         handle
             .with_async(|node| async move {
                 // Check that every validator is able to execute such a cert.
-                node.state().handle_certificate(&cert).await.unwrap();
+                node.state()
+                    .execute_certificate_internal(&cert)
+                    .await
+                    .unwrap();
             })
             .await;
     }

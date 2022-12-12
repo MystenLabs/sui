@@ -4,6 +4,19 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
+## Week ending 12/10/22
+
+| Topic | Update | 
+| :------ | :------- |
+| [Exchange Integration FAQ](../learn/exchange-integration-faq.md) | New topic. |
+| [Sui Client CLI](../build/cli-client.md) | [Added the `--verify-dependencies` flag to Sui client `publish`](https://github.com/MystenLabs/sui/pull/6601) to `sui client publish`. |
+
+## Week Ending 11/12/22
+
+| Topic | Update | 
+| :------ | :------- |
+| [Run a Sui Full node](../build/fullnode.md) | [Updated system requirements](https://github.com/MystenLabs/sui/pull/6033) for Full node. |
+
 ## Week ending 10/29/22
 
 | Topic | Update | 
@@ -11,7 +24,6 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | [Reference](../reference) | Added a new Reference top-level node. Moved filed from the Reference section previously in the Build node. |
 | [Dynamic Fields](../build/programming-with-objects/ch5-dynamic-fields.md) | Docs for a new, more flexible, replacement for Child Objects.  **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch5-dynamic-fields.md#current-limitations). |
 | [Collections](../build/programming-with-objects/ch6-collections.md) | New docs to accompany the addition of map-like collections to the Sui Framework's Move library, built on top of Dynamic Fields. **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch6-collections.md#current-limitations). |
-
 
 ## Week ending 10/22/22
 
@@ -33,7 +45,6 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | :------ | :------- |
 | [Install Sui](../build/install.md) | Removed the setup script (sui-setup.sh) until we can resolve the errors with the latest version of Sui. |
 | [Explore Sui](../explore/index.md) | General copyedits for style, removed some stale images and examples. |
-
 
 ## Week ending 10/01/22
 

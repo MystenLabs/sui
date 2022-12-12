@@ -1144,7 +1144,7 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
 
     let (tx_data, signature) = txn.to_tx_bytes_and_signature();
     SuiClientCommands::ExecuteSignedTx {
-        tx_data: tx_data.encoded(),
+        tx_bytes: tx_data.encoded(),
         signature: signature.encoded(),
     }
     .execute(context)

@@ -679,7 +679,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
+        let s = Base58::encode(self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -1033,7 +1033,7 @@ impl FromStr for TransactionDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
-        result.copy_from_slice(&Base64::decode(s).map_err(|e| anyhow!(e))?);
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow!(e))?);
         Ok(TransactionDigest(result))
     }
 }

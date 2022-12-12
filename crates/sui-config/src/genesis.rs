@@ -10,7 +10,6 @@ use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
-use narwhal_crypto::NetworkPublicKey;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
@@ -21,8 +20,7 @@ use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::chain_id::ChainId;
-use sui_types::crypto::{AuthorityPublicKey, ToFromBytes};
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature, ToFromBytes};
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::messages::CallArg;
@@ -99,38 +97,6 @@ impl Genesis {
             authorities: narwhal_committee,
             epoch: self.epoch() as narwhal_config::Epoch,
         }))
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    pub fn narwhal_worker_cache(&self) -> narwhal_config::SharedWorkerCache {
-        let workers = self
-            .validator_set
-            .iter()
-            .map(|validator| {
-                let name = AuthorityPublicKey::from_bytes(validator.protocol_key().as_ref())
-                    .expect("Can't get protocol key");
-                let workers = [(
-                    0, // worker_id
-                    narwhal_config::WorkerInfo {
-                        name: NetworkPublicKey::from_bytes(validator.worker_key().as_ref())
-                            .expect("Can't get worker key"),
-                        transactions: validator.narwhal_consensus_address.clone(),
-                        worker_address: validator.narwhal_worker_address.clone(),
-                        internal_worker_address: validator.narwhal_internal_worker_address.clone(),
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let worker_index = narwhal_config::WorkerIndex(workers);
-
-                (name, worker_index)
-            })
-            .collect();
-        narwhal_config::WorkerCache {
-            workers,
-            epoch: self.epoch() as narwhal_config::Epoch,
-        }
-        .into()
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
@@ -689,8 +655,6 @@ mod test {
             p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
-            narwhal_internal_worker_address: None,
-            narwhal_consensus_address: utils::new_tcp_network_address(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
         let builder = Builder::new()

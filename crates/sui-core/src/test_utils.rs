@@ -10,9 +10,8 @@ use std::time::Duration;
 use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::{
-        get_key_pair, AccountKeyPair, AuthoritySignInfo, AuthoritySignature, Signable, Signature,
-    },
+    crypto::{get_key_pair, AccountKeyPair, AuthoritySignInfo, AuthoritySignature, Signature},
+    intent::{Intent, IntentMessage},
     messages::{
         BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData, VerifiedTransaction,
     },
@@ -147,19 +146,24 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
-    let signature = Signature::new(&data, signer);
-    // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
+    VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
+        data,
+        Intent::default(),
+        signer,
+    ))
 }
 
+// Workaround for benchmark setup.
 pub fn to_sender_signed_transaction_arc(
     data: TransactionData,
     signer: &Arc<fastcrypto::ed25519::Ed25519KeyPair>,
 ) -> VerifiedTransaction {
-    let mut message = Vec::new();
-    data.write(&mut message);
-    let signature: Signature = signer.sign(&message);
-    VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
+    let data1 = data.clone();
+    let intent_message = IntentMessage::new(Intent::default(), data);
+    // OK to unwrap because this is used for benchmark only.
+    let bytes = bcs::to_bytes(&intent_message).unwrap();
+    let signature: Signature = signer.sign(&bytes);
+    VerifiedTransaction::new_unchecked(Transaction::from_data(data1, Intent::default(), signature))
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
@@ -180,7 +184,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
         wrapped: Vec::new(),
         gas_object: (
             random_object_ref(),
-            Owner::AddressOwner(tx.data().data.signer()),
+            Owner::AddressOwner(tx.data().intent_message.value.signer()),
         ),
         events: Vec::new(),
         dependencies: Vec::new(),

@@ -104,7 +104,10 @@ impl TransactionManager {
 
             let missing = self
                 .authority_store
-                .get_missing_input_objects(&digest, &cert.data().data.input_objects()?)
+                .get_missing_input_objects(
+                    &digest,
+                    &cert.data().intent_message.value.input_objects()?,
+                )
                 .await
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
@@ -172,6 +175,9 @@ impl TransactionManager {
             self.metrics
                 .transaction_manager_num_pending_certificates
                 .set(inner.pending_certificates.len() as i64);
+            self.metrics
+                .transaction_manager_num_executing_certificates
+                .set(inner.executing_certificates.len() as i64);
         }
 
         for digest in ready_digests.iter() {
@@ -206,6 +212,9 @@ impl TransactionManager {
         {
             let inner = &mut self.inner.write().await;
             inner.executing_certificates.remove(digest);
+            self.metrics
+                .transaction_manager_num_executing_certificates
+                .set(inner.executing_certificates.len() as i64);
         }
         let _ = self
             .authority_store

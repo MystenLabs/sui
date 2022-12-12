@@ -10,7 +10,11 @@ export default {
 } as Meta;
 
 export const InputDefault: StoryObj<InputProps> = {
-    render: (props) => <Input value="Test value" {...props} />,
+    render: (props) => <Input {...props} />,
+    args: {
+        value: 'Test value',
+        label: 'Test label',
+    },
 };
 
 export const InputPlaceholder: StoryObj<InputProps> = {
@@ -18,6 +22,7 @@ export const InputPlaceholder: StoryObj<InputProps> = {
     args: {
         value: undefined,
         placeholder: 'Test placeholder',
+        label: 'Input with placeholder',
     },
 };
 
@@ -25,12 +30,6 @@ export const InputDisabled: StoryObj<InputProps> = {
     ...InputDefault,
     args: {
         disabled: true,
-    },
-};
-
-export const InputWithLabel: StoryObj<InputProps> = {
-    ...InputDefault,
-    args: {
-        label: 'Test Label',
+        label: 'Disabled input',
     },
 };

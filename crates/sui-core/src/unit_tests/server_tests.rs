@@ -33,7 +33,7 @@ async fn test_simple_request() {
 
     let server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        Arc::new(authority_state),
+        authority_state,
         consensus_address,
     );
 
@@ -66,7 +66,7 @@ async fn test_subscription() {
     // Start the batch server
     let mut server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        Arc::new(authority_state),
+        authority_state,
         consensus_address,
     );
     server.min_batch_size = 10;
@@ -261,7 +261,7 @@ async fn test_subscription_safe_client() {
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
 
     // Start the batch server
-    let state = Arc::new(authority_state);
+    let state = authority_state;
     let server = Arc::new(AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/998/http".parse().unwrap(),
         state.clone(),

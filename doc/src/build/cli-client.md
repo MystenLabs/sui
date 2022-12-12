@@ -618,7 +618,7 @@ Example `genesis.yaml`:
 
 ```yaml
 ---
-validator_genesis_info: ~
+validator_config_info: ~
 committee_size: 4
 accounts:
   - gas_objects:

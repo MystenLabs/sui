@@ -66,10 +66,6 @@ pub enum CeremonyCommand {
         narwhal_primary_address: Multiaddr,
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
-        #[clap(long)]
-        narwhal_internal_worker_address: Option<Multiaddr>,
-        #[clap(long)]
-        narwhal_consensus_address: Multiaddr,
     },
 
     AddGasObject {
@@ -115,8 +111,6 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             p2p_address,
             narwhal_primary_address,
             narwhal_worker_address,
-            narwhal_internal_worker_address,
-            narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
@@ -139,8 +133,6 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     p2p_address,
                     narwhal_primary_address,
                     narwhal_worker_address,
-                    narwhal_internal_worker_address,
-                    narwhal_consensus_address,
                 },
                 pop,
             );
@@ -309,8 +301,6 @@ mod test {
                     p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),
                     narwhal_worker_address: utils::new_udp_network_address(),
-                    narwhal_internal_worker_address: None,
-                    narwhal_consensus_address: utils::new_tcp_network_address(),
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();
@@ -369,10 +359,6 @@ mod test {
                     p2p_address: validator.p2p_address().to_owned(),
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
-                    narwhal_internal_worker_address: validator
-                        .narwhal_internal_worker_address
-                        .clone(),
-                    narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                 },
             };
             command.run()?;

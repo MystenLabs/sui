@@ -9,21 +9,19 @@ import type { ComponentProps } from 'react';
 
 export interface InputProps
     extends Omit<ComponentProps<'input'>, 'ref' | 'className'> {
-    label?: string;
+    label: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
     ({ label, ...inputProps }, ref) => {
-        const input = (
-            <input
-                ref={ref}
-                {...inputProps}
-                className="rounded-md border border-solid border-gray-45 bg-white p-2 text-body font-medium text-steel-darker shadow-sm shadow-ebony/10 placeholder:text-gray-60"
-            />
+        return (
+            <Label label={label}>
+                <input
+                    ref={ref}
+                    {...inputProps}
+                    className="rounded-md border border-solid border-gray-45 bg-white p-2 text-body font-medium text-steel-darker shadow-sm shadow-ebony/10 placeholder:text-gray-60"
+                />
+            </Label>
         );
-        if (label) {
-            return <Label label={label}>{input}</Label>;
-        }
-        return input;
     }
 );

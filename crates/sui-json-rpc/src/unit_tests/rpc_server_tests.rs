@@ -3,28 +3,32 @@
 
 use std::path::Path;
 
-#[cfg(not(msim))]
 use std::str::FromStr;
 
-use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiExecuteTransactionResponse, SuiTransactionResponse, TransactionBytes,
+    Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
+    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
+use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
+
+use crate::api::CoinReadApiClient;
+use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
+use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 
 use sui_macros::sim_test;
 
@@ -198,6 +202,261 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
             matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_coins() -> Result<(), anyhow::Error> {
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let result: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(5, result.data.len());
+    assert_eq!(None, result.next_cursor);
+
+    let result: CoinPage = http_client
+        .get_coins(*address, Some("0x2::sui::TestCoin".into()), None, None)
+        .await?;
+    assert_eq!(0, result.data.len());
+
+    let result: CoinPage = http_client
+        .get_coins(*address, Some("0x2::sui::SUI".into()), None, None)
+        .await?;
+    assert_eq!(5, result.data.len());
+    assert_eq!(None, result.next_cursor);
+
+    // Test paging
+    let result: CoinPage = http_client
+        .get_coins(*address, Some("0x2::sui::SUI".into()), None, Some(3))
+        .await?;
+    assert_eq!(3, result.data.len());
+    assert!(result.next_cursor.is_some());
+
+    let result: CoinPage = http_client
+        .get_coins(
+            *address,
+            Some("0x2::sui::SUI".into()),
+            result.next_cursor,
+            Some(3),
+        )
+        .await?;
+    assert_eq!(2, result.data.len());
+    assert!(result.next_cursor.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_balances() -> Result<(), anyhow::Error> {
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let result: Vec<Balance> = http_client.get_balances(*address, None).await?;
+    assert_eq!(1, result.len());
+    assert_eq!("0x2::sui::SUI", result[0].coin_type);
+    assert_eq!(500000000000000, result[0].total_balance);
+    assert_eq!(5, result[0].coin_object_count);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_metadata() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let gas = objects.first().unwrap();
+
+    // Publish test coin package
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
+        .get_package_base64();
+
+    let transaction_bytes: TransactionBytes = http_client
+        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .await?;
+
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+
+    let tx_response = http_client
+        .execute_transaction(
+            tx_bytes,
+            sig_scheme,
+            signature_bytes,
+            pub_key,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
+        panic!()
+    };
+
+    let package_id = effects
+        .effects
+        .events
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::Publish { package_id, .. } = e {
+                Some(package_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    let result: SuiCoinMetadata = http_client
+        .get_coin_metadata(format!("{package_id}::trusted_coin::TRUSTED_COIN"))
+        .await?;
+
+    assert_eq!("TRUSTED", result.symbol);
+    assert_eq!("Trusted Coin for test", result.description);
+    assert_eq!("Trusted Coin", result.name);
+    assert_eq!(2, result.decimals);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_total_supply() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let gas = objects.first().unwrap();
+
+    // Publish test coin package
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
+        .get_package_base64();
+
+    let transaction_bytes: TransactionBytes = http_client
+        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .await?;
+
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+
+    let tx_response = http_client
+        .execute_transaction(
+            tx_bytes,
+            sig_scheme,
+            signature_bytes,
+            pub_key,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
+        panic!()
+    };
+
+    let package_id = effects
+        .effects
+        .events
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::Publish { package_id, .. } = e {
+                Some(package_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    let coin_name = format!("{package_id}::trusted_coin::TRUSTED_COIN");
+    let coin_type = parse_sui_type_tag(&coin_name).unwrap();
+    let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
+
+    assert_eq!(0, result.value);
+
+    let treasury_cap = effects
+        .effects
+        .events
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::NewObject {
+                object_id,
+                object_type,
+                ..
+            } = e
+            {
+                if TreasuryCap::type_(parse_sui_struct_tag(&coin_name).unwrap())
+                    == parse_sui_struct_tag(object_type).unwrap()
+                {
+                    Some(object_id)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    // Mint 100000 coin
+
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            COIN_MODULE_NAME.to_string(),
+            "mint_and_transfer".into(),
+            vec![coin_type.into()],
+            vec![
+                SuiJsonValue::from_str(&treasury_cap.to_string()).unwrap(),
+                SuiJsonValue::from_str("100000").unwrap(),
+                SuiJsonValue::from_str(&address.to_string()).unwrap(),
+            ],
+            Some(gas.object_id),
+            10_000,
+        )
+        .await?;
+
+    let tx = transaction_bytes.to_data()?;
+
+    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
+    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+
+    let tx_response = http_client
+        .execute_transaction(
+            tx_bytes,
+            sig_scheme,
+            signature_bytes,
+            pub_key,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
+        panic!()
+    };
+
+    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+
+    let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
+    assert_eq!(100000, result.value);
+
     Ok(())
 }
 

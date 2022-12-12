@@ -12,6 +12,7 @@ use sui_core::SUI_CORE_VERSION;
 use sui_json_rpc::api::EventReadApiOpenRpc;
 use sui_json_rpc::api::EventStreamingApiOpenRpc;
 use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
@@ -47,6 +48,7 @@ async fn main() {
 
     let mut open_rpc = sui_rpc_doc(SUI_CORE_VERSION);
     open_rpc.add_module(ReadApi::rpc_doc_module());
+    open_rpc.add_module(CoinReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());

@@ -7,7 +7,9 @@ pub mod authority_aggregator;
 pub mod authority_batch;
 pub mod authority_client;
 pub mod authority_server;
+pub mod checkpoints;
 pub mod consensus_adapter;
+pub mod consensus_validator;
 pub mod epoch;
 pub mod event_handler;
 pub mod execution_engine;
@@ -17,16 +19,14 @@ pub mod safe_client;
 pub mod storage;
 pub mod streamer;
 pub mod tbls;
+pub mod test_utils;
 pub mod transaction_input_checker;
 pub mod transaction_orchestrator;
 pub mod transaction_streamer;
 pub mod validator_info;
 
-pub mod test_utils;
-
-pub mod checkpoints;
 mod consensus_handler;
-pub mod consensus_validator;
+mod execution_driver;
 mod histogram;
 mod module_cache_gauge;
 mod node_sync;

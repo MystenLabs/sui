@@ -133,7 +133,7 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 
-<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidVerifyingKey">EInvalidVerifyingKey</a>: u64 = 7;
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidVerifyingKey">EInvalidVerifyingKey</a>: u64 = 0;
 </code></pre>
 
 

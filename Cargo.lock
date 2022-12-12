@@ -4928,7 +4928,7 @@ dependencies = [
  "bs58",
  "byteorder",
  "data-encoding",
- "multihash",
+ "multihash 0.16.3",
  "percent-encoding",
  "serde 1.0.149",
  "static_assertions",
@@ -4938,15 +4938,15 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4aebdb21e90f81d13ed01dc84123320838e53963c2ca94b60b305d3fa64f31e"
+checksum = "3b53e0cc5907a5c216ba6584bf74be8ab47d6d6289f72793b2dddbf15dc3bf8c"
 dependencies = [
  "arrayref",
  "byteorder",
  "data-encoding",
  "multibase",
- "multihash",
+ "multihash 0.17.0",
  "percent-encoding",
  "serde 1.0.149",
  "static_assertions",
@@ -4970,6 +4970,17 @@ name = "multihash"
 version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c346cf9999c631f002d8f977c4eaeaa0e6386f16007202308d0b3757522c2cc"
+dependencies = [
+ "core2",
+ "multihash-derive",
+ "unsigned-varint",
+]
+
+[[package]]
+name = "multihash"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835d6ff01d610179fbce3de1694d007e500bf33a7f29689838941d6bf783ae40"
 dependencies = [
  "core2",
  "multihash-derive",
@@ -5040,12 +5051,12 @@ dependencies = [
  "eyre",
  "futures",
  "http",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "serde 1.0.149",
  "tokio",
  "tokio-stream",
  "tonic 0.8.3",
- "tonic-health 0.7.1",
+ "tonic-health 0.8.0",
  "tower",
  "tower-http",
  "tracing",
@@ -5108,7 +5119,7 @@ dependencies = [
  "fastcrypto",
  "insta",
  "match_opt",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "narwhal-crypto",
  "narwhal-test-utils",
  "rand 0.8.5",
@@ -5232,7 +5243,7 @@ dependencies = [
  "itertools",
  "match_opt",
  "mockall",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "narwhal-config",
  "narwhal-consensus",
@@ -5274,7 +5285,7 @@ dependencies = [
  "fail 0.5.1",
  "fastcrypto",
  "futures",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "narwhal-crypto",
  "narwhal-test-utils",
@@ -5308,7 +5319,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "itertools",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
@@ -5364,7 +5375,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "mockall",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
@@ -5436,7 +5447,7 @@ dependencies = [
  "futures",
  "indexmap",
  "itertools",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-network 0.2.0",
  "narwhal-config",
  "narwhal-crypto",
@@ -5524,7 +5535,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
@@ -6447,9 +6458,9 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "0.3.15"
+version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15eb2c6e362923af47e13c23ca5afb859e83d54452c55b0b9ac763b8f7c1ac16"
+checksum = "ac662b3a6490de378b0ee15cf2dfff7127aebfe0b19acc65e7fbca3d299c3788"
 
 [[package]]
 name = "pprof"
@@ -8331,7 +8342,7 @@ dependencies = [
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
  "move-unit-test",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-network 0.2.0",
  "narwhal-executor",
  "prometheus",
@@ -8418,7 +8429,7 @@ dependencies = [
  "hdrhistogram",
  "indicatif",
  "move-core-types",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "narwhal-node",
  "num_cpus",
  "prometheus",
@@ -8503,7 +8514,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-runtime",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "narwhal-config",
  "narwhal-crypto",
  "once_cell",
@@ -8541,7 +8552,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-runtime",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-config",
@@ -8775,6 +8786,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bcs",
  "fastcrypto",
  "futures",
  "hyper",
@@ -8804,6 +8816,7 @@ dependencies = [
  "sui-types",
  "tap",
  "test-utils",
+ "thiserror",
  "tokio",
  "tower",
  "tower-http",
@@ -8873,7 +8886,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-network 0.2.0",
  "prometheus",
  "rand 0.8.5",
@@ -8900,7 +8913,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "futures",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-network",
@@ -8929,6 +8942,7 @@ name = "sui-open-rpc"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap 3.2.23",
  "fastcrypto",
  "move-core-types",
@@ -8974,7 +8988,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.5.17",
- "axum-core 0.2.9",
+ "axum-core 0.3.0",
  "bcs",
  "clap 3.2.23",
  "fastcrypto",
@@ -9136,7 +9150,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
- "tonic-health 0.7.1",
+ "tonic-health 0.8.0",
  "tracing",
  "workspace-hack",
 ]
@@ -9184,7 +9198,7 @@ dependencies = [
  "eyre",
  "futures",
  "itertools",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-network 0.1.0",
  "rocksdb",
  "serde 1.0.149",
@@ -9560,7 +9574,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "move-core-types",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "mysten-network 0.2.0",
  "once_cell",
  "prometheus",
@@ -10000,9 +10014,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-health"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "632faf60b81a5b5f439d9635102b2b2921ee39171faf14f3e0008d99f98689f1"
+checksum = "a88aee666ef3a4d1ee46218bbc8e5f69bcf9cc27bf2e871d6b724d83f56d179f"
 dependencies = [
  "async-stream",
  "bytes",
@@ -11338,9 +11352,10 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "multiaddr 0.14.0",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "multibase",
- "multihash",
+ "multihash 0.16.3",
+ "multihash 0.17.0",
  "multihash-derive",
  "multimap",
  "mysten-network 0.1.0",
@@ -11645,7 +11660,7 @@ dependencies = [
  "tonic-build 0.7.2",
  "tonic-build 0.8.4",
  "tonic-health 0.6.0",
- "tonic-health 0.7.1",
+ "tonic-health 0.8.0",
  "toolchain_find",
  "tower",
  "tower-http",

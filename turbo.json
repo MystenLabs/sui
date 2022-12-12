@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["build/**", "dist/**", "storybook-static/**"]
+    }
+  },
+  "globalEnv": ["VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID"]
+}

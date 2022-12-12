@@ -121,7 +121,7 @@ fn compare_transaction_info_responses(
 
 async fn construct_shared_object_transaction_with_sequence_number(
     sequence_number: SequenceNumber,
-) -> (AuthorityState, VerifiedTransaction, ObjectID, ObjectID) {
+) -> (Arc<AuthorityState>, VerifiedTransaction, ObjectID, ObjectID) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -183,7 +183,10 @@ async fn test_dry_run_transaction() {
     let transaction_digest = *transaction.digest();
 
     let response = authority
-        .dry_exec_transaction(transaction.data().data.clone(), transaction_digest)
+        .dry_exec_transaction(
+            transaction.data().intent_message.value.clone(),
+            transaction_digest,
+        )
         .await;
     assert!(response.is_ok());
 
@@ -211,7 +214,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
-        Arc::new(init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await);
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -253,7 +256,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     bad_signature_transfer_transaction
         .data_mut_for_testing()
         .tx_signature =
-        Signature::new_temp(&transfer_transaction.data().data.to_bytes(), &unknown_key);
+        Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key);
 
     assert!(client
         .handle_transaction(bad_signature_transfer_transaction)
@@ -483,7 +486,10 @@ async fn test_handle_transfer_transaction_ok() {
         panic!("No verified envelope for transaction");
     };
 
-    assert_eq!(envelope.data().data, transfer_transaction.data().data);
+    assert_eq!(
+        envelope.data().intent_message.value,
+        transfer_transaction.data().intent_message.value
+    );
 }
 
 #[tokio::test]
@@ -613,7 +619,7 @@ pub async fn send_and_confirm_transaction_with_shared(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.handle_certificate(&certificate).await
+    authority.execute_certificate_internal(&certificate).await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -923,7 +929,7 @@ async fn test_handle_confirmation_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await
         .is_err());
 }
@@ -986,7 +992,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(response.signed_effects.is_none());
@@ -1030,7 +1036,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         &authority_state,
     );
     let response = authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await
         .unwrap();
     response.signed_effects.unwrap().into_data().status.unwrap();
@@ -1084,7 +1090,7 @@ async fn test_handle_confirmation_transaction_ok() {
         .unwrap();
 
     let info = authority_state
-        .handle_certificate(&certified_transfer_transaction.clone())
+        .execute_certificate_internal(&certified_transfer_transaction.clone())
         .await
         .unwrap();
     info.signed_effects.unwrap().into_data().status.unwrap();
@@ -1166,7 +1172,7 @@ impl<F: Future> Future for LimitedPoll<F> {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_handle_certificate_interrupted_retry() {
+async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     telemetry_subscribers::init_for_testing();
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -1210,6 +1216,8 @@ async fn test_handle_certificate_interrupted_retry() {
             .unwrap()
             .unwrap();
 
+        // The tested certificate must contain shared objects, background:
+        // https://github.com/MystenLabs/sui/pull/4579
         let shared_object_cert = make_test_transaction(
             &sender,
             &sender_key,
@@ -1221,13 +1229,15 @@ async fn test_handle_certificate_interrupted_retry() {
         )
         .await;
 
-        send_consensus(&authority_state, &shared_object_cert).await;
+        // Send the shared_object_cert to consensus without execution, because it is necessary
+        // to prepare the state for the explicit interrupted execution later.
+        send_consensus_no_execution(&authority_state, &shared_object_cert).await;
 
         let clone1 = shared_object_cert.clone();
         let state1 = authority_state.clone();
 
         let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
-            state1.handle_certificate(&clone1).await.unwrap();
+            state1.execute_certificate_internal(&clone1).await.unwrap();
         }));
 
         let res = limited_fut.await;
@@ -1249,7 +1259,7 @@ async fn test_handle_certificate_interrupted_retry() {
 
         // Now run the tx to completion
         let info = authority_state
-            .handle_certificate(&shared_object_cert)
+            .execute_certificate_internal(&shared_object_cert)
             .await
             .unwrap();
 
@@ -1289,13 +1299,13 @@ async fn test_handle_confirmation_transaction_idempotent() {
     );
 
     let info = authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(info.signed_effects.as_ref().unwrap().data().status.is_ok());
 
     let info2 = authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(info2.signed_effects.as_ref().unwrap().data().status.is_ok());
@@ -1434,7 +1444,7 @@ async fn test_move_call_insufficient_gas() {
         &authority_state,
     );
     let effects = authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await
         .unwrap()
         .signed_effects
@@ -1785,7 +1795,7 @@ async fn test_idempotent_reversed_confirmation() {
         &authority_state,
     );
     let result1 = authority_state
-        .handle_certificate(&certified_transfer_transaction)
+        .execute_certificate_internal(&certified_transfer_transaction)
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
@@ -1835,7 +1845,7 @@ async fn test_transfer_sui_no_amount() {
 
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .handle_certificate(&certificate)
+        .execute_certificate_internal(&certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().into_data();
@@ -1873,7 +1883,7 @@ async fn test_transfer_sui_with_amount() {
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .handle_certificate(&certificate)
+        .execute_certificate_internal(&certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().into_data();
@@ -1927,7 +1937,7 @@ async fn test_store_revert_transfer_sui() {
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
-        .handle_certificate(&certificate)
+        .execute_certificate_internal(&certificate)
         .await
         .unwrap();
 
@@ -1996,7 +2006,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrap_digest = *wrap_cert.digest();
 
     let wrap_effects = authority_state
-        .handle_certificate(&wrap_cert)
+        .execute_certificate_internal(&wrap_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2083,7 +2093,7 @@ async fn test_store_revert_unwrap_move_call() {
     let unwrap_digest = *unwrap_cert.digest();
 
     let unwrap_effects = authority_state
-        .handle_certificate(&unwrap_cert)
+        .execute_certificate_internal(&unwrap_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2169,7 +2179,7 @@ async fn test_store_revert_add_ofield() {
     let add_digest = *add_cert.digest();
 
     let add_effects = authority_state
-        .handle_certificate(&add_cert)
+        .execute_certificate_internal(&add_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2281,7 +2291,7 @@ async fn test_store_revert_remove_ofield() {
     let remove_ofield_digest = *remove_ofield_cert.digest();
 
     let remove_effects = authority_state
-        .handle_certificate(&remove_ofield_cert)
+        .execute_certificate_internal(&remove_ofield_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2322,14 +2332,14 @@ pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> 
 }
 
 #[cfg(test)]
-pub async fn init_state() -> AuthorityState {
+pub async fn init_state() -> Arc<AuthorityState> {
     init_state_with_committee(None).await
 }
 
 #[cfg(test)]
 pub async fn init_state_with_committee(
     committee: Option<(Committee, AuthorityKeyPair)>,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let (committee, authority_key): (_, AuthorityKeyPair) = match committee {
         Some(c) => c,
         None => {
@@ -2349,7 +2359,7 @@ pub async fn init_state_with_committee(
 #[cfg(test)]
 pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     objects: I,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
@@ -2363,7 +2373,7 @@ pub async fn init_state_with_ids_and_object_basics<
     I: IntoIterator<Item = (SuiAddress, ObjectID)>,
 >(
     objects: I,
-) -> (AuthorityState, ObjectRef) {
+) -> (Arc<AuthorityState>, ObjectRef) {
     use sui_framework_build::compiled_package::BuildConfig;
 
     let state = init_state().await;
@@ -2393,7 +2403,7 @@ pub async fn init_state_with_ids_and_versions<
     I: IntoIterator<Item = (SuiAddress, ObjectID, SequenceNumber)>,
 >(
     objects: I,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let state = init_state().await;
     for (address, object_id, version) in objects {
         let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
@@ -2402,14 +2412,16 @@ pub async fn init_state_with_ids_and_versions<
     state
 }
 
-pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
+    objects: I,
+) -> Arc<AuthorityState> {
     init_state_with_objects_and_committee(objects, None).await
 }
 
 pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
     objects: I,
     committee_and_keypair: Option<(Committee, AuthorityKeyPair)>,
-) -> AuthorityState {
+) -> Arc<AuthorityState> {
     let state = init_state_with_committee(committee_and_keypair).await;
     for o in objects {
         state.insert_genesis_object(o).await;
@@ -2418,20 +2430,11 @@ pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object
 }
 
 #[cfg(test)]
-pub async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
-    init_state_with_ids(std::iter::once((address, object))).await
-}
-
-#[cfg(test)]
-pub async fn update_state_with_object_id_and_version(
-    state: AuthorityState,
+pub async fn init_state_with_object_id(
     address: SuiAddress,
-    object_id: ObjectID,
-    version: SequenceNumber,
-) -> AuthorityState {
-    let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
-    state.insert_genesis_object(obj).await;
-    state
+    object: ObjectID,
+) -> Arc<AuthorityState> {
+    init_state_with_ids(std::iter::once((address, object))).await
 }
 
 #[cfg(test)]
@@ -2491,6 +2494,22 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
     if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
         authority
             .handle_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
+            .await
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
+async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {
+    let transaction = SequencedConsensusTransaction::new_test(
+        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
+    );
+
+    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+        // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+        // This allows testing cert execution independently.
+        authority
+            .process_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
             .await
             .unwrap();
     }
@@ -2683,7 +2702,7 @@ async fn make_test_transaction(
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn shared_object() {
+async fn test_shared_object_transaction() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -2716,10 +2735,10 @@ async fn shared_object() {
     .await;
     let transaction_digest = certificate.digest();
 
-    // Sending the certificate now fails since it was not sequenced.
-    let result = authority.handle_certificate(&certificate).await;
+    // Executing the certificate now fails since it was not sequenced.
+    let result = authority.execute_certificate_internal(&certificate).await;
     assert!(
-        matches!(result, Err(SuiError::SharedObjectLockNotSetError)),
+        matches!(result, Err(SuiError::TransactionInputObjectsErrors { .. })),
         "{:#?}",
         result
     );
@@ -2727,6 +2746,7 @@ async fn shared_object() {
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;
 
+    // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
         .db()
         .epoch_store()
@@ -2743,10 +2763,19 @@ async fn shared_object() {
         .expect("Shared object must be locked");
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
-    // Finally process the certificate and execute the contract. Ensure that the
-    // shared object sequence number increased.
-    authority.handle_certificate(&certificate).await.unwrap();
+    // Finally (Re-)execute the contract should succeed.
+    authority
+        .execute_certificate_internal(&certificate)
+        .await
+        .unwrap();
 
+    // Ensure transaction effects are available.
+    authority
+        .notify_read_transaction_info(&certificate)
+        .await
+        .unwrap();
+
+    // Ensure shared object sequence number increased.
     let shared_object_version = authority
         .get_object(&shared_object_id)
         .await
@@ -2803,7 +2832,7 @@ async fn test_consensus_message_processed() {
         if let TransactionInfoResponse {
             signed_effects: Some(effects),
             ..
-        } = authority.handle_certificate(cert).await.unwrap()
+        } = authority.execute_certificate_internal(cert).await.unwrap()
         {
             effects
         } else {
@@ -2841,7 +2870,7 @@ async fn test_consensus_message_processed() {
             handle_cert(&authority2, &certificate).await
         } else {
             authority2
-                .handle_certificate_with_effects(&certificate, &effects1)
+                .execute_certificate_with_effects(&certificate, &effects1)
                 .await
                 .unwrap();
             authority2

@@ -126,7 +126,7 @@ async fn test_start_epoch_change() {
             .verify(&genesis_committee)
             .unwrap();
     assert_eq!(
-        state.handle_certificate(&certificate).await.unwrap_err(),
+        state.execute_certificate_internal(&certificate).await.unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
     );
 

@@ -46,7 +46,7 @@
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
             "@mysten/bcs": ["../../sdk/bcs/src/"],
             "@mysten/wallet-standard": [
-                "../../sdk/wallet-adapter/packages/wallet-standard/src/"
+                "../../sdk/wallet-adapter/wallet-standard/src/"
             ]
         }
     },
