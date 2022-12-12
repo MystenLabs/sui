@@ -6,7 +6,7 @@ use crate::authority_client::{
     make_authority_clients, make_network_authority_client_sets_from_committee,
     make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
 };
-use crate::safe_client::{SafeClient, SafeClientMetrics};
+use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use crate::validator_info::make_committee;
 
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -244,9 +244,9 @@ pub struct AuthorityAggregator<A> {
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     /// Metrics
     pub metrics: AuthAggMetrics,
+    /// Metric base for the purpose of creating new safe clients during reconfiguration.
+    pub safe_client_metrics_base: Arc<SafeClientMetricsBase>,
     pub timeouts: TimeoutConfig,
-    /// Store here for clone during re-config
-    pub safe_client_metrics: Arc<SafeClientMetrics>,
     /// Store here for clone during re-config.
     pub committee_store: Arc<CommitteeStore>,
 }
@@ -256,15 +256,13 @@ impl<A> AuthorityAggregator<A> {
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: AuthAggMetrics,
-        safe_client_metrics: Arc<SafeClientMetrics>,
+        registry: &Registry,
     ) -> Self {
         Self::new_with_timeouts(
             committee,
             committee_store,
             authority_clients,
-            metrics,
-            safe_client_metrics,
+            registry,
             Default::default(),
         )
     }
@@ -273,10 +271,10 @@ impl<A> AuthorityAggregator<A> {
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: AuthAggMetrics,
-        safe_client_metrics: Arc<SafeClientMetrics>,
+        registry: &Registry,
         timeouts: TimeoutConfig,
     ) -> Self {
+        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         Self {
             committee,
             authority_clients: authority_clients
@@ -288,14 +286,14 @@ impl<A> AuthorityAggregator<A> {
                             api,
                             committee_store.clone(),
                             name,
-                            safe_client_metrics.clone(),
+                            SafeClientMetrics::new(&safe_client_metrics_base, name),
                         ),
                     )
                 })
                 .collect(),
-            metrics,
+            metrics: AuthAggMetrics::new(registry),
+            safe_client_metrics_base: Arc::new(safe_client_metrics_base),
             timeouts,
-            safe_client_metrics,
             committee_store,
         }
     }
@@ -327,7 +325,7 @@ impl<A> AuthorityAggregator<A> {
                         api,
                         self.committee_store.clone(),
                         name,
-                        self.safe_client_metrics.clone(),
+                        SafeClientMetrics::new(&self.safe_client_metrics_base, name),
                     ),
                 )
             })
@@ -356,7 +354,7 @@ impl<A> AuthorityAggregator<A> {
             authority_clients: safe_clients,
             metrics: self.metrics.clone(),
             timeouts: self.timeouts.clone(),
-            safe_client_metrics: self.safe_client_metrics.clone(),
+            safe_client_metrics_base: self.safe_client_metrics_base.clone(),
             committee_store: self.committee_store.clone(),
         })
     }
@@ -401,8 +399,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             sui_system_state.get_current_epoch_committee().committee,
             committee_store.clone(),
             authority_clients,
-            AuthAggMetrics::new(prometheus_registry),
-            Arc::new(SafeClientMetrics::new(prometheus_registry)),
+            prometheus_registry,
         ))
     }
 }
@@ -1894,13 +1891,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             Arc::new(CommitteeStore::new_for_testing(&committee))
         };
         Ok((
-            AuthorityAggregator::new(
-                committee,
-                committee_store,
-                auth_clients.clone(),
-                AuthAggMetrics::new(&registry),
-                Arc::new(SafeClientMetrics::new(&registry)),
-            ),
+            AuthorityAggregator::new(committee, committee_store, auth_clients.clone(), &registry),
             auth_clients,
         ))
     }

@@ -252,9 +252,6 @@ where
         ?max_stream_items,
         "requesting new batch stream items"
     );
-    client
-        .metrics_seq_number_to_handle_batch_stream
-        .set(start_seq as i64);
 
     let req = BatchInfoRequest {
         start: Some(start_seq),
