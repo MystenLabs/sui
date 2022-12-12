@@ -281,7 +281,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let object_id = object_refs.first().unwrap().object_id;
 
     SuiClientCommands::Object {
-        id: object_id.clone(),
+        id: object_id,
         bcs: false,
     }
     .execute(context)
@@ -289,7 +289,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     .print(true);
 
     SuiClientCommands::Object {
-        id: object_id.clone(),
+        id: object_id,
         bcs: true,
     }
     .execute(context)
