@@ -35,7 +35,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `burn_`](#0x2_coin_burn_)
--  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
 -  [Function `update_description`](#0x2_coin_update_description)
 -  [Function `update_icon_url`](#0x2_coin_update_icon_url)
@@ -517,6 +516,22 @@ Aborts if <code>value &gt; <a href="balance.md#0x2_balance">balance</a>.value</c
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_val = <a href="balance.md#0x2_balance">balance</a>.value;
+<b>let</b> <b>post</b> after_val = <a href="balance.md#0x2_balance">balance</a>.value;
+<b>ensures</b> after_val == before_val - value;
+<b>aborts_if</b> value &gt; before_val;
+<b>aborts_if</b> ctx.ids_created + 1 &gt; MAX_U64;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_put"></a>
 
 ## Function `put`
@@ -536,6 +551,21 @@ Put a <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code> to the <cod
 <pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_put">put</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
     <a href="balance.md#0x2_balance_join">balance::join</a>(<a href="balance.md#0x2_balance">balance</a>, <a href="coin.md#0x2_coin_into_balance">into_balance</a>(<a href="coin.md#0x2_coin">coin</a>));
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_val = <a href="balance.md#0x2_balance">balance</a>.value;
+<b>let</b> <b>post</b> after_val = <a href="balance.md#0x2_balance">balance</a>.value;
+<b>ensures</b> after_val == before_val + <a href="coin.md#0x2_coin">coin</a>.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>aborts_if</b> before_val + <a href="coin.md#0x2_coin">coin</a>.<a href="balance.md#0x2_balance">balance</a>.value &gt; MAX_U64;
 </code></pre>
 
 
@@ -570,6 +600,21 @@ Aborts if <code>c.value + self.value &gt; U64_MAX</code>
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_val = self.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>let</b> <b>post</b> after_val = self.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>ensures</b> after_val == before_val + c.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>aborts_if</b> before_val + c.<a href="balance.md#0x2_balance">balance</a>.value &gt; MAX_U64;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_split"></a>
 
 ## Function `split`
@@ -592,6 +637,22 @@ and the remaining balance is left is <code>self</code>.
 ): <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="coin.md#0x2_coin_take">take</a>(&<b>mut</b> self.<a href="balance.md#0x2_balance">balance</a>, split_amount, ctx)
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_val = self.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>let</b> <b>post</b> after_val = self.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>ensures</b> after_val == before_val - split_amount;
+<b>aborts_if</b> split_amount &gt; before_val;
+<b>aborts_if</b> ctx.ids_created + 1 &gt; MAX_U64;
 </code></pre>
 
 
@@ -776,6 +837,22 @@ in <code>cap</code> accordingly.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_supply = cap.total_supply.value;
+<b>let</b> <b>post</b> after_supply = cap.total_supply.value;
+<b>ensures</b> after_supply == before_supply + value;
+<b>aborts_if</b> before_supply + value &gt; MAX_U64;
+<b>aborts_if</b> ctx.ids_created + 1 &gt; MAX_U64;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_mint_balance"></a>
 
 ## Function `mint_balance`
@@ -805,6 +882,21 @@ Aborts if <code>value</code> + <code>cap.total_supply</code> >= U64_MAX
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_supply = cap.total_supply.value;
+<b>let</b> <b>post</b> after_supply = cap.total_supply.value;
+<b>ensures</b> after_supply == before_supply + value;
+<b>aborts_if</b> before_supply + value &gt; MAX_U64;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_burn"></a>
 
 ## Function `burn`
@@ -827,6 +919,21 @@ accordingly.
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> cap.total_supply, <a href="balance.md#0x2_balance">balance</a>)
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_supply = cap.total_supply.value;
+<b>let</b> <b>post</b> after_supply = cap.total_supply.value;
+<b>ensures</b> after_supply == before_supply - c.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>aborts_if</b> before_supply &lt; c.<a href="balance.md#0x2_balance">balance</a>.value;
 </code></pre>
 
 
@@ -885,27 +992,15 @@ Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin
 
 </details>
 
-<a name="0x2_coin_update_name"></a>
-
-## Function `update_name`
-
-Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
-</code></pre>
-
-
-
 <details>
-<summary>Implementation</summary>
+<summary>Specification</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(
-    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>
-) {
-    metadata.name = name;
-}
+
+<pre><code><b>let</b> before_supply = c.total_supply.value;
+<b>let</b> <b>post</b> after_supply = c.total_supply.value;
+<b>ensures</b> after_supply == before_supply - <a href="coin.md#0x2_coin">coin</a>.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>aborts_if</b> before_supply &lt; <a href="coin.md#0x2_coin">coin</a>.<a href="balance.md#0x2_balance">balance</a>.value;
 </code></pre>
 
 
