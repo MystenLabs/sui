@@ -8,16 +8,13 @@ use multiaddr::Multiaddr;
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_network::default_mysten_network_config;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use sui_types::message_envelope::Message;
 use tokio::time::Instant;
 
-use sui_core::authority_client::{
-    AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
-};
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
 
 use anyhow::anyhow;
@@ -32,7 +29,7 @@ use sui_types::object::ObjectFormatOptions;
 
 #[derive(Parser, Clone, ArgEnum)]
 pub enum Verbosity {
-    Groupped,
+    Grouped,
     Concise,
     Verbose,
 }
@@ -78,7 +75,7 @@ pub enum ToolCommand {
         #[clap(
             arg_enum,
             long = "verbosity",
-            default_value = "groupped",
+            default_value = "grouped",
             ignore_case = true
         )]
         verbosity: Verbosity,
@@ -174,10 +171,7 @@ fn make_clients(
         let channel = net_config
             .connect_lazy(validator.network_address())
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(
-            channel,
-            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-        );
+        let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes = validator.protocol_key();
         authority_clients.insert(public_key_bytes, (validator, client));
     }
@@ -244,10 +238,10 @@ impl std::fmt::Display for OwnerOutput {
     }
 }
 
-struct GrouppedObjectOutput(ObjectData);
+struct GroupedObjectOutput(ObjectData);
 
 #[allow(clippy::format_in_format_args)]
-impl std::fmt::Display for GrouppedObjectOutput {
+impl std::fmt::Display for GroupedObjectOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let responses = self
             .0
@@ -602,8 +596,8 @@ impl ToolCommand {
                     responses,
                 };
                 match verbosity {
-                    Verbosity::Groupped => {
-                        println!("{}", GrouppedObjectOutput(output));
+                    Verbosity::Grouped => {
+                        println!("{}", GroupedObjectOutput(output));
                     }
                     Verbosity::Verbose => {
                         println!("{}", VerboseObjectOutput(output));

@@ -5,7 +5,6 @@
 use crate::authority_client::{
     make_authority_clients, make_network_authority_client_sets_from_committee,
     make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
-    NetworkAuthorityClientMetrics,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics};
 use crate::validator_info::make_committee;
@@ -249,9 +248,6 @@ pub struct AuthorityAggregator<A> {
     /// Store here for clone during re-config
     pub safe_client_metrics: Arc<SafeClientMetrics>,
     /// Store here for clone during re-config.
-    /// Only relevant for NetworkAuthorityClient.
-    pub network_client_metrics: Arc<NetworkAuthorityClientMetrics>,
-    /// Store here for clone during re-config.
     pub committee_store: Arc<CommitteeStore>,
 }
 
@@ -262,7 +258,6 @@ impl<A> AuthorityAggregator<A> {
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
         safe_client_metrics: Arc<SafeClientMetrics>,
-        network_client_metrics: Arc<NetworkAuthorityClientMetrics>,
     ) -> Self {
         Self::new_with_timeouts(
             committee,
@@ -270,7 +265,6 @@ impl<A> AuthorityAggregator<A> {
             authority_clients,
             metrics,
             safe_client_metrics,
-            network_client_metrics,
             Default::default(),
         )
     }
@@ -281,7 +275,6 @@ impl<A> AuthorityAggregator<A> {
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
         safe_client_metrics: Arc<SafeClientMetrics>,
-        network_client_metrics: Arc<NetworkAuthorityClientMetrics>,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
@@ -303,7 +296,6 @@ impl<A> AuthorityAggregator<A> {
             metrics,
             timeouts,
             safe_client_metrics,
-            network_client_metrics,
             committee_store,
         }
     }
@@ -319,14 +311,12 @@ impl<A> AuthorityAggregator<A> {
         committee: CommitteeWithNetAddresses,
         network_config: &Config,
     ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
-        let network_clients = make_network_authority_client_sets_from_committee(
-            &committee,
-            network_config,
-            self.network_client_metrics.clone(),
-        )
-        .map_err(|err| SuiError::GenericAuthorityError {
-            error: format!("Failed to make authority clients from committee: {:?}", err),
-        })?;
+        let network_clients =
+            make_network_authority_client_sets_from_committee(&committee, network_config).map_err(
+                |err| SuiError::GenericAuthorityError {
+                    error: format!("Failed to make authority clients from committee: {:?}", err),
+                },
+            )?;
 
         let safe_clients = network_clients
             .into_iter()
@@ -367,7 +357,6 @@ impl<A> AuthorityAggregator<A> {
             metrics: self.metrics.clone(),
             timeouts: self.timeouts.clone(),
             safe_client_metrics: self.safe_client_metrics.clone(),
-            network_client_metrics: self.network_client_metrics.clone(),
             committee_store: self.committee_store.clone(),
         })
     }
@@ -406,19 +395,14 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         let net_config = default_mysten_network_config();
         let sui_system_state = store.get_sui_system_state_object()?;
 
-        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(prometheus_registry));
-        let authority_clients = make_network_authority_client_sets_from_system_state(
-            &sui_system_state,
-            &net_config,
-            network_metrics.clone(),
-        )?;
+        let authority_clients =
+            make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)?;
         Ok(Self::new(
             sui_system_state.get_current_epoch_committee().committee,
             committee_store.clone(),
             authority_clients,
             AuthAggMetrics::new(prometheus_registry),
             Arc::new(SafeClientMetrics::new(prometheus_registry)),
-            network_metrics,
         ))
     }
 }
@@ -1898,13 +1882,11 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         let registry = self
             .registry
             .unwrap_or_else(|| Arc::new(prometheus::Registry::new()));
-        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&registry));
 
         let auth_clients = make_authority_clients(
             validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
-            network_metrics.clone(),
         );
         let committee_store = if let Some(committee_store) = self.committee_store {
             committee_store
@@ -1918,7 +1900,6 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
                 auth_clients.clone(),
                 AuthAggMetrics::new(&registry),
                 Arc::new(SafeClientMetrics::new(&registry)),
-                network_metrics,
             ),
             auth_clients,
         ))

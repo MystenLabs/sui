@@ -10,7 +10,6 @@ use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::config::Config;
-use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,7 +26,6 @@ use sui_types::{error::SuiError, messages::*};
 #[cfg(test)]
 use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
 
-use crate::epoch::reconfiguration::Reconfigurable;
 use sui_network::tonic::transport::Channel;
 
 #[async_trait]
@@ -83,49 +81,30 @@ pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoRespon
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
     client: ValidatorClient<Channel>,
-    metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
 impl NetworkAuthorityClient {
-    pub async fn connect(
-        address: &Multiaddr,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> anyhow::Result<Self> {
+    pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
         let channel = mysten_network::client::connect(address)
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
-        Ok(Self::new(channel, metrics))
+        Ok(Self::new(channel))
     }
 
-    pub fn connect_lazy(
-        address: &Multiaddr,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> anyhow::Result<Self> {
+    pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
         let channel = mysten_network::client::connect_lazy(address)
             .map_err(|err| anyhow!(err.to_string()))?;
-        Ok(Self::new(channel, metrics))
+        Ok(Self::new(channel))
     }
 
-    pub fn new(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
+    pub fn new(channel: Channel) -> Self {
         Self {
             client: ValidatorClient::new(channel),
-            metrics,
         }
     }
 
     fn client(&self) -> ValidatorClient<Channel> {
         self.client.clone()
-    }
-}
-
-#[async_trait]
-impl Reconfigurable for NetworkAuthorityClient {
-    fn needs_network_recreation() -> bool {
-        true
-    }
-
-    fn recreate(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
-        NetworkAuthorityClient::new(channel, metrics)
     }
 }
 
@@ -136,11 +115,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let _timer = self
-            .metrics
-            .handle_transaction_request_latency
-            .start_timer();
-
         self.client()
             .transaction(transaction)
             .await
@@ -153,11 +127,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let _timer = self
-            .metrics
-            .handle_certificate_request_latency
-            .start_timer();
-
         self.client()
             .handle_certificate(certificate)
             .await
@@ -169,11 +138,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
-        let _timer = self
-            .metrics
-            .handle_account_info_request_latency
-            .start_timer();
-
         self.client()
             .account_info(request)
             .await
@@ -185,11 +149,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        let _timer = self
-            .metrics
-            .handle_object_info_request_latency
-            .start_timer();
-
         self.client()
             .object_info(request)
             .await
@@ -202,11 +161,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let _timer = self
-            .metrics
-            .handle_transaction_info_request_latency
-            .start_timer();
-
         self.client()
             .transaction_info(request)
             .await
@@ -234,8 +188,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        let _timer = self.metrics.handle_checkpoint_request_latency.start_timer();
-
         self.client()
             .checkpoint(request)
             .await
@@ -247,11 +199,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError> {
-        let _timer = self
-            .metrics
-            .handle_committee_info_request_latency
-            .start_timer();
-
         self.client()
             .committee_info(request)
             .await
@@ -263,7 +210,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
 pub fn make_network_authority_client_sets_from_system_state(
     sui_system_state: &SuiSystemState,
     network_config: &Config,
-    network_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in &sui_system_state.validators.active_validators {
@@ -271,7 +217,7 @@ pub fn make_network_authority_client_sets_from_system_state(
         let channel = network_config
             .connect_lazy(&address)
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
+        let client = NetworkAuthorityClient::new(channel);
         let name: &[u8] = &validator.metadata.pubkey_bytes;
         let public_key_bytes = AuthorityName::from_bytes(name)?;
         authority_clients.insert(public_key_bytes, client);
@@ -282,7 +228,6 @@ pub fn make_network_authority_client_sets_from_system_state(
 pub fn make_network_authority_client_sets_from_committee(
     committee: &CommitteeWithNetAddresses,
     network_config: &Config,
-    network_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for (name, _stakes) in &committee.committee.voting_rights {
@@ -293,7 +238,7 @@ pub fn make_network_authority_client_sets_from_committee(
         let channel = network_config
             .connect_lazy(&address)
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
+        let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(*name, client);
     }
     Ok(authority_clients)
@@ -302,14 +247,13 @@ pub fn make_network_authority_client_sets_from_committee(
 pub fn make_network_authority_client_sets_from_genesis(
     genesis: &Genesis,
     network_config: &Config,
-    network_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in genesis.validator_set() {
         let channel = network_config
             .connect_lazy(validator.network_address())
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
+        let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(validator.protocol_key(), client);
     }
     Ok(authority_clients)
@@ -319,7 +263,6 @@ pub fn make_authority_clients(
     validator_set: &[ValidatorInfo],
     connect_timeout: Duration,
     request_timeout: Duration,
-    net_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
     let mut network_config = mysten_network::config::Config::new();
@@ -329,7 +272,7 @@ pub fn make_authority_clients(
         let channel = network_config
             .connect_lazy(authority.network_address())
             .unwrap();
-        let client = NetworkAuthorityClient::new(channel, net_metrics.clone());
+        let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(authority.protocol_key(), client);
     }
     authority_clients
@@ -353,16 +296,6 @@ impl LocalAuthorityClientFaultConfig {
 pub struct LocalAuthorityClient {
     pub state: Arc<AuthorityState>,
     pub fault_config: LocalAuthorityClientFaultConfig,
-}
-
-impl Reconfigurable for LocalAuthorityClient {
-    fn needs_network_recreation() -> bool {
-        false
-    }
-
-    fn recreate(_channel: Channel, _metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
-        unreachable!(); // this function should not get called because the above function returns false
-    }
 }
 
 #[async_trait]
@@ -519,81 +452,5 @@ impl LocalAuthorityClient {
             });
         }
         Ok(response.into())
-    }
-}
-
-#[derive(Clone)]
-pub struct NetworkAuthorityClientMetrics {
-    pub handle_transaction_request_latency: Histogram,
-    pub handle_certificate_request_latency: Histogram,
-    pub handle_account_info_request_latency: Histogram,
-    pub handle_object_info_request_latency: Histogram,
-    pub handle_transaction_info_request_latency: Histogram,
-    pub handle_checkpoint_request_latency: Histogram,
-    pub handle_committee_info_request_latency: Histogram,
-}
-
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
-];
-
-impl NetworkAuthorityClientMetrics {
-    pub fn new(registry: &prometheus::Registry) -> Self {
-        Self {
-            handle_transaction_request_latency: register_histogram_with_registry!(
-                "handle_transaction_request_latency",
-                "Latency of handle transaction request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            handle_certificate_request_latency: register_histogram_with_registry!(
-                "handle_certificate_request_latency",
-                "Latency of handle certificate request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            handle_account_info_request_latency: register_histogram_with_registry!(
-                "handle_account_info_request_latency",
-                "Latency of handle account info request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            handle_object_info_request_latency: register_histogram_with_registry!(
-                "handle_object_info_request_latency",
-                "Latency of handle object info request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            handle_transaction_info_request_latency: register_histogram_with_registry!(
-                "handle_transaction_info_request_latency",
-                "Latency of handle transaction info request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            handle_checkpoint_request_latency: register_histogram_with_registry!(
-                "handle_checkpoint_request_latency",
-                "Latency of handle checkpoint request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-            handle_committee_info_request_latency: register_histogram_with_registry!(
-                "handle_committee_info_request_latency",
-                "Latency of handle committee info request",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry
-            )
-            .unwrap(),
-        }
-    }
-
-    pub fn new_for_tests() -> Self {
-        let registry = prometheus::Registry::new();
-        Self::new(&registry)
     }
 }

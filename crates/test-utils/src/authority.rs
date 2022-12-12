@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::TEST_COMMITTEE_SIZE;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
-use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
+use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use sui_types::object::Object;
 
 pub use sui_node::{SuiNode, SuiNodeHandle};
@@ -104,11 +104,7 @@ where
 
 /// Get a network client to communicate with the consensus.
 pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
-    NetworkAuthorityClient::connect_lazy(
-        config.network_address(),
-        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-    )
-    .unwrap()
+    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
 }
 
 pub async fn get_object(config: &ValidatorInfo, object_id: ObjectID) -> Object {
