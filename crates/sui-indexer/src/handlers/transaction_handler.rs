@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::{SuiTransactionResponse, TransactionsPage};
 use sui_sdk::SuiClient;
@@ -11,10 +12,10 @@ use tokio::time::sleep;
 use tracing::info;
 
 use sui_indexer::errors::IndexerError;
-use sui_indexer::establish_connection;
 use sui_indexer::models::transaction_logs::{commit_transction_log, read_transaction_log};
 use sui_indexer::models::transactions::commit_transactions;
 use sui_indexer::utils::log_errors_to_pg;
+use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
 
 use fastcrypto::encoding::{Base64, Encoding};
 
@@ -22,19 +23,23 @@ const TRANSACTION_PAGE_SIZE: usize = 100;
 
 pub struct TransactionHandler {
     rpc_client: SuiClient,
-    db_url: String,
+    pg_connection_pool: Arc<PgConnectionPool>,
 }
 
 impl TransactionHandler {
-    pub fn new(rpc_client: SuiClient, db_url: String) -> Self {
-        Self { rpc_client, db_url }
+    pub fn new(rpc_client: SuiClient, pg_connection_pool: Arc<PgConnectionPool>) -> Self {
+        Self {
+            rpc_client,
+            pg_connection_pool,
+        }
     }
 
     pub async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer transaction handler started...");
-        let mut pg_conn = establish_connection(self.db_url.clone());
+        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
+
         let mut next_cursor = None;
-        let txn_log = read_transaction_log(&mut pg_conn)?;
+        let txn_log = read_transaction_log(&mut pg_pool_conn)?;
         if let Some(txn_digest) = txn_log.next_cursor_tx_digest {
             let bytes = Base64::decode(txn_digest.as_str()).map_err(|e| {
                 IndexerError::TransactionDigestParsingError(format!(
@@ -68,10 +73,10 @@ impl TransactionHandler {
                 .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
                 .collect();
 
-            log_errors_to_pg(&mut pg_conn, errors);
-            commit_transactions(&mut pg_conn, resp_vec)?;
+            log_errors_to_pg(&mut pg_pool_conn, errors);
+            commit_transactions(&mut pg_pool_conn, resp_vec)?;
             // canonical txn digest is Base64 encoded
-            commit_transction_log(&mut pg_conn, page.next_cursor.map(|d| d.encode()))?;
+            commit_transction_log(&mut pg_pool_conn, page.next_cursor.map(|d| d.encode()))?;
             next_cursor = page.next_cursor;
             if txn_count < TRANSACTION_PAGE_SIZE {
                 sleep(Duration::from_secs_f32(0.1)).await;

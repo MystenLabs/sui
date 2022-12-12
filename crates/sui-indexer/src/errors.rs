@@ -5,44 +5,56 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum IndexerError {
-    #[error("Indexer cannot read fullnode with error: `{0}`")]
-    FullNodeReadingError(String),
-
-    #[error("Indexer cannot read PostgresDB with error: `{0}`")]
-    PostgresReadError(String),
-
-    #[error("Indexer failed commiting changes to PostgresDB with error: `{0}`")]
-    PostgresWriteError(String),
-
-    #[error("Indexer failed converting to diesel Insertable with error: `{0}`")]
-    InsertableParsingError(String),
-
     #[error("Indexer failed to convert timestamp to NaiveDateTime with error: `{0}`")]
     DateTimeParsingError(String),
 
-    #[error("Indexer failed to parse transaction digest read from DB: `{0}`")]
-    TransactionDigestParsingError(String),
+    #[error("Indexer failed to deserialize event from events table with error: `{0}`")]
+    EventDeserializationError(String),
+
+    #[error("Indexer failed to read fullnode with error: `{0}`")]
+    FullNodeReadingError(String),
+
+    #[error("Indexer failed to convert structs to diesel Insertable with error: `{0}`")]
+    InsertableParsingError(String),
 
     #[error("Indexer failed to find object mutations, which should never happen.")]
     ObjectMutationNotAvailable,
 
-    #[error("Indexer failed to deserialize event from events table: `{0}`")]
-    EventDeserializationError(String),
+    #[error("Indexer failed to build PG connection pool with error: `{0}`")]
+    PgConnectionPoolInitError(String),
+
+    #[error("Indexer failed to get a pool connection from PG connection pool with error: `{0}`")]
+    PgPoolConnectionError(String),
+
+    #[error("Indexer failed to read PostgresDB with error: `{0}`")]
+    PostgresReadError(String),
+
+    #[error("Indexer failed to commit changes to PostgresDB with error: `{0}`")]
+    PostgresWriteError(String),
+
+    #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
+    RpcClientInitError(String),
+
+    #[error("Indexer failed to parse transaction digest read from DB with error: `{0}`")]
+    TransactionDigestParsingError(String),
 }
 
 impl IndexerError {
     pub fn name(&self) -> String {
         match self {
-            IndexerError::FullNodeReadingError(_) => "FullNodeReadingError".to_string(),
-            IndexerError::PostgresReadError(_) => "PostgresReadError".to_string(),
-            IndexerError::PostgresWriteError(_) => "PostgresWriteError".to_string(),
-            IndexerError::InsertableParsingError(_) => "InsertableParsingError".to_string(),
-            IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".to_string(),
+            IndexerError::FullNodeReadingError(_) => "FullNodeReadingError".into(),
+            IndexerError::PostgresReadError(_) => "PostgresReadError".into(),
+            IndexerError::PostgresWriteError(_) => "PostgresWriteError".into(),
+            IndexerError::InsertableParsingError(_) => "InsertableParsingError".into(),
+            IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".into(),
             IndexerError::TransactionDigestParsingError(_) => {
-                "TransactionDigestParsingError".to_string()
+                "TransactionDigestParsingError".into()
             }
-            IndexerError::ObjectMutationNotAvailable => "ObjectMutationNotAvailable".to_string(),
-            IndexerError::EventDeserializationError(_) => "EventDeserializationError".to_string(),
+            IndexerError::ObjectMutationNotAvailable => "ObjectMutationNotAvailable".into(),
+            IndexerError::EventDeserializationError(_) => "EventDeserializationError".into(),
+            IndexerError::PgConnectionPoolInitError(_) => "PgConnectionPoolInitError".into(),
+            IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
+            IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
         }
     }
 }

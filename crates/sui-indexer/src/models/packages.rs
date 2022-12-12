@@ -8,9 +8,11 @@ use crate::schema::packages::dsl::{
     package_content as package_content_column, package_id as package_id_column,
 };
 use crate::utils::log_errors_to_pg;
+use crate::PgPoolConnection;
 
 use diesel::pg::upsert::excluded;
 use diesel::prelude::*;
+use diesel::result::Error;
 use futures::future::join_all;
 use sui_json_rpc_types::SuiEvent;
 use sui_sdk::SuiClient;
@@ -36,7 +38,7 @@ pub struct NewPackage {
 
 pub async fn commit_packages_from_events(
     rpc_client: SuiClient,
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     events: Vec<SuiEvent>,
 ) -> Result<usize, IndexerError> {
     let sender_pkg_pair_iter = events.into_iter().filter_map(|event| match event {
@@ -54,33 +56,41 @@ pub async fn commit_packages_from_events(
         .into_iter()
         .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
         .collect();
-    log_errors_to_pg(conn, errors);
-    commit_new_packages(conn, new_pkgs)
+
+    log_errors_to_pg(pg_pool_conn, errors);
+    commit_new_packages(pg_pool_conn, new_pkgs)
 }
 
 fn commit_new_packages(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     new_pkgs: Vec<NewPackage>,
 ) -> Result<usize, IndexerError> {
     if new_pkgs.is_empty() {
         return Ok(0);
     }
-    diesel::insert_into(packages::table)
-        .values(&new_pkgs)
-        .on_conflict(package_id_column)
-        .do_update()
-        .set((
-            author_column.eq(excluded(author_column)),
-            module_names_column.eq(excluded(module_names_column)),
-            package_content_column.eq(excluded(package_content_column)),
-        ))
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing or updating packages {:?} with error: {:?}",
-                new_pkgs, e
+
+    let pkg_commit_result: Result<usize, Error> = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+        diesel::insert_into(packages::table)
+            .values(&new_pkgs)
+            .on_conflict(package_id_column)
+            .do_update()
+            .set((
+                author_column.eq(excluded(author_column)),
+                module_names_column.eq(excluded(module_names_column)),
+                package_content_column.eq(excluded(package_content_column)),
             ))
-        })
+            .execute(conn)
+    });
+
+    pkg_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed writing or updating packages {:?} with error: {:?}",
+            new_pkgs, e
+        ))
+    })
 }
 
 async fn generate_new_package(

@@ -3,9 +3,11 @@
 
 use crate::errors::IndexerError;
 use crate::schema::error_logs;
+use crate::PgPoolConnection;
 
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::Error;
 
 // NOTE: this is for the errors table in PG
 #[derive(Queryable, Debug)]
@@ -33,16 +35,21 @@ pub fn err_to_error_log(error: IndexerError) -> NewErrorLog {
 }
 
 pub fn commit_error_logs(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     new_error_logs: Vec<NewErrorLog>,
-) -> Result<ErrorLog, IndexerError> {
-    diesel::insert_into(error_logs::table)
-        .values(&new_error_logs)
-        .get_result(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing error logs to PostgresDB with error logs  {:?} and error: {:?}",
-                new_error_logs, e
-            ))
-        })
+) -> Result<usize, IndexerError> {
+    let error_commit_result: Result<usize, Error> = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+        diesel::insert_into(error_logs::table)
+            .values(&new_error_logs)
+            .execute(conn)
+    });
+    error_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed writing error logs to PostgresDB with error logs  {:?} and error: {:?}",
+            new_error_logs, e
+        ))
+    })
 }

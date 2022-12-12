@@ -162,7 +162,7 @@ der-parser = { version = "8", features = ["bigint", "num-bigint", "std"] }
 derive_builder = { version = "0.12", features = ["std"] }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
-diesel = { version = "2", features = ["32-column-tables", "bitflags", "byteorder", "chrono", "itoa", "postgres", "postgres_backend", "pq-sys", "serde_json", "with-deprecated"] }
+diesel = { version = "2", features = ["32-column-tables", "bitflags", "byteorder", "chrono", "itoa", "postgres", "postgres_backend", "pq-sys", "r2d2", "serde_json", "with-deprecated"] }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -445,6 +445,7 @@ quinn = { version = "0.9", default-features = false, features = ["futures-io", "
 quinn-proto = { version = "0.9", default-features = false, features = ["ring", "rustls", "tls-rustls", "webpki"] }
 quinn-udp = { version = "0.3", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
+r2d2 = { version = "0.8", default-features = false }
 radium-d8f496e17d97b5cb = { package = "radium", version = "0.5", default-features = false }
 radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
@@ -487,6 +488,7 @@ rusty-fork = { version = "0.3", default-features = false, features = ["timeout",
 rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
+scheduled-thread-pool = { version = "0.2", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 scopeguard = { version = "1", features = ["use_std"] }
 sct = { version = "0.7", default-features = false }
@@ -825,7 +827,7 @@ derive_builder_macro = { version = "0.12", default-features = false }
 derive_more = { version = "0.99", features = ["add", "add_assign", "as_mut", "as_ref", "constructor", "convert_case", "deref", "deref_mut", "display", "error", "from", "from_str", "index", "index_mut", "into", "into_iterator", "is_variant", "iterator", "mul", "mul_assign", "not", "rustc_version", "sum", "try_into", "unwrap"] }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
-diesel = { version = "2", features = ["32-column-tables", "bitflags", "byteorder", "chrono", "itoa", "postgres", "postgres_backend", "pq-sys", "serde_json", "with-deprecated"] }
+diesel = { version = "2", features = ["32-column-tables", "bitflags", "byteorder", "chrono", "itoa", "postgres", "postgres_backend", "pq-sys", "r2d2", "serde_json", "with-deprecated"] }
 diesel_derives = { version = "2", features = ["32-column-tables", "postgres", "with-deprecated"] }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
@@ -1153,6 +1155,7 @@ quinn-proto = { version = "0.9", default-features = false, features = ["ring", "
 quinn-udp = { version = "0.3", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6", features = ["proc-macro"] }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
+r2d2 = { version = "0.8", default-features = false }
 radium-d8f496e17d97b5cb = { package = "radium", version = "0.5", default-features = false }
 radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
@@ -1200,6 +1203,7 @@ rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 rustyline-derive = { version = "0.7", default-features = false }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
+scheduled-thread-pool = { version = "0.2", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 schemars_derive = { version = "0.8", default-features = false }
 scopeguard = { version = "1", features = ["use_std"] }

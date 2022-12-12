@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+use sui_indexer::PgConnectionPool;
+use sui_sdk::SuiClient;
+
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
-use sui_sdk::SuiClient;
 use tracing::{error, info, warn};
 
 use crate::handlers::event_handler::EventHandler;
@@ -12,18 +15,23 @@ use crate::handlers::transaction_handler::TransactionHandler;
 #[derive(Clone)]
 pub struct HandlerOrchestrator {
     rpc_client: SuiClient,
-    db_url: String,
+    pg_connection_pool: Arc<PgConnectionPool>,
 }
 
 impl HandlerOrchestrator {
-    pub fn new(rpc_client: SuiClient, db_url: String) -> Self {
-        Self { rpc_client, db_url }
+    pub fn new(rpc_client: SuiClient, pg_connection_pool: Arc<PgConnectionPool>) -> Self {
+        Self {
+            rpc_client,
+            pg_connection_pool,
+        }
     }
 
     pub async fn run_forever(&self) {
         info!("Handler orchestrator started...");
-        let event_handler = EventHandler::new(self.rpc_client.clone(), self.db_url.clone());
-        let txn_handler = TransactionHandler::new(self.rpc_client.clone(), self.db_url.clone());
+        let event_handler =
+            EventHandler::new(self.rpc_client.clone(), self.pg_connection_pool.clone());
+        let txn_handler =
+            TransactionHandler::new(self.rpc_client.clone(), self.pg_connection_pool.clone());
 
         tokio::task::spawn(async move {
             let txn_res = retry(ExponentialBackoff::default(), || async {
