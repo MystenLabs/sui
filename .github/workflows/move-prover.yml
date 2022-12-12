@@ -16,6 +16,12 @@ jobs:
         run:  |
           crates/sui/scripts/prover_setup.sh
 
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+
       - name: Prover Run
         run:  |
           crates/sui/scripts/prover_run.sh
