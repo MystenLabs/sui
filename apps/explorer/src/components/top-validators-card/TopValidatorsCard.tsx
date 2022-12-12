@@ -123,7 +123,7 @@ function StakeColumn(prop: { stake: bigint; stakePercent: number }) {
                 {prop.stake.toString()}
             </Text>
             <Text variant="captionSmall" color="steel-dark">
-                {prop.stakePercent.toFixed(2)}%
+                SUI
             </Text>
         </div>
     );
