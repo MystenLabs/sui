@@ -136,7 +136,7 @@ SG3 --> Vector2
 Vector2 --> ElasticSearch
 ```
 
-In the graph above, there are multiple subscribers, JSON logs can be for example fed via a local sidecar log forwarder such as [Vector](https://vector.dev), and then onwards to destinations such as ElasticSearch.
+In the graph above, there are multiple subscribers. You can feed JSON logs, for example, through a local sidecar log forwarder such as [Vector](https://vector.dev), and then onwards to destinations such as ElasticSearch.
 
 The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the validator server, as well as offloading observability traffic.
 
