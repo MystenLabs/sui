@@ -6,7 +6,7 @@ jobs:
     outputs:
       isClient: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), 'sui-explorer')) || steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
       - name: Detect Changes (pnpm)
         uses: "./.github/actions/pnpm-diffs"
         id: pnpm
@@ -20,12 +20,12 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-      - uses: pnpm/action-setup@v2.2.4
+        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
       - name: Install Nodejs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:
           node-version: "16"
           cache: "pnpm"
@@ -44,12 +44,12 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-      - uses: pnpm/action-setup@v2.2.4
+        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
       - name: Install Nodejs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:
           node-version: "16"
           cache: "pnpm"
@@ -58,7 +58,7 @@ jobs:
       - name: Install Cypress
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
-        uses: cypress-io/github-action@v5
+        uses: cypress-io/github-action@c5724eda82337bcff977ce14509f47052c12e04c # pin@v5
         with:
           install: false
           start: pnpm dev:static
@@ -70,14 +70,14 @@ jobs:
     if: needs.diff.outputs.isClient == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: pnpm/action-setup@v2.2.4
+      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
       - run: cargo build --bin sui-test-validator --profile dev
       - name: Install Nodejs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:
           node-version: "16"
           cache: "pnpm"
@@ -86,7 +86,7 @@ jobs:
       - name: Install Cypress
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
-        uses: cypress-io/github-action@v5
+        uses: cypress-io/github-action@c5724eda82337bcff977ce14509f47052c12e04c # pin@v5
         with:
           install: false
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
