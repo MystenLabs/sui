@@ -73,8 +73,8 @@ function ReceiptCard({ txId }: { txId: string }) {
     const txDetails = getTransactions(data.certificate)[0];
     const txKindName = getTransactionKindName(txDetails);
     const sender = getTransactionSender(data.certificate);
-    const txSummery = getEventsPayReceiveSummary(data.effects.events);
-    const txSummery2 = getTxnAmount(txDetails, data.effects);
+    const txMoveSummery = getEventsPayReceiveSummary(data.effects.events);
+    const txCoinSummery = getTxnAmount(txDetails, data.effects);
 
     const relatedObjectIds = getRelatedObjectIds(
         data.effects.events,
@@ -82,7 +82,7 @@ function ReceiptCard({ txId }: { txId: string }) {
     );
 
     const txStatus = getExecutionStatusType(data);
-    const walletAddressTxnMeta = txSummery.find(
+    const walletAddressTxnMeta = txMoveSummery.find(
         ({ receiverAddress }) => receiverAddress === accountAddress
     );
 
@@ -159,10 +159,10 @@ function ReceiptCard({ txId }: { txId: string }) {
                                 </div>
                             ))}
 
-                        {txSummery2 &&
+                        {txCoinSummery &&
                             accountAddress &&
                             !moveMetaInfo?.validatorAddress &&
-                            txSummery2.map(
+                            txCoinSummery.map(
                                 ({ recipientAddress, amount, coinType }) => (
                                     <Transfer
                                         key={recipientAddress}
