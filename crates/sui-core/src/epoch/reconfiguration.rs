@@ -132,7 +132,6 @@ where
             // in correct if the table can contain certificates from multiple epochs.
             // TODO: fix this during reconfiguration work.
             self.state.database.cleanup_pending_certificates()?;
-            // TODO: also clean up self.node_sync_store for epoch - 1.
 
             let (storage_charges, computation_charges, storage_rebates): (
                 Vec<u64>,

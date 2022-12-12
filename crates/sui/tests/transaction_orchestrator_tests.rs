@@ -23,9 +23,6 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
     let active = node.active();
 
-    // Disable node sync process
-    active.cancel_node_sync_process_for_tests().await;
-
     let net = active.agg_aggregator();
     let temp_dir = tempfile::tempdir().unwrap();
     let orchestrator =
@@ -83,9 +80,6 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
 
     let active = node.active();
-
-    // Disable node sync process
-    active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
     let temp_dir = tempfile::tempdir().unwrap();

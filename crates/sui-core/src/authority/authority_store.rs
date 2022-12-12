@@ -1180,7 +1180,7 @@ impl AuthorityStore {
 
         // Holding _tx_lock avoids the following race:
         // - we check effects_exist, returns false
-        // - another task (starting from handle_node_sync_certificate) writes effects,
+        // - another task (starting from CheckpointExecutor) writes effects,
         //    and then deletes locks from assigned_shared_object_versions
         // - we write to assigned_object versions, re-creating the locks that were just deleted
         // - now it's possible to run a new tx against old versions of the shared objects.

@@ -46,7 +46,6 @@ use sui_network::discovery;
 use sui_network::state_sync;
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
-    node_sync_store::NodeSyncStore,
     IndexStore,
 };
 use sui_types::committee::Committee;
@@ -87,7 +86,6 @@ pub struct SuiNode {
     _json_rpc_service: Option<ServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
-    _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -176,17 +174,10 @@ impl SuiNode {
             None
         };
 
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            config.db_path().join("node_sync_db"),
-            None,
-            None,
-        ));
-
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
             store,
-            node_sync_store,
             committee_store.clone(),
             index_store.clone(),
             event_store,
@@ -245,13 +236,6 @@ impl SuiNode {
                 None
             };
 
-        let gossip_handle = if is_full_node {
-            active_authority.clone().spawn_node_sync_process().await;
-            None
-        } else {
-            None
-        };
-
         let json_rpc_service = build_server(
             state.clone(),
             &transaction_orchestrator.clone(),
@@ -283,7 +267,6 @@ impl SuiNode {
             config: config.clone(),
             validator_components: ArcSwapOption::new(validator_components),
             _json_rpc_service: json_rpc_service,
-            _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,

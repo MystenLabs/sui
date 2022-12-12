@@ -51,7 +51,6 @@ use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
-    node_sync_store::NodeSyncStore,
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
@@ -547,8 +546,6 @@ pub struct AuthorityState {
 
     /// The database
     pub database: Arc<AuthorityStore>, // TODO: remove pub
-
-    pub node_sync_store: Arc<NodeSyncStore>,
 
     indexes: Option<Arc<IndexStore>>,
 
@@ -1713,7 +1710,6 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        node_sync_store: Arc<NodeSyncStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
@@ -1745,7 +1741,6 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
-            node_sync_store,
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
@@ -1829,12 +1824,6 @@ impl AuthorityState {
             None,
         ));
 
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            path.join("node_sync_db"),
-            None,
-            None,
-        ));
-
         let index_store = Some(Arc::new(IndexStore::open_tables_read_write(
             path.join("indexes"),
             None,
@@ -1846,7 +1835,6 @@ impl AuthorityState {
             secret.public().into(),
             secret.clone(),
             store,
-            node_sync_store,
             epochs,
             index_store,
             None,
