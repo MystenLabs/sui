@@ -92,7 +92,7 @@
         "prettier": "2.8.1",
         "prettier-plugin-tailwindcss": "^0.2.1",
         "start-server-and-test": "^1.14.0",
-        "storybook": "7.0.0-alpha.38",
+        "storybook": "7.0.0-beta.3",
         "stylelint": "^14.5.0",
         "stylelint-config-prettier": "^9.0.3",
         "stylelint-config-standard": "^25.0.0",
