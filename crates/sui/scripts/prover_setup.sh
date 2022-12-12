@@ -227,6 +227,7 @@ if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 fi
 
 export DOTNET_INSTALL_DIR="${HOME}/.dotnet/"
+export INSTALL_DIR="$HOME/bin"
 install_pkg curl "$PACKAGE_MANAGER"
 install_pkg unzip "$PACKAGE_MANAGER"
 install_z3
