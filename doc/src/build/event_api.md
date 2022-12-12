@@ -51,7 +51,7 @@ Move event attributes:
 
 ## Publish event
 
-Publish events occur for each package published to the network.
+Publish events occur when you publish a package to the network.
 
 ### Attributes
 
@@ -72,7 +72,7 @@ Publish event attributes:
 
 ## Transfer object event
 
-Transfer object events occur when for each object transferred from one address to another.
+Transfer object events occur you transfer an object from one address to another.
 
 ### Attributes
 
@@ -105,7 +105,7 @@ Transfer event attributes:
 
 ## Delete object event
 
-Delete object events occur for each object deleted.
+Delete object events occur when you delete an object.
 
 ### Attributes
 
@@ -129,7 +129,7 @@ Delete object events occur for each object deleted.
 
 ## New object event
 
-New object events occur for each new object created on the network.
+New object events occur for you create an object on the network.
 
 ### Attributes
 
