@@ -190,7 +190,7 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 1. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
 1. Clone the console repo and `cargo run` to launch the console.
 
-**Note:** Adding Tokio-console support may significantly slow down Sui validators/gateways.
+**Note:** Adding Tokio-console support might significantly slow down Sui validators/gateways.
 
 ### Memory profiling
 
