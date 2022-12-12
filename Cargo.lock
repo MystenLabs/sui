@@ -8977,7 +8977,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.5.17",
- "axum-core 0.2.9",
+ "axum-core 0.3.0",
  "bcs",
  "clap 3.2.23",
  "fastcrypto",
