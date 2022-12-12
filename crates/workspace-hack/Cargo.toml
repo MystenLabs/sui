@@ -216,7 +216,7 @@ futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "exec
 futures-channel = { version = "0.3", features = ["alloc", "futures-sink", "sink", "std", "unstable"] }
 futures-core = { version = "0.3", features = ["alloc", "std", "unstable"] }
 futures-executor = { version = "0.3", features = ["std"] }
-futures-intrusive = { version = "0.5", features = ["alloc", "parking_lot", "std"] }
+futures-intrusive = { version = "0.4", features = ["alloc", "parking_lot", "std"] }
 futures-io = { version = "0.3", features = ["std", "unstable"] }
 futures-lite = { version = "1", features = ["alloc", "fastrand", "futures-io", "memchr", "parking", "std", "waker-fn"] }
 futures-sink = { version = "0.3", features = ["alloc", "std"] }
@@ -882,7 +882,7 @@ futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "exec
 futures-channel = { version = "0.3", features = ["alloc", "futures-sink", "sink", "std", "unstable"] }
 futures-core = { version = "0.3", features = ["alloc", "std", "unstable"] }
 futures-executor = { version = "0.3", features = ["std"] }
-futures-intrusive = { version = "0.5", features = ["alloc", "parking_lot", "std"] }
+futures-intrusive = { version = "0.4", features = ["alloc", "parking_lot", "std"] }
 futures-io = { version = "0.3", features = ["std", "unstable"] }
 futures-lite = { version = "1", features = ["alloc", "fastrand", "futures-io", "memchr", "parking", "std", "waker-fn"] }
 futures-macro = { version = "0.3", default-features = false }
