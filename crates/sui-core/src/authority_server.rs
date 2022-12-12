@@ -24,13 +24,13 @@ use sui_network::{
     tonic,
 };
 
+use mysten_metrics::{spawn_monitored_task, RegistryService};
+use narwhal_types::TransactionsClient;
+use sui_types::messages_checkpoint::CheckpointRequest;
+use sui_types::messages_checkpoint::CheckpointResponse;
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
 use tokio::{sync::mpsc::Receiver, task::JoinHandle, time::sleep};
-use narwhal_types::TransactionsClient;
-use mysten_metrics::{spawn_monitored_task, RegistryService};
-use sui_types::messages_checkpoint::CheckpointRequest;
-use sui_types::messages_checkpoint::CheckpointResponse;
 use tracing::{debug, info, Instrument};
 
 use crate::checkpoints::{
@@ -306,7 +306,7 @@ impl ValidatorService {
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
-        let tx_validator = SuiTxValidator::new(state.clone(), &registry);
+        let tx_validator = SuiTxValidator::new(state.clone(), &prometheus_registry);
         spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
             consensus_keypair,
             network_keypair,
