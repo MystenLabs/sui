@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo } from 'react';
+import { useCallback, useEffect, useRef, memo } from 'react';
 
-import { Text } from '../../shared/text';
+import { formatBalance } from '../../hooks/useFormatCoin';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import Card, { CardFooter, CardHeader } from '_app/shared/card';
+import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
+import { useCoinDecimals } from '_hooks';
 
 import type { FormValues } from './StakingCard';
 
@@ -19,7 +21,6 @@ import st from './StakeForm.module.scss';
 export type StakeFromProps = {
     submitError: string | null;
     coinBalance: string;
-
     coinType: string;
     onClearSubmitError: () => void;
 };
@@ -28,21 +29,27 @@ function StakeForm({
     submitError,
     coinBalance,
     coinType,
-
     onClearSubmitError,
 }: StakeFromProps) {
     const {
         isSubmitting,
         isValid,
         values: { amount },
+        setFieldValue,
     } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
+    const [coinDecimals] = useCoinDecimals(coinType);
+    const maxToken = formatBalance(coinBalance, coinDecimals);
 
     useEffect(() => {
         onClearRef.current();
     }, [amount]);
+
+    const setMaxToken = useCallback(() => {
+        setFieldValue('amount', maxToken);
+    }, [maxToken, setFieldValue]);
 
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
@@ -61,6 +68,7 @@ function StakeForm({
                                 <div
                                     role="button"
                                     className="border border-solid border-gray-60 rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:bg-gray-60 hover:text-white  text-bodySmall font-medium"
+                                    onClick={setMaxToken}
                                 >
                                     Max
                                 </div>

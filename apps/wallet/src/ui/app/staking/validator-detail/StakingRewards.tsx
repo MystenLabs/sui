@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Text } from '../../shared/text';
+import { Text } from '_app/shared/text';
 
 //Todo: add staking rewards
 export function StakingReward() {

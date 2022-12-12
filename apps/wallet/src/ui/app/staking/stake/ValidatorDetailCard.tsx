@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Text } from '../../shared/text';
-import { IconTooltip } from '../../shared/tooltip';
 import Card, { CardContent, CardFooter, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
 import { ImageIcon } from '_app/shared/image-icon';
+import { Text } from '_app/shared/text';
+import { IconTooltip } from '_app/shared/tooltip';
 import { useAppSelector, useGetValidators } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
@@ -60,7 +60,9 @@ export function ValidateDetailFormCard({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {validatorDataByAddress.apy}%
+                                {validatorDataByAddress.apy}{' '}
+                                {typeof validatorDataByAddress.apy !==
+                                    'string' && '%'}
                             </Text>
                         </div>
                         {!unstake && (

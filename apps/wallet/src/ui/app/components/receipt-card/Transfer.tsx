@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Text } from '../../shared/text';
 import { Heading } from '_app/shared/heading';
+import { Text } from '_app/shared/text';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useMiddleEllipsis, useFormatCoin } from '_hooks';

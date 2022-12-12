@@ -7,11 +7,11 @@ import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { Text } from '../../shared/text';
 import StakeForm from './StakeForm';
 import { ValidateDetailFormCard } from './ValidatorDetailCard';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
@@ -50,12 +50,14 @@ export function StakingCard() {
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
+
     const coinSymbol = useMemo(
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
         [coinType]
     );
     const [sendError, setSendError] = useState<string | null>(null);
     const [coinDecimals] = useCoinDecimals(coinType);
+
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const validationSchema = useMemo(
         () =>

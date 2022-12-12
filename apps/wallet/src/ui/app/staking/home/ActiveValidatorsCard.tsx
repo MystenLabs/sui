@@ -3,14 +3,14 @@
 
 import { useCallback, useState } from 'react';
 
-import { Text } from '../../shared/text';
-import { IconTooltip } from '../../shared/tooltip';
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { ImageIcon } from '_app/shared/image-icon';
+import { Text } from '_app/shared/text';
+import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -67,7 +67,7 @@ function ValidatorListItem({
                     <ExplorerLink
                         type={ExplorerLinkType.address}
                         address={address}
-                        className="text-steel-dark no-underline font-mono font-medium "
+                        className="text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark"
                         showIcon={false}
                     >
                         {truncatedAddress}
@@ -84,7 +84,7 @@ function ValidatorListItem({
                         weight="medium"
                         color="steel-dark"
                     >
-                        % APY
+                        {typeof apy !== 'string' && '% APY'}
                     </Text>
                     <div className="text-steel items-baseline text-subtitle h-3 flex opacity-0 group-hover:opacity-100">
                         <IconTooltip tip={`${APY_TOOLTIP}`} placement="top" />
