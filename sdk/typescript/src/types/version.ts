@@ -3,11 +3,7 @@
 
 import * as femver from '@suchipi/femver';
 
-export type RpcApiVersion = `${string}.${string}.${string}`;
-
-export function parseVersionFromString(version: string) {
-  return femver.parse(version);
-}
+export type RpcApiVersion = string;
 
 // TODO: Explore other ways to do this, maybe an object-oriented way where there's some `version` object
 // that contains functions like `gt` itself.

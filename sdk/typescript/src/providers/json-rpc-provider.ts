@@ -46,7 +46,6 @@ import {
   TransactionQuery,
   SUI_TYPE_ARG,
   RpcApiVersion,
-  parseVersionFromString,
   EventQuery,
   EventId,
   PaginatedEvents,

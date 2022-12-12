@@ -1659,12 +1659,7 @@ export function isTransactionData(obj: any, _argumentName?: string): obj is Tran
 
 export function isRpcApiVersion(obj: any, _argumentName?: string): obj is RpcApiVersion {
     return (
-        (obj !== null &&
-            typeof obj === "object" ||
-            typeof obj === "function") &&
-        isSuiMoveTypeParameterIndex(obj.major) as boolean &&
-        isSuiMoveTypeParameterIndex(obj.minor) as boolean &&
-        isSuiMoveTypeParameterIndex(obj.patch) as boolean
+        typeof obj === "string"
     )
 }
 
