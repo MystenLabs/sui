@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, isSuiObject, isSuiMoveObject, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    Base64DataBuffer,
+    isSuiObject,
+    isSuiMoveObject,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
@@ -117,16 +122,15 @@ export type ValidatorState = {
     };
 };
 
-
-function StakeColumn({ stake  }: { stake: bigint; }) {
-     const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG)
+function StakeColumn({ stake }: { stake: bigint }) {
+    const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
     return (
         <div className="flex items-end gap-0.5">
             <Text variant="bodySmall" color="steel-darker">
-            {amount}
+                {amount}
             </Text>
             <Text variant="captionSmall" color="steel-dark">
-              {symbol}
+                {symbol}
             </Text>
         </div>
     );
@@ -150,7 +154,6 @@ export function processValidators(set: Validator[], totalStake: bigint) {
             stake: av.fields.stake_amount,
             stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
             delegation_count: av.fields.delegation_count || 0,
-            
         };
     });
 }
@@ -183,11 +186,7 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
                         {validator.name}
                     </Text>
                 ),
-                stake: (
-                    <StakeColumn
-                        stake={validator.stake}
-                    />
-                ),
+                stake: <StakeColumn stake={validator.stake} />,
                 delegation: (
                     <Text variant="bodySmall" color="steel-darker">
                         {validator.stake.toString()}
