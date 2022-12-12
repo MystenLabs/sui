@@ -436,7 +436,9 @@ proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "l
 prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
 prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
 prost-types-a6292c17cd707f01 = { package = "prost-types", version = "0.11", features = ["std"] }
-protobuf = { version = "3", default-features = false }
+protobuf-f595c2ba2a3f28df = { package = "protobuf", version = "2", default-features = false }
+protobuf-7b89eefb6aaa9bf3 = { package = "protobuf", version = "3" }
+protobuf-support = { version = "3", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
@@ -1142,7 +1144,9 @@ prost-derive-93f6ce9d446188ac = { package = "prost-derive", version = "0.10", de
 prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
 prost-types-93f6ce9d446188ac = { package = "prost-types", version = "0.10", default-features = false }
 prost-types-a6292c17cd707f01 = { package = "prost-types", version = "0.11", features = ["std"] }
-protobuf = { version = "3", default-features = false }
+protobuf-f595c2ba2a3f28df = { package = "protobuf", version = "2", default-features = false }
+protobuf-7b89eefb6aaa9bf3 = { package = "protobuf", version = "3" }
+protobuf-support = { version = "3", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
