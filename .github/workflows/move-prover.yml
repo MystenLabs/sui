@@ -1,0 +1,16 @@
+name: Move Prover
+
+on: pull_request
+
+jobs:
+  move-prover:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prover Setup
+        run:  |
+          crates/sui/scripts/prover_setup.sh
+
+      - name: Prover Run
+        run:  |
+          crates/sui/scripts/prover_run.sh
