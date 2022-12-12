@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 
+import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { AddressLink } from '~/ui/InternalLink';
@@ -15,6 +16,7 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 
+const COIN_TYPE = '0x2::sui::SUI';
 const VALIDATORS_OBJECT_ID = '0x05';
 const NUMBER_OF_VALIDATORS = 10;
 
@@ -116,14 +118,16 @@ export type ValidatorState = {
     };
 };
 
-function StakeColumn(prop: { stake: bigint; stakePercent: number }) {
+
+function StakeColumn({ stake, stakePercent }: { stake: bigint; stakePercent: number }) {
+     const [amount, symbol] = useFormatCoin(stake, COIN_TYPE)
     return (
         <div className="flex items-end gap-0.5">
             <Text variant="bodySmall" color="steel-darker">
-                {prop.stake.toString()}
+            {amount}
             </Text>
             <Text variant="captionSmall" color="steel-dark">
-                SUI
+              {symbol}
             </Text>
         </div>
     );
@@ -147,6 +151,7 @@ export function processValidators(set: Validator[], totalStake: bigint) {
             stake: av.fields.stake_amount,
             stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
             delegation_count: av.fields.delegation_count || 0,
+            
         };
     });
 }
@@ -258,7 +263,7 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
                         <div className="mt-3">
                             <Link to="/validators">
                                 <div className="flex items-center gap-2">
-                                    More Validators{' '}
+                                    More Validators
                                     <ArrowRight fill="currentColor" />
                                 </div>
                             </Link>
