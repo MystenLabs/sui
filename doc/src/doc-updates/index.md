@@ -4,6 +4,16 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
+## Week ending 12/17/22
+
+| Topic | Update | 
+| :------ | :------- |
+| [Explore Sui](../explore/index.md) | Added [Sui Capys](https://docs.sui.io/) and [Satoshi Flip](https://satoshi-flip.sui.io/) apps. |
+| [Event API](../build/event_api.md) | [Copyedit and reformat for readability](https://github.com/MystenLabs/sui/pull/6718). |
+| [Connect to Devnet](../build/devnet.md) | [Copyedit and updates for style consistency](https://github.com/MystenLabs/sui/pull/6715/files#diff-33791b72aa9e90e09f1b9f85972b29b605e388dff5130b2cdd9417a6946c8012).
+| Multiple | Removed $ from example commands. Changed style for keyboard key names to use **bold** instead of `code` format. |
+
+
 ## Week ending 12/10/22
 
 | Topic | Update | 

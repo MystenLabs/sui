@@ -11,8 +11,8 @@
         "link": "learn/exchange-integration-faq"
       },
       {
-        "label": "Sui by Example",
-        "link": "https://examples.sui.io/",
+        "label": "Satoshi Flip on Sui",
+        "link": "https://satoshi-flip.sui.io/",
         "external": true
       }
     ]

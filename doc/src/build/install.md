@@ -57,7 +57,7 @@ Sui requires Rust and Cargo on all supported operating systems. Some operating s
 
 Use the following command to install Rust and Cargo on macOS or Linux:
 ```shell
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 Windows 11 users can use the [Rust installer](https://www.rust-lang.org/tools/install) available on the Rust website. The installer detects if you do not have the required C++ build tools and prompts you to install. Select the option that best defines your environment and follow the instructions in the install wizard. 
@@ -69,7 +69,7 @@ Sui uses the latest version of Cargo to build and manage dependencies. See the [
 Use the following command to update Rust:
 
 ```shell
-$ rustup update stable
+rustup update stable
 ```
 
 After you install Rust, proceed to the prerequisites for your operating system.
@@ -84,19 +84,19 @@ After you install Rust, proceed to the prerequisites for your operating system.
 Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update `apt-get`:
 
 ```shell
-$ sudo apt-get update
+sudo apt-get update
 ```
 
 ### cURL
 
 Install cURL with the following command:
 ```shell
-$ sudo apt install curl
+sudo apt install curl
 ```
 
 Verify that cURL installed correctly with the following command:
 ```shell
-$ curl --version
+curl --version
 ```
 
 ### Git CLI
@@ -104,7 +104,7 @@ $ curl --version
 Run the following command to install Git, including the [Git CLI](https://cli.github.com/):
 
 ```shell
-$ sudo apt-get install git-all
+sudo apt-get install git-all
 ```
 
 For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux) on the GitHub website.
@@ -118,7 +118,7 @@ Install CMake using the instructions at [Installing CMake](https://cmake.org/ins
 Use the following command to install `libssl-dev`:
 
 ```shell
-$ sudo apt-get install libssl-dev
+sudo apt-get install libssl-dev
 ```
 
 ### libclang-dev
@@ -126,7 +126,7 @@ $ sudo apt-get install libssl-dev
 Use the following command to install `libclang-dev`:
 
 ```shell
-$ sudo apt-get install libclang-dev
+sudo apt-get install libclang-dev
 ```
 
 Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
@@ -140,34 +140,33 @@ macOS includes a version of cURL you can use to install Brew. Use Brew to instal
 
 Use the following command to install [Brew](https://brew.sh/):
 ```shell
-$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
 ### cURL
 
 Use the following command to update the default [cURL](https://curl.se) on macOS:
 ```shell
-$ brew install curl
+brew install curl
 ```
 
 ### CMake
 
 Use the following command to install CMake:
 ```shell
-$ brew install cmake
+brew install cmake
 ```
 
 ### Git CLI
 
 Use the following command to install Git:
 ```shell
-$ brew install git
+brew install git
 ```
 
 After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
 
 Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
-
 
 ## Windows prerequisites
 
@@ -197,18 +196,16 @@ Sui requires the following additional tools on computers running Windows.
  * [C++ build tools](https://visualstudio.microsoft.com/downloads/) are required to [install Rust](#rust-and-cargo), so you should already have these installed if you followed these instructions.
  * The [LLVM Compiler Infrastructure](https://releases.llvm.org/).
 
->**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
->press the `enter` key in the command prompt to fix the issue.
+If the progress appears to freeze, press **Enter** in the command prompt to fix the issue.
 
->**Known issue:** The `sui console` command does not work in PowerShell.
-
+**Known issue** - The `sui console` command does not work in PowerShell.
 
 ## Install Sui binaries
 
 With Cargo installed, use the following command to install Sui binaries:
 
 ```shell
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
 ```
 
 The command installs the following Sui components in `~/.cargo/bin`:
@@ -225,24 +222,24 @@ source "$HOME/.cargo/env"
 
 Confirm the binaries are installed with `.cargo/bin` appearing in your PATH variable:
 ```
-$ echo $PATH
+echo $PATH
 ```
 ### Windows
 
 Confirm the binaries are installed with `.cargo\bin` appearing in your PATH variable:
 ```
-$ echo %PATH%
+echo %PATH%
 ```
 Use the `--help` flag to access helpful information for any of these binaries.
 
-> **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages and re-install.
+**Important** - Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages and re-install.
 
 ## Integrated development environment
 
 The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` using the `--features` flag:
 
 ```shell
-$ cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
+cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
 ```
 
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.
@@ -254,14 +251,14 @@ To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet browser e
 To request SUI test tokens from the browser extension:
 
 1. Use the Sui Wallet browser extension to open your wallet.
-2. Click the **Request Sui Devnet SUI Tokens** button.
+1. Click **Request Sui Devnet Tokens**.
 
 To request SUI test tokens in Discord:
 
 1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
 1. Identify your address through either the Sui Wallet browser extension or by running the following command and electing to connect to a Sui RPC server if prompted:
    ```shell
-   $ sui client active-address
+   sui client active-address
    ```
 1. Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel using the syntax: `!faucet <YOUR_ADDRESS>`, for example:
       ```shell
@@ -277,7 +274,7 @@ https://github.com/MystenLabs/sui
 Clone the Sui repository:
 
 ```shell
-$ git clone https://github.com/MystenLabs/sui.git --branch devnet
+git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 The following primary directories offer a good starting point for exploring Sui's source code:
