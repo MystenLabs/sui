@@ -4,7 +4,7 @@ on: pull_request
 
 jobs:
   move-prover:
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-ghcloud]
 
     steps:
       - name: Checkout Code
