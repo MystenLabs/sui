@@ -83,7 +83,7 @@
     "typedoc": "^0.23.21",
     "typescript": "^4.8.3",
     "vite": "^4.0.0",
-    "vitest": "^0.25.6",
+    "vitest": "^0.25.7",
     "wait-on": "^6.0.1"
   },
   "dependencies": {
