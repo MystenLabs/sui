@@ -186,7 +186,6 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
                 stake: (
                     <StakeColumn
                         stake={validator.stake}
-                        stakePercent={validator.stakePercent}
                     />
                 ),
                 delegation: (
