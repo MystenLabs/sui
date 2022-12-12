@@ -19,12 +19,6 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
 
-      - name: Cargo Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-targets --all-features --release --profile=release
-
       - name: Prover Run
         run:  |
           crates/sui/scripts/prover_run.sh
