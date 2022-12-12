@@ -67,11 +67,7 @@ pub fn process_certificates(c: &mut Criterion) {
             |b, i| {
                 b.iter(|| {
                     for cert in i {
-                        let _ = ordering_engine.process_certificate(
-                            &mut state,
-                            /* consensus_index */ 0,
-                            cert.clone(),
-                        );
+                        let _ = ordering_engine.process_certificate(&mut state, cert.clone());
                     }
                 })
             },
