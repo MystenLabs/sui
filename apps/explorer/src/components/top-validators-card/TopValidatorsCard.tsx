@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
+import { Base64DataBuffer, isSuiObject, isSuiMoveObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
@@ -16,7 +16,6 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 
-const COIN_TYPE = '0x2::sui::SUI';
 const VALIDATORS_OBJECT_ID = '0x05';
 const NUMBER_OF_VALIDATORS = 10;
 
@@ -119,8 +118,8 @@ export type ValidatorState = {
 };
 
 
-function StakeColumn({ stake, stakePercent }: { stake: bigint; stakePercent: number }) {
-     const [amount, symbol] = useFormatCoin(stake, COIN_TYPE)
+function StakeColumn({ stake  }: { stake: bigint; }) {
+     const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG)
     return (
         <div className="flex items-end gap-0.5">
             <Text variant="bodySmall" color="steel-darker">
