@@ -354,9 +354,10 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "796ddf
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
 multiaddr-582f2526e08bb6a0 = { package = "multiaddr", version = "0.14", features = ["url"] }
-multiaddr-986da7b5efc2b80e = { package = "multiaddr", version = "0.16", features = ["url"] }
+multiaddr-9067fe90e8c1f593 = { package = "multiaddr", version = "0.17", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
-multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
+multihash-986da7b5efc2b80e = { package = "multihash", version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
+multihash-9067fe90e8c1f593 = { package = "multihash", version = "0.17", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 mysten-network = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
@@ -1033,9 +1034,10 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "796ddf
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "796ddf22ac4f8cd3d09c0c83bed1cf8faa252d9a" }
 multiaddr-582f2526e08bb6a0 = { package = "multiaddr", version = "0.14", features = ["url"] }
-multiaddr-986da7b5efc2b80e = { package = "multiaddr", version = "0.16", features = ["url"] }
+multiaddr-9067fe90e8c1f593 = { package = "multiaddr", version = "0.17", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
-multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
+multihash-986da7b5efc2b80e = { package = "multihash", version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
+multihash-9067fe90e8c1f593 = { package = "multihash", version = "0.17", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
 mysten-network = { version = "0.1", default-features = false }

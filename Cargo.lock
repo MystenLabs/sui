@@ -4938,24 +4938,6 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4aebdb21e90f81d13ed01dc84123320838e53963c2ca94b60b305d3fa64f31e"
-dependencies = [
- "arrayref",
- "byteorder",
- "data-encoding",
- "multibase",
- "multihash 0.16.3",
- "percent-encoding",
- "serde 1.0.149",
- "static_assertions",
- "unsigned-varint",
- "url",
-]
-
-[[package]]
-name = "multiaddr"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b53e0cc5907a5c216ba6584bf74be8ab47d6d6289f72793b2dddbf15dc3bf8c"
@@ -11369,9 +11351,10 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "multiaddr 0.14.0",
- "multiaddr 0.16.0",
+ "multiaddr 0.17.0",
  "multibase",
  "multihash 0.16.3",
+ "multihash 0.17.0",
  "multihash-derive",
  "multimap",
  "mysten-network 0.1.0",
