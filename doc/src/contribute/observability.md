@@ -154,7 +154,7 @@ To generate detailed span start and end logs, define the `SUI_JSON_SPAN_LOGS` en
 
 You can send this output to a tool or service for indexing, alerts, aggregation, and analysis.
 
-The example output below shows certificate processing in the authority with span logging. Note the START and END annotations, and notice how DB_UPDATE_STATE which is nested is embedded within PROCESS_CERT. Also notice `elapsed_milliseconds` which logs the duration of each span.
+The following example output shows certificate processing in the authority with span logging. Note the `START` and `END` annotations, and notice how `DB_UPDATE_STATE` which is nested is embedded within `PROCESS_CERT`. Also notice `elapsed_milliseconds`, which logs the duration of each span.
 
 ```
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - START]","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.241421Z","target":"sui_core::authority_server","line":67,"file":"sui_core/src/authority_server.rs","tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493"}
