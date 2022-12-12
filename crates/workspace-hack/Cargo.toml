@@ -265,7 +265,7 @@ iana-time-zone = { version = "0.1", default-features = false, features = ["fallb
 idna = { version = "0.3", default-features = false }
 ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
-impl-codec = { version = "0.6", default-features = false, features = ["std"] }
+impl-codec = { version = "0.5", default-features = false, features = ["std"] }
 impl-serde = { version = "0.3", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
@@ -937,7 +937,7 @@ idna = { version = "0.3", default-features = false }
 if_chain = { version = "1", default-features = false }
 ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
-impl-codec = { version = "0.6", default-features = false, features = ["std"] }
+impl-codec = { version = "0.5", default-features = false, features = ["std"] }
 impl-serde = { version = "0.3", default-features = false }
 impl-trait-for-tuples = { version = "0.2", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
