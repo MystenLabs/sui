@@ -208,7 +208,7 @@ To view the profile files, one needs to do the following, on the same platform a
 1. Run `jeprof --svg sui-node jeprof.xxyyzz.heap` - select the heap profile based on 
    timestamp and memory size in the filename.
 
-Note: with automatic memory profiling, it is no longer necessary to configure environment variables beyond what is required above.  It is possible to configure custom profiling options, see the links below:
+**Note:** With automatic memory profiling, it is no longer necessary to configure environment variables beyond those previously listed.  It is possible to configure custom profiling options:
 
 * [Heap Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
 * [heap profiling with jemallocator](https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174)
