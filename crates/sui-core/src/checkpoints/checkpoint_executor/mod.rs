@@ -17,13 +17,18 @@
 //! handles epoch boundaries by calling to reconfig once all checkpoints of an epoch have finished
 //! executing.
 
-use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_types::{
-    base_types::{ExecutionDigests, TransactionDigest},
+    base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     crypto::AuthorityPublicKeyBytes,
     error::SuiResult,
     messages::{SignedTransactionEffects, TransactionEffects, VerifiedCertificate},
@@ -35,7 +40,7 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
-use typed_store::rocks::TypedStoreError;
+use typed_store::{rocks::TypedStoreError, Map};
 
 use crate::{
     authority::{AuthorityState, EffectsNotifyRead},
@@ -365,11 +370,12 @@ pub async fn execute_checkpoint(
 }
 
 async fn execute_transactions(
-    transactions: Vec<ExecutionDigests>,
+    execution_digests: Vec<ExecutionDigests>,
     authority_state: Arc<AuthorityState>,
 ) -> SuiResult<Vec<SignedTransactionEffects>> {
-    let tx_digests: Vec<TransactionDigest> = transactions.iter().map(|tx| tx.transaction).collect();
-    let txns: Vec<VerifiedCertificate> = authority_state
+    let tx_digests: Vec<TransactionDigest> =
+        execution_digests.iter().map(|tx| tx.transaction).collect();
+    let mut txns: Vec<VerifiedCertificate> = authority_state
         .database
         .epoch_store()
         .multi_get_pending_certificate(&tx_digests)?
@@ -377,17 +383,51 @@ async fn execute_transactions(
         .flatten()
         .collect();
 
-    // TODO once https://github.com/MystenLabs/sui/pull/6157 is landed,
-    // replace with call to `authority_state.add_pending_certs_and_effects`,
-    // which handles reading effects for shared object version numbers
-    // and enqueing transactions with TransactionManager.
+    // executed txns get moved to perpetual table so look for missing txns there
+    if txns.len() < tx_digests.len() {
+        let epoch_txn_digests: HashSet<&TransactionDigest> =
+            HashSet::from_iter(txns.iter().map(|tx| tx.digest()));
+
+        let missing_txn_digests: Vec<TransactionDigest> = tx_digests
+            .clone()
+            .into_iter()
+            .filter(|digest| !epoch_txn_digests.contains(digest))
+            .collect();
+
+        let mut perp_table_txns: Vec<VerifiedCertificate> = authority_state
+            .database
+            .perpetual_tables
+            .certificates
+            .multi_get(missing_txn_digests)?
+            .into_iter()
+            .map(|txn| {
+                if txn.is_none() {
+                    panic!("Txn does not exist in epoch store or perpetual table");
+                }
+                txn.unwrap().into()
+            })
+            .collect();
+
+        txns.append(&mut perp_table_txns);
+    }
+    let txns = txns;
+
+    let effects_digests: Vec<TransactionEffectsDigest> = execution_digests
+        .iter()
+        .map(|digest| digest.effects)
+        .collect();
     let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_state
         .database
-        .get_effects(&tx_digests)?
+        .perpetual_tables
+        .effects
+        .multi_get(effects_digests)?
         .into_iter()
         .map(|fx| {
+            if fx.is_none() {
+                panic!("Transaction effects do not exist in effects table");
+            }
             let fx = fx.unwrap();
-            (fx.transaction_digest, fx.data().clone())
+            (fx.transaction_digest, fx)
         })
         .collect();
 
