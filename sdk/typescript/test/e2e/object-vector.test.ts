@@ -31,7 +31,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         module: 'entry_point_vector',
         function: 'mint',
         typeArguments: [],
-        arguments: [val],
+        arguments: [val.toString()],
         gasBudget: DEFAULT_GAS_BUDGET,
       });
       expect(getExecutionStatusType(txn)).toEqual('success');
