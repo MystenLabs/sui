@@ -1,19 +1,8 @@
 name: Wallet Adapter PR Checks
 on: pull_request
 jobs:
-  diff:
-    runs-on: [ubuntu-latest]
-    outputs:
-      isWalletAdapter: ${{ (steps.diff.outputs.packages && contains(fromJson(steps.diff.outputs.packages), 'sui-wallet-adapter')) }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Detect Changes
-        uses: "./.github/actions/pnpm-diffs"
-        id: diff
   ci:
     name: Build
-    needs: diff
-    if: needs.diff.outputs.isWalletAdapter == 'true'
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
@@ -28,5 +17,15 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Turbo Cache
+        id: turbo-cache
+        uses: actions/cache@v3
+        with:
+          path: node_modules/.cache/turbo
+          key: turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.job }}-${{ github.ref_name }}-
+
       - name: Build
-        run: pnpm wallet-adapter build
+        run: pnpm turbo build --filter="./sdk/wallet-adapter/**"

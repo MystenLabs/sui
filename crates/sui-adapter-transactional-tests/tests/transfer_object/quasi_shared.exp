@@ -17,7 +17,7 @@ written: object(107), object(108)
 
 task 4 'view-object'. lines 33-33:
 Owner: Object ID: ( fake(107) )
-Version: 2
+Version: 3
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(110)}}
 
 task 5 'transfer-object'. lines 35-35:
@@ -26,5 +26,5 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(107) )
-Version: 3
+Version: 4
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(110)}}

@@ -255,7 +255,6 @@ async fn run_actual_and_estimate_costs(
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
     let tx_map = create_txes(sender, &keypair, &gas_objects, &configs).await;
-
     for (tx_type, tx) in tx_map {
         let gas_used = if tx_type.is_shared_object_tx() {
             submit_shared_object_transaction(tx.clone(), configs.validator_set())
@@ -274,7 +273,7 @@ async fn run_actual_and_estimate_costs(
             .with_async(|node| async move {
                 let state = node.state();
                 estimate_transaction_computation_cost(
-                    tx.into_inner().into_data().data,
+                    tx.into_inner().into_data().intent_message.value,
                     state.clone(),
                     None,
                     None,

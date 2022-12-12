@@ -15,6 +15,3 @@ expression: genesis.validator_set()
   p2p-address: ""
   narwhal-primary-address: ""
   narwhal-worker-address: ""
-  narwhal-internal-worker-address: ~
-  narwhal-consensus-address: ""
-

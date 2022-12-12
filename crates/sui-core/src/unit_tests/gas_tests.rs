@@ -280,7 +280,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .as_ref()
         .unwrap()
         .data()
-        .data
+        .intent_message
+        .value
         .kind
         .single_transactions()
         .next()
@@ -515,7 +516,7 @@ async fn test_storage_gas_unit_price() -> SuiResult {
 }
 
 struct TransferResult {
-    pub authority_state: AuthorityState,
+    pub authority_state: Arc<AuthorityState>,
     pub object_id: ObjectID,
     pub gas_object_id: ObjectID,
     pub response: SuiResult<VerifiedTransactionInfoResponse>,

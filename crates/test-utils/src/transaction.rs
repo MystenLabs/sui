@@ -21,6 +21,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
+use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::{
@@ -106,9 +107,11 @@ pub async fn publish_package_with_wallet(
         let signature = context
             .config
             .keystore
-            .sign(&sender, &data.to_bytes())
+            .sign_secure(&sender, &data, Intent::default())
             .unwrap();
-        Transaction::from_data(data, signature).verify().unwrap()
+        Transaction::from_data(data, Intent::default(), signature)
+            .verify()
+            .unwrap()
     };
 
     let resp = client
@@ -161,9 +164,12 @@ pub async fn submit_move_transaction(
     let signature = context
         .config
         .keystore
-        .sign(&sender, &data.to_bytes())
+        .sign_secure(&sender, &data, Intent::default())
         .unwrap();
-    let tx = Transaction::from_data(data, signature).verify().unwrap();
+
+    let tx = Transaction::from_data(data, Intent::default(), signature)
+        .verify()
+        .unwrap();
     let tx_digest = tx.digest();
     debug!(?tx_digest, "submitting move transaction");
 
@@ -385,9 +391,12 @@ pub async fn delete_devnet_nft(
     let signature = context
         .config
         .keystore
-        .sign(sender, &data.to_bytes())
+        .sign_secure(sender, &data, Intent::default())
         .unwrap();
-    let tx = Transaction::from_data(data, signature).verify().unwrap();
+
+    let tx = Transaction::from_data(data, Intent::default(), signature)
+        .verify()
+        .unwrap();
     let client = context.get_client().await.unwrap();
     let resp = client
         .quorum_driver()
@@ -411,7 +420,6 @@ pub async fn submit_single_owner_transaction(
         .0
         .pop()
         .unwrap();
-
     let mut responses = Vec::new();
     for config in configs {
         let client = get_client(config);

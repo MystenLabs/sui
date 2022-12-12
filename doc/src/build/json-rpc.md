@@ -10,7 +10,7 @@ For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI c
 
 Follow the instructions to [install Sui binaries](install.md).
 
-### Connect to a Sui network
+## Connect to a Sui network
 
 You can connect to a Sui Full node on Devnet. Follow the guidance in the [Connect to Sui Devnet](../build/devnet.md) topic to start making RPC calls to the Sui network.
 

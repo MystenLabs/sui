@@ -44,7 +44,7 @@ Follow the instructions here to run your own Sui Full node.
 
 ### Hardware requirements
 
-Minimum hardware requirements for running a Sui Full node:
+Suggested hardware requirements for running a Sui Full node:
 
 * CPUs: 10 core
 * RAM: 32 GB
@@ -90,27 +90,27 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
        ```
 1. `cd` into your `sui` repository:
     ```shell
-    $ cd sui
+    cd sui
     ```
 1. Set up the Sui repository as a git remote:
     ```shell
-    $ git remote add upstream https://github.com/MystenLabs/sui
+    git remote add upstream https://github.com/MystenLabs/sui
     ```
 1. Sync your fork:
     ```shell
-    $ git fetch upstream
+    git fetch upstream
     ```
 1. Check out the `devnet` branch:
     ```shell
-    $ git checkout --track upstream/devnet
+    git checkout --track upstream/devnet
     ```
 1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
-   $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
+   cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
 1. Download the [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet:
     ```shell
-    $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+    curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
 1. Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
    * Update the `db-path` field with the path to the Full node database.
@@ -124,7 +124,7 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
        ```
 1. Start your Sui Full node:
     ```shell
-    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 1. Optional: [Publish / subscribe](event_api.md#subscribe-to-sui-events) to notifications using JSON-RPC via websocket.
 
@@ -160,7 +160,7 @@ Whenever Sui releases a new version, Devnet restarts as a new network with no da
 Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
 namely by running the command:
 ```shell
-$ docker-compose down --volumes
+docker-compose down --volumes
 ```
 
 ### Update from source
@@ -171,38 +171,26 @@ Source](#building-from-source), update your Full node as follows:
 1. Shut down your currently running Full node.
 1. `cd` into your local Sui repository:
     ```shell
-    $ cd sui
+    cd sui
     ```
 1. Remove the old on-disk database and 'genesis.blob' file:
     ```shell
-    $ rm -r suidb genesis.blob
+    rm -r suidb genesis.blob
     ```
 1. Fetch the source from the latest release:
     ```shell
-    $ git fetch upstream
+    git fetch upstream
     ```
 1. Reset your branch:
     ```shell
-    $ git checkout -B devnet --track upstream/devnet
+    git checkout -B devnet --track upstream/devnet
     ```
 1. Download the latest [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet as described above.
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui Full node:
     ```shell
-    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 Your Full node starts on:
 `http://127.0.0.1:9000`
 
-## Future plans
-
-Today, a Full node relies only on synchronizing with 2f+1 validators in order to
-ensure it has seen all committed transactions. In the future, we expect
-Full nodes to fully participate in a peer-to-peer (p2p) environment where the
-load of disseminating new transactions can be shared with the whole network and
-not place the burden solely on the validators. We also expect future
-features, such as checkpoints, to enable improved performance of synchronizing the
-state of the chain from genesis.
-
-Please see our [privacy policy](https://sui.io/policy/) to learn how we handle
-information about our nodes.

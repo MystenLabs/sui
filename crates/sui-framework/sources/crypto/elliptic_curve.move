@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Library for Elliptic Curve operations on chain. We specifically support the Ristretto-255 sub-group.
+/// Library for Elliptic Curve operations for Pedersen Commitment on a prime order group.
+/// We specifically support the Ristretto-255 sub-group.
+
 module sui::elliptic_curve {
     use std::vector;
 

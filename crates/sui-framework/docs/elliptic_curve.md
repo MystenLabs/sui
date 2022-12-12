@@ -3,7 +3,8 @@
 
 # Module `0x2::elliptic_curve`
 
-Library for Elliptic Curve operations on chain. We specifically support the Ristretto-255 sub-group.
+Library for Elliptic Curve operations for Pedersen Commitment on a prime order group.
+We specifically support the Ristretto-255 sub-group.
 
 
 -  [Struct `RistrettoPoint`](#0x2_elliptic_curve_RistrettoPoint)

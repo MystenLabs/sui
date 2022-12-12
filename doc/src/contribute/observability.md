@@ -6,38 +6,30 @@ Good observability capabilities are key to the development and growth of Sui. Th
 
 The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library. The rest of this document highlights specific aspects of achieving good observability through structured logging and metrics in Sui.
 
-NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers. The
-content of logs and traces do not represent the authoritative, certified output of validators and are subject
-to potentially byzantine behavior.
+**Note:** The output here is largely for the consumption of Sui operators, administrators, and developers. The content of logs and traces do not represent the authoritative, certified output of validators and are subject to potentially byzantine behavior.
 
 ## Contexts, scopes, and tracing transaction flow
 
-In a distributed and asynchronous system like Sui, one cannot rely on looking at individual logs over time in a single thread.
-To solve this problem, we use the approach of structured logging. Structured logging offers a way to tie together
-logs, events, and blocks of functionality across threads and process boundaries.
+In a distributed and asynchronous system like Sui, one cannot rely on looking at individual logs over time in a single thread. To solve this problem, use the approach of structured logging. Structured logging offers a way to tie together logs, events, and blocks of functionality across threads and process boundaries.
 
 ### Spans and events
 
 In the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library, structured logging is implemented using [spans and events](https://docs.rs/tracing/0.1.31/tracing/index.html#core-concepts).
-Spans cover a whole block of functionality - like one function call, a future or asynchronous task, etc. They can be
-nested, and key-value pairs in spans give context to events or logs inside the function.
+Spans cover a whole block of functionality - like one function call, a future or asynchronous task, etc. They can be nested, and key-value pairs in spans give context to events or logs inside the function.
+ * spans and their key-value pairs add essential context to enclosed logs, such as a transaction ID.
+ * spans also track time spent in different sections of code, enabling distributed tracing functionality.
+ * individual logs can also add key-value pairs to aid in parsing, filtering and aggregation.
 
-* spans and their key-value pairs add essential context to enclosed logs, such as a transaction ID.
-* spans also track time spent in different sections of code, enabling distributed tracing functionality.
-* individual logs can also add key-value pairs to aid in parsing, filtering and aggregation.
+Here is a list of context information of interest:
+ * TX Digest
+ * Object reference/ID, when applicable
+ * Address
+ * Certificate digest, if applicable
+ * For Client HTTP endpoint: route, method, status
+ * Epoch
+ * Host information, for both clients and validators
 
-Here is a table/summary of context information that we will want:
-
-- TX Digest
-- Object reference/ID, when applicable
-- Address
-- Certificate digest, if applicable
-- For Client HTTP endpoint: route, method, status
-- Epoch
-- Host information, for both clients and validators
-
-Example output which shows both context (tx digests) and key-value pairs enhancing observability/filtering,
-and tracing a transaction across the gateway (`authority_aggregator`) as well as the validator:
+Example output that shows both context (tx digests) and key-value pairs enhancing observability/filtering, and tracing a transaction across the gateway (`authority_aggregator`) as well as the validator:
 
 ```
 7ab7774d1f7bd40848}: sui_core::authority_aggregator: Broadcasting transaction request to authorities quorum_threshold=3 validity_threshold=2 timeout_after_quorum=60s
@@ -50,17 +42,15 @@ and tracing a transaction across the gateway (`authority_aggregator`) as well as
 2022-03-05T01:35:03.395917Z DEBUG test_move_call_args_linter_command:process_cert{tx_digest=t#7e5f08ab09ec80e3372c101c5858c96965a25326c21af27ab7774d1f7bd40848}: sui_core::authority: Finished execution of transaction with status Success { gas_used: 7 } gas_used=7
 ```
 
-From the example above, we can see that `process_tx` is a span that covers handling the initial transaction request, and "Checked locks" is a single log message within the transaction handling method in the validator.
-Every log message that occurs within the span inherits the key-value properties defined in the span, including the tx_digest and any other fields that are added.
-Log messages can set their own keys and values.
-The fact that logs inherit the span properties allows us to trace, for example, the flow of a transaction across thread and process boundaries.
+From the preceding example, `process_tx` is a span that covers handling the initial transaction request, and "Checked locks" is a single log message within the transaction handling method in the validator.
+
+Every log message that occurs within the span inherits the key-value properties defined in the span, including the `tx_digest` and any other fields that are added. Log messages can set their own keys and values. The fact that logs inherit the span properties allows you to trace, for example, the flow of a transaction across thread and process boundaries.
 
 ## Key-value pairs schema
 
-### Span names
+Spans capture not a single event but an entire block of time; so start, end, duration, etc. can be captured and analyzed for tracing, performance analysis, and so on.
 
-Spans capture not a single event but an entire block of time; so start, end, duration, etc. can be captured
-and analyzed for tracing, performance analysis, etc.
+### Span names
 
 |           Name          |       Place        |                                    Meaning                                     |
 | ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
@@ -81,6 +71,7 @@ and analyzed for tracing, performance analysis, etc.
 ### Tags - keys
 
 The idea is that every event and span would get tagged with key-value pairs. Events that log within any context or nested contexts would also inherit the context-level tags.
+
 These tags represent *fields* that can be analyzed and filtered by. For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
 
 |         Key         |      Place(s)      |                                  Meaning                                   |
@@ -114,9 +105,9 @@ This is always tricky, to balance the right amount of verbosity especially by de
 
 Going from info to debug results in a much larger spew of messages.
 
-The `RUST_LOG` environment variable can be used to set both the overall logging level as well as the level for
-individual components, and even filtering down to specific spans or tags within spans are possible too.
-For more details, please see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) docs.
+Use the `RUST_LOG` environment variable to set both the overall logging level as well as the level for individual components. Filtering down to specific spans or tags within spans is even possible.
+
+For more details, see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) topic.
 
 ## Metrics
 
@@ -146,27 +137,25 @@ SG3 --> Vector2
 Vector2 --> ElasticSearch
 ```
 
-In the graph above, there are multiple subscribers, JSON logs can be for example fed via a local sidecar log forwarder such as
-[Vector](https://vector.dev), and then onwards to destinations such as ElasticSearch.
+In the graph above, there are multiple subscribers. You can feed JSON logs, for example, through a local sidecar log forwarder such as [Vector](https://vector.dev), and then onwards to destinations such as ElasticSearch.
 
-The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the validator server,
-as well as offloading observability traffic.
+The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the validator server, as well as offloading observability traffic.
 
 Metrics: served with a Prometheus scrape endpoint, by default at `<host>:9184/metrics`.
 
 ### Stdout (default)
 
 By default, logs (but not spans) are formatted for human readability and output to stdout, with key-value tags at the end of every line.
-`RUST_LOG` can be configured for custom logging output, including filtering - see the logging levels section above.
+
+You can configure `RUST_LOG` for custom logging output, including filtering - see the [Logging levels](#logging-levels) section earlier in this topic.
 
 ### Tracing and span output
 
-Detailed span start and end logs can be generated by defining the `SUI_JSON_SPAN_LOGS` environment variable. Note that this causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
-This output can easily be fed to backends such as ElasticSearch for indexing, alerts, aggregation, and analysis.
+To generate detailed span start and end logs, define the `SUI_JSON_SPAN_LOGS` environment variable. This causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
 
-The example output below shows certificate processing in the authority with span logging. Note the START and END annotations,
-and notice how DB_UPDATE_STATE which is nested is embedded within PROCESS_CERT.
-Also notice `elapsed_milliseconds` which logs the duration of each span.
+You can send this output to a tool or service for indexing, alerts, aggregation, and analysis.
+
+The following example output shows certificate processing in the authority with span logging. Note the `START` and `END` annotations, and notice how `DB_UPDATE_STATE` which is nested is embedded within `PROCESS_CERT`. Also notice `elapsed_milliseconds`, which logs the duration of each span.
 
 ```
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - START]","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.241421Z","target":"sui_core::authority_server","line":67,"file":"sui_core/src/authority_server.rs","tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493"}
@@ -183,16 +172,16 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 
 1. Run this to get a local Jaeger container:
    ```shell
-   $ docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+   docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
    ```
 1. Run Sui like this (trace enables the most detailed spans):
    ```shell
-   $ SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
+   SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
    ```
 1. Run some transfers with Sui CLI client, or run the benchmarking tool.
 1. Browse to `http://localhost:16686/` and select Sui as the service.
 
-> **Note:** Separate spans (which are not nested) are not connected as a single trace for now.
+**Note:** - Separate spans (that are not nested) are not connected as a single trace for now.
 
 ### Live async inspection / Tokio Console
 
@@ -202,21 +191,16 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 1. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
 1. Clone the console repo and `cargo run` to launch the console.
 
-> **Note:** Adding Tokio-console support may significantly slow down Sui validators/gateways.
+**Note:** Adding Tokio-console support might significantly slow down Sui validators/gateways.
 
 ### Memory profiling
 
-Sui uses the [jemalloc memory allocator](https://jemalloc.net/) by default on most platforms, and there is code that enables automatic
-memory profiling using jemalloc's sampling profiler, which is very lightweight and designed for production
-use.  The profiling code spits out profiles at most every 5 minutes, and only when total memory has increased
-by a default 20%.  Profiling files are named `jeprof.<TIMESTAMP>.<memorysize>MB.prof` so that it is easy to 
+Sui uses the [jemalloc memory allocator](https://jemalloc.net/) by default on most platforms, and there is code that enables automatic memory profiling using jemalloc's sampling profiler, which is very lightweight and designed for production use.  The profiling code spits out profiles at most every 5 minutes, and only when total memory has increased by a default 20%.  Profiling files are named `jeprof.<TIMESTAMP>.<memorysize>MB.prof` so that it is easy to 
 correlate to metrics and incidents, for ease of debugging.
 
-For the memory profiling to work, you need to set the environment variable `_RJEM_MALLOC_CONF=prof:true`. 
-(If you use the [Docker image](https://hub.docker.com/r/mysten/sui-node), they are set automatically)
+For the memory profiling to work, you need to set the environment variable `_RJEM_MALLOC_CONF=prof:true`. If you use the [Docker image](https://hub.docker.com/r/mysten/sui-node) they are set automatically.
 
-Note that running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable
-automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
+Running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
 
 To view the profile files, one needs to do the following, on the same platform as where the profiles were gathered:
 1. Install `libunwind`, the `dot` utility from graphviz, and jeprof.  On Debian: `apt-get install libjemalloc-dev libunwind-dev graphviz`.
@@ -225,8 +209,7 @@ To view the profile files, one needs to do the following, on the same platform a
 1. Run `jeprof --svg sui-node jeprof.xxyyzz.heap` - select the heap profile based on 
    timestamp and memory size in the filename.
 
-Note: with automatic memory profiling, it is no longer necessary to configure environment variables beyond
-what is required above.  It is possible to configure custom profiling options, see the links below:
+**Note:** With automatic memory profiling, it is no longer necessary to configure environment variables beyond those previously listed.  It is possible to configure custom profiling options:
 
 * [Heap Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
 * [heap profiling with jemallocator](https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174)
@@ -235,6 +218,5 @@ For example, set `_RJEM_MALLOC_CONF` to:
 `prof:true,lg_prof_interval:24,lg_prof_sample:19`
 
 The preceding setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
-and dump out the profile every 2^24 or 16MB of memory allocated. 
-However, the automatic profiling is designed to produce files that are better named and at less intervals,
+and dump out the profile every 2^24 or 16MB of memory allocated. However, the automatic profiling is designed to produce files that are better named and at less intervals,
 so overriding the default configuration is not usually recommended.

@@ -7,10 +7,12 @@ use crate::utils::log_errors_to_pg;
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use diesel::result::Error;
 use sui_json_rpc_types::{OwnedObjectRef, SuiObjectRef, SuiTransactionResponse};
 
 use crate::errors::IndexerError;
 use crate::schema::transactions::transaction_digest;
+use crate::PgPoolConnection;
 
 #[derive(Debug, Queryable)]
 pub struct Transaction {
@@ -58,8 +60,31 @@ pub struct NewTransaction {
     pub transaction_content: String,
 }
 
+pub fn read_transactions(
+    pg_pool_conn: &mut PgPoolConnection,
+    last_processed_id: i64,
+    limit: usize,
+) -> Result<Vec<Transaction>, IndexerError> {
+    let txn_read_result: Result<Vec<Transaction>, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            transactions_table
+                .filter(id.gt(last_processed_id))
+                .limit(limit as i64)
+                .load::<Transaction>(conn)
+        });
+
+    txn_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading transactions with last_processed_id {} and err: {:?}",
+            last_processed_id, e
+        ))
+    })
+}
+
 pub fn commit_transactions(
-    conn: &mut PgConnection,
+    pg_pool_conn: &mut PgPoolConnection,
     tx_resps: Vec<SuiTransactionResponse>,
 ) -> Result<usize, IndexerError> {
     let new_txn_iter = tx_resps
@@ -70,36 +95,25 @@ pub fn commit_transactions(
     let new_txns: Vec<NewTransaction> = new_txn_iter
         .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
-    log_errors_to_pg(conn, errors);
+    log_errors_to_pg(pg_pool_conn, errors);
 
-    diesel::insert_into(transactions::table)
-        .values(&new_txns)
-        .on_conflict(transaction_digest)
-        .do_nothing()
-        .execute(conn)
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
-                new_txns, e
-            ))
-        })
-}
+    let txn_commit_result: Result<usize, Error> = pg_pool_conn
+        .build_transaction()
+        .read_write()
+        .run::<_, Error, _>(|conn| {
+        diesel::insert_into(transactions::table)
+            .values(&new_txns)
+            .on_conflict(transaction_digest)
+            .do_nothing()
+            .execute(conn)
+    });
 
-pub fn read_transactions(
-    conn: &mut PgConnection,
-    last_processed_id: i64,
-    limit: usize,
-) -> Result<Vec<Transaction>, IndexerError> {
-    transactions_table
-        .filter(id.gt(last_processed_id))
-        .limit(limit as i64)
-        .load::<Transaction>(conn)
-        .map_err(|e| {
-            IndexerError::PostgresReadError(format!(
-                "Failed reading transactions with last_processed_id {} and err: {:?}",
-                last_processed_id, e
-            ))
-        })
+    txn_commit_result.map_err(|e| {
+        IndexerError::PostgresWriteError(format!(
+            "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
+            new_txns, e
+        ))
+    })
 }
 
 pub fn transaction_response_to_new_transaction(

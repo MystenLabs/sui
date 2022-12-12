@@ -49,10 +49,6 @@
     }
 }
 
-.error {
-    @include utils.error-message-box;
-}
-
 .muted {
     font-size: 12px;
     font-weight: 400;

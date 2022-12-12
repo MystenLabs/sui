@@ -457,7 +457,8 @@ impl<'a> SuiTestAdapter<'a> {
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
             .data()
-            .data
+            .intent_message
+            .value
             .input_objects()?
             .into_iter()
             .flat_map(|kind| {
@@ -491,7 +492,7 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
-            transaction.into_inner().into_data().data,
+            transaction.into_inner().into_data().intent_message.value,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

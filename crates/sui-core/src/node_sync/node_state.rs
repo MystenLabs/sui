@@ -560,7 +560,7 @@ where
 
         match self
             .state()
-            .handle_certificate_with_effects(&cert, &effects)
+            .execute_certificate_with_effects(&cert, &effects)
             .await
         {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -580,7 +580,7 @@ where
 
         let cert = self.get_cert(epoch_id, digest).await?;
 
-        let result = self.state().handle_certificate(&cert).await;
+        let result = self.state().execute_certificate_internal(&cert).await;
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
@@ -600,7 +600,7 @@ where
 
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
-                self.state().handle_certificate(&cert).await?;
+                self.state().execute_certificate_internal(&cert).await?;
                 Ok(SyncStatus::CertExecuted)
             }
             Err(e) => Err(e),
@@ -712,7 +712,7 @@ where
             .await?;
 
         self.state()
-            .handle_certificate_with_effects(&cert, &effects)
+            .execute_certificate_with_effects(&cert, &effects)
             .await?;
 
         Ok(SyncStatus::CertExecuted)
@@ -1102,6 +1102,6 @@ mod tests {
             msg: "test 2".into(),
             errors: vec![err1],
         };
-        assert_eq!(format!("{}", err2), "ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 2 - Caused by : [ ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 1 - Caused by : [ ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 0 - Caused by : [  ] ] ]");
+        assert_eq!(format!("{}", err2), "ExecutionDriver error for k7FaK87WHGVXzkaoHb7CdVPgkKDQhZ29VLDeBVbDfYn: test 2 - Caused by : [ ExecutionDriver error for k7FaK87WHGVXzkaoHb7CdVPgkKDQhZ29VLDeBVbDfYn: test 1 - Caused by : [ ExecutionDriver error for k7FaK87WHGVXzkaoHb7CdVPgkKDQhZ29VLDeBVbDfYn: test 0 - Caused by : [  ] ] ]");
     }
 }

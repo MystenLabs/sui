@@ -11,6 +11,8 @@ use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use signature::rand_core::OsRng;
 use sui_keys::key_derive::derive_key_pair_from_path;
+use sui_types::intent::Intent;
+use sui_types::messages::TransactionData;
 use tracing::info;
 
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
@@ -125,7 +127,8 @@ impl KeyToolCommand {
                 info!("Data to sign : {}", data);
                 info!("Address : {}", address);
                 let message = Base64::decode(&data).map_err(|e| anyhow!(e))?;
-                let sui_signature = keystore.sign(&address, &message)?;
+                let tx_data: TransactionData = bcs::from_bytes(&message).map_err(|e| anyhow!(e))?;
+                let sui_signature = keystore.sign_secure(&address, &tx_data, Intent::default())?;
                 // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
                 let signature_string = format!("{:?}", sui_signature);
                 let sig_split = signature_string.split('@').collect::<Vec<_>>();

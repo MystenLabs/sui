@@ -6,10 +6,11 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signable, Signature, SignatureScheme, SuiSignature,
+    Ed25519SuiSignature, EmptySignInfo, Signature, SignatureScheme, SuiSignature,
     SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
+use crate::intent::{Intent, IntentMessage};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
@@ -734,16 +735,6 @@ impl TransactionData {
         self.sender
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut writer = Vec::new();
-        self.write(&mut writer);
-        writer
-    }
-
-    pub fn to_base64(&self) -> String {
-        Base64::encode(&self.to_bytes())
-    }
-
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
         &self.gas_payment
     }
@@ -810,14 +801,16 @@ impl TransactionData {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
-    pub data: TransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
+    pub intent_message: IntentMessage<TransactionData>,
     pub tx_signature: Signature,
 }
 
 impl SenderSignedData {
-    pub fn new(data: TransactionData, tx_signature: Signature) -> Self {
-        Self { data, tx_signature }
+    pub fn new(tx_data: TransactionData, intent: Intent, tx_signature: Signature) -> Self {
+        Self {
+            intent_message: IntentMessage::new(intent, tx_data),
+            tx_signature,
+        }
     }
 }
 
@@ -825,24 +818,25 @@ impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(sha3_hash(&self.data))
+        TransactionDigest::new(sha3_hash(&self.intent_message.value))
     }
 
     fn verify(&self) -> SuiResult {
-        if self.data.kind.is_system_tx() {
+        if self.intent_message.value.kind.is_system_tx() {
             return Ok(());
         }
-        self.tx_signature.verify(&self.data, self.data.sender)
+        self.tx_signature
+            .verify_secure(&self.intent_message, self.intent_message.value.sender)
     }
 }
 
 impl<S> Envelope<SenderSignedData, S> {
     pub fn sender_address(&self) -> SuiAddress {
-        self.data().data.sender
+        self.data().intent_message.value.sender
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        self.data().data.gas_payment_object_ref()
+        self.data().intent_message.value.gas_payment_object_ref()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -852,7 +846,7 @@ impl<S> Envelope<SenderSignedData, S> {
     pub fn shared_input_objects(
         &self,
     ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
-        self.data().data.kind.shared_input_objects()
+        self.data().intent_message.value.kind.shared_input_objects()
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -878,7 +872,7 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 
     pub fn is_system_tx(&self) -> bool {
-        self.data().data.kind.is_system_tx()
+        self.data().intent_message.value.kind.is_system_tx()
     }
 }
 
@@ -887,32 +881,39 @@ pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
 pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
 
 impl Transaction {
-    pub fn from_data(data: TransactionData, signature: Signature) -> Self {
-        Self::new(SenderSignedData::new(data, signature))
-    }
-
-    #[cfg(test)]
     pub fn from_data_and_signer(
         data: TransactionData,
+        intent: Intent,
         signer: &dyn signature::Signer<Signature>,
     ) -> Self {
-        let signature = Signature::new(&data, signer);
-        Self::from_data(data, signature)
+        let data1 = data.clone();
+        let intent1 = intent.clone();
+        let intent_msg = IntentMessage::new(intent, data);
+        let signature = Signature::new_secure(&intent_msg, signer);
+        Self::new(SenderSignedData::new(data1, intent1, signature))
+    }
+
+    pub fn from_data(data: TransactionData, intent: Intent, signature: Signature) -> Self {
+        Self::new(SenderSignedData::new(data, intent, signature))
     }
 
     // TODO(joyqvq): remove and prefer to_tx_bytes_and_signature()
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
         (
-            Base64::from_bytes(&self.data().data.to_bytes()),
-            self.data().tx_signature.scheme(),
-            Base64::from_bytes(self.data().tx_signature.signature_bytes()),
-            Base64::from_bytes(self.data().tx_signature.public_key_bytes()),
+            Base64::from_bytes(
+                bcs::to_bytes(&self.intent_message.value)
+                    .unwrap()
+                    .as_slice(),
+            ),
+            self.tx_signature.scheme(),
+            Base64::from_bytes(self.tx_signature.signature_bytes()),
+            Base64::from_bytes(self.tx_signature.public_key_bytes()),
         )
     }
 
     pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
         (
-            Base64::from_bytes(&self.data().data.to_bytes()),
+            Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
             Base64::from_bytes(self.data().tx_signature.as_ref()),
         )
     }
@@ -939,7 +940,8 @@ impl VerifiedTransaction {
             0,
         );
         let signed_data = SenderSignedData {
-            data,
+            // Default intent
+            intent_message: IntentMessage::new(Intent::default(), data),
             // Arbitrary keypair
             tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                 .unwrap()
@@ -2065,7 +2067,7 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sig().signers_map
         )?;
-        write!(writer, "{}", &self.data().data.kind)?;
+        write!(writer, "{}", &self.data().intent_message.value.kind)?;
         write!(f, "{}", writer)
     }
 }

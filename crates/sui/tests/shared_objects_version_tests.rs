@@ -20,10 +20,10 @@ use test_utils::transaction::{
 };
 
 #[sim_test]
-async fn fresh_shared_objects_get_start_version() {
+async fn fresh_shared_object_initial_version_matches_current() {
     let mut env = TestEnvironment::new().await;
-    let (_, owner) = env.create_shared_counter().await;
-    assert!(is_shared_at(&owner, OBJECT_START_VERSION));
+    let ((_, curr, _), owner) = env.create_shared_counter().await;
+    assert!(is_shared_at(&owner, curr));
 }
 
 #[sim_test]

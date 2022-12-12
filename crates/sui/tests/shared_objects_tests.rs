@@ -6,7 +6,6 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };
-use sui_types::object::OBJECT_START_VERSION;
 use test_utils::authority::get_client;
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
@@ -328,6 +327,8 @@ async fn replay_shared_object_transaction() {
         package_ref,
         /* arguments */ Vec::default(),
     );
+
+    let mut version = None;
     for _ in 0..2 {
         let effects = submit_single_owner_transaction(
             create_counter_transaction.clone(),
@@ -337,7 +338,14 @@ async fn replay_shared_object_transaction() {
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
         // Ensure the sequence number of the shared object did not change.
-        let ((_, seq, _), _) = effects.created[0];
-        assert_eq!(seq, OBJECT_START_VERSION);
+        let ((_, curr, _), _) = effects.created[0];
+        if let Some(prev) = version {
+            assert_eq!(
+                prev, curr,
+                "SequenceNumber of shared object did not change."
+            );
+        }
+
+        version = Some(curr);
     }
 }

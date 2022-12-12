@@ -1,101 +1,59 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, EffectsNotifyRead};
 use signature::Signer;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use sui_types::{
-    base_types::{dbg_addr, ObjectID, TransactionDigest},
-    batch::UpdateItem,
-    crypto::{
-        get_key_pair, AccountKeyPair, AuthoritySignInfo, AuthoritySignature, Signable, Signature,
+    base_types::{
+        dbg_addr, random_object_ref, AuthorityName, ExecutionDigests, ObjectID, TransactionDigest,
     },
+    committee::Committee,
+    crypto::{get_key_pair, AccountKeyPair, AuthoritySignInfo, AuthoritySignature, Signature},
+    gas::GasCostSummary,
+    intent::{Intent, IntentMessage},
+    message_envelope::Message,
     messages::{
-        BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData, VerifiedTransaction,
+        CertifiedTransaction, ExecutionStatus, Transaction, TransactionData, TransactionEffects,
+        VerifiedTransaction,
     },
-    object::Object,
+    object::{Object, Owner},
 };
+use tokio::time::timeout;
+use tracing::{info, warn};
 
-use futures::StreamExt;
-use sui_types::base_types::{random_object_ref, AuthorityName, ExecutionDigests};
-use sui_types::committee::Committee;
-use sui_types::gas::GasCostSummary;
-use sui_types::message_envelope::Message;
-use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects};
-use sui_types::object::Owner;
-use tokio::time::sleep;
-use tracing::info;
+const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
-pub async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
-    wait_for_all_txes(vec![wait_digest], state).await
-}
-
-pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
-    let mut wait_digests: HashSet<_> = wait_digests.iter().collect();
-
-    let mut timeout = Box::pin(sleep(Duration::from_millis(15_000)));
-
-    let mut max_seq = Some(0);
-
-    let mut stream = Box::pin(
-        state
-            .handle_batch_streaming(BatchInfoRequest {
-                start: max_seq,
-                length: 1000,
-            })
-            .await
-            .unwrap(),
-    );
-
-    loop {
-        tokio::select! {
-            _ = &mut timeout => panic!("wait_for_tx timed out"),
-
-            items = &mut stream.next() => {
-                match items {
-                    // Upon receiving a batch
-                    Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(batch)) )) => {
-                        max_seq = Some(batch.data().next_sequence_number);
-                        info!(?max_seq, "Received Batch");
-                    }
-                    // Upon receiving a transaction digest we store it, if it is not processed already.
-                    Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
-                        info!(?digest, "Received Transaction");
-                        if wait_digests.remove(&digest.transaction) {
-                            info!(?digest, "Digest found");
-                        }
-                        if wait_digests.is_empty() {
-                            info!(?digest, "all digests found");
-                            break;
-                        }
-                    },
-
-                    Some(Err( err )) => panic!("{}", err),
-                    None => {
-                        info!(?max_seq, "Restarting Batch");
-                        stream = Box::pin(
-                                state
-                                    .handle_batch_streaming(BatchInfoRequest {
-                                        start: max_seq,
-                                        length: 1000,
-                                    })
-                                    .await
-                                    .unwrap(),
-                            );
-
-                    }
-                }
-            },
+pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
+    match timeout(
+        WAIT_FOR_TX_TIMEOUT,
+        state.database.notify_read_effects(vec![digest]),
+    )
+    .await
+    {
+        Ok(_) => info!(?digest, "digest found"),
+        Err(e) => {
+            warn!(?digest, "digest not found!");
+            panic!("timed out waiting for effects of digest! {e}");
         }
     }
+}
 
-    // A small delay is needed so that the batch process can finish notifying other subscribers,
-    // which tests may depend on. Otherwise tests can pass or fail depending on whether the
-    // subscriber in this function was notified first or last.
-    sleep(Duration::from_millis(10)).await;
+pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
+    match timeout(
+        WAIT_FOR_TX_TIMEOUT,
+        state.database.notify_read_effects(digests.clone()),
+    )
+    .await
+    {
+        Ok(_) => info!(?digests, "all digests found"),
+        Err(e) => {
+            warn!(?digests, "some digests not found!");
+            panic!("timed out waiting for effects of digests! {e}");
+        }
+    }
 }
 
 // Creates a fake sender-signed transaction for testing. This transaction will
@@ -147,19 +105,24 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
-    let signature = Signature::new(&data, signer);
-    // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
+    VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
+        data,
+        Intent::default(),
+        signer,
+    ))
 }
 
+// Workaround for benchmark setup.
 pub fn to_sender_signed_transaction_arc(
     data: TransactionData,
     signer: &Arc<fastcrypto::ed25519::Ed25519KeyPair>,
 ) -> VerifiedTransaction {
-    let mut message = Vec::new();
-    data.write(&mut message);
-    let signature: Signature = signer.sign(&message);
-    VerifiedTransaction::new_unchecked(Transaction::from_data(data, signature))
+    let data1 = data.clone();
+    let intent_message = IntentMessage::new(Intent::default(), data);
+    // OK to unwrap because this is used for benchmark only.
+    let bytes = bcs::to_bytes(&intent_message).unwrap();
+    let signature: Signature = signer.sign(&bytes);
+    VerifiedTransaction::new_unchecked(Transaction::from_data(data1, Intent::default(), signature))
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
@@ -180,7 +143,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
         wrapped: Vec::new(),
         gas_object: (
             random_object_ref(),
-            Owner::AddressOwner(tx.data().data.signer()),
+            Owner::AddressOwner(tx.data().intent_message.value.signer()),
         ),
         events: Vec::new(),
         dependencies: Vec::new(),

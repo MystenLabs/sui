@@ -8,10 +8,10 @@ use fastcrypto::encoding::{Encoding, Hex};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto;
-use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
+use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, SenderSignedData,
-    Transaction, TransactionData,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
+    TransactionData,
 };
 use sui_types::object::Owner;
 
@@ -28,6 +28,8 @@ use crate::types::{
 };
 use crate::ErrorType::InternalError;
 use crate::{ErrorType, OnlineServerContext, SuiEnv};
+use anyhow::anyhow;
+use sui_types::intent::{Intent, IntentMessage};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
 
@@ -60,15 +62,15 @@ pub async fn payloads(
         .ok_or_else(|| Error::new(ErrorType::MissingMetadata))?;
 
     let data = Operation::create_data(request.operations, metadata).await?;
-    let hex_bytes = Hex::encode(data.to_bytes());
+    let address = data.signer();
+    let intent_msg = IntentMessage::new(Intent::default(), data);
+    let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
     Ok(ConstructionPayloadsResponse {
-        unsigned_transaction: Hex::from_bytes(&data.to_bytes()),
+        unsigned_transaction: Hex::from_bytes(&intent_msg_bytes),
         payloads: vec![SigningPayload {
-            account_identifier: AccountIdentifier {
-                address: data.signer(),
-            },
-            hex_bytes,
+            account_identifier: AccountIdentifier { address },
+            hex_bytes: Hex::encode(bcs::to_bytes(&intent_msg)?),
             signature_type: Some(SignatureType::Ed25519),
         }],
     })
@@ -86,25 +88,22 @@ pub async fn combine(
     let unsigned_tx = request
         .unsigned_transaction
         .to_vec()
-        .map_err(|e| anyhow::anyhow!(e))?;
-    let data = TransactionData::from_signable_bytes(&unsigned_tx)?;
+        .map_err(|e| anyhow!(e))?;
+    let intent_msg: IntentMessage<TransactionData> = bcs::from_bytes(&unsigned_tx)?;
     let sig = request.signatures.first().unwrap();
-    let sig_bytes = sig.hex_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?;
-    let pub_key = sig
-        .public_key
-        .hex_bytes
-        .to_vec()
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let sig_bytes = sig.hex_bytes.to_vec().map_err(|e| anyhow!(e))?;
+    let pub_key = sig.public_key.hex_bytes.to_vec().map_err(|e| anyhow!(e))?;
     let flag = vec![match sig.signature_type {
         SignatureType::Ed25519 => SignatureScheme::ED25519,
         SignatureType::Ecdsa => SignatureScheme::Secp256k1,
     }
     .flag()];
 
-    let signed_tx = Transaction::new(SenderSignedData::new(
-        data,
+    let signed_tx = Transaction::from_data(
+        intent_msg.value,
+        Intent::default(),
         crypto::Signature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
-    ));
+    );
     signed_tx.verify_signature()?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 
@@ -252,14 +251,11 @@ pub async fn parse(
                 .to_vec()
                 .map_err(|e| anyhow::anyhow!(e))?,
         )?;
-        tx.into_data().data
+        tx.into_data().intent_message.value
     } else {
-        TransactionData::from_signable_bytes(
-            &request
-                .transaction
-                .to_vec()
-                .map_err(|e| anyhow::anyhow!(e))?,
-        )?
+        let intent: IntentMessage<TransactionData> =
+            bcs::from_bytes(&request.transaction.to_vec().map_err(|e| anyhow!(e))?)?;
+        intent.value
     };
     let account_identifier_signers = if request.signed {
         vec![AccountIdentifier {

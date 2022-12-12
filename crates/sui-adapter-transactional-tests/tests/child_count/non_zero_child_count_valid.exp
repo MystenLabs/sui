@@ -13,7 +13,7 @@ written: object(106)
 
 task 3 'view-object'. lines 50-54:
 Owner: Shared
-Version: 1
+Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'run'. lines 56-56:
@@ -25,7 +25,7 @@ written: object(112), object(114)
 
 task 6 'view-object'. lines 60-64:
 Owner: Account Address ( B )
-Version: 2
+Version: 3
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
 
 task 7 'run'. lines 66-66:
@@ -37,5 +37,5 @@ written: object(117), object(119)
 
 task 9 'view-object'. lines 70-70:
 Owner: Account Address ( B )
-Version: 2
+Version: 3
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(117)}}}

@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
+use fastcrypto::encoding::{Base64, Encoding};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -27,17 +28,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-use sui_types::coin::CoinMetadata;
-use tracing::warn;
-
-use fastcrypto::encoding::{Base64, Encoding};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
     TransactionDigest, TransactionEffectsDigest,
 };
+use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
+use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
@@ -56,6 +54,7 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
+use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -63,8 +62,26 @@ mod rpc_types_tests;
 
 pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
-
 pub type EventPage = Page<SuiEventEnvelope, EventID>;
+pub type CoinPage = Page<Coin, ObjectID>;
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Balance {
+    pub coin_type: String,
+    pub coin_object_count: usize,
+    pub total_balance: u128,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Coin {
+    pub coin_type: String,
+    pub coin_object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    pub balance: u64,
+}
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
@@ -418,7 +435,7 @@ impl SuiExecuteTransactionResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiCoinMetadata {
     /// Number of decimal places the coin uses.
@@ -942,9 +959,11 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
-                    if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                        return Ok(GasCoin::new(*id, *balance));
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
+                    if let Ok(balance) = balance.parse::<u64>() {
+                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                            return Ok(GasCoin::new(*id, balance));
+                        }
                     }
                 }
             }
@@ -1164,7 +1183,6 @@ pub enum SuiMoveValue {
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
-    Bytearray(Base64),
     String(String),
     UID { id: ObjectID },
     Struct(SuiMoveStruct),
@@ -1189,13 +1207,6 @@ impl Display for SuiMoveValue {
                     vec.iter().map(|value| format!("{value}")).join(",\n")
                 )?;
             }
-            SuiMoveValue::Bytearray(value) => {
-                write!(
-                    writer,
-                    "{:?}",
-                    value.clone().to_vec().map_err(fmt::Error::custom)?
-                )?;
-            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1207,16 +1218,12 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U16(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U32(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U64(value) => SuiMoveValue::Number(value),
+            MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
-                if let Some(bytes) = to_bytearray(&values) {
-                    SuiMoveValue::Bytearray(Base64::from_bytes(&bytes))
-                } else {
-                    SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
-                }
+                SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
             }
             MoveValue::Struct(value) => {
                 // Best effort Sui core type conversion
@@ -1743,7 +1750,7 @@ pub struct SuiChangeEpoch {
 pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
+    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
     pub tx_signature: Signature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: AuthorityStrongQuorumSignInfo,
@@ -1772,7 +1779,7 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
         let (data, sig) = cert.into_data_and_sig();
         Ok(Self {
             transaction_digest: digest,
-            data: data.data.try_into()?,
+            data: data.intent_message.value.try_into()?,
             tx_signature: data.tx_signature,
             auth_sign_info: sig,
         })
@@ -2780,7 +2787,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
-    /// transaction data bytes, as base-64 encoded string
+    /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
     pub tx_bytes: Base64,
     /// the gas object to be used
     pub gas: SuiObjectRef,
@@ -2791,7 +2798,7 @@ pub struct TransactionBytes {
 impl TransactionBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            tx_bytes: Base64::from_bytes(&data.to_bytes()),
+            tx_bytes: Base64::from_bytes(bcs::to_bytes(&data)?.as_slice()),
             gas: data.gas().into(),
             input_objects: data
                 .input_objects()?
@@ -2802,9 +2809,8 @@ impl TransactionBytes {
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(
-            &self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?,
-        )
+        bcs::from_bytes::<TransactionData>(&self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
 

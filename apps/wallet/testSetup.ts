@@ -3,7 +3,7 @@
 
 import { webcrypto } from 'crypto';
 
-if (!globalThis.defined) {
+if (!globalThis.crypto) {
     globalThis.crypto = webcrypto as Crypto;
 }
 

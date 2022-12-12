@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
-use sui_types::messages::TransactionEffects;
+use sui_types::messages::SignedTransactionEffects;
 use tokio::sync::oneshot;
 
 #[async_trait]
@@ -31,15 +31,15 @@ pub trait EffectsNotifyRead: Send + Sync + 'static {
     ///
     /// This method **does not** schedule transactions for execution - it is responsibility of the caller
     /// to schedule transactions for execution before calling this method.
-    async fn notify_read(
+    async fn notify_read_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<TransactionEffects>>;
+    ) -> SuiResult<Vec<SignedTransactionEffects>>;
 
     fn get_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
 }
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
@@ -178,10 +178,10 @@ impl<'a, K: Eq + Hash + Clone, V: Clone> Drop for Registration<'a, K, V> {
 
 #[async_trait]
 impl EffectsNotifyRead for Arc<AuthorityStore> {
-    async fn notify_read(
+    async fn notify_read_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<TransactionEffects>> {
+    ) -> SuiResult<Vec<SignedTransactionEffects>> {
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registrations = self.effects_notify_read.register_all(digests.clone());
         let effects = EffectsStore::get_effects(self, digests.iter())?;
@@ -201,7 +201,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
     fn get_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
         EffectsStore::get_effects(self, digests.iter())
     }
 }

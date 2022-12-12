@@ -462,7 +462,7 @@ impl LocalAuthorityClient {
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
         let state = AuthorityState::new_for_testing(committee, &secret, None, Some(genesis)).await;
         Self {
-            state: Arc::new(state),
+            state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
         }
     }
@@ -510,7 +510,7 @@ impl LocalAuthorityClient {
                     let epoch_store = state.epoch_store();
                     certificate.verify(epoch_store.committee())?
                 };
-                state.handle_certificate(&certificate).await?
+                state.execute_certificate_internal(&certificate).await?
             }
         };
         if fault_config.fail_after_handle_confirmation {
