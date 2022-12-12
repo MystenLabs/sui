@@ -104,7 +104,7 @@ This is always tricky, to balance the right amount of verbosity especially by de
 
 Going from info to debug results in a much larger spew of messages.
 
-The `RUST_LOG` environment variable can be used to set both the overall logging level as well as the level for individual components, and even filtering down to specific spans or tags within spans are possible too.
+Use the `RUST_LOG` environment variable to set both the overall logging level as well as the level for individual components. Filtering down to specific spans or tags within spans is even possible.
 
 For more details, see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) topic.
 
