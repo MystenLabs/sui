@@ -12,7 +12,7 @@ anemo-tower.workspace = true
 axum = "0.5.16"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
-multiaddr = "0.16.0"
+multiaddr = "0.17.0"
 prometheus = "0.13.3"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
