@@ -44,7 +44,7 @@ Example output that shows both context (tx digests) and key-value pairs enhancin
 
 From the preceding example, `process_tx` is a span that covers handling the initial transaction request, and "Checked locks" is a single log message within the transaction handling method in the validator.
 
-Every log message that occurs within the span inherits the key-value properties defined in the span, including the tx_digest and any other fields that are added. Log messages can set their own keys and values. The fact that logs inherit the span properties allows you to trace, for example, the flow of a transaction across thread and process boundaries.
+Every log message that occurs within the span inherits the key-value properties defined in the span, including the `tx_digest` and any other fields that are added. Log messages can set their own keys and values. The fact that logs inherit the span properties allows you to trace, for example, the flow of a transaction across thread and process boundaries.
 
 ## Key-value pairs schema
 
