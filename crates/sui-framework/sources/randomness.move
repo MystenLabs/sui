@@ -103,4 +103,13 @@ module sui::randomness {
 
     /// Verify signature sig on message "randomness":epoch:id
     native fun native_verify_tbls_signature(epoch: u64, msg: &vector<u8>, sig: &vector<u8>): bool;
+
+    /// Helper functions to sign on messages.
+    native fun native_tbls_sign(epoch: u64, msg: &vector<u8>): vector<u8>;
+
+    #[test_only]
+    public fun sign<T>(self: &Randomness<T>): vector<u8> {
+        let msg = to_bytes(&Domain, self.epoch, &object::id(self));
+        native_tbls_sign(self.epoch, &msg)
+    }
 }
