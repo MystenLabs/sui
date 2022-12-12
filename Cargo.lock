@@ -14,16 +14,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9ecd88a8c8378ca913a680cd98f0f13ac67383d35993f86c90a70e3f137816b"
 dependencies = [
- "gimli 0.26.2",
-]
-
-[[package]]
-name = "addr2line"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76fd60b23679b7d19bd066031410fb7e458ccc5e958eb5c325888ce4baedc97"
-dependencies = [
- "gimli 0.27.0",
+ "gimli",
 ]
 
 [[package]]
@@ -722,7 +713,7 @@ version = "0.3.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab84319d616cfb654d03394f38ab7e6f0919e181b1b57e1fd15e7fb4077d9a7"
 dependencies = [
- "addr2line 0.17.0",
+ "addr2line",
  "cc",
  "cfg-if",
  "libc",
@@ -2976,12 +2967,6 @@ name = "gimli"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22030e2c5a68ec659fde1e949a745124b48e6fa8b045b7ed5bd1fe4ccc5c4e5d"
-
-[[package]]
-name = "gimli"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
 
 [[package]]
 name = "glob"
@@ -10942,7 +10927,7 @@ name = "workspace-hack"
 version = "0.1.0"
 dependencies = [
  "Inflector",
- "addr2line 0.19.0",
+ "addr2line",
  "adler",
  "aead",
  "aes",
@@ -11208,7 +11193,7 @@ dependencies = [
  "getrandom 0.1.16",
  "getrandom 0.2.8",
  "ghash",
- "gimli 0.26.2",
+ "gimli",
  "glob",
  "globset",
  "globwalk",
