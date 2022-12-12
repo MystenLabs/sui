@@ -48,9 +48,9 @@ Every log message that occurs within the span inherits the key-value properties 
 
 ## Key-value pairs schema
 
-### Span names
-
 Spans capture not a single event but an entire block of time; so start, end, duration, etc. can be captured and analyzed for tracing, performance analysis, and so on.
+
+### Span names
 
 |           Name          |       Place        |                                    Meaning                                     |
 | ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
@@ -71,6 +71,7 @@ Spans capture not a single event but an entire block of time; so start, end, dur
 ### Tags - keys
 
 The idea is that every event and span would get tagged with key-value pairs. Events that log within any context or nested contexts would also inherit the context-level tags.
+
 These tags represent *fields* that can be analyzed and filtered by. For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
 
 |         Key         |      Place(s)      |                                  Meaning                                   |
