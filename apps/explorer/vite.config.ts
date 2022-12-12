@@ -15,6 +15,7 @@ process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV;
 export default defineConfig({
     plugins: [react(), svgr()],
     test: {
+        css: true,
         globals: true,
         environment: 'happy-dom',
     },
