@@ -1330,9 +1330,13 @@ fn write_cert_and_effects(
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
-            SuiClientCommandResult::Object(object_read, _bcs) => {
+            SuiClientCommandResult::Object(object_read, bcs) => {
                 let object = object_read.object()?;
-                Ok(serde_json::to_string_pretty(&object)?)
+                if *bcs {
+                    Ok(serde_json::to_string_pretty(&bcs::to_bytes(&object)?)?)
+                } else {
+                    Ok(serde_json::to_string_pretty(&object)?)
+                }
             }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
