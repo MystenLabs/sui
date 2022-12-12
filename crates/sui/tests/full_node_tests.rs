@@ -60,6 +60,9 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
+    // A small delay is needed for post processing operations following the transaction to finish.
+    sleep(Duration::from_secs(1)).await;
+
     // verify that the intermediate sync data is cleared.
     let sync_store = node.state().node_sync_store.clone();
     let epoch_id = 0;
