@@ -30,7 +30,7 @@
     "@mysten/wallet-adapter-base": "workspace:*"
   },
   "devDependencies": {
-    "tsup": "^6.2.2",
+    "tsup": "^6.5.0",
     "typescript": "^4.8.3"
   }
 }
