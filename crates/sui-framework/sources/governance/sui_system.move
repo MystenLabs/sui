@@ -360,8 +360,8 @@ module sui::sui_system {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
 
-        let storage_reward = balance::increase_supply(&mut self.sui_supply, storage_charge);
-        let computation_reward = balance::increase_supply(&mut self.sui_supply, computation_charge);
+        let storage_reward = balance::create_staking_rewards(storage_charge);
+        let computation_reward = balance::create_staking_rewards(computation_charge);
 
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
@@ -404,13 +404,19 @@ module sui::sui_system {
         balance::join(&mut self.storage_fund, storage_fund_reward);
         balance::join(&mut self.storage_fund, computation_reward);
 
-        // Burn the storage rebate.
+        // Destroy the storage rebate.
         assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
-        balance::decrease_supply(&mut self.sui_supply, balance::split(&mut self.storage_fund, storage_rebate));
+        balance::destroy_storage_rebates(balance::split(&mut self.storage_fund, storage_rebate));
         
         // Validator reports are only valid for the epoch.
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
+    }
+
+    spec advance_epoch {
+        /// Total supply of SUI shouldn't change.
+        ensures balance::supply_value(self.sui_supply) 
+            == old(balance::supply_value(self.sui_supply));
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
