@@ -7,4 +7,5 @@ export {
     getEventsPayReceiveSummary,
     getMoveCallMeta,
     getRelatedObjectIds,
+    getTxnAmount,
 } from './getTxSummery';
