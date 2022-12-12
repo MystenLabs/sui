@@ -190,16 +190,15 @@ fn num_fields(struct_def: &StructDefinition) -> usize {
     }
 }
 
-fn pack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
-    let mut has_id = false;
+fn pack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) -> PartialVMResult<()> {
     for _ in 0..num_fields(struct_def) {
-        has_id |= verifier.stack.pop().unwrap() == AbstractValue::ID;
+        let value = verifier.stack.pop().unwrap();
+        if value == AbstractValue::ID {
+            return Err(move_verification_error("ID is leaked into a struct."));
+        }
     }
-    verifier.stack.push(if has_id {
-        AbstractValue::ID
-    } else {
-        AbstractValue::NonID
-    });
+    verifier.stack.push(AbstractValue::NonID);
+    Ok(())
 }
 
 fn unpack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
@@ -354,12 +353,12 @@ fn execute_inner(
 
         Bytecode::Pack(idx) => {
             let struct_def = expect_ok(verifier.binary_view.struct_def_at(*idx))?;
-            pack(verifier, struct_def);
+            pack(verifier, struct_def)?;
         }
         Bytecode::PackGeneric(idx) => {
             let struct_inst = expect_ok(verifier.binary_view.struct_instantiation_at(*idx))?;
             let struct_def = expect_ok(verifier.binary_view.struct_def_at(struct_inst.def))?;
-            pack(verifier, struct_def);
+            pack(verifier, struct_def)?;
         }
         Bytecode::Unpack(idx) => {
             let struct_def = expect_ok(verifier.binary_view.struct_def_at(*idx))?;
