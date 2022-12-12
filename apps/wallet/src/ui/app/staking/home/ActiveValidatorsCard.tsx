@@ -3,14 +3,14 @@
 
 import { useCallback, useState } from 'react';
 
+import { Text } from '../../shared/text';
+import { IconTooltip } from '../../shared/tooltip';
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { ImageIcon } from '_app/shared/image-icon';
-import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';

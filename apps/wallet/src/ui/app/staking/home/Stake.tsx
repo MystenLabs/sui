@@ -7,6 +7,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { FEATURES } from '../../experimentation/features';
+import { Text } from '../../shared/text';
 import { usePendingDelegation } from '../usePendingDelegation';
 import { ActiveDelegation } from './ActiveDelegation';
 import { ActiveValidatorsCard } from './ActiveValidatorsCard';
@@ -18,7 +19,6 @@ import BottomMenuLayout, {
 import Button from '_app/shared/button';
 import Card, { CardContent, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
-import { Text } from '_app/shared/text';
 import {
     activeDelegationIDsSelector,
     totalActiveStakedSelector,

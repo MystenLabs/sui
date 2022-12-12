@@ -4,11 +4,10 @@
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
+import { Text } from '../../shared/text';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import Card, { CardContent, CardFooter, CardHeader } from '_app/shared/card';
-import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
+import Card, { CardFooter, CardHeader } from '_app/shared/card';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
@@ -20,6 +19,7 @@ import st from './StakeForm.module.scss';
 export type StakeFromProps = {
     submitError: string | null;
     coinBalance: string;
+
     coinType: string;
     onClearSubmitError: () => void;
 };
@@ -28,6 +28,7 @@ function StakeForm({
     submitError,
     coinBalance,
     coinType,
+
     onClearSubmitError,
 }: StakeFromProps) {
     const {
@@ -38,6 +39,7 @@ function StakeForm({
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
+
     useEffect(() => {
         onClearRef.current();
     }, [amount]);
@@ -64,35 +66,14 @@ function StakeForm({
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent colored padding col gap>
-                            <div className="flex  gap-2 items-center justify-between ">
-                                <div className="flex gap-1 items-baseline text-steel">
-                                    <Text
-                                        variant="body"
-                                        weight="medium"
-                                        color="steel-darker"
-                                    >
-                                        Staking APY
-                                    </Text>
-                                    <IconTooltip tip="Annual Percentage Yield" />
-                                </div>
 
-                                <Text
-                                    variant="body"
-                                    weight="semibold"
-                                    color="gray-90"
-                                >
-                                    12.5%
-                                </Text>
-                            </div>
-                        </CardContent>
                         <CardFooter className="bg-sui/10">
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Your Staked SUI
+                                Gas Fee
                             </Text>
                             <Text
                                 variant="body"

@@ -13,12 +13,12 @@ import cl from 'classnames';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { Text } from '../../shared/text';
 import { GasCard } from './GasCard';
 import { NftMiniCard } from './NftCard';
 import { Transfer } from './Transfer';
 import { ValidatorCard } from './ValidatorCard';
 import { DateCard } from '_app/shared/date-card';
-import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';

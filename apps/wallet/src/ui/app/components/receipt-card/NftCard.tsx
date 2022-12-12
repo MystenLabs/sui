@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { Text } from '_app/shared/text';
+import { Text } from '../../shared/text';
 import { useGetNFTMetaById, useMiddleEllipsis } from '_hooks';
 
 const imageStyle = cva([], {

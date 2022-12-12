@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '../../shared/text';
+import { IconTooltip } from '../../shared/tooltip';
 import Card, { CardContent, CardFooter, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
 import { ImageIcon } from '_app/shared/image-icon';
-import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
-// import { totalActiveStakedSelector } from '_app/staking/selectors';
 import { useAppSelector, useGetValidators } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
@@ -23,8 +22,6 @@ export function ValidateDetailFormCard({
     const validatorDataByAddress = validators.find(
         ({ address }) => address === validatorAddress
     );
-
-    // const totalStaked = useAppSelector(totalActiveStakedSelector); , isLoading, isError
 
     return (
         <div className="w-full">
@@ -98,19 +95,14 @@ export function ValidateDetailFormCard({
                                 </Text>
                             </div>
 
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                <CoinBalance
-                                    balance={
-                                        validatorDataByAddress.pendingDelegationAmount
-                                    }
-                                    type={GAS_TYPE_ARG}
-                                    diffSymbol={true}
-                                />
-                            </Text>
+                            <CoinBalance
+                                balance={
+                                    validatorDataByAddress.pendingDelegationAmount
+                                }
+                                className="text-body font-medium steel-darker"
+                                type={GAS_TYPE_ARG}
+                                diffSymbol={true}
+                            />
                         </div>
                     </CardContent>
                     <CardFooter>
@@ -121,19 +113,15 @@ export function ValidateDetailFormCard({
                         >
                             Your Staked SUI
                         </Text>
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            <CoinBalance
-                                balance={
-                                    validatorDataByAddress.pendingDelegationAmount
-                                }
-                                type={GAS_TYPE_ARG}
-                                diffSymbol={true}
-                            />
-                        </Text>
+
+                        <CoinBalance
+                            balance={
+                                validatorDataByAddress.pendingDelegationAmount
+                            }
+                            className="text-body medium steel-darker"
+                            type={GAS_TYPE_ARG}
+                            diffSymbol={true}
+                        />
                     </CardFooter>
                 </Card>
             )}

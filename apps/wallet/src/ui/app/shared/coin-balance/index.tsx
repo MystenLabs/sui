@@ -33,7 +33,7 @@ function CoinBalance({
             <span
                 className={cl(
                     { [st.diffSymbol]: diffSymbol },
-                    'text-steel text-body font-medium ml-1'
+                    'text-body font-medium ml-1'
                 )}
             >
                 {symbol}

@@ -4,10 +4,10 @@
 import { Link } from 'react-router-dom';
 
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
+import { Text } from '../../shared/text';
+import { IconTooltip } from '../../shared/tooltip';
 import { useFormatCoin } from '_app/hooks';
 import { ImageIcon } from '_app/shared/image-icon';
-import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',

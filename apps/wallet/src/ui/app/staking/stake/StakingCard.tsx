@@ -7,11 +7,11 @@ import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { Text } from '../../shared/text';
 import StakeForm from './StakeForm';
 import { ValidateDetailFormCard } from './ValidatorDetailCard';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
-import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
@@ -112,8 +112,6 @@ export function StakingCard() {
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
-                        transfer: isUnstaked ? 'unstaked' : 'staked',
-                        validatoraddress: validatorAddress,
                     }).toString()}`
                 );
                 resetForm();
@@ -122,14 +120,7 @@ export function StakingCard() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [
-            coinType,
-            coinDecimals,
-            dispatch,
-            validatorAddress,
-            navigate,
-            isUnstaked,
-        ]
+        [coinType, coinDecimals, dispatch, validatorAddress, navigate]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);

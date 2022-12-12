@@ -4,7 +4,7 @@
 import cl from 'classnames';
 import { memo } from 'react';
 
-import { Text } from '_app/shared/text';
+import { Text } from '../../text';
 
 import type { ReactNode } from 'react';
 
