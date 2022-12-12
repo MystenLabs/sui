@@ -17,6 +17,4 @@ module sui::hmac_tests {
         let outout_bytes = digest::sha3_256_digest_to_bytes(&output);
         assert!(outout_bytes == expected_output_bytes, 0);
     }
-
-
 }
