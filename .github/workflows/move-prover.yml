@@ -16,10 +16,14 @@ jobs:
         run:  |
           crates/sui/scripts/prover_setup.sh
 
-      - name: Build
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+
+      - name: Cargo Build
         uses: actions-rs/cargo@v1
         with:
           command: build
+          args: --all-targets --all-features --release --profile=release
 
       - name: Prover Run
         run:  |
