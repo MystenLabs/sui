@@ -85,6 +85,7 @@ mod generated {
 mod builder;
 mod metrics;
 mod server;
+pub mod test_utils;
 #[cfg(test)]
 mod tests;
 

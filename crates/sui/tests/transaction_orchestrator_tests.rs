@@ -141,6 +141,7 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();

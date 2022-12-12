@@ -18,6 +18,7 @@ use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
+use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -85,6 +86,7 @@ pub struct SuiNode {
     _p2p_network: anemo::Network,
     _discovery: discovery::Handle,
     _state_sync: state_sync::Handle,
+    _checkpoint_executor_handle: tokio::task::JoinHandle<()>,
 
     reconfig_channel: (
         tokio::sync::mpsc::Sender<EpochId>,
@@ -183,6 +185,16 @@ impl SuiNode {
         )
         .await;
 
+        let checkpoint_executor_handle = {
+            let executor = CheckpointExecutor::new(
+                state_sync_handle.subscribe_to_synced_checkpoints(),
+                checkpoint_store.clone(),
+                state.clone(),
+                &prometheus_registry,
+            )?;
+            tokio::spawn(executor.run())
+        };
+
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
             net.clone(),
@@ -264,6 +276,7 @@ impl SuiNode {
             _p2p_network: p2p_network,
             _discovery: discovery_handle,
             _state_sync: state_sync_handle,
+            _checkpoint_executor_handle: checkpoint_executor_handle,
             reconfig_channel,
 
             #[cfg(msim)]

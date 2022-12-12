@@ -647,7 +647,7 @@ impl AuthorityStore {
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
-    /// version, and then writes bjects, certificates, parents and clean up locks atomically.
+    /// version, and then writes objects, certificates, parents and clean up locks atomically.
     pub async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,

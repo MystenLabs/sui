@@ -294,6 +294,19 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.pending_certificates.get(tx)?.map(|c| c.into()))
     }
 
+    pub fn multi_get_pending_certificate(
+        &self,
+        transaction_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<VerifiedCertificate>>> {
+        Ok(self
+            .tables
+            .pending_certificates
+            .multi_get(transaction_digests)?
+            .into_iter()
+            .map(|o| o.map(|c| c.into()))
+            .collect())
+    }
+
     /// Gets all pending certificates. Used during recovery.
     pub fn all_pending_certificates(&self) -> SuiResult<Vec<VerifiedCertificate>> {
         Ok(self
