@@ -49,7 +49,7 @@ jobs:
         if: steps.get-artifact.outputs.result != ''
         with:
           pr_number: ${{ steps.source-run-info.outputs.pullRequestNumber }}
-          comment_includes: "💳 Wallet Extension"
+          comment_tag: "wallet-extension"
           message: |
             💳 Wallet Extension has been built, you can download the packaged extension here: ${{steps.get-artifact.outputs.result}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
