@@ -1,229 +1,181 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    getTransactionKindName,
+    getTransactions,
+    getTransactionSender,
+    getExecutionStatusType,
+    getExecutionStatusGasSummary,
+    getTotalGasUsed,
+} from '@mysten/sui.js';
 import cl from 'classnames';
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import { GasCard } from './GasCard';
+import { NftMiniCard } from './NftCard';
+import { ValidatorCard } from './ValidatorCard';
+import { DateCard } from '_app/shared/date-card';
+import { Text } from '_app/shared/text';
+import Alert from '_components/alert';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { formatDate } from '_helpers';
-import { useMiddleEllipsis, useFormatCoin } from '_hooks';
+import { SuiIcons } from '_components/icon';
+import Loading from '_components/loading';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
+import Overlay from '_components/overlay';
+import {
+    getEventsPayReceiveSummary,
+    getMoveCallMeta,
+    getRelatedObjectIds,
+} from '_helpers';
+import { useGetTransaction, useAppSelector } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-
-import type { TxResultState } from '_redux/slices/txresults';
 
 import st from './ReceiptCard.module.scss';
 
-type TxResponseProps = {
-    txDigest: TxResultState;
-    transferType?: 'nft' | 'coin' | null;
-};
+function ReceiptCard({ txId }: { txId: string }) {
+    const [showModal, setShowModal] = useState(true);
+    const { data, isLoading, isError } = useGetTransaction(txId);
+    const navigate = useNavigate();
+    const accountAddress = useAppSelector(({ account }) => account.address);
 
-const TRUNCATE_MAX_LENGTH = 8;
-const TRUNCATE_PREFIX_LENGTH = 4;
+    const closeReceipt = useCallback(() => {
+        navigate('/transactions');
+    }, [navigate]);
 
-// Truncate text after one line (~ 35 characters)
-const TRUNCATE_MAX_CHAR = 40;
-
-function ReceiptCard({ txDigest }: TxResponseProps) {
-    const toAddrStr = useMiddleEllipsis(
-        txDigest.to || '',
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
-    const fromAddrStr = useMiddleEllipsis(
-        txDigest.from || '',
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
-    const truncatedNftName = useMiddleEllipsis(
-        txDigest?.name || '',
-        TRUNCATE_MAX_CHAR,
-        TRUNCATE_MAX_CHAR - 1
-    );
-
-    const truncatedNftDescription = useMiddleEllipsis(
-        txDigest?.description || '',
-        TRUNCATE_MAX_CHAR,
-        TRUNCATE_MAX_CHAR - 1
-    );
-
-    const transferType =
-        txDigest?.kind === 'Call'
-            ? 'Call'
-            : txDigest.isSender
-            ? 'Sent'
-            : 'Received';
-
-    const transferMeta = {
-        Call: {
-            txName:
-                txDigest?.name && txDigest?.url
-                    ? 'Minted'
-                    : `Call ${
-                          txDigest?.callFunctionName &&
-                          '(' + txDigest?.callFunctionName + ')'
-                      }`,
-
-            transfer: txDigest?.isSender ? 'To' : 'From',
-            address: false,
-            addressTruncate: false,
-            failedMsg: txDigest?.error || 'Failed',
-        },
-        Sent: {
-            txName: 'Sent',
-            transfer: 'To',
-            addressTruncate: toAddrStr,
-            address: txDigest.to,
-            failedMsg: txDigest?.error || 'Failed',
-        },
-        Received: {
-            txName: 'Received',
-            transfer: 'From',
-            addressTruncate: fromAddrStr,
-            address: txDigest.from,
-            failedMsg: '',
-        },
-    };
-
-    const imgUrl = txDigest?.url
-        ? txDigest?.url.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')
-        : false;
-
-    const date = txDigest?.timestampMs
-        ? formatDate(txDigest.timestampMs, [
-              'month',
-              'day',
-              'year',
-              'hour',
-              'minute',
-          ])
-        : false;
-
-    const assetCard = imgUrl && (
-        <div className={st.wideview}>
-            <img
-                className={cl(st.img)}
-                src={imgUrl}
-                alt={txDigest?.name || 'NFT'}
-            />
-            <div className={st.nftfields}>
-                <div className={st.nftName}>{truncatedNftName}</div>
-                <div className={st.nftType}>{truncatedNftDescription}</div>
+    if (isError) {
+        return (
+            <div className="p-2">
+                <Alert mode="warning">
+                    <div className="mb-1 font-semibold">
+                        Something went wrong
+                    </div>
+                </Alert>
             </div>
-        </div>
+        );
+    }
+
+    if (isLoading) {
+        return (
+            <div className="p-2 w-full flex justify-center item-center h-full">
+                <LoadingIndicator />
+            </div>
+        );
+    }
+
+    const gasBreakdown = getExecutionStatusGasSummary(data);
+
+    const totalGasUsed = getTotalGasUsed(data);
+
+    const txDetails = getTransactions(data.certificate)[0];
+    const txKindName = getTransactionKindName(txDetails);
+    const sender = getTransactionSender(data.certificate);
+    const txSummery = getEventsPayReceiveSummary(data.effects.events);
+    const relatedObjectIds = getRelatedObjectIds(
+        data.effects.events,
+        accountAddress || ''
     );
 
-    const statusClassName =
-        txDigest.status === 'success' ? st.success : st.failed;
-
-    const [formatted, symbol] = useFormatCoin(
-        txDigest.amount || txDigest.balance || 0,
-        txDigest.coinType || GAS_TYPE_ARG
+    // If txKindName is not Call, Publish, ChangeEpoch use sent/received in title
+    // For call check for validator address a
+    const txStatus = getExecutionStatusType(data);
+    const senderMeta = txSummery.find(
+        ({ receiverAddress }) => receiverAddress === accountAddress
     );
+    const transferLabel = accountAddress === sender ? 'Sent' : 'Received';
+    const moveMetaInfo = getMoveCallMeta(txDetails);
 
-    const [gas, gasSymbol] = useFormatCoin(txDigest.txGas, GAS_TYPE_ARG);
+    const transfersTxt =
+        txKindName === 'Call' ? moveMetaInfo?.label : transferLabel;
 
-    const [total, totalSymbol] = useFormatCoin(
-        txDigest.amount && txDigest.isSender
-            ? txDigest.amount + txDigest.txGas
-            : null,
-        GAS_TYPE_ARG
-    );
+    const statusClassName = txStatus === 'success' ? st.success : st.failed;
 
     return (
-        <>
-            <div className={cl(st.txnResponse, statusClassName)}>
-                <div className={st.txnResponseStatus}>
-                    <div className={st.statusIcon}></div>
-                    <div className={st.date}>
-                        {date && date.replace(' AM', 'am').replace(' PM', 'pm')}
+        <Loading loading={isLoading} className={st.centerLoading}>
+            <Overlay
+                showModal={showModal}
+                setShowModal={setShowModal}
+                title={
+                    txStatus === 'success'
+                        ? `${transfersTxt} ${
+                              transfersTxt === 'Move Call'
+                                  ? ''
+                                  : 'Successfully!'
+                          }`
+                        : 'Transaction Failed'
+                }
+                closeOverlay={closeReceipt}
+                closeIcon={SuiIcons.Check}
+            >
+                <div className={cl(st.txnResponse, statusClassName)}>
+                    <div className={cl(st.txnResponseStatus, 'gap-3.5')}>
+                        <div className={st.statusIcon}></div>
+                        {data.timestamp_ms && (
+                            <DateCard date={data.timestamp_ms} />
+                        )}
                     </div>
-                </div>
-
-                <div className={st.responseCard}>
-                    <div className={st.status}>
-                        <div className={st.amountTransferred}>
-                            <div className={st.label}>
-                                {txDigest.status === 'success'
-                                    ? transferMeta[transferType].txName
-                                    : transferMeta[transferType].failedMsg}
-                            </div>
-                            {(txDigest.amount || txDigest.balance) && (
-                                <div className={st.amount}>
-                                    {formatted}
-                                    <span>{symbol}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {assetCard}
-                    </div>
-
-                    {transferMeta[transferType].address && (
-                        <div className={st.txnItem}>
-                            <div className={st.label}>
-                                {transferMeta[transferType].transfer}
-                            </div>
-                            <div className={cl(st.value, st.walletAddress)}>
-                                <ExplorerLink
-                                    type={ExplorerLinkType.address}
-                                    address={
-                                        transferMeta[transferType]
-                                            .address as string
+                    <div
+                        className={cl(
+                            st.responseCard,
+                            'border border-solid border-gray-45 box-border'
+                        )}
+                    >
+                        {moveMetaInfo?.validatorAddress && accountAddress && (
+                            <div className="flex flex-col gap-3.5 !pb-0">
+                                <ValidatorCard
+                                    validatorAddress={
+                                        moveMetaInfo.validatorAddress
                                     }
-                                    title="View on Sui Explorer"
-                                    className={st['explorer-link']}
-                                    showIcon={false}
-                                >
-                                    {transferMeta[transferType].addressTruncate}
-                                </ExplorerLink>
+                                    accountAddress={accountAddress}
+                                    amount={senderMeta?.amount || 0}
+                                    stakeType={moveMetaInfo.label}
+                                    coinType={
+                                        senderMeta?.coinType || GAS_TYPE_ARG
+                                    }
+                                />
                             </div>
-                        </div>
-                    )}
+                        )}
+                        {relatedObjectIds &&
+                            relatedObjectIds.map((id) => (
+                                <div className="flex flex-col gap-2" key={id}>
+                                    <Text
+                                        variant="body"
+                                        weight="medium"
+                                        color="steel-darker"
+                                    >
+                                        {transfersTxt}
+                                    </Text>
+                                    <NftMiniCard
+                                        objectId={id}
+                                        fnCallName={
+                                            moveMetaInfo?.fnName || null
+                                        }
+                                        variant="square"
+                                    />
+                                </div>
+                            ))}
 
-                    {txDigest.txGas && (
-                        <div
-                            className={cl(
-                                st.txFees,
-                                st.txnItem,
-                                txDigest.isSender && st.noBorder
-                            )}
+                        {totalGasUsed && gasBreakdown && (
+                            <GasCard
+                                totalGasUsed={totalGasUsed}
+                                computationCost={gasBreakdown.computationCost}
+                                storageRebate={gasBreakdown.storageRebate}
+                                storageCost={gasBreakdown.storageCost}
+                            />
+                        )}
+                        <ExplorerLink
+                            type={ExplorerLinkType.transaction}
+                            transactionID={txId}
+                            className="text-sui-dark no-underline font-semibold uppercase text-caption pt-3.5"
                         >
-                            <div className={st.label}>Gas Fees</div>
-                            <div className={st.value}>
-                                {gas} {gasSymbol}
-                            </div>
-                        </div>
-                    )}
-
-                    {txDigest.amount && txDigest.isSender && (
-                        <div className={cl(st.txFees, st.txnItem)}>
-                            <div className={st.txInfoLabel}>Total Amount</div>
-                            <div className={st.walletInfoValue}>
-                                {total} {totalSymbol}
-                            </div>
-                        </div>
-                    )}
-
-                    {txDigest.txId && (
-                        <div className={st.explorerLink}>
-                            <ExplorerLink
-                                type={ExplorerLinkType.transaction}
-                                transactionID={txDigest.txId}
-                                title="View on Sui Explorer"
-                                className={st['explorer-link']}
-                                showIcon={true}
-                            >
-                                View on Explorer
-                            </ExplorerLink>
-                        </div>
-                    )}
+                            View on explorer
+                        </ExplorerLink>
+                    </div>
                 </div>
-            </div>
-        </>
+            </Overlay>
+        </Loading>
     );
 }
-
 export default ReceiptCard;

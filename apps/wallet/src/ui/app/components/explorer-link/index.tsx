@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { memo, useCallback, useMemo } from 'react';
 
 import { getObjectUrl, getAddressUrl, getTransactionUrl } from './Explorer';
@@ -14,8 +15,6 @@ import { trackEvent } from '_src/shared/plausible';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
-
-import st from './ExplorerLink.module.scss';
 
 export type ExplorerLinkProps = (
     | {
@@ -92,17 +91,17 @@ function ExplorerLink(props: ExplorerLinkProps) {
     return (
         <ExternalLink
             href={explorerHref}
-            className={className}
+            className={cl(className, 'flex gap-0.5')}
             title={title}
             showIcon={false}
             onClick={handleclick}
         >
             <>
-                {children}{' '}
+                {children}
                 {showIcon && (
                     <Icon
-                        icon={SuiIcons.ArrowLeft}
-                        className={st.explorerIcon}
+                        icon={SuiIcons.ArrowRight}
+                        className="-rotate-45 text-captionSmall text-steel font-light"
                     />
                 )}
             </>

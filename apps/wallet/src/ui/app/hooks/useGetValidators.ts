@@ -65,13 +65,9 @@ function processValidators(
             metadata: av.fields.metadata,
             // TODO: update
             pendingDelegationsCount: pending_delegations.length,
-            totalPendingDelegationAmount: pending_delegations
-                ? pending_delegations.reduce(
-                      (acc, fields) =>
-                          (acc += BigInt(fields.fields.sui_amount || 0n)),
-                      0n
-                  )
-                : 0n,
+            totalPendingDelegationAmount: BigInt(
+                av.fields.metadata.fields.next_epoch_delegation || 0n
+            ),
             logo: null,
             suiEarned: 0n,
         };

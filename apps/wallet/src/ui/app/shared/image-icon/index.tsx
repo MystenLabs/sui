@@ -9,6 +9,7 @@ const imageStyle = cva([], {
             none: 'w-0 h-0',
             small: 'w-6 h-6',
             medium: 'w-icon h-icon',
+            large: 'w-10 h-10',
         },
         variant: {
             rounded: 'rounded-full overflow-hidden',

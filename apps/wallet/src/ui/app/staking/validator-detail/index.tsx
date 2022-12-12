@@ -5,13 +5,13 @@ import { useCallback, useState } from 'react';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 
 import { StakingReward } from './StakingRewards';
-import { Text } from '_app/shared/Text';
-import { IconTooltip } from '_app/shared/Tooltip';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import Card, { CardContent, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
 import { ImageIcon } from '_app/shared/image-icon';
+import { Text } from '_app/shared/text';
+import { IconTooltip } from '_app/shared/tooltip';
 import { totalActiveStakedSelector } from '_app/staking/selectors';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
@@ -230,6 +230,7 @@ function ValidatorDetailCard({
                                 <Button
                                     size="large"
                                     mode="outline"
+                                    disabled={true}
                                     href={
                                         stakeByValidatorAddress + '&unstake=1'
                                     }

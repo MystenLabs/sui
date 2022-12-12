@@ -80,7 +80,6 @@ export class Coin {
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
-     * @param callType The type of the call
      */
     public static async stakeCoin(
         signer: RawSigner,

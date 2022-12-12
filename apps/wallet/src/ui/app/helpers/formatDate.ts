@@ -5,7 +5,10 @@
 // Wed Aug 05
 //
 type Show = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'weekday';
-export default function formatDate(timeStamp: number, show: Show[]): string {
+export default function formatDate(
+    timeStamp: Date | number,
+    show: Show[]
+): string {
     const date = new Date(timeStamp);
     if (!(date instanceof Date) || !show.length) return '';
 

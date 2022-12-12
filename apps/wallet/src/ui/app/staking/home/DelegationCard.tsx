@@ -5,9 +5,9 @@ import { Link } from 'react-router-dom';
 
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
 import { useFormatCoin } from '_app/hooks';
-import { Text } from '_app/shared/Text';
-import { IconTooltip } from '_app/shared/Tooltip';
 import { ImageIcon } from '_app/shared/image-icon';
+import { Text } from '_app/shared/text';
+import { IconTooltip } from '_app/shared/tooltip';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',

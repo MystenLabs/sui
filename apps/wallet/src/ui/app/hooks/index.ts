@@ -20,3 +20,5 @@ export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
 export { useGetObject } from './useGetObject';
 export { useGetValidators } from './useGetValidators';
+export { useGetTransaction } from './useGetTransaction';
+export { useGetNFTMetaById } from './useGetNFTMetaById';

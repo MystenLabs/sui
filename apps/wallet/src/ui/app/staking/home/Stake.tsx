@@ -11,7 +11,6 @@ import { usePendingDelegation } from '../usePendingDelegation';
 import { ActiveDelegation } from './ActiveDelegation';
 import { ActiveValidatorsCard } from './ActiveValidatorsCard';
 import { DelegationCard, DelegationState } from './DelegationCard';
-import { Text } from '_app/shared/Text';
 import BottomMenuLayout, {
     Menu,
     Content,
@@ -19,6 +18,7 @@ import BottomMenuLayout, {
 import Button from '_app/shared/button';
 import Card, { CardContent, CardItem, CardHeader } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
+import { Text } from '_app/shared/text';
 import {
     activeDelegationIDsSelector,
     totalActiveStakedSelector,

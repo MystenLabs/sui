@@ -1,6 +1,13 @@
 @use '_utils';
 @use '_values/colors';
 
+.receipt-overlay {
+    > div {
+        color: colors.$gray-90;
+        background-color: colors.$gray-40;
+    }
+}
+
 .wallet-address {
     a {
         color: colors.$sui-dark-blue;
@@ -18,7 +25,7 @@
         flex-flow: column;
         align-items: center;
         justify-content: center;
-        gap: 10px;
+        gap: 13px;
         margin-bottom: 12px;
     }
 
@@ -153,6 +160,10 @@
     height: 46px;
     width: 46px;
     display: flex;
+}
+
+.response-card::after {
+    width: 318px;
 }
 
 .success {

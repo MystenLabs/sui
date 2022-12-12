@@ -10,8 +10,8 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import StakeForm from './StakeForm';
 import { ValidateDetailFormCard } from './ValidatorDetailCard';
 import { createValidationSchema } from './validation';
-import { Text } from '_app/shared/Text';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
@@ -86,7 +86,7 @@ export function StakingCard() {
             { amount }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
-            if (coinType === null) {
+            if (coinType === null || !validatorAddress) {
                 return;
             }
             setSendError(null);
@@ -105,14 +105,31 @@ export function StakingCard() {
                         validator_address: validatorAddress,
                     })
                 ).unwrap();
+
                 const txDigest = getTransactionDigest(response);
+
+                // pass the validator
+                navigate(
+                    `/receipt?${new URLSearchParams({
+                        txdigest: txDigest,
+                        transfer: isUnstaked ? 'unstaked' : 'staked',
+                        validatoraddress: validatorAddress,
+                    }).toString()}`
+                );
                 resetForm();
-                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+                // navigate(`/tx/${encodeURIComponent(txDigest)}`);
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [coinType, coinDecimals, dispatch, validatorAddress, navigate]
+        [
+            coinType,
+            coinDecimals,
+            dispatch,
+            validatorAddress,
+            navigate,
+            isUnstaked,
+        ]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);

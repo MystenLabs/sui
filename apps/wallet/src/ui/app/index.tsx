@@ -38,6 +38,7 @@ const HIDDEN_MENU_PATHS = [
     '/send',
     '/send/select',
     '/apps/disconnectapp',
+    '/receipt',
 ];
 
 const App = () => {

@@ -4,16 +4,14 @@
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
-import { Text } from '_app/shared/Text';
-import { IconTooltip } from '_app/shared/Tooltip';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import Card, { CardContent, CardFooter, CardHeader } from '_app/shared/card';
+import { Text } from '_app/shared/text';
+import { IconTooltip } from '_app/shared/tooltip';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
-// import { useFormatCoin } from '_hooks';
-// import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 

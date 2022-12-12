@@ -26,6 +26,7 @@ const textStyles = cva([], {
             'gray-100': 'text-gray-100',
             'gray-90': 'text-gray-90',
             'gray-85': 'text-gray-85',
+            'gray-80': 'text-gray-80',
             'gray-75': 'text-gray-75',
             'gray-70': 'text-gray-70',
             'gray-65': 'text-gray-65',
