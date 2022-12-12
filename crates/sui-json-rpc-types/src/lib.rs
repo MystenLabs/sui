@@ -83,6 +83,12 @@ pub struct Coin {
     pub balance: u64,
 }
 
+impl Coin {
+    pub fn object_ref(&self) -> ObjectRef {
+        (self.coin_object_id, self.version, self.digest)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
     Copy,

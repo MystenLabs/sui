@@ -1,29 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-extern crate core;
-
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use futures_core::Stream;
 use jsonrpsee::core::client::{ClientT, Subscription};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
+use crate::error::{RpcError, SuiRpcResult};
 use rpc_types::{
     GetPastObjectDataResponse, SuiCertifiedTransaction, SuiExecuteTransactionResponse,
     SuiParsedTransactionResponse, SuiTransactionEffects,
 };
 use serde_json::Value;
 pub use sui_json as json;
+use sui_json_rpc::api::CoinReadApiClient;
 use sui_json_rpc::api::EventReadApiClient;
 use sui_json_rpc::api::EventStreamingApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
@@ -32,21 +31,26 @@ use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::api::TransactionExecutionApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
-    EventPage, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope, SuiEventFilter,
-    SuiMoveNormalizedModule, SuiObjectInfo, SuiTransactionResponse, TransactionsPage,
+    Balance, Coin, CoinPage, EventPage, GetObjectDataResponse, GetRawObjectDataResponse,
+    SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
+use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::event::EventID;
 use sui_types::messages::VerifiedTransaction;
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::sui_system_state::SuiSystemState;
 use types::base_types::SequenceNumber;
 use types::committee::EpochId;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::{CommitteeInfoResponse, ExecuteTransactionRequestType};
+pub mod error;
 
+pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
 
 #[derive(Debug)]
@@ -64,11 +68,12 @@ pub struct SuiClient {
     api: Arc<RpcClient>,
     transaction_builder: TransactionBuilder,
     read_api: Arc<ReadApi>,
+    coin_read_api: CoinReadApi,
     event_api: EventApi,
     quorum_driver: QuorumDriver,
 }
 
-struct RpcClient {
+pub(crate) struct RpcClient {
     http: HttpClient,
     ws: Option<WsClient>,
     info: ServerInfo,
@@ -95,7 +100,7 @@ impl RpcClient {
         http: &str,
         ws: Option<&str>,
         request_timeout: Option<Duration>,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, RpcError> {
         let mut http_builder = HttpClientBuilder::default();
         if let Some(request_timeout) = request_timeout {
             http_builder = http_builder.request_timeout(request_timeout);
@@ -119,22 +124,20 @@ impl RpcClient {
     async fn get_server_info(
         http: &HttpClient,
         ws: &Option<WsClient>,
-    ) -> Result<ServerInfo, anyhow::Error> {
-        let rpc_spec: Value = http
-            .request("rpc.discover", rpc_params![])
-            .await
-            .map_err(|e| anyhow!("Fail to connect to the RPC server: {e}"))?;
+    ) -> Result<ServerInfo, RpcError> {
+        let rpc_spec: Value = http.request("rpc.discover", rpc_params![]).await?;
         let version = rpc_spec
             .pointer("/info/version")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Fail parsing server version from rpc.discover endpoint."))?;
+            .ok_or_else(|| {
+                RpcError::DataError(
+                    "Fail parsing server version from rpc.discover endpoint.".into(),
+                )
+            })?;
         let rpc_methods = Self::parse_methods(&rpc_spec)?;
 
         let subscriptions = if let Some(ws) = ws {
-            let rpc_spec: Value = ws
-                .request("rpc.discover", rpc_params![])
-                .await
-                .map_err(|e| anyhow!("Fail to connect to the Websocket server: {e}"))?;
+            let rpc_spec: Value = ws.request("rpc.discover", rpc_params![]).await?;
             Self::parse_methods(&rpc_spec)?
         } else {
             Vec::new()
@@ -146,12 +149,14 @@ impl RpcClient {
         })
     }
 
-    fn parse_methods(server_spec: &Value) -> Result<Vec<String>, anyhow::Error> {
+    fn parse_methods(server_spec: &Value) -> Result<Vec<String>, RpcError> {
         let methods = server_spec
             .pointer("/methods")
             .and_then(|methods| methods.as_array())
             .ok_or_else(|| {
-                anyhow!("Fail parsing server information from rpc.discover endpoint.")
+                RpcError::DataError(
+                    "Fail parsing server information from rpc.discover endpoint.".into(),
+                )
             })?;
 
         Ok(methods
@@ -167,18 +172,20 @@ impl SuiClient {
         http_url: &str,
         ws_url: Option<&str>,
         request_timeout: Option<Duration>,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, RpcError> {
         let rpc = RpcClient::new(http_url, ws_url, request_timeout).await?;
         let api = Arc::new(rpc);
-        let read_api = Arc::new(ReadApi { api: api.clone() });
-        let quorum_driver = QuorumDriver { api: api.clone() };
-        let event_api = EventApi(api.clone());
+        let read_api = Arc::new(ReadApi::new(api.clone()));
+        let quorum_driver = QuorumDriver::new(api.clone());
+        let event_api = EventApi::new(api.clone());
         let transaction_builder = TransactionBuilder(read_api.clone());
+        let coin_read_api = CoinReadApi::new(api.clone());
 
         Ok(SuiClient {
             api,
             transaction_builder,
             read_api,
+            coin_read_api,
             event_api,
             quorum_driver,
         })
@@ -196,11 +203,14 @@ impl SuiClient {
         &self.api.info.version
     }
 
-    pub fn check_api_version(&self) -> Result<(), anyhow::Error> {
+    pub fn check_api_version(&self) -> SuiRpcResult<()> {
         let server_version = self.api_version();
         let client_version = env!("CARGO_PKG_VERSION");
         if server_version != client_version {
-            return Err(anyhow!("Client/Server api version mismatch, client api version : {client_version}, server api version : {server_version}"));
+            return Err(RpcError::ServerVersionMismatch {
+                client_version: client_version.to_string(),
+                server_version: server_version.to_string(),
+            });
         };
         Ok(())
     }
@@ -212,24 +222,27 @@ pub struct ReadApi {
 }
 
 impl ReadApi {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
     pub async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
-    ) -> anyhow::Result<Vec<SuiObjectInfo>> {
+    ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
         Ok(self.api.http.get_objects_owned_by_address(address).await?)
     }
 
     pub async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
-    ) -> anyhow::Result<Vec<SuiObjectInfo>> {
+    ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
         Ok(self.api.http.get_objects_owned_by_object(object_id).await?)
     }
 
     pub async fn get_parsed_object(
         &self,
         object_id: ObjectID,
-    ) -> anyhow::Result<GetObjectDataResponse> {
+    ) -> SuiRpcResult<GetObjectDataResponse> {
         Ok(self.api.http.get_object(object_id).await?)
     }
 
@@ -237,7 +250,7 @@ impl ReadApi {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> anyhow::Result<GetPastObjectDataResponse> {
+    ) -> SuiRpcResult<GetPastObjectDataResponse> {
         Ok(self
             .api
             .http
@@ -245,14 +258,11 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_object(
-        &self,
-        object_id: ObjectID,
-    ) -> anyhow::Result<GetRawObjectDataResponse> {
+    pub async fn get_object(&self, object_id: ObjectID) -> SuiRpcResult<GetRawObjectDataResponse> {
         Ok(self.api.http.get_raw_object(object_id).await?)
     }
 
-    pub async fn get_total_transaction_number(&self) -> anyhow::Result<u64> {
+    pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
         Ok(self.api.http.get_total_transaction_number().await?)
     }
 
@@ -260,21 +270,21 @@ impl ReadApi {
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
-    ) -> anyhow::Result<Vec<TransactionDigest>> {
+    ) -> SuiRpcResult<Vec<TransactionDigest>> {
         Ok(self.api.http.get_transactions_in_range(start, end).await?)
     }
 
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> anyhow::Result<SuiTransactionResponse> {
+    ) -> SuiRpcResult<SuiTransactionResponse> {
         Ok(self.api.http.get_transaction(digest).await?)
     }
 
     pub async fn get_committee_info(
         &self,
         epoch: Option<EpochId>,
-    ) -> anyhow::Result<CommitteeInfoResponse> {
+    ) -> SuiRpcResult<CommitteeInfoResponse> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
@@ -283,42 +293,146 @@ impl ReadApi {
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
-        descending_order: Option<bool>,
-    ) -> anyhow::Result<TransactionsPage> {
+        descending_order: bool,
+    ) -> SuiRpcResult<TransactionsPage> {
         Ok(self
             .api
             .http
-            .get_transactions(query, cursor, limit, descending_order)
+            .get_transactions(query, cursor, limit, Some(descending_order))
             .await?)
+    }
+
+    pub fn get_transactions_stream(
+        &self,
+        query: TransactionQuery,
+        cursor: Option<TransactionDigest>,
+        descending_order: bool,
+    ) -> impl Stream<Item = TransactionDigest> + '_ {
+        stream::unfold(
+            (vec![], cursor, true, query),
+            move |(mut data, cursor, first, query)| async move {
+                if let Some(item) = data.pop() {
+                    Some((item, (data, cursor, false, query)))
+                } else if (cursor.is_none() && first) || cursor.is_some() {
+                    let page = self
+                        .get_transactions(query.clone(), cursor, Some(100), descending_order)
+                        .await
+                        .ok()?;
+                    let mut data = page.data;
+                    data.reverse();
+                    data.pop()
+                        .map(|item| (item, (data, page.next_cursor, false, query)))
+                } else {
+                    None
+                }
+            },
+        )
     }
 
     pub async fn get_normalized_move_modules_by_package(
         &self,
         package: ObjectID,
-    ) -> anyhow::Result<BTreeMap<String, SuiMoveNormalizedModule>> {
+    ) -> SuiRpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
         Ok(self
             .api
             .http
             .get_normalized_move_modules_by_package(package)
             .await?)
     }
+
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+        Ok(self.api.http.get_sui_system_state().await?)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CoinReadApi {
+    api: Arc<RpcClient>,
+}
+
+impl CoinReadApi {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
+    pub async fn get_coins(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<CoinPage> {
+        Ok(self
+            .api
+            .http
+            .get_coins(owner, coin_type, cursor, limit)
+            .await?)
+    }
+
+    pub fn get_coins_stream(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> impl Stream<Item = Coin> + '_ {
+        stream::unfold(
+            (vec![], None, true, coin_type),
+            move |(mut data, cursor, first, coin_type)| async move {
+                if let Some(item) = data.pop() {
+                    Some((item, (data, cursor, false, coin_type)))
+                } else if (cursor.is_none() && first) || cursor.is_some() {
+                    let page = self
+                        .get_coins(owner, coin_type.clone(), cursor, Some(100))
+                        .await
+                        .ok()?;
+                    let mut data = page.data;
+                    data.reverse();
+                    data.pop()
+                        .map(|item| (item, (data, page.next_cursor, false, coin_type)))
+                } else {
+                    None
+                }
+            },
+        )
+    }
+
+    pub async fn get_balances(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> SuiRpcResult<Vec<Balance>> {
+        Ok(self.api.http.get_balances(owner, coin_type).await?)
+    }
+
+    pub async fn get_coin_metadata(&self, coin_type: String) -> SuiRpcResult<SuiCoinMetadata> {
+        Ok(self.api.http.get_coin_metadata(coin_type).await?)
+    }
+
+    pub async fn get_total_supply(&self, coin_type: String) -> SuiRpcResult<Supply> {
+        Ok(self.api.http.get_total_supply(coin_type).await?)
+    }
 }
 
 #[derive(Clone)]
-pub struct EventApi(Arc<RpcClient>);
+pub struct EventApi {
+    api: Arc<RpcClient>,
+}
 
 impl EventApi {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
     pub async fn subscribe_event(
         &self,
         filter: SuiEventFilter,
-    ) -> anyhow::Result<impl Stream<Item = Result<SuiEventEnvelope, anyhow::Error>>> {
-        match &self.0.ws {
+    ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiEventEnvelope>>> {
+        match &self.api.ws {
             Some(c) => {
                 let subscription: Subscription<SuiEventEnvelope> =
                     c.subscribe_event(filter).await?;
                 Ok(subscription.map(|item| Ok(item?)))
             }
-            _ => Err(anyhow!("Subscription only supported by WebSocket client.")),
+            _ => Err(RpcError::Subscription(
+                "Subscription only supported by WebSocket client.".to_string(),
+            )),
         }
     }
 
@@ -327,13 +441,40 @@ impl EventApi {
         query: EventQuery,
         cursor: Option<EventID>,
         limit: Option<usize>,
-        descending_order: Option<bool>,
-    ) -> anyhow::Result<EventPage> {
+        descending_order: bool,
+    ) -> SuiRpcResult<EventPage> {
         Ok(self
-            .0
+            .api
             .http
-            .get_events(query, cursor, limit, descending_order)
+            .get_events(query, cursor, limit, Some(descending_order))
             .await?)
+    }
+
+    pub fn get_events_stream(
+        &self,
+        query: EventQuery,
+        cursor: Option<EventID>,
+        descending_order: bool,
+    ) -> impl Stream<Item = SuiEventEnvelope> + '_ {
+        stream::unfold(
+            (vec![], cursor, true, query),
+            move |(mut data, cursor, first, query)| async move {
+                if let Some(item) = data.pop() {
+                    Some((item, (data, cursor, false, query)))
+                } else if (cursor.is_none() && first) || cursor.is_some() {
+                    let page = self
+                        .get_events(query.clone(), cursor, Some(100), descending_order)
+                        .await
+                        .ok()?;
+                    let mut data = page.data;
+                    data.reverse();
+                    data.pop()
+                        .map(|item| (item, (data, page.next_cursor, false, query)))
+                } else {
+                    None
+                }
+            },
+        )
     }
 }
 
@@ -343,6 +484,9 @@ pub struct QuorumDriver {
 }
 
 impl QuorumDriver {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
     /// Execute a transaction with a FullNode client. `request_type`
     /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
@@ -354,7 +498,7 @@ impl QuorumDriver {
         &self,
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> anyhow::Result<TransactionExecutionResult> {
+    ) -> SuiRpcResult<TransactionExecutionResult> {
         let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
@@ -428,11 +572,10 @@ impl QuorumDriver {
                 }
             }
             (other_request_type, other_resp) => {
-                bail!(
-                    "Invalid response type {:?} for request type: {:?}",
+                return Err(RpcError::InvalidTransactionResponse(
                     other_resp,
-                    other_request_type
-                );
+                    other_request_type,
+                ))
             }
         })
     }
@@ -440,7 +583,7 @@ impl QuorumDriver {
     async fn wait_until_fullnode_sees_tx(
         c: &RpcClient,
         tx_digest: TransactionDigest,
-    ) -> anyhow::Result<()> {
+    ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
             let resp = RpcReadApiClient::get_transaction(&c.http, tx_digest).await;
@@ -449,21 +592,16 @@ impl QuorumDriver {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                 } else {
                     // immediately return on other types of errors
-                    bail!(
-                        "Encountered error when confirming tx status for {:?}, err: {:?}",
-                        tx_digest,
-                        err
-                    );
+                    return Err(RpcError::TransactionConfirmationError(tx_digest, err));
                 }
             } else {
                 return Ok(());
             }
             if start.elapsed().as_secs() >= WAIT_FOR_TX_TIMEOUT_SEC {
-                bail!(
-                    "Failed to confirm tx status for {:?} within {} seconds.",
+                return Err(RpcError::FailToConfirmTransactionStatus(
                     tx_digest,
-                    WAIT_FOR_TX_TIMEOUT_SEC
-                );
+                    WAIT_FOR_TX_TIMEOUT_SEC,
+                ));
             }
         }
     }
@@ -475,6 +613,9 @@ impl SuiClient {
     }
     pub fn read_api(&self) -> &ReadApi {
         &self.read_api
+    }
+    pub fn coin_read_api(&self) -> &CoinReadApi {
+        &self.coin_read_api
     }
     pub fn event_api(&self) -> &EventApi {
         &self.event_api
@@ -490,13 +631,13 @@ impl DataReader for ReadApi {
         &self,
         address: SuiAddress,
     ) -> Result<Vec<SuiObjectInfo>, anyhow::Error> {
-        self.get_objects_owned_by_address(address).await
+        Ok(self.get_objects_owned_by_address(address).await?)
     }
 
     async fn get_object(
         &self,
         object_id: ObjectID,
     ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
-        self.get_object(object_id).await
+        Ok(self.get_object(object_id).await?)
     }
 }

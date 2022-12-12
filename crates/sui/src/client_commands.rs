@@ -989,7 +989,7 @@ impl WalletContext {
         object_id: ObjectID,
     ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
         let client = self.get_client().await?;
-        client.read_api().get_object(object_id).await
+        Ok(client.read_api().get_object(object_id).await?)
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address

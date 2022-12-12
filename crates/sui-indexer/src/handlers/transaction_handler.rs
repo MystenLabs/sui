@@ -94,7 +94,7 @@ impl TransactionHandler {
                 TransactionQuery::All,
                 cursor,
                 Some(TRANSACTION_PAGE_SIZE),
-                None,
+                false,
             )
             .await
             .map_err(|e| {
