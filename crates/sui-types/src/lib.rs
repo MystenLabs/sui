@@ -19,6 +19,7 @@ use base_types::ObjectID;
 #[macro_use]
 pub mod error;
 
+pub mod accumulator;
 pub mod balance;
 pub mod base_types;
 pub mod batch;
@@ -45,7 +46,6 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod temporary_store;
-pub mod waypoint;
 
 pub mod filter;
 #[path = "./unit_tests/utils.rs"]
