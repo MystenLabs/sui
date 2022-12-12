@@ -76,7 +76,8 @@ reqwest = { version = "0.11.13", features = ["json"] }
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
-
+fs_extra = "1.2.0"
+more-asserts="0.3.1"
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"

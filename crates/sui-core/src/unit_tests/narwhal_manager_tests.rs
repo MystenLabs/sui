@@ -15,6 +15,7 @@ use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::crypto::KeypairTraits;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::mpsc::channel;
@@ -54,6 +55,7 @@ async fn test_narwhal_manager() {
             None,
             genesis,
             &committee_store,
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),

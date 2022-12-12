@@ -2391,6 +2391,7 @@ async fn test_authority_persist() {
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -2422,6 +2423,7 @@ async fn test_authority_persist() {
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),

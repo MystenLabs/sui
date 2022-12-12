@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_constants::MAX_TX_GAS;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -105,6 +106,7 @@ mod tbls_tests;
 
 pub mod authority_per_epoch_store;
 
+pub mod authority_store_pruner;
 pub mod authority_store_tables;
 
 pub(crate) mod authority_notify_read;
@@ -1556,6 +1558,7 @@ impl AuthorityState {
                 None,
                 &genesis_committee,
                 genesis,
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),

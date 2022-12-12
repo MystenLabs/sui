@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::authority_store_pruner::AuthorityStorePruner;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use arc_swap::ArcSwap;
@@ -10,6 +11,7 @@ use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::{
     lock_service::ObjectLockStatus,
     mutex_table::{LockGuard, MutexTable},
@@ -40,7 +42,7 @@ pub struct AuthorityStore {
     /// Internal vector of locks to manage concurrent writes to the database
     mutex_table: MutexTable<ObjectDigest>,
 
-    pub(crate) perpetual_tables: AuthorityPerpetualTables,
+    pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
     // needed for re-opening epoch db.
@@ -49,6 +51,7 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
+    _store_pruner: AuthorityStorePruner,
 }
 
 impl AuthorityStore {
@@ -59,8 +62,9 @@ impl AuthorityStore {
         db_options: Option<Options>,
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
+        pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
-        let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
+        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
             perpetual_tables.set_recovery_epoch(0)?;
         }
@@ -75,7 +79,15 @@ impl AuthorityStore {
                 genesis.committee()?
             }
         };
-        Self::open_inner(path, db_options, genesis, perpetual_tables, committee).await
+        Self::open_inner(
+            path,
+            db_options,
+            genesis,
+            perpetual_tables,
+            committee,
+            pruning_config,
+        )
+        .await
     }
 
     pub async fn open_with_committee_for_testing(
@@ -83,17 +95,19 @@ impl AuthorityStore {
         db_options: Option<Options>,
         committee: &Committee,
         genesis: &Genesis,
+        pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
         // TODO: Since we always start at genesis, the committee should be technically the same
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
-        let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
+        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         Self::open_inner(
             path,
             db_options,
             genesis,
             perpetual_tables,
             committee.clone(),
+            pruning_config,
         )
         .await
     }
@@ -102,8 +116,9 @@ impl AuthorityStore {
         path: &Path,
         db_options: Option<Options>,
         genesis: &Genesis,
-        perpetual_tables: AuthorityPerpetualTables,
+        perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: Committee,
+        pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
             committee,
@@ -116,7 +131,7 @@ impl AuthorityStore {
         let lockdb_path: PathBuf = path.join("lockdb");
         let lock_service =
             LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
-
+        let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
         let store = Self {
             lock_service,
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
@@ -124,6 +139,7 @@ impl AuthorityStore {
             epoch_store: epoch_tables.into(),
             path: path.into(),
             db_options,
+            _store_pruner,
             effects_notify_read: NotifyRead::new(),
         };
         // Only initialize an empty database.
