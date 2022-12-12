@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
+// not allowed since C is not packed with a fresh UID
 module 0x0.test {
     import 0x2.object;
     import 0x2.transfer;
@@ -36,6 +37,7 @@ module 0x0.test {
 }
 
 //# publish
+// allowed since Bar does not have key
 module 0x0.m {
     import 0x2.object;
 
