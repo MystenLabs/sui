@@ -124,6 +124,7 @@ mod tbls_tests;
 
 pub mod authority_per_epoch_store;
 
+pub mod authority_store_pruner;
 pub mod authority_store_tables;
 
 pub mod authority_notifier;
