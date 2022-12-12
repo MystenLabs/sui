@@ -309,7 +309,7 @@ matchers = { version = "0.1", default-features = false }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 memchr = { version = "2", features = ["std", "use_std"] }
-memoffset = { version = "0.7" }
+memoffset = { version = "0.6" }
 merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
@@ -987,7 +987,7 @@ matchers = { version = "0.1", default-features = false }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 memchr = { version = "2", features = ["std", "use_std"] }
-memoffset = { version = "0.7" }
+memoffset = { version = "0.6" }
 merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
