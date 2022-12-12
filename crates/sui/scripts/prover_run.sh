@@ -13,4 +13,4 @@ export Z3_EXE="${BIN_DIR}/z3"
 export CVC5_EXE="${BIN_DIR}/cvc5"
 export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
 
-cd "${SCRIPT_DIR}/../../sui-framework" &&  cargo run -p sui -- move prove
+cd "${SCRIPT_DIR}/../../sui-framework" && /home/runner/.cargo/bin/cargo run -p sui -- move prove
