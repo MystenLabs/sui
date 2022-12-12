@@ -1,21 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { parse } from '@suchipi/femver';
+import * as femver from '@suchipi/femver';
 
-export type RpcApiVersion = {
-  major: number;
-  minor: number;
-  patch: number;
-};
+export type RpcApiVersion = `${string}.${string}.${string}`;
 
-export function parseVersionFromString(
-  version: string
-): RpcApiVersion | undefined {
-  return parse(version);
+export function parseVersionFromString(version: string) {
+  return femver.parse(version);
 }
 
-export function versionToString(version: RpcApiVersion): string {
-  const { major, minor, patch } = version;
-  return `${major}.${minor}.${patch}`;
-}
+// TODO: Explore other ways to do this, maybe an object-oriented way where there's some `version` object
+// that contains functions like `gt` itself.
+
+// Export all of the version utilities in femver to make it easier for consumers to work with versioning.
+export const VersionUtils = femver;

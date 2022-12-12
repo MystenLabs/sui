@@ -1,15 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { lt } from '@suchipi/femver';
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  getEvents,
-  getObjectExistsResponse,
-  getObjectFields,
-  LocalTxnDataSerializer,
-  ObjectId,
-  RawSigner,
-} from '../../src';
+import { LocalTxnDataSerializer, ObjectId, RawSigner } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Coin Metadata', () => {
@@ -28,7 +22,7 @@ describe('Test Coin Metadata', () => {
     // TODO: This API is only available under version 0.17.0. Clean
     // up this once 0.17. is released
     const version = await toolbox.provider.getRpcApiVersion();
-    if (version?.major === 0 && version?.minor < 17) {
+    if (version && lt(version, '0.17.0')) {
       shouldSkip = true;
       return;
     }

@@ -54,7 +54,6 @@ import {
   Order,
   TransactionEffects,
   CoinMetadata,
-  versionToString,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
@@ -62,7 +61,11 @@ import {
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
 } from '../types';
-import { PublicKey, SignatureScheme, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
+import {
+  PublicKey,
+  SignatureScheme,
+  SIGNATURE_SCHEME_TO_FLAG,
+} from '../cryptography/publickey';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
@@ -167,7 +170,7 @@ export class JsonRpcProvider extends Provider {
         isAny,
         this.options.skipDataValidation
       );
-      this.rpcApiVersion = parseVersionFromString(resp.info.version);
+      this.rpcApiVersion = resp.info.version;
       this.cacheExpiry =
         Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0);
       return this.rpcApiVersion;
@@ -181,11 +184,11 @@ export class JsonRpcProvider extends Provider {
     try {
       const version = await this.getRpcApiVersion();
       // TODO: clean up after 0.17.0 is deployed on both DevNet and TestNet
-      if (version && lt(versionToString(version), '0.17.0')) {
+      if (version && lt(version, '0.17.0')) {
         const [packageId, module, symbol] = coinType.split('::');
         if (
           normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-          module != 'sui' ||
+          module !== 'sui' ||
           symbol !== 'SUI'
         ) {
           throw new Error(
@@ -319,7 +322,9 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Objects
-  async getObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
+  async getObjectsOwnedByAddress(
+    address: SuiAddress
+  ): Promise<SuiObjectInfo[]> {
     try {
       if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
         throw new Error('Invalid Sui address');
@@ -337,7 +342,9 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getGasObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
+  async getGasObjectsOwnedByAddress(
+    address: SuiAddress
+  ): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
@@ -425,13 +432,15 @@ export class JsonRpcProvider extends Provider {
     return getObjectReference(resp);
   }
 
-  async getObjectBatch(objectIds: ObjectId[]): Promise<GetObjectDataResponse[]> {
+  async getObjectBatch(
+    objectIds: ObjectId[]
+  ): Promise<GetObjectDataResponse[]> {
     try {
       const requests = objectIds.map((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
-        return { 
+        return {
           method: 'sui_getObject',
           args: [id],
         };
@@ -442,7 +451,9 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for ids [${objectIds}]`);
+      throw new Error(
+        `Error fetching object info: ${err} for ids [${objectIds}]`
+      );
     }
   }
 
@@ -534,7 +545,7 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest
   ): Promise<SuiTransactionResponse> {
     try {
-      if (!isValidTransactionDigest(digest, "base58")) {
+      if (!isValidTransactionDigest(digest, 'base58')) {
         throw new Error('Invalid Transaction digest');
       }
       const resp = await this.client.requestWithType(
@@ -550,16 +561,16 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
- 
+
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
   ): Promise<SuiTransactionResponse[]> {
     try {
       const requests = digests.map((d) => {
-        if (!isValidTransactionDigest(d, "base58")) {
+        if (!isValidTransactionDigest(d, 'base58')) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
-        return { 
+        return {
           method: 'sui_getTransaction',
           args: [d],
         };
@@ -586,27 +597,39 @@ export class JsonRpcProvider extends Provider {
     try {
       let resp;
       let version = await this.getRpcApiVersion();
-      if (version?.major === 0 && version?.minor < 18) {
+      if (version && lt(version, '0.18.0')) {
         resp = await this.client.requestWithType(
           'sui_executeTransaction',
-          [txnBytes.toString(), signatureScheme, signature.toString(), pubkey.toString(), requestType],
+          [
+            txnBytes.toString(),
+            signatureScheme,
+            signature.toString(),
+            pubkey.toString(),
+            requestType,
+          ],
           isSuiExecuteTransactionResponse,
           this.options.skipDataValidation
         );
       } else {
         // Serialize sigature field as: `flag || signature || pubkey`
-        const serialized_sig = new Uint8Array(1 + signature.getLength() + pubkey.toBytes().length);
+        const serialized_sig = new Uint8Array(
+          1 + signature.getLength() + pubkey.toBytes().length
+        );
         serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
         serialized_sig.set(signature.getData(), 1);
         serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
 
         resp = await this.client.requestWithType(
           'sui_executeTransactionSerializedSig',
-          [txnBytes.toString(), new Base64DataBuffer(serialized_sig).toString(), requestType],
+          [
+            txnBytes.toString(),
+            new Base64DataBuffer(serialized_sig).toString(),
+            requestType,
+          ],
           isSuiExecuteTransactionResponse,
           this.options.skipDataValidation
         );
-      };
+      }
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}}`);
@@ -656,9 +679,7 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(
-        `Error fetching transaction auth signers: ${err}`
-      );
+      throw new Error(`Error fetching transaction auth signers: ${err}`);
     }
   }
 

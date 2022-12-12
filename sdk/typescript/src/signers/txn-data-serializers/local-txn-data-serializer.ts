@@ -36,6 +36,7 @@ import {
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
 import { TypeTagSerializer } from './type-tag-serializer';
+import { gt } from '@suchipi/femver';
 
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
@@ -50,7 +51,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       const version = await this.provider.getRpcApiVersion();
-      const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
+      const useIntentSigning = !!version && gt(version, '0.18.0');
       return await this.serializeTransactionData(
         useIntentSigning,
         await this.constructTransactionData(signerAddress, txn)
@@ -334,7 +335,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         TRANSACTION_DATA_TYPE_TAG.length + dataBytes.length
       );
       serialized.set(TRANSACTION_DATA_TYPE_TAG);
-      serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);  
+      serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);
       return new Base64DataBuffer(serialized);
     }
   }

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
+import {
+    isValidTransactionDigest,
+    isValidSuiAddress,
+    VersionUtils,
+} from '@mysten/sui.js';
 import { useEffect, useState, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -33,7 +37,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
     if (
         isValidTransactionDigest(
             input,
-            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
+            version && VersionUtils.lt(version, '0.18.0') ? 'base64' : 'base58'
         )
     ) {
         searchPromises.push(

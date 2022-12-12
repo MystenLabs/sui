@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { gt, gte, lt } from '@suchipi/femver';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
@@ -32,7 +33,7 @@ import {
   SignableTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
-// See: sui/crates/sui-types/src/intent.rs 
+// See: sui/crates/sui-types/src/intent.rs
 // This is currently hardcoded with [IntentScope::TransactionData = 0, Version::V0 = 0, AppId::Sui = 0]
 const INTENT_BYTES = [0, 0, 0];
 ///////////////////////////////
@@ -105,14 +106,16 @@ export abstract class SignerWithProvider implements Signer {
       const version = await this.provider.getRpcApiVersion();
       let dataToSign;
       let txBytesToSubmit;
-      if (version?.major == 0 && version?.minor < 19) {
+      if (version && lt(version, '0.19.0')) {
         dataToSign = txBytes;
         txBytesToSubmit = txBytes;
       } else {
-        const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.getLength());
+        const intentMessage = new Uint8Array(
+          INTENT_BYTES.length + txBytes.getLength()
+        );
         intentMessage.set(INTENT_BYTES);
         intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
-        
+
         dataToSign = new Base64DataBuffer(intentMessage);
         txBytesToSubmit = txBytes;
       }
@@ -148,10 +151,12 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
     const version = await this.provider.getRpcApiVersion();
-    const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
+    const useIntentSigning = !!version && gt(version, '0.18.0');
     let dataToSign;
     if (useIntentSigning) {
-      const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.getLength());
+      const intentMessage = new Uint8Array(
+        INTENT_BYTES.length + txBytes.getLength()
+      );
       intentMessage.set(INTENT_BYTES);
       intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
       dataToSign = new Base64DataBuffer(intentMessage);
@@ -160,14 +165,18 @@ export abstract class SignerWithProvider implements Signer {
     }
 
     const sig = await this.signData(dataToSign);
-    const data = deserializeTransactionBytesToTransactionData(useIntentSigning, txBytes);
+    const data = deserializeTransactionBytesToTransactionData(
+      useIntentSigning,
+      txBytes
+    );
+
     return generateTransactionDigest(
       data,
       sig.signatureScheme,
       sig.signature,
       sig.pubKey,
-      (version?.major == 0 && version?.minor < 18) ? 'base64' : 'base58',
-      (version?.major == 0 && version?.minor < 18) ? false : true
+      version && gte(version, '0.18.0') ? 'base58' : 'base64',
+      !!version && gte(version, '0.18.0')
     );
   }
 

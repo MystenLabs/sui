@@ -6,6 +6,7 @@ import {
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
+    VersionUtils,
     type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
@@ -83,7 +84,7 @@ export const deserializeTxn = createAsyncThunk<
 
         //TODO: Error handling - either show the error or use the serialized txn
         const useIntentSigning =
-            version != null && version.major >= 0 && version.minor > 18;
+            !!version && VersionUtils.gt(version, '0.18.0');
         const deserializeTx =
             (await localSerializer.deserializeTransactionBytesToSignableTransaction(
                 useIntentSigning,

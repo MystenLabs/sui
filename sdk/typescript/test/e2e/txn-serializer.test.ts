@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { gt } from '@suchipi/femver';
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   deserializeTransactionBytesToTransactionData,
@@ -51,7 +52,7 @@ describe('Transaction Serialization and deserialization', () => {
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const version = await toolbox.provider.getRpcApiVersion();
-    const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
+    const useIntentSigning = !!version && gt(version, '0.18.0');
     const deserialized =
       (await localSerializer.deserializeTransactionBytesToSignableTransaction(
         useIntentSigning,
@@ -59,9 +60,12 @@ describe('Transaction Serialization and deserialization', () => {
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
 
-    const deserializedTxnData =
-      deserializeTransactionBytesToTransactionData(useIntentSigning, localTxnBytes);
-    const reserialized = await localSerializer.serializeTransactionData(useIntentSigning,
+    const deserializedTxnData = deserializeTransactionBytesToTransactionData(
+      useIntentSigning,
+      localTxnBytes
+    );
+    const reserialized = await localSerializer.serializeTransactionData(
+      useIntentSigning,
       deserializedTxnData
     );
     expect(reserialized).toEqual(localTxnBytes);
