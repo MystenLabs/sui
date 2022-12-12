@@ -199,7 +199,7 @@ correlate to metrics and incidents, for ease of debugging.
 
 For the memory profiling to work, you need to set the environment variable `_RJEM_MALLOC_CONF=prof:true`. If you use the [Docker image](https://hub.docker.com/r/mysten/sui-node) they are set automatically.
 
-Note that running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
+Running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
 
 To view the profile files, one needs to do the following, on the same platform as where the profiles were gathered:
 1. Install `libunwind`, the `dot` utility from graphviz, and jeprof.  On Debian: `apt-get install libjemalloc-dev libunwind-dev graphviz`.
