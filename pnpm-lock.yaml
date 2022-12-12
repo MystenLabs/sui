@@ -234,7 +234,7 @@ importers:
       formik: ^2.2.9
       framer-motion: ^7.6.19
       git-rev-sync: ^3.0.2
-      happy-dom: ^7.6.0
+      happy-dom: ^8.1.0
       html-webpack-plugin: ^5.5.0
       mini-css-extract-plugin: ^2.6.1
       mitt: ^3.0.0
@@ -348,7 +348,7 @@ importers:
       eslint-config-react-app: 7.0.1_itqs5654cmlnjraw6gjzqacppi
       eslint-webpack-plugin: 3.2.0_skpnekq7gq3zdkwzxpcrmjcczy
       git-rev-sync: 3.0.2
-      happy-dom: 7.8.1
+      happy-dom: 8.1.0
       html-webpack-plugin: 5.5.0_webpack@5.74.0
       mini-css-extract-plugin: 2.6.1_webpack@5.74.0
       onchange: 7.1.0
@@ -369,7 +369,7 @@ importers:
       tsconfig-paths: 4.1.1
       typescript: 4.8.3
       vite: 4.0.0_3im4wt3lhzwamwht7viklmwwvy
-      vitest: 0.25.7_p2rhmo2skxr4fab6ceroj77syu
+      vitest: 0.25.7_y6khfwbh6kb2hn3sdbswiptbzi
       web-ext: 7.2.0
       webpack: 5.74.0_webpack-cli@4.10.0
       webpack-cli: 4.10.0_webpack@5.74.0
@@ -11258,8 +11258,8 @@ packages:
       uglify-js: 3.17.4
     dev: true
 
-  /happy-dom/7.8.1:
-    resolution: {integrity: sha512-lKpeGDtA0FqS/LpAEU+5N5kKkmW5TOjZCXZDnF7YtWuvKP9iwCqpeshG9gXA/H+gX0VQ/I/OToy73+umx1NQUw==}
+  /happy-dom/8.1.0:
+    resolution: {integrity: sha512-R9NVb5815gpMFsldZF0wVSHw2uSobx6yitSkCdQPda1kwfAmVw4Ut8ZspxGHXkK6OA93SznldkcvrbhKFr6JcA==}
     dependencies:
       css.escape: 1.5.1
       he: 1.2.0
@@ -18534,7 +18534,7 @@ packages:
       - terser
     dev: true
 
-  /vitest/0.25.7_p2rhmo2skxr4fab6ceroj77syu:
+  /vitest/0.25.7_y6khfwbh6kb2hn3sdbswiptbzi:
     resolution: {integrity: sha512-lJ+Ue+v8kHl2JzjaKHJ9u5Yo/loU7zrWK2/Whn8OKQjtq5G7nkeWfXuq3elZaC8xKdkdIuWiiIicaNBG1F5yzg==}
     engines: {node: '>=v14.16.0'}
     hasBin: true
@@ -18563,7 +18563,7 @@ packages:
       acorn-walk: 8.2.0
       chai: 4.3.7
       debug: 4.3.4
-      happy-dom: 7.8.1
+      happy-dom: 8.1.0
       local-pkg: 0.4.2
       source-map: 0.6.1
       strip-literal: 1.0.0
