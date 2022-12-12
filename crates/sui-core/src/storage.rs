@@ -87,19 +87,28 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<VerifiedCertificate>, Self::Error> {
         if let Some(transaction) = self
             .authority_store
-            .epoch_store()
-            .get_pending_certificate(digest)?
-        {
-            return Ok(Some(transaction));
-        }
-
-        if let Some(transaction) = self
-            .authority_store
             .perpetual_tables
             .certificates
             .get(digest)?
         {
             return Ok(Some(transaction.into()));
+        }
+
+        if let Some(transaction) = self
+            .authority_store
+            .perpetual_tables
+            .synced_transactions
+            .get(digest)?
+        {
+            return Ok(Some(transaction.into()));
+        }
+
+        if let Some(transaction) = self
+            .authority_store
+            .epoch_store()
+            .get_pending_certificate(digest)?
+        {
+            return Ok(Some(transaction));
         }
 
         Ok(None)
@@ -146,8 +155,9 @@ impl WriteStore for RocksDbStore {
 
     fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error> {
         self.authority_store
-            .epoch_store()
-            .insert_pending_certificates(&[transaction])
+            .perpetual_tables
+            .synced_transactions
+            .insert(transaction.digest(), transaction.serializable_ref())
     }
 
     fn insert_transaction_effects(

@@ -58,6 +58,7 @@ pub struct AuthorityPerpetualTables {
     pub(crate) executed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
+    pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
     // Tables used for authority batch structure
     // TODO: executed_sequence and batches both conceptually belong in AuthorityEpochTables,
