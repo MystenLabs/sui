@@ -20,6 +20,8 @@ custom coins with <code><a href="balance.md#0x2_balance_Supply">Supply</a></code
 -  [Function `join`](#0x2_balance_join)
 -  [Function `split`](#0x2_balance_split)
 -  [Function `destroy_zero`](#0x2_balance_destroy_zero)
+-  [Function `create_staking_rewards`](#0x2_balance_create_staking_rewards)
+-  [Function `destroy_storage_rebates`](#0x2_balance_destroy_storage_rebates)
 
 
 <pre><code></code></pre>
@@ -400,6 +402,60 @@ Destroy a zero <code><a href="balance.md#0x2_balance_Balance">Balance</a></code>
 
 
 <pre><code><b>aborts_if</b> <a href="balance.md#0x2_balance">balance</a>.value != 0 <b>with</b> <a href="balance.md#0x2_balance_ENonZero">ENonZero</a>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_create_staking_rewards"></a>
+
+## Function `create_staking_rewards`
+
+CAUTION: this function creates a <code><a href="balance.md#0x2_balance_Balance">Balance</a></code> without increasing the supply.
+It should only be called by <code><a href="sui_system.md#0x2_sui_system_advance_epoch">sui_system::advance_epoch</a></code> to create staking rewards,
+and nowhere else.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64): <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+    <a href="balance.md#0x2_balance_Balance">Balance</a> { value }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_destroy_storage_rebates"></a>
+
+## Function `destroy_storage_rebates`
+
+CAUTION: this function destroys a <code><a href="balance.md#0x2_balance_Balance">Balance</a></code> without decreasing the supply.
+It should only be called by <code><a href="sui_system.md#0x2_sui_system_advance_epoch">sui_system::advance_epoch</a></code> to destroy storage rebates,
+and nowhere else.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;) {
+    <b>let</b> <a href="balance.md#0x2_balance_Balance">Balance</a> { value: _ } = self;
+}
 </code></pre>
 
 

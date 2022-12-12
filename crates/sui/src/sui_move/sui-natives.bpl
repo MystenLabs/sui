@@ -122,7 +122,7 @@ procedure {:inline 1} $2_ed25519_ed25519_verify(signature: Vec (int), public_key
 // ==================================================================================
 // Native bulletproofs
 
-procedure {:inline 1} $2_bulletproofs_native_verify_full_range_proof(proof: Vec (int), commitment: Vec (int), bit_length: int);
+procedure {:inline 1} $2_bulletproofs_native_verify_full_range_proof(proof: Vec (int), commitment: Vec (int), bit_length: int) returns (res: bool);
 
 // ==================================================================================
 // Native elliptic_curve

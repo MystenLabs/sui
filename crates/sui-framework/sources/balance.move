@@ -5,6 +5,8 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
+    friend sui::sui_system;
+
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
 
@@ -99,6 +101,20 @@ module sui::balance {
 
     spec destroy_zero {
         aborts_if balance.value != 0 with ENonZero;
+    }
+
+    /// CAUTION: this function creates a `Balance` without increasing the supply. 
+    /// It should only be called by `sui_system::advance_epoch` to create staking rewards,
+    /// and nowhere else.
+    public(friend) fun create_staking_rewards<T>(value: u64): Balance<T> {
+        Balance { value }
+    }
+
+    /// CAUTION: this function destroys a `Balance` without decreasing the supply. 
+    /// It should only be called by `sui_system::advance_epoch` to destroy storage rebates,
+    /// and nowhere else.
+    public(friend) fun destroy_storage_rebates<T>(self: Balance<T>) {
+        let Balance { value: _ } = self;
     }
 
     #[test_only]

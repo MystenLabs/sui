@@ -804,8 +804,8 @@ gas coins.
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
 
-    <b>let</b> storage_reward = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> self.sui_supply, storage_charge);
-    <b>let</b> computation_reward = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> self.sui_supply, computation_charge);
+    <b>let</b> storage_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(storage_charge);
+    <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
 
     <b>let</b> delegation_stake = <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators);
     <b>let</b> validator_stake = <a href="validator_set.md#0x2_validator_set_total_validator_stake">validator_set::total_validator_stake</a>(&self.validators);
@@ -848,14 +848,29 @@ gas coins.
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
 
-    // Burn the storage rebate.
+    // Destroy the storage rebate.
     <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate, 0);
-    <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> self.sui_supply, <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
+    <a href="balance.md#0x2_balance_destroy_storage_rebates">balance::destroy_storage_rebates</a>(<a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
 
     // Validator reports are only valid for the epoch.
     // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
     self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+Total supply of SUI shouldn't change.
+
+
+<pre><code><b>ensures</b> <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply)
+    == <b>old</b>(<a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply));
 </code></pre>
 
 
