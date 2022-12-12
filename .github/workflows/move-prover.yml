@@ -16,11 +16,10 @@ jobs:
         run:  |
           crates/sui/scripts/prover_setup.sh
 
-      - name: Compile cargo
+      - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
 
       - name: Prover Run
         run:  |
