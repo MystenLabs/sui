@@ -7,11 +7,10 @@ jobs:
     runs-on: [ubuntu-ghcloud]
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      
       - name: Prover Setup
         run: |
           crates/sui/scripts/prover_setup.sh
