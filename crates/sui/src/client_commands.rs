@@ -137,6 +137,31 @@ pub enum SuiClientCommands {
         verify_dependencies: bool,
     },
 
+    /// Verify the local Move modules against on-chain modules. By default, dependencies are verified
+    #[clap(name = "verify-source")]
+    VerifySource {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+
+        /// Do not verify on-chain dependencies.
+        #[clap(long)]
+        no_deps: bool,
+
+        /// If specified, the root is verified against the package at this address.
+        #[clap(long)]
+        addr: Option<ObjectID>,
+    },
+
     /// Call Move function
     #[clap(name = "call")]
     Call {
@@ -444,7 +469,7 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 if verify_dependencies {
                     BytecodeSourceVerifier::new(client.read_api(), false)
-                        .verify_deployed_dependencies(&compiled_package.package)
+                        .verify_package(&compiled_package.package, true, None)
                         .await?;
                     println!("Successfully verified dependencies on-chain against source.");
                 }
@@ -917,6 +942,32 @@ impl SuiClientCommands {
                 context.config.envs.clone(),
                 context.config.active_env.clone(),
             ),
+            SuiClientCommands::VerifySource {
+                package_path,
+                build_config,
+                no_deps,
+                addr,
+            } => {
+                let compiled_package = build_move_package(
+                    &package_path,
+                    BuildConfig {
+                        config: build_config,
+                        run_bytecode_verifier: true,
+                        print_diags_to_stderr: true,
+                    },
+                )?;
+
+                let client = context.get_client().await?;
+                SuiClientCommandResult::VerifySource(
+                    match BytecodeSourceVerifier::new(client.read_api(), false)
+                        .verify_package(&compiled_package.package, !no_deps, addr.map(|q| q.into()))
+                        .await
+                    {
+                        Ok(_) => "Ok".to_string(),
+                        Err(e) => format!("{}", e),
+                    },
+                )
+            }
         });
         ret
     }
@@ -1267,6 +1318,10 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer)?;
                 }
             }
+            SuiClientCommandResult::VerifySource(res) => {
+                write!(writer, "{}", res)?;
+                writeln!(writer)?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1381,6 +1436,7 @@ impl SuiClientCommandResult {
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
+    VerifySource(String),
     Object(GetObjectDataResponse, bool),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(

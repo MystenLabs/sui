@@ -4,7 +4,7 @@
 use std::{collections::HashMap, fmt::Debug};
 use thiserror::Error;
 
-use move_compiler::compiled_unit::CompiledUnitEnum;
+use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
 use move_core_types::account_address::AccountAddress;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_symbol_pool::Symbol;
@@ -18,7 +18,7 @@ use sui_types::{base_types::ObjectID, error::SuiError};
 mod tests;
 
 #[derive(Debug, Error)]
-pub enum DependencyVerificationError {
+pub enum SourceVerificationError {
     #[error("Could not read a dependency's on-chain object: {0:?}")]
     DependencyObjectReadFailure(RpcError),
 
@@ -42,6 +42,9 @@ pub enum DependencyVerificationError {
         package: Symbol,
         module: Symbol,
     },
+
+    #[error("On-chain address cannot be zero")]
+    ZeroOnChainAddresSpecifiedFailure,
 }
 
 pub struct BytecodeSourceVerifier<'a> {
@@ -61,16 +64,59 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
     }
 
-    /// Verify that all local Move package dependencies' bytecode matches
+    /// Helper wrapper to verify that all local Move package dependencies' and root bytecode matches
     /// the bytecode at the address specified on the Sui network we are publishing to.
-    pub async fn verify_deployed_dependencies(
+    pub async fn verify_package_root_and_deps(
         &self,
         compiled_package: &CompiledPackage,
-    ) -> Result<(), DependencyVerificationError> {
-        let compiled_dep_map = get_module_bytes_map(compiled_package);
+        root_on_chain_address: AccountAddress,
+    ) -> Result<(), SourceVerificationError> {
+        self.verify_package(compiled_package, true, Some(root_on_chain_address))
+            .await
+    }
+
+    /// Helper wrapper to verify that all local Move package root bytecode matches
+    /// the bytecode at the address specified on the Sui network we are publishing to.
+    pub async fn verify_package_root(
+        &self,
+        compiled_package: &CompiledPackage,
+        root_on_chain_address: AccountAddress,
+    ) -> Result<(), SourceVerificationError> {
+        self.verify_package(compiled_package, false, Some(root_on_chain_address))
+            .await
+    }
+
+    /// Helper wrapper to verify that all local Move package dependencies' matches
+    /// the bytecode at the address specified on the Sui network we are publishing to.
+    pub async fn verify_package_deps(
+        &self,
+        compiled_package: &CompiledPackage,
+    ) -> Result<(), SourceVerificationError> {
+        self.verify_package(compiled_package, true, None).await
+    }
+
+    /// Verify that all local Move package dependencies' and/or root bytecode matches
+    /// the bytecode at the address specified on the Sui network we are publishing to.
+    /// If `verify_deps` is true, the dependencies are verified
+    /// If `root_on_chain_address` is specified, the root is verified against a package at `root_on_chain_address`
+    pub async fn verify_package(
+        &self,
+        compiled_package: &CompiledPackage,
+        verify_deps: bool,
+        root_on_chain_address: Option<AccountAddress>,
+    ) -> Result<(), SourceVerificationError> {
+        // On-chain address for matching root package cannot be zero
+        if let Some(ref root_address) = root_on_chain_address {
+            if *root_address == AccountAddress::ZERO {
+                return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure);
+            }
+        }
+
+        let compiled_dep_map =
+            get_module_bytes_map(compiled_package, verify_deps, root_on_chain_address);
 
         for ((address, package), local_modules) in compiled_dep_map {
-            // Zero address is the package we're checking dependencies for, it does not need to (and
+            // if `root_on_chain_address` is None, then Zero address is the package we're checking dependencies for, it does not need to (and
             // cannot) be verified.
             if address == AccountAddress::ZERO {
                 continue;
@@ -85,7 +131,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
             for (module, local_bytes) in local_modules {
                 let Some(on_chain_bytes) = on_chain_modules.remove(module.as_ref()) else {
-                    return Err(DependencyVerificationError::OnChainDependencyNotFound {
+                    return Err(SourceVerificationError::OnChainDependencyNotFound {
                         package, module,
                     })
                 };
@@ -93,7 +139,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 // compare local bytecode to on-chain bytecode to ensure integrity of our
                 // dependencies
                 if local_bytes != on_chain_bytes {
-                    return Err(DependencyVerificationError::ModuleBytecodeMismatch {
+                    return Err(SourceVerificationError::ModuleBytecodeMismatch {
                         address,
                         package,
                         module,
@@ -111,10 +157,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             }
 
             if let Some((module, _)) = on_chain_modules.into_iter().next() {
-                return Err(DependencyVerificationError::LocalDependencyNotFound {
-                    package,
-                    module,
-                });
+                return Err(SourceVerificationError::LocalDependencyNotFound { package, module });
             }
         }
 
@@ -124,7 +167,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
     async fn pkg_for_address(
         &self,
         addr: &AccountAddress,
-    ) -> Result<SuiRawMovePackage, DependencyVerificationError> {
+    ) -> Result<SuiRawMovePackage, SourceVerificationError> {
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
         let obj_id = ObjectID::from(*addr);
@@ -136,38 +179,80 @@ impl<'a> BytecodeSourceVerifier<'a> {
             .rpc_client
             .get_object(obj_id)
             .await
-            .map_err(DependencyVerificationError::DependencyObjectReadFailure)?;
+            .map_err(SourceVerificationError::DependencyObjectReadFailure)?;
 
         let obj = obj_read
             .object()
-            .map_err(DependencyVerificationError::SuiObjectRefFailure)?;
+            .map_err(SourceVerificationError::SuiObjectRefFailure)?;
 
         match obj.data.clone() {
             SuiRawData::Package(pkg) => Ok(pkg),
             SuiRawData::MoveObject(move_obj) => Err(
-                DependencyVerificationError::ObjectFoundWhenPackageExpected(obj_id, move_obj),
+                SourceVerificationError::ObjectFoundWhenPackageExpected(obj_id, move_obj),
             ),
         }
     }
 }
 
-fn get_module_bytes_map(compiled_package: &CompiledPackage) -> ModuleBytesMap {
+fn get_module_bytes_map(
+    compiled_package: &CompiledPackage,
+    include_deps: bool,
+    root_address: Option<AccountAddress>,
+) -> ModuleBytesMap {
     let mut map: ModuleBytesMap = HashMap::new();
-    for (package, local_unit) in &compiled_package.deps_compiled_units {
-        let CompiledUnitEnum::Module(m) = &local_unit.unit else {
-            continue;
-        };
 
-        let module = m.name;
-        let address = m.address.into_inner();
+    fn make_map_entry(
+        package: &Symbol,
+        named_compiled_module: &NamedCompiledModule,
+        subst_addr: Option<AccountAddress>,
+    ) -> ((AccountAddress, Symbol), (Symbol, Vec<u8>)) {
+        let mut named_compiled_module = named_compiled_module.clone();
+        let module = named_compiled_module.name;
+        let address = subst_addr.unwrap_or_else(|| named_compiled_module.address.into_inner());
 
         // in the future, this probably needs to use `serialize_for_version`.
         let mut bytes = vec![];
-        m.module.serialize(&mut bytes).unwrap();
 
-        map.entry((address, *package))
-            .or_default()
-            .insert(module, bytes);
+        // Replace the Zero address entries in the module if needed
+        if let Some(addr) = subst_addr {
+            let mut addrs = Vec::new();
+            for a in named_compiled_module.module.address_identifiers {
+                addrs.push(if a == AccountAddress::ZERO { addr } else { a })
+            }
+            named_compiled_module.module.address_identifiers = addrs;
+        };
+
+        named_compiled_module.module.serialize(&mut bytes).unwrap();
+        ((address, *package), (module, bytes))
+    }
+
+    // TODO: consolidate loops
+    if include_deps {
+        for (package, local_unit) in &compiled_package.deps_compiled_units {
+            let CompiledUnitEnum::Module(m) = &local_unit.unit else {
+                continue;
+            };
+
+            let (k, v) = make_map_entry(package, m, None);
+
+            map.entry(k).or_default().insert(v.0, v.1);
+        }
+    }
+
+    if let Some(addr) = root_address {
+        for (package, local_unit) in compiled_package
+            .root_compiled_units
+            .iter()
+            .map(|q| (compiled_package.compiled_package_info.package_name, q))
+        {
+            let CompiledUnitEnum::Module(m) = &local_unit.unit else {
+                continue;
+            };
+
+            let (k, v) = make_map_entry(&package, m, Some(addr));
+
+            map.entry(k).or_default().insert(v.0, v.1);
+        }
     }
     map
 }
