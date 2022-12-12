@@ -150,7 +150,7 @@ You can configure `RUST_LOG` for custom logging output, including filtering - se
 
 ### Tracing and span output
 
-To generate detailed span start and end logs, define the `SUI_JSON_SPAN_LOGS` environment variable. Note that this causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
+To generate detailed span start and end logs, define the `SUI_JSON_SPAN_LOGS` environment variable. This causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
 
 You can send this output to a tool or service for indexing, alerts, aggregation, and analysis.
 
