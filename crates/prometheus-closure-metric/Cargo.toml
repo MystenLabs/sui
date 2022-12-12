@@ -11,5 +11,5 @@ publish = false
 [dependencies]
 anyhow = "1.0.58"
 prometheus = "0.13.3"
-protobuf = "^2.0"
+protobuf = "^3.2"
 workspace-hack.workspace = true

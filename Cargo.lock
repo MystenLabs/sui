@@ -6625,7 +6625,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "memchr",
  "parking_lot 0.12.1",
- "protobuf",
+ "protobuf 2.28.0",
  "thiserror",
 ]
 
@@ -6635,7 +6635,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "prometheus",
- "protobuf",
+ "protobuf 3.2.0",
  "workspace-hack",
 ]
 
@@ -6787,12 +6787,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
+name = "protobuf"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b55bad9126f378a853655831eb7363b7b01b81d19f8cb1218861086ca4a1a61e"
+dependencies = [
+ "once_cell",
+ "protobuf-support",
+ "thiserror",
+]
+
+[[package]]
 name = "protobuf-src"
 version = "1.1.0+21.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7ac8852baeb3cc6fb83b93646fb93c0ffe5d14bf138c945ceb4b9948ee0e3c1"
 dependencies = [
  "autotools",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d4d7b8601c814cfb36bcebb79f0e61e45e1e93640cf778837833bbed05c372"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -11460,7 +11480,7 @@ dependencies = [
  "prost-derive 0.11.2",
  "prost-types 0.10.1",
  "prost-types 0.11.2",
- "protobuf",
+ "protobuf 3.2.0",
  "protobuf-src",
  "ptree",
  "quick-error 1.2.3",
