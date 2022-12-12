@@ -13,12 +13,9 @@ jobs:
           fetch-depth: 0
 
       - name: Prover Setup
-        run:  |
+        run: |
           crates/sui/scripts/prover_setup.sh
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-
       - name: Prover Run
-        run:  |
+        run: |
           crates/sui/scripts/prover_run.sh
