@@ -105,8 +105,7 @@ async fn init_executor_test(
     CommitteeFixture,
 ) {
     let (keypair, committee) = committee();
-    let state =
-        Arc::new(AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await);
+    let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);

@@ -17,7 +17,7 @@
 //! handles epoch boundaries by calling to reconfig once all checkpoints of an epoch have finished
 //! executing.
 
-use std::{cmp::Ordering, sync::Arc, time::Duration};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
@@ -26,7 +26,7 @@ use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     crypto::AuthorityPublicKeyBytes,
     error::SuiResult,
-    messages::TransactionEffects,
+    messages::{SignedTransactionEffects, TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use tokio::{
@@ -350,7 +350,7 @@ pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_state: Arc<AuthorityState>,
     checkpoint_store: Arc<CheckpointStore>,
-) -> SuiResult<Vec<TransactionEffects>> {
+) -> SuiResult<Vec<SignedTransactionEffects>> {
     let txes = checkpoint_store
         .get_checkpoint_contents(&checkpoint.content_digest())?
         .unwrap_or_else(|| {
@@ -361,30 +361,50 @@ pub async fn execute_checkpoint(
         })
         .into_inner();
 
-    let effects = execute_transactions(txes, authority_state).await?;
-    Ok(effects)
+    execute_transactions(txes, authority_state).await
 }
 
 async fn execute_transactions(
     transactions: Vec<ExecutionDigests>,
     authority_state: Arc<AuthorityState>,
-) -> SuiResult<Vec<TransactionEffects>> {
+) -> SuiResult<Vec<SignedTransactionEffects>> {
     let tx_digests: Vec<TransactionDigest> = transactions.iter().map(|tx| tx.transaction).collect();
-    let txns = authority_state
+    let txns: Vec<VerifiedCertificate> = authority_state
         .database
         .epoch_store()
         .multi_get_pending_certificate(&tx_digests)?
         .into_iter()
-        .map(|tx| tx.unwrap())
+        .flatten()
         .collect();
 
     // TODO once https://github.com/MystenLabs/sui/pull/6157 is landed,
     // replace with call to `authority_state.add_pending_certs_and_effects`,
     // which handles reading effects for shared object version numbers
     // and enqueing transactions with TransactionManager.
+    let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_state
+        .database
+        .get_effects(&tx_digests)?
+        .into_iter()
+        .map(|fx| {
+            let fx = fx.unwrap();
+            (fx.transaction_digest, fx.data().clone())
+        })
+        .collect();
+
+    for tx in txns.clone() {
+        if tx.contains_shared_object() {
+            authority_state
+                .database
+                .acquire_shared_locks_from_effects(&tx, digest_to_effects.get(tx.digest()).unwrap())
+                .await?;
+        }
+    }
     authority_state.transaction_manager.enqueue(txns).await?;
 
-    let actual_fx = authority_state.database.notify_read(tx_digests).await?;
+    let actual_fx = authority_state
+        .database
+        .notify_read_effects(tx_digests)
+        .await?;
     Ok(actual_fx)
 }
 

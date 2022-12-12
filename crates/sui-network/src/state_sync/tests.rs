@@ -11,7 +11,7 @@ use crate::{
 use anemo::{PeerId, Request};
 use std::{collections::HashMap, time::Duration};
 use sui_types::{
-    messages_checkpoint::VerifiedCheckpoint,
+    messages_checkpoint::{CheckpointDigest, VerifiedCheckpoint},
     storage::{ReadStore, SharedInMemoryStore, WriteStore},
 };
 use tokio::time::timeout;
