@@ -198,7 +198,7 @@ Sui requires the following additional tools on computers running Windows.
 
 If the progress appears to freeze, press **Enter** in the command prompt to fix the issue.
 
-**Known issue:** - The `sui console` command does not work in PowerShell.
+**Known issue** - The `sui console` command does not work in PowerShell.
 
 ## Install Sui binaries
 
@@ -232,7 +232,7 @@ echo %PATH%
 ```
 Use the `--help` flag to access helpful information for any of these binaries.
 
-**Important:** - Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages and re-install.
+**Important** - Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages and re-install.
 
 ## Integrated development environment
 
