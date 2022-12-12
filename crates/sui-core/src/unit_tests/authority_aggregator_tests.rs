@@ -57,14 +57,7 @@ async fn init_network_authorities(
         DEFAULT_REQUEST_TIMEOUT_SEC,
     );
 
-    let registry = prometheus::Registry::new();
-    AuthorityAggregator::new(
-        committee,
-        committee_store,
-        auth_clients,
-        AuthAggMetrics::new(&registry),
-        Arc::new(SafeClientMetrics::new(&registry)),
-    )
+    AuthorityAggregator::new(committee, committee_store, auth_clients, &Registry::new())
 }
 
 pub async fn init_local_authorities(
@@ -158,8 +151,7 @@ pub async fn init_local_authorities_with_genesis(
             committee,
             committee_store,
             clients,
-            AuthAggMetrics::new_for_tests(),
-            Arc::new(SafeClientMetrics::new_for_tests()),
+            &Registry::new(),
             timeouts,
         ),
         states,
@@ -916,8 +908,7 @@ fn get_agg(
         committee,
         committee_store,
         clients,
-        AuthAggMetrics::new_for_tests(),
-        Arc::new(SafeClientMetrics::new_for_tests()),
+        &Registry::new(),
         TimeoutConfig {
             serial_authority_request_interval: Duration::from_millis(50),
             ..Default::default()

@@ -9,7 +9,7 @@ use futures::StreamExt;
 use prometheus::core::{GenericCounter, GenericGauge};
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
-    IntGaugeVec,
+    IntGaugeVec, Registry,
 };
 use std::sync::Arc;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
@@ -38,17 +38,15 @@ macro_rules! check_error {
     }
 }
 
-/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
-#[derive(Clone)]
-pub struct SafeClientMetrics {
-    pub(crate) total_requests_by_address_method: IntCounterVec,
-    pub(crate) total_responses_by_address_method: IntCounterVec,
-    pub(crate) follower_streaming_from_seq_number_by_address: IntGaugeVec,
+pub struct SafeClientMetricsBase {
+    total_requests_by_address_method: IntCounterVec,
+    total_responses_by_address_method: IntCounterVec,
+    follower_streaming_from_seq_number_by_address: IntGaugeVec,
     latency: HistogramVec,
 }
 
-impl SafeClientMetrics {
-    pub fn new(registry: &prometheus::Registry) -> Self {
+impl SafeClientMetricsBase {
+    pub fn new(registry: &Registry) -> Self {
         Self {
             total_requests_by_address_method: register_int_counter_vec_with_registry!(
                 "safe_client_total_requests_by_address_method",
@@ -79,10 +77,103 @@ impl SafeClientMetrics {
             ),
         }
     }
+}
 
-    pub fn new_for_tests() -> Self {
-        let registry = prometheus::Registry::new();
-        Self::new(&registry)
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+#[derive(Clone)]
+pub struct SafeClientMetrics {
+    total_requests_handle_transaction_and_effects_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    total_ok_responses_handle_transaction_and_effects_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    total_requests_handle_transaction_info_request: GenericCounter<prometheus::core::AtomicU64>,
+    total_ok_responses_handle_transaction_info_request: GenericCounter<prometheus::core::AtomicU64>,
+    total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
+    total_ok_responses_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
+    total_requests_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
+    total_ok_responses_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
+    seq_number_to_handle_batch_stream: GenericGauge<prometheus::core::AtomicI64>,
+    handle_transaction_latency: Histogram,
+    handle_certificate_latency: Histogram,
+    handle_obj_info_latency: Histogram,
+    handle_tx_info_latency: Histogram,
+}
+
+impl SafeClientMetrics {
+    pub fn new(metrics_base: &SafeClientMetricsBase, validator_address: AuthorityName) -> Self {
+        let validator_address = validator_address.to_string();
+
+        let total_requests_handle_transaction_and_effects_info_request = metrics_base
+            .total_requests_by_address_method
+            .with_label_values(&[
+                &validator_address,
+                "handle_transaction_and_effects_info_request",
+            ]);
+        let total_ok_responses_handle_transaction_and_effects_info_request = metrics_base
+            .total_responses_by_address_method
+            .with_label_values(&[
+                &validator_address,
+                "handle_transaction_and_effects_info_request",
+            ]);
+
+        let total_requests_handle_transaction_info_request = metrics_base
+            .total_requests_by_address_method
+            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+        let total_ok_responses_handle_transaction_info_request = metrics_base
+            .total_responses_by_address_method
+            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+
+        let total_requests_handle_object_info_request = metrics_base
+            .total_requests_by_address_method
+            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+        let total_ok_responses_handle_object_info_request = metrics_base
+            .total_responses_by_address_method
+            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+
+        let total_requests_handle_batch_stream = metrics_base
+            .total_requests_by_address_method
+            .with_label_values(&[&validator_address, "handle_batch_stream"]);
+        let total_ok_responses_handle_batch_stream = metrics_base
+            .total_responses_by_address_method
+            .with_label_values(&[&validator_address, "handle_batch_stream"]);
+
+        let seq_number_to_handle_batch_stream = metrics_base
+            .follower_streaming_from_seq_number_by_address
+            .with_label_values(&[&validator_address]);
+
+        let handle_transaction_latency = metrics_base
+            .latency
+            .with_label_values(&[&validator_address, "handle_transaction"]);
+        let handle_certificate_latency = metrics_base
+            .latency
+            .with_label_values(&[&validator_address, "handle_certificate"]);
+        let handle_obj_info_latency = metrics_base
+            .latency
+            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+        let handle_tx_info_latency = metrics_base
+            .latency
+            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+        Self {
+            total_requests_handle_transaction_and_effects_info_request,
+            total_ok_responses_handle_transaction_and_effects_info_request,
+            total_requests_handle_transaction_info_request,
+            total_ok_responses_handle_transaction_info_request,
+            total_requests_handle_object_info_request,
+            total_ok_responses_handle_object_info_request,
+            total_requests_handle_batch_stream,
+            total_ok_responses_handle_batch_stream,
+            seq_number_to_handle_batch_stream,
+            handle_transaction_latency,
+            handle_certificate_latency,
+            handle_obj_info_latency,
+            handle_tx_info_latency,
+        }
+    }
+
+    pub fn new_for_tests(validator_address: AuthorityName) -> Self {
+        let registry = Registry::new();
+        let metrics_base = SafeClientMetricsBase::new(&registry);
+        Self::new(&metrics_base, validator_address)
     }
 }
 
@@ -93,24 +184,7 @@ pub struct SafeClient<C> {
     authority_client: C,
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
-    metrics_total_requests_handle_transaction_and_effects_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_ok_responses_handle_transaction_and_effects_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_requests_handle_transaction_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_ok_responses_handle_transaction_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_ok_responses_handle_object_info_request:
-        GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_requests_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
-    metrics_total_ok_responses_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
-    pub(crate) metrics_seq_number_to_handle_batch_stream: GenericGauge<prometheus::core::AtomicI64>,
-    metrics_handle_transaction_latency: Histogram,
-    metrics_handle_certificate_latency: Histogram,
-    metrics_handle_obj_info_latency: Histogram,
-    metrics_handle_tx_info_latency: Histogram,
+    metrics: SafeClientMetrics,
 }
 
 impl<C> SafeClient<C> {
@@ -118,73 +192,13 @@ impl<C> SafeClient<C> {
         authority_client: C,
         committee_store: Arc<CommitteeStore>,
         address: AuthorityPublicKeyBytes,
-        safe_client_metrics: Arc<SafeClientMetrics>,
+        metrics: SafeClientMetrics,
     ) -> Self {
-        // Cache counters for efficiency
-        let validator_address = address.to_string();
-        let requests_metrics_vec = &safe_client_metrics.total_requests_by_address_method;
-        let responses_metrics_vec = &safe_client_metrics.total_responses_by_address_method;
-
-        let metrics_total_requests_handle_transaction_and_effects_info_request =
-            requests_metrics_vec.with_label_values(&[
-                &validator_address,
-                "handle_transaction_and_effects_info_request",
-            ]);
-        let metrics_total_ok_responses_handle_transaction_and_effects_info_request =
-            responses_metrics_vec.with_label_values(&[
-                &validator_address,
-                "handle_transaction_and_effects_info_request",
-            ]);
-
-        let metrics_total_requests_handle_transaction_info_request = requests_metrics_vec
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
-        let metrics_total_ok_responses_handle_transaction_info_request = responses_metrics_vec
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
-
-        let metrics_total_requests_handle_object_info_request = requests_metrics_vec
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
-        let metrics_total_ok_responses_handle_object_info_request = responses_metrics_vec
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
-
-        let metrics_total_requests_handle_batch_stream =
-            requests_metrics_vec.with_label_values(&[&validator_address, "handle_batch_stream"]);
-        let metrics_total_ok_responses_handle_batch_stream =
-            responses_metrics_vec.with_label_values(&[&validator_address, "handle_batch_stream"]);
-
-        let metrics_seq_number_to_handle_batch_stream = safe_client_metrics
-            .follower_streaming_from_seq_number_by_address
-            .with_label_values(&[&validator_address]);
-
-        let metrics_handle_transaction_latency = safe_client_metrics
-            .latency
-            .with_label_values(&[&validator_address, "handle_transaction"]);
-        let metrics_handle_certificate_latency = safe_client_metrics
-            .latency
-            .with_label_values(&[&validator_address, "handle_certificate"]);
-        let metrics_handle_obj_info_latency = safe_client_metrics
-            .latency
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
-        let metrics_handle_tx_info_latency = safe_client_metrics
-            .latency
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
-
         Self {
             authority_client,
             committee_store,
             address,
-            metrics_total_requests_handle_transaction_and_effects_info_request,
-            metrics_total_ok_responses_handle_transaction_and_effects_info_request,
-            metrics_total_requests_handle_transaction_info_request,
-            metrics_total_ok_responses_handle_transaction_info_request,
-            metrics_total_requests_handle_object_info_request,
-            metrics_total_ok_responses_handle_object_info_request,
-            metrics_total_requests_handle_batch_stream,
-            metrics_total_ok_responses_handle_batch_stream,
-            metrics_seq_number_to_handle_batch_stream,
-            metrics_handle_transaction_latency,
-            metrics_handle_certificate_latency,
-            metrics_handle_obj_info_latency,
-            metrics_handle_tx_info_latency,
+            metrics,
         }
     }
 
@@ -502,7 +516,7 @@ where
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let digest = *transaction.digest();
-        let _timer = self.metrics_handle_transaction_latency.start_timer();
+        let _timer = self.metrics.handle_transaction_latency.start_timer();
         let transaction_info = self
             .authority_client
             .handle_transaction(transaction.into_inner())
@@ -537,7 +551,7 @@ where
         certificate: CertifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let digest = *certificate.digest();
-        let _timer = self.metrics_handle_certificate_latency.start_timer();
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
         let transaction_info = self
             .authority_client
             .handle_certificate(certificate)
@@ -567,9 +581,9 @@ where
         request: ObjectInfoRequest,
         skip_committee_check_during_reconfig: bool,
     ) -> Result<VerifiedObjectInfoResponse, SuiError> {
-        self.metrics_total_requests_handle_object_info_request.inc();
+        self.metrics.total_requests_handle_object_info_request.inc();
 
-        let _timer = self.metrics_handle_obj_info_latency.start_timer();
+        let _timer = self.metrics.handle_obj_info_latency.start_timer();
         let response = self
             .authority_client
             .handle_object_info_request(request.clone())
@@ -582,7 +596,8 @@ where
 
                 )?;
 
-        self.metrics_total_ok_responses_handle_object_info_request
+        self.metrics
+            .total_ok_responses_handle_object_info_request
             .inc();
         Ok(response)
     }
@@ -592,11 +607,12 @@ where
         &self,
         request: TransactionInfoRequest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        self.metrics_total_requests_handle_transaction_info_request
+        self.metrics
+            .total_requests_handle_transaction_info_request
             .inc();
         let digest = request.transaction_digest;
 
-        let _timer = self.metrics_handle_tx_info_latency.start_timer();
+        let _timer = self.metrics.handle_tx_info_latency.start_timer();
 
         let transaction_info = self
             .authority_client
@@ -614,7 +630,8 @@ where
             }
             Ok(i) => i,
         };
-        self.metrics_total_ok_responses_handle_transaction_info_request
+        self.metrics
+            .total_ok_responses_handle_transaction_info_request
             .inc();
         Ok(transaction_info)
     }
@@ -624,7 +641,8 @@ where
         &self,
         digests: &ExecutionDigests,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        self.metrics_total_requests_handle_transaction_and_effects_info_request
+        self.metrics
+            .total_requests_handle_transaction_and_effects_info_request
             .inc();
         let transaction_info = self
             .authority_client
@@ -642,7 +660,8 @@ where
             }
             Ok(info) => info,
         };
-        self.metrics_total_ok_responses_handle_transaction_and_effects_info_request
+        self.metrics
+            .total_ok_responses_handle_transaction_and_effects_info_request
             .inc();
         Ok(transaction_info)
     }
@@ -763,12 +782,17 @@ where
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        self.metrics_total_requests_handle_batch_stream.inc();
+        self.metrics.total_requests_handle_batch_stream.inc();
+        if let Some(start_seq) = request.start {
+            self.metrics
+                .seq_number_to_handle_batch_stream
+                .set(start_seq as i64);
+        }
         let batch_info_items = self
             .authority_client
             .handle_batch_stream(request.clone())
             .await?;
-        self.metrics_total_ok_responses_handle_batch_stream.inc();
+        self.metrics.total_ok_responses_handle_batch_stream.inc();
         let client = self.clone();
         let address = self.address;
         let count: u64 = 0;
