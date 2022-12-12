@@ -7,6 +7,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
       - name: Prover Setup
         run:  |
           crates/sui/scripts/prover_setup.sh
