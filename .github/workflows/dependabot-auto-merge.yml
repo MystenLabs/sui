@@ -16,16 +16,16 @@ jobs:
     steps:
       - name: Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@v1.3.5
+        uses: dependabot/fetch-metadata@5ef00187930bafb52d529e0b9c3dff045dfa9851 # pin@v1.3.5
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.AUTOMERGE_TOKEN }}
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@bf6758885262d0e6f61089a9d8c8790d3ac3368f # pin@v1
         with:
           crate: cargo-hakari
           locked: true
@@ -44,7 +44,7 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.AUTOMERGE_TOKEN }}@github.com/${{ github.repository }}
           git commit -am "chore(deps): cargo hakari"
           git push
-      - uses: ahmadnassri/action-dependabot-auto-merge@v2.6
+      - uses: ahmadnassri/action-dependabot-auto-merge@7dbc44641f77fb62b23158c1294b5b757d6091a5 # pin@v2.6
         with:
           github-token: ${{ secrets.AUTOMERGE_TOKEN }}
           command: 'squash and merge'

@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch Changesets To Operations
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@26b39ed245ab8f31526069329e112ab2fb224588 # pin@v2
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.CHANGESETS_DEPLOY_DISPATCH }}
@@ -25,27 +25,27 @@ jobs:
     steps:
       - name: Generate token
         id: generate_token
-        uses: tibdex/github-app-token@v1
+        uses: tibdex/github-app-token@021a2405c7f990db57f5eae5397423dcc554159c # pin@v1
         with:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: checkout code repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
         with:
           token: ${{ steps.generate_token.outputs.token }}
           fetch-depth: 0
-      - uses: pnpm/action-setup@v2.2.4
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
         with:
           version: 7
       - name: Install Nodejs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:
           node-version: "16"
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Create Release Pull Request
-        uses: changesets/action@v1
+        uses: changesets/action@e9cc34b540dd3ad1b030c57fd97269e8f6ad905a # pin@v1
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
