@@ -47,7 +47,7 @@ pub enum SourceVerificationError {
     #[error("On-chain address cannot be zero")]
     ZeroOnChainAddresSpecifiedFailure,
 
-    #[error("Invalid module {name} with error : {message}")]
+    #[error("Invalid module {name} with error: {message}")]
     InvalidModuleFailure { name: String, message: String },
 }
 
@@ -75,8 +75,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
         compiled_package: &CompiledPackage,
         root_on_chain_address: AccountAddress,
     ) -> Result<(), SourceVerificationError> {
-        self.verify_package(compiled_package, true, Some(root_on_chain_address))
-            .await
+        self.verify_package(
+            compiled_package,
+            /* verify_deps */ true,
+            Some(root_on_chain_address),
+        )
+        .await
     }
 
     /// Helper wrapper to verify that all local Move package root bytecode matches
@@ -86,8 +90,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
         compiled_package: &CompiledPackage,
         root_on_chain_address: AccountAddress,
     ) -> Result<(), SourceVerificationError> {
-        self.verify_package(compiled_package, false, Some(root_on_chain_address))
-            .await
+        self.verify_package(
+            compiled_package,
+            /* do not verify_deps */ false,
+            Some(root_on_chain_address),
+        )
+        .await
     }
 
     /// Helper wrapper to verify that all local Move package dependencies' matches
@@ -96,7 +104,8 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &self,
         compiled_package: &CompiledPackage,
     ) -> Result<(), SourceVerificationError> {
-        self.verify_package(compiled_package, true, None).await
+        self.verify_package(compiled_package, /* verify_deps */ true, None)
+            .await
     }
 
     /// Verify that all local Move package dependencies' and/or root bytecode matches
@@ -110,7 +119,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         root_on_chain_address: Option<AccountAddress>,
     ) -> Result<(), SourceVerificationError> {
         // On-chain address for matching root package cannot be zero
-        if let Some(ref root_address) = root_on_chain_address {
+        if let Some(root_address) = &root_on_chain_address {
             if *root_address == AccountAddress::ZERO {
                 return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure);
             }

@@ -8,7 +8,7 @@ use std::{
     io::{self},
     path::Path,
 };
-use std::{path::PathBuf, str, time::Duration};
+use std::{path::PathBuf, str};
 use sui::client_commands::WalletContext;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
@@ -17,7 +17,6 @@ use sui_types::{
 };
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::publish_package_with_wallet;
-use tokio::time::sleep;
 
 use crate::{BytecodeSourceVerifier, SourceVerificationError};
 
@@ -49,28 +48,26 @@ async fn successful_verification() -> anyhow::Result<()> {
 
     // Skip deps and root
     verifier
-        .verify_package(&a_pkg.package, false, None)
+        .verify_package(
+            &a_pkg.package,
+            /* do not verify_deps */ false,
+            /* no root subst addr */ None,
+        )
         .await
         .unwrap();
-    sleep(Duration::from_millis(1000)).await;
 
     // Verify deps but skip root
-    verifier
-        .verify_package(&a_pkg.package, true, None)
-        .await
-        .unwrap();
-    sleep(Duration::from_millis(1000)).await;
+    verifier.verify_package_deps(&a_pkg.package).await.unwrap();
 
     // Skip deps but verify root
     verifier
-        .verify_package(&a_pkg.package, false, Some(a_addr.into()))
+        .verify_package_root(&a_pkg.package, a_addr.into())
         .await
         .unwrap();
-    sleep(Duration::from_millis(1000)).await;
 
     // Verify both deps and root
     verifier
-        .verify_package(&a_pkg.package, true, Some(a_addr.into()))
+        .verify_package_root_and_deps(&a_pkg.package, a_addr.into())
         .await
         .unwrap();
 
@@ -78,7 +75,7 @@ async fn successful_verification() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn successful_verification_bad_address() -> anyhow::Result<()> {
+async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
     let context = &mut cluster.wallet;
@@ -104,7 +101,7 @@ async fn successful_verification_bad_address() -> anyhow::Result<()> {
 
     assert!(matches!(
         verifier
-            .verify_package(&a_pkg.package, true, Some(AccountAddress::ZERO))
+            .verify_package_root_and_deps(&a_pkg.package, AccountAddress::ZERO)
             .await,
         Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure),
     ),);
@@ -123,8 +120,6 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
         let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
         publish_package(context, sender, b_src).await
     };
-
-    sleep(Duration::from_millis(1000)).await;
 
     let (_a_pkg, a_ref) = {
         let fixtures = tempfile::tempdir()?;
@@ -148,22 +143,20 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
     drop(cluster);
 
     assert!(matches!(
-        verifier.verify_package(&a_pkg.package, true, None).await,
+        verifier.verify_package_deps(&a_pkg.package).await,
         Err(SourceVerificationError::DependencyObjectReadFailure(_)),
     ),);
-    sleep(Duration::from_millis(1000)).await;
 
     assert!(matches!(
         verifier
-            .verify_package(&a_pkg.package, true, Some(a_addr.into()))
+            .verify_package_root_and_deps(&a_pkg.package, a_addr.into())
             .await,
         Err(SourceVerificationError::DependencyObjectReadFailure(_)),
     ),);
-    sleep(Duration::from_millis(1000)).await;
 
     assert!(matches!(
         verifier
-            .verify_package(&a_pkg.package, false, Some(a_addr.into()))
+            .verify_package_root(&a_pkg.package, a_addr.into())
             .await,
         Err(SourceVerificationError::DependencyObjectReadFailure(_)),
     ),);
@@ -190,24 +183,22 @@ async fn package_not_found() -> anyhow::Result<()> {
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     assert!(matches!(
-        verifier.verify_package(&a_pkg.package, true, None).await,
+        verifier.verify_package_deps(&a_pkg.package).await,
         Err(SourceVerificationError::SuiObjectRefFailure(_)),
     ),);
-    sleep(Duration::from_millis(1000)).await;
 
     assert!(matches!(
         // Subst address here doesnt matter
         verifier
-            .verify_package(&a_pkg.package, true, Some(AccountAddress::random()))
+            .verify_package_root_and_deps(&a_pkg.package, AccountAddress::random())
             .await,
         Err(SourceVerificationError::SuiObjectRefFailure(_)),
     ),);
-    sleep(Duration::from_millis(1000)).await;
 
     assert!(matches!(
         // Subst address here doesnt matter
         verifier
-            .verify_package(&a_pkg.package, false, Some(AccountAddress::random()))
+            .verify_package_root(&a_pkg.package, AccountAddress::random())
             .await,
         Err(SourceVerificationError::SuiObjectRefFailure(_)),
     ),);
@@ -231,7 +222,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
     assert!(matches!(
-        verifier.verify_package(&a_pkg.package, true, None).await,
+        verifier.verify_package_deps(&a_pkg.package).await,
         Err(SourceVerificationError::ObjectFoundWhenPackageExpected(
             SUI_SYSTEM_STATE_OBJECT_ID,
             _,
@@ -264,7 +255,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    let Err(err) = verifier.verify_package(&a_pkg.package, true, None).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
     };
 
@@ -302,7 +293,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    let Err(err) = verifier.verify_package(&a_pkg.package, true, None).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
     };
 
@@ -357,7 +348,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    let Err(err) = verifier.verify_package(&a_pkg.package, true, None).await else {
+    let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
     };
 
@@ -369,7 +360,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     assert_eq!(package, "b".into());
     assert_eq!(module, "c".into());
 
-    let Err(err) = verifier.verify_package(&a_pkg.package, false, Some(a_addr.into())).await else {
+    let Err(err) = verifier.verify_package_root(&a_pkg.package, a_addr.into()).await else {
         panic!("Expected verification to fail");
     };
 
