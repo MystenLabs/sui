@@ -5,7 +5,7 @@ import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
-import { useGetObject } from './useGetObject';
+import { useGetObject, inValidateObjectQueryCache } from './useGetObject';
 
 //TODO: Remove when available on SDK, types should come from the SDK
 import type {
@@ -13,7 +13,7 @@ import type {
     ValidatorState,
 } from '_app/staking/home/ValidatorDataTypes';
 
-const VALIDATORS_OBJECT_ID = '0x05';
+export const VALIDATORS_OBJECT_ID = '0x05';
 
 function processValidators(
     set: Validator[],
@@ -104,4 +104,9 @@ export function useGetValidators(walletAddress: string | null) {
         return processedValidators.sort((a, b) => (a.name > b.name ? 1 : -1));
     }, [totalStake, validatorsData, walletAddress]);
     return { validators, isLoading, isError };
+}
+
+// invalidates the cache for the validators object
+export function invalidateValidatorsCache() {
+    inValidateObjectQueryCache(VALIDATORS_OBJECT_ID);
 }

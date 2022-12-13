@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type GetObjectDataResponse } from '@mysten/sui.js';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+    useQuery,
+    type UseQueryResult,
+    useQueryClient,
+} from '@tanstack/react-query';
 
 //TODO use hook useRpc -
 import { api } from '../redux/store/thunk-extras';
@@ -20,4 +24,10 @@ export function useGetObject(
     );
 
     return response;
+}
+
+// Invalidates the cache for validators. This is useful when a validator is added or removed.
+export function inValidateObjectQueryCache(cacheId: string) {
+    const queryClient = useQueryClient();
+    queryClient.invalidateQueries({ queryKey: [cacheId] });
 }
