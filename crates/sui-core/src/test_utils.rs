@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::base_types::ObjectRef;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
@@ -118,6 +118,14 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
     }
 }
 
+pub fn compile_basics_package() -> CompiledPackage {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sui_programmability/examples/basics");
+
+    let build_config = BuildConfig::default();
+    sui_framework::build_move_package(&path, build_config).unwrap()
+}
+
 async fn init_genesis(
     committee_size: usize,
     mut genesis_objects: Vec<Object>,
@@ -127,11 +135,7 @@ async fn init_genesis(
     ObjectRef,
 ) {
     // add object_basics package object to genesis
-    let build_config = BuildConfig::default();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
+    let modules = compile_basics_package()
         .get_modules()
         .into_iter()
         .cloned()

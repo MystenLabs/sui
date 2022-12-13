@@ -5,7 +5,6 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
 use std::path::PathBuf;
-use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
@@ -32,7 +31,7 @@ use sui_types::messages::{
 use sui_types::object::{
     generate_test_gas_objects, generate_test_gas_objects_with_owner_list, Object,
 };
-use sui_types::utils::{to_sender_signed_transaction, to_sender_signed_transaction_arc};
+use sui_types::utils::to_sender_signed_transaction;
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
@@ -357,7 +356,7 @@ pub fn make_counter_increment_transaction(
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     sender: SuiAddress,
-    keypair: &Arc<AccountKeyPair>,
+    keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
     let data = TransactionData::new_move_call(
         sender,
@@ -372,7 +371,7 @@ pub fn make_counter_increment_transaction(
         })],
         MAX_GAS,
     );
-    to_sender_signed_transaction_arc(data, keypair)
+    to_sender_signed_transaction(data, keypair)
 }
 
 /// Make a transaction calling a specific move module & function.

@@ -1762,6 +1762,13 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         std::mem::drop(g);
 
         // Now run the tx to completion
+        //
+        // NOTE: this test fails if execute_certificate() is used here instead, while keeping
+        // execute_certificate_internal() above. This is because owned object locks are not cleared
+        // atomically after a transaction completes, causing inconsistency when TransactionManager
+        // calss get_missing_input_objects(). This would be an issue for crash recovery too.
+        // TODO: fix the issue and test interrupting both execute_certificate() and
+        // execute_certificate_internal(), and calling execute_certificate() again.
         let info = authority_state
             .execute_certificate_internal(&shared_object_cert)
             .await
@@ -3137,7 +3144,7 @@ fn init_certified_transaction(
 }
 
 #[cfg(test)]
-async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) {
+pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) {
     let transaction = SequencedConsensusTransaction::new_test(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
@@ -3151,7 +3158,10 @@ async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) 
 }
 
 #[cfg(test)]
-async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {
+pub(crate) async fn send_consensus_no_execution(
+    authority: &AuthorityState,
+    cert: &VerifiedCertificate,
+) {
     let transaction = SequencedConsensusTransaction::new_test(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );

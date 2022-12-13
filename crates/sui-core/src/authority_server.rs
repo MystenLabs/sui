@@ -17,8 +17,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::messages_checkpoint::CheckpointRequest;
-use sui_types::messages_checkpoint::CheckpointResponse;
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
 use tokio::task::JoinHandle;
@@ -366,7 +365,7 @@ impl ValidatorService {
                 }
             })?;
             // Do not wait for the result, because the transaction might have already executed.
-            // Instead, read or wait for effects which is done below.
+            // Instead, check or wait for the existence of certificate effects below.
         }
 
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
