@@ -355,6 +355,15 @@ module sui::coin {
         aborts_if before_supply < coin.balance.value;
     }
 
+    // === Update coin metadata ===
+
+    /// Update name of the coin in `CoinMetadata`
+    public entry fun update_name<T>(
+        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, name: string::String
+    ) {
+        metadata.name = name;
+    }
+
     /// Update the symbol of the coin in `CoinMetadata`
     public entry fun update_symbol<T>(
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, symbol: ascii::String
