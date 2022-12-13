@@ -11,7 +11,7 @@ export type CardProps = {
     children?: ReactNode | ReactNode[];
 };
 
-function Card({ className, children }: CardProps) {
+export function Card({ className, children }: CardProps) {
     return (
         <div
             className={cl(
@@ -24,8 +24,7 @@ function Card({ className, children }: CardProps) {
     );
 }
 
-export default memo(Card);
-export { default as CardContent } from './content';
-export { default as CardItem } from './item';
-export { default as CardHeader } from './header';
-export { default as CardFooter } from './footer';
+export { CardContent } from './content';
+export { CardItem } from './item';
+export { CardHeader } from './header';
+export { CardFooter } from './footer';

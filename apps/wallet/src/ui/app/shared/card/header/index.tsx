@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { memo } from 'react';
 
 import type { ReactNode } from 'react';
 
@@ -27,8 +26,6 @@ export interface CardHeaderProps extends VariantProps<typeof cardHeaderStyle> {
     children: ReactNode | ReactNode[];
 }
 
-function CardHeader({ children, ...styleProps }: CardHeaderProps) {
+export function CardHeader({ children, ...styleProps }: CardHeaderProps) {
     return <div className={cardHeaderStyle(styleProps)}>{children}</div>;
 }
-
-export default memo(CardHeader);

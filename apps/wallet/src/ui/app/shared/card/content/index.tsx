@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { memo } from 'react';
 
 import type { ReactNode } from 'react';
 
@@ -37,8 +36,7 @@ export interface CardContentProps
     children: ReactNode;
 }
 
-function CardContent({ children, ...styleProps }: CardContentProps) {
+export function CardContent({ children, ...styleProps }: CardContentProps) {
     return <div className={cardContentStyle(styleProps)}>{children}</div>;
 }
 
-export default memo(CardContent);
