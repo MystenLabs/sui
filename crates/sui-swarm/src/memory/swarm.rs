@@ -26,6 +26,7 @@ pub struct SwarmBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
+    with_event_store: bool,
 }
 
 impl SwarmBuilder {
@@ -38,6 +39,7 @@ impl SwarmBuilder {
             initial_accounts_config: None,
             fullnode_count: 0,
             fullnode_rpc_addr: None,
+            with_event_store: false,
         }
     }
 }
@@ -51,6 +53,7 @@ impl<R> SwarmBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
+            with_event_store: false,
         }
     }
 
@@ -144,6 +147,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         }
     }
 
+    pub fn with_event_store(mut self) -> Self {
+        self.with_event_store = true;
+        self
+    }
+
     pub fn from_network_config(self, dir: PathBuf, network_config: NetworkConfig) -> Swarm {
         let dir = SwarmDirectory::Persistent(dir);
 
@@ -156,6 +164,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
             let mut config = network_config
                 .fullnode_config_builder()
+                .set_event_store(self.with_event_store)
                 .with_random_dir()
                 .build()
                 .unwrap();
