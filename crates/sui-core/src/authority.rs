@@ -67,6 +67,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
+use sui_types::parse_sui_struct_tag;
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
@@ -2272,8 +2273,10 @@ impl AuthorityState {
                     .await?
             }
             EventQuery::MoveEvent(struct_name) => {
+                let normalized_struct_name =
+                    parse_sui_struct_tag(&struct_name)?.to_canonical_string();
                 es.events_by_move_event_struct_name(
-                    &struct_name,
+                    &normalized_struct_name,
                     tx_num,
                     event_num,
                     limit,

@@ -113,15 +113,7 @@ impl RpcReadApiServer for ReadApi {
                 .await
                 .and_then(|read| read.into_object())
                 .map_err(|e| anyhow!(e))?;
-            object_info.push(SuiObjectInfo {
-                object_id: object.id(),
-                version: object.version(),
-                digest: object.digest(),
-                // Package cannot be owned by object, safe to unwrap.
-                type_: format!("{}", object.type_().unwrap()),
-                owner: object.owner,
-                previous_transaction: object.previous_transaction,
-            });
+            object_info.push(object.into());
         }
         Ok(object_info)
     }

@@ -851,7 +851,7 @@ impl SuiMoveObject for SuiParsedMoveObject {
                 }
             } else {
                 SuiParsedMoveObject {
-                    type_: object.type_.to_string(),
+                    type_: object.type_.to_canonical_string(),
                     has_public_transfer: object.has_public_transfer(),
                     fields: move_struct,
                 }
@@ -870,7 +870,7 @@ pub fn type_and_fields_from_move_struct(
 ) -> (String, SuiMoveStruct) {
     match move_struct.into() {
         SuiMoveStruct::WithTypes { type_, fields } => (type_, SuiMoveStruct::WithFields(fields)),
-        fields => (type_.to_string(), fields),
+        fields => (type_.to_canonical_string(), fields),
     }
 }
 
@@ -890,7 +890,7 @@ pub struct SuiRawMoveObject {
 impl From<MoveObject> for SuiRawMoveObject {
     fn from(o: MoveObject) -> Self {
         Self {
-            type_: o.type_.to_string(),
+            type_: o.type_.to_canonical_string(),
             has_public_transfer: o.has_public_transfer(),
             version: o.version(),
             bcs_bytes: o.into_contents(),
@@ -904,7 +904,7 @@ impl SuiMoveObject for SuiRawMoveObject {
         _layout: MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            type_: object.type_.to_string(),
+            type_: object.type_.to_canonical_string(),
             has_public_transfer: object.has_public_transfer(),
             version: object.version(),
             bcs_bytes: object.into_contents(),
@@ -1412,7 +1412,7 @@ impl From<MoveStruct> for SuiMoveStruct {
                     .collect(),
             ),
             MoveStruct::WithTypes { type_, fields } => SuiMoveStruct::WithTypes {
-                type_: type_.to_string(),
+                type_: type_.to_canonical_string(),
                 fields: fields
                     .into_iter()
                     .map(|(id, value)| (id.into_string(), value.into()))
@@ -2374,7 +2374,7 @@ impl SuiEvent {
                     let (type_, field) = type_and_fields_from_move_struct(&type_, move_struct);
                     (type_, Some(field))
                 } else {
-                    (type_.to_string(), None)
+                    (type_.to_canonical_string(), None)
                 };
 
                 SuiEvent::MoveEvent {
@@ -2530,7 +2530,7 @@ impl PartialEq<SuiEvent> for Event {
                     package_id == self_package_id
                         && &self_transaction_module.to_string() == transaction_module
                         && self_sender == sender
-                        && &self_type.to_string() == type_
+                        && &self_type.to_canonical_string() == type_
                         && self_contents == bcs
                 } else {
                     false
@@ -2793,6 +2793,23 @@ impl From<ObjectInfo> for SuiObjectInfo {
             type_: format!("{}", info.type_),
             owner: info.owner,
             previous_transaction: info.previous_transaction,
+        }
+    }
+}
+
+impl From<Object> for SuiObjectInfo {
+    fn from(o: Object) -> Self {
+        Self {
+            object_id: o.id(),
+            version: o.version(),
+            digest: o.digest(),
+            type_: format!(
+                "{}",
+                o.type_()
+                    .map_or("Package".to_string(), |v| v.to_canonical_string())
+            ),
+            owner: o.owner,
+            previous_transaction: o.previous_transaction,
         }
     }
 }

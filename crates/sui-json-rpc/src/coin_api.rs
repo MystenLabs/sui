@@ -103,6 +103,7 @@ impl CoinReadApi {
     fn get_owner_coin_iterator<'a>(
         &'a self,
         owner: SuiAddress,
+        // TODO: update the type to be `StructTag` instead of String
         coin_type: &'a Option<String>,
     ) -> Result<impl Iterator<Item = ObjectID> + '_, Error> {
         Ok(self
@@ -290,7 +291,7 @@ impl CoinReadApiServer for CoinReadApi {
 fn is_coin_type(type_: &StructTag, coin_type: &Option<String>) -> bool {
     if Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_) {
         return if let Some(coin_type) = coin_type {
-            matches!(type_.type_params.first(), Some(TypeTag::Struct(type_)) if &type_.to_string() == coin_type)
+            matches!(type_.type_params.first(), Some(TypeTag::Struct(type_)) if &type_.to_canonical_string() == coin_type)
         } else {
             true
         };

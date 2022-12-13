@@ -910,7 +910,7 @@ impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ObjectType::Package => write!(f, "Package"),
-            ObjectType::Struct(t) => write!(f, "{}", t),
+            ObjectType::Struct(t) => write!(f, "{}", t.to_canonical_string()),
         }
     }
 }
