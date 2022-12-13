@@ -7,8 +7,8 @@
         "link": "doc-updates"
       },
       {
-        "label": "Sui Exchange Integration FAQ",
-        "link": "learn/exchange-integration-faq"
+        "label": "Sui Releases",
+        "link": "https://github.com/MystenLabs/sui/releases"
       },
       {
         "label": "Satoshi Flip on Sui",
