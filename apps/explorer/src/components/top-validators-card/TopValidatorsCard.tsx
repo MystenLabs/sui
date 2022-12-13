@@ -1,12 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
+import {
+    Base64DataBuffer,
+    isSuiObject,
+    isSuiMoveObject,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 
+import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { AddressLink } from '~/ui/InternalLink';
@@ -116,14 +122,15 @@ export type ValidatorState = {
     };
 };
 
-function StakeColumn(prop: { stake: bigint; stakePercent: number }) {
+function StakeColumn({ stake }: { stake: bigint }) {
+    const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
     return (
         <div className="flex items-end gap-0.5">
             <Text variant="bodySmall" color="steel-darker">
-                {prop.stake.toString()}
+                {amount}
             </Text>
             <Text variant="captionSmall" color="steel-dark">
-                {prop.stakePercent.toFixed(2)}%
+                {symbol}
             </Text>
         </div>
     );
@@ -179,12 +186,7 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
                         {validator.name}
                     </Text>
                 ),
-                stake: (
-                    <StakeColumn
-                        stake={validator.stake}
-                        stakePercent={validator.stakePercent}
-                    />
-                ),
+                stake: <StakeColumn stake={validator.stake} />,
                 delegation: (
                     <Text variant="bodySmall" color="steel-darker">
                         {validator.stake.toString()}
@@ -258,7 +260,7 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
                         <div className="mt-3">
                             <Link to="/validators">
                                 <div className="flex items-center gap-2">
-                                    More Validators{' '}
+                                    More Validators
                                     <ArrowRight fill="currentColor" />
                                 </div>
                             </Link>
