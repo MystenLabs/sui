@@ -33,5 +33,5 @@ jobs:
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
 
-          /home/runner/.cargo/bin/cargo run -p sui -- move prove
+          cargo run -p sui -- move prove
 
