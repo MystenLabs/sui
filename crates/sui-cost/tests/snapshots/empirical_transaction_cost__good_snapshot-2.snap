@@ -10,7 +10,7 @@ expression: common_costs_estimate
   },
   "Publish": {
     "computation_cost": 6702,
-    "storage_cost": 9828,
+    "storage_cost": 9829,
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {

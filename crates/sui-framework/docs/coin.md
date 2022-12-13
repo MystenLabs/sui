@@ -868,10 +868,7 @@ in <code>cap</code> accordingly.
 
 
 
-<pre><code><b>let</b> before_supply = cap.total_supply.value;
-<b>let</b> <b>post</b> after_supply = cap.total_supply.value;
-<b>ensures</b> after_supply == before_supply + value;
-<b>aborts_if</b> before_supply + value &gt;= MAX_U64;
+<pre><code><b>include</b> <a href="coin.md#0x2_coin_MintBalance">MintBalance</a>&lt;T&gt;;
 <b>aborts_if</b> ctx.ids_created + 1 &gt; MAX_U64;
 </code></pre>
 
@@ -913,10 +910,7 @@ Aborts if <code>value</code> + <code>cap.total_supply</code> >= U64_MAX
 
 
 
-<pre><code><b>let</b> before_supply = cap.total_supply.value;
-<b>let</b> <b>post</b> after_supply = cap.total_supply.value;
-<b>ensures</b> after_supply == before_supply + value;
-<b>aborts_if</b> before_supply + value &gt;= MAX_U64;
+<pre><code><b>include</b> <a href="coin.md#0x2_coin_MintBalance">MintBalance</a>&lt;T&gt;;
 </code></pre>
 
 
@@ -956,10 +950,7 @@ accordingly.
 
 
 
-<pre><code><b>let</b> before_supply = cap.total_supply.value;
-<b>let</b> <b>post</b> after_supply = cap.total_supply.value;
-<b>ensures</b> after_supply == before_supply - c.<a href="balance.md#0x2_balance">balance</a>.value;
-<b>aborts_if</b> before_supply &lt; c.<a href="balance.md#0x2_balance">balance</a>.value;
+<pre><code><b>include</b> <a href="coin.md#0x2_coin_Burn">Burn</a>&lt;T&gt;;
 </code></pre>
 
 
@@ -1000,7 +991,7 @@ Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code
 Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin_burn">burn</a>()</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -1009,8 +1000,8 @@ Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
-    <a href="coin.md#0x2_coin_burn">burn</a>(c, <a href="coin.md#0x2_coin">coin</a>);
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
+    <a href="coin.md#0x2_coin_burn">burn</a>(cap, c);
 }
 </code></pre>
 
@@ -1023,10 +1014,7 @@ Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin
 
 
 
-<pre><code><b>let</b> before_supply = c.total_supply.value;
-<b>let</b> <b>post</b> after_supply = c.total_supply.value;
-<b>ensures</b> after_supply == before_supply - <a href="coin.md#0x2_coin">coin</a>.<a href="balance.md#0x2_balance">balance</a>.value;
-<b>aborts_if</b> before_supply &lt; <a href="coin.md#0x2_coin">coin</a>.<a href="balance.md#0x2_balance">balance</a>.value;
+<pre><code><b>include</b> <a href="coin.md#0x2_coin_Burn">Burn</a>&lt;T&gt;;
 </code></pre>
 
 
