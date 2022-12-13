@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 
 import { useGetObject } from './useGetObject';
 
-
 //TODO: Remove when available on SDK, types should come from the SDK
 import type {
     Validator,
