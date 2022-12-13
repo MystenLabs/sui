@@ -9,8 +9,6 @@ import {
     isHasPermissionRequest,
 } from '_payloads/permissions';
 import { isExecuteTransactionRequest } from '_payloads/transactions';
-import Permissions from '_src/background/Permissions';
-import Transactions from '_src/background/Transactions';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -24,6 +22,9 @@ import type {
 } from '_payloads/permissions';
 import type { ExecuteTransactionResponse } from '_payloads/transactions';
 import type { Runtime } from 'webextension-polyfill';
+
+import Permissions from '~/background/Permissions';
+import Transactions from '~/background/Transactions';
 
 export class ContentScriptConnection extends Connection {
     public static readonly CHANNEL: PortChannelName =

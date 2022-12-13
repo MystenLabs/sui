@@ -4,7 +4,8 @@
 import * as Yup from 'yup';
 
 import { SUI_ADDRESS_VALIDATION } from '_components/address-input/validation';
-import { createTokenValidation } from '_src/shared/validation';
+
+import { createTokenValidation } from '~/shared/validation';
 
 export function createValidationSchemaStepTwo() {
     return Yup.object({

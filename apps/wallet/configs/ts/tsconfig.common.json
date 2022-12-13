@@ -17,9 +17,8 @@
         "baseUrl": "../../",
         "sourceMap": true,
         "paths": {
-            // for internal aliases start them with _ for eslint to use the correct import group
-            "_src/*": ["./src/*"],
-            "_shared/*": ["./src/shared/*"],
+            "~/*": ["./src/*"],
+            // Deprecated aliases:
             "_app/*": ["./src/ui/app/*"],
             "_assets/*": ["./src/ui/assets/*"],
             "_images/*": ["./src/ui/assets/images/*"],
@@ -35,7 +34,6 @@
             "_messages/*": ["./src/shared/messaging/messages/*"],
             "_payloads": ["./src/shared/messaging/messages/payloads/"],
             "_payloads/*": ["./src/shared/messaging/messages/payloads/*"],
-            "_styles/*": ["./src/ui/styles/*"],
             "_variables": ["./src/ui/styles/variables"],
             "_variables/*": ["./src/ui/styles/variables/*"],
             "_values": ["./src/ui/styles/values"],
@@ -43,6 +41,7 @@
             "_utils": ["./src/ui/styles/utils"],
             "_utils/*": ["./src/ui/styles/utils/*"],
             "_font-icons/*": ["./font-icons/*"],
+            // Internal packages:
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
             "@mysten/bcs": ["../../sdk/bcs/src/"],
             "@mysten/wallet-standard": [

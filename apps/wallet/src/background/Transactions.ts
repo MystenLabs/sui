@@ -10,7 +10,7 @@ import { Window } from './Window';
 import type { TransactionDataType } from '_messages/payloads/transactions/ExecuteTransactionRequest';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
+import type { ContentScriptConnection } from '~/background/connections/ContentScriptConnection';
 
 const TX_STORE_KEY = 'transactions';
 

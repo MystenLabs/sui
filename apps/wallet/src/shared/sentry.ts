@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react';
 import { BrowserTracing } from '@sentry/tracing';
 import Browser from 'webextension-polyfill';
 
-import { growthbook } from '_src/ui/app/experimentation/feature-gating';
+import { growthbook } from '~/ui/app/experimentation/feature-gating';
 
 const WALLET_VERSION = Browser.runtime.getManifest().version;
 const SENTRY_DSN =

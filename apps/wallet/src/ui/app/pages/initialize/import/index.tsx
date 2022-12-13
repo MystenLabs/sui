@@ -9,8 +9,9 @@ import StepTwo from './steps/StepTwo';
 import CardLayout from '_app/shared/card-layout';
 import { useAppDispatch } from '_hooks';
 import { createVault, logout } from '_redux/slices/account';
-import { MAIN_UI_URL } from '_shared/utils';
-import { entropyToSerialized, mnemonicToEntropy } from '_shared/utils/bip39';
+
+import { MAIN_UI_URL } from '~/shared//utils';
+import { entropyToSerialized, mnemonicToEntropy } from '~/shared//utils/bip39';
 
 const initialValues = {
     mnemonic: '',

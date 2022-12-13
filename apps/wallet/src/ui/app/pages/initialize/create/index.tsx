@@ -13,9 +13,10 @@ import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
-import { PRIVACY_POLICY_LINK, ToS_LINK } from '_shared/constants';
 
 import st from './Create.module.scss';
+
+import { PRIVACY_POLICY_LINK, ToS_LINK } from '~/shared//constants';
 
 const CreatePage = () => {
     const dispatch = useAppDispatch();

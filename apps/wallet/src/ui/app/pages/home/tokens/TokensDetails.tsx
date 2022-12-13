@@ -18,9 +18,10 @@ import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
-import { FEATURES } from '_src/ui/app/experimentation/features';
 
 import st from './TokensPage.module.scss';
+
+import { FEATURES } from '~/ui/app/experimentation/features';
 
 type TokenDetailsProps = {
     coinType?: string;

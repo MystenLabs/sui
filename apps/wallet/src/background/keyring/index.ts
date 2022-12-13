@@ -9,19 +9,20 @@ import Browser from 'webextension-polyfill';
 import { VaultStorage } from './VaultStorage';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
-import { entropyToSerialized } from '_shared/utils/bip39';
-import Alarms from '_src/background/Alarms';
-import {
-    AUTO_LOCK_TIMER_MAX_MINUTES,
-    AUTO_LOCK_TIMER_MIN_MINUTES,
-    AUTO_LOCK_TIMER_STORAGE_KEY,
-} from '_src/shared/constants';
 
 import type { Keypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { ErrorPayload } from '_payloads';
 import type { KeyringPayload } from '_payloads/keyring';
-import type { Connection } from '_src/background/connections/Connection';
+import type { Connection } from '~/background/connections/Connection';
+
+import Alarms from '~/background/Alarms';
+import { entropyToSerialized } from '~/shared//utils/bip39';
+import {
+    AUTO_LOCK_TIMER_MAX_MINUTES,
+    AUTO_LOCK_TIMER_MIN_MINUTES,
+    AUTO_LOCK_TIMER_STORAGE_KEY,
+} from '~/shared/constants';
 
 type KeyringEvents = {
     lockedStatusUpdate: boolean;

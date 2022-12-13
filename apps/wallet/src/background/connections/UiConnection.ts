@@ -13,10 +13,6 @@ import {
 import { isDisconnectApp } from '_payloads/permissions/DisconnectApp';
 import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import Permissions from '_src/background/Permissions';
-import Tabs from '_src/background/Tabs';
-import Transactions from '_src/background/Transactions';
-import Keyring from '_src/background/keyring';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -26,6 +22,11 @@ import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import type { Runtime } from 'webextension-polyfill';
+
+import Permissions from '~/background/Permissions';
+import Tabs from '~/background/Tabs';
+import Transactions from '~/background/Transactions';
+import Keyring from '~/background/keyring';
 
 export class UiConnection extends Connection {
     public static readonly CHANNEL: PortChannelName = 'sui_ui<->background';

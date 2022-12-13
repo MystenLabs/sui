@@ -6,7 +6,7 @@ import Browser from 'webextension-polyfill';
 import {
     AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
     AUTO_LOCK_TIMER_STORAGE_KEY,
-} from '_src/shared/constants';
+} from '~/shared/constants';
 
 export const LOCK_ALARM_NAME = 'lock-keyring-alarm';
 

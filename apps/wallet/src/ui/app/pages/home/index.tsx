@@ -11,7 +11,8 @@ import Loading from '_components/loading';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import PageLayout from '_pages/layout';
 import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
-import { usePageView } from '_shared/utils';
+
+import { usePageView } from '~/shared//utils';
 
 const POLL_SUI_OBJECTS_INTERVAL = 4000;
 

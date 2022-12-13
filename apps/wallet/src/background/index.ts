@@ -9,8 +9,9 @@ import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { IS_SESSION_STORAGE_SUPPORTED } from './keyring/VaultStorage';
-import { openInNewTab } from '_shared/utils';
-import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
+
+import { MSG_CONNECT } from '~/content-script/keep-bg-alive';
+import { openInNewTab } from '~/shared//utils';
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
     // TODO: Our versions don't use semver, and instead are date-based. Instead of using the semver

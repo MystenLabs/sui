@@ -5,7 +5,8 @@ import { useEffect } from 'react';
 
 import useAppSelector from './useAppSelector';
 import { AppType } from '_redux/slices/app/AppType';
-import { openInNewTab } from '_shared/utils';
+
+import { openInNewTab } from '~/shared//utils';
 
 export default function useFullscreenGuard(enabled: boolean) {
     const appType = useAppSelector((state) => state.app.appType);

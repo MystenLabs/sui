@@ -6,7 +6,7 @@ import { take } from 'rxjs';
 import { PortStream } from '_messaging/PortStream';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
 
-import type { Message } from '_src/shared/messaging/messages';
+import type { Message } from '~/shared/messaging/messages';
 
 function createPort(
     windowMsgStream: WindowMessageStream,

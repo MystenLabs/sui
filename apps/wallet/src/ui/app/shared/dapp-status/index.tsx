@@ -18,9 +18,10 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
-import { trackEvent } from '_src/shared/plausible';
 
 import st from './DappStatus.module.scss';
+
+import { trackEvent } from '~/shared/plausible';
 
 function DappStatus() {
     const dispatch = useAppDispatch();

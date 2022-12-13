@@ -3,7 +3,7 @@
 
 import * as Yup from 'yup';
 
-import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
+import { normalizeMnemonics, validateMnemonics } from '~/shared/utils/bip39';
 
 export const mnemonicValidation = Yup.string()
     .ensure()

@@ -5,10 +5,11 @@ import { randomBytes } from '@noble/hashes/utils';
 import Browser from 'webextension-polyfill';
 
 import { Vault } from './Vault';
-import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
 
 import type { StoredData } from './Vault';
 import type { Storage } from 'webextension-polyfill';
+
+import { getRandomEntropy, toEntropy } from '~/shared//utils/bip39';
 
 export const IS_SESSION_STORAGE_SUPPORTED = 'chrome' in global;
 const SESSION_STORAGE: Storage.LocalStorageArea | null =

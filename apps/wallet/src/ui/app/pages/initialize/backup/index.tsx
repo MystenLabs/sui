@@ -13,9 +13,10 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import { loadEntropyFromKeyring } from '_redux/slices/account';
-import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
 
 import st from './Backup.module.scss';
+
+import { entropyToMnemonic, toEntropy } from '~/shared//utils/bip39';
 
 export type BackupPageProps = {
     mode?: 'created' | 'imported';

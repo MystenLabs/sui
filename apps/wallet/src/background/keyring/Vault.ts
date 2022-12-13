@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { encrypt, decrypt } from '_shared/cryptography/keystore';
+import { encrypt, decrypt } from '~/shared//cryptography/keystore';
 import {
     entropyToMnemonic,
     entropyToSerialized,
     mnemonicToEntropy,
     toEntropy,
     validateEntropy,
-} from '_shared/utils/bip39';
+} from '~/shared//utils/bip39';
 
 export const LATEST_VAULT_VERSION = 1;
 

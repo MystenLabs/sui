@@ -3,11 +3,11 @@
 
 import { BehaviorSubject, filter, map, take } from 'rxjs';
 
-import Keyring from '_src/background/keyring';
-import { IS_SESSION_STORAGE_SUPPORTED } from '_src/background/keyring/VaultStorage';
-import { MSG_DISABLE_AUTO_RECONNECT } from '_src/content-script/keep-bg-alive';
-
 import type { Runtime } from 'webextension-polyfill';
+
+import Keyring from '~/background/keyring';
+import { IS_SESSION_STORAGE_SUPPORTED } from '~/background/keyring/VaultStorage';
+import { MSG_DISABLE_AUTO_RECONNECT } from '~/content-script/keep-bg-alive';
 
 const MIN_DISCONNECT_TIMEOUT = 1000 * 30;
 const MAX_DISCONNECT_TIMEOUT = 1000 * 60 * 3;

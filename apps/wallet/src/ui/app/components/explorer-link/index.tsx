@@ -10,12 +10,13 @@ import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { activeAccountSelector } from '_redux/slices/account';
-import { trackEvent } from '_src/shared/plausible';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 import st from './ExplorerLink.module.scss';
+
+import { trackEvent } from '~/shared/plausible';
 
 export type ExplorerLinkProps = (
     | {

@@ -8,11 +8,12 @@ import Button from '_app/shared/button';
 import { requestGas } from '_app/shared/faucet/actions';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_hooks';
-import { trackEvent } from '_shared/plausible';
 
 import type { ButtonProps } from '_app/shared/button';
 
 import st from './RequestButton.module.scss';
+
+import { trackEvent } from '~/shared//plausible';
 
 type FaucetRequestButtonProps = {
     mode?: ButtonProps['mode'];

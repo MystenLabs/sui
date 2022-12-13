@@ -14,7 +14,6 @@ import { queryClient } from './app/helpers/queryClient';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
-import initSentry from '_src/shared/sentry';
 import store from '_store';
 import { thunkExtras } from '_store/thunk-extras';
 
@@ -23,6 +22,8 @@ import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
 import '_font-icons/output/sui-icons.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
+
+import initSentry from '~/shared/sentry';
 
 async function init() {
     if (process.env.NODE_ENV === 'development') {

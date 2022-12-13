@@ -14,9 +14,10 @@ import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
-import { ToS_LINK } from '_src/shared/constants';
 
 import st from './MenuList.module.scss';
+
+import { ToS_LINK } from '~/shared/constants';
 
 function MenuList() {
     const accountUrl = useNextMenuUrl(true, '/account');

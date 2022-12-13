@@ -8,7 +8,8 @@ import {
     GAS_SYMBOL,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
 } from '_redux/slices/sui-objects/Coin';
-import { createTokenValidation } from '_src/shared/validation';
+
+import { createTokenValidation } from '~/shared/validation';
 
 export function createValidationSchema(
     coinType: string,

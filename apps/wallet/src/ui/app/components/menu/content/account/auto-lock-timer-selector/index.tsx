@@ -12,14 +12,15 @@ import { setKeyringLockTimeout } from '_app/wallet/actions';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
+
+import st from './AutoLockTimerSelector.module.scss';
+
 import {
     AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
     AUTO_LOCK_TIMER_STORAGE_KEY,
     AUTO_LOCK_TIMER_MIN_MINUTES,
     AUTO_LOCK_TIMER_MAX_MINUTES,
-} from '_src/shared/constants';
-
-import st from './AutoLockTimerSelector.module.scss';
+} from '~/shared/constants';
 
 const validation = Yup.object({
     timer: Yup.number()

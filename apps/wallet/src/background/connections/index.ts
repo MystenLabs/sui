@@ -6,10 +6,11 @@ import Browser from 'webextension-polyfill';
 import { ContentScriptConnection } from './ContentScriptConnection';
 import { KeepAliveConnection } from './KeepAliveConnection';
 import { UiConnection } from './UiConnection';
-import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
 
 import type { Connection } from './Connection';
 import type { Permission } from '_payloads/permissions';
+
+import { KEEP_ALIVE_BG_PORT_NAME } from '~/content-script/keep-bg-alive';
 
 export class Connections {
     #connections: (Connection | KeepAliveConnection)[] = [];
