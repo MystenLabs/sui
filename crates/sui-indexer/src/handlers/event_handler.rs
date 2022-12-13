@@ -71,7 +71,7 @@ async fn fetch_event_page(
             EventQuery::All,
             next_cursor.clone(),
             Some(EVENT_PAGE_SIZE),
-            None,
+            false,
         )
         .await
         .map_err(|e| {
