@@ -52,7 +52,7 @@ jobs:
           pr_number: ${{ steps.source-run-info.outputs.pullRequestNumber }}
           comment_tag: "changesets-warning"
           message: |
-            ⚠️ 🦋 **Changesets Warning:** This PR has changes to public npm packages, but does not contain a changeset. You can create a changeset easily by running `pnpm changeset`, and following the prompts. If your change does not need a changeset (e.g. a documentation-only change), you can ignore this message. This warning will be removed when a changeset is added to this pull request.
+            ⚠️ 🦋 **Changesets Warning:** This PR has changes to public npm packages, but does not contain a changeset. You can create a changeset easily by running `pnpm changeset` in the root of the Sui repo, and following the prompts. If your change does not need a changeset (e.g. a documentation-only change), you can ignore this message. This warning will be removed when a changeset is added to this pull request.
 
             [Learn more about Changesets](https://github.com/changesets/changesets).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

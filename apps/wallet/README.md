@@ -18,12 +18,14 @@ Dependencies are managed using [`pnpm`](https://pnpm.io/). You can start by inst
 $ pnpm install
 ```
 
+> All `pnpm` commands are intended to be run in the root of the Sui repo. You can also run them within the `apps/wallet` directory, and remove change `pnpm wallet` to just `pnpm` when running commands.
+
 ## Build in watch mode (dev)
 
 To build the extension and watch for changes run:
 
 ```
-pnpm start
+pnpm wallet start
 ```
 
 This will build the app in the [dist/](./dist/) directory, watch for changes and rebuild it. (Also runs prettier to format the files that changed.)
@@ -33,7 +35,7 @@ This will build the app in the [dist/](./dist/) directory, watch for changes and
 To build the app once in development mode (no optimizations etc) run
 
 ```
-pnpm run build:dev
+pnpm wallet build:dev
 ```
 
 The output directory is the same [dist/](./dist/), all build artifacts will go there
@@ -43,7 +45,7 @@ The output directory is the same [dist/](./dist/), all build artifacts will go t
 To build the app once in production mode run
 
 ```
-pnpm run build:prod
+pnpm wallet build:prod
 ```
 
 Same as above the output is [dist/](./dist/).
@@ -55,5 +57,5 @@ After building the app, the extension needs to be installed to Chrome. Follow th
 ## Testing
 
 ```
-pnpm run test
+pnpm wallet test
 ```
