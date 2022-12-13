@@ -23,7 +23,6 @@ use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
 pub mod execution_state;
 pub mod metrics;
-pub mod restarter;
 
 /// High level functions to spawn the primary and the workers.
 pub struct Node;

@@ -55,7 +55,7 @@ pub async fn run_narwhal_manager<State, TxValidator>(
         // Copy the config for this iteration of the loop
         let mut id_keypair_copy = Vec::new();
         for (id, keypair) in &config.worker_ids_and_keypairs {
-            id_keypair_copy.push((id.clone(), keypair.copy()));
+            id_keypair_copy.push((*id, keypair.copy()));
         }
         let config_copy = NarwhalConfiguration {
             primary_keypair: config.primary_keypair.copy(),
