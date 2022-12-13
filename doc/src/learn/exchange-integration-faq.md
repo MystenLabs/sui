@@ -14,18 +14,6 @@ The Sui blockchain is still in its development stages, therefore many of the sol
 
 Testnet Wave 1 ended on 12/01/22. Information about subsequent Testnet waves will be provided when available.
 
-## What are your plans for the token launch?
-
-- We plan to launch in all jurisdictions that are not restricted by OFAC on day 1.
-- There will be multiple liquidity providers in the form of market makers to ensure the SUI markets operate efficiently.
-- We plan on launching simultaneously across the top centralized crypto exchanges. Decentralized exchanges built on the Sui blockchain will also be live at launch. Many more exchanges will also launch SUI pairs during the subsequent days/weeks post-launch.
-- Sui Tokenomics information will be shared publicly months ahead of the token launch.
-- We will partner with a few exchanges to conduct an open-ended token liquidity distribution (often referred to as an IEO or Token Launchpad) once the network is live so that a substantial share of SUI tokens are available to the community early on.
-
-## What kind of institutional staking and governance will be available?
-
-The only distinction between different staking parties on the Sui network is between validators staking their own SUI tokens and non-validator SUI token holders who delegate tokens to their validator(s) of choice. Beyond this distinction, the Sui network imposes no additional requirements across SUI delegators, including retail and institutional entities.
-
 ## How will SUI staking work?
 
 Sample staking implementation:
@@ -98,7 +86,7 @@ Rewards are compounded every epoch, and paid out when you withdraw your stake. Y
 There will be a minimum amount required and a maximum amount allowed, as well as limits on stake changes within an epoch.
 
  * Validation: Requires a high minimum amount of SUI.
- * Delegation: Minimum planned to be .000000001 SUI (subject to change).
+ * Delegation: No minimum
 
 Specific amounts will be provided when available.
 
