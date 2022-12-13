@@ -148,7 +148,7 @@ async fn test_simple_epoch_change() {
             futs.push(fut);
         }
 
-        info!("Sent to all the reconfigure message {:?}", message);
+        info!("Sent to all the reconfigure message {message:?}");
 
         try_join_all(futs).await.unwrap();
 
