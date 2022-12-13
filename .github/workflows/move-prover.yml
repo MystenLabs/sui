@@ -1,6 +1,12 @@
 name: Move Prover
 
-on: pull_request
+on: 
+  pull_request:
+    paths:
+    - 'crates/sui-framework/sources/**'
+    - 'crates/sui/src/sui_move/**'
+    - 'Cargo.toml'
+    - 'Cargo.lock'
 
 jobs:
   move-prover:
