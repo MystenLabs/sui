@@ -81,7 +81,6 @@ function getStakePercent(stake: bigint, total: bigint): number {
 }
 
 export function useGetValidators(walletAddress: string | null) {
-    // TODO add cache invalidation to useGetObject. Prevents stale data  after staking and destaking
     const { data, isLoading, isError } = useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorsData =
@@ -107,6 +106,7 @@ export function useGetValidators(walletAddress: string | null) {
 }
 
 // invalidates the cache for the validators object
+// invalidation cache after calling staking methods
 export function useInvalidateValidatorsCache() {
     return useValidateObjectQueryCache(VALIDATORS_OBJECT_ID);
 }
