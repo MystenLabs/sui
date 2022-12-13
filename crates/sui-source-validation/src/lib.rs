@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::access::ModuleAccess;
 use std::{collections::HashMap, fmt::Debug};
 use thiserror::Error;
 
@@ -45,6 +46,9 @@ pub enum SourceVerificationError {
 
     #[error("On-chain address cannot be zero")]
     ZeroOnChainAddresSpecifiedFailure,
+
+    #[error("Invalid module {name} with error : {message}")]
+    InvalidModuleFailure { name: String, message: String },
 }
 
 pub struct BytecodeSourceVerifier<'a> {
@@ -113,7 +117,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
 
         let compiled_dep_map =
-            get_module_bytes_map(compiled_package, verify_deps, root_on_chain_address);
+            get_module_bytes_map(compiled_package, verify_deps, root_on_chain_address)?;
 
         for ((address, package), local_modules) in compiled_dep_map {
             // if `root_on_chain_address` is None, then Zero address is the package we're checking dependencies for, it does not need to (and
@@ -198,14 +202,15 @@ fn get_module_bytes_map(
     compiled_package: &CompiledPackage,
     include_deps: bool,
     root_address: Option<AccountAddress>,
-) -> ModuleBytesMap {
+) -> Result<ModuleBytesMap, SourceVerificationError> {
     let mut map: ModuleBytesMap = HashMap::new();
 
+    #[allow(clippy::type_complexity)]
     fn make_map_entry(
         package: &Symbol,
         named_compiled_module: &NamedCompiledModule,
         subst_addr: Option<AccountAddress>,
-    ) -> ((AccountAddress, Symbol), (Symbol, Vec<u8>)) {
+    ) -> Result<((AccountAddress, Symbol), (Symbol, Vec<u8>)), SourceVerificationError> {
         let mut named_compiled_module = named_compiled_module.clone();
         let module = named_compiled_module.name;
         let address = subst_addr.unwrap_or_else(|| named_compiled_module.address.into_inner());
@@ -214,16 +219,28 @@ fn get_module_bytes_map(
         let mut bytes = vec![];
 
         // Replace the Zero address entries in the module if needed
-        if let Some(addr) = subst_addr {
-            let mut addrs = Vec::new();
-            for a in named_compiled_module.module.address_identifiers {
-                addrs.push(if a == AccountAddress::ZERO { addr } else { a })
-            }
-            named_compiled_module.module.address_identifiers = addrs;
+        if let Some(new_address) = subst_addr {
+            let self_handle = named_compiled_module.module.self_handle().clone();
+            let self_address_idx = self_handle.address;
+
+            let addrs = &mut named_compiled_module.module.address_identifiers;
+            let Some(address_mut) = addrs.get_mut(self_address_idx.0 as usize) else {
+                let name = named_compiled_module.module.identifier_at(self_handle.name);
+                return Err(SourceVerificationError::InvalidModuleFailure {name: name.to_string(), message: "Self address field missing".to_string()});
+            };
+
+            if *address_mut != AccountAddress::ZERO {
+                let name = named_compiled_module.module.identifier_at(self_handle.name);
+                return Err(SourceVerificationError::InvalidModuleFailure {
+                    name: name.to_string(),
+                    message: "Self address already populated".to_string(),
+                });
+            };
+            *address_mut = new_address;
         };
 
         named_compiled_module.module.serialize(&mut bytes).unwrap();
-        ((address, *package), (module, bytes))
+        Ok(((address, *package), (module, bytes)))
     }
 
     // TODO: consolidate loops
@@ -233,7 +250,7 @@ fn get_module_bytes_map(
                 continue;
             };
 
-            let (k, v) = make_map_entry(package, m, None);
+            let (k, v) = make_map_entry(package, m, None)?;
 
             map.entry(k).or_default().insert(v.0, v.1);
         }
@@ -249,10 +266,10 @@ fn get_module_bytes_map(
                 continue;
             };
 
-            let (k, v) = make_map_entry(&package, m, Some(addr));
+            let (k, v) = make_map_entry(&package, m, Some(addr))?;
 
             map.entry(k).or_default().insert(v.0, v.1);
         }
     }
-    map
+    Ok(map)
 }
