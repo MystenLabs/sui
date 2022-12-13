@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, isSuiObject, type SuiAddress } from '@mysten/sui.js';
+import { is, SuiMoveObject, SuiObject, type SuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -78,8 +78,8 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
         if (
             !address ||
             !data ||
-            !isSuiObject(data.details) ||
-            !isSuiMoveObject(data.details.data)
+            !is(data.details, SuiObject) ||
+            !is(data.details.data, SuiMoveObject)
         ) {
             return [];
         }

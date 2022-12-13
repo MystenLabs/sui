@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, Delegation } from '@mysten/sui.js';
+import { is, SuiMoveObject, Delegation } from '@mysten/sui.js';
 import { createSelector } from '@reduxjs/toolkit';
 
 import { ownedObjects } from '_redux/slices/account';
 import { suiSystemObjectSelector } from '_redux/slices/sui-objects';
 
-import type { SuiMoveObject, DelegationSuiObject } from '@mysten/sui.js';
+import type { DelegationSuiObject } from '@mysten/sui.js';
 
 export const delegationsSelector = createSelector(
     ownedObjects,
@@ -39,7 +39,7 @@ export const totalActiveStakedSelector = createSelector(
 export const epochSelector = createSelector(
     suiSystemObjectSelector,
     (systemObj) =>
-        systemObj && isSuiMoveObject(systemObj.data)
+        systemObj && is(systemObj.data, SuiMoveObject)
             ? (systemObj.data.fields.epoch as number)
             : null
 );
@@ -48,7 +48,7 @@ export function getValidatorSelector(validatorAddress?: string) {
     // TODO this is limited only to the active and next set of validators. Is there a way to access the list of all validators?
     return createSelector(suiSystemObjectSelector, (systemObj) => {
         const { data } = systemObj || {};
-        if (isSuiMoveObject(data)) {
+        if (is(data, SuiMoveObject)) {
             const { active_validators: active, next_epoch_validators: next } =
                 data.fields.validators.fields;
             const validator: SuiMoveObject | undefined = [
