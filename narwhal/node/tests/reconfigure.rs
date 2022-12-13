@@ -9,13 +9,10 @@ use config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerCache, Worke
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
-use futures::future::{join_all, try_join_all};
-use mysten_metrics::RegistryService;
+use futures::future::join_all;
 use narwhal_node as node;
-use node::{restarter::NodeRestarter, Node};
+use node::Node;
 use prometheus::Registry;
-use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -26,7 +23,6 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use tracing::info;
 use types::{ConsensusOutput, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
@@ -183,164 +179,108 @@ async fn run_client(
     }
 }
 
-#[ignore]
-#[tokio::test]
-async fn restart() {
-    telemetry_subscribers::init_for_testing();
-
-    let fixture = CommitteeFixture::builder()
-        .number_of_workers(NonZeroUsize::new(1).unwrap())
-        .randomize_ports(true)
-        .build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-
-    // Spawn the nodes.
-    let mut rx_nodes = Vec::new();
-    let latest_observed_epoch = Arc::new(AtomicU64::new(0));
-
-    let mut validators_execution_states = Vec::new();
-
-    for a in fixture.authorities() {
-        let (tx_output, rx_output) = channel(10);
-        let (tx_node_reconfigure, rx_node_reconfigure) = channel(10);
-
-        let execution_state = Arc::new(SimpleExecutionState::new(
-            a.keypair().copy(),
-            a.network_keypair().copy(),
-            a.worker_keypairs(),
-            fixture.worker_cache(),
-            committee.clone(),
-            tx_output,
-            tx_node_reconfigure,
-        ));
-
-        validators_execution_states.push(execution_state.clone());
-
-        let worker_ids_and_keypairs = a
-            .worker_keypairs()
-            .iter()
-            .enumerate()
-            .map(|(i, k)| (i as WorkerId, k.copy()))
-            .collect();
-
-        let committee = committee.clone();
-        let worker_cache = worker_cache.clone();
-
-        let parameters = Parameters {
-            batch_size: 200,
-            max_header_delay: Duration::from_secs(1),
-            max_header_num_of_batches: 1,
-            ..Parameters::default()
-        };
-
-        let register_service = RegistryService::new(Registry::new());
-
-        let keypair = a.keypair().copy();
-        let network_keypair = a.network_keypair().copy();
-        tokio::spawn(async move {
-            NodeRestarter::watch(
-                keypair,
-                network_keypair,
-                worker_ids_and_keypairs,
-                &committee,
-                worker_cache,
-                /* base_store_path */ test_utils::temp_dir(),
-                execution_state,
-                parameters,
-                TrivialTransactionValidator::default(),
-                rx_node_reconfigure,
-                register_service,
-            )
-            .await;
-        });
-
-        rx_nodes.push(rx_output);
-    }
-
-    // Give a chance to the nodes to start.
-    tokio::task::yield_now().await;
-
-    // Spawn some clients.
-    let mut tx_clients = Vec::new();
-    for a in fixture.authorities() {
-        let (tx_client_reconfigure, rx_client_reconfigure) = channel(10);
-        tx_clients.push(tx_client_reconfigure);
-
-        let name = a.public_key();
-        let worker_cache = worker_cache.clone();
-        tokio::spawn(
-            async move { run_client(name, worker_cache.clone(), rx_client_reconfigure).await },
-        );
-    }
-
-    // Listen to the outputs.
-    let mut handles = Vec::new();
-    for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
-        let global_epoch = latest_observed_epoch.clone();
-        let execution_state = validators_execution_states.remove(0);
-
-        handles.push(tokio::spawn(async move {
-            let mut current_epoch = 0u64;
-            static MAX_EPOCH: u64 = 10;
-
-            // Repeatedly send transactions.
-            let mut interval = interval(Duration::from_secs(3));
-            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-            loop {
-                tokio::select! {
-                    result = rx.recv() => {
-                        // channel closed, we won't be able to receive any further epoch updates so
-                        // we need to exit the loop
-                        if result.is_none() {
-                            break;
-                        }
-
-                        let epoch = result.unwrap();
-
-                        info!("Received epoch {}", epoch);
-
-                        // update the latest observed global epoch - but only swap
-                        // if it's greater than the previous value
-                        let _ = global_epoch.compare_exchange(epoch-1, epoch, Ordering::SeqCst, Ordering::SeqCst);
-
-                        if epoch == MAX_EPOCH {
-                            return;
-                        }
-                        if epoch > current_epoch {
-                            current_epoch = epoch;
-                            tx.send(current_epoch).await.unwrap();
-                        }
-                    },
-                    _ = interval.tick() => {
-                        // detect whether all the other nodes managed to advance in epochs
-                        // and our node did fall behind - in this case we want to advance
-                        // our node
-                        let global_epoch = global_epoch.load(Ordering::SeqCst);
-
-                        if global_epoch > current_epoch {
-                            info!("Detected greater epoch compared to our current {global_epoch} > {current_epoch} : will update epoch");
-
-                            current_epoch = global_epoch;
-
-                            // reconfigure - send details
-                            execution_state.send_new_epoch_reconfigure(current_epoch).await;
-                        }
-                    }
-                }
-            }
-
-            if current_epoch < MAX_EPOCH {
-                panic!("Node never reached epoch {MAX_EPOCH}, something broke our connection");
-            }
-        }));
-    }
-
-    try_join_all(handles)
-        .await
-        .expect("No error should occurred");
-}
+// #[ignore]
+// #[tokio::test]
+// async fn restart() {
+//     telemetry_subscribers::init_for_testing();
+//     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+//     let committee = fixture.committee();
+//     let worker_cache = fixture.shared_worker_cache();
+//
+//     // Spawn the nodes.
+//     let mut rx_nodes = Vec::new();
+//     for a in fixture.authorities() {
+//         let (tx_output, rx_output) = channel(10);
+//         let (tx_node_reconfigure, rx_node_reconfigure) = channel(10);
+//
+//         let execution_state = Arc::new(SimpleExecutionState::new(
+//             a.keypair().copy(),
+//             a.network_keypair().copy(),
+//             a.worker_keypairs(),
+//             fixture.worker_cache(),
+//             committee.clone(),
+//             tx_output,
+//             tx_node_reconfigure,
+//         ));
+//
+//         let worker_keypairs = a.worker_keypairs();
+//         let worker_ids = 0..worker_keypairs.len() as u32;
+//         let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs.into_iter()).collect();
+//
+//         let committee = committee.clone();
+//         let worker_cache = worker_cache.clone();
+//
+//         let parameters = Parameters {
+//             batch_size: 200,
+//             max_header_num_of_batches: 1,
+//             ..Parameters::default()
+//         };
+//
+//         let keypair = a.keypair().copy();
+//         let network_keypair = a.network_keypair().copy();
+//         tokio::spawn(async move {
+//             NodeRestarter::watch(
+//                 keypair,
+//                 network_keypair,
+//                 worker_ids_and_keypairs,
+//                 &committee,
+//                 worker_cache,
+//                 /* base_store_path */ test_utils::temp_dir(),
+//                 execution_state,
+//                 parameters,
+//                 TrivialTransactionValidator::default(),
+//                 rx_node_reconfigure,
+//                 &Registry::new(),
+//             )
+//             .await;
+//         });
+//
+//         rx_nodes.push(rx_output);
+//     }
+//
+//     // Give a chance to the nodes to start.
+//     tokio::task::yield_now().await;
+//
+//     // Spawn some clients.
+//     let mut tx_clients = Vec::new();
+//     for a in fixture.authorities() {
+//         let (tx_client_reconfigure, rx_client_reconfigure) = channel(10);
+//         tx_clients.push(tx_client_reconfigure);
+//
+//         let name = a.public_key();
+//         let worker_cache = worker_cache.clone();
+//         tokio::spawn(
+//             async move { run_client(name, worker_cache.clone(), rx_client_reconfigure).await },
+//         );
+//     }
+//
+//     // Listen to the outputs.
+//     let mut handles = Vec::new();
+//     for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
+//         handles.push(tokio::spawn(async move {
+//             let mut current_epoch = 0u64;
+//
+//             while let Some(epoch) = rx.recv().await {
+//                 println!("Received epoch {}", epoch);
+//                 if epoch == 5 {
+//                     return;
+//                 }
+//                 if epoch > current_epoch {
+//                     current_epoch = epoch;
+//                     tx.send(current_epoch).await.unwrap();
+//                 }
+//             }
+//
+//             if current_epoch < 5 {
+//                 panic!("Node never reached epoch 5, something broke our connection");
+//             }
+//         }));
+//     }
+//
+//     try_join_all(handles)
+//         .await
+//         .expect("No error should occurred");
+// }
 
 #[ignore]
 #[tokio::test]

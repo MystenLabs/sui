@@ -23,13 +23,7 @@ use sui_network::{
 };
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::*;
-use sui_types::messages::{
-    AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ConsensusTransaction,
-    ObjectInfoRequest, ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse,
-};
-use sui_types::messages_checkpoint::CheckpointRequest;
-use sui_types::messages_checkpoint::CheckpointResponse;
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use tap::TapFallible;
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, info, Instrument};
@@ -247,8 +241,6 @@ pub struct ValidatorService {
 }
 
 impl ValidatorService {
-    /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
-    /// and a consensus listener bridging the consensus node and the sui authority.
     pub async fn new(
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
