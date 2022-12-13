@@ -644,8 +644,7 @@ fn test_convert_number_from_bcs() {
 #[test]
 fn test_convert_number_array_from_bcs() {
     let bcs_bytes = [
-        5, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80,
-        195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0,
+        5, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0,
     ];
 
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
