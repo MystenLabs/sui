@@ -711,6 +711,9 @@ impl AuthorityState {
         let observed_effects = self
             .database
             .notify_read_effects(vec![digest])
+            .instrument(tracing::debug_span!(
+                "notify_read_effects_in_execute_certificate_with_effects"
+            ))
             .await?
             .pop()
             .expect("notify_read_effects should return exactly 1 element");

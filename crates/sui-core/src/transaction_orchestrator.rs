@@ -4,17 +4,15 @@
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
-finalized transactions locally, with the help of Node Sync.
+finalized transactions locally, when possible.
 */
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio_stream::StreamExt;
 
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
-use crate::node_sync::{NodeSyncHandle, SyncStatus};
 use crate::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
@@ -32,7 +30,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, instrument, warn, Instrument};
+use tracing::{debug, error, instrument, warn};
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -41,7 +39,6 @@ const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct TransactiondOrchestrator<A> {
     quorum_driver_handler: QuorumDriverHandler<A>,
     quorum_driver: Arc<QuorumDriver<A>>,
-    node_sync_handle: NodeSyncHandle,
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
     metrics: Arc<TransactionOrchestratorMetrics>,
@@ -54,7 +51,6 @@ where
     pub fn new(
         validators: Arc<AuthorityAggregator<A>>,
         validator_state: Arc<AuthorityState>,
-        node_sync_handle: NodeSyncHandle,
         prometheus_registry: &Registry,
     ) -> Self {
         let quorum_driver_handler =
@@ -62,14 +58,12 @@ where
         let quorum_driver = quorum_driver_handler.clone_quorum_driver();
         let effects_receiver = quorum_driver_handler.subscribe();
         let state_clone = validator_state.clone();
-        let handle_clone = node_sync_handle.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
         let metrics_clone = metrics.clone();
         let _local_executor_handle = {
             spawn_monitored_task!(async move {
                 Self::loop_execute_finalized_tx_locally(
                     state_clone,
-                    handle_clone,
                     effects_receiver,
                     metrics_clone,
                 )
@@ -80,7 +74,6 @@ where
             quorum_driver_handler,
             quorum_driver,
             validator_state,
-            node_sync_handle,
             _local_executor_handle,
             metrics,
         }
@@ -149,7 +142,6 @@ where
                 }
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
-                    &self.node_sync_handle,
                     &tx_cert,
                     &effects_cert,
                     &self.metrics,
@@ -174,7 +166,6 @@ where
     #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?tx_cert.digest()), err)]
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
-        node_sync_handle: &NodeSyncHandle,
         tx_cert: &VerifiedCertificate,
         effects_cert: &CertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
@@ -198,13 +189,7 @@ where
             });
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            Self::execute_impl(
-                validator_state,
-                node_sync_handle,
-                tx_cert,
-                effects_cert,
-                metrics,
-            ),
+            validator_state.execute_certificate_with_effects(tx_cert, effects_cert),
         )
         .await
         {
@@ -236,7 +221,6 @@ where
 
     async fn loop_execute_finalized_tx_locally(
         validator_state: Arc<AuthorityState>,
-        node_sync_handle: NodeSyncHandle,
         mut effects_receiver: Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
         metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
@@ -258,7 +242,6 @@ where
                     };
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
-                        &node_sync_handle,
                         &tx_cert,
                         &effects_cert,
                         &metrics,
@@ -284,86 +267,6 @@ where
         &self,
     ) -> Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
         self.quorum_driver_handler.subscribe()
-    }
-
-    /// Execute a finalized transaction locally.
-    /// Firstly it tries to execute it optimistically. If there are missing
-    /// dependencies, it then leverages Node Sync to process the parents.
-    ///
-    /// TODO: replace this function with AuthorityState::execute_certificate_with_effects(),
-    /// after checkpoint v2 becomes the default for fullnode synchronization.
-    async fn execute_impl(
-        state: &Arc<AuthorityState>,
-        node_sync_handle: &NodeSyncHandle,
-        tx_cert: &VerifiedCertificate,
-        effects_cert: &CertifiedTransactionEffects,
-        metrics: &TransactionOrchestratorMetrics,
-    ) -> SuiResult {
-        let tx_digest = tx_cert.digest();
-        if tx_cert.contains_shared_object() {
-            state
-                .database
-                .acquire_shared_locks_from_effects(tx_cert, effects_cert.data())
-                .await?;
-        }
-        let res = state.execute_certificate_internal(tx_cert).await;
-        match res {
-            Ok(info) => {
-                if let Some(effects) = info.signed_effects {
-                    if effects.digest() != effects_cert.digest() {
-                        return Err(SuiError::from(
-                            "Tx from orchestrator failed to be executed. Effects mismatch!",
-                        ));
-                    }
-                } else {
-                    return Err(SuiError::from(
-                        "Tx from orchestrator failed to be executed. No effect returned!",
-                    ));
-                }
-                debug!(
-                    ?tx_digest,
-                    "Orchestrator optimistically executed transaction successfully."
-                );
-                metrics.tx_directly_executed.inc();
-                Ok(())
-            }
-            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
-                debug!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
-
-                match node_sync_handle
-                    .handle_parents_request(state.epoch(), std::iter::once(*tx_digest))
-                    .await?
-                    .next()
-                    .instrument(tracing::debug_span!(
-                        "transaction_orchestrator_execute_tx_via_node_sync"
-                    ))
-                    .await
-                    // Safe to unwrap because `handle_execution_request` wraps futures one by one
-                    .unwrap()?
-                {
-                    SyncStatus::CertExecuted => {
-                        metrics.tx_executed_via_node_sync.inc();
-                        debug!(
-                            ?tx_digest,
-                            "Orchestrator executed transaction via Node Sync."
-                        );
-                        Ok(())
-                    }
-                    SyncStatus::NotFinal => {
-                        // This shall not happen
-                        metrics.tx_not_executed.inc();
-                        error!(
-                            ?tx_digest,
-                            "Orchestrator failed to execute finalized transaction via Node Sync"
-                        );
-                        Err(SuiError::from(
-                            "Tx from orchestrator failed to be executed via node sync",
-                        ))
-                    }
-                }
-            }
-            Err(e) => Err(e),
-        }
     }
 
     fn update_metrics(
@@ -434,10 +337,6 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
     local_execution_failure: GenericCounter<AtomicU64>,
-
-    tx_directly_executed: GenericCounter<AtomicU64>,
-    tx_executed_via_node_sync: GenericCounter<AtomicU64>,
-    tx_not_executed: GenericCounter<AtomicU64>,
 }
 
 impl TransactionOrchestratorMetrics {
@@ -523,24 +422,6 @@ impl TransactionOrchestratorMetrics {
             local_execution_failure: register_int_counter_with_registry!(
                 "tx_orchestrator_local_execution_failure",
                 "Total number of failed local execution txns Transaction Orchestrator handles",
-                registry,
-            )
-            .unwrap(),
-            tx_directly_executed: register_int_counter_with_registry!(
-                "tx_orchestrator_tx_directly_executed",
-                "Total number of txns Transaction Orchestrator directly executed",
-                registry,
-            )
-            .unwrap(),
-            tx_executed_via_node_sync: register_int_counter_with_registry!(
-                "tx_orchestrator_tx_executed_via_node_sync",
-                "Total number of txns Transaction Orchestrator executed via node sync",
-                registry,
-            )
-            .unwrap(),
-            tx_not_executed: register_int_counter_with_registry!(
-                "tx_orchestrator_tx_not_executed",
-                "Total number of txns Transaction Orchestrator failed to execute",
                 registry,
             )
             .unwrap(),
