@@ -184,7 +184,7 @@ struct EffectsStakeInfo {
 #[derive(Default)]
 struct EffectsStakeMap {
     effects_map: HashMap<(EpochId, TransactionEffectsDigest), EffectsStakeInfo>,
-    efects_cert: Option<CertifiedTransactionEffects>,
+    effects_cert: Option<CertifiedTransactionEffects>,
 }
 
 impl EffectsStakeMap {
@@ -209,7 +209,7 @@ impl EffectsStakeMap {
         entry.signatures.push(sig);
 
         if entry.stake >= committee.quorum_threshold() {
-            self.efects_cert = CertifiedTransactionEffects::new(
+            self.effects_cert = CertifiedTransactionEffects::new(
                 entry.effects.clone(),
                 entry.signatures.clone(),
                 committee,
@@ -221,7 +221,7 @@ impl EffectsStakeMap {
                 );
             })
             .ok();
-            self.efects_cert.is_some()
+            self.effects_cert.is_some()
         } else {
             false
         }
@@ -232,7 +232,7 @@ impl EffectsStakeMap {
     }
 
     pub fn get_cert(&self) -> Option<CertifiedTransactionEffects> {
-        self.efects_cert.clone()
+        self.effects_cert.clone()
     }
 }
 
@@ -1259,7 +1259,7 @@ where
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> Result<CertifiedTransactionEffects, SuiError> {
+    ) -> Result<VerifiedCertifiedTransactionEffects, SuiError> {
         #[derive(Default)]
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
@@ -1366,7 +1366,7 @@ where
                 tx_digest = ?tx_digest,
                 "Found an effect with good stake over threshold"
             );
-            return Ok(cert);
+            return cert.verify(&self.committee);
         }
 
         // If none has, fail.
@@ -1378,7 +1378,7 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &VerifiedTransaction,
-    ) -> Result<(VerifiedCertificate, CertifiedTransactionEffects), anyhow::Error> {
+    ) -> Result<(VerifiedCertificate, VerifiedCertifiedTransactionEffects), anyhow::Error> {
         let new_certificate = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
