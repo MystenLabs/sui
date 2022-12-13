@@ -9,7 +9,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       
       - name: Prover Setup
         run: |
@@ -28,7 +27,6 @@ jobs:
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          apt install build-essential
-          
+
           /home/runner/.cargo/bin/cargo run -p sui -- move prove
 
