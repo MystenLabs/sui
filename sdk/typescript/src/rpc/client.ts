@@ -5,7 +5,6 @@ import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
 import {
   any,
-  assert,
   Infer,
   is,
   literal,
@@ -103,10 +102,6 @@ export class JsonRpcClient {
     } else if (is(response, ValidResponse)) {
       // TODO: Improve error messaging here using superstruct asserts
       const expectedSchema = is(response.result, struct);
-      if (!expectedSchema) {
-        console.log({ RES: response.result.EffectsCert.effects, STR: struct });
-      }
-      assert(response.result, struct);
       const errMsg =
         TYPE_MISMATCH_ERROR +
         `Result received was: ${JSON.stringify(response.result)}`;
