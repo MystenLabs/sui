@@ -34,8 +34,6 @@ use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
-use crate::waypoint::IntoPoint;
-use crate::SUI_FRAMEWORK_ADDRESS;
 use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 

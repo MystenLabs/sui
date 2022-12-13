@@ -105,7 +105,7 @@ pub trait RpcReadApi {
         parent_object_id: ObjectID,
         /// Optional paging cursor
         cursor: Option<ObjectID>,
-        /// Maximum item returned per page
+        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage>;
 
@@ -215,7 +215,7 @@ pub trait RpcFullNodeReadApi {
         query: TransactionQuery,
         /// Optional paging cursor
         cursor: Option<TransactionDigest>,
-        /// Maximum item returned per page
+        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.  
         descending_order: Option<bool>,
@@ -494,7 +494,7 @@ pub trait EventReadApi {
         query: EventQuery,
         /// optional paging cursor
         cursor: Option<EventID>,
-        /// maximum number of items per page
+        /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.  
         descending_order: Option<bool>,

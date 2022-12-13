@@ -717,7 +717,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -759,7 +759,7 @@
         },
         {
           "name": "limit",
-          "description": "maximum number of items per page",
+          "description": "maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -1606,7 +1606,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
