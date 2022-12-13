@@ -17,12 +17,7 @@
 //! handles epoch boundaries by calling to reconfig once all checkpoints of an epoch have finished
 //! executing.
 
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
@@ -375,42 +370,15 @@ async fn execute_transactions(
 ) -> SuiResult<Vec<SignedTransactionEffects>> {
     let tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
-    let mut txns: Vec<VerifiedCertificate> = authority_state
+    let txns: Vec<VerifiedCertificate> = authority_state
         .database
-        .epoch_store()
-        .multi_get_pending_certificate(&tx_digests)?
+        .perpetual_tables
+        .synced_transactions
+        .multi_get(&tx_digests)?
         .into_iter()
         .flatten()
+        .map(|tx| tx.into())
         .collect();
-
-    // executed txns get moved to perpetual table so look for missing txns there
-    if txns.len() < tx_digests.len() {
-        let epoch_txn_digests: HashSet<&TransactionDigest> =
-            HashSet::from_iter(txns.iter().map(|tx| tx.digest()));
-
-        let missing_txn_digests: Vec<TransactionDigest> = tx_digests
-            .clone()
-            .into_iter()
-            .filter(|digest| !epoch_txn_digests.contains(digest))
-            .collect();
-
-        let mut perp_table_txns: Vec<VerifiedCertificate> = authority_state
-            .database
-            .perpetual_tables
-            .certificates
-            .multi_get(missing_txn_digests)?
-            .into_iter()
-            .map(|txn| {
-                if txn.is_none() {
-                    panic!("Txn does not exist in epoch store or perpetual table");
-                }
-                txn.unwrap().into()
-            })
-            .collect();
-
-        txns.append(&mut perp_table_txns);
-    }
-    let txns = txns;
 
     let effects_digests: Vec<TransactionEffectsDigest> = execution_digests
         .iter()
@@ -439,13 +407,17 @@ async fn execute_transactions(
                 .await?;
         }
     }
+    authority_state
+        .database
+        .epoch_store()
+        .insert_pending_certificates(&txns)?;
+
     authority_state.transaction_manager.enqueue(txns).await?;
 
-    let actual_fx = authority_state
+    authority_state
         .database
         .notify_read_effects(tx_digests)
-        .await?;
-    Ok(actual_fx)
+        .await
 }
 
 fn reconfig(_next_epoch_committee: Vec<(AuthorityPublicKeyBytes, u64)>) {
