@@ -685,12 +685,37 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
     <b>let</b> vec = <a href="_empty">vector::empty</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
     <b>let</b> i = 0;
     <b>let</b> split_amount = <a href="coin.md#0x2_coin_value">value</a>(self) / n;
-    <b>while</b> (i &lt; n - 1) {
+    <b>while</b> ({
+        <b>spec</b> {
+            <b>invariant</b> i &lt;= n-1;
+            <b>invariant</b> self.<a href="balance.md#0x2_balance">balance</a>.value == <b>old</b>(self).<a href="balance.md#0x2_balance">balance</a>.value - (i * split_amount);
+            <b>invariant</b> ctx.ids_created == <b>old</b>(ctx).ids_created + i;
+        };
+        i &lt; n - 1
+    }) {
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> vec, <a href="coin.md#0x2_coin_split">split</a>(self, split_amount, ctx));
         i = i + 1;
     };
     vec
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>let</b> before_val = self.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>let</b> <b>post</b> after_val = self.<a href="balance.md#0x2_balance">balance</a>.value;
+<b>let</b> split_amount = before_val / n;
+<b>ensures</b> after_val == before_val - ((n - 1) * split_amount);
+<b>aborts_if</b> n == 0;
+<b>aborts_if</b> self.<a href="balance.md#0x2_balance">balance</a>.<a href="coin.md#0x2_coin_value">value</a> &lt; n;
+<b>aborts_if</b> ctx.ids_created + n - 1 &gt; MAX_U64;
 </code></pre>
 
 
@@ -845,7 +870,7 @@ in <code>cap</code> accordingly.
 <pre><code><b>let</b> before_supply = cap.total_supply.value;
 <b>let</b> <b>post</b> after_supply = cap.total_supply.value;
 <b>ensures</b> after_supply == before_supply + value;
-<b>aborts_if</b> before_supply + value &gt; MAX_U64;
+<b>aborts_if</b> before_supply + value &gt;= MAX_U64;
 <b>aborts_if</b> ctx.ids_created + 1 &gt; MAX_U64;
 </code></pre>
 
@@ -890,7 +915,7 @@ Aborts if <code>value</code> + <code>cap.total_supply</code> >= U64_MAX
 <pre><code><b>let</b> before_supply = cap.total_supply.value;
 <b>let</b> <b>post</b> after_supply = cap.total_supply.value;
 <b>ensures</b> after_supply == before_supply + value;
-<b>aborts_if</b> before_supply + value &gt; MAX_U64;
+<b>aborts_if</b> before_supply + value &gt;= MAX_U64;
 </code></pre>
 
 
