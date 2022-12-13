@@ -41,6 +41,7 @@ impl ReadApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
+
     pub async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
@@ -170,6 +171,7 @@ impl CoinReadApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
+
     pub async fn get_coins(
         &self,
         owner: SuiAddress,
@@ -236,6 +238,7 @@ impl EventApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
+
     pub async fn subscribe_event(
         &self,
         filter: SuiEventFilter,
@@ -303,6 +306,7 @@ impl QuorumDriver {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
+
     /// Execute a transaction with a FullNode client. `request_type`
     /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
