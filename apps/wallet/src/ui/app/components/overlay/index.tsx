@@ -11,8 +11,7 @@ import type { ReactNode } from 'react';
 import st from './Overlay.module.scss';
 
 type OverlayProps = {
-    title: string;
-    className?: string;
+    title: ReactNode;
     children: ReactNode | ReactNode[];
     showModal: boolean;
     closeOverlay?: () => void;
@@ -22,7 +21,6 @@ type OverlayProps = {
 
 function Overlay({
     title,
-    className,
     children,
     showModal,
     closeOverlay,
@@ -41,8 +39,15 @@ function Overlay({
         <>
             {showModal ? (
                 <div className={st.container}>
-                    <div className={cl(className, st.header)}>
-                        <div className={st.headerContent}>{title}</div>
+                    <div className={cl(st.header, 'bg-gray-40')}>
+                        <div
+                            className={cl(
+                                st.headerContent,
+                                'text-steel-darker'
+                            )}
+                        >
+                            {title}
+                        </div>
                     </div>
                     <div className={st.content}>{children}</div>
                     <button className={st.closeOverlay} onClick={closeModal}>
