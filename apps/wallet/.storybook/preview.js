@@ -15,4 +15,17 @@ export const parameters = {
             date: /Date$/,
         },
     },
+    viewport: {
+        viewports: {
+            extension: {
+                name: 'Chrome Extension',
+                styles: {
+                    height: '595px',
+                    width: '360px',
+                },
+                type: 'mobile',
+            },
+        },
+        defaultViewport: 'extension',
+    },
 };
