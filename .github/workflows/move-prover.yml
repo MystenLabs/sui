@@ -18,10 +18,10 @@ jobs:
         working-directory: crates/sui-framework
         run: |
           set -o pipefail
-          PATH=/home/runner/.cargo/bin/:$PATH
           DOTNET_ROOT="$HOME/.dotnet"
           BIN_DIR="$HOME/bin"
 
+          export PATH=/home/runner/.cargo/bin/:$PATH
           export DOTNET_ROOT="${DOTNET_ROOT}"
           export PATH="${DOTNET_ROOT}/tools:\$PATH"
           export Z3_EXE="${BIN_DIR}/z3"
