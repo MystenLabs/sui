@@ -39,7 +39,7 @@ function Overlay({
         <>
             {showModal ? (
                 <div className={st.container}>
-                    <div className={cl(st.header, 'bg-gray-40 ')}>
+                    <div className={cl(st.header, 'bg-gray-40')}>
                         <div
                             className={cl(
                                 st.headerContent,
