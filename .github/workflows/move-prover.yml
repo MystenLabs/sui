@@ -18,6 +18,7 @@ jobs:
       - name: Prover Run
         working-directory: crates/sui-framework
         run: |
+          set -o pipefail
           PATH=/home/runner/.cargo/bin/:$PATH
           DOTNET_ROOT="$HOME/.dotnet"
           BIN_DIR="$HOME/bin"
@@ -28,5 +29,5 @@ jobs:
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
 
-          cargo run -p sui -- move prove
+          /home/runner/.cargo/bin/cargo run -p sui -- move prove
 
