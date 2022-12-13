@@ -4,10 +4,9 @@
 use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
 use mysten_metrics::spawn_monitored_task;
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use network::{CancelOnDropHandler, ReliableNetwork};
 use std::{collections::BTreeMap, sync::Arc};
-use tap::TapFallible;
-use tap::TapOptional;
+use tap::{TapFallible, TapOptional};
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, error, info, warn};
 use types::{
@@ -183,7 +182,7 @@ impl StateHandler {
                     // the shutdown message.
                     if shutdown {
                         // shutdown network as well
-                        let _ = self.network.network().shutdown().await.tap_err(|err|{
+                        let _ = self.network.shutdown().await.tap_err(|err|{
                             error!("Error while shutting down network: {err}")
                         });
 
