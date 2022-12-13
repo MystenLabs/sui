@@ -34,3 +34,27 @@ module 0x0.test {
         return;
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.object;
+
+    struct Foo has key {
+        id: object.UID,
+    }
+
+    struct Bar {
+        v: u64,
+        id: object.UID,
+    }
+
+    foo(f: Self.Foo) {
+        let id: object.UID;
+        let b: Self.Bar;
+        label l0:
+        Foo { id } = move(f);
+        b = Bar { v: 0, id: move(id) };
+        abort 0;
+    }
+
+}
