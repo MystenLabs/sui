@@ -91,7 +91,9 @@ impl SuiJsonValue {
             JsonValue::Number(n) => {
                 // Must be castable to u64
                 if !n.is_u64() {
-                    return Err(anyhow!("{n} not allowed. Number must be unsigned integer"));
+                    return Err(anyhow!(
+                        "{n} not allowed. Number must be unsigned integer of at most u32"
+                    ));
                 }
             }
             // Must be homogeneous
@@ -166,7 +168,7 @@ impl SuiJsonValue {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => MoveValue::Bool(*b),
 
-            // In constructor, we have already checked that the JSON number is unsigned int of at most U64
+            // In constructor, we have already checked that the JSON number is unsigned int of at most U32
             (JsonValue::Number(n), MoveTypeLayout::U8) => match n.as_u64() {
                 Some(x) => MoveValue::U8(u8::try_from(x)?),
                 None => return Err(anyhow!("{} is not a valid number. Only u8 allowed.", n)),
@@ -178,10 +180,6 @@ impl SuiJsonValue {
             (JsonValue::Number(n), MoveTypeLayout::U32) => match n.as_u64() {
                 Some(x) => MoveValue::U32(u32::try_from(x)?),
                 None => return Err(anyhow!("{} is not a valid number. Only u32 allowed.", n)),
-            },
-            (JsonValue::Number(n), MoveTypeLayout::U64) => match n.as_u64() {
-                Some(x) => MoveValue::U64(x),
-                None => return Err(anyhow!("{} is not a valid number. Only u64 allowed.", n)),
             },
 
             // u8, u16, u32, u64, u128, u256 can be encoded as String
@@ -275,11 +273,9 @@ fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
         Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<u32>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
-    } else if let Ok(v) = bcs::from_bytes::<u64>(bytes) {
-        Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<bool>(bytes) {
         Ok(JsonValue::Bool(v))
-    } else if let Ok(v) = bcs::from_bytes::<Vec<u64>>(bytes) {
+    } else if let Ok(v) = bcs::from_bytes::<Vec<u32>>(bytes) {
         let v = v
             .into_iter()
             .map(|v| JsonValue::Number(Number::from(v)))

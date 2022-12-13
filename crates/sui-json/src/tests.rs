@@ -359,7 +359,7 @@ fn test_basic_args_linter_pure_args_good() {
         ),
         // U64 nest
         (
-            json!([[1111, 2, 3], [], [300, 4, 5, 6, 7]]),
+            json!([["1111", "2", "3"], [], ["300", "4", "5", "6", "7"]]),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
                 MoveTypeLayout::U64,
             )))),
@@ -370,16 +370,16 @@ fn test_basic_args_linter_pure_args_good() {
             ])
             .unwrap(),
         ),
-        // U64 deep nest, good
+        // U32 deep nest, good
         (
             json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]]),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
-                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)),
+                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U32)),
             )))),
             bcs::to_bytes(&vec![
-                vec![vec![9u64, 53u64, 434u64], vec![0u64], vec![300u64]],
+                vec![vec![9u32, 53u32, 434u32], vec![0u32], vec![300u32]],
                 vec![],
-                vec![vec![332u64], vec![4u64, 5u64, 6u64, 7u64]],
+                vec![vec![332u32], vec![4u32, 5u32, 6u32, 7u32]],
             ])
             .unwrap(),
         ),
@@ -426,7 +426,7 @@ fn test_basic_args_linter_top_level() {
     */
 
     let monster_name_raw = "MonsterName";
-    let monster_img_id_raw = 12345678;
+    let monster_img_id_raw = "12345678";
     let breed_raw = 89;
     let monster_affinity_raw = 200;
     let monster_description_raw = "MonsterDescription";
@@ -472,7 +472,7 @@ fn test_basic_args_linter_top_level() {
     );
     assert_eq!(
         json_args[2],
-        SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw as u64)).unwrap()),
+        SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw.parse::<u64>().unwrap())).unwrap()),
     );
     assert_eq!(
         json_args[3],
@@ -516,7 +516,7 @@ fn test_basic_args_linter_top_level() {
     Function signature:
             public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext)
     */
-    let value_raw = 29897;
+    let value_raw = "29897";
     let address = SuiAddress::random_for_testing_only();
 
     let value = json!(value_raw);
@@ -533,7 +533,7 @@ fn test_basic_args_linter_top_level() {
 
     assert_eq!(
         args[0],
-        SuiJsonCallArg::Pure(bcs::to_bytes(&(value_raw as u64)).unwrap())
+        SuiJsonCallArg::Pure(bcs::to_bytes(&(value_raw.parse::<u64>().unwrap())).unwrap())
     );
 
     // Need to verify this specially
@@ -636,7 +636,7 @@ fn test_convert_address_from_bcs() {
 
 #[test]
 fn test_convert_number_from_bcs() {
-    let bcs_bytes = [160u8, 134, 1, 0, 0, 0, 0, 0];
+    let bcs_bytes = [160u8, 134, 1, 0];
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
     assert_eq!(100000, value.0.as_u64().unwrap());
 }
@@ -644,8 +644,7 @@ fn test_convert_number_from_bcs() {
 #[test]
 fn test_convert_number_array_from_bcs() {
     let bcs_bytes = [
-        5, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80,
-        195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0,
+        5, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0,
     ];
 
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();

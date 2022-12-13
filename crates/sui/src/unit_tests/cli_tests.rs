@@ -391,7 +391,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Create the args
     let args = vec![
-        SuiJsonValue::new(json!(123u8))?,
+        SuiJsonValue::new(json!("123"))?,
         SuiJsonValue::new(json!(address1))?,
     ];
 
