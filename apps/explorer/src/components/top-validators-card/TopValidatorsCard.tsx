@@ -7,7 +7,6 @@ import {
     isSuiMoveObject,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -152,17 +151,10 @@ export function processValidators(set: Validator[], totalStake: bigint) {
             name,
             address: av.fields.metadata.fields.sui_address,
             stake: av.fields.stake_amount,
-            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
             delegation_count: av.fields.delegation_count || 0,
         };
     });
 }
-
-export const getStakePercent = (stake: bigint, total: bigint): number => {
-    const bnStake = new BigNumber(stake.toString());
-    const bnTotal = new BigNumber(total.toString());
-    return bnStake.div(bnTotal).multipliedBy(100).toNumber();
-};
 
 const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
     const totalStake = validatorsData.validators.fields.total_validator_stake;
