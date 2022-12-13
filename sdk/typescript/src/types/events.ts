@@ -20,16 +20,16 @@ import {
   SequenceNumber,
 } from './common';
 
-export const BalanceChangeTypeStruct = union([
+export const BalanceChangeType = union([
   literal('Gas'),
   literal('Pay'),
   literal('Receive'),
 ]);
 
-export type BalanceChangeType = Infer<typeof BalanceChangeTypeStruct>;
+export type BalanceChangeType = Infer<typeof BalanceChangeType>;
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
-export const MoveEventStruct = object({
+export const MoveEvent = object({
   packageId: ObjectId,
   transactionModule: string(),
   sender: SuiAddress,
@@ -38,30 +38,30 @@ export const MoveEventStruct = object({
   bcs: string(),
 });
 
-export type MoveEvent = Infer<typeof MoveEventStruct>;
+export type MoveEvent = Infer<typeof MoveEvent>;
 
-export const PublishEventStruct = object({
+export const PublishEvent = object({
   sender: SuiAddress,
   packageId: ObjectId,
 });
 
-export type PublishEvent = Infer<typeof PublishEventStruct>;
+export type PublishEvent = Infer<typeof PublishEvent>;
 
-export const CoinBalanceChangeEventStruct = object({
+export const CoinBalanceChangeEvent = object({
   packageId: ObjectId,
   transactionModule: string(),
   sender: SuiAddress,
   owner: ObjectOwner,
-  changeType: BalanceChangeTypeStruct,
+  changeType: BalanceChangeType,
   coinType: string(),
   coinObjectId: ObjectId,
   version: SequenceNumber,
   amount: number(),
 });
 
-export type CoinBalanceChangeEvent = Infer<typeof CoinBalanceChangeEventStruct>;
+export type CoinBalanceChangeEvent = Infer<typeof CoinBalanceChangeEvent>;
 
-export const TransferObjectEventStruct = object({
+export const TransferObjectEvent = object({
   packageId: ObjectId,
   transactionModule: string(),
   sender: SuiAddress,
@@ -71,9 +71,9 @@ export const TransferObjectEventStruct = object({
   version: SequenceNumber,
 });
 
-export type TransferObjectEvent = Infer<typeof TransferObjectEventStruct>;
+export type TransferObjectEvent = Infer<typeof TransferObjectEvent>;
 
-export const MutateObjectEventStruct = object({
+export const MutateObjectEvent = object({
   packageId: ObjectId,
   transactionModule: string(),
   sender: SuiAddress,
@@ -82,9 +82,9 @@ export const MutateObjectEventStruct = object({
   version: SequenceNumber,
 });
 
-export type MutateObjectEvent = Infer<typeof MutateObjectEventStruct>;
+export type MutateObjectEvent = Infer<typeof MutateObjectEvent>;
 
-export const DeleteObjectEventStruct = object({
+export const DeleteObjectEvent = object({
   packageId: ObjectId,
   transactionModule: string(),
   sender: SuiAddress,
@@ -92,9 +92,9 @@ export const DeleteObjectEventStruct = object({
   version: SequenceNumber,
 });
 
-export type DeleteObjectEvent = Infer<typeof DeleteObjectEventStruct>;
+export type DeleteObjectEvent = Infer<typeof DeleteObjectEvent>;
 
-export const NewObjectEventStruct = object({
+export const NewObjectEvent = object({
   packageId: ObjectId,
   transactionModule: string(),
   sender: SuiAddress,
@@ -104,18 +104,25 @@ export const NewObjectEventStruct = object({
   version: SequenceNumber,
 });
 
-export type NewObjectEvent = Infer<typeof NewObjectEventStruct>;
+export type NewObjectEvent = Infer<typeof NewObjectEvent>;
+
+// TODO: Figure out if these actually can be bigint:
+export const EpochChangeEvent = union([bigint(), number()]);
+export type EpochChangeEvent = Infer<typeof EpochChangeEvent>;
+
+export const CheckpointEvent = union([bigint(), number()]);
+export type CheckpointEvent = Infer<typeof EpochChangeEvent>;
 
 export const SuiEvent = union([
-  object({ moveEvent: MoveEventStruct }),
-  object({ publish: PublishEventStruct }),
-  object({ coinBalanceChange: CoinBalanceChangeEventStruct }),
-  object({ transferObject: TransferObjectEventStruct }),
-  object({ mutateObject: MutateObjectEventStruct }),
-  object({ deleteObject: DeleteObjectEventStruct }),
-  object({ newObject: NewObjectEventStruct }),
-  object({ epochChange: bigint() }),
-  object({ checkpoint: bigint() }),
+  object({ moveEvent: MoveEvent }),
+  object({ publish: PublishEvent }),
+  object({ coinBalanceChange: CoinBalanceChangeEvent }),
+  object({ transferObject: TransferObjectEvent }),
+  object({ mutateObject: MutateObjectEvent }),
+  object({ deleteObject: DeleteObjectEvent }),
+  object({ newObject: NewObjectEvent }),
+  object({ epochChange: EpochChangeEvent }),
+  object({ checkpoint: CheckpointEvent }),
 ]);
 export type SuiEvent = Infer<typeof SuiEvent>;
 
