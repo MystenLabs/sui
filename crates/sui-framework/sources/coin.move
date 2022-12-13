@@ -292,12 +292,19 @@ module sui::coin {
         }
     }
 
-    spec mint {
+    spec schema MintBalance<T> {
+        cap: TreasuryCap<T>;
+        value: u64;
+
         let before_supply = cap.total_supply.value;
         let post after_supply = cap.total_supply.value;
         ensures after_supply == before_supply + value;
 
         aborts_if before_supply + value >= MAX_U64;
+    }
+
+    spec mint {
+        include MintBalance<T>;
         aborts_if ctx.ids_created + 1 > MAX_U64;
     }
 
@@ -311,11 +318,7 @@ module sui::coin {
     }
 
     spec mint_balance {
-        let before_supply = cap.total_supply.value;
-        let post after_supply = cap.total_supply.value;
-        ensures after_supply == before_supply + value;
-
-        aborts_if before_supply + value >= MAX_U64;
+        include MintBalance<T>;
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
@@ -326,12 +329,19 @@ module sui::coin {
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
-    spec burn {
+    spec schema Burn<T> {
+        cap: TreasuryCap<T>;
+        c: Coin<T>;
+
         let before_supply = cap.total_supply.value;
         let post after_supply = cap.total_supply.value;
         ensures after_supply == before_supply - c.balance.value;
 
         aborts_if before_supply < c.balance.value;
+    }
+
+    spec burn {
+        include Burn<T>;
     }
 
     // === Entrypoints ===
@@ -344,15 +354,12 @@ module sui::coin {
     }
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
-    public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
-        burn(c, coin);
+    public entry fun burn_<T>(cap: &mut TreasuryCap<T>, c: Coin<T>) {
+        burn(cap, c);
     }
 
     spec burn_ {
-        let before_supply = c.total_supply.value;
-        let post after_supply = c.total_supply.value;
-        ensures after_supply == before_supply - coin.balance.value;
-        aborts_if before_supply < coin.balance.value;
+        include Burn<T>;
     }
 
     // === Update coin metadata ===
