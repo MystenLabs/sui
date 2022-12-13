@@ -8,8 +8,8 @@ use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_symbol_pool::Symbol;
+use sui_sdk::apis::ReadApi;
 use sui_sdk::error::RpcError;
-use sui_sdk::ReadApi;
 
 use sui_sdk::rpc_types::{SuiRawData, SuiRawMoveObject, SuiRawMovePackage};
 use sui_types::{base_types::ObjectID, error::SuiError};
