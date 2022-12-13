@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiEvent } from './events';
-import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 import {
   is,
   array,
@@ -14,13 +12,15 @@ import {
   string,
   union,
 } from 'superstruct';
+import { SuiEvent } from './events';
+import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 import {
   ObjectId,
   ObjectOwner,
   SuiAddress,
   SuiJsonValue,
   TransactionDigest,
-} from './shared';
+} from './common';
 
 // TODO: support u64
 export const EpochId = number();

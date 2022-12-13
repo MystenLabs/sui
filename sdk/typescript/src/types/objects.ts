@@ -14,7 +14,7 @@ import {
   string,
   union,
 } from 'superstruct';
-import { ObjectId, ObjectOwner, TransactionDigest } from './shared';
+import { ObjectId, ObjectOwner, TransactionDigest } from './common';
 
 export const ObjectType = union([literal('moveObject'), literal('package')]);
 export type ObjectType = Infer<typeof ObjectType>;

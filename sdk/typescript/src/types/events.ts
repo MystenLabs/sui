@@ -18,7 +18,7 @@ import {
   TransactionDigest,
   SuiJsonValue,
   SequenceNumber,
-} from './shared';
+} from './common';
 
 export const BalanceChangeTypeStruct = union([
   literal('Gas'),

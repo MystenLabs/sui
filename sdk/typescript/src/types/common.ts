@@ -1,6 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+  Infer,
+  literal,
+  number,
+  object,
+  string,
+  union,
+  unknown,
+} from 'superstruct';
 import { Base58DataBuffer } from '../serialization/base58';
 import { bcs, TransactionData } from './sui-bcs';
 import {
@@ -13,7 +22,38 @@ import { sha256Hash } from '../cryptography/hash';
 import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
 import { Base64DataBuffer } from '../serialization/base64';
-import { ObjectId, SuiAddress, TransactionDigest } from './shared';
+
+export const TransactionDigest = string();
+export type TransactionDigest = Infer<typeof TransactionDigest>;
+
+export const ObjectId = string();
+export type ObjectId = Infer<typeof ObjectId>;
+
+export const SuiAddress = string();
+export type SuiAddress = Infer<typeof SuiAddress>;
+
+export const SequenceNumber = number();
+export type SequenceNumber = Infer<typeof SequenceNumber>;
+
+export const ObjectOwner = union([
+  object({
+    AddressOwner: SuiAddress,
+  }),
+  object({
+    ObjectOwner: SuiAddress,
+  }),
+  object({
+    Shared: object({
+      initial_shared_version: number(),
+    }),
+  }),
+  literal('Immutable'),
+]);
+export type ObjectOwner = Infer<typeof ObjectOwner>;
+
+// TODO: Figure out if we actually should have validaton on this:
+export const SuiJsonValue = unknown();
+export type SuiJsonValue = boolean | number | string | Array<SuiJsonValue>;
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
