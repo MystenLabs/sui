@@ -10,11 +10,11 @@ use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
-use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
@@ -30,7 +30,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, instrument, warn, Instrument};
+use tracing::{debug, error, instrument, warn};
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -189,7 +189,7 @@ where
             });
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            Self::execute_impl(validator_state, tx_cert, effects_cert, metrics),
+            validator_state.execute_certificate_with_effects(tx_cert, effects_cert),
         )
         .await
         {
@@ -269,79 +269,6 @@ where
         self.quorum_driver_handler.subscribe()
     }
 
-    /// Execute a finalized transaction locally.
-    /// Firstly it tries to execute it optimistically. If there are missing
-    /// dependencies, it then leverages Node Sync to process the parents.
-    ///
-    /// TODO: replace this function with AuthorityState::execute_certificate_with_effects(),
-    /// after checkpoint v2 becomes the default for fullnode synchronization.
-    async fn execute_impl(
-        state: &Arc<AuthorityState>,
-        tx_cert: &VerifiedCertificate,
-        effects_cert: &CertifiedTransactionEffects,
-        metrics: &TransactionOrchestratorMetrics,
-    ) -> SuiResult {
-        let tx_digest = tx_cert.digest();
-        if tx_cert.contains_shared_object() {
-            state
-                .database
-                .acquire_shared_locks_from_effects(tx_cert, effects_cert.data())
-                .await?;
-        }
-        let res = state.execute_certificate_internal(tx_cert).await;
-        match res {
-            Ok(info) => {
-                if let Some(effects) = info.signed_effects {
-                    if effects.digest() != effects_cert.digest() {
-                        return Err(SuiError::from(
-                            "Tx from orchestrator failed to be executed. Effects mismatch!",
-                        ));
-                    }
-                } else {
-                    return Err(SuiError::from(
-                        "Tx from orchestrator failed to be executed. No effect returned!",
-                    ));
-                }
-                debug!(
-                    ?tx_digest,
-                    "Orchestrator optimistically executed transaction successfully."
-                );
-                metrics.tx_directly_executed.inc();
-                Ok(())
-            }
-            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
-                debug!(?tx_digest, "Orchestrator failed to execute transaction optimistically due to missing parents: {:?}", e);
-                // Now we need to wait for the transaction and its parents to be gossiped and executed from data sync
-                if let Err(err) = state
-                    .transaction_manager
-                    .enqueue(vec![tx_cert.clone()])
-                    .await
-                {
-                    warn!(
-                        ?tx_digest,
-                        "Failed to enqueue to TransactionManager in TransactionOrchestrator, {:?}",
-                        err
-                    );
-                }
-                let _effects = state
-                    .database
-                    .notify_read_effects(vec![*tx_digest])
-                    .instrument(tracing::debug_span!(
-                        "transaction_orchestrator_execute_tx_via_notify_read"
-                    ))
-                    .in_monitored_scope("TransactionOrchestratorLocalExecutionNotifyRead")
-                    .await?;
-                metrics.tx_executed_via_transaction_manager.inc();
-                debug!(
-                    ?tx_digest,
-                    "Orchestrator executed transaction via TransactionManager."
-                );
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     fn update_metrics(
         &'_ self,
         request_type: &ExecuteTransactionRequestType,
@@ -410,9 +337,6 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
     local_execution_failure: GenericCounter<AtomicU64>,
-
-    tx_directly_executed: GenericCounter<AtomicU64>,
-    tx_executed_via_transaction_manager: GenericCounter<AtomicU64>,
 }
 
 impl TransactionOrchestratorMetrics {
@@ -498,18 +422,6 @@ impl TransactionOrchestratorMetrics {
             local_execution_failure: register_int_counter_with_registry!(
                 "tx_orchestrator_local_execution_failure",
                 "Total number of failed local execution txns Transaction Orchestrator handles",
-                registry,
-            )
-            .unwrap(),
-            tx_directly_executed: register_int_counter_with_registry!(
-                "tx_orchestrator_tx_directly_executed",
-                "Total number of txns Transaction Orchestrator directly executed",
-                registry,
-            )
-            .unwrap(),
-            tx_executed_via_transaction_manager: register_int_counter_with_registry!(
-                "tx_orchestrator_tx_executed_via_transaction_manager",
-                "Total number of txns Transaction Orchestrator executed via transaction manager",
                 registry,
             )
             .unwrap(),
