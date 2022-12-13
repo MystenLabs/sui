@@ -50,8 +50,8 @@ function install_pkg {
 
 function install_dotnet {
   echo "Installing .Net"
-  mkdir -p "${DOTNET_INSTALL_DIR}" || true
-  if [[ $("${DOTNET_INSTALL_DIR}/dotnet" --list-sdks | grep -c "^${DOTNET_VERSION}" || true) == "0" ]]; then
+  mkdir -p "${DOTNET_INSTALL_DIR}dotnet/" || true
+  if [[ $("${DOTNET_INSTALL_DIR}dotnet" --list-sdks | grep -c "^${DOTNET_VERSION}" || true) == "0" ]]; then
     if [[ "$(uname)" == "Linux" ]]; then
       # Install various prerequisites for .dotnet. There are known bugs
       # in the dotnet installer to warn even if they are present. We try
@@ -109,6 +109,7 @@ function install_boogie {
 
 function install_z3 {
   echo "Installing Z3"
+  mkdir -p "${INSTALL_DIR}" || true
   if command -v /usr/local/bin/z3 &>/dev/null; then
     echo "z3 already exists at /usr/local/bin/z3"
     echo "but this install will go to ${INSTALL_DIR}/z3."
@@ -141,6 +142,7 @@ function install_z3 {
 
 function install_cvc5 {
   echo "Installing cvc5"
+  mkdir -p "${INSTALL_DIR}" || true
   if command -v /usr/local/bin/cvc5 &>/dev/null; then
     echo "cvc5 already exists at /usr/local/bin/cvc5"
     echo "but this install will go to $${INSTALL_DIR}cvc5."
@@ -227,6 +229,7 @@ if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 fi
 
 export DOTNET_INSTALL_DIR="${HOME}/.dotnet/"
+export INSTALL_DIR="$HOME/bin/"
 install_pkg curl "$PACKAGE_MANAGER"
 install_pkg unzip "$PACKAGE_MANAGER"
 install_z3
