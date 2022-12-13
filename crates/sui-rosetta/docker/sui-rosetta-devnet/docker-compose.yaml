@@ -1,21 +1,33 @@
 ---
 version: "3.9"
 services:
-  rosetta-online:
+  sui-full-node:
     image: mysten/sui-rosetta-devnet
     ports:
-      - "9002:9002"
       - "9000:9000"
     expose:
-      - "9002"
       - "9000"
     working_dir: /sui/devnet
     command:
       - /bin/bash
       - -c
       - |
+        /usr/local/bin/sui-node --config-path fullnode.yaml
+    stdin_open: true
+    tty: true
+  rosetta-online:
+    image: mysten/sui-rosetta-devnet
+    ports:
+      - "9002:9002"
+    expose:
+      - "9002"
+    working_dir: /sui/devnet
+    command:
+      - /bin/bash
+      - -c
+      - |
         /usr/local/bin/sui-rosetta generate-rosetta-cli-config --env devnet &
-        /usr/local/bin/sui-rosetta start-online-server --env devnet --node-config fullnode.yaml
+        /usr/local/bin/sui-rosetta start-online-remote-server --env devnet --full-node-url http://sui-full-node:9000
     stdin_open: true
     tty: true
   rosetta-offline:

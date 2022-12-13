@@ -55,7 +55,7 @@ pub async fn payloads(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let metadata = request.metadata.ok_or_else(|| Error::MissingMetadata)?;
+    let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
 
     let data = Operation::create_data(request.operations, metadata).await?;
     let address = data.signer();

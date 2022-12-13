@@ -444,18 +444,10 @@ async fn test_transaction(
         data
     );
 
-    let events = effect
-        .events
-        .clone()
-        .into_iter()
-        .map(|event| event.try_into())
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
-
     let ops = Operation::from_data_and_events(
         &data.try_into().unwrap(),
         &SuiExecutionStatus::Success,
-        &events,
+        &effect.events,
     )
     .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();

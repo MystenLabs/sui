@@ -80,7 +80,7 @@ impl BlockProvider for PseudoBlockProvider {
             .iter()
             .find(|b| b.block.block_identifier.index == index)
             .cloned()
-            .ok_or_else(|| Error::BlockNotFound {
+            .ok_or(Error::BlockNotFound {
                 index: Some(index),
                 hash: None,
             })
@@ -93,7 +93,7 @@ impl BlockProvider for PseudoBlockProvider {
             .iter()
             .find(|b| b.block.block_identifier.hash == hash)
             .cloned()
-            .ok_or_else(|| Error::BlockNotFound {
+            .ok_or(Error::BlockNotFound {
                 index: None,
                 hash: Some(hash),
             })

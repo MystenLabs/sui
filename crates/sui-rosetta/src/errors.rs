@@ -28,6 +28,7 @@ use thiserror::Error;
     derive(Display, EnumIter),
     strum(serialize_all = "kebab-case")
 )]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     #[error("Unsupported blockchain: {0}")]
     UnsupportedBlockchain(String),
@@ -74,12 +75,12 @@ impl Serialize for ErrorType {
     where
         S: Serializer,
     {
-        self.to_json().serialize(serializer)
+        self.json().serialize(serializer)
     }
 }
 
 impl ErrorType {
-    fn to_json(&self) -> Value {
+    fn json(&self) -> Value {
         let retriable = false;
         // Safe to unwrap
         let error_code = ErrorType::iter().position(|e| &e == self).unwrap();
@@ -99,7 +100,7 @@ impl Serialize for Error {
         S: Serializer,
     {
         let type_: ErrorType = self.into();
-        let mut json = type_.to_json();
+        let mut json = type_.json();
         // Safe to unwrap, we know ErrorType must be an object.
         let error = json.as_object_mut().unwrap();
         error.insert("details".into(), json!({ "error": format!("{self}") }));
