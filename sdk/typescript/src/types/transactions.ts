@@ -11,6 +11,8 @@ import {
   optional,
   string,
   union,
+  unknown,
+  boolean,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
@@ -116,6 +118,7 @@ export const GenericAuthoritySignature = union([
 export const AuthorityQuorumSignInfo = object({
   epoch: EpochId,
   signature: GenericAuthoritySignature,
+  signers_map: array(number()),
 });
 export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 
@@ -216,6 +219,8 @@ export type SuiTransactionAuthSignersResponse = Infer<
 
 // TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207
 export const SuiCertifiedTransactionEffects = object({
+  transactionEffectsDigest: string(),
+  authSignInfo: AuthorityQuorumSignInfo,
   effects: TransactionEffects,
 });
 
@@ -230,6 +235,7 @@ export const SuiExecuteTransactionResponse = union([
     EffectsCert: object({
       certificate: CertifiedTransaction,
       effects: SuiCertifiedTransactionEffects,
+      confirmed_local_execution: boolean(),
     }),
   }),
 ]);
@@ -270,7 +276,8 @@ export type AuthorityName = string;
 export const TransactionBytes = object({
   txBytes: string(),
   gas: SuiObjectRef,
-  // TODO: Add input_objects field
+  // TODO: Type input_objects field
+  inputObjects: unknown(),
 });
 
 export const SuiParsedMergeCoinResponse = object({
