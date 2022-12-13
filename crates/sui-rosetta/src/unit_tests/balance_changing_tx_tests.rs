@@ -23,9 +23,9 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::intent::Intent;
 use sui_types::messages::{
-    CallArg, ExecuteTransactionRequestType, ExecutionStatus, InputObjectKind, MoveCall,
-    MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, Transaction,
-    TransactionData, TransactionKind, TransferSui,
+    CallArg, ExecuteTransactionRequestType, InputObjectKind, MoveCall, MoveModulePublish,
+    ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, Transaction, TransactionData,
+    TransactionKind, TransferSui,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -452,7 +452,12 @@ async fn test_transaction(
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
 
-    let ops = Operation::from_data_and_events(&data, &ExecutionStatus::Success, &events).unwrap();
+    let ops = Operation::from_data_and_events(
+        &data.try_into().unwrap(),
+        &SuiExecutionStatus::Success,
+        &events,
+    )
+    .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();
 
     // get actual balance changed after transaction

@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use fastcrypto::encoding::{Base64, Hex};
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
@@ -13,18 +14,17 @@ use serde_json::Value;
 use serde_with::serde_as;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
-
-use fastcrypto::encoding::{Base64, Hex};
+use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::{
     ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
+use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::messages::ExecutionStatus;
 use sui_types::sui_serde::Readable;
 
-use crate::errors::Error;
+use crate::errors::{Error, ErrorType};
 use crate::operations::Operation;
-use crate::{ErrorType, UnsupportedBlockchain, UnsupportedNetwork, SUI};
+use crate::SUI;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct NetworkIdentifier {
@@ -50,10 +50,12 @@ impl SuiEnv {
         network_identifier: &NetworkIdentifier,
     ) -> Result<(), Error> {
         if &network_identifier.blockchain != "sui" {
-            return Err(Error::new(UnsupportedBlockchain));
+            return Err(Error::UnsupportedBlockchain(
+                network_identifier.blockchain.clone(),
+            ));
         }
         if &network_identifier.network != self {
-            return Err(Error::new(UnsupportedNetwork));
+            return Err(Error::UnsupportedNetwork(network_identifier.network));
         }
         Ok(())
     }
@@ -107,14 +109,9 @@ pub struct BlockHash(
     #[serde_as(as = "Readable<Base64, _>")] pub(crate) [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
-impl TryFrom<&[u8]> for BlockHash {
-    type Error = Error;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Error> {
-        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
-            .try_into()
-            .map_err(|e| Error::new_with_cause(ErrorType::InvalidInput, e))?;
-        Ok(Self(arr))
+impl From<TransactionDigest> for BlockHash {
+    fn from(digest: TransactionDigest) -> Self {
+        Self(digest.into_bytes())
     }
 }
 
@@ -264,6 +261,23 @@ pub struct Coin {
     pub amount: Amount,
 }
 
+impl From<sui_sdk::rpc_types::Coin> for Coin {
+    fn from(coin: sui_sdk::rpc_types::Coin) -> Self {
+        Self {
+            coin_identifier: CoinIdentifier {
+                identifier: CoinID {
+                    id: coin.coin_object_id,
+                    version: coin.version,
+                },
+            },
+            amount: Amount {
+                value: SignedValue::from(coin.balance),
+                currency: SUI.clone(),
+            },
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CoinIdentifier {
     pub identifier: CoinID,
@@ -348,7 +362,7 @@ pub struct ConstructionDeriveRequest {
     pub public_key: PublicKey,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct PublicKey {
     pub hex_bytes: Hex,
     pub curve_type: CurveType,
@@ -358,15 +372,13 @@ impl TryInto<SuiAddress> for PublicKey {
     type Error = Error;
 
     fn try_into(self) -> Result<SuiAddress, Self::Error> {
-        let key_bytes = self.hex_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?;
-        let pub_key =
-            sui_types::crypto::PublicKey::try_from_bytes(self.curve_type.into(), &key_bytes)
-                .map_err(|e| Error::new_with_cause(ErrorType::ParsingError, e))?;
+        let key_bytes = self.hex_bytes.to_vec()?;
+        let pub_key = SuiPublicKey::try_from_bytes(self.curve_type.into(), &key_bytes)?;
         Ok((&pub_key).into())
     }
 }
 
-#[derive(Deserialize, Serialize, Copy, Clone)]
+#[derive(Deserialize, Serialize, Copy, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum CurveType {
     Secp256k1,
@@ -552,6 +564,7 @@ pub struct ConstructionPreprocessResponse {
 #[derive(Serialize, Deserialize)]
 pub struct MetadataOptions {
     pub sender: SuiAddress,
+    pub amount: u128,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -682,7 +695,7 @@ pub struct Version {
 pub struct Allow {
     pub operation_statuses: Vec<Value>,
     pub operation_types: Vec<OperationType>,
-    pub errors: Vec<Error>,
+    pub errors: Vec<ErrorType>,
     pub historical_balance_lookup: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_start_index: Option<u64>,
@@ -702,11 +715,11 @@ pub enum OperationStatus {
     Failure,
 }
 
-impl From<&ExecutionStatus> for OperationStatus {
-    fn from(es: &ExecutionStatus) -> Self {
+impl From<&SuiExecutionStatus> for OperationStatus {
+    fn from(es: &SuiExecutionStatus) -> Self {
         match es {
-            ExecutionStatus::Success => OperationStatus::Success,
-            ExecutionStatus::Failure { .. } => OperationStatus::Failure,
+            SuiExecutionStatus::Success => OperationStatus::Success,
+            SuiExecutionStatus::Failure { .. } => OperationStatus::Failure,
         }
     }
 }

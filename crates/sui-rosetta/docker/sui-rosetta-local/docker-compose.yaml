@@ -1,22 +1,30 @@
 ---
 version: "3.9"
 services:
+  sui-network:
+    image: mysten/sui-rosetta-local
+    ports:
+      - "9000:9000"
+    expose:
+      - "9000"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /usr/local/bin/sui start
   rosetta-online:
     image: mysten/sui-rosetta-local
     ports:
       - "9002:9002"
-      - "9000:9000"
     expose:
       - "9002"
-      - "9000"
     working_dir: /sui/localnet
     command:
       - /bin/bash
       - -c
       - |
         /usr/local/bin/sui-rosetta generate-rosetta-cli-config &
-        /usr/local/bin/sui start --no-full-node &> /sui/sui.log &
-        /usr/local/bin/sui-rosetta start-online-server
+        /usr/local/bin/sui-rosetta start-online-remote-server --full-node-url http://sui-network:9000 --genesis-path ~/.sui/sui_config/genesis.blob
     stdin_open: true
     tty: true
   rosetta-offline:
@@ -30,5 +38,3 @@ services:
       - -c
       - |
         /usr/local/bin/sui-rosetta start-offline-server
-    stdin_open: true
-    tty: true
