@@ -207,25 +207,18 @@ export const TransactionEffects = object({
 });
 export type TransactionEffects = Infer<typeof TransactionEffects>;
 
-export type SuiTransactionAuthSignersResponse = {
-  signers: AuthorityName[];
-};
+export const SuiTransactionAuthSignersResponse = object({
+  signers: array(string()),
+});
+export type SuiTransactionAuthSignersResponse = Infer<
+  typeof SuiTransactionAuthSignersResponse
+>;
 
 // TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207
 export const SuiCertifiedTransactionEffects = object({
   effects: TransactionEffects,
 });
 
-<<<<<<< HEAD
-export type SuiExecuteTransactionResponse =
-  | { TxCert: { certificate: CertifiedTransaction } }
-  | {
-      EffectsCert: {
-        certificate: CertifiedTransaction;
-        effects: SuiCertifiedTransactionEffects;
-      };
-    };
-=======
 export const SuiExecuteTransactionResponse = union([
   object({
     ImmediateReturn: object({
@@ -243,7 +236,6 @@ export const SuiExecuteTransactionResponse = union([
 export type SuiExecuteTransactionResponse = Infer<
   typeof SuiExecuteTransactionResponse
 >;
->>>>>>> 213c2a8ad (transactions)
 
 export type GatewayTxSeqNumber = number;
 

@@ -15,9 +15,7 @@ import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
 
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
-import { isSuiMoveObject } from './index.guard';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
-import { SignerWithProvider } from '../signers/signer-with-provider';
 import { Infer, is, literal, number, object, string, union } from 'superstruct';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
