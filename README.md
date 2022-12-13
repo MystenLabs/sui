@@ -64,6 +64,7 @@ flowchart LR
     AC2 <==>|Network TCP| Authority2
 ```
 
+
 ## Overview
 
 Sui is a smart contract platform maintained by a permissionless set of authorities that play a role similar to validators or miners in other blockchain systems.
