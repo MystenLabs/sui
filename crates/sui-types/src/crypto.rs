@@ -1309,6 +1309,8 @@ mod bcs_signable {
     impl BcsSignable for crate::messages::SenderSignedData {}
     impl BcsSignable for crate::object::Object {}
 
+    impl BcsSignable for crate::accumulator::Accumulator {}
+
     impl BcsSignable for super::bcs_signable_test::Foo {}
     #[cfg(test)]
     impl BcsSignable for super::bcs_signable_test::Bar {}

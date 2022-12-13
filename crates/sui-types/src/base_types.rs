@@ -23,6 +23,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
+use crate::accumulator::IntoPoint;
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
@@ -33,7 +34,6 @@ use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
-use crate::waypoint::IntoPoint;
 use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 
@@ -291,12 +291,6 @@ pub struct TransactionDigest(
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
-impl IntoPoint for TransactionDigest {
-    fn into_point(&self) -> RistrettoPoint {
-        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
-    }
-}
-
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -305,6 +299,12 @@ pub struct ObjectDigest(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     pub [u8; OBJECT_DIGEST_LENGTH],
 ); // We use SHA3-256 hence 32 bytes here
+
+impl IntoPoint for ObjectDigest {
+    fn into_point(&self) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
+    }
+}
 
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -345,15 +345,6 @@ impl ExecutionDigests {
             transaction: TransactionDigest::random(),
             effects: TransactionEffectsDigest::random(),
         }
-    }
-}
-
-impl IntoPoint for ExecutionDigests {
-    fn into_point(&self) -> RistrettoPoint {
-        let mut data = [0; 64];
-        data[0..32].clone_from_slice(&self.transaction.0);
-        data[32..64].clone_from_slice(&self.effects.0);
-        RistrettoPoint::from_uniform_bytes(&data)
     }
 }
 
