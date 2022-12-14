@@ -5,7 +5,7 @@
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
+use config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
@@ -13,6 +13,8 @@ use futures::future::{join_all, try_join_all};
 use narwhal_node as node;
 use node::{restarter::NodeRestarter, Node};
 use prometheus::Registry;
+use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -23,6 +25,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
+use tracing::info;
 use types::{ConsensusOutput, Transaction};
 use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 use worker::TrivialTransactionValidator;
@@ -75,16 +78,12 @@ impl SimpleExecutionState {
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
-        let mut i = 0;
-        for (_, batches) in consensus_output.batches {
-            for batch in batches {
-                for transaction in batch.transactions.into_iter() {
-                    i += 1;
-                    let mut change_epoch = false;
-                    if i % 3 == 0 {
-                        change_epoch = true
+        if consensus_output.sub_dag.sub_dag_index % 3 == 0 {
+            for (_, batches) in consensus_output.batches {
+                for batch in batches {
+                    for transaction in batch.transactions.into_iter() {
+                        self.process_transaction(transaction, true).await;
                     }
-                    self.process_transaction(transaction, change_epoch).await;
                 }
             }
         }
@@ -97,36 +96,44 @@ impl ExecutionState for SimpleExecutionState {
 
 impl SimpleExecutionState {
     async fn process_transaction(&self, transaction: Transaction, change_epoch: bool) {
-        let _transaction: u64 = bincode::deserialize(&transaction).unwrap();
+        let transaction: u64 = bincode::deserialize(&transaction).unwrap();
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
-        if change_epoch {
+        if transaction >= epoch && change_epoch {
             epoch += 1;
-            {
-                let mut guard = self.committee.lock().unwrap();
-                guard.epoch = epoch;
-            };
 
-            let worker_keypairs = self.worker_keypairs.iter().map(|kp| kp.copy());
-            let worker_ids = 0..self.worker_keypairs.len() as u32;
-            let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs).collect();
-
-            let new_committee = self.committee.lock().unwrap().clone();
-
-            self.tx_reconfigure
-                .send((
-                    self.keypair.copy(),
-                    self.network_keypair.copy(),
-                    new_committee,
-                    worker_ids_and_keypairs,
-                    self.worker_cache.clone(),
-                ))
-                .await
-                .unwrap();
+            self.send_new_epoch_reconfigure(epoch).await;
         }
 
         let _ = self.tx_output.send(epoch).await;
+    }
+
+    async fn send_new_epoch_reconfigure(&self, epoch: Epoch) {
+        {
+            let mut guard = self.committee.lock().unwrap();
+            guard.epoch = epoch;
+        }
+
+        let worker_ids_and_keypairs = self
+            .worker_keypairs
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (i as WorkerId, k.copy()))
+            .collect();
+
+        let new_committee = self.committee.lock().unwrap().clone();
+
+        self.tx_reconfigure
+            .send((
+                self.keypair.copy(),
+                self.network_keypair.copy(),
+                new_committee,
+                worker_ids_and_keypairs,
+                self.worker_cache.clone(),
+            ))
+            .await
+            .unwrap();
     }
 }
 
@@ -150,7 +157,7 @@ async fn run_client(
     };
 
     // Repeatedly send transactions.
-    let mut interval = interval(Duration::from_millis(50));
+    let mut interval = interval(Duration::from_millis(100));
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     tokio::pin!(interval);
 
@@ -179,12 +186,20 @@ async fn run_client(
 #[tokio::test]
 async fn restart() {
     telemetry_subscribers::init_for_testing();
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+
+    let fixture = CommitteeFixture::builder()
+        .number_of_workers(NonZeroUsize::new(1).unwrap())
+        .randomize_ports(true)
+        .build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
 
     // Spawn the nodes.
     let mut rx_nodes = Vec::new();
+    let latest_observed_epoch = Arc::new(AtomicU64::new(0));
+
+    let mut validators_execution_states = Vec::new();
+
     for a in fixture.authorities() {
         let (tx_output, rx_output) = channel(10);
         let (tx_node_reconfigure, rx_node_reconfigure) = channel(10);
@@ -199,15 +214,21 @@ async fn restart() {
             tx_node_reconfigure,
         ));
 
-        let worker_keypairs = a.worker_keypairs();
-        let worker_ids = 0..worker_keypairs.len() as u32;
-        let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs.into_iter()).collect();
+        validators_execution_states.push(execution_state.clone());
+
+        let worker_ids_and_keypairs = a
+            .worker_keypairs()
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (i as WorkerId, k.copy()))
+            .collect();
 
         let committee = committee.clone();
         let worker_cache = worker_cache.clone();
 
         let parameters = Parameters {
             batch_size: 200,
+            max_header_delay: Duration::from_secs(1),
             max_header_num_of_batches: 1,
             ..Parameters::default()
         };
@@ -253,22 +274,62 @@ async fn restart() {
     // Listen to the outputs.
     let mut handles = Vec::new();
     for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
+        let global_epoch = latest_observed_epoch.clone();
+        let execution_state = validators_execution_states.remove(0);
+
         handles.push(tokio::spawn(async move {
             let mut current_epoch = 0u64;
+            static MAX_EPOCH: u64 = 10;
 
-            while let Some(epoch) = rx.recv().await {
-                println!("Received epoch {}", epoch);
-                if epoch == 5 {
-                    return;
-                }
-                if epoch > current_epoch {
-                    current_epoch = epoch;
-                    tx.send(current_epoch).await.unwrap();
+            // Repeatedly send transactions.
+            let mut interval = interval(Duration::from_secs(3));
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+            loop {
+                tokio::select! {
+                    result = rx.recv() => {
+                        // channel closed, we won't be able to receive any further epoch updates so
+                        // we need to exit the loop
+                        if result.is_none() {
+                            break;
+                        }
+
+                        let epoch = result.unwrap();
+
+                        info!("Received epoch {}", epoch);
+
+                        // update the latest observed global epoch - but only swap
+                        // if it's greater than the previous value
+                        let _ = global_epoch.compare_exchange(epoch-1, epoch, Ordering::SeqCst, Ordering::SeqCst);
+
+                        if epoch == MAX_EPOCH {
+                            return;
+                        }
+                        if epoch > current_epoch {
+                            current_epoch = epoch;
+                            tx.send(current_epoch).await.unwrap();
+                        }
+                    },
+                    _ = interval.tick() => {
+                        // detect whether all the other nodes managed to advance in epochs
+                        // and our node did fall behind - in this case we want to advance
+                        // our node
+                        let global_epoch = global_epoch.load(Ordering::SeqCst);
+
+                        if global_epoch > current_epoch {
+                            info!("Detected greater epoch compared to our current {global_epoch} > {current_epoch} : will update epoch");
+
+                            current_epoch = global_epoch;
+
+                            // reconfigure - send details
+                            execution_state.send_new_epoch_reconfigure(current_epoch).await;
+                        }
+                    }
                 }
             }
 
-            if current_epoch < 5 {
-                panic!("Node never reached epoch 5, something broke our connection");
+            if current_epoch < MAX_EPOCH {
+                panic!("Node never reached epoch {MAX_EPOCH}, something broke our connection");
             }
         }));
     }
@@ -300,6 +361,7 @@ async fn epoch_change() {
 
     // Spawn the nodes.
     let mut rx_nodes = Vec::new();
+
     for a in fixture.authorities() {
         let (tx_output, rx_output) = channel(10);
         let (tx_node_reconfigure, mut rx_node_reconfigure) = channel(10);
