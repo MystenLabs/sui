@@ -45,7 +45,7 @@ use tracing::info;
 use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, RegistryService};
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
@@ -81,7 +81,7 @@ pub struct SuiNode {
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
-    _prometheus_registry: Registry,
+    registry_service: RegistryService,
 
     _p2p_network: anemo::Network,
     _discovery: discovery::Handle,
@@ -98,10 +98,11 @@ pub struct SuiNode {
 }
 
 impl SuiNode {
-    pub async fn start(config: &NodeConfig, prometheus_registry: Registry) -> Result<SuiNode> {
+    pub async fn start(config: &NodeConfig, registry_service: RegistryService) -> Result<SuiNode> {
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
+        let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),
             "Initializing sui-node listening on {}", config.network_address
@@ -248,7 +249,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_store.clone(),
             &state_sync_handle,
-            &prometheus_registry,
+            registry_service.clone(),
         )
         .await?;
 
@@ -271,7 +272,7 @@ impl SuiNode {
             state,
             active: active_authority,
             transaction_orchestrator,
-            _prometheus_registry: prometheus_registry,
+            registry_service,
             _p2p_network: p2p_network,
             _discovery: discovery_handle,
             _state_sync: state_sync_handle,
@@ -375,12 +376,12 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: &state_sync::Handle,
-        prometheus_registry: &Registry,
+        registry_service: RegistryService,
     ) -> Result<Option<ValidatorServerInfo>> {
         if state.is_fullnode() {
             return Ok(None);
         }
-
+        let prometheus_registry = registry_service.default_registry();
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
         let validator_service = ValidatorService::new(
@@ -388,7 +389,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_store,
             state_sync_handle.clone(),
-            prometheus_registry.clone(),
+            registry_service,
             rx_reconfigure_consensus,
         )
         .await?;
@@ -397,7 +398,7 @@ impl SuiNode {
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
         server_conf.load_shed = config.grpc_load_shed;
         let mut server_builder =
-            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry));
+            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(&prometheus_registry));
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 
@@ -487,7 +488,7 @@ impl SuiNode {
                         self.state.clone(),
                         self.checkpoint_store.clone(),
                         &self._state_sync,
-                        &self._prometheus_registry,
+                        self.registry_service.clone(),
                     )
                     .await
                     .expect("Starting grpc server cannot fail");

@@ -77,6 +77,7 @@ sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
+mysten-metrics = { path = "../mysten-metrics" }
 
 assert_cmd = "2.0.6"
 

@@ -24,14 +24,13 @@ use sui_network::{
     tonic,
 };
 
-use sui_types::{error::*, messages::*};
-use tap::TapFallible;
-use tokio::{sync::mpsc::Receiver, task::JoinHandle, time::sleep};
-
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, RegistryService};
 use narwhal_types::TransactionsClient;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
+use sui_types::{error::*, messages::*};
+use tap::TapFallible;
+use tokio::{sync::mpsc::Receiver, task::JoinHandle, time::sleep};
 use tracing::{debug, info, Instrument};
 
 use crate::checkpoints::{
@@ -260,9 +259,10 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: sui_network::state_sync::Handle,
-        prometheus_registry: Registry,
+        registry_service: RegistryService,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
+        let prometheus_registry = registry_service.default_registry();
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
@@ -306,8 +306,7 @@ impl ValidatorService {
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
-        let registry = prometheus_registry.clone();
-        let tx_validator = SuiTxValidator::new(state.clone(), &registry);
+        let tx_validator = SuiTxValidator::new(state.clone(), &prometheus_registry);
         spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
             consensus_keypair,
             network_keypair,
@@ -319,7 +318,7 @@ impl ValidatorService {
             consensus_parameters,
             tx_validator,
             rx_reconfigure_consensus,
-            &registry,
+            registry_service
         ));
 
         Ok(Self {

@@ -35,7 +35,8 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
 
-    let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+    let registry_service = metrics::start_prometheus_server(config.metrics_address);
+    let prometheus_registry = registry_service.default_registry();
     info!(
         "Started Prometheus HTTP endpoint at {}",
         config.metrics_address
@@ -67,7 +68,7 @@ async fn main() -> Result<()> {
 
     sui_node::admin::start_admin_server(config.admin_interface_port, filter_handle);
 
-    let node = sui_node::SuiNode::start(&config, prometheus_registry).await?;
+    let node = sui_node::SuiNode::start(&config, registry_service).await?;
     node.monitor_reconfiguration().await?;
 
     Ok(())

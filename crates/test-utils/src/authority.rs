@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::TEST_COMMITTEE_SIZE;
+use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
 use std::time::Duration;
@@ -39,8 +40,11 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
 }
 
 #[cfg(not(msim))]
-pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNodeHandle {
-    SuiNode::start(config, prom_registry).await.unwrap().into()
+pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) -> SuiNodeHandle {
+    SuiNode::start(config, registry_service)
+        .await
+        .unwrap()
+        .into()
 }
 
 /// In the simulator, we call SuiNode::start from inside a newly spawned simulator node.
@@ -52,7 +56,7 @@ pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode
 /// Most of the time, tests do this just in order to verify some internal state, so this is fine
 /// most of the time.
 #[cfg(msim)]
-pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNodeHandle {
+pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) -> SuiNodeHandle {
     use std::net::{IpAddr, SocketAddr};
 
     let config = config.clone();
@@ -72,7 +76,7 @@ pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode
         })
         .build();
 
-    node.spawn(async move { SuiNode::start(&config, prom_registry).await.unwrap() })
+    node.spawn(async move { SuiNode::start(&config, registry_service).await.unwrap() })
         .await
         .unwrap()
         .into()
@@ -85,8 +89,8 @@ where
 {
     let mut handles = Vec::new();
     for validator in config.validator_configs() {
-        let prom_registry = Registry::new();
-        let node = start_node(validator, prom_registry).await;
+        let registry_service = RegistryService::new(Registry::new());
+        let node = start_node(validator, registry_service).await;
         let objects = objects.clone();
 
         node.with_async(|node| async move {

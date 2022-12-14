@@ -65,7 +65,8 @@ impl Container {
             .build();
 
         let task_handle = node.spawn(async move {
-            let _server = SuiNode::start(&config, Registry::new()).await.unwrap();
+            let registry_service = mysten_metrics::RegistryService::new(Registry::new());
+            let _server = SuiNode::start(&config, registry_service).await.unwrap();
             // Notify that we've successfully started the node
             trace!("node started, sending oneshot");
             let _ = startup_sender.send(());

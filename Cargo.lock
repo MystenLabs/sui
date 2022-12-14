@@ -5012,12 +5012,14 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
+ "dashmap",
  "once_cell",
  "prometheus",
  "scopeguard",
  "tap",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -8364,6 +8366,7 @@ dependencies = [
  "move-stackless-bytecode",
  "move-unit-test",
  "multiaddr 0.17.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-executor",
  "prometheus",
@@ -8942,6 +8945,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "prometheus",
  "prometheus-closure-metric",
+ "reqwest",
  "sui-config",
  "sui-core",
  "sui-json-rpc",
@@ -9161,6 +9165,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "prometheus",
  "rand 0.8.5",
@@ -9597,6 +9602,7 @@ dependencies = [
  "jsonrpsee",
  "move-core-types",
  "multiaddr 0.17.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "once_cell",
  "prometheus",
