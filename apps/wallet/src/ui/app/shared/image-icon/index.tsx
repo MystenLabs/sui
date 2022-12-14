@@ -15,30 +15,30 @@ const imageStyle = cva(
                 large: 'w-10 h-10',
             },
             variant: {
-                rounded: 'rounded-full overflow-hidden',
+                circle: 'rounded-full overflow-hidden',
                 square: 'rounded-none',
             },
         },
 
         defaultVariants: {
-            variant: 'rounded',
+            variant: 'circle',
             size: 'medium',
         },
     }
 );
 
-export interface IconProps extends VariantProps<typeof imageStyle> {
+export interface ImageIconProps extends VariantProps<typeof imageStyle> {
     src?: string | null;
     alt: string;
 }
 
-export function ImageIcon({ src, alt, ...styleProps }: IconProps) {
+export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
     return (
         <div className={imageStyle(styleProps)}>
             {src ? (
                 <img src={src} className="h-full w-full" alt={alt} />
             ) : (
-                <div className="h-full w-full flex items-center justify-center font-medium text-bodySmall ">
+                <div className="h-full w-full flex items-center justify-center font-medium text-bodySmall">
                     {alt.slice(0, 2)}
                 </div>
             )}

@@ -25,7 +25,7 @@ const cardContentStyle = cva([], {
 export interface CardProps extends VariantProps<typeof cardContentStyle> {
     header?: ReactNode;
     footer?: ReactNode;
-    children?: ReactNode | ReactNode[];
+    children?: ReactNode;
 }
 
 export function Card({ header, footer, children, ...styleProps }: CardProps) {
@@ -36,7 +36,7 @@ export function Card({ header, footer, children, ...styleProps }: CardProps) {
             }
         >
             {header && (
-                <div className="bg-gray-40 flex justify-center items-center divide-x divide-solid divide-gray-45 divide-y-0">
+                <div className="bg-gray-40 flex justify-center items-center">
                     {header}
                 </div>
             )}
