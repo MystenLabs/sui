@@ -37,7 +37,7 @@ jobs:
         run: pnpm dlx concurrently --kill-others --success command-1 'RUST_LOG="consensus=off" cargo run --bin sui-test-validator' 'pnpm sdk test:e2e'
 
   end_to_end_devnet:
-    name: End-to-end tests against DevNet
+    name: End-to-end tests against Devnet
     needs: diff
     if: needs.diff.outputs.isTypescriptSDK == 'true'
     runs-on: [self-hosted, self-hosted-arc]
@@ -56,4 +56,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run e2e tests
-        run: pnpm dlx concurrently --kill-others 'VITE_FAUCET_URL="https://faucet.devnet.sui.io:443/gas" VITE_FULLNODE_URL="https://fullnode.devnet.sui.io" pnpm sdk test:e2e:nowait'
+        env:
+          VITE_FAUCET_URL: "https://faucet.devnet.sui.io:443/gas"
+          VITE_FULLNODE_URL: "https://fullnode.devnet.sui.io"
+        run: pnpm sdk test:e2e:nowait
