@@ -9,7 +9,11 @@ use move_core_types::{
 };
 use move_vm_runtime::session::{SerializedReturnValues, Session};
 use move_vm_types::loaded_data::runtime_types::Type;
-use sui_types::error::ExecutionError;
+use sui_types::{
+    base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    error::ExecutionError,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 pub type TransactionIndex = usize;
 
@@ -108,7 +112,7 @@ impl ExecutionMode for DevInspect {
             }
         };
         let ty_args = &loaded_function.type_arguments;
-        let mutable_reference_outputs = mutable_reference_outputs
+        let mut mutable_reference_outputs = mutable_reference_outputs
             .iter()
             .map(|(i, bytes, _)| {
                 let ty =
@@ -117,6 +121,16 @@ impl ExecutionMode for DevInspect {
                 Ok((*i, bytes.clone(), tag))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
+        // ignore the TxContext if it is there
+        let last = mutable_reference_outputs.last();
+        if let Some((_, _, TypeTag::Struct(st))) = last {
+            let is_txn_ctx = st.address == SUI_FRAMEWORK_ADDRESS
+                && st.module.as_ident_str() == TX_CONTEXT_MODULE_NAME
+                && st.name.as_ident_str() == TX_CONTEXT_STRUCT_NAME;
+            if is_txn_ctx {
+                mutable_reference_outputs.pop();
+            }
+        }
         let return_values = return_values
             .iter()
             .enumerate()
@@ -130,7 +144,7 @@ impl ExecutionMode for DevInspect {
     }
 
     fn empty_results() -> Self::ExecutionResults {
-        todo!()
+        vec![]
     }
 
     fn add_result(

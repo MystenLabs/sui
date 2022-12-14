@@ -75,6 +75,17 @@ pub(crate) async fn check_dev_inspect_input(
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
+    let mut used_objects: HashSet<SuiAddress> = HashSet::new();
+    for object in &objects {
+        if !object.is_immutable() {
+            fp_ensure!(
+                used_objects.insert(object.id().into()),
+                SuiError::InvalidBatchTransaction {
+                    error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
+                }
+            );
+        }
+    }
     let input_objects = InputObjects::new(input_objects.into_iter().zip(objects).collect());
     Ok((gas_status, input_objects))
 }

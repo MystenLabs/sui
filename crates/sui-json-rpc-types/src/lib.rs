@@ -1974,10 +1974,10 @@ pub struct DevInspectResults {
     /// Summary of effects that likely would be generated if the transaction is actually run.
     /// Note however, that not all dev-inspect transactions are actually usable as transactions so
     /// it might not be possible actually generate these effects from a normal transaction.
-    effects: SuiTransactionEffects,
+    pub effects: SuiTransactionEffects,
     /// Execution results (including return values) from executing the transactions
     /// Currently contains only return values from Move calls
-    results: Result<Vec<(usize, SuiExecutionResult)>, String>,
+    pub results: Result<Vec<(usize, SuiExecutionResult)>, String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
