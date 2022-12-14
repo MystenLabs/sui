@@ -52,7 +52,8 @@ jobs:
       - name: Wallet Extension Has Changes?
         id: wallet-diff
         run: |
-          pnpm dlx turbo-ignore sui-wallet 2> /dev/null
+          set -e
+          pnpm dlx turbo-ignore sui-wallet
           if [ $? -eq 0 ]
           then
             echo "hasChanges=false" >> $GITHUB_OUTPUT
