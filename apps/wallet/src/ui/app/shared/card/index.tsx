@@ -54,3 +54,5 @@ export function Card({ header, footer, children, ...styleProps }: CardProps) {
         </div>
     );
 }
+
+export { CardItem } from './CardItem';
