@@ -335,6 +335,18 @@ A self-custodial object holding the staked SUI tokens.
 
 </dd>
 <dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+ The validator we are staking with.
+</dd>
+<dt>
+<code>delegation_request_epoch: u64</code>
+</dt>
+<dd>
+ The epoch at which the delegation is requested.
+</dd>
+<dt>
 <code>principal: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
 </dt>
 <dd>
@@ -483,6 +495,8 @@ when the delegation object containing the pool tokens is distributed to the dele
     <a href="_push_back">vector::push_back</a>(&<b>mut</b> pool.pending_delegations, <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount });
     <b>let</b> staked_sui = <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        validator_address: pool.validator_address,
+        delegation_request_epoch: <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
         principal: <a href="stake.md#0x2_stake">stake</a>,
         sui_token_lock,
     };
@@ -573,6 +587,7 @@ time lock if applicable.
     // Check that the delegation information matches the pool.
     <b>assert</b>!(
         delegation.validator_address == pool.validator_address &&
+        delegation.validator_address == staked_sui.validator_address &&
         delegation.pool_starting_epoch == pool.starting_epoch,
         <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>
     );
@@ -960,6 +975,8 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 <pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_staked_sui">destroy_empty_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>) {
     <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id,
+        validator_address: _,
+        delegation_request_epoch: _,
         principal,
         sui_token_lock
     } = staked_sui;
