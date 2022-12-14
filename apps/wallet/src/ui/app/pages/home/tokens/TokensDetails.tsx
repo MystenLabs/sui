@@ -114,7 +114,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         <small>{error.message}</small>
                     </Alert>
                 ) : null}
-                {!coinType && <AccountAddress showLink={false} mode="faded" />}
+                {!coinType && (
+                    <AccountAddress showLink={false} copyable mode="faded" />
+                )}
                 <div className={st.balanceContainer}>
                     <Loading loading={loading}>
                         <CoinBalance

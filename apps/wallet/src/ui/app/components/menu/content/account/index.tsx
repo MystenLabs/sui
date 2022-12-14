@@ -32,7 +32,12 @@ function Account() {
             <div className={st.content}>
                 <div className={st.itemGroup}>
                     <label className={st.itemTitle}>Address</label>
-                    <AccountAddress shorten={true} showLink={false} />
+                    <AccountAddress
+                        mode="faded"
+                        shorten={true}
+                        showLink={false}
+                        copyable
+                    />
                 </div>
                 <div className={st.itemGroup}>
                     <label className={st.itemTitle}>
