@@ -51,6 +51,7 @@ jobs:
       # Pack wallet extension and upload it as an artifact for easy developer use:
       - name: Wallet Extension Has Changes?
         id: wallet-diff
+        continue-on-error: true
         run: |
           set -e
           pnpm dlx turbo-ignore sui-wallet
