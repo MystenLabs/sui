@@ -5,8 +5,4 @@ export { default as formatDate } from './formatDate';
 export { default as notEmpty } from './notEmptyCheck';
 
 export { getAggregateBalanceByAddress } from './getAggregateBalanceByAddress';
-export {
-    getEventsPayReceiveSummary,
-    getObjectIdsForAddress,
-    getMoveCallMeta,
-} from './getMoveTxnSummary';
+export { getMoveCallMeta } from './getMoveTxnSummary';
