@@ -34,7 +34,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_stream::StreamExt;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use typed_store::{rocks::TypedStoreError, Map};
 
 use crate::{
@@ -135,7 +135,13 @@ impl CheckpointExecutor {
             // last executed checkpoint before shutdown was last of epoch. Make sure
             // reconfig was successful, otherwise redo
             if let Some(committee) = checkpoint.next_epoch_committee() {
-                if checkpoint.epoch() == self.authority_state.epoch() {
+                let local_epoch = self.authority_state.epoch();
+                if checkpoint.epoch() == local_epoch {
+                    info!(
+                        "Handling end of epoch pre-reconfig crash recovery for epoch {:?} -> {:?}",
+                        local_epoch,
+                        local_epoch + 1
+                    );
                     reconfig(committee.to_vec());
                 }
             }
@@ -171,7 +177,12 @@ impl CheckpointExecutor {
                 Some(Ok((checkpoint, next_committee))) = pending.next() => {
                     match next_committee {
                         None => {
-                            self.metrics.last_executed_checkpoint.set(checkpoint.sequence_number() as i64);
+                            let new_highest = checkpoint.sequence_number();
+                            debug!(
+                                "Bumping highest_executed_checkpoint watermark to {:?}",
+                                new_highest,
+                            );
+                            self.metrics.last_executed_checkpoint.set(new_highest as i64);
                             self.checkpoint_store
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
@@ -179,12 +190,25 @@ impl CheckpointExecutor {
                         // We must not ratchet highest_executed_checkpoint before reconfig. If we
                         // do and reconfig crashes, node will move forward with checkpoint execution
                         // in the wrong epoch after startup
-                        Some(committee) => return Some((checkpoint, committee)),
+                        Some(committee) => {
+                            debug!(
+                                "Last checkpoint ({:?}) of epoch {:?} has finished execution",
+                                checkpoint.sequence_number(),
+                                checkpoint.epoch(),
+                            );
+                            return Some((checkpoint, committee));
+                        }
                     }
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
-                    Ok(checkpoint) => self.latest_synced_checkpoint = Some(checkpoint),
+                    Ok(checkpoint) => {
+                        debug!(
+                            "Received new synced checkpoint message for checkpoint {:?}",
+                            checkpoint.sequence_number(),
+                        );
+                        self.latest_synced_checkpoint = Some(checkpoint);
+                    }
                     // In this case, messages in the mailbox have been overwritten
                     // as a result of lagging too far behind. In this case, we need to
                     // nullify self.latest_synced_checkpoint as the latest synced needs to
@@ -288,6 +312,10 @@ impl CheckpointExecutor {
         checkpoints_to_schedule.sort_by_key(|a| a.sequence_number());
         checkpoints_to_schedule.push(latest_synced_checkpoint);
         let checkpoints_to_schedule = checkpoints_to_schedule;
+        debug!(
+            "Scheduling {:?} lagging checkpoints",
+            checkpoints_to_schedule.len(),
+        );
 
         for checkpoint in checkpoints_to_schedule.into_iter() {
             self.schedule_checkpoint(checkpoint, pending)?;
@@ -351,6 +379,10 @@ pub async fn execute_checkpoint(
     authority_state: Arc<AuthorityState>,
     checkpoint_store: Arc<CheckpointStore>,
 ) -> SuiResult<Vec<SignedTransactionEffects>> {
+    debug!(
+        "Scheduling checkpoint {:?} for execution",
+        checkpoint.sequence_number(),
+    );
     let txes = checkpoint_store
         .get_checkpoint_contents(&checkpoint.content_digest())?
         .unwrap_or_else(|| {
