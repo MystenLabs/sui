@@ -270,12 +270,10 @@ export function DappTxApprovalPage() {
                 >
                     <section className={st.txInfo}>
                         {txRequest?.tx && address && (
-                            <>
-                                <TransactionSummaryCard
-                                    txRequest={txRequest}
-                                    address={address}
-                                />
-                            </>
+                            <TransactionSummaryCard
+                                txRequest={txRequest}
+                                address={address}
+                            />
                         )}
                         <Permissions metadata={metadata} />
                         <SummaryCard
