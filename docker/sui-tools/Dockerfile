@@ -53,6 +53,8 @@ COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
 COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
+# sui-indexer needs postgres libpq
+RUN apt update && apt install -y libpq
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 
 ARG BUILD_DATE
