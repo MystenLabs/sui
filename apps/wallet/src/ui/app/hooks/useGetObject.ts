@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type GetObjectDataResponse } from '@mysten/sui.js';
-import {
-    useQuery,
-    type UseQueryResult,
-    useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { useRpc } from '_hooks';
 
@@ -23,10 +19,4 @@ export function useGetObject(
     );
 
     return response;
-}
-
-// Invalidates the cache Objects. called after a transaction
-export function useValidateObjectQueryCache(cacheId: string) {
-    const queryClient = useQueryClient();
-    queryClient.invalidateQueries({ queryKey: [cacheId] });
 }
