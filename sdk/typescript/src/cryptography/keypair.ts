@@ -38,7 +38,12 @@ export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
   const secretKey = fromB64(keypair.privateKey);
   switch (keypair.schema) {
     case 'ED25519':
-      return Ed25519Keypair.fromSecretKey(secretKey);
+      let pureSecretKey = secretKey;
+      if (secretKey.length === 64) {
+        // This is a legacy secret key, we need to strip the public key bytes and only read the first 32 bytes
+        pureSecretKey = secretKey.slice(0, 32);
+      }
+      return Ed25519Keypair.fromSecretKey(pureSecretKey);
     case 'Secp256k1':
       return Secp256k1Keypair.fromSecretKey(secretKey);
     default:
