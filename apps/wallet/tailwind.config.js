@@ -14,12 +14,19 @@ module.exports = {
     },
     theme: {
         extend: {
+            colors: {
+                'gradient-blue-start': '#589AEA',
+                'gradient-blue-end': '#4C75A6',
+            },
+            minHeight: {
+                8: '2rem',
+            },
             height: {
                 header: '68px',
-                icon: '30px',
+                7.5: '30px',
             },
             width: {
-                icon: '30px',
+                7.5: '30px',
             },
         },
     },
