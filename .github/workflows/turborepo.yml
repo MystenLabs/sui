@@ -52,20 +52,12 @@ jobs:
       - name: Wallet Extension Has Changes?
         id: wallet-diff
         continue-on-error: true
-        run: |
-          set -e
-          pnpm dlx turbo-ignore sui-wallet
-          if [ $? -eq 0 ]
-          then
-            echo "hasChanges=false" >> $GITHUB_OUTPUT
-          else
-            echo "hasChanges=true" >> $GITHUB_OUTPUT
-          fi
+        run: pnpm dlx turbo-ignore sui-wallet
       - name: Wallet Extension Preview Package
-        if: ${{ steps.wallet-diff.outputs.hasChanges == 'true' }}
+        if: ${{ steps.wallet-diff.outcome == 'failure' }}
         run: pnpm wallet pack:zip
       - uses: actions/upload-artifact@v3
-        if: ${{ steps.wallet-diff.outputs.hasChanges == 'true' }}
+        if: ${{ steps.wallet-diff.outcome == 'failure' }}
         with:
           name: wallet-extension
           path: apps/wallet/web-ext-artifacts/*
