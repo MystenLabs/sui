@@ -4,7 +4,7 @@
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::{
     monitored_future, monitored_scope, spawn_logged_monitored_task, spawn_monitored_task,
 };
@@ -79,7 +79,7 @@ pub(crate) struct CertificateFetcher {
     /// correctness).
     targets: BTreeMap<PublicKey, Round>,
     /// Keeps the handle to the (at most one) inflight fetch certificates task.
-    fetch_certificates_task: FuturesUnordered<BoxFuture<'static, Result<(), JoinError>>>,
+    fetch_certificates_task: FuturesUnordered<JoinHandle<()>>,
 }
 
 /// Thread-safe internal state of CertificateFetcher shared with its fetch task.
@@ -198,6 +198,8 @@ impl CertificateFetcher {
                 },
 
                 _ = self.rx_shutdown.receiver.recv() => {
+                    // abort the tasks in the list and then exit
+                    self.fetch_certificates_task.iter().for_each(|h|h.abort());
                     return
                 }
             }
@@ -261,8 +263,8 @@ impl CertificateFetcher {
             self.targets.values().max().unwrap_or(&0),
             gc_round
         );
-        self.fetch_certificates_task.push(
-            spawn_monitored_task!(async move {
+        self.fetch_certificates_task
+            .push(spawn_monitored_task!(async move {
                 let _scope = monitored_scope("CertificatesFetching");
                 state
                     .metrics
@@ -290,9 +292,7 @@ impl CertificateFetcher {
                     .certificate_fetcher_inflight_fetch
                     .with_label_values(&[&committee.epoch.to_string()])
                     .dec();
-            })
-            .boxed(),
-        );
+            }));
     }
 
     fn gc_round(&self) -> Round {
