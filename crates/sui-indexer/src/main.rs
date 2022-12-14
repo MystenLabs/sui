@@ -7,6 +7,7 @@ use sui_indexer::{new_pg_connection_pool, new_rpc_client};
 
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use futures::future::try_join_all;
 use tracing::info;
 
 use clap::Parser;
@@ -30,13 +31,23 @@ async fn main() -> Result<(), IndexerError> {
         let pg_connection_pool = new_pg_connection_pool(indexer_config.db_url.clone()).await?;
         // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
         // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
-        HandlerOrchestrator::new(rpc_client.clone(), pg_connection_pool.clone())
-            .run_forever()
-            .await;
-        ProcessorOrchestrator::new(rpc_client.clone(), pg_connection_pool.clone())
-            .run_forever()
-            .await;
+        let handler_rpc_client = rpc_client.clone();
+        let handler_pg_pool = pg_connection_pool.clone();
+        let handler_handle = tokio::spawn(async move {
+            HandlerOrchestrator::new(handler_rpc_client, handler_pg_pool)
+                .run_forever()
+                .await;
+        });
 
+        let processor_handle = tokio::spawn(async move {
+            ProcessorOrchestrator::new(rpc_client.clone(), pg_connection_pool.clone())
+                .run_forever()
+                .await;
+        });
+
+        try_join_all(vec![handler_handle, processor_handle])
+            .await
+            .expect("Indexer main should not run into errors.");
         Ok(())
     })
     .await

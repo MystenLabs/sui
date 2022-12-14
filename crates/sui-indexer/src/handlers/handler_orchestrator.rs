@@ -7,6 +7,7 @@ use sui_sdk::SuiClient;
 
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use futures::future::try_join_all;
 use tracing::{error, info, warn};
 
 use crate::handlers::event_handler::EventHandler;
@@ -33,7 +34,7 @@ impl HandlerOrchestrator {
         let txn_handler =
             TransactionHandler::new(self.rpc_client.clone(), self.pg_connection_pool.clone());
 
-        tokio::task::spawn(async move {
+        let txn_handle = tokio::task::spawn(async move {
             let txn_res = retry(ExponentialBackoff::default(), || async {
                 let txn_handler_exec_res = txn_handler.start().await;
                 if let Err(e) = txn_handler_exec_res.clone() {
@@ -52,7 +53,7 @@ impl HandlerOrchestrator {
                 );
             }
         });
-        tokio::task::spawn(async move {
+        let event_handle = tokio::task::spawn(async move {
             let event_res = retry(ExponentialBackoff::default(), || async {
                 let event_handler_exec_res = event_handler.start().await;
                 if let Err(e) = event_handler_exec_res.clone() {
@@ -71,5 +72,8 @@ impl HandlerOrchestrator {
                 );
             }
         });
+        try_join_all(vec![txn_handle, event_handle])
+            .await
+            .expect("Handler orchestrator shoult not run into errors.");
     }
 }
