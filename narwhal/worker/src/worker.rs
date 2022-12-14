@@ -21,7 +21,7 @@ use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_logged_monitored_task;
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
@@ -330,19 +330,22 @@ impl Worker {
         mut rx_reconfigure: Receiver<ReconfigureNotification>,
         network: Network,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            while let Ok(_result) = rx_reconfigure.changed().await {
-                let message = rx_reconfigure.borrow().clone();
-                if let ReconfigureNotification::Shutdown = message {
-                    let _ = network
-                        .shutdown()
-                        .await
-                        .tap_err(|err| error!("Error while shutting down network: {err}"));
-                    info!("Worker network server shutdown");
-                    return;
+        spawn_logged_monitored_task!(
+            async move {
+                while let Ok(_result) = rx_reconfigure.changed().await {
+                    let message = rx_reconfigure.borrow().clone();
+                    if let ReconfigureNotification::Shutdown = message {
+                        let _ = network
+                            .shutdown()
+                            .await
+                            .tap_err(|err| error!("Error while shutting down network: {err}"));
+                        info!("Worker network server shutdown");
+                        return;
+                    }
                 }
-            }
-        })
+            },
+            "WorkerShutdownNetworkListenerTask"
+        )
     }
 
     fn add_peer_in_network(
@@ -466,19 +469,22 @@ impl<V: TransactionValidator> TxReceiverHandler<V> {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         endpoint_metrics: WorkerEndpointMetrics,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            tokio::select! {
-                _result =  mysten_network::config::Config::new()
-                    .server_builder_with_metrics(endpoint_metrics)
-                    .add_service(TransactionsServer::new(self))
-                    .bind(&address)
-                    .await
-                    .unwrap()
-                    .serve() => (),
+        spawn_logged_monitored_task!(
+            async move {
+                tokio::select! {
+                    _result =  mysten_network::config::Config::new()
+                        .server_builder_with_metrics(endpoint_metrics)
+                        .add_service(TransactionsServer::new(self))
+                        .bind(&address)
+                        .await
+                        .unwrap()
+                        .serve() => (),
 
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
+                    () = Self::wait_for_shutdown(rx_reconfigure) => ()
+                }
+            },
+            "TxReceiverHandlerTask"
+        )
     }
 }
 

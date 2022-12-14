@@ -75,23 +75,46 @@ pub fn get_metrics() -> Option<&'static Metrics> {
 #[macro_export]
 macro_rules! monitored_future {
     ($fut: expr) => {{
-        monitored_future!(futures, $fut)
+        monitored_future!(futures, $fut, "", INFO, false)
     }};
 
-    ($metric: ident, $fut: expr) => {{
-        const LOCATION: &str = concat!(file!(), ':', line!());
+    ($metric: ident, $fut: expr, $name: expr, $logging_level: ident, $logging_enabled: expr) => {{
+        let location: &str = if $name.is_empty() {
+            concat!(file!(), ':', line!())
+        } else {
+            concat!(file!(), ':', $name)
+        };
 
         async move {
             let metrics = mysten_metrics::get_metrics();
 
-            let _guard = if let Some(m) = metrics {
-                m.$metric.with_label_values(&[LOCATION]).inc();
+            let _metrics_guard = if let Some(m) = metrics {
+                m.$metric.with_label_values(&[location]).inc();
                 Some(mysten_metrics::scopeguard::guard(m, |metrics| {
-                    m.$metric.with_label_values(&[LOCATION]).dec();
+                    m.$metric.with_label_values(&[location]).dec();
                 }))
             } else {
                 None
             };
+            let _logging_guard = if $logging_enabled {
+                Some(mysten_metrics::scopeguard::guard((), |_| {
+                    tracing::event!(
+                        tracing::Level::$logging_level,
+                        "Future {} completed",
+                        location
+                    );
+                }))
+            } else {
+                None
+            };
+
+            if $logging_enabled {
+                tracing::event!(
+                    tracing::Level::$logging_level,
+                    "Spawning future {}",
+                    location
+                );
+            }
 
             $fut.await
         }
@@ -101,7 +124,34 @@ macro_rules! monitored_future {
 #[macro_export]
 macro_rules! spawn_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(tasks, $fut))
+        tokio::task::spawn(mysten_metrics::monitored_future!(
+            tasks, $fut, "", INFO, false
+        ))
+    };
+}
+
+#[macro_export]
+macro_rules! spawn_logged_monitored_task {
+    ($fut: expr) => {
+        tokio::task::spawn(mysten_metrics::monitored_future!(
+            tasks, $fut, "", INFO, true
+        ))
+    };
+
+    ($fut: expr, $name: expr) => {
+        tokio::task::spawn(mysten_metrics::monitored_future!(
+            tasks, $fut, $name, INFO, true
+        ))
+    };
+
+    ($fut: expr, $name: expr, $logging_level: ident) => {
+        tokio::task::spawn(mysten_metrics::monitored_future!(
+            tasks,
+            $fut,
+            $name,
+            $logging_level,
+            true
+        ))
     };
 }
 

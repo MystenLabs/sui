@@ -5,7 +5,7 @@ use config::Committee;
 use crypto::PublicKey;
 use dag::node_dag::{NodeDag, NodeDagError};
 use fastcrypto::hash::Hash;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -352,7 +352,7 @@ impl Dag {
             metrics,
         );
 
-        let handle = spawn_monitored_task!(async move { idg.run().await });
+        let handle = spawn_logged_monitored_task!(async move { idg.run().await }, "DAGTask");
         let dag = Dag { tx_commands };
         (handle, dag)
     }

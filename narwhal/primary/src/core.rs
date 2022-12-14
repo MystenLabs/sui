@@ -15,7 +15,7 @@ use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
 use network::{anemo_ext::NetworkExt, CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
@@ -121,40 +121,43 @@ impl Core {
         metrics: Arc<PrimaryMetrics>,
         primary_network: anemo::Network,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            Self {
-                name,
-                committee,
-                worker_cache,
-                header_store,
-                certificate_store,
-                synchronizer,
-                signature_service,
-                rx_consensus_round_updates,
-                rx_narwhal_round_updates,
-                gc_depth,
-                rx_reconfigure,
-                rx_certificates,
-                rx_certificates_loopback,
-                rx_headers,
-                tx_new_certificates,
-                tx_parents,
-                gc_round: 0,
-                highest_received_round: 0,
-                highest_processed_round: 0,
-                pending_certificates: HashMap::new(),
-                background_tasks: JoinSet::new(),
-                cancel_proposed_header: None,
-                propose_header_future: None.into(),
-                certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
-                network: primary_network,
-                metrics,
-            }
-            .recover()
-            .await
-            .run()
-            .await;
-        })
+        spawn_logged_monitored_task!(
+            async move {
+                Self {
+                    name,
+                    committee,
+                    worker_cache,
+                    header_store,
+                    certificate_store,
+                    synchronizer,
+                    signature_service,
+                    rx_consensus_round_updates,
+                    rx_narwhal_round_updates,
+                    gc_depth,
+                    rx_reconfigure,
+                    rx_certificates,
+                    rx_certificates_loopback,
+                    rx_headers,
+                    tx_new_certificates,
+                    tx_parents,
+                    gc_round: 0,
+                    highest_received_round: 0,
+                    highest_processed_round: 0,
+                    pending_certificates: HashMap::new(),
+                    background_tasks: JoinSet::new(),
+                    cancel_proposed_header: None,
+                    propose_header_future: None.into(),
+                    certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
+                    network: primary_network,
+                    metrics,
+                }
+                .recover()
+                .await
+                .run()
+                .await;
+            },
+            "CoreTask"
+        )
     }
 
     #[instrument(level = "info", skip_all)]

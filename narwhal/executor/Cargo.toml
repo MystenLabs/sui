@@ -26,6 +26,7 @@ prometheus = "0.13.3"
 backoff = { version = "0.4.0", features = ["tokio"] }
 storage = { path = "../storage", package = "narwhal-storage" }
 itertools = "0.10.5"
+tap = "1.0.1"
 
 types = { path = "../types", package = "narwhal-types" }
 network = { path = "../network", package = "narwhal-network" }
