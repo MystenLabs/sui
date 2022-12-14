@@ -10,7 +10,7 @@ module contract::tournament {
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::transfer;
-    use contract::satoshi_flip_match::{Match};
+    use contract::satoshi_flip_match::{Self, Match, Outcome};
 
 
     // structs
@@ -19,7 +19,7 @@ module contract::tournament {
         players: vector<address>,
         prize: Balance<SUI>,
         capacity: u64,
-        status: u64 // Status -> 0: pending | 1: running | 2: finished
+        status: u64, // Status -> 0: pending | 1: running | 2: finished
         round: u64,
     }
 
@@ -31,6 +31,7 @@ module contract::tournament {
     const ETournamentNotFound: u64 = 3;
     const ECannotWithdraw: u64 = 4;
     const ECannotStartRound: u64 = 5;
+    const ETournamentEnd: u64 = 6;
 
     // Tournament initialization. 
     // Player can initialize a new tournament and share it with other players. 
@@ -121,22 +122,26 @@ module contract::tournament {
         // Split players into matches of two-players
         while(i > 0) {
             // Assign last player to be the host
-            let host = vector::pop_back(&tournament.players);
+            let host = vector::pop_back(&mut tournament.players);
 
             // Assign second to last player to be the guesser
-            let guesser = vector::pop_back(&tournament.players);
+            let guesser = vector::pop_back(&mut tournament.players);
             
             // Create a match for current pair of host-guesser
-            Match.create(host, guesser, ctx);
+            satoshi_flip_match::create(host, guesser, ctx);
 
             i = i - 2;
         };
 
-        tournament.round += 1;
+        tournament.round = tournament.round + 1;
     }
 
-    fun advance_round() {
+    fun advance_round(tournament: &mut Tournament, match: Match, ctx: &mut TxContext) {
         // Are we going to handle guess, reveal functions here?
+        
+        // Get winners for all active matches
+        // Write winners to tournament.players
+        // proceed to next round
     }
 }
 
