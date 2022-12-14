@@ -1,0 +1,46 @@
+name: Turborepo CI
+on: pull_request
+jobs:
+  build:
+    name: Lint, Build, and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Turbo Cache
+        id: turbo-cache
+        uses: actions/cache@v3
+        with:
+          path: node_modules/.cache/turbo
+          key: turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.job }}-${{ github.ref_name }}-
+      - name: Lint
+        run: pnpm turbo lint
+      - name: Build
+        run: pnpm turbo build
+      - name: Test
+        run: pnpm turbo test
+
+      # Support wallet extension PRs:
+
+      # - name: Wallet Extension Preview Package
+      #   run: pnpm wallet pack:zip
+      # - uses: actions/upload-artifact@v3
+      #   # TODO: Figure out how to do this IF using turbo (probably just turbo-ignore)
+      #   if: ${{ needs.diff.outputs.isSrcChange == 'true' }}
+      #   with:
+      #     name: wallet-extension
+      #     path: apps/wallet/web-ext-artifacts/*
+      #     if-no-files-found: error
+      #     retention-days: 7

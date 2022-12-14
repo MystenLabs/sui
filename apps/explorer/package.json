@@ -5,7 +5,7 @@
     "scripts": {
         "dev": "vite --port 3000",
         "dev:static": "VITE_NETWORK=STATIC vite --port 8080",
-        "test": "pnpm test:unit && pnpm test:cypress",
+        "test": "pnpm test:unit",
         "test:unit": "vitest run",
         "test:cypress": "start-server-and-test dev:static 8080 'cypress run --spec \"cypress/e2e/static/*\"'",
         "typecheck": "tsc --noEmit",
