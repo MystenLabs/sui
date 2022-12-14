@@ -9,7 +9,6 @@ use tempfile::tempdir;
 use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
-use mysten_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::sync::broadcast;
 
@@ -44,7 +43,7 @@ pub async fn checkpoint_executor_test() {
             None,
             &committee,
         );
-        let _handle = spawn_monitored_task!(async move { executor.run().await });
+        let _handle = executor.start().unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
         // dropping the channel will cause the checkpoint executor process to exit (gracefully)
         drop(checkpoint_sender);
@@ -82,7 +81,7 @@ pub async fn checkpoint_executor_test() {
             Some(last_executed_checkpoint),
             &committee,
         );
-        let _handle = spawn_monitored_task!(async move { executor.run().await });
+        let _handle = executor.start().unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
         // dropping the channel will cause the checkpoint executor process to exit (gracefully)
         drop(checkpoint_sender);
@@ -110,8 +109,7 @@ async fn init_executor_test(
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
     let executor =
-        CheckpointExecutor::new_for_tests(checkpoint_sender.subscribe(), store.clone(), state)
-            .unwrap();
+        CheckpointExecutor::new_for_tests(checkpoint_sender.subscribe(), store.clone(), state);
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     (executor, checkpoint_sender, committee)
 }

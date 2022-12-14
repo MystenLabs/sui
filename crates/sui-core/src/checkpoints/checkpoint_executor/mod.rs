@@ -31,7 +31,7 @@ use sui_types::{
 };
 use tokio::{
     sync::broadcast::{self, error::RecvError},
-    task::{self, JoinHandle},
+    task::JoinHandle,
 };
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
@@ -58,9 +58,17 @@ type CheckpointExecutionBuffer = FuturesOrdered<
     )>,
 >;
 
+#[derive(Clone)]
+pub struct EndOfEpochMessage {
+    pub next_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
+    pub next_epoch: u64,
+}
+
 pub struct CheckpointExecutor {
-    executor: CheckpointExecutorEventLoop,
-    end_of_epoch_event_sender: broadcast::Sender<Vec<(AuthorityPublicKeyBytes, u64)>>,
+    mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+    checkpoint_store: Arc<CheckpointStore>,
+    authority_state: Arc<AuthorityState>,
+    metrics: Arc<CheckpointExecutorMetrics>,
 }
 
 impl CheckpointExecutor {
@@ -69,49 +77,69 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
         prometheus_registry: &Registry,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Self {
+        Self {
+            mailbox,
+            checkpoint_store,
+            authority_state,
+            metrics: CheckpointExecutorMetrics::new(prometheus_registry),
+        }
+    }
+
+    pub fn new_for_tests(
+        mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+        checkpoint_store: Arc<CheckpointStore>,
+        authority_state: Arc<AuthorityState>,
+    ) -> Self {
+        Self {
+            mailbox,
+            checkpoint_store,
+            authority_state,
+            metrics: CheckpointExecutorMetrics::new_for_tests(),
+        }
+    }
+
+    pub fn start(self) -> Result<Handle, TypedStoreError> {
+        let Self {
+            mailbox,
+            checkpoint_store,
+            authority_state,
+            metrics,
+        } = self;
+
         let (end_of_epoch_event_sender, _receiver) =
-            broadcast::channel(END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY);
+            broadcast::channel::<EndOfEpochMessage>(END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY);
 
         let executor = CheckpointExecutorEventLoop::new(
             mailbox,
             end_of_epoch_event_sender.clone(),
             checkpoint_store,
             authority_state,
-            prometheus_registry,
+            metrics,
         )?;
 
-        Ok(Self {
-            executor,
+        let event_loop_handle = tokio::spawn(executor.run());
+        Ok(Handle {
             end_of_epoch_event_sender,
+            _event_loop_handle: event_loop_handle,
         })
     }
-
-    pub fn start(&self) -> CheckpointExecutorHandle {
-        let event_loop_handle = self.executor.start();
-        CheckpointExecutorHandle {
-            end_of_epoch_event_sender: end_of_epoch_event_sender.clone(),
-            event_loop_handle,
-        }
-    }
 }
 
-pub struct CheckpointExecutorHandle {
-    end_of_epoch_event_sender: broadcast::Sender<Vec<(AuthorityPublicKeyBytes, u64)>>,
-    event_loop_handle: JoinHandle<()>,
+pub struct Handle {
+    end_of_epoch_event_sender: broadcast::Sender<EndOfEpochMessage>,
+    _event_loop_handle: JoinHandle<()>,
 }
 
-impl CheckpointExecutorHandle {
-    pub fn subscribe_to_end_of_epoch(
-        &self,
-    ) -> broadcast::Receiver<Vec<(AuthorityPublicKeyBytes, u64)>> {
+impl Handle {
+    pub fn subscribe_to_end_of_epoch(&self) -> broadcast::Receiver<EndOfEpochMessage> {
         self.end_of_epoch_event_sender.subscribe()
     }
 }
 
 pub struct CheckpointExecutorEventLoop {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
-    end_of_epoch_event_sender: broadcast::Sender<Vec<(AuthorityPublicKeyBytes, u64)>>,
+    end_of_epoch_event_sender: broadcast::Sender<EndOfEpochMessage>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_state: Arc<AuthorityState>,
     highest_scheduled_seq_num: Option<CheckpointSequenceNumber>,
@@ -135,10 +163,10 @@ pub struct CheckpointExecutorEventLoop {
 impl CheckpointExecutorEventLoop {
     fn new(
         mailbox: broadcast::Receiver<VerifiedCheckpoint>,
-        end_of_epoch_event_sender: broadcast::Sender<Vec<(AuthorityPublicKeyBytes, u64)>>,
+        end_of_epoch_event_sender: broadcast::Sender<EndOfEpochMessage>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
-        prometheus_registry: &Registry,
+        metrics: Arc<CheckpointExecutorMetrics>,
     ) -> Result<Self, TypedStoreError> {
         Ok(Self {
             mailbox,
@@ -149,36 +177,17 @@ impl CheckpointExecutorEventLoop {
             latest_synced_checkpoint: None,
             end_of_epoch: false,
             task_limit: TASKS_PER_CORE * num_cpus::get(),
-            metrics: CheckpointExecutorMetrics::new(prometheus_registry),
-        })
-    }
-
-    pub fn new_for_tests(
-        mailbox: broadcast::Receiver<VerifiedCheckpoint>,
-        end_of_epoch_event_sender: broadcast::Sender<Vec<(AuthorityPublicKeyBytes, u64)>>,
-        checkpoint_store: Arc<CheckpointStore>,
-        authority_state: Arc<AuthorityState>,
-    ) -> Result<Self, TypedStoreError> {
-        Ok(Self {
-            mailbox,
-            end_of_epoch_event_sender,
-            checkpoint_store,
-            authority_state,
-            highest_scheduled_seq_num: None,
-            latest_synced_checkpoint: None,
-            end_of_epoch: false,
-            task_limit: TASKS_PER_CORE * num_cpus::get(),
-            metrics: CheckpointExecutorMetrics::new_for_tests(),
+            metrics,
         })
     }
 
     pub async fn run(mut self) {
-        self.handle_crash_recovery().unwrap();
+        self.handle_crash_recovery().await.unwrap();
 
         while let Some((last_checkpoint, next_committee)) =
             self.execute_checkpoints_for_epoch().await
         {
-            self.reconfig(next_committee);
+            self.reconfig(next_committee, last_checkpoint.epoch()).await;
             self.checkpoint_store
                 .update_highest_executed_checkpoint(&last_checkpoint)
                 .unwrap();
@@ -187,19 +196,19 @@ impl CheckpointExecutorEventLoop {
         // Channel closed
     }
 
-    pub fn handle_crash_recovery(&self) -> SuiResult {
+    pub async fn handle_crash_recovery(&self) -> SuiResult {
         if let Some(checkpoint) = self.checkpoint_store.get_highest_executed_checkpoint()? {
             // last executed checkpoint before shutdown was last of epoch. Make sure
             // reconfig was successful, otherwise redo
             if let Some(committee) = checkpoint.next_epoch_committee() {
                 let local_epoch = self.authority_state.epoch();
-                if checkpoint.epoch() == self.authority_state.epoch() {
+                if checkpoint.epoch() == local_epoch {
                     info!(
                         "Handling end of epoch pre-reconfig crash recovery for epoch {:?} -> {:?}",
                         local_epoch,
                         local_epoch + 1
                     );
-                    self.reconfig(committee.to_vec());
+                    self.reconfig(committee.to_vec(), local_epoch).await;
                 }
             }
         }
@@ -424,10 +433,20 @@ impl CheckpointExecutorEventLoop {
         Ok(())
     }
 
-    fn reconfig(&self, next_epoch_committee: Vec<(AuthorityPublicKeyBytes, u64)>) {
-        let _ = self.end_of_epoch_event_sender.send(next_epoch_committee);
-
-        // TODO await notify that reconfig is completed (in next epoch)
+    async fn reconfig(
+        &self,
+        next_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
+        current_epoch: u64,
+    ) {
+        let end_of_epoch_message = EndOfEpochMessage {
+            next_committee,
+            next_epoch: current_epoch + 1,
+        };
+        let _ = self.end_of_epoch_event_sender.send(end_of_epoch_message);
+        self.authority_state
+            .epoch_store()
+            .wait_epoch_terminated()
+            .await;
     }
 }
 

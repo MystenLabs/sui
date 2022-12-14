@@ -8,6 +8,7 @@ use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
+use checkpoint_executor::{CheckpointExecutor, EndOfEpochMessage};
 use futures::TryFutureExt;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
@@ -20,7 +21,7 @@ use std::{sync::Arc, time::Duration};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
-use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
+use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -68,7 +69,6 @@ use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
 use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_types::committee::EpochId;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -87,14 +87,10 @@ pub struct SuiNode {
     _p2p_network: Network,
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
-
     checkpoint_store: Arc<CheckpointStore>,
-    _checkpoint_executor_handle: tokio::task::JoinHandle<()>,
+    _checkpoint_executor_handle: checkpoint_executor::Handle,
 
-    reconfig_channel: (
-        tokio::sync::mpsc::Sender<EpochId>,
-        tokio::sync::mpsc::Receiver<EpochId>,
-    ),
+    reconfig_channel: tokio::sync::broadcast::Receiver<EndOfEpochMessage>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -162,8 +158,6 @@ impl SuiNode {
             &prometheus_registry,
         )?;
 
-        let reconfig_channel = channel(1);
-
         let transaction_streamer = if is_full_node {
             Some(Arc::new(TransactionStreamer::new()))
         } else {
@@ -189,15 +183,15 @@ impl SuiNode {
         )
         .await;
 
-        let checkpoint_executor_handle = {
-            let executor = CheckpointExecutor::new(
-                state_sync_handle.subscribe_to_synced_checkpoints(),
-                checkpoint_store.clone(),
-                state.clone(),
-                &prometheus_registry,
-            )?;
-            tokio::spawn(executor.run())
-        };
+        let checkpoint_executor_handle = CheckpointExecutor::new(
+            state_sync_handle.subscribe_to_synced_checkpoints(),
+            checkpoint_store.clone(),
+            state.clone(),
+            &prometheus_registry,
+        )
+        .start()?;
+
+        let reconfig_channel = checkpoint_executor_handle.subscribe_to_end_of_epoch();
 
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
@@ -568,9 +562,11 @@ impl SuiNode {
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
     pub async fn monitor_reconfiguration(mut self) -> Result<()> {
         loop {
-            let next_epoch = self
+            let EndOfEpochMessage {
+                next_committee: _next_committee,
+                next_epoch,
+            } = self
                 .reconfig_channel
-                .1
                 .recv()
                 .await
                 .expect("Reconfiguration channel was closed unexpectedly.");
