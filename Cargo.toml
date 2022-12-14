@@ -85,6 +85,11 @@ panic = 'abort'
 # For convenience.
 strip = 'none'
 
+[profile.test.package.move-compiler]
+# opt-level 2 for move-compiler reduces the size of some of its
+# (recursive) stack frames by up to 10x, avoiding stack overflows.
+opt-level = 2
+
 [profile.simulator]
 inherits = "test"
 debug = true
