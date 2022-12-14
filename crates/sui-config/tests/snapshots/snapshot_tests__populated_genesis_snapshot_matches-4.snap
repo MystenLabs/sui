@@ -445,5 +445,9 @@ parameters:
 reference_gas_price: 0
 validator_report_records:
   contents: []
-next_epoch_stake_subsidy: 1000000
+stake_subsidy:
+  epoch_counter: 0
+  balance:
+    value: 0
+  current_epoch_amount: 1000000
 

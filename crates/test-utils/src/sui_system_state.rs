@@ -13,7 +13,7 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    StakingPool, SuiSystemState, Validator, ValidatorMetadata, ValidatorSet,
+    StakingPool, StakeSubsidy, SuiSystemState, Validator, ValidatorMetadata, ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
@@ -94,6 +94,10 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         },
         reference_gas_price: 1,
         validator_report_records: VecMap { contents: vec![] },
-        next_epoch_stake_subsidy: 0,
+        stake_subsidy: StakeSubsidy {
+            epoch_counter: 0,
+            balance: Balance::new(0),
+            current_epoch_amount: 0,
+        },
     }
 }

@@ -150,8 +150,15 @@ pub struct SuiSystemState {
     pub parameters: SystemParameters,
     pub reference_gas_price: u64,
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
-    pub next_epoch_stake_subsidy: u64,
+    pub stake_subsidy: StakeSubsidy,
     // TODO: Use getters instead of all pub.
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct StakeSubsidy {
+    pub epoch_counter: u64,
+    pub balance: Balance,
+    pub current_epoch_amount: u64,
 }
 
 impl SuiSystemState {
