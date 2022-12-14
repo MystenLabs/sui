@@ -15,6 +15,7 @@ type AccountAddressProps = {
     className?: string;
     showLink?: boolean;
     shorten?: boolean;
+    copyable?: boolean;
     mode?: 'normal' | 'faded';
 };
 
@@ -22,21 +23,32 @@ function AccountAddress({
     className,
     showLink = true,
     shorten = true,
+    copyable,
     mode = 'normal',
 }: AccountAddressProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const showExplorerLink = API_ENV.customRPC !== network;
 
     const address = useAppSelector(({ account: { address } }) => address);
-    const shortenAddress = useMiddleEllipsis(address, 10, 7);
+    const shortenAddress = useMiddleEllipsis(address, 10, 6);
     const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
+
+    const addressLink = address && (
+        <span className={cl(st.address, st[mode])} title={address}>
+            {shorten ? shortenAddress : address}
+        </span>
+    );
+
     return address ? (
         <span className={cl(st.addressContainer, className)}>
-            <CopyToClipboard txt={address} mode={cpIconMode}>
-                <span className={cl(st.address, st[mode])} title={address}>
-                    {shorten ? shortenAddress : address}
-                </span>
-            </CopyToClipboard>
+            {copyable ? (
+                <CopyToClipboard txt={address} mode={cpIconMode}>
+                    {addressLink}
+                </CopyToClipboard>
+            ) : (
+                addressLink
+            )}
+
             {showLink && showExplorerLink ? (
                 <ExplorerLink
                     type={ExplorerLinkType.address}

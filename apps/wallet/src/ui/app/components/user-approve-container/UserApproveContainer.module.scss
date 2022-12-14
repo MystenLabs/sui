@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .container {
     flex: 1;
@@ -9,8 +10,18 @@
 
 .scroll-body {
     flex: 1;
-    padding: 25px;
+    padding: 30px 20px;
     padding-bottom: 0;
+    display: flex;
+    flex-flow: column;
+    gap: 15px;
+}
+
+.children {
+    flex: 1;
+    display: flex;
+    flex-flow: column;
+    gap: 15px;
 }
 
 .origin-container {
@@ -18,29 +29,63 @@
     flex-flow: column nowrap;
     align-items: center;
     align-self: stretch;
-    padding-bottom: 25px;
+    padding: 15px;
+    border: 1px solid colors.$gray-50;
+    border-radius: 15px;
+    gap: 20px;
+}
+
+.origin-meta {
+    display: flex;
+    flex-flow: row;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
 }
 
 .fav-icon {
     width: 60px;
-    border-radius: 4px;
+    height: 60px;
+    border-radius: 30px;
+}
+
+.card-footer {
+    width: 100%;
+    border-top: 1px solid colors.$gray-45;
+    display: flex;
+    justify-content: space-between;
+    padding-top: 12px;
+    color: colors.$sui-blue-steel-darker;
+
+    @include utils.typography('Primary/BodySmall-M');
+
+    .address {
+        font-family: 'Red Hat MonoVariable', ui-monospace, monospace;
+    }
+
+    .label {
+        color: colors.$sui-blue-steel-darker;
+    }
 }
 
 .host {
-    margin-top: 20px;
-    margin-bottom: 10px;
     font-size: 18px;
     line-height: 18px;
     font-weight: 600;
     text-transform: capitalize;
+    display: flex;
+    flex-flow: column;
+    align-content: center;
+    gap: 7px;
+    flex-grow: 1;
 }
 
 .origin {
-    margin-bottom: 10px;
     font-size: 14px;
-    line-height: 13px;
+    line-height: 100%;
     font-weight: 500;
     text-decoration: none;
+    text-transform: lowercase;
     color: colors.$sui-dark-blue;
 
     &.warning {
@@ -66,7 +111,7 @@
 }
 
 .actions {
-    padding: 15px 25px 25px;
+    padding: 20px;
     background: colors.$white;
     border-radius: 20px 20px 0 0;
     display: flex;
