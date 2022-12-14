@@ -10,6 +10,7 @@ export enum SuiIcons {
   ThumbsUp = "sui-icons-ThumbsUp",
   Union = "sui-icons-Union",
   Activity = "sui-icons-activity",
+  Add = "sui-icons-add",
   Apps = "sui-icons-apps",
   ArrowDown = "sui-icons-arrow-down",
   ArrowLeft = "sui-icons-arrow-left",
@@ -33,6 +34,7 @@ export enum SuiIcons {
   Nfts = "sui-icons-nfts",
   PercentagePolygon = "sui-icons-percentage-polygon",
   Person = "sui-icons-person",
+  Remove = "sui-icons-remove",
   Search = "sui-icons-search",
   SuiChevronRight = "sui-icons-sui-chevron-right",
   SuiLogoIcon = "sui-icons-sui-logo-icon",
@@ -44,6 +46,6 @@ export enum SuiIcons {
   VersionIcon = "sui-icons-version-icon"
 }
 
-export type SuiIconsClassname = "sui-icons-Buy" | "sui-icons-Download" | "sui-icons-Info" | "sui-icons-Plus" | "sui-icons-Preview" | "sui-icons-ThumbsUp" | "sui-icons-Union" | "sui-icons-activity" | "sui-icons-apps" | "sui-icons-arrow-down" | "sui-icons-arrow-left" | "sui-icons-arrow-right" | "sui-icons-check-fill" | "sui-icons-check" | "sui-icons-checkmark" | "sui-icons-chevron-down" | "sui-icons-clipboard" | "sui-icons-close-fill" | "sui-icons-close" | "sui-icons-coins" | "sui-icons-copy-fill" | "sui-icons-copy" | "sui-icons-globe" | "sui-icons-hand-coins" | "sui-icons-history" | "sui-icons-lock" | "sui-icons-logout" | "sui-icons-nft-type-image" | "sui-icons-nfts" | "sui-icons-percentage-polygon" | "sui-icons-person" | "sui-icons-search" | "sui-icons-sui-chevron-right" | "sui-icons-sui-logo-icon" | "sui-icons-sui-logo-txt" | "sui-icons-swap" | "sui-icons-tokens" | "sui-icons-unlocked" | "sui-icons-up-right" | "sui-icons-version-icon"
-export type SuiIconsIcon = "Buy" | "Download" | "Info" | "Plus" | "Preview" | "ThumbsUp" | "Union" | "activity" | "apps" | "arrow-down" | "arrow-left" | "arrow-right" | "check-fill" | "check" | "checkmark" | "chevron-down" | "clipboard" | "close-fill" | "close" | "coins" | "copy-fill" | "copy" | "globe" | "hand-coins" | "history" | "lock" | "logout" | "nft-type-image" | "nfts" | "percentage-polygon" | "person" | "search" | "sui-chevron-right" | "sui-logo-icon" | "sui-logo-txt" | "swap" | "tokens" | "unlocked" | "up-right" | "version-icon"
+export type SuiIconsClassname = "sui-icons-Buy" | "sui-icons-Download" | "sui-icons-Info" | "sui-icons-Plus" | "sui-icons-Preview" | "sui-icons-ThumbsUp" | "sui-icons-Union" | "sui-icons-activity" | "sui-icons-add" | "sui-icons-apps" | "sui-icons-arrow-down" | "sui-icons-arrow-left" | "sui-icons-arrow-right" | "sui-icons-check-fill" | "sui-icons-check" | "sui-icons-checkmark" | "sui-icons-chevron-down" | "sui-icons-clipboard" | "sui-icons-close-fill" | "sui-icons-close" | "sui-icons-coins" | "sui-icons-copy-fill" | "sui-icons-copy" | "sui-icons-globe" | "sui-icons-hand-coins" | "sui-icons-history" | "sui-icons-lock" | "sui-icons-logout" | "sui-icons-nft-type-image" | "sui-icons-nfts" | "sui-icons-percentage-polygon" | "sui-icons-person" | "sui-icons-remove" | "sui-icons-search" | "sui-icons-sui-chevron-right" | "sui-icons-sui-logo-icon" | "sui-icons-sui-logo-txt" | "sui-icons-swap" | "sui-icons-tokens" | "sui-icons-unlocked" | "sui-icons-up-right" | "sui-icons-version-icon"
+export type SuiIconsIcon = "Buy" | "Download" | "Info" | "Plus" | "Preview" | "ThumbsUp" | "Union" | "activity" | "add" | "apps" | "arrow-down" | "arrow-left" | "arrow-right" | "check-fill" | "check" | "checkmark" | "chevron-down" | "clipboard" | "close-fill" | "close" | "coins" | "copy-fill" | "copy" | "globe" | "hand-coins" | "history" | "lock" | "logout" | "nft-type-image" | "nfts" | "percentage-polygon" | "person" | "remove" | "search" | "sui-chevron-right" | "sui-logo-icon" | "sui-logo-txt" | "swap" | "tokens" | "unlocked" | "up-right" | "version-icon"
 export const SuiIconsPrefix = "sui-icons-"
