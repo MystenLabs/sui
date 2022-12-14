@@ -8,13 +8,12 @@ import {
     useQueryClient,
 } from '@tanstack/react-query';
 
-//TODO use hook useRpc -
-import { api } from '../redux/store/thunk-extras';
+import { useRpc } from '_hooks';
 
 export function useGetObject(
     objectId: string
 ): UseQueryResult<GetObjectDataResponse, unknown> {
-    const rpc = api.instance.fullNode;
+    const rpc = useRpc();
     const response = useQuery(
         ['object', objectId],
         async () => {

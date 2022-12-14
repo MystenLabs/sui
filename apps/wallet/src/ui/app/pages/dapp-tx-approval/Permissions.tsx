@@ -8,7 +8,7 @@ import { MiniNFT } from './MiniNFT';
 import { SummaryCard } from './SummaryCard';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useMiddleEllipsis, useGetNFTMeta } from '_hooks';
+import { useMiddleEllipsis, useGetNFTMetaById } from '_hooks';
 
 import st from './DappTxApprovalPage.module.scss';
 
@@ -29,7 +29,7 @@ export function PassedObject({ id, module }: { id: string; module: string }) {
         TRUNCATE_PREFIX_LENGTH
     );
 
-    const nftMeta = useGetNFTMeta(id);
+    const nftMeta = useGetNFTMetaById(id);
 
     return (
         <div className={st.permissionsContent}>
