@@ -37,11 +37,11 @@ module contract::satoshi_flip_match {
         match.host
     }
 
-    public fun get_guesser(match: & Match): address {
+    public fun get_guesser(match: &Match): address {
         match.guesser
     }
 
-    public fun get_guess(match: & Match): u8 {
+    public fun get_guess(match: &Match): u8 {
         let guess = *option::borrow(&match.guess);
         guess
     }

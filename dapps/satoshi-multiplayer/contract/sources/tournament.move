@@ -10,7 +10,9 @@ module contract::tournament {
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::transfer;
-    
+    use contract::satoshi_flip_match::{Match};
+
+
     // structs
     struct Tournament has key {
         id: UID,
@@ -105,20 +107,36 @@ module contract::tournament {
     }
 
     // Start n-th round for tournament
-    entry fun start_round(tournament: &mut Tournament) {
+    entry fun start_round(tournament: &mut Tournament, ctx: &mut TxContext) {
+        let num_of_players = vector::length(&tournament.players);
+
         // Bail early if this is the last player
-        assert!(vector::length(&tournament.players) < 2, ETournamentEnd);
+        assert!(num_of_players < 2, ETournamentEnd);
 
         // Make sure you are in the correct round
-        assert!((tournament.capacity/(2^tournament.round)) == vector::length(&tournament.players), ECannotStartRound);
+        assert!((tournament.capacity / (2^tournament.round)) == num_of_players, ECannotStartRound);
 
-        // How many matches in current round
-        let matches_num = vector::length(&tournament.players) / 2;
+        let i = num_of_players;
 
-        // Create matches that will participate in round
-        // Make one player host | guesser
+        // Split players into matches of two-players
+        while(i > 0) {
+            // Assign last player to be the host
+            let host = vector::pop_back(&tournament.players);
+
+            // Assign second to last player to be the guesser
+            let guesser = vector::pop_back(&tournament.players);
+            
+            // Create a match for current pair of host-guesser
+            Match.create(host, guesser, ctx);
+
+            i = i - 2;
+        };
 
         tournament.round += 1;
+    }
+
+    fun advance_round() {
+        // Are we going to handle guess, reveal functions here?
     }
 }
 
