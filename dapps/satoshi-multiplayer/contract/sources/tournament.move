@@ -18,6 +18,7 @@ module contract::tournament {
         prize: Balance<SUI>,
         capacity: u64,
         status: u64 // Status -> 0: pending | 1: running | 2: finished
+        round: u64,
     }
 
     // Player default entry fee in MIST
@@ -27,6 +28,7 @@ module contract::tournament {
     const EPlayerNoExist: u64 = 2;
     const ETournamentNotFound: u64 = 3;
     const ECannotWithdraw: u64 = 4;
+    const ECannotStartRound: u64 = 5;
 
     // Tournament initialization. 
     // Player can initialize a new tournament and share it with other players. 
@@ -47,6 +49,7 @@ module contract::tournament {
             prize: coin::into_balance(player_coin),
             capacity,
             status: 0,
+            round: 0,
         };
 
         // Make tournament shared obj so that every player can access it
@@ -100,4 +103,22 @@ module contract::tournament {
         // Transfer coin back to player
         transfer::transfer(player_payback, tx_context::sender(ctx));
     }
+
+    // Start n-th round for tournament
+    entry fun start_round(tournament: &mut Tournament) {
+        // Bail early if this is the last player
+        assert!(vector::length(&tournament.players) < 2, ETournamentEnd);
+
+        // Make sure you are in the correct round
+        assert!((tournament.capacity/(2^tournament.round)) == vector::length(&tournament.players), ECannotStartRound);
+
+        // How many matches in current round
+        let matches_num = vector::length(&tournament.players) / 2;
+
+        // Create matches that will participate in round
+        // Make one player host | guesser
+
+        tournament.round += 1;
+    }
 }
+
