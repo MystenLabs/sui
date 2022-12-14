@@ -143,6 +143,7 @@ impl SuiCommand {
                 } else {
                     Swarm::builder()
                         .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
+                        .with_event_store()
                 }
                 .from_network_config(sui_config_dir()?, network_config);
 
@@ -341,6 +342,7 @@ async fn genesis(
 
     let mut fullnode_config = network_config
         .fullnode_config_builder()
+        .with_event_store()
         .with_dir(FULL_NODE_DB_PATH.into())
         .build()?;
 
