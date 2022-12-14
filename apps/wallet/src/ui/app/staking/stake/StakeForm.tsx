@@ -13,7 +13,7 @@ import {
     GAS_SYMBOL,
 } from '_redux/slices/sui-objects/Coin';
 
-import type { FormValues } from '.';
+import type { FormValues } from './StakeCard';
 
 import st from './StakeForm.module.scss';
 
