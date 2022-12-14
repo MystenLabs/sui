@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import cl from 'classnames';
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,8 +27,6 @@ import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-
-import st from './StakeHome.module.scss';
 
 function StakeHome() {
     const { loading, error, showError } = useObjectsState();
@@ -60,7 +57,7 @@ function StakeHome() {
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
-            <div className={cl(st.container, 'w-full')}>
+            <div className="w-full flex flex-col flex-nowrap h-full overflow-x-scroll">
                 {showError && error ? (
                     <Alert className="mb-2">
                         <strong>Sync error (data might be outdated).</strong>{' '}
@@ -69,7 +66,7 @@ function StakeHome() {
                 ) : null}
                 <Loading
                     loading={loading || pendingDelegationsLoading}
-                    className={st.stakedInfoContainer}
+                    className="flex h-full items-center justify-center"
                 >
                     {hasDelegations ? (
                         <StakedHomeCard
@@ -105,30 +102,34 @@ function StakedHomeCard({
     const hasDelegations =
         activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
 
-    const numOfValidators = [
-        new Set([...activeDelegationIDs, ...pendingDelegations]),
-    ];
+    const numOfValidators =
+        activeDelegationIDs.length + pendingDelegations.length;
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     return (
-        <div className={st.container}>
+        <div className="flex flex-col flex-nowrap h-full overflow-x-scroll w-full">
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
                         <Card
+                            padding="none"
                             header={
-                                <Text
-                                    variant="captionSmall"
-                                    weight="medium"
-                                    color="steel-darker"
-                                >
-                                    STAKING ON {numOfValidators.length}{' '}
-                                    VALIDATORS
-                                </Text>
+                                <div className="py-2.5">
+                                    <Text
+                                        variant="captionSmall"
+                                        weight="semibold"
+                                        color="steel-darker"
+                                    >
+                                        STAKING ON {numOfValidators}
+                                        {numOfValidators > 1
+                                            ? ' VALIDATORS'
+                                            : ' VALIDATOR'}
+                                    </Text>
+                                </div>
                             }
                         >
-                            <div>
+                            <div className="flex divide-x divide-solid divide-gray-45 divide-y-0">
                                 <CardItem
                                     title="Your Stake"
                                     value={
@@ -137,7 +138,7 @@ function StakedHomeCard({
                                                 totalStakedIncludingPending
                                             }
                                             type={GAS_TYPE_ARG}
-                                            diffSymbol={true}
+                                            diffSymbol
                                         />
                                     }
                                 />
@@ -149,7 +150,7 @@ function StakedHomeCard({
                                             balance={BigInt(0)}
                                             type={GAS_TYPE_ARG}
                                             mode="positive"
-                                            diffSymbol={true}
+                                            diffSymbol
                                             title="This value currently is not available"
                                         />
                                     }
@@ -157,7 +158,7 @@ function StakedHomeCard({
                             </div>
                         </Card>
 
-                        <div className={st.stakedContainer}>
+                        <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {hasDelegations ? (
                                 <>
                                     {pendingDelegations.map(
@@ -179,13 +180,15 @@ function StakedHomeCard({
                                     ))}
                                 </>
                             ) : (
-                                <div
-                                    className={cl(
-                                        st.stakedInfoContainer,
-                                        st.empty
-                                    )}
-                                >
-                                    No active stakes found
+                                <div className="flex mt-7.5 items-center justify-center grid-cols-2 text-bodySmall">
+                                    <Text
+                                        variant="caption"
+                                        weight="semibold"
+                                        color="gray-75"
+                                    >
+                                        {' '}
+                                        No active stakes found
+                                    </Text>
                                 </div>
                             )}
                         </div>
