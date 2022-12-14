@@ -673,7 +673,9 @@ impl PrimaryReceiverHandler {
                     break
                 },
                 result = rx_narwhal_round_updates.changed() => {
-                    result.unwrap();
+                    if result.is_err() {
+                        return Err(DagError::NetworkError("Node shutting down".to_owned()));
+                    }
                     let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
                         narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,

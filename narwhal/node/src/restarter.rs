@@ -85,6 +85,10 @@ impl NodeRestarter {
             handles.extend(primary_handles);
             handles.extend(worker_handles);
 
+            // give some time to the node to bootstrap before we are ready to receive
+            // another reconfiguration message
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
             // Wait for a committee change.
             let (
                 new_keypair,
@@ -106,7 +110,7 @@ impl NodeRestarter {
                     "http://127.0.0.1:{}/reconfigure",
                     parameters
                         .network_admin_server
-                        .primary_network_admin_server_port
+                        .primary_network_admin_server_port,
                 ))
                 .json(&ReconfigureNotification::Shutdown)
                 .send()
@@ -118,6 +122,8 @@ impl NodeRestarter {
             // Wait for the components to shut down.
             join_all(handles.drain(..)).await;
             tracing::info!("All tasks successfully exited");
+
+            drop(store);
 
             // Give it an extra second in case the last task to exit is a network server. The OS
             // may need a moment to make the TCP ports available again.

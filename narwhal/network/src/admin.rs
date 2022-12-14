@@ -47,6 +47,7 @@ pub fn start_admin_server(
             let message = rx_reconfigure.borrow().clone();
             if let ReconfigureNotification::Shutdown = message {
                 handle.clone().shutdown();
+
                 return;
             }
         }
@@ -58,6 +59,8 @@ pub fn start_admin_server(
             .serve(router.into_make_service())
             .await
             .unwrap();
+
+        info!("Shutting down admin server");
     }));
 
     handles

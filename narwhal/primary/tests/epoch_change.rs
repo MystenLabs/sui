@@ -8,21 +8,29 @@ use config::{Committee, Parameters};
 use fastcrypto::traits::KeyPair;
 use futures::future::{join_all, try_join_all};
 use narwhal_primary as primary;
+use node::Node;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
+use std::num::NonZeroUsize;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use storage::NodeStorage;
 use test_utils::{ensure_test_environment, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
+use tracing::info;
 use types::ReconfigureNotification;
+use worker::TrivialTransactionValidator;
 
 /// The epoch changes but the stake distribution and network addresses stay the same.
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_simple_epoch_change() {
     ensure_test_environment();
+    telemetry_subscribers::init_for_testing();
 
     // The configuration of epoch 0.
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder()
+        .number_of_workers(NonZeroUsize::new(1).unwrap())
+        .randomize_ports(true)
+        .build();
     let committee_0 = fixture.committee();
     let worker_cache_0 = fixture.shared_worker_cache();
     let parameters = fixture
@@ -57,15 +65,16 @@ async fn test_simple_epoch_change() {
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
         let store = NodeStorage::reopen(temp_dir());
+        let registry = Registry::new();
 
         let p = parameters.get(&name).unwrap().clone();
         Primary::spawn(
-            name,
+            name.clone(),
             signer.copy(),
             authority.network_keypair().copy(),
             Arc::new(ArcSwap::from_pointee(committee_0.clone())),
             worker_cache_0.clone(),
-            p,
+            p.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),
             store.proposer_store.clone(),
@@ -78,8 +87,23 @@ async fn test_simple_epoch_change() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
-            &Registry::new(),
+            &registry,
             None,
+        );
+
+        let worker_keypairs = authority.worker_keypairs();
+        let worker_ids = 0..worker_keypairs.len() as u32;
+        let worker_ids_and_keypairs = worker_ids.zip(worker_keypairs.into_iter()).collect();
+
+        Node::spawn_workers(
+            name,
+            worker_ids_and_keypairs,
+            Arc::new(ArcSwap::from_pointee(committee_0.clone())),
+            worker_cache_0.clone(),
+            &store,
+            p.clone(),
+            TrivialTransactionValidator::default(),
+            &registry,
         );
     }
 
@@ -87,6 +111,7 @@ async fn test_simple_epoch_change() {
     for rx in rx_channels.iter_mut() {
         loop {
             let certificate = rx.recv().await.unwrap();
+
             assert_eq!(certificate.epoch(), 0);
             if certificate.round() == 10 {
                 break;
@@ -122,6 +147,9 @@ async fn test_simple_epoch_change() {
                 .send();
             futs.push(fut);
         }
+
+        info!("Sent to all the reconfigure message {message:?}");
+
         try_join_all(futs).await.unwrap();
 
         // Run for a while.
@@ -129,6 +157,7 @@ async fn test_simple_epoch_change() {
             loop {
                 let certificate = rx.recv().await.unwrap();
                 if certificate.epoch() == epoch && certificate.round() == 10 {
+                    info!("Received certificate of epoch {}", certificate.epoch());
                     break;
                 }
             }
