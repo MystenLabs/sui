@@ -21,7 +21,9 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
+use crate::authority_aggregator::TransactionCertifier;
 use std::collections::HashSet;
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -274,6 +276,7 @@ pub struct CheckpointBuilder {
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
+    transaction_certifier: Box<dyn TransactionCertifier>,
 }
 
 pub struct CheckpointAggregator {
@@ -304,6 +307,7 @@ impl CheckpointBuilder {
         exit: watch::Receiver<()>,
         notify_aggregator: Arc<Notify>,
         metrics: Arc<CheckpointMetrics>,
+        transaction_certifier: Box<dyn TransactionCertifier>,
     ) -> Self {
         Self {
             state,
@@ -314,6 +318,7 @@ impl CheckpointBuilder {
             exit,
             notify_aggregator,
             metrics,
+            transaction_certifier,
         }
     }
 
@@ -486,6 +491,7 @@ impl CheckpointBuilder {
                 self.state.epoch() + 1,
                 epoch_total_gas_cost,
                 Duration::from_secs(60), // TODO: Is 60s enough?
+                self.transaction_certifier.deref(),
             )
             .await?;
         let signed_effect = self
@@ -732,6 +738,7 @@ impl CheckpointService {
         effects_store: Box<dyn EffectsNotifyRead>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
+        transaction_certifier: Box<dyn TransactionCertifier>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Arc<Self> {
         let notify_builder = Arc::new(Notify::new());
@@ -748,6 +755,7 @@ impl CheckpointService {
             exit_rcv.clone(),
             notify_aggregator.clone(),
             metrics.clone(),
+            transaction_certifier,
         );
 
         spawn_monitored_task!(builder.run());
@@ -929,6 +937,7 @@ impl CheckpointTailer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority_aggregator::NetworkTransactionCertifier;
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
@@ -984,6 +993,7 @@ mod tests {
             store,
             Box::new(output),
             Box::new(certified_output),
+            Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new_for_tests(),
         );
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);

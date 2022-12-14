@@ -78,7 +78,7 @@ use sui_types::{
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_aggregator::TransactionCertifier;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
@@ -334,7 +334,7 @@ impl AuthorityMetrics {
             .unwrap(),
             transaction_manager_num_executing_certificates: register_int_gauge_with_registry!(
                 "transaction_manager_num_executing_certificates",
-                "Nnumber of executing certificates, including queued and actually running certificates",
+                "Number of executing certificates, including queued and actually running certificates",
                 registry,
             )
             .unwrap(),
@@ -2417,6 +2417,7 @@ impl AuthorityState {
         next_epoch: EpochId,
         gas_cost_summary: &GasCostSummary,
         timeout: Duration,
+        transaction_certifier: &dyn TransactionCertifier,
     ) -> anyhow::Result<VerifiedCertificate> {
         debug!(
             ?next_epoch,
@@ -2434,49 +2435,8 @@ impl AuthorityState {
         // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
         self.handle_transaction_impl(tx.clone()).await?;
         debug!(?next_epoch, "Successfully signed advance epoch transaction");
-
-        // If constructing network fails, it's not recoverable.
-        let net = AuthorityAggregator::new_from_system_state(
-            &self.database,
-            &self.committee_store,
-            &Registry::new(),
-        )?;
-
-        let result = tokio::time::timeout(timeout, async {
-            loop {
-                // We may have already executed this transaction somewhere else.
-                // If so, no need to try to get it from the network.
-                if let Ok(Some(VerifiedTransactionInfoResponse {
-                    certified_transaction: Some(cert),
-                    ..
-                })) = self.get_tx_info_already_executed(tx.digest()).await
-                {
-                    return cert;
-                }
-                match net.process_transaction(tx.clone()).await {
-                    Ok(cert) => {
-                        return cert;
-                    }
-                    Err(err) => {
-                        debug!("Did not create advance epoch transaction cert: {:?}", err);
-                    }
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        })
-        .await;
-        match result {
-            Ok(cert) => {
-                debug!(
-                    "Successfully created advance epoch transaction cert: {:?}",
-                    cert
-                );
-                Ok(cert)
-            }
-            Err(err) => {
-                error!("Failed to create advance epoch transaction cert. Giving up");
-                Err(err.into())
-            }
-        }
+        transaction_certifier
+            .create_certificate(&tx, self, timeout)
+            .await
     }
 }

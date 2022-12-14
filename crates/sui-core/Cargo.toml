@@ -37,6 +37,7 @@ either = "1.8.0"
 rand = "0.8.5"
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
 sui-network = { path = "../sui-network" }
 sui-types = { path = "../sui-types" }
 sui-storage = { path = "../sui-storage" }
@@ -78,7 +79,6 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
 
-sui-framework-build = { path = "../sui-framework-build" }
 sui-protocol-constants = { path = "../sui-protocol-constants" }
 sui-macros = { path = "../sui-macros" }
 

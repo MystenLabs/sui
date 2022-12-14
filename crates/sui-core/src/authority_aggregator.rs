@@ -406,27 +406,49 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     }
 }
 
+/// This trait provides a method for an authority to get a certificate from the network
+/// for a specific transaction. In order to create a certificate, we need to create the network
+/// authority aggregator based on the Sui system state committee/network information. This is
+/// needed to create a certificate for the advance epoch transaction during reconfiguration.
+/// However to make testing easier, we sometimes want to use local authority clients that do not
+/// involve full-fledged network Sui nodes (e.g. when we want to abstract out Narwhal). In order
+/// to support both network clients and local clients, this trait is defined to hide the difference.
+/// We implement this trait for both NetworkTransactionCertifier and LocalTransactionCertifier.
 #[async_trait]
-pub trait AdvanceEpochTxCertifier {
-    async fn create_advance_epoch_cert(
+pub trait TransactionCertifier: Sync + Send + 'static {
+    /// This function first loads the Sui system state object from `self_state`, get the committee
+    /// information, creates an AuthorityAggregator, and use the aggregator to create a certificate
+    /// for the specified transaction.
+    async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &Arc<AuthorityState>,
+        self_state: &AuthorityState,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate>;
 }
 
-pub struct NetworkAdvanceEpochTxCertifier {}
-pub struct LocalAdvanceEpochTxCertifier {
+#[derive(Default)]
+pub struct NetworkTransactionCertifier {}
+
+pub struct LocalTransactionCertifier {
+    /// Contains all the local authority states that we are aware of.
+    /// This can be utilized to also test validator set changes. We simply need to provide all
+    /// potential validators (both current and future) in this map for latter lookup.
     state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>,
 }
 
+impl LocalTransactionCertifier {
+    pub fn new(state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>) -> Self {
+        Self { state_map }
+    }
+}
+
 #[async_trait]
-impl AdvanceEpochTxCertifier for NetworkAdvanceEpochTxCertifier {
-    async fn create_advance_epoch_cert(
+impl TransactionCertifier for NetworkTransactionCertifier {
+    async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &Arc<AuthorityState>,
+        self_state: &AuthorityState,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let net = AuthorityAggregator::new_from_system_state(
@@ -441,11 +463,11 @@ impl AdvanceEpochTxCertifier for NetworkAdvanceEpochTxCertifier {
 }
 
 #[async_trait]
-impl AdvanceEpochTxCertifier for LocalAdvanceEpochTxCertifier {
-    async fn create_advance_epoch_cert(
+impl TransactionCertifier for LocalTransactionCertifier {
+    async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &Arc<AuthorityState>,
+        self_state: &AuthorityState,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let sui_system_state = self_state.get_sui_system_state_object().await?;
@@ -1855,7 +1877,7 @@ where
     pub async fn authorty_ask_for_cert_with_retry_and_timeout(
         &self,
         transaction: &VerifiedTransaction,
-        state: &Arc<AuthorityState>,
+        state: &AuthorityState,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let result = tokio::time::timeout(timeout, async {

@@ -3,9 +3,3 @@
 
 pub mod committee_store;
 pub mod reconfiguration;
-
-/*
-#[cfg(test)]
-#[path = "./tests/reconfiguration_tests.rs"]
-mod reconfiguration_tests;
-*/

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::option::Option::None;
 use std::{sync::Arc, time::Duration};
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -445,6 +445,7 @@ impl SuiNode {
             Box::new(state.database.clone()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
+            Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new(&registry_service.default_registry()),
         );
         let committee = config.genesis()?.narwhal_committee().load();

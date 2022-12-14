@@ -21,10 +21,8 @@ use sui_types::committee::CommitteeWithNetAddresses;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{error::SuiError, messages::*};
-
-#[cfg(test)]
 use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
+use sui_types::{error::SuiError, messages::*};
 
 use sui_network::tonic::transport::Channel;
 
@@ -391,7 +389,6 @@ impl AuthorityAPI for LocalAuthorityClient {
 }
 
 impl LocalAuthorityClient {
-    #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
         let state = AuthorityState::new_for_testing(committee, &secret, None, Some(genesis)).await;
         Self {
@@ -400,7 +397,6 @@ impl LocalAuthorityClient {
         }
     }
 
-    #[cfg(test)]
     pub async fn new_with_objects(
         committee: Committee,
         secret: AuthorityKeyPair,

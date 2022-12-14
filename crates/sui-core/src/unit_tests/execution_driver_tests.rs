@@ -3,9 +3,9 @@
 
 use crate::authority_aggregator::authority_aggregator_tests::{
     crate_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
-    init_local_authorities, transfer_object_move_transaction,
+    transfer_object_move_transaction,
 };
-use crate::test_utils::wait_for_tx;
+use crate::test_utils::{init_local_authorities, wait_for_tx};
 
 use std::collections::BTreeSet;
 use std::time::Duration;
