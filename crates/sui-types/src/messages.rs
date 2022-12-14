@@ -1894,6 +1894,10 @@ pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
+pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
+pub type VerifiedCertifiedTransactionEffects =
+    VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
 pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
 pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
 pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
@@ -2197,7 +2201,6 @@ pub type IsTransactionExecutedLocally = bool;
 pub enum ExecuteTransactionResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
-    // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(
         Box<(
             CertifiedTransaction,
@@ -2207,7 +2210,7 @@ pub enum ExecuteTransactionResponse {
     ),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
+#[derive(Clone, Debug, schemars::JsonSchema)]
 pub enum QuorumDriverRequestType {
     ImmediateReturn,
     WaitForTxCert,
@@ -2220,11 +2223,11 @@ pub struct QuorumDriverRequest {
     pub request_type: QuorumDriverRequestType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum QuorumDriverResponse {
     ImmediateReturn,
-    TxCert(Box<CertifiedTransaction>),
-    EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
+    TxCert(Box<VerifiedCertificate>),
+    EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

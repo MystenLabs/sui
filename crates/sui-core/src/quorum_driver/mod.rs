@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::messages::VerifiedCertifiedTransactionEffects;
 use tap::TapFallible;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -22,15 +23,15 @@ use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedCertificate,
+    VerifiedTransaction,
 };
 
 const TASK_QUEUE_SIZE: usize = 5000;
 
 pub enum QuorumTask {
     ProcessTransaction(VerifiedTransaction),
-    ProcessCertificate(CertifiedTransaction),
+    ProcessCertificate(VerifiedCertificate),
 }
 
 /// A handler to wrap around QuorumDriver. This handler should be owned by the node with exclusive
@@ -38,9 +39,10 @@ pub enum QuorumTask {
 pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     _processor_handle: JoinHandle<()>,
-    // TODO: Change to CertifiedTransactionEffects eventually.
-    effects_subscriber:
-        tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
+    effects_subscriber: tokio::sync::broadcast::Receiver<(
+        VerifiedCertificate,
+        VerifiedCertifiedTransactionEffects,
+    )>,
     quorum_driver_metrics: Arc<QuorumDriverMetrics>,
 }
 
@@ -53,7 +55,7 @@ pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumTask>,
     effects_subscribe_sender:
-        tokio::sync::broadcast::Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
+        tokio::sync::broadcast::Sender<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>,
     metrics: Arc<QuorumDriverMetrics>,
 }
 
@@ -62,8 +64,8 @@ impl<A> QuorumDriver<A> {
         validators: Arc<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumTask>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<(
-            CertifiedTransaction,
-            CertifiedTransactionEffects,
+            VerifiedCertificate,
+            VerifiedCertifiedTransactionEffects,
         )>,
         metrics: Arc<QuorumDriverMetrics>,
     ) -> Self {
@@ -174,21 +176,22 @@ where
     ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self.process_transaction(transaction).await?;
         let response = self.process_certificate(certificate).await?;
-        Ok(QuorumDriverResponse::EffectsCert(Box::new(response)))
+        Ok(QuorumDriverResponse::EffectsCert(Box::new((
+            response.0, response.1,
+        ))))
     }
 
     pub async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<CertifiedTransaction> {
+    ) -> SuiResult<VerifiedCertificate> {
         let tx_digest = *transaction.digest();
         let result = self
             .validators
             .load()
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx", ?tx_digest))
-            .await
-            .map(|v| v.into());
+            .await;
 
         match &result {
             Err(SuiError::QuorumFailedToProcessTransaction {
@@ -250,12 +253,12 @@ where
 
     pub async fn process_certificate(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> SuiResult<(CertifiedTransaction, CertifiedTransactionEffects)> {
+        certificate: VerifiedCertificate,
+    ) -> SuiResult<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)> {
         let effects = self
             .validators
             .load()
-            .process_certificate(certificate.clone())
+            .process_certificate(certificate.clone().into_inner())
             .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
             .await?;
         let response = (certificate, effects);
@@ -487,7 +490,8 @@ where
 
     pub fn subscribe(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
+    ) -> tokio::sync::broadcast::Receiver<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>
+    {
         self.effects_subscriber.resubscribe()
     }
 

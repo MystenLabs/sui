@@ -151,7 +151,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             QuorumDriverResponse::EffectsCert(result) => {
                 let (tx_cert, effects_cert) = *result;
                 let tx_cert: SuiCertifiedTransaction = tx_cert.try_into().unwrap();
-                let effects = ExecutionEffects::CertifiedTransactionEffects(effects_cert);
+                let effects = ExecutionEffects::CertifiedTransactionEffects(effects_cert.into());
                 Ok((tx_cert, effects))
             }
             other => panic!("This should not happen, got: {:?}", other),

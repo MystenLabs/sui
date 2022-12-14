@@ -38,7 +38,8 @@ use sui_storage::{
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
-use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
+use sui_types::messages::VerifiedCertificate;
+use sui_types::messages::VerifiedCertifiedTransactionEffects;
 use tokio::sync::mpsc::channel;
 use tower::ServiceBuilder;
 use tracing::info;
@@ -429,8 +430,12 @@ impl SuiNode {
 
     pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>>
-    {
+    ) -> Result<
+        tokio::sync::broadcast::Receiver<(
+            VerifiedCertificate,
+            VerifiedCertifiedTransactionEffects,
+        )>,
+    > {
         self.transaction_orchestrator
             .as_ref()
             .map(|to| to.subscribe_to_effects_queue())

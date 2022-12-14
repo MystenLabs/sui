@@ -21,9 +21,9 @@ use prometheus::{
 };
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
-    ExecuteTransactionRequestType, ExecuteTransactionResponse, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, VerifiedCertificate,
+    CertifiedTransactionEffects, ExecuteTransactionRequest, ExecuteTransactionRequestType,
+    ExecuteTransactionResponse, QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse,
+    VerifiedCertificate, VerifiedCertifiedTransactionEffects,
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
@@ -124,19 +124,15 @@ where
             QuorumDriverResponse::ImmediateReturn => {
                 Ok(ExecuteTransactionResponse::ImmediateReturn)
             }
-            QuorumDriverResponse::TxCert(result) => {
-                Ok(ExecuteTransactionResponse::TxCert(Box::new(*result)))
-            }
+            QuorumDriverResponse::TxCert(result) => Ok(ExecuteTransactionResponse::TxCert(
+                Box::new(result.into_inner()),
+            )),
             QuorumDriverResponse::EffectsCert(result) => {
                 let (tx_cert, effects_cert) = *result;
-                let tx_cert = {
-                    let epoch_store = self.validator_state.epoch_store();
-                    tx_cert.verify(epoch_store.committee())?
-                };
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         tx_cert.into(),
-                        effects_cert,
+                        effects_cert.into(),
                         false,
                     ))));
                 }
@@ -150,12 +146,12 @@ where
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         tx_cert.into(),
-                        effects_cert,
+                        effects_cert.into(),
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         tx_cert.into(),
-                        effects_cert,
+                        effects_cert.into(),
                         false,
                     )))),
                 }
@@ -221,25 +217,12 @@ where
 
     async fn loop_execute_finalized_tx_locally(
         validator_state: Arc<AuthorityState>,
-        mut effects_receiver: Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
+        mut effects_receiver: Receiver<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>,
         metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
-                    let tx_cert = {
-                        let epoch_store = validator_state.epoch_store();
-                        match tx_cert.verify(epoch_store.committee()) {
-                            Err(err) => {
-                                error!(
-                                "received certificate from quorum driver with bad signatures! {}",
-                                err
-                            );
-                                continue;
-                            }
-                            Ok(c) => c,
-                        }
-                    };
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
                         &tx_cert,
@@ -265,7 +248,7 @@ where
 
     pub fn subscribe_to_effects_queue(
         &self,
-    ) -> Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
+    ) -> Receiver<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)> {
         self.quorum_driver_handler.subscribe()
     }
 
