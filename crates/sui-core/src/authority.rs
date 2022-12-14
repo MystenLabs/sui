@@ -649,6 +649,17 @@ impl AuthorityState {
 
         self.metrics.tx_orders.inc();
 
+        // The should_accept_user_certs check here is best effort, because
+        // between a validator signs a tx and a cert is formed, the validator
+        // could close the window.
+        if !self
+            .epoch_store()
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_user_certs()
+        {
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
         let response = self.handle_transaction_impl(transaction).await;
         match response {
             Ok(r) => Ok(r),
@@ -779,7 +790,7 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "handle_certificate");
+        debug!(?tx_digest, "execute_certificate_internal");
 
         let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
 
