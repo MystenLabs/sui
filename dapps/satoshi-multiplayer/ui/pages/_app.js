@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import '../styles/style.scss'
 import Footer from '../components/Footer'
 import Head from 'next/head'
