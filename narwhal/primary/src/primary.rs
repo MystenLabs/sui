@@ -391,32 +391,6 @@ impl Primary {
             network.clone(),
         );
 
-        let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
-            tx_block_synchronizer_commands,
-            tx_certificates,
-            certificate_store.clone(),
-            parameters
-                .block_synchronizer
-                .handler_certificate_deliver_timeout,
-        ));
-
-        // Indicator variable for components to operate in internal vs external consensus modes.
-        let internal_consensus = dag.is_none();
-
-        // Responsible for finding missing blocks (certificates) and fetching
-        // them from the primary peers by synchronizing also their batches.
-        let block_synchronizer_handle = BlockSynchronizer::spawn(
-            name.clone(),
-            (**committee.load()).clone(),
-            worker_cache.clone(),
-            tx_reconfigure.subscribe(),
-            rx_block_synchronizer_commands,
-            network.clone(),
-            payload_store.clone(),
-            certificate_store.clone(),
-            parameters.clone(),
-        );
-
         // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
         let certificate_fetcher_handle = CertificateFetcher::spawn(
@@ -453,19 +427,41 @@ impl Primary {
             node_metrics,
         );
 
-        // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
-        let state_handler_handle = StateHandler::spawn(
-            name.clone(),
-            committee.clone(),
-            worker_cache.clone(),
-            rx_committed_certificates,
-            rx_state_handler,
-            tx_reconfigure,
-            Some(tx_committed_own_headers),
-            network.clone(),
-        );
+        let mut handles = vec![
+            core_handle,
+            certificate_fetcher_handle,
+            proposer_handle,
+            connection_monitor_handle,
+        ];
+        handles.extend(admin_handles);
 
-        let consensus_api_handle = if !internal_consensus {
+        // If a DAG component is present then we are not using the internal consensus (Bullshark/Tusk)
+        // but rather an external one and we are leveraging a pure DAG structure, and more components
+        // need to get initialised.
+        if dag.is_some() {
+            let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
+                tx_block_synchronizer_commands,
+                tx_certificates,
+                certificate_store.clone(),
+                parameters
+                    .block_synchronizer
+                    .handler_certificate_deliver_timeout,
+            ));
+
+            // Responsible for finding missing blocks (certificates) and fetching
+            // them from the primary peers by synchronizing also their batches.
+            let block_synchronizer_handle = BlockSynchronizer::spawn(
+                name.clone(),
+                (**committee.load()).clone(),
+                worker_cache.clone(),
+                tx_reconfigure.subscribe(),
+                rx_block_synchronizer_commands,
+                network.clone(),
+                payload_store.clone(),
+                certificate_store.clone(),
+                parameters.clone(),
+            );
+
             // Retrieves a block's data by contacting the worker nodes that contain the
             // underlying batches and their transactions.
             let block_waiter = BlockWaiter::new(
@@ -478,17 +474,17 @@ impl Primary {
             // Orchestrates the removal of blocks across the primary and worker nodes.
             let block_remover = BlockRemover::new(
                 name.clone(),
-                worker_cache,
+                worker_cache.clone(),
                 certificate_store,
                 header_store,
                 payload_store,
                 dag.clone(),
-                network,
+                network.clone(),
                 tx_committed_certificates,
             );
 
             // Spawn a grpc server to accept requests from external consensus layer.
-            Some(ConsensusAPIGrpc::spawn(
+            let consensus_api_handle = ConsensusAPIGrpc::spawn(
                 name.clone(),
                 parameters.consensus_api_grpc.socket_addr,
                 block_waiter,
@@ -499,10 +495,23 @@ impl Primary {
                 dag,
                 committee.clone(),
                 endpoint_metrics,
-            ))
-        } else {
-            None
-        };
+            );
+
+            handles.extend(vec![block_synchronizer_handle, consensus_api_handle]);
+        }
+
+        // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
+        let state_handler_handle = StateHandler::spawn(
+            name.clone(),
+            committee.clone(),
+            worker_cache,
+            rx_committed_certificates,
+            rx_state_handler,
+            tx_reconfigure,
+            Some(tx_committed_own_headers),
+            network,
+        );
+        handles.push(state_handler_handle);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -513,21 +522,6 @@ impl Primary {
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
         );
-
-        let mut handles = vec![
-            core_handle,
-            block_synchronizer_handle,
-            certificate_fetcher_handle,
-            proposer_handle,
-            state_handler_handle,
-            connection_monitor_handle,
-        ];
-
-        handles.extend(admin_handles);
-
-        if let Some(h) = consensus_api_handle {
-            handles.push(h);
-        }
 
         handles
     }
