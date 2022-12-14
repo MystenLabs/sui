@@ -88,6 +88,10 @@ module sui::staking_pool {
     /// A self-custodial object holding the staked SUI tokens.
     struct StakedSui has key {
         id: UID,
+        /// The validator we are staking with.
+        validator_address: address,
+        /// The epoch at which the delegation is requested.
+        delegation_request_epoch: u64,
         /// The staked SUI tokens.
         principal: Balance<SUI>,
         /// If the stake comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>, this
@@ -129,6 +133,8 @@ module sui::staking_pool {
         vector::push_back(&mut pool.pending_delegations, PendingDelegationEntry { delegator, sui_amount });
         let staked_sui = StakedSui {
             id: object::new(ctx),
+            validator_address: pool.validator_address,
+            delegation_request_epoch: tx_context::epoch(ctx),
             principal: stake,
             sui_token_lock,
         };
@@ -179,6 +185,7 @@ module sui::staking_pool {
         // Check that the delegation information matches the pool. 
         assert!(
             delegation.validator_address == pool.validator_address &&
+            delegation.validator_address == staked_sui.validator_address &&
             delegation.pool_starting_epoch == pool.starting_epoch,
             EWRONG_POOL
         );
@@ -375,6 +382,8 @@ module sui::staking_pool {
     public entry fun destroy_empty_staked_sui(staked_sui: StakedSui) {
         let StakedSui {
             id,
+            validator_address: _,
+            delegation_request_epoch: _,
             principal,
             sui_token_lock
         } = staked_sui;
