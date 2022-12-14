@@ -76,6 +76,8 @@ function CoinMeta({
     const activeAccount = useAppSelector(({ account }) => account.address);
 
     // TODO add receiver address;
+    // Currently dry_run does not return receiver address for transactions init by Move contract
+
     const showAddress = receiverAddress !== activeAccount;
 
     const receiverAddr = useMiddleEllipsis(

@@ -4,10 +4,13 @@
 import { getTotalGasUsed } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { useTransactionDryRun } from './useTransactionDryRun';
+import {
+    useTransactionDryRun,
+    type TransactionDryRun,
+} from './useTransactionDryRun';
 import { notEmpty } from '_helpers';
 
-import type { SignerWithProvider, TransactionEffects } from '@mysten/sui.js';
+import type { TransactionEffects } from '@mysten/sui.js';
 
 export type CoinsMetaProps = {
     amount: number;
@@ -96,10 +99,6 @@ export function getEventsSummary(
         coins: Object.values(meta),
     };
 }
-
-export type TransactionDryRun = Parameters<
-    SignerWithProvider['dryRunTransaction']
->['0'];
 
 type ExecuteDryRunTransactionRequestProps = {
     txData: TransactionDryRun;
