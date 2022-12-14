@@ -37,7 +37,6 @@ export function getEventsSummary(
                     event?.coinBalanceChange?.changeType
                 )
             ) {
-                /// Combine all the coin balance changes from Pay and Receive events
                 /// A net positive amount means the user received coins
                 /// A net negative amount means the user sent coins
                 const { coinBalanceChange } = event;
