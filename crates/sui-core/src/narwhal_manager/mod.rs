@@ -5,6 +5,7 @@ use arc_swap::ArcSwap;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
+use mysten_metrics::RegistryService;
 use narwhal_config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::{Node, NodeStorage};
@@ -19,7 +20,7 @@ use tokio::task::JoinHandle;
 
 pub struct NarwhalManager {
     pub join_handle: JoinHandle<()>,
-    pub tx_start: Sender<(Arc<Committee>, Registry)>,
+    pub tx_start: Sender<Arc<Committee>>,
     pub tx_stop: Sender<()>,
 }
 
@@ -36,11 +37,13 @@ pub struct NarwhalConfiguration<
     pub parameters: Parameters,
     pub execution_state: Arc<State>,
     pub tx_validator: TxValidator,
+
+    pub registry_service: RegistryService,
 }
 
 pub async fn run_narwhal_manager<State, TxValidator>(
     config: NarwhalConfiguration<State, TxValidator>,
-    mut tr_start: Receiver<(Arc<Committee>, Registry)>,
+    mut tr_start: Receiver<Arc<Committee>>,
     mut tr_stop: Receiver<()>,
 ) where
     State: ExecutionState + Send + Sync + 'static,
@@ -57,6 +60,16 @@ pub async fn run_narwhal_manager<State, TxValidator>(
         for (id, keypair) in &config.worker_ids_and_keypairs {
             id_keypair_copy.push((*id, keypair.copy()));
         }
+
+        // Wait for instruction to start an instance of narwhal
+        let new_committee = match tr_start.recv().await {
+            Some(m) => m,
+            None => break,
+        };
+
+        let new_registry = Registry::new();
+        let _ = config.registry_service.add(new_registry.clone());
+
         let config_copy = NarwhalConfiguration {
             primary_keypair: config.primary_keypair.copy(),
             network_keypair: config.network_keypair.copy(),
@@ -66,13 +79,9 @@ pub async fn run_narwhal_manager<State, TxValidator>(
             parameters: config.parameters.clone(),
             execution_state: config.execution_state.clone(),
             tx_validator: config.tx_validator.clone(),
+            registry_service: config.registry_service.clone(),
         };
 
-        // Wait for instruction to start an instance of narwhal
-        let (new_committee, new_registry) = match tr_start.recv().await {
-            Some(m) => m,
-            None => break,
-        };
         let narwhal_handles = start_narwhal(config_copy, new_committee, new_registry).await;
 
         // Wait for instruction to stop the instance of narwhal
