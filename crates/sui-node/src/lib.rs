@@ -263,7 +263,7 @@ impl SuiNode {
                 state.clone(),
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
-                &prometheus_registry,
+                registry_service.clone(),
             )
             .await?;
             validator_server_handle_outer = Some(validator_server_handle);
@@ -387,20 +387,23 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
-        prometheus_registry: &Registry,
+        registry_service: RegistryService,
     ) -> Result<(tokio::task::JoinHandle<Result<()>>, NarwhalManager)> {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        let consensus_adapter =
-            Self::construct_consensus_adapter(consensus_config, state.clone(), prometheus_registry);
+        let consensus_adapter = Self::construct_consensus_adapter(
+            consensus_config,
+            state.clone(),
+            &registry_service.default_registry(),
+        );
 
         let validator_server_handle = Self::start_grpc_validator_service(
             config,
             state.clone(),
             consensus_adapter.clone(),
-            prometheus_registry,
+            &registry_service.default_registry(),
         )
         .await?;
 
@@ -411,7 +414,7 @@ impl SuiNode {
             checkpoint_store.clone(),
             state.clone(),
             state_sync_handle,
-            &prometheus_registry,
+            registry_service,
         )
         .await?;
 
@@ -425,7 +428,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
-        prometheus_registry: &Registry,
+        registry_service: RegistryService,
     ) -> Result<NarwhalManager> {
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
             sender: consensus_adapter.clone(),
@@ -441,7 +444,7 @@ impl SuiNode {
             Box::new(state.database.clone()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
-            CheckpointMetrics::new(prometheus_registry),
+            CheckpointMetrics::new(&registry_service.default_registry()),
         );
         let committee = config.genesis()?.narwhal_committee().load();
 
@@ -453,7 +456,8 @@ impl SuiNode {
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
             execution_state: Arc::new(ConsensusHandler::new(state.clone(), checkpoint_service)),
-            tx_validator: SuiTxValidator::new(state.clone(), prometheus_registry),
+            tx_validator: SuiTxValidator::new(state.clone(), &registry_service.default_registry()),
+            registry_service,
         };
 
         let (tx_start, tr_start) = channel(1);
@@ -466,10 +470,8 @@ impl SuiNode {
             tx_start,
             tx_stop,
         };
-        narwhal_manager
-            .tx_start
-            .send((committee.clone(), prometheus_registry.clone()))
-            .await?;
+
+        narwhal_manager.tx_start.send(committee.clone()).await?;
 
         Ok(narwhal_manager)
     }
@@ -485,12 +487,10 @@ impl SuiNode {
                 .expect("Failed to connect to consensus"),
         );
 
-        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
+        let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
-        let consensus_adapter =
-            ConsensusAdapter::new(Box::new(consensus_client), state.clone(), ca_metrics);
 
-        consensus_adapter
+        ConsensusAdapter::new(Box::new(consensus_client), state, ca_metrics)
     }
 
     async fn start_grpc_validator_service(
@@ -583,10 +583,9 @@ impl SuiNode {
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator.
                     let narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-                    let registry = self.registry_service.default_registry();
                     narwhal_manager
                         .tx_start
-                        .send((Arc::new(narwhal_committee), registry))
+                        .send(Arc::new(narwhal_committee))
                         .await?;
                     // TODO: (Laura) wait for start complete signal
                     info!("Starting Narwhal");
@@ -595,14 +594,14 @@ impl SuiNode {
                 }
             } else if self.state.is_validator() {
                 info!("Promoting the node from fullnode to validator, starting grpc server");
-                let registry = self.registry_service.default_registry();
+
                 let (validator_server_handle, narwhal_manager) =
                     Self::construct_validator_components(
                         &self.config,
                         self.state.clone(),
                         self.checkpoint_store.clone(),
                         self.state_sync.clone(),
-                        &registry,
+                        self.registry_service.clone(),
                     )
                     .await?;
                 self.validator_server_handle = Some(validator_server_handle);
