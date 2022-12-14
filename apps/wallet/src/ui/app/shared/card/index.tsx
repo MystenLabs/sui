@@ -23,7 +23,6 @@ const cardContentStyle = cva([], {
 });
 
 export interface CardProps extends VariantProps<typeof cardContentStyle> {
-    className?: string;
     header?: ReactNode;
     footer?: ReactNode;
     children?: ReactNode | ReactNode[];
