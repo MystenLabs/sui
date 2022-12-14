@@ -28,7 +28,10 @@ pub(crate) struct TransactionManager {
 #[derive(Default)]
 struct Inner {
     // Maps missing input objects to transactions in pending_certificates.
-    missing_inputs: BTreeMap<ObjectKey, TransactionDigest>,
+    // Note that except for immutable objects, a given key may only have one TransactionDigest in
+    // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
+    // cannot determine from TransactionData whether an input is mutable or immutable.
+    missing_inputs: BTreeMap<ObjectKey, BTreeSet<TransactionDigest>>,
 
     // A transaction enqueued to TransactionManager must be in either pending_certificates or
     // executing_certificates.
@@ -127,9 +130,16 @@ impl TransactionManager {
             // 3. TransactionManager is protected by a mutex. The notification via
             // objects_committed() can only arrive after the current enqueue() call finishes.
             debug!(tx_digest = ?digest, ?missing, "certificate waiting on missing objects");
-            inner
-                .missing_inputs
-                .extend(missing.clone().into_iter().map(|obj_key| (obj_key, digest)));
+
+            for objkey in missing.iter() {
+                debug!(?objkey, ?digest, "adding missing object entry");
+                inner
+                    .missing_inputs
+                    .entry(*objkey)
+                    .or_default()
+                    .insert(digest);
+            }
+
             inner
                 .pending_certificates
                 .entry(digest)
@@ -153,19 +163,22 @@ impl TransactionManager {
         {
             let inner = &mut self.inner.write().await;
             for object_key in object_keys {
-                let Some(digest) = inner.missing_inputs.remove(&object_key) else {
+                let Some(digests) = inner.missing_inputs.remove(&object_key) else {
                     continue;
                 };
-                let set = inner.pending_certificates.entry(digest).or_default();
-                set.remove(&object_key);
-                // This certificate has no missing input. It is ready to execute.
-                if set.is_empty() {
-                    debug!(tx_digest = ?digest, "certificate ready");
-                    inner.pending_certificates.remove(&digest);
-                    assert!(inner.executing_certificates.insert(digest));
-                    ready_digests.push(digest);
-                } else {
-                    debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
+
+                for digest in digests.iter() {
+                    let set = inner.pending_certificates.entry(*digest).or_default();
+                    set.remove(&object_key);
+                    // This certificate has no missing input. It is ready to execute.
+                    if set.is_empty() {
+                        debug!(tx_digest = ?digest, "certificate ready");
+                        inner.pending_certificates.remove(digest);
+                        assert!(inner.executing_certificates.insert(*digest));
+                        ready_digests.push(*digest);
+                    } else {
+                        debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
+                    }
                 }
             }
 
