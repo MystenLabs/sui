@@ -11,8 +11,8 @@ module contract::satoshi_flip_match {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
-    const ENotGameHost: u64 = 0;
-    const ENotGameGuesser: u64 = 1;
+    const ENotMatchHost: u64 = 0;
+    const ENotMatchGuesser: u64 = 1;
     const ENotCorrectSecret: u64 = 2;
 
     struct Match has key {
@@ -71,7 +71,7 @@ module contract::satoshi_flip_match {
 
     public entry fun set_hash(match: Match, hash: vector<u8>, ctx: &mut TxContext){
         // make sure that host is calling the function
-        assert!(match.host == tx_context::sender(ctx), ENotGameHost);
+        assert!(match.host == tx_context::sender(ctx), ENotMatchHost);
         // update last move time with current epoch
         match.last_move_time = tx_context::epoch(ctx);
         // turn vector type into SHA3256-digest type
@@ -84,7 +84,7 @@ module contract::satoshi_flip_match {
 
     public entry fun guess(match: Match, guess: u8, ctx: &mut TxContext){
         // make sure that guesser is calling the function
-        assert!(match.guesser == tx_context::sender(ctx), ENotGameGuesser);
+        assert!(match.guesser == tx_context::sender(ctx), ENotMatchGuesser);
         // update last move time with current epoch
         match.last_move_time = tx_context::epoch(ctx);
         option::fill(&mut match.guess, guess);
@@ -95,7 +95,7 @@ module contract::satoshi_flip_match {
 
     public entry fun reveal(match: Match, secret: vector<u8>, ctx: &mut TxContext){
         let Match {id, last_move_time: _, host, guesser, hash, guess} = match;
-        assert!(host == tx_context::sender(ctx), ENotGameHost);
+        assert!(host == tx_context::sender(ctx), ENotMatchHost);
         let secret_hash = sha3_256(secret);
         let hash_value = option::borrow(&hash);
         assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
