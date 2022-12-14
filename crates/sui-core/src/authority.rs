@@ -895,9 +895,20 @@ impl AuthorityState {
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let digest = *certificate.digest();
+        // The cert could have been processed by a concurrent attempt of the same cert, so check if
+        // the effects have already been written.
+        // If the cert is finalized in a previous epoch, it will be re-signed
+        // with current epoch info and returned.
+        if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
+            tx_guard.release();
+            return Ok(info);
+        }
+
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
-        // present the possibility of an epoch mismatch.
+        // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
+        // epoch, then it's invalid.
         if certificate.epoch() != self.epoch() {
             tx_guard.release();
             return Err(SuiError::WrongEpoch {
@@ -909,9 +920,8 @@ impl AuthorityState {
         // first check to see if we have already executed and committed the tx
         // to the WAL
         let epoch_store = self.epoch_store();
-        if let Some((inner_temporary_storage, signed_effects)) = epoch_store
-            .wal()
-            .get_execution_output(certificate.digest())?
+        if let Some((inner_temporary_storage, signed_effects)) =
+            epoch_store.wal().get_execution_output(&digest)?
         {
             return self
                 .commit_cert_and_notify(
@@ -921,14 +931,6 @@ impl AuthorityState {
                     tx_guard,
                 )
                 .await;
-        }
-
-        let digest = *certificate.digest();
-        // The cert could have been processed by a concurrent attempt of the same cert, so check if
-        // the effects have already been written.
-        if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
-            tx_guard.release();
-            return Ok(info);
         }
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
