@@ -3,6 +3,7 @@
 
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use futures::future::try_join_all;
 use std::sync::Arc;
 use sui_indexer::PgConnectionPool;
 use sui_sdk::SuiClient;
@@ -32,7 +33,7 @@ impl ProcessorOrchestrator {
         let package_processor =
             PackageProcessor::new(self.rpc_client.clone(), self.conn_pool.clone());
 
-        tokio::task::spawn(async move {
+        let addr_handle = tokio::task::spawn(async move {
             let addr_result = retry(ExponentialBackoff::default(), || async {
                 let addr_processor_exec_res = address_processor.start().await;
                 if let Err(e) = addr_processor_exec_res.clone() {
@@ -51,7 +52,7 @@ impl ProcessorOrchestrator {
                 );
             }
         });
-        tokio::task::spawn(async move {
+        let obj_handle = tokio::task::spawn(async move {
             let obj_result = retry(ExponentialBackoff::default(), || async {
                 let obj_processor_exec_res = object_processor.start().await;
                 if let Err(e) = obj_processor_exec_res.clone() {
@@ -70,7 +71,7 @@ impl ProcessorOrchestrator {
                 );
             }
         });
-        tokio::task::spawn(async move {
+        let pkg_handle = tokio::task::spawn(async move {
             let pkg_result = retry(ExponentialBackoff::default(), || async {
                 let pkg_processor_exec_res = package_processor.start().await;
                 if let Err(e) = pkg_processor_exec_res.clone() {
@@ -89,5 +90,8 @@ impl ProcessorOrchestrator {
                 );
             }
         });
+        try_join_all(vec![addr_handle, pkg_handle, obj_handle])
+            .await
+            .expect("Processor orchestrator should not run into errors.");
     }
 }
