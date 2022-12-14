@@ -17,10 +17,8 @@ export { useObjectsState } from './useObjectsState';
 export { useWaitForElement } from './useWaitForElement';
 export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
 export { useGetNFTMeta } from './useGetNFTMeta';
-export {
-    useTransactionSummary,
-    useTransactionDryRun,
-} from './useTransactionDryRun';
+export { useTransactionDryRun } from './useTransactionDryRun';
+export { useTransactionSummary } from './useTransactionSummary';
 export { useRpc } from './useRpc';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';

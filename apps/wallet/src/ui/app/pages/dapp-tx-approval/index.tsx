@@ -256,16 +256,6 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest?.tx, txRequest?.unSerializedTxn]);
 
-    const TransactionTypeHeader = (
-        <>
-            <div className="font-medium text-sui-steel-darker">
-                Transaction Type
-            </div>
-            <div className="font-semibold text-sui-steel-darker">
-                {txRequest?.unSerializedTxn?.kind ?? txRequest?.tx?.type}
-            </div>
-        </>
-    );
     const address = useAppSelector(({ account: { address } }) => address);
 
     return (
@@ -290,7 +280,17 @@ export function DappTxApprovalPage() {
                         <Permissions metadata={metadata} />
                         <SummaryCard
                             transparentHeader
-                            header={TransactionTypeHeader}
+                            header={
+                                <>
+                                    <div className="font-medium text-sui-steel-darker">
+                                        Transaction Type
+                                    </div>
+                                    <div className="font-semibold text-sui-steel-darker">
+                                        {txRequest?.unSerializedTxn?.kind ??
+                                            txRequest?.tx?.type}
+                                    </div>
+                                </>
+                            }
                         >
                             <div className={st.content}>
                                 {valuesContent.map(

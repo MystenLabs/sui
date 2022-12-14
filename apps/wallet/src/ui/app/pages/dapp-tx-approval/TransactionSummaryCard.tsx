@@ -15,10 +15,8 @@ import {
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
-import type {
-    CoinsMetaProps,
-    TransactionDryRun,
-} from '../../hooks/useTransactionDryRun';
+import type { TransactionDryRun } from '../../hooks/useTransactionDryRun';
+import type { CoinsMetaProps } from '../../hooks/useTransactionSummary';
 import type { TransactionRequest } from '_payloads/transactions';
 
 import st from './DappTxApprovalPage.module.scss';
@@ -89,8 +87,6 @@ function CoinMeta({
     /// A net positive amount means the user received coins and verse versa.
     const sendLabel = coinMeta.amount < 0 ? 'Send' : 'Receive';
     const receiveLabel = coinMeta.amount < 0 ? 'To' : 'From';
-
-    // Use origin if current user address is the same as receiver address.
 
     return (
         <div className={st.content}>

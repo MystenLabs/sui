@@ -96,7 +96,6 @@ export function Permissions({ metadata }: PermissionsProps) {
                                         st.tab,
                                         tab === key && st.active
                                     )}
-                                    // eslint-disable-next-line react/jsx-no-bind
                                     onClick={() => {
                                         setTab(key as TabType);
                                     }}
