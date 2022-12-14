@@ -4,12 +4,12 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isTypescriptSDK: ${{ (steps.pnpm.outputs.packages && contains(fromJson(steps.pnpm.outputs.packages), '@mysten/sui.js')) || steps.diff.outputs.isRust }}
+      isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) || steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@v3
-      - name: Detect Changes (pnpm)
-        uses: "./.github/actions/pnpm-diffs"
-        id: pnpm
+      - name: Detect Changes (turbo)
+        uses: "./.github/actions/turbo-diffs"
+        id: turbo
       - name: Detect Changes (diff)
         uses: "./.github/actions/diffs"
         id: diff

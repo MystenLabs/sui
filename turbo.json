@@ -2,8 +2,24 @@
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
+      "inputs": [
+        "src/**/*",
+        "public/**",
+        ".storybook/**",
+        "*.ts",
+        "*.js",
+        "*.json"
+      ],
       "dependsOn": ["^build"],
       "outputs": ["build/**", "dist/**", "storybook-static/**"]
+    },
+    "sui-explorer#build": {
+      // The Sui Explorer does not need to build dependencies first:
+      "dependsOn": []
+    },
+    "sui-wallet#build": {
+      // The Sui Explorer does not need to build dependencies first:
+      "dependsOn": []
     }
   },
   "globalEnv": ["VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID"]
