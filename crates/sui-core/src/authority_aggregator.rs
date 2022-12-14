@@ -4,11 +4,13 @@
 
 use crate::authority_client::{
     make_authority_clients, make_network_authority_client_sets_from_committee,
-    make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
+    make_network_authority_client_sets_from_system_state, AuthorityAPI, LocalAuthorityClient,
+    NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use crate::validator_info::make_committee;
 
+use async_trait::async_trait;
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use move_core_types::value::MoveStructLayout;
@@ -48,7 +50,7 @@ use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
-use crate::authority::AuthorityStore;
+use crate::authority::{AuthorityState, AuthorityStore};
 use crate::epoch::committee_store::CommitteeStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
@@ -401,6 +403,66 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             authority_clients,
             prometheus_registry,
         ))
+    }
+}
+
+#[async_trait]
+pub trait AdvanceEpochTxCertifier {
+    async fn create_advance_epoch_cert(
+        &self,
+        transaction: &VerifiedTransaction,
+        self_state: &Arc<AuthorityState>,
+        timeout: Duration,
+    ) -> anyhow::Result<VerifiedCertificate>;
+}
+
+pub struct NetworkAdvanceEpochTxCertifier {}
+pub struct LocalAdvanceEpochTxCertifier {
+    state_map: BTreeMap<AuthorityName, Arc<AuthorityState>>,
+}
+
+#[async_trait]
+impl AdvanceEpochTxCertifier for NetworkAdvanceEpochTxCertifier {
+    async fn create_advance_epoch_cert(
+        &self,
+        transaction: &VerifiedTransaction,
+        self_state: &Arc<AuthorityState>,
+        timeout: Duration,
+    ) -> anyhow::Result<VerifiedCertificate> {
+        let net = AuthorityAggregator::new_from_system_state(
+            &self_state.db(),
+            self_state.committee_store(),
+            &Registry::new(),
+        )?;
+
+        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
+            .await
+    }
+}
+
+#[async_trait]
+impl AdvanceEpochTxCertifier for LocalAdvanceEpochTxCertifier {
+    async fn create_advance_epoch_cert(
+        &self,
+        transaction: &VerifiedTransaction,
+        self_state: &Arc<AuthorityState>,
+        timeout: Duration,
+    ) -> anyhow::Result<VerifiedCertificate> {
+        let sui_system_state = self_state.get_sui_system_state_object().await?;
+        let committee = sui_system_state.get_current_epoch_committee().committee;
+        let clients: BTreeMap<_, _> = committee.names().map(|name|
+            // unwrap is fine because LocalAuthorityClient is only used for testing.
+           (*name, LocalAuthorityClient::new_from_authority(self.state_map.get(name).unwrap().clone()))
+        ).collect();
+        let net = AuthorityAggregator::new(
+            committee,
+            self_state.committee_store().clone(),
+            clients,
+            &Registry::new(),
+        );
+
+        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
+            .await
     }
 }
 
@@ -1788,6 +1850,52 @@ where
                 action: "execute_cert_to_true_effects".to_string(),
             })
             .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
+    }
+
+    pub async fn authorty_ask_for_cert_with_retry_and_timeout(
+        &self,
+        transaction: &VerifiedTransaction,
+        state: &Arc<AuthorityState>,
+        timeout: Duration,
+    ) -> anyhow::Result<VerifiedCertificate> {
+        let result = tokio::time::timeout(timeout, async {
+            loop {
+                // We may have already executed this transaction somewhere else.
+                // If so, no need to try to get it from the network.
+                if let Ok(Some(VerifiedTransactionInfoResponse {
+                    certified_transaction: Some(cert),
+                    ..
+                })) = state
+                    .get_tx_info_already_executed(transaction.digest())
+                    .await
+                {
+                    return cert;
+                }
+                match self.process_transaction(transaction.clone()).await {
+                    Ok(cert) => {
+                        return cert;
+                    }
+                    Err(err) => {
+                        debug!("Did not create advance epoch transaction cert: {:?}", err);
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+        match result {
+            Ok(cert) => {
+                debug!(
+                    "Successfully created advance epoch transaction cert: {:?}",
+                    cert
+                );
+                Ok(cert)
+            }
+            Err(err) => {
+                error!("Failed to create advance epoch transaction cert. Giving up");
+                Err(err.into())
+            }
+        }
     }
 }
 
