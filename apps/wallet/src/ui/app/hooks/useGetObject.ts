@@ -26,7 +26,7 @@ export function useGetObject(
     return response;
 }
 
-// Invalidates the cache for validators. This is useful when a validator is added or removed.
+// Invalidates the cache Objects. called after a transaction
 export function useValidateObjectQueryCache(cacheId: string) {
     const queryClient = useQueryClient();
     queryClient.invalidateQueries({ queryKey: [cacheId] });
