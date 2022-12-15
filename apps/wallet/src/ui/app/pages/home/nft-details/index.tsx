@@ -21,6 +21,7 @@ import {
     useObjectsState,
 } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
+import ExternalLink from '_src/ui/app/components/external-link';
 
 import type { ReactNode } from 'react';
 
@@ -38,13 +39,26 @@ function LabelValueItems({
                 >
                     <div className="flex-1 text-gray-80 truncate">{label}</div>
                     <div className="max-w-[60%] text-gray-90 truncate">
-                        {value}
+                        {typeof value === 'string' &&
+                        (value.startsWith('http://') ||
+                            value.startsWith('https://')) ? (
+                            <ExternalLink
+                                href={value}
+                                className="text-steel-darker no-underline"
+                            >
+                                {value}
+                            </ExternalLink>
+                        ) : (
+                            value
+                        )}
                     </div>
                 </div>
             ))}
         </div>
     );
 }
+
+const FILTER_PROPERTIES = ['id', 'url', 'name'];
 
 function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
@@ -60,7 +74,21 @@ function NFTDetailsPage() {
     const { nftFields, fileExtensionType, filePath } =
         useNFTBasicData(selectedNft);
     const { loading } = useObjectsState();
-    const metaFields = nftFields?.metadata?.fields?.attributes?.fields || null;
+
+    // Extract either the attributes, or use the top-level NFT fields:
+    const metaFields =
+        nftFields?.metadata?.fields?.attributes?.fields ||
+        Object.entries(nftFields ?? {})
+            .filter(([key]) => !FILTER_PROPERTIES.includes(key))
+            .reduce(
+                (acc, [key, value]) => {
+                    acc.keys.push(key);
+                    acc.values.push(value);
+                    return acc;
+                },
+                { keys: [] as string[], values: [] as string[] }
+            );
+
     const metaKeys: string[] = metaFields ? metaFields.keys : [];
     const metaValues = metaFields ? metaFields.values : [];
     return (
