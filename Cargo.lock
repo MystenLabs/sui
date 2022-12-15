@@ -2546,7 +2546,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d4e9173985adeae9c2cb65132064949ca0824a0b#d4e9173985adeae9c2cb65132064949ca0824a0b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b69f4f4b4e8919b6b647304094a9d4e138facc3d#b69f4f4b4e8919b6b647304094a9d4e138facc3d"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2592,7 +2592,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d4e9173985adeae9c2cb65132064949ca0824a0b#d4e9173985adeae9c2cb65132064949ca0824a0b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b69f4f4b4e8919b6b647304094a9d4e138facc3d#b69f4f4b4e8919b6b647304094a9d4e138facc3d"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -2602,7 +2602,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d4e9173985adeae9c2cb65132064949ca0824a0b#d4e9173985adeae9c2cb65132064949ca0824a0b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=b69f4f4b4e8919b6b647304094a9d4e138facc3d#b69f4f4b4e8919b6b647304094a9d4e138facc3d"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -5012,12 +5012,14 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
+ "dashmap",
  "once_cell",
  "prometheus",
  "scopeguard",
  "tap",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -5258,6 +5260,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.150",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",
@@ -8364,6 +8367,7 @@ dependencies = [
  "move-stackless-bytecode",
  "move-unit-test",
  "multiaddr 0.17.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "narwhal-executor",
  "prometheus",
@@ -8588,6 +8592,7 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",
+ "reqwest",
  "rocksdb",
  "scopeguard",
  "serde 1.0.150",
@@ -8942,6 +8947,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "prometheus",
  "prometheus-closure-metric",
+ "reqwest",
  "sui-config",
  "sui-core",
  "sui-json-rpc",
@@ -9127,6 +9133,7 @@ dependencies = [
  "criterion",
  "enum_dispatch",
  "eyre",
+ "fastcrypto",
  "fdlimit",
  "flexstr",
  "futures",
@@ -9161,6 +9168,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "prometheus",
  "rand 0.8.5",
@@ -9301,6 +9309,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-vm-types",
+ "narwhal-config",
  "narwhal-executor",
  "once_cell",
  "opentelemetry 0.17.0",
@@ -9597,6 +9606,7 @@ dependencies = [
  "jsonrpsee",
  "move-core-types",
  "multiaddr 0.17.0",
+ "mysten-metrics",
  "mysten-network 0.2.0",
  "once_cell",
  "prometheus",

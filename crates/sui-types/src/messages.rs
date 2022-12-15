@@ -879,6 +879,7 @@ impl<S> Envelope<SenderSignedData, S> {
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
 pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+pub type TrustedTransction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
 
 impl Transaction {
     pub fn from_data_and_signer(
@@ -1894,6 +1895,10 @@ pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
+pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
+pub type VerifiedCertifiedTransactionEffects =
+    VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
 pub type ValidExecutionDigests = Envelope<ExecutionDigests, CertificateProof>;
 pub type ValidTransactionEffectsDigest = Envelope<TransactionEffectsDigest, CertificateProof>;
 pub type ValidTransactionEffects = TransactionEffectsEnvelope<CertificateProof>;
@@ -2197,7 +2202,6 @@ pub type IsTransactionExecutedLocally = bool;
 pub enum ExecuteTransactionResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
-    // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(
         Box<(
             CertifiedTransaction,
@@ -2207,7 +2211,7 @@ pub enum ExecuteTransactionResponse {
     ),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
+#[derive(Clone, Debug, schemars::JsonSchema)]
 pub enum QuorumDriverRequestType {
     ImmediateReturn,
     WaitForTxCert,
@@ -2220,11 +2224,11 @@ pub struct QuorumDriverRequest {
     pub request_type: QuorumDriverRequestType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum QuorumDriverResponse {
     ImmediateReturn,
-    TxCert(Box<CertifiedTransaction>),
-    EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
+    TxCert(Box<VerifiedCertificate>),
+    EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

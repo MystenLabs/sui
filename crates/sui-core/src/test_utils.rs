@@ -5,21 +5,15 @@ use crate::authority::{AuthorityState, EffectsNotifyRead};
 use signature::Signer;
 use std::sync::Arc;
 use std::time::Duration;
-
+use sui_types::utils::create_fake_transaction;
 use sui_types::{
-    base_types::{
-        dbg_addr, random_object_ref, AuthorityName, ExecutionDigests, ObjectID, TransactionDigest,
-    },
+    base_types::{random_object_ref, AuthorityName, ExecutionDigests, TransactionDigest},
     committee::Committee,
-    crypto::{get_key_pair, AccountKeyPair, AuthoritySignInfo, AuthoritySignature, Signature},
+    crypto::{AuthoritySignInfo, AuthoritySignature},
     gas::GasCostSummary,
-    intent::{Intent, IntentMessage},
     message_envelope::Message,
-    messages::{
-        CertifiedTransaction, ExecutionStatus, Transaction, TransactionData, TransactionEffects,
-        VerifiedTransaction,
-    },
-    object::{Object, Owner},
+    messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    object::Owner,
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
@@ -56,23 +50,6 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
     }
 }
 
-// Creates a fake sender-signed transaction for testing. This transaction will
-// not actually work.
-pub fn create_fake_transaction() -> VerifiedTransaction {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let recipient = dbg_addr(2);
-    let object_id = ObjectID::random();
-    let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui(
-        recipient,
-        sender,
-        None,
-        object.compute_object_reference(),
-        10000,
-    );
-    to_sender_signed_transaction(data, &sender_key)
-}
-
 pub fn create_fake_cert_and_effect_digest<'a>(
     signers: impl Iterator<
         Item = (
@@ -98,31 +75,6 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         ExecutionDigests::new(*transaction.digest(), effects.digest()),
         cert,
     )
-}
-
-// This is used to sign transaction with signer using default Intent.
-pub fn to_sender_signed_transaction(
-    data: TransactionData,
-    signer: &dyn Signer<Signature>,
-) -> VerifiedTransaction {
-    VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        data,
-        Intent::default(),
-        signer,
-    ))
-}
-
-// Workaround for benchmark setup.
-pub fn to_sender_signed_transaction_arc(
-    data: TransactionData,
-    signer: &Arc<fastcrypto::ed25519::Ed25519KeyPair>,
-) -> VerifiedTransaction {
-    let data1 = data.clone();
-    let intent_message = IntentMessage::new(Intent::default(), data);
-    // OK to unwrap because this is used for benchmark only.
-    let bytes = bcs::to_bytes(&intent_message).unwrap();
-    let signature: Signature = signer.sign(&bytes);
-    VerifiedTransaction::new_unchecked(Transaction::from_data(data1, Intent::default(), signature))
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {

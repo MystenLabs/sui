@@ -14,7 +14,7 @@ use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
-use storage::NodeStorage;
+pub use storage::NodeStorage;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
@@ -23,7 +23,6 @@ use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
 pub mod execution_state;
 pub mod metrics;
-pub mod restarter;
 
 /// High level functions to spawn the primary and the workers.
 pub struct Node;

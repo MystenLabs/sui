@@ -5,7 +5,9 @@ use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
-use mysten_metrics::{monitored_future, monitored_scope, spawn_monitored_task};
+use mysten_metrics::{
+    monitored_future, monitored_scope, spawn_logged_monitored_task, spawn_monitored_task,
+};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{
@@ -114,21 +116,24 @@ impl CertificateFetcher {
         });
         // Add a future that never returns to fetch_certificates_task, so it is blocked when empty.
         let fetch_certificates_task = FuturesUnordered::new();
-        spawn_monitored_task!(async move {
-            Self {
-                state,
-                committee,
-                certificate_store,
-                rx_consensus_round_updates,
-                gc_depth,
-                rx_reconfigure,
-                rx_certificate_fetcher,
-                targets: BTreeMap::new(),
-                fetch_certificates_task,
-            }
-            .run()
-            .await;
-        })
+        spawn_logged_monitored_task!(
+            async move {
+                Self {
+                    state,
+                    committee,
+                    certificate_store,
+                    rx_consensus_round_updates,
+                    gc_depth,
+                    rx_reconfigure,
+                    rx_certificate_fetcher,
+                    targets: BTreeMap::new(),
+                    fetch_certificates_task,
+                }
+                .run()
+                .await;
+            },
+            "CertificateFetcherTask"
+        )
     }
 
     async fn run(&mut self) {

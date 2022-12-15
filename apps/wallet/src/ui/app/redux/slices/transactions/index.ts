@@ -31,6 +31,7 @@ type SendTokensTXArgs = {
     tokenTypeArg: string;
     amount: bigint;
     recipientAddress: SuiAddress;
+    gasBudget: number;
 };
 type TransactionResult = SuiExecuteTransactionResponse;
 
@@ -41,7 +42,7 @@ export const sendTokens = createAsyncThunk<
 >(
     'sui-objects/send-tokens',
     async (
-        { tokenTypeArg, amount, recipientAddress },
+        { tokenTypeArg, amount, recipientAddress, gasBudget },
         { getState, extra: { api, keypairVault }, dispatch }
     ) => {
         const state = getState();
@@ -53,12 +54,7 @@ export const sendTokens = createAsyncThunk<
                 tokenTypeArg,
                 amount,
                 recipientAddress,
-                Coin.computeGasBudgetForPay(
-                    coins.filter(
-                        (aCoin) => Coin.getCoinTypeArg(aCoin) === tokenTypeArg
-                    ),
-                    amount
-                )
+                gasBudget
             )
         );
         // TODO: better way to sync latest objects
@@ -72,7 +68,7 @@ type StakeTokensTXArgs = {
     amount: bigint;
 };
 
-export const StakeTokens = createAsyncThunk<
+export const stakeTokens = createAsyncThunk<
     TransactionResult,
     StakeTokensTXArgs,
     AppThunkConfig
@@ -130,7 +126,7 @@ const slice = createSlice({
             // @ts-ignore: This causes a compiler error, but it will be removed when we migrate off of Redux.
             return txAdapter.setOne(state, payload);
         });
-        builder.addCase(StakeTokens.fulfilled, (state, { payload }) => {
+        builder.addCase(stakeTokens.fulfilled, (state, { payload }) => {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore: This causes a compiler error, but it will be removed when we migrate off of Redux.
             return txAdapter.setOne(state, payload);

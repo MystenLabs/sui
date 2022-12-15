@@ -3,11 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use fastcrypto::traits::ToFromBytes;
-use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::chain_id::ChainId;
 use crate::collection_types::{VecMap, VecSet};
@@ -18,6 +13,11 @@ use crate::{
     id::UID,
     SUI_FRAMEWORK_ADDRESS,
 };
+use fastcrypto::traits::ToFromBytes;
+use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+use narwhal_config::Committee as NarwhalCommittee;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -191,5 +191,14 @@ impl SuiSystemState {
                 .unwrap(),
             net_addresses,
         }
+    }
+
+    pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
+        // todo: we need the following to be added to the Validator Metadata
+        // todo: on the system state object in order to construct this:
+        // - protocol_key
+        // - network_key
+        // - narwhal_primary_address
+        todo!();
     }
 }

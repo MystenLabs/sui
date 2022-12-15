@@ -18,14 +18,14 @@ export default function PasswordFields() {
         <>
             <FieldLabel txt="Create Password">
                 <Field name="password" component={PasswordInput} />
-                {touched['password'] && errors['password'] ? (
-                    <Alert>{errors['password']}</Alert>
+                {touched.password && errors.password ? (
+                    <Alert>{errors.password}</Alert>
                 ) : null}
             </FieldLabel>
             <FieldLabel txt="Confirm Password">
                 <Field name="confirmPassword" component={PasswordInput} />
-                {touched['confirmPassword'] && errors['confirmPassword'] ? (
-                    <Alert>{errors['confirmPassword']}</Alert>
+                {touched.confirmPassword && errors.confirmPassword ? (
+                    <Alert>{errors.confirmPassword}</Alert>
                 ) : null}
             </FieldLabel>
         </>

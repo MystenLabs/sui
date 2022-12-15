@@ -78,12 +78,12 @@ impl Container {
             let runtime = builder.enable_all().build().unwrap();
 
             runtime.block_on(async move {
-                let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+                let registry_service = metrics::start_prometheus_server(config.metrics_address);
                 info!(
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
-                let _server = SuiNode::start(&config, prometheus_registry).await.unwrap();
+                let _server = SuiNode::start(&config, registry_service).await.unwrap();
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(());
                 // run until canceled

@@ -3,7 +3,7 @@
 
 use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -47,18 +47,22 @@ pub fn start_admin_server(
             let message = rx_reconfigure.borrow().clone();
             if let ReconfigureNotification::Shutdown = message {
                 handle.clone().shutdown();
+
                 return;
             }
         }
     }));
 
-    handles.push(spawn_monitored_task!(async move {
-        axum_server::bind(socket_address)
-            .handle(shutdown_handle)
-            .serve(router.into_make_service())
-            .await
-            .unwrap();
-    }));
+    handles.push(spawn_logged_monitored_task!(
+        async move {
+            axum_server::bind(socket_address)
+                .handle(shutdown_handle)
+                .serve(router.into_make_service())
+                .await
+                .unwrap();
+        },
+        "AdminServerTask"
+    ));
 
     handles
 }

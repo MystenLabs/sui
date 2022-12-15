@@ -6,7 +6,6 @@ import {
     getCertifiedTransaction,
     getTransactionEffects,
     LocalTxnDataSerializer,
-    type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -15,6 +14,7 @@ import {
 } from '@reduxjs/toolkit';
 
 import type {
+    SuiMoveNormalizedFunction,
     SuiTransactionResponse,
     SignableTransaction,
     SuiExecuteTransactionResponse,
@@ -91,6 +91,7 @@ export const deserializeTxn = createAsyncThunk<
             )) as UnserializedSignableTransaction;
 
         const deserializeData = deserializeTx?.data as MoveCallTransaction;
+
         const normalized = {
             ...deserializeData,
             gasBudget: Number(deserializeData.gasBudget.toString(10)),
@@ -225,7 +226,6 @@ const slice = createSlice({
         build.addCase(deserializeTxn.rejected, (state, { payload }) => {
             state.deserializeTxnFailed = true;
         });
-
         build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
             const { txRequestID, unSerializedTxn } = payload;
             if (unSerializedTxn) {

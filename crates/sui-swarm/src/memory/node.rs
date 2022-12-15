@@ -70,6 +70,11 @@ impl Node {
         self.thread = None;
     }
 
+    /// If this Node is currently running
+    pub fn is_running(&self) -> bool {
+        self.thread.is_some()
+    }
+
     /// Perform a health check on this Node by:
     /// * Checking that the node is running
     /// * Calling the Node's gRPC Health service if it's a validator.

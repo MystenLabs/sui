@@ -7,7 +7,7 @@ use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
-use mysten_metrics::{monitored_future, spawn_monitored_task};
+use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
@@ -48,19 +48,22 @@ impl QuorumWaiter {
         rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            Self {
-                name,
-                id,
-                committee,
-                worker_cache,
-                rx_reconfigure,
-                rx_message,
-                network,
-            }
-            .run()
-            .await;
-        })
+        spawn_logged_monitored_task!(
+            async move {
+                Self {
+                    name,
+                    id,
+                    committee,
+                    worker_cache,
+                    rx_reconfigure,
+                    rx_message,
+                    network,
+                }
+                .run()
+                .await;
+            },
+            "QuorumWaiterTask"
+        )
     }
 
     /// Helper function. It waits for a future to complete and then delivers a value.

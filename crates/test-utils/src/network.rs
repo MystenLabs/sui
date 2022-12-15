@@ -8,6 +8,7 @@ use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
 
+use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::genesis_config::GenesisConfig;
@@ -82,6 +83,22 @@ impl TestCluster {
     pub async fn start_fullnode(&self) -> Result<FullNodeHandle, anyhow::Error> {
         let config = self.fullnode_config_builder().build().unwrap();
         start_fullnode_from_config(config).await
+    }
+
+    pub fn get_validator_addresses(&self) -> Vec<SuiAddress> {
+        self.swarm.validators().map(|v| v.name()).collect()
+    }
+
+    pub fn stop_validator(&mut self, name: SuiAddress) {
+        self.swarm.validator_mut(name).unwrap().stop();
+    }
+
+    pub async fn start_validator(&mut self, name: SuiAddress) {
+        let node = self.swarm.validator_mut(name).unwrap();
+        if node.is_running() {
+            return;
+        }
+        node.start().await.unwrap();
     }
 }
 
@@ -220,7 +237,8 @@ impl Default for TestClusterBuilder {
 pub async fn start_fullnode_from_config(
     config: NodeConfig,
 ) -> Result<FullNodeHandle, anyhow::Error> {
-    let sui_node = SuiNode::start(&config, Registry::new()).await?;
+    let registry_service = RegistryService::new(Registry::new());
+    let sui_node = SuiNode::start(&config, registry_service).await?;
 
     let rpc_url = format!("http://{}", config.json_rpc_address);
     let rpc_client = HttpClientBuilder::default().build(&rpc_url)?;

@@ -21,16 +21,18 @@ use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_logged_monitored_task;
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
+use tap::TapFallible;
+use tokio::sync::watch::Receiver;
 use tokio::{sync::watch, task::JoinHandle};
 use tonic::{Request, Response, Status};
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{error, info};
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Sender},
@@ -289,14 +291,16 @@ impl Worker {
             network.clone(),
         );
         let client_flow_handles = worker.handle_clients_transactions(
-            rx_reconfigure,
+            rx_reconfigure.clone(),
             tx_our_batch,
             node_metrics,
             channel_metrics,
             endpoint_metrics,
             validator,
-            network,
+            network.clone(),
         );
+
+        let network_shutdown_handle = Self::shutdown_network_listener(rx_reconfigure, network);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -310,10 +314,38 @@ impl Worker {
                 .transactions
         );
 
-        let mut handles = vec![primary_connector_handle, connection_monitor_handle];
+        let mut handles = vec![
+            primary_connector_handle,
+            connection_monitor_handle,
+            network_shutdown_handle,
+        ];
         handles.extend(admin_handles);
         handles.extend(client_flow_handles);
         handles
+    }
+
+    // Spawns a task responsible for explicitly shutting down the network
+    // when a shutdown signal has been sent to the node.
+    fn shutdown_network_listener(
+        mut rx_reconfigure: Receiver<ReconfigureNotification>,
+        network: Network,
+    ) -> JoinHandle<()> {
+        spawn_logged_monitored_task!(
+            async move {
+                while let Ok(_result) = rx_reconfigure.changed().await {
+                    let message = rx_reconfigure.borrow().clone();
+                    if let ReconfigureNotification::Shutdown = message {
+                        let _ = network
+                            .shutdown()
+                            .await
+                            .tap_err(|err| error!("Error while shutting down network: {err}"));
+                        info!("Worker network server shutdown");
+                        return;
+                    }
+                }
+            },
+            "WorkerShutdownNetworkListenerTask"
+        )
     }
 
     fn add_peer_in_network(
@@ -437,19 +469,22 @@ impl<V: TransactionValidator> TxReceiverHandler<V> {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         endpoint_metrics: WorkerEndpointMetrics,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            tokio::select! {
-                _result =  mysten_network::config::Config::new()
-                    .server_builder_with_metrics(endpoint_metrics)
-                    .add_service(TransactionsServer::new(self))
-                    .bind(&address)
-                    .await
-                    .unwrap()
-                    .serve() => (),
+        spawn_logged_monitored_task!(
+            async move {
+                tokio::select! {
+                    _result =  mysten_network::config::Config::new()
+                        .server_builder_with_metrics(endpoint_metrics)
+                        .add_service(TransactionsServer::new(self))
+                        .bind(&address)
+                        .await
+                        .unwrap()
+                        .serve() => (),
 
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
+                    () = Self::wait_for_shutdown(rx_reconfigure) => ()
+                }
+            },
+            "TxReceiverHandlerTask"
+        )
     }
 }
 

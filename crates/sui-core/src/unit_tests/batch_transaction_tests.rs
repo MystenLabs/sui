@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority::authority_tests::init_state_with_ids_and_object_basics,
-    test_utils::to_sender_signed_transaction,
-};
-
 use super::*;
+use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use bcs;
+use sui_types::utils::to_sender_signed_transaction;
 
 use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use move_binary_format::file_format;
