@@ -4,7 +4,6 @@
 import { useCallback, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
-import { ActiveValidatorsCard } from '../home/ActiveValidatorsCard';
 import { StakingCard } from './StakingCard';
 import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
@@ -27,7 +26,7 @@ function StakePage() {
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
-            {validatorAddress ? <StakingCard /> : <ActiveValidatorsCard />}
+            {validatorAddress && <StakingCard />}
         </Overlay>
     );
 }
