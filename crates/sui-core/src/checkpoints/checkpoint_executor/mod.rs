@@ -177,6 +177,13 @@ impl CheckpointExecutor {
                 Some(Ok((checkpoint, next_committee))) = pending.next() => {
                     match next_committee {
                         None => {
+                            // Ensure that we are not skipping checkpoints at any point
+                            if let Some(prev_highest) = self.checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap() {
+                                assert_eq!(prev_highest + 1, checkpoint.sequence_number());
+                            } else {
+                                assert_eq!(checkpoint.sequence_number(), 0);
+                            }
+
                             let new_highest = checkpoint.sequence_number();
                             debug!(
                                 "Bumping highest_executed_checkpoint watermark to {:?}",
@@ -300,17 +307,16 @@ impl CheckpointExecutor {
         let num_tasks_to_schedule = std::cmp::min(checkpoints_diff, tasks_diff as u64);
 
         // get all checkpoints to be scheduled, less the last (which we got already above)
-        let range: Vec<u64> = (next_to_exec..(next_to_exec + num_tasks_to_schedule)).collect();
+        let range: Vec<u64> = (next_to_exec..(next_to_exec + num_tasks_to_schedule - 1)).collect();
 
         let mut checkpoints_to_schedule = self
             .checkpoint_store
             .multi_get_checkpoint_by_sequence_number(&range)?
             .into_iter()
-            .map(|tx| tx.unwrap())
+            .map(|checkpoint| checkpoint.unwrap())
             .collect::<Vec<VerifiedCheckpoint>>();
 
         checkpoints_to_schedule.sort_by_key(|a| a.sequence_number());
-        checkpoints_to_schedule.push(latest_synced_checkpoint);
         let checkpoints_to_schedule = checkpoints_to_schedule;
         debug!(
             "Scheduling {:?} lagging checkpoints",
