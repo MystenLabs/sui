@@ -68,13 +68,11 @@ function StakeHome() {
                     loading={loading || pendingDelegationsLoading}
                     className="flex h-full items-center justify-center"
                 >
-                    {hasDelegations ? (
+                    {hasDelegations && (
                         <StakedHomeCard
                             activeDelegationIDs={activeDelegationIDs}
                             pendingDelegations={pendingDelegations}
                         />
-                    ) : (
-                        '<ActiveValidatorsCard />'
                     )}
                 </Loading>
             </div>
