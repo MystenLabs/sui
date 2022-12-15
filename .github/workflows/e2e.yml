@@ -78,7 +78,7 @@ jobs:
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
           working-directory: ./apps/explorer
           spec: cypress/e2e/localnet/*
-          wait-on: 'pnpm test:wait-on'
+          wait-on: "pnpm test:wait-on"
           wait-on-timeout: 120
 
   devnet:
@@ -104,4 +104,4 @@ jobs:
         env:
           VITE_FAUCET_URL: "https://faucet.devnet.sui.io:443/gas"
           VITE_FULLNODE_URL: "https://fullnode.devnet.sui.io"
-        run: pnpm sdk test:e2e:nowait
+        run: VITE_SUI_BIN=$(which sui) pnpm sdk test:e2e:nowait
