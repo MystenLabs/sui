@@ -18,7 +18,6 @@ use prometheus::{
 use serde::Deserialize;
 use tokio::time::Instant;
 use tower::Layer;
-use tracing::info;
 
 const SPAM_LABEL: &str = "SPAM";
 
