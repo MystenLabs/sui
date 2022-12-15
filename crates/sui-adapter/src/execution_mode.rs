@@ -135,7 +135,7 @@ impl ExecutionMode for DevInspect {
             .iter()
             .enumerate()
             .map(|(i, (bytes, _))| {
-                let ty = remove_ref_and_subst_ty(&loaded_function.parameters[i], ty_args)?;
+                let ty = remove_ref_and_subst_ty(&loaded_function.return_[i], ty_args)?;
                 let tag = type_to_type_tag(session, &ty)?;
                 Ok((bytes.clone(), tag))
             })

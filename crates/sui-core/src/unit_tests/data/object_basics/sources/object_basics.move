@@ -5,7 +5,7 @@
 module examples::object_basics {
     use sui::dynamic_object_field as ofield;
     use sui::event;
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
@@ -73,5 +73,13 @@ module examples::object_basics {
             ofield::remove<bool, Object>(&mut o.id, true),
             tx_context::sender(ctx),
         );
+    }
+
+    fun get_value(o: &Object): u64 {
+        o.value
+    }
+
+    fun get_contents(o: &Object): (ID, u64) {
+        (object::id(o), o.value)
     }
 }

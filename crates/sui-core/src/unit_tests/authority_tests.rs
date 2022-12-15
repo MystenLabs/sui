@@ -555,6 +555,103 @@ async fn test_dev_inspect_dynamic_field() {
 }
 
 #[tokio::test]
+async fn test_dev_inspect_return_values() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+
+    // make an object
+    let init_value = 16_u64;
+    let effects = call_move(
+        &*authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "create",
+        vec![],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(init_value)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+        ],
+    )
+    .await
+    .unwrap();
+    let created_object_id = effects.created[0].0 .0;
+    let created_object = authority_state
+        .get_object(&created_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let created_object_bytes = created_object
+        .data
+        .try_as_move()
+        .unwrap()
+        .contents()
+        .to_vec();
+
+    // read one value from it's bytes
+    let DevInspectResults { results, .. } = call_dev_inspect(
+        &*authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "get_value",
+        vec![],
+        vec![TestCallArg::Pure(created_object_bytes.clone())],
+    )
+    .await
+    .unwrap();
+    let mut results = results.unwrap();
+    assert_eq!(results.len(), 1);
+    let (idx, exec_results) = results.pop().unwrap();
+    let SuiExecutionResult {
+        mutable_reference_outputs,
+        mut return_values,
+    } = exec_results;
+    assert_eq!(idx, 0);
+    assert!(mutable_reference_outputs.is_empty());
+    assert_eq!(return_values.len(), 1);
+    let (return_value_1, _return_type) = return_values.pop().unwrap();
+    let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
+    assert_eq!(init_value, deserialized_rv1);
+
+    // read two values from it's bytes
+    let DevInspectResults { results, .. } = call_dev_inspect(
+        &*authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "get_contents",
+        vec![],
+        vec![TestCallArg::Pure(created_object_bytes)],
+    )
+    .await
+    .unwrap();
+    let mut results = results.unwrap();
+    assert_eq!(results.len(), 1);
+    let (idx, exec_results) = results.pop().unwrap();
+    let SuiExecutionResult {
+        mutable_reference_outputs,
+        mut return_values,
+    } = exec_results;
+    assert_eq!(idx, 0);
+    assert!(mutable_reference_outputs.is_empty());
+    assert_eq!(return_values.len(), 2);
+    let (return_value_2, _return_type) = return_values.pop().unwrap();
+    let (returned_id_bytes, _return_type) = return_values.pop().unwrap();
+    let returned_id: ObjectID = bcs::from_bytes(&returned_id_bytes).unwrap();
+    assert_eq!(return_value_1, return_value_2);
+    assert_eq!(created_object_id, returned_id);
+}
+
+#[tokio::test]
 async fn test_handle_transfer_transaction_bad_signature() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
