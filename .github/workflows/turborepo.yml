@@ -40,9 +40,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: node_modules/.cache/turbo
-          key: turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          key: turbo-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            turbo-${{ github.job }}-${{ github.ref_name }}-
+            turbo-${{ runner.os }}-
       - name: Lint
         run: pnpm turbo lint
       - name: Build
