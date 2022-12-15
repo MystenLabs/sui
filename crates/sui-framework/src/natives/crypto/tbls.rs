@@ -30,8 +30,8 @@ pub fn verify_tbls_signature(
     let cost = legacy_empty_cost();
 
     let (pk_bls, _pk_vss) = mocked_dkg::generate_public_keys(1, epoch);
-    let sig = types::Signature::from(sig.as_bytes_ref());
-    let valid = tbls::ThresholdBls12381MinSig::verify(&pk_bls, &msg.as_bytes_ref(), sig);
+    let sig: types::Signature = bincode::deserialize(&sig.as_bytes_ref()).unwrap();
+    let valid = types::ThresholdBls12381MinSig::verify(&pk_bls, &msg.as_bytes_ref(), &sig).is_ok();
 
     match valid {
         true => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
@@ -55,10 +55,11 @@ pub fn tbls_sign(
     let cost = legacy_empty_cost();
 
     let (sk, _pk) = mocked_dkg::generate_full_key_pair(epoch);
-    let sig = tbls::ThresholdBls12381MinSig::sign(&sk, &msg.as_bytes_ref());
+    let sig = types::ThresholdBls12381MinSig::sign(&sk, &msg.as_bytes_ref());
+    let sig = bincode::serialize(&sig).unwrap();
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(sig.to_bytes())],
+        smallvec![Value::vector_u8(sig)],
     ))
 }
