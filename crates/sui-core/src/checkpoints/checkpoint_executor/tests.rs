@@ -170,27 +170,6 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     ));
 }
 
-// TODO REMOVE
-#[tokio::test]
-pub async fn test_simple_reconfig_DEBUGGING_ONLY() {
-    let buffer_size = 10;
-    let tempdir = tempdir().unwrap();
-    let checkpoint_store = CheckpointStore::new(tempdir.path());
-
-    let (authority_state, _executor, _checkpoint_sender, _first_committee): (
-        Arc<AuthorityState>,
-        CheckpointExecutor,
-        Sender<VerifiedCheckpoint>,
-        CommitteeFixture,
-    ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
-    let second_committee = CommitteeFixture::generate(rand::rngs::OsRng, 1, 4);
-
-    // This will fail with the following: https://gist.github.com/williampsmith/396022a474f20d3f7c618e6ede15ef1b
-    authority_state
-        .reconfigure(second_committee.committee().clone())
-        .unwrap();
-}
-
 async fn init_executor_test(
     buffer_size: usize,
     store: Arc<CheckpointStore>,
