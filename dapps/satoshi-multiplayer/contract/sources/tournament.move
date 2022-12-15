@@ -3,14 +3,17 @@
 
 module contract::tournament {
     // imports
-    use sui::object::{Self, UID, ID};
+    use std::option::{Self, Option};
     use std::vector;
+    use std::hash::sha3_256;
+
+    use sui::digest::{Self, Sha3256Digest};
+    use sui::object::{Self, UID, ID};
     use sui::sui::SUI; // coin type
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::transfer;
-    use contract::satoshi_flip_match::{Self, Match, Outcome};
     use sui::dynamic_object_field as dof;
 
     // structs
@@ -22,6 +25,18 @@ module contract::tournament {
         status: u64, // Status -> 0: pending | 1: running | 2: finished
         round: u64,
         matches: vector<ID>,
+    }
+
+        struct Match has key, store {
+        id: UID,
+        last_move_time: u64,
+        host: address,
+        guesser: address,
+        hash: Option<Sha3256Digest>,
+        guess: Option<u8>,
+        secret: Option<vector<u8>>,
+        round: u64,
+        winner: Option<address>,
     }
 
     // Player default entry fee in MIST
@@ -37,6 +52,12 @@ module contract::tournament {
     const ETournamentEnd: u64 = 6;
     const EPlayerAlreadyExists: u64 = 7;
     const EMatchNotFound: u64 = 8;
+    // match error codes
+    const ENotMatchHost: u64 = 9;
+    const ENotMatchGuesser: u64 = 10;
+    const ENotCorrectSecret: u64 = 11;
+    const EMatchNotEnded: u64 = 12;
+    const EGuessNotSet: u64 = 13;
 
     // Tournament initialization. 
     // Player can initialize a new tournament and share it with other players. 
@@ -70,7 +91,7 @@ module contract::tournament {
         assert!(tournament.capacity < vector::length(&tournament.players), EMaxPlayersReached);
 
         // Check if player is already in tournament
-        assert!(vector::contains(&tournament.players, tx_context::sender(ctx)), EPlayerAlreadyExists);
+        assert!(vector::contains(&tournament.players, &tx_context::sender(ctx)), EPlayerAlreadyExists);
 
         // Make sure player has given enough mist
         assert!(coin::value(&player_coin) >= ENTRY_FEE, ENotEnoughMoney);
@@ -138,11 +159,11 @@ module contract::tournament {
             let guesser = vector::pop_back(&mut tournament.players);
             
             // Create a match for current pair of host-guesser
-            let match = satoshi_flip_match::create(host, guesser, ctx);
-            let match_id = satoshi_flip_match::id(match);
+            let match = create_match(host, guesser, tournament.round, ctx);
+            let match_id = object::uid_to_inner(&match.id);
 
             // Include match to tournament
-            vector::add(&mut tournament.matches, match_id);
+            vector::push_back(&mut tournament.matches, match_id);
 
             // Transfer match to host
             transfer::transfer(match, host);
@@ -167,7 +188,8 @@ module contract::tournament {
             let match = dof::remove(tournament, match_id);
 
             // Get match winner and add them to tournament's players
-            let winner = satoshi_flip_match::get_winner(&match);
+            let winner: &address = option::borrow(&match.winner);
+            //let winner: address = match.winner;
             vector::push_back(&mut tournament.players, winner);
 
             i = i - 1;
@@ -176,5 +198,82 @@ module contract::tournament {
         // Increment round counter for next iteration
         tournament.round = tournament.round + 1;
     }
+
+    // match functions
+
+    fun create_match(host: address, guesser: address, round: u64, ctx: &mut TxContext): Match{
+        let match = Match{
+            id: object::new(ctx),
+            last_move_time: tx_context::epoch(ctx),
+            host,
+            guesser,
+            hash: option::none(),
+            guess: option::none(),
+            secret: option::none(),
+            round,
+            winner: option::none(),
+        };
+        match
+    }
+
+    entry fun set_hash(match: Match, hash: vector<u8>, ctx: &mut TxContext) {
+        // make sure that host is calling the function
+        assert!(match.host == tx_context::sender(ctx), ENotMatchHost);
+
+        // update last move time with current epoch
+        match.last_move_time = tx_context::epoch(ctx);
+
+        // turn vector type into SHA3256-digest type
+        let hash_value = digest::sha3_256_digest_from_bytes(hash);
+
+        // add hash value to match
+        option::fill(&mut match.hash, hash_value);
+
+        // transfer match to host
+        let host = match.host;
+        transfer::transfer(match, host);
+    }
+
+    entry fun set_guess(match: Match, guess: u8, ctx: &mut TxContext) {
+        // make sure that guesser is calling the function
+        assert!(match.guesser == tx_context::sender(ctx), ENotMatchGuesser);
+
+        // update last move time with current epoch
+        match.last_move_time = tx_context::epoch(ctx);
+
+        // add guess to match
+        option::fill(&mut match.guess, guess);
+
+        // transfer match to guesser
+        let guesser = match.guesser;
+        transfer::transfer(match, guesser);
+    }
+
+    entry fun reveal(tournament: &mut Tournament, match: Match, secret: vector<u8>, ctx: &mut TxContext) {
+        assert!(match.host == tx_context::sender(ctx), ENotMatchHost);
+        let secret_hash = sha3_256(secret);
+        let hash_value = option::borrow(&match.hash);
+
+        // make sure match.hash is hash of secret
+        assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
+
+        // take last byte
+        let length = vector::length(&secret) - 1;
+        let last_byte = vector::borrow(&secret, length);
+
+        // take player guess
+        let player_guess = option::borrow(&match.guess);
+
+        // decide on winner
+        let winner = if ((*last_byte % 2) == *player_guess) match.guesser else match.host;
+
+        // add winner to match
+        option::fill(&mut match.winner, winner); 
+
+        // add match as a dof to tournament
+        let id = object::uid_to_inner(& match.id);
+        dof::add(&mut tournament.id, id, match);
+    }
+
 }
 
