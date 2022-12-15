@@ -47,6 +47,20 @@ interface PendingDelegation {
     staked: bigint;
 }
 
+export function getName(rawName: string | number[]) {
+    let name: string;
+
+    if (Array.isArray(rawName)) {
+        name = String.fromCharCode(...rawName);
+    } else {
+        name = Buffer.from(rawName, 'base64').toString();
+        if (!VALDIATOR_NAME.test(name)) {
+            name = rawName;
+        }
+    }
+    return name;
+}
+
 /**
  * Fetches the pending delegations from the system object. This is currently pretty hacky and expensive.
  */
@@ -87,19 +101,8 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
 
                     if (!filteredDelegations.length) return null;
 
-                    let name: string;
-                    const rawName = validator.fields.metadata.fields.name;
-                    if (Array.isArray(rawName)) {
-                        name = String.fromCharCode(...rawName);
-                    } else {
-                        name = Buffer.from(rawName, 'base64').toString();
-                        if (!VALDIATOR_NAME.test(name)) {
-                            name = rawName;
-                        }
-                    }
-
                     return {
-                        name,
+                        name: getName(validator.fields.metadata.fields.name),
                         staked: filteredDelegations.reduce(
                             (acc, delegation) =>
                                 acc + BigInt(delegation.fields.sui_amount),
