@@ -5,8 +5,7 @@ import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useCallback, useState, useMemo } from 'react';
 
-// TODO: replace with useGetObject
-import { useGetObjectData } from '_app/hooks/useGetObjectData';
+import { getName, STATE_OBJECT } from '../usePendingDelegation';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -20,14 +19,13 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useMiddleEllipsis } from '_hooks';
+import { useMiddleEllipsis, useGetObject } from '_hooks';
 
 import type { ValidatorState } from '../ValidatorDataTypes';
 
 const TRUNCATE_MAX_LENGTH = 10;
 const TRUNCATE_PREFIX_LENGTH = 6;
 const APY_TOOLTIP = 'Annual Percentage Yield';
-const VALIDATORS_OBJECT_ID = '0x5';
 
 type ValidatorListItemProp = {
     name: string;
@@ -110,26 +108,11 @@ function ValidatorListItem({
     );
 }
 
-// TODO: to unblock, replace with getName from usePendingDelegation
-function getName(rawName: string | number[]) {
-    let name: string;
-
-    if (Array.isArray(rawName)) {
-        name = String.fromCharCode(...rawName);
-    } else {
-        name = Buffer.from(rawName, 'base64').toString();
-        if (!/^[A-Z-_.\s0-9]+$/i.test(name)) {
-            name = rawName;
-        }
-    }
-    return name;
-}
-
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<false | string>(
         false
     );
-    const { data, isLoading, isError } = useGetObjectData(VALIDATORS_OBJECT_ID);
+    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 
     const validatorsData =
         data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
