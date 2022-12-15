@@ -18,42 +18,42 @@ mod tests {
         let ref4 = ObjectDigest::random();
 
         let mut a1 = Accumulator::default();
-        a1.insert(&ref1);
-        a1.insert(&ref2);
-        a1.insert(&ref3);
+        a1.insert(ref1);
+        a1.insert(ref2);
+        a1.insert(ref3);
 
         // Insertion out of order should arrive at the same result.
         let mut a2 = Accumulator::default();
-        a2.insert(&ref3);
+        a2.insert(ref3);
         assert_ne!(a1, a2);
-        a2.insert(&ref2);
+        a2.insert(ref2);
         assert_ne!(a1, a2);
-        a2.insert(&ref1);
+        a2.insert(ref1);
         assert_eq!(a1, a2);
 
         // Accumulator is not a set, and inserting the same element twice will change the result.
-        a2.insert(&ref3);
+        a2.insert(ref3);
         assert_ne!(a1, a2);
-        a2.remove(&ref3);
+        a2.remove(ref3);
 
-        a2.insert(&ref4);
+        a2.insert(ref4);
         assert_ne!(a1, a2);
 
         // Supports removal.
-        a2.remove(&ref4);
+        a2.remove(ref4);
         assert_eq!(a1, a2);
 
         // Removing elements out of order should arrive at the same result.
-        a2.remove(&ref3);
-        a2.remove(&ref1);
+        a2.remove(ref3);
+        a2.remove(ref1);
 
-        a1.remove(&ref1);
-        a1.remove(&ref3);
+        a1.remove(ref1);
+        a1.remove(ref3);
 
         assert_eq!(a1, a2);
 
         // After removing all elements, it should be the same as an empty one.
-        a1.remove(&ref2);
+        a1.remove(ref2);
         assert_eq!(a1, Accumulator::default());
     }
 
