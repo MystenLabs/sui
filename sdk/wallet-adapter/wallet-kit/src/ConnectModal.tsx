@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWallet } from "@mysten/wallet-adapter-react";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog } from '@headlessui/react'
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
 import { Button, Panel } from "./utils/ui";
@@ -145,11 +145,10 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
   }, [wallet, selected, connected]);
 
   return (
-    <Dialog.Root
+    <Dialog
       open={open}
-      onOpenChange={(isOpen) => (isOpen ? null : onClose())}
+      onClose={onClose}
     >
-      <Dialog.Portal>
         <Overlay />
         <Content>
           <Body connect>
@@ -227,7 +226,6 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
             <CloseButton />
           </Body>
         </Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </Dialog>
   );
 }
