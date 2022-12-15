@@ -103,7 +103,11 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request.transaction.verify()?;
+        let tx_digest = *request.transaction.digest();
+        let transaction = request
+            .transaction
+            .verify()
+            .tap_err(|e| debug!(?tx_digest, "Failed to verify user signature: {:?}", e))?;
 
         // We will shortly refactor the TransactionOrchestrator with a queue-based implementation.
         // TDOO: `should_enqueue` will be used to determine if the transaction should be enqueued.
@@ -126,7 +130,6 @@ where
                 QuorumDriverRequestType::WaitForEffectsCert
             }
         };
-        let tx_digest = *transaction.digest();
         let execution_result = self
             .quorum_driver
             .execute_transaction(QuorumDriverRequest {
