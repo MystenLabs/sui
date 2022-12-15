@@ -55,11 +55,12 @@ export function useGetValidators(walletAddress: string | null) {
 
             const num_epochs_participated =
                 validatorsData.epoch - starting_epoch;
-            const APY =
-                (1 +
+            const APY = Math.pow(
+                1 +
                     (sui_balance - delegation_token_supply.fields.value) /
-                        delegation_token_supply.fields.value) ^
-                (365 / num_epochs_participated - 1);
+                        delegation_token_supply.fields.value,
+                365 / num_epochs_participated - 1
+            );
 
             const pending_delegationsByAddress = pending_delegations
                 ? pending_delegations.filter(
