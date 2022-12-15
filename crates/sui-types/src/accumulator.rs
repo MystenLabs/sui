@@ -1,98 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-
-use crate::crypto::sha3_hash;
-use curve25519_dalek::ristretto::RistrettoPoint;
-
-#[allow(clippy::wrong_self_convention)]
-pub trait IntoPoint {
-    fn into_point(&self) -> RistrettoPoint;
-}
-
-impl<T> IntoPoint for &T
-where
-    T: IntoPoint,
-{
-    fn into_point(&self) -> RistrettoPoint {
-        (*self).into_point()
-    }
-}
-
-/*
-   A MulHash accumulator: each element is mapped to a
-   point on an elliptic curve on which the DL problem is
-   hard. The accumulator is the sum of all points.
-
-    See for more information about the construction and
-    its security: https://arxiv.org/abs/1601.06502
-
-*/
-#[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Accumulator {
-    accumulator: RistrettoPoint,
-}
-
-impl Accumulator {
-    /// Insert one item in the accumulator
-    pub fn insert<I>(&mut self, item: &I)
-    where
-        I: IntoPoint,
-    {
-        let point: RistrettoPoint = item.into_point();
-        self.accumulator += point;
-    }
-
-    // Insert all items from an iterator into the accumulator
-    pub fn insert_all<'a, I, It>(&'a mut self, items: It)
-    where
-        It: 'a + IntoIterator<Item = &'a I>,
-        I: 'a + IntoPoint,
-    {
-        for i in items {
-            self.insert(i);
-        }
-    }
-
-    /// Remove one item from the accumulator
-    pub fn remove<I>(&mut self, item: &I)
-    where
-        I: IntoPoint,
-    {
-        let point: RistrettoPoint = item.into_point();
-        self.accumulator -= point;
-    }
-
-    // Remove all items from an iterator from the accumulator
-    pub fn remove_all<'a, I, It>(&'a mut self, items: It)
-    where
-        It: 'a + IntoIterator<Item = &'a I>,
-        I: 'a + IntoPoint,
-    {
-        for i in items {
-            self.remove(i);
-        }
-    }
-
-    pub fn digest(&self) -> [u8; 32] {
-        sha3_hash(self)
-    }
-}
-
-impl Debug for Accumulator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Accumulator").finish()
-    }
-}
+pub type Accumulator = fastcrypto::hash::EllipticCurveMultisetHash;
 
 #[cfg(test)]
 mod tests {
-    use rand::seq::SliceRandom;
-
     use crate::accumulator::Accumulator;
     use crate::base_types::ObjectDigest;
+    use fastcrypto::hash::MultisetHash;
+    use rand::seq::SliceRandom;
 
     #[test]
     fn test_accumulator() {

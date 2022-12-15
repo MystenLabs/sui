@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use curve25519_dalek::ristretto::RistrettoPoint;
 use fastcrypto::encoding::decode_bytes_hex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -15,7 +14,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
-use sha2::Sha512;
 use std::borrow::Borrow;
 use std::cmp::max;
 use std::collections::HashMap;
@@ -23,7 +21,6 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
-use crate::accumulator::IntoPoint;
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
@@ -299,12 +296,6 @@ pub struct ObjectDigest(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     pub [u8; OBJECT_DIGEST_LENGTH],
 ); // We use SHA3-256 hence 32 bytes here
-
-impl IntoPoint for ObjectDigest {
-    fn into_point(&self) -> RistrettoPoint {
-        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
-    }
-}
 
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
