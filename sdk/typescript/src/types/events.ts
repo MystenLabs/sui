@@ -10,6 +10,8 @@ import {
   literal,
   Infer,
   array,
+  record,
+  any,
 } from 'superstruct';
 import {
   ObjectId,
@@ -34,7 +36,7 @@ export const MoveEvent = object({
   transactionModule: string(),
   sender: SuiAddress,
   type: string(),
-  fields: object(),
+  fields: record(string(), any()),
   bcs: string(),
 });
 
