@@ -50,6 +50,9 @@ module contract::satoshi_flip_match {
         outcome.winner
     }
 
+    public fun id(match: &Match): UID {
+        match.id
+    }
 
     // functions
 
