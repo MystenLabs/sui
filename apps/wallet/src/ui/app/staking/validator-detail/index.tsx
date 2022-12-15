@@ -46,14 +46,16 @@ export function ValidatorDetail() {
 
     const validatorName = validatorData?.name || 'Loading...';
 
+    // TODO: get logo from validator data
+    const logo = null;
+
     return (
         <Overlay
             showModal={showModal}
             setShowModal={setShowModal}
             title={
                 <div className="flex gap-2 items-center capitalize">
-                    {/* TODO: update once meta data is aval  */}
-                    <ImageIcon src={null} alt={validatorName} size="small" />
+                    <ImageIcon src={logo} alt={validatorName} size="small" />
 
                     {validatorName}
                 </div>
