@@ -16,7 +16,7 @@ export { default as useNFTBasicData } from './useNFTBasicData';
 export { useObjectsState } from './useObjectsState';
 export { useWaitForElement } from './useWaitForElement';
 export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
-export { useGetNFTMetaById } from './useGetNFTMetaById';
+export { useGetNFTMeta } from './useGetNFTMeta';
 export { useTransactionDryRun } from './useTransactionDryRun';
 export { useTransactionSummary } from './useTransactionSummary';
 export { useRpc } from './useRpc';

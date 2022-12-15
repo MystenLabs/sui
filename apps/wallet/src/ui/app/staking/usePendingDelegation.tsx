@@ -9,8 +9,8 @@ import { notEmpty } from '../helpers';
 import { useAppSelector } from '../hooks';
 import { api } from '../redux/store/thunk-extras';
 
-const STATE_OBJECT = '0x5';
-const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
+export const STATE_OBJECT = '0x5';
+export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
 
 // TODO: Generalize into SDK:
 interface SystemStateObject {

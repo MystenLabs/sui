@@ -6,73 +6,13 @@ import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { useGetObject } from './useGetObject';
+import {
+    STATE_OBJECT,
+    VALDIATOR_NAME,
+} from '_app/staking/usePendingDelegation';
 
 //TODO: Remove when available on SDK, types should come from the SDK
-import type {
-    Validator,
-    ValidatorState,
-} from '_app/staking/home/ValidatorDataTypes';
-
-export const VALIDATORS_OBJECT_ID = '0x05';
-
-function processValidators(
-    set: Validator[],
-    totalStake: bigint,
-    current_epoch: number,
-    walletAddress?: string | null
-) {
-    return set.map((av) => {
-        const rawName = av.fields.metadata.fields.name;
-
-        const name = Buffer.from(rawName, 'base64').toString();
-
-        const {
-            sui_balance,
-            starting_epoch,
-            pending_delegations,
-            delegation_token_supply,
-        } = av.fields.delegation_staking_pool.fields;
-        const num_epochs_participated = current_epoch - starting_epoch;
-        const APY =
-            (1 +
-                (sui_balance - delegation_token_supply.fields.value) /
-                    delegation_token_supply.fields.value) ^
-            (365 / num_epochs_participated - 1);
-
-        const pending_delegationsByAddress = pending_delegations
-            ? pending_delegations.filter(
-                  (d) => d.fields.delegator === walletAddress
-              )
-            : [];
-
-        return {
-            name: name,
-            address: av.fields.metadata.fields.sui_address,
-            stake: av.fields.stake_amount,
-            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
-            commissionRate: av.fields.commission_rate || 0,
-            delegationCount: av.fields.delegation_count || 0,
-            apy: APY > 0 ? APY : 'N/A',
-
-            amount: av.fields.stake_amount || 0n,
-            // only show pending delegation addreeses if there is a pending delegation
-            pendingDelegations: pending_delegationsByAddress,
-            pendingDelegationAmount: pending_delegationsByAddress.reduce(
-                (acc, fields) =>
-                    (acc += BigInt(fields.fields.sui_amount || 0n)),
-                0n
-            ),
-            metadata: av.fields.metadata,
-            // TODO: update
-            pendingDelegationsCount: pending_delegations.length,
-            totalPendingDelegationAmount: BigInt(
-                av.fields.metadata.fields.next_epoch_delegation || 0n
-            ),
-            logo: null,
-            suiEarned: 0n,
-        };
-    });
-}
+import type { ValidatorState } from '_app/staking/home/ValidatorDataTypes';
 
 function getStakePercent(stake: bigint, total: bigint): number {
     const bnStake = new BigNumber(stake.toString());
@@ -81,7 +21,7 @@ function getStakePercent(stake: bigint, total: bigint): number {
 }
 
 export function useGetValidators(walletAddress: string | null) {
-    const { data, isLoading, isError } = useGetObject(VALIDATORS_OBJECT_ID);
+    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 
     const validatorsData =
         data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
@@ -93,14 +33,56 @@ export function useGetValidators(walletAddress: string | null) {
 
     const validators = useMemo(() => {
         if (!validatorsData) return [];
-        const processedValidators = processValidators(
-            validatorsData.validators.fields.active_validators,
-            totalStake,
-            validatorsData.epoch,
-            walletAddress
-        );
+        return validatorsData.validators.fields.active_validators.map((av) => {
+            const rawName = av.fields.metadata.fields.name;
 
-        return processedValidators.sort((a, b) => (a.name > b.name ? 1 : -1));
+            let name: string;
+
+            if (Array.isArray(rawName)) {
+                name = String.fromCharCode(...rawName);
+            } else {
+                name = Buffer.from(rawName, 'base64').toString();
+                if (!VALDIATOR_NAME.test(name)) {
+                    name = rawName;
+                }
+            }
+            const {
+                sui_balance,
+                starting_epoch,
+                pending_delegations,
+                delegation_token_supply,
+            } = av.fields.delegation_staking_pool.fields;
+
+            const num_epochs_participated =
+                validatorsData.epoch - starting_epoch;
+            const APY =
+                (1 +
+                    (sui_balance - delegation_token_supply.fields.value) /
+                        delegation_token_supply.fields.value) ^
+                (365 / num_epochs_participated - 1);
+
+            const pending_delegationsByAddress = pending_delegations
+                ? pending_delegations.filter(
+                      (d) => d.fields.delegator === walletAddress
+                  )
+                : [];
+
+            return {
+                name: name,
+                apy: APY > 0 ? APY : 'N/A',
+                logo: null,
+                stakePercent: getStakePercent(
+                    av.fields.stake_amount,
+                    totalStake
+                ),
+                pendingDelegationAmount: pending_delegationsByAddress.reduce(
+                    (acc, fields) =>
+                        (acc += BigInt(fields.fields.sui_amount || 0n)),
+                    0n
+                ),
+                av,
+            };
+        });
     }, [totalStake, validatorsData, walletAddress]);
     return { validators, isLoading, isError };
 }

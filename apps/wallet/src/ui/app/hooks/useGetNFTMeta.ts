@@ -12,7 +12,7 @@ export type NFTMetadata = {
     url: string;
 };
 
-export function useGetNFTMetaById(objectID: string): NFTMetadata | null {
+export function useGetNFTMeta(objectID: string): NFTMetadata | null {
     const { data, isError } = useGetObject(objectID);
 
     const nftMeta = useMemo(() => {
