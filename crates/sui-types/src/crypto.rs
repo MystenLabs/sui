@@ -1555,7 +1555,7 @@ impl SignatureScheme {
 
 pub fn construct_tbls_randomness_object_message(epoch: EpochId, obj_id: &ObjectID) -> Vec<u8> {
     let mut msg = TBLS_RANDOMNESS_OBJECT_DOMAIN.to_vec();
-    msg.append(&mut u64::to_be_bytes(epoch as u64).to_vec());
-    msg.append(&mut obj_id.to_vec());
+    msg.extend_from_slice(&u64::to_be_bytes(epoch as u64));
+    msg.extend_from_slice(obj_id.as_ref());
     msg
 }
