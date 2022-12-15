@@ -151,10 +151,12 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let (_handle, mut reconfig_channel) = executor.start().unwrap();
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    // We should have only synced up to epoch boundary
+    // We should have synced up to epoch boundary - 1 (-1 because we do
+    // not ratchet the highest executed checkpoint watermark until after
+    // reconfig is successful)
     assert!(matches!(
         checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
-        Some(highest) if highest == (num_to_sync_per_epoch as u64),
+        Some(highest) if highest == (num_to_sync_per_epoch as u64) - 1,
     ));
 
     // Ensure we have end of epoch notification
