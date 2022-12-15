@@ -77,7 +77,10 @@ function ValidatorListItem({
                     <ExplorerLink
                         type={ExplorerLinkType.address}
                         address={address}
-                        className="text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark"
+                        className={cl(
+                            'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark',
+                            selected && 'text-hero-dark'
+                        )}
                         showIcon={false}
                     >
                         {truncatedAddress}
