@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
-import { useCallback, useState,  } from 'react';
+import cl from 'classnames';
+import { useCallback, useState, useMemo } from 'react';
 
 // TODO: replace with useGetObject
-import {useGetObjectData} from '_app/hooks/useGetObjectData';
+import { useGetObjectData } from '_app/hooks/useGetObjectData';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -19,14 +20,14 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useMiddleEllipsis, useAppSelector } from '_hooks';
+import { useMiddleEllipsis } from '_hooks';
 
+import type { ValidatorState } from '../ValidatorDataTypes';
 
 const TRUNCATE_MAX_LENGTH = 10;
 const TRUNCATE_PREFIX_LENGTH = 6;
 const APY_TOOLTIP = 'Annual Percentage Yield';
-const VALIDATORS_OBJECT_ID = '0x5'
-
+const VALIDATORS_OBJECT_ID = '0x5';
 
 type ValidatorListItemProp = {
     name: string;
@@ -51,7 +52,10 @@ function ValidatorListItem({
 
     return (
         <div
-            className="flex justify-between w-full hover:bg-sui/10 py-3.5 px-2.5 rounded-lg group"
+            className={cl(
+                'flex justify-between w-full hover:bg-sui/10 py-3.5 px-2.5 rounded-lg group',
+                selected && 'bg-sui/10'
+            )}
             role="button"
         >
             <div className="flex gap-2.5">
@@ -59,7 +63,7 @@ function ValidatorListItem({
                     {selected && (
                         <Icon
                             icon={SuiIcons.CheckFill}
-                            className="absolute text-success text-heading6 translate-x-4 -translate-y-1"
+                            className="absolute text-success text-heading6 translate-x-4 -translate-y-1 rounded-full bg-white"
                         />
                     )}
 
@@ -81,16 +85,18 @@ function ValidatorListItem({
                 </div>
             </div>
             <div className="flex gap-0.5 items-center ">
-                <Text variant="body" weight="semibold" color="steel-darker">
-                    {apy}
-                </Text>
-                <div className="flex gap-0.5 items-baseline leading-none">
+                {typeof apy !== 'string' && (
+                    <Text variant="body" weight="semibold" color="steel-darker">
+                        {apy}
+                    </Text>
+                )}
+                <div className="flex gap-0.5 leading-none">
                     <Text
                         variant="subtitleSmall"
                         weight="medium"
                         color="steel-dark"
                     >
-                        {typeof apy !== 'string' && '% APY'}
+                        {typeof apy === 'string' ? apy : '% APY'}
                     </Text>
                     <div className="text-steel items-baseline text-subtitle h-3 flex opacity-0 group-hover:opacity-100">
                         <IconTooltip tip={`${APY_TOOLTIP}`} placement="top" />
@@ -116,17 +122,49 @@ function getName(rawName: string | number[]) {
     return name;
 }
 
-export function ActiveValidatorsCard() {
+export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<false | string>(
         false
     );
-    const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data, isLoading, isSuccess, isError } = useGetObjectData(VALIDATORS_OBJECT_ID);
-   
-    /*const validatorsData =
+    const { data, isLoading, isError } = useGetObjectData(VALIDATORS_OBJECT_ID);
+
+    const validatorsData =
         data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
             ? (data.details.data.fields as ValidatorState)
-            : null;*/
+            : null;
+
+    const validators = useMemo(() => {
+        if (!validatorsData) return [];
+        return validatorsData.validators.fields.active_validators
+            .map((av) => {
+                const rawName = av.fields.metadata.fields.name;
+
+                const {
+                    sui_balance,
+                    starting_epoch,
+
+                    delegation_token_supply,
+                } = av.fields.delegation_staking_pool.fields;
+
+                const num_epochs_participated =
+                    validatorsData.epoch - starting_epoch;
+
+                const APY = Math.pow(
+                    1 +
+                        (sui_balance - delegation_token_supply.fields.value) /
+                            delegation_token_supply.fields.value,
+                    365 / num_epochs_participated - 1
+                );
+
+                return {
+                    name: getName(rawName),
+                    apy: APY > 0 ? APY : 'N/A',
+                    logo: null,
+                    address: av.fields.metadata.fields.sui_address,
+                };
+            })
+            .sort((a, b) => (a.name > b.name ? 1 : -1));
+    }, [validatorsData]);
 
     const selectValidator = useCallback(
         (address: string) => {
@@ -188,7 +226,7 @@ export function ActiveValidatorsCard() {
                     ))}
             </Content>
 
-            <Menu stuckClass="stake-cta" className="w-full p-0">
+            <Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
                 {selectedValidator && (
                     <Button
                         size="large"
