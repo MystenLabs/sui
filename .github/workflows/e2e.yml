@@ -72,7 +72,6 @@ jobs:
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
           working-directory: ./apps/explorer
           spec: cypress/e2e/localnet/*
-          # Wait on faucet and explorer:
-          wait-on: "tcp:3000, http://localhost:9123"
-          # wait for 2 minutes for the server to respond
+          # Wait on explorer, then faucet (giving faucet up to 2 minutes to respond):
+          wait-on: 'pnpm dlx wait-on --log tcp:3000 && pnpm dlx wait-on --log --timeout 120000 http://localhost:9123'
           wait-on-timeout: 120
