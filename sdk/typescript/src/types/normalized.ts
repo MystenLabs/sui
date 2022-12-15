@@ -76,18 +76,15 @@ function isSuiMoveNormalizedType(
   if (is(value, SuiMoveNormalizedTypeParameterType)) return true;
   if (isSuiMoveNormalizedStructType(value)) return true;
   if (typeof value !== 'object') return false;
-  if ('Reference' in value && is(value.Reference, SuiMoveNormalizedType))
-    return true;
-  if (
-    'MutableReference' in value &&
-    is(value.MutableReference, SuiMoveNormalizedType)
-  )
-    return true;
-  if ('Vector' in value && is(value.Vector, SuiMoveNormalizedType)) return true;
+
+  const valueProperties = value as Record<string, unknown>;
+  if (is(valueProperties.Reference, SuiMoveNormalizedType)) return true;
+  if (is(valueProperties.MutableReference, SuiMoveNormalizedType)) return true;
+  if (is(valueProperties.Vector, SuiMoveNormalizedType)) return true;
   return false;
 }
 
-export const SuiMoveNormalizedType = define(
+export const SuiMoveNormalizedType = define<SuiMoveNormalizedType>(
   'SuiMoveNormalizedType',
   isSuiMoveNormalizedType
 );
@@ -105,10 +102,12 @@ function isSuiMoveNormalizedStructType(
   value: unknown
 ): value is SuiMoveNormalizedStructType {
   if (!value || typeof value !== 'object') return false;
-  if (!('Struct' in value) || !value.Struct || typeof value.Struct !== 'object')
+
+  const valueProperties = value as Record<string, unknown>;
+  if (!valueProperties.Struct || typeof valueProperties.Struct !== 'object')
     return false;
 
-  const structProperties = value.Struct as Record<string, unknown>;
+  const structProperties = valueProperties.Struct as Record<string, unknown>;
   if (
     typeof structProperties.address !== 'string' ||
     typeof structProperties.module !== 'string' ||
@@ -125,7 +124,7 @@ function isSuiMoveNormalizedStructType(
 }
 
 // NOTE: This type is recursive, so we need to manually implement it:
-export const SuiMoveNormalizedStructType = define(
+export const SuiMoveNormalizedStructType = define<SuiMoveNormalizedStructType>(
   'SuiMoveNormalizedStructType',
   isSuiMoveNormalizedStructType
 );
