@@ -95,6 +95,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+// TODO: WIP, complete this tests
 #[sim_test]
 async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let port = get_available_port();
