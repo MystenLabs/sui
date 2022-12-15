@@ -5,6 +5,7 @@ import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
 import { useState, useMemo } from 'react';
 
 import { getName, STATE_OBJECT } from '../usePendingDelegation';
+import { ValidatorListItem } from './ValidatorListItem';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -14,7 +15,6 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { ValidatorListItem } from './ValidatorListItem';
 import { useGetObject } from '_hooks';
 
 import type { ValidatorState } from '../ValidatorDataTypes';
