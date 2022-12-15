@@ -216,7 +216,7 @@ async fn test_dev_inspect_object_by_bytes() {
 
     // test normal call
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -248,7 +248,7 @@ async fn test_dev_inspect_object_by_bytes() {
 
     // actually make the call to make an object
     let effects = call_move(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -278,7 +278,7 @@ async fn test_dev_inspect_object_by_bytes() {
 
     // use the created object directly, via its bytes
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -313,7 +313,7 @@ async fn test_dev_inspect_object_by_bytes() {
 
     // make the same call with the object id
     let effects = call_move(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -352,7 +352,7 @@ async fn test_dev_inspect_unowned_gas() {
 
     // bob uses dev inspect with alice's gas
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &alice_gas_id,
         &bob,
         &bob_key,
@@ -393,7 +393,7 @@ async fn test_dev_inspect_unowned_object() {
 
     // make an object, send it to bob
     let effects = call_move(
-        &*authority_state,
+        &authority_state,
         &alice_gas_id,
         &alice,
         &alice_key,
@@ -419,7 +419,7 @@ async fn test_dev_inspect_unowned_object() {
 
     // alice uses the object with dev inspect, despite not being the owner
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &alice_gas_id,
         &alice,
         &alice_key,
@@ -464,7 +464,7 @@ async fn test_dev_inspect_dynamic_field() {
         macro_rules! mk_obj {
             () => {{
                 let effects = call_move(
-                    &*authority_state,
+                    &authority_state,
                     &gas_object_id,
                     &sender,
                     &sender_key,
@@ -503,7 +503,7 @@ async fn test_dev_inspect_dynamic_field() {
 
     // add a dynamic field to itself
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -523,7 +523,7 @@ async fn test_dev_inspect_dynamic_field() {
 
     // add a dynamic field to an object
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -564,7 +564,7 @@ async fn test_dev_inspect_return_values() {
     // make an object
     let init_value = 16_u64;
     let effects = call_move(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -594,7 +594,7 @@ async fn test_dev_inspect_return_values() {
 
     // mutably borrow a value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -624,7 +624,7 @@ async fn test_dev_inspect_return_values() {
 
     // borrow a value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -654,7 +654,7 @@ async fn test_dev_inspect_return_values() {
 
     // read one value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -684,7 +684,7 @@ async fn test_dev_inspect_return_values() {
 
     // read two values from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &*authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
