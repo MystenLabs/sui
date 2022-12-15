@@ -36,7 +36,7 @@ use sui_types::base_types::{
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
-use sui_types::error::SuiError;
+use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::{EventFilter, TransactionFilter};
@@ -1964,6 +1964,68 @@ impl Display for SuiTransactionEffects {
             }
         }
         write!(f, "{}", writer)
+    }
+}
+
+/// The response from processing a dev inspect transaction
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "DevInspectResults", rename_all = "camelCase")]
+pub struct DevInspectResults {
+    /// Summary of effects that likely would be generated if the transaction is actually run.
+    /// Note however, that not all dev-inspect transactions are actually usable as transactions so
+    /// it might not be possible actually generate these effects from a normal transaction.
+    pub effects: SuiTransactionEffects,
+    /// Execution results (including return values) from executing the transactions
+    /// Currently contains only return values from Move calls
+    pub results: Result<Vec<(usize, SuiExecutionResult)>, String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SuiExecutionResult {
+    /// The value of any arguments that were mutably borrowed.
+    /// Non-mut borrowed values are not included
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mutable_reference_outputs: Vec<(/* local index */ u8, Vec<u8>, SuiTypeTag)>,
+    /// The return values from the function
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub return_values: Vec<(Vec<u8>, SuiTypeTag)>,
+}
+
+type ExecutionResult = (
+    /*  mutable_reference_outputs */ Vec<(u8, Vec<u8>, TypeTag)>,
+    /*  return_values */ Vec<(Vec<u8>, TypeTag)>,
+);
+
+impl DevInspectResults {
+    pub fn new(
+        effects: TransactionEffects,
+        return_values: Result<Vec<(usize, ExecutionResult)>, ExecutionError>,
+        resolver: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
+        let effects = SuiTransactionEffects::try_from(effects, resolver)?;
+        let results = match return_values {
+            Err(e) => Err(format!("{}", e)),
+            Ok(srvs) => Ok(srvs
+                .into_iter()
+                .map(|(idx, srv)| {
+                    let (mutable_reference_outputs, return_values) = srv;
+                    let mutable_reference_outputs = mutable_reference_outputs
+                        .into_iter()
+                        .map(|(i, bytes, tag)| (i, bytes, SuiTypeTag::from(tag)))
+                        .collect();
+                    let return_values = return_values
+                        .into_iter()
+                        .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
+                        .collect();
+                    let res = SuiExecutionResult {
+                        mutable_reference_outputs,
+                        return_values,
+                    };
+                    (idx, res)
+                })
+                .collect()),
+        };
+        Ok(Self { effects, results })
     }
 }
 

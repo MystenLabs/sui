@@ -211,10 +211,16 @@ fn execute_internal<
             .map_err(|e| convert_type_argument_error(idx, e))?;
     }
     // script visibility checked manually for entry points
-    let (result, (change_set, events, mut native_context_extensions)) = session
-        .execute_function_bypass_visibility(module_id, function, type_args, args, gas_status)
-        .and_then(|ret| Ok((ret, session.finish_with_extensions()?)))?;
-    let mode_result = Mode::make_result(&result)?;
+    let result = session.execute_function_bypass_visibility(
+        module_id,
+        function,
+        type_args.clone(),
+        args,
+        gas_status,
+    )?;
+    let mode_result = Mode::make_result(&session, module_id, function, &type_args, &result)?;
+
+    let (change_set, events, mut native_context_extensions) = session.finish_with_extensions()?;
     let SerializedReturnValues {
         mut mutable_reference_outputs,
         ..
@@ -226,16 +232,6 @@ fn execute_internal<
     assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
     // Sui Move no longer uses Move's internal event system
     assert_invariant!(events.is_empty(), "Events must be empty");
-    // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
-    let num_mut_objects = if has_ctx_arg {
-        mutable_ref_objects.len() + 1
-    } else {
-        mutable_ref_objects.len()
-    };
-    assert_invariant!(
-        num_mut_objects == mutable_reference_outputs.len(),
-        "Number of mutable references returned does not match input"
-    );
 
     // When this function is used during publishing, it
     // may be executed several times, with objects being
@@ -250,14 +246,24 @@ fn execute_internal<
         ctx.update_state(updated_ctx)?;
     }
 
-    let mutable_refs = mutable_reference_outputs
-        .into_iter()
-        .map(|(local_idx, bytes, _layout)| {
-            let object_id = mutable_ref_objects.remove(&local_idx).unwrap();
-            debug_assert!(!by_value_objects.contains(&object_id));
-            (object_id, bytes)
-        })
-        .collect();
+    let mut mutable_refs = vec![];
+    for (local_idx, bytes, _layout) in mutable_reference_outputs {
+        let object_id = match mutable_ref_objects.remove(&local_idx) {
+            Some(id) => id,
+            None => {
+                assert_invariant!(
+                    Mode::allow_arbitrary_function_calls(),
+                    "Mutable references should be populated only by objects in normal execution"
+                );
+                continue;
+            }
+        };
+        assert_invariant!(
+            !by_value_objects.contains(&object_id),
+            "object used by-ref and by-value"
+        );
+        mutable_refs.push((object_id, bytes));
+    }
     assert_invariant!(
         mutable_ref_objects.is_empty(),
         "All mutable references should have been marked as updated"
