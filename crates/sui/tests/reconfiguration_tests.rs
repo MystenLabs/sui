@@ -1,61 +1,86 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
+use sui_core::authority::AuthorityState;
+use sui_core::authority_aggregator::{
+    LocalTransactionCertifier, NetworkTransactionCertifier, TransactionCertifier,
+};
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::test_utils::init_local_authorities;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
-use test_utils::authority::{get_client, spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 
 #[tokio::test]
-async fn advance_epoch_tx_test() {
+async fn local_advance_epoch_tx_test() {
     // This test checks the following functionalities related to advance epoch transaction:
     // 1. The create_advance_epoch_tx_cert API in AuthorityState can properly sign an advance
     //    epoch transaction locally and exchange with other validators to obtain a cert.
     // 2. The timeout in the API works as expected.
     // 3. The certificate can be executed by each validator.
-    let configs = test_authority_configs();
-    let handles = spawn_test_authorities(iter::empty(), &configs).await;
+    // Uses local clients.
+    let (net, states, _) = init_local_authorities(4, vec![]).await;
 
-    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
-    let client0 = get_client(&configs.validator_set()[0]);
     // Make sure that validators do not accept advance epoch sent externally.
+    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
+    let client0 = net.get_client(&states[0].name).unwrap().authority_client();
     assert!(matches!(
         client0.handle_transaction(tx.into_inner()).await,
         Err(SuiError::InvalidSystemTransaction)
     ));
 
-    let failing_task = handles
-        .first()
-        .unwrap()
-        .with_async(|node| async move {
-            node.state()
-                .create_advance_epoch_tx_cert(
-                    1,
-                    &GasCostSummary::new(0, 0, 0),
-                    Duration::from_secs(15),
-                )
-                .await
-        })
+    let certifier = LocalTransactionCertifier::new(
+        states
+            .iter()
+            .map(|state| (state.name, state.clone()))
+            .collect::<BTreeMap<_, _>>(),
+    );
+    advance_epoch_tx_test_impl(states, &certifier).await;
+}
+
+#[tokio::test]
+async fn network_advance_epoch_tx_test() {
+    // Same as local_advance_epoch_tx_test, but uses network clients.
+    let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
+    let states: Vec<_> = authorities
+        .iter()
+        .map(|authority| authority.with(|node| node.state()))
+        .collect();
+    let certifier = NetworkTransactionCertifier::default();
+    advance_epoch_tx_test_impl(states, &certifier).await;
+}
+
+async fn advance_epoch_tx_test_impl(
+    states: Vec<Arc<AuthorityState>>,
+    certifier: &dyn TransactionCertifier,
+) {
+    let failing_task = states[0]
+        .create_advance_epoch_tx_cert(
+            1,
+            &GasCostSummary::new(0, 0, 0),
+            Duration::from_secs(15),
+            certifier,
+        )
         .await;
     // Since we are only running the task on one validator, it will never get a quorum and hence
     // never succeed.
     assert!(failing_task.is_err());
 
-    let tasks: Vec<_> = handles
+    let tasks: Vec<_> = states
         .iter()
-        .map(|handle| {
-            handle.with_async(|node| async move {
-                node.state()
-                    .create_advance_epoch_tx_cert(
-                        1,
-                        &GasCostSummary::new(0, 0, 0),
-                        Duration::from_secs(1000), // A very very long time
-                    )
-                    .await
-            })
+        .map(|state| async {
+            state
+                .create_advance_epoch_tx_cert(
+                    1,
+                    &GasCostSummary::new(0, 0, 0),
+                    Duration::from_secs(1000), // A very very long time
+                    certifier,
+                )
+                .await
         })
         .collect();
     let results = futures::future::join_all(tasks)
@@ -63,16 +88,8 @@ async fn advance_epoch_tx_test() {
         .into_iter()
         .collect::<anyhow::Result<Vec<_>>>()
         .unwrap();
-    for (handle, cert) in handles.iter().zip(results) {
-        handle
-            .with_async(|node| async move {
-                // Check that every validator is able to execute such a cert.
-                node.state()
-                    .execute_certificate_internal(&cert)
-                    .await
-                    .unwrap();
-            })
-            .await;
+    for (state, cert) in states.iter().zip(results) {
+        state.execute_certificate_internal(&cert).await.unwrap();
     }
 }
 

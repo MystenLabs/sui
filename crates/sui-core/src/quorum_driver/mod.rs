@@ -546,7 +546,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authority_aggregator::authority_aggregator_tests::init_local_authorities;
+    use crate::test_utils::init_local_authorities;
 
     #[tokio::test]
     async fn test_not_retry_on_object_locked() -> Result<(), anyhow::Error> {

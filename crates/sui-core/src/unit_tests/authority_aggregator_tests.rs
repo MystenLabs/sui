@@ -9,13 +9,9 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use sui_config::genesis::Genesis;
-use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_types::crypto::{
-    generate_proof_of_possession, get_authority_key_pair, get_key_pair, AccountKeyPair,
-    AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
+    get_authority_key_pair, get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
 use test_utils::sui_system_state::{test_sui_system_state, test_validator};
@@ -23,140 +19,19 @@ use test_utils::sui_system_state::{test_sui_system_state, test_validator};
 use sui_macros::sim_test;
 use sui_types::messages::*;
 use sui_types::object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING};
-use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
 use test_utils::messages::make_random_certified_transaction;
 
 use super::*;
-use crate::authority::AuthorityState;
-use crate::authority_client::make_authority_clients;
 use crate::authority_client::{
     AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
-    LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
+    LocalAuthorityClientFaultConfig,
 };
-use crate::validator_info::make_committee;
+use crate::test_utils::init_local_authorities;
 use sui_types::utils::to_sender_signed_transaction;
-
 use tokio::time::Instant;
 
 #[cfg(msim)]
 use sui_simulator::configs::constant_latency_ms;
-
-async fn init_network_authorities(
-    committee_size: usize,
-    genesis_objects: Vec<Object>,
-) -> AuthorityAggregator<NetworkAuthorityClient> {
-    let configs = test_and_configure_authority_configs(committee_size);
-    let _nodes = spawn_test_authorities(genesis_objects, &configs).await;
-
-    let committee = make_committee(0, configs.validator_set()).unwrap();
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-
-    let auth_clients = make_authority_clients(
-        configs.validator_set(),
-        DEFAULT_CONNECT_TIMEOUT_SEC,
-        DEFAULT_REQUEST_TIMEOUT_SEC,
-    );
-
-    AuthorityAggregator::new(committee, committee_store, auth_clients, &Registry::new())
-}
-
-pub async fn init_local_authorities(
-    committee_size: usize,
-    mut genesis_objects: Vec<Object>,
-) -> (
-    AuthorityAggregator<LocalAuthorityClient>,
-    Vec<Arc<AuthorityState>>,
-    ObjectRef,
-) {
-    // add object_basics package object to genesis
-    let build_config = BuildConfig::default();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_modules()
-        .into_iter()
-        .cloned()
-        .collect();
-    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
-    genesis_objects.push(pkg);
-
-    let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
-    let mut key_pairs = Vec::new();
-    for i in 0..committee_size {
-        let key_pair: AuthorityKeyPair = get_key_pair().1;
-        let authority_name = key_pair.public().into();
-        let worker_key_pair: NetworkKeyPair = get_key_pair().1;
-        let worker_name = worker_key_pair.public().clone();
-        let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
-        let network_key_pair: NetworkKeyPair = get_key_pair().1;
-        let validator_info = ValidatorInfo {
-            name: format!("validator-{i}"),
-            protocol_key: authority_name,
-            worker_key: worker_name,
-            account_key: account_key_pair.public(),
-            network_key: network_key_pair.public().clone(),
-            stake: 1,
-            delegation: 0,
-            gas_price: 1,
-            commission_rate: 0,
-            network_address: sui_config::utils::new_tcp_network_address(),
-            p2p_address: sui_config::utils::new_udp_network_address(),
-            narwhal_primary_address: sui_config::utils::new_udp_network_address(),
-            narwhal_worker_address: sui_config::utils::new_udp_network_address(),
-        };
-        let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
-        builder = builder.add_validator(validator_info, pop);
-        key_pairs.push((authority_name, key_pair));
-    }
-    let genesis = builder.build();
-    let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
-    (aggregator, authorities, pkg_ref)
-}
-
-pub async fn init_local_authorities_with_genesis(
-    genesis: &Genesis,
-    key_pairs: Vec<(AuthorityPublicKeyBytes, AuthorityKeyPair)>,
-) -> (
-    AuthorityAggregator<LocalAuthorityClient>,
-    Vec<Arc<AuthorityState>>,
-) {
-    telemetry_subscribers::init_for_testing();
-    let committee = genesis.committee().unwrap();
-
-    let mut clients = BTreeMap::new();
-    let mut states = Vec::new();
-    for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new_with_objects(
-            committee.clone(),
-            secret,
-            genesis.objects().to_owned(),
-            genesis,
-        )
-        .await;
-        states.push(client.state.clone());
-        clients.insert(authority_name, client);
-    }
-    let timeouts = TimeoutConfig {
-        authority_request_timeout: Duration::from_secs(5),
-        pre_quorum_timeout: Duration::from_secs(5),
-        post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_timeout: Duration::from_secs(1),
-        serial_authority_request_interval: Duration::from_secs(1),
-    };
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    (
-        AuthorityAggregator::new_with_timeouts(
-            committee,
-            committee_store,
-            clients,
-            &Registry::new(),
-            timeouts,
-        ),
-        states,
-    )
-}
 
 pub fn get_local_client(
     authorities: &mut AuthorityAggregator<LocalAuthorityClient>,
@@ -442,14 +317,14 @@ async fn test_quorum_map_and_reduce_timeout() {
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_ref_1 = gas_object1.compute_object_reference();
     let genesis_objects = vec![pkg, gas_object1];
-    let mut authorities = init_network_authorities(4, genesis_objects).await;
+    let (mut authorities, _, _) = init_local_authorities(4, genesis_objects).await;
     let tx = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap();
     // Send request with a very small timeout to trigger timeout error
-    authorities.timeouts.pre_quorum_timeout = Duration::from_millis(2);
-    authorities.timeouts.post_quorum_timeout = Duration::from_millis(2);
+    authorities.timeouts.pre_quorum_timeout = Duration::from_nanos(0);
+    authorities.timeouts.post_quorum_timeout = Duration::from_nanos(0);
     let certified_effects = authorities
         .process_certificate(certificate.clone().into())
         .await;
