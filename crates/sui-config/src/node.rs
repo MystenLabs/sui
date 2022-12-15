@@ -309,6 +309,14 @@ impl ValidatorInfo {
         &self.network_address
     }
 
+    pub fn narwhal_primary_address(&self) -> &Multiaddr {
+        &self.narwhal_primary_address
+    }
+
+    pub fn narwhal_worker_address(&self) -> &Multiaddr {
+        &self.narwhal_worker_address
+    }
+
     pub fn p2p_address(&self) -> &Multiaddr {
         &self.p2p_address
     }

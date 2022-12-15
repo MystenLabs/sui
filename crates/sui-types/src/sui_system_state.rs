@@ -46,6 +46,8 @@ pub struct ValidatorMetadata {
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
+    pub consensus_address: Vec<u8>,
+    pub worker_address: Vec<u8>,
     pub next_epoch_stake: u64,
     pub next_epoch_delegation: u64,
     pub next_epoch_gas_price: u64,

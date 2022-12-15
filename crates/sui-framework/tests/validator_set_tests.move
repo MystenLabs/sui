@@ -164,6 +164,8 @@ module sui::validator_set_tests {
             vector[hint],
             vector[hint],
             vector[hint],
+            vector[hint],
+            vector[hint],
             init_stake,
             option::none(),
             1,
@@ -178,6 +180,8 @@ module sui::validator_set_tests {
         let init_stake = coin::into_balance(init_stake);
         validator::new_for_testing(
             addr,
+            vector[hint],
+            vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],

@@ -104,6 +104,18 @@
  The network address of the validator (could also contain extra info such as port, DNS and etc.).
 </dd>
 <dt>
+<code>consensus_address: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+ The address of the narwhal primary
+</dd>
+<dt>
+<code>worker_address: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+ The address of the narwhal worker
+</dd>
+<dt>
 <code>next_epoch_stake: u64</code>
 </dt>
 <dd>
@@ -253,7 +265,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, coin_locked_until_epoch: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -269,6 +281,8 @@
     proof_of_possession: <a href="">vector</a>&lt;u8&gt;,
     name: <a href="">vector</a>&lt;u8&gt;,
     net_address: <a href="">vector</a>&lt;u8&gt;,
+    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    worker_address: <a href="">vector</a>&lt;u8&gt;,
     <a href="stake.md#0x2_stake">stake</a>: Balance&lt;SUI&gt;,
     coin_locked_until_epoch: Option&lt;EpochTimeLock&gt;,
     gas_price: u64,
@@ -297,6 +311,8 @@
             proof_of_possession,
             name,
             net_address,
+            consensus_address,
+            worker_address,
             next_epoch_stake: stake_amount,
             next_epoch_delegation: 0,
             next_epoch_gas_price: gas_price,

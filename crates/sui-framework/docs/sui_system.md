@@ -290,7 +290,7 @@ The <code><a href="validator.md#0x2_validator">validator</a></code> object needs
 The amount of stake in the <code><a href="validator.md#0x2_validator">validator</a></code> object must meet the requirements.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, consensus_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, <a href="stake.md#0x2_stake">stake</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -306,6 +306,8 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
     proof_of_possession: <a href="">vector</a>&lt;u8&gt;,
     name: <a href="">vector</a>&lt;u8&gt;,
     net_address: <a href="">vector</a>&lt;u8&gt;,
+    consensus_address: <a href="">vector</a>&lt;u8&gt;,
+    worker_address: <a href="">vector</a>&lt;u8&gt;,
     <a href="stake.md#0x2_stake">stake</a>: Coin&lt;SUI&gt;,
     gas_price: u64,
     commission_rate: u64,
@@ -327,6 +329,8 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         proof_of_possession,
         name,
         net_address,
+        consensus_address,
+        worker_address,
         <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="stake.md#0x2_stake">stake</a>),
         <a href="_none">option::none</a>(),
         gas_price,
