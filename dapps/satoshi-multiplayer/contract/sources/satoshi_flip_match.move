@@ -9,11 +9,12 @@ module contract::satoshi_flip_match {
     use sui::object::{Self, UID, ID};
     use sui::digest::{Self, Sha3256Digest};
     use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
 
     const ENotMatchHost: u64 = 0;
     const ENotMatchGuesser: u64 = 1;
     const ENotCorrectSecret: u64 = 2;
+    const EMatchNotEnded: u64 = 3;
+    const EGuessNotSet: u64 = 4;
 
     struct Match has key {
         id: UID,
@@ -22,32 +23,36 @@ module contract::satoshi_flip_match {
         guesser: address,
         hash: Option<Sha3256Digest>,
         guess: Option<u8>,
-    }
-
-    struct Outcome has key{
-        id: UID,
-        match_id: ID,
-        winner: address,
-        loser: address,
+        secret: Option<vector<u8>>,
+        round: u64,
+        winner: Option<address>,
     }
 
     // accessors
 
-    public fun get_host(match: &Match): address {
+    public fun id(match: &Match): ID{
+        let id = object::uid_to_inner(&match.id);
+        id
+    }
+
+    public fun host(match: &Match): address {
         match.host
     }
 
-    public fun get_guesser(match: &Match): address {
+    public fun guesser(match: &Match): address {
         match.guesser
     }
 
-    public fun get_guess(match: &Match): u8 {
+    public fun guess(match: &Match): u8 {
+        assert!(option::is_some(&match.guess), EGuessNotSet);
         let guess = *option::borrow(&match.guess);
         guess
     }
 
-    public fun get_winner(outcome: &Outcome): address {
-        outcome.winner
+    public fun winner(match: &Match): address{
+        assert!(option::is_some(&match.winner), EMatchNotEnded);
+        let winner = *option::borrow(&match.winner);
+        winner
     }
 
     public fun id(match: &Match): UID {
@@ -56,7 +61,7 @@ module contract::satoshi_flip_match {
 
     // functions
 
-    public fun create(host: address, guesser: address, ctx: &mut TxContext){
+    public fun create(host: address, guesser: address, round: u64, ctx: &mut TxContext): Match{
         let match = Match{
             id: object::new(ctx),
             last_move_time: tx_context::epoch(ctx),
@@ -64,57 +69,51 @@ module contract::satoshi_flip_match {
             guesser,
             hash: option::none(),
             guess: option::none(),
+            secret: option::none(),
+            round,
+            winner: option::none(),
         };
-
-        transfer::transfer(match, host);
+        match
     }
 
-    public entry fun set_hash(match: Match, hash: vector<u8>, ctx: &mut TxContext){
+    public fun set_hash(match: Match, hash: vector<u8>, ctx: &mut TxContext): Match{
         // make sure that host is calling the function
         assert!(match.host == tx_context::sender(ctx), ENotMatchHost);
         // update last move time with current epoch
         match.last_move_time = tx_context::epoch(ctx);
         // turn vector type into SHA3256-digest type
         let hash_value = digest::sha3_256_digest_from_bytes(hash);
+        // add hash value to match
         option::fill(&mut match.hash, hash_value);
-        // transfer game to guesser so he can call create_guess afterwards
-        let transfer_address = match.guesser;
-        transfer::transfer(match, transfer_address);
+        match
     }
 
-    public entry fun guess(match: Match, guess: u8, ctx: &mut TxContext){
+    public fun set_guess(match: Match, guess: u8, ctx: &mut TxContext): Match{
         // make sure that guesser is calling the function
         assert!(match.guesser == tx_context::sender(ctx), ENotMatchGuesser);
         // update last move time with current epoch
         match.last_move_time = tx_context::epoch(ctx);
+        // add guess to match
         option::fill(&mut match.guess, guess);
-        // transfer game back to host to call reveal afterwards and reveal the secret
-        let transfer_address = match.host;
-        transfer::transfer(match, transfer_address);
+        match
     }
 
-    public entry fun reveal(match: Match, secret: vector<u8>, ctx: &mut TxContext){
-        let Match {id, last_move_time: _, host, guesser, hash, guess} = match;
-        assert!(host == tx_context::sender(ctx), ENotMatchHost);
+    public fun reveal(match: Match, secret: vector<u8>): Match {
+        // assert!(match.host == tx_context::sender(ctx), ENotMatchHost);
         let secret_hash = sha3_256(secret);
-        let hash_value = option::borrow(&hash);
+        let hash_value = option::borrow(&match.hash);
+        // make sure match.hash is hash of secret
         assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
+        // take last byte
         let length = vector::length(&secret) - 1;
         let last_byte = vector::borrow(&secret, length);
-        let player_guess = option::borrow(&guess);
-        let winner = if ((*last_byte % 2) == *player_guess) guesser else host;
-        let loser = if (winner == host) guesser else host;
-        let outcome = Outcome {
-            id: object::new(ctx),
-            match_id: object::uid_to_inner(&id),
-            winner,
-            loser,
-        };
-        transfer::share_object(outcome);
-        object::delete(id);
+        // take player guess
+        let player_guess = option::borrow(&match.guess);
+        // decide on winner
+        let winner = if ((*last_byte % 2) == *player_guess) match.guesser else match.host;
+        // add winner to match
+        option::fill(&mut match.winner, winner); 
+        match   
     }
 
 }
-
-// Question: should we update last move time in reveal function? probably no need since game will be destroyed.
-// Maybe add last move time to outcome.
