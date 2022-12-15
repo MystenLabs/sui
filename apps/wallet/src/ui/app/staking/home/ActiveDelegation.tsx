@@ -41,7 +41,7 @@ export function ActiveDelegation({ id }: Props) {
         return Buffer.from(validator.fields.name, 'base64').toString();
     }, [validator]);
 
-    if (!validator || !delegation || !validatorName) {
+    if (!validator || !delegation || !validatorName || !validatorAddress) {
         return null;
     }
 
@@ -50,6 +50,7 @@ export function ActiveDelegation({ id }: Props) {
             name={validatorName}
             staked={delegation.delegateAmount()}
             state={DelegationState.EARNING}
+            address={validatorAddress}
         />
     );
 }
