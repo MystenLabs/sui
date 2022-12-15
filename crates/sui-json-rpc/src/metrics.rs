@@ -23,12 +23,12 @@ const SPAM_LABEL: &str = "SPAM";
 
 #[derive(Debug, Clone)]
 pub struct MetricsLayer {
-    metrics: Arc<Metrics>,
+    metrics: Metrics,
     method_whitelist: Arc<HashSet<String>>,
 }
 impl MetricsLayer {
     pub fn new(registry: &prometheus::Registry, method_whitelist: &[&str]) -> Self {
-        let metrics = Arc::new(Metrics {
+        let metrics = Metrics {
             requests_by_route: register_int_counter_vec_with_registry!(
                 "rpc_requests_by_route",
                 "Number of requests by route",
@@ -51,7 +51,7 @@ impl MetricsLayer {
                 registry,
             )
             .unwrap(),
-        });
+        };
 
         Self {
             metrics,
@@ -71,7 +71,7 @@ impl<S> Layer<S> for MetricsLayer {
 #[derive(Debug, Clone)]
 pub struct JsonRpcMetricService<S> {
     inner: S,
-    metrics: Arc<Metrics>,
+    metrics: Metrics,
     method_whitelist: Arc<HashSet<String>>,
 }
 
@@ -90,7 +90,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 impl<S> JsonRpcMetricService<S> {
-    pub fn new(inner: S, metrics: Arc<Metrics>, method_whitelist: Arc<HashSet<String>>) -> Self {
+    pub fn new(inner: S, metrics: Metrics, method_whitelist: Arc<HashSet<String>>) -> Self {
         Self {
             inner,
             metrics,
