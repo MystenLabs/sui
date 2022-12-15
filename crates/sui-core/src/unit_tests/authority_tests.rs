@@ -592,6 +592,66 @@ async fn test_dev_inspect_return_values() {
         .contents()
         .to_vec();
 
+    // mutably borrow a value from it's bytes
+    let DevInspectResults { results, .. } = call_dev_inspect(
+        &*authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "borrow_value_mut",
+        vec![],
+        vec![TestCallArg::Pure(created_object_bytes.clone())],
+    )
+    .await
+    .unwrap();
+    let mut results = results.unwrap();
+    assert_eq!(results.len(), 1);
+    let (idx, exec_results) = results.pop().unwrap();
+    let SuiExecutionResult {
+        mutable_reference_outputs,
+        mut return_values,
+    } = exec_results;
+    assert_eq!(idx, 0);
+    assert_eq!(mutable_reference_outputs.len(), 1);
+    assert_eq!(return_values.len(), 1);
+    let (return_value_1, return_type) = return_values.pop().unwrap();
+    let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
+    assert_eq!(init_value, deserialized_rv1);
+    let type_tag: TypeTag = return_type.try_into().unwrap();
+    assert!(matches!(type_tag, TypeTag::U64));
+
+    // borrow a value from it's bytes
+    let DevInspectResults { results, .. } = call_dev_inspect(
+        &*authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "borrow_value",
+        vec![],
+        vec![TestCallArg::Pure(created_object_bytes.clone())],
+    )
+    .await
+    .unwrap();
+    let mut results = results.unwrap();
+    assert_eq!(results.len(), 1);
+    let (idx, exec_results) = results.pop().unwrap();
+    let SuiExecutionResult {
+        mutable_reference_outputs,
+        mut return_values,
+    } = exec_results;
+    assert_eq!(idx, 0);
+    assert!(mutable_reference_outputs.is_empty());
+    assert_eq!(return_values.len(), 1);
+    let (return_value_1, return_type) = return_values.pop().unwrap();
+    let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
+    assert_eq!(init_value, deserialized_rv1);
+    let type_tag: TypeTag = return_type.try_into().unwrap();
+    assert!(matches!(type_tag, TypeTag::U64));
+
     // read one value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
         &*authority_state,
@@ -616,9 +676,11 @@ async fn test_dev_inspect_return_values() {
     assert_eq!(idx, 0);
     assert!(mutable_reference_outputs.is_empty());
     assert_eq!(return_values.len(), 1);
-    let (return_value_1, _return_type) = return_values.pop().unwrap();
+    let (return_value_1, return_type) = return_values.pop().unwrap();
     let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
     assert_eq!(init_value, deserialized_rv1);
+    let type_tag: TypeTag = return_type.try_into().unwrap();
+    assert!(matches!(type_tag, TypeTag::U64));
 
     // read two values from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(

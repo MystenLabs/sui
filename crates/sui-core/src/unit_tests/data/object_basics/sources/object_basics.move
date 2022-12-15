@@ -75,6 +75,14 @@ module examples::object_basics {
         );
     }
 
+    fun borrow_value_mut(o: &mut Object): &mut u64 {
+        &mut o.value
+    }
+
+    fun borrow_value(o: &Object): &u64 {
+        &o.value
+    }
+
     fun get_value(o: &Object): u64 {
         o.value
     }
