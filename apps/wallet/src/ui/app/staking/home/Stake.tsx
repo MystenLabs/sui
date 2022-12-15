@@ -87,6 +87,7 @@ type StakedCardProps = {
     pendingDelegations: {
         name: string;
         staked: bigint;
+        validatorAddress: string;
     }[];
 };
 
@@ -149,8 +150,9 @@ function StakedHomeCard({
                                         <CoinBalance
                                             balance={BigInt(0)}
                                             type={GAS_TYPE_ARG}
-                                            mode="positive"
+                                            mode="neutral"
                                             diffSymbol
+                                            className="!text-gray-60"
                                             title="This value currently is not available"
                                         />
                                     }
@@ -162,12 +164,16 @@ function StakedHomeCard({
                             {hasDelegations ? (
                                 <>
                                     {pendingDelegations.map(
-                                        ({ name, staked }, index) => (
+                                        (
+                                            { name, staked, validatorAddress },
+                                            index
+                                        ) => (
                                             <DelegationCard
                                                 key={index}
                                                 name={name}
                                                 staked={staked}
                                                 state={DelegationState.WARM_UP}
+                                                address={validatorAddress}
                                             />
                                         )
                                     )}

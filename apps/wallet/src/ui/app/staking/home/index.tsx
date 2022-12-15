@@ -32,6 +32,7 @@ export function Staking() {
     return (
         <Routes>
             <Route path="/*" element={<StakeHome />} />
+            <Route path="/validator-details" element={<ValidatorDetail />} />
             {stakingEnabled ? (
                 <Route path="/new" element={<StakeNew />} />
             ) : null}

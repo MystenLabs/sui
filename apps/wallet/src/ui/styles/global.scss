@@ -67,3 +67,8 @@ textarea {
 textarea {
     font-family: InterVariable, sans-serif;
 }
+
+#floating-ui-root {
+    position: relative;
+    z-index: 500;
+}
