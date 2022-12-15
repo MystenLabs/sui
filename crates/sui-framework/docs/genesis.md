@@ -75,7 +75,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(chain_id: u8, validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_stakes: <a href="">vector</a>&lt;u64&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(chain_id: u8, validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addressess: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_stakes: <a href="">vector</a>&lt;u64&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -92,6 +92,8 @@ all the information we need in the system.
     validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;,
     validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
+    validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
+    validator_worker_addressess: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_stakes: <a href="">vector</a>&lt;u64&gt;,
     validator_gas_prices: <a href="">vector</a>&lt;u64&gt;,
     validator_commission_rates: <a href="">vector</a>&lt;u64&gt;,
@@ -106,6 +108,8 @@ all the information we need in the system.
             && <a href="_length">vector::length</a>(&validator_stakes) == count
             && <a href="_length">vector::length</a>(&validator_names) == count
             && <a href="_length">vector::length</a>(&validator_net_addresses) == count
+            && <a href="_length">vector::length</a>(&validator_consensus_addresses) == count
+            && <a href="_length">vector::length</a>(&validator_worker_addressess) == count
             && <a href="_length">vector::length</a>(&validator_gas_prices) == count
             && <a href="_length">vector::length</a>(&validator_commission_rates) == count,
         1
@@ -118,6 +122,8 @@ all the information we need in the system.
         <b>let</b> proof_of_possession = *<a href="_borrow">vector::borrow</a>(&validator_proof_of_possessions, i);
         <b>let</b> name = *<a href="_borrow">vector::borrow</a>(&validator_names, i);
         <b>let</b> net_address = *<a href="_borrow">vector::borrow</a>(&validator_net_addresses, i);
+        <b>let</b> consensus_address = *<a href="_borrow">vector::borrow</a>(&validator_consensus_addresses, i);
+        <b>let</b> worker_address = *<a href="_borrow">vector::borrow</a>(&validator_worker_addressess, i);
         <b>let</b> <a href="stake.md#0x2_stake">stake</a> = *<a href="_borrow">vector::borrow</a>(&validator_stakes, i);
         <b>let</b> gas_price = *<a href="_borrow">vector::borrow</a>(&validator_gas_prices, i);
         <b>let</b> commission_rate = *<a href="_borrow">vector::borrow</a>(&validator_commission_rates, i);
@@ -128,6 +134,8 @@ all the information we need in the system.
             proof_of_possession,
             name,
             net_address,
+            consensus_address,
+            worker_address,
             <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> sui_supply, <a href="stake.md#0x2_stake">stake</a>),
             <a href="_none">option::none</a>(),
             gas_price,

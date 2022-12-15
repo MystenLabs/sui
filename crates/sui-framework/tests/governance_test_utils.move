@@ -21,9 +21,12 @@ module sui::governance_test_utils {
         validator::new_for_testing(
             addr,
             x"FF",
+
             x"FF",
             x"FF",
             b"ValidatorName",
+            x"FFFF",
+            x"FFFF",
             x"FFFF",
             balance::create_for_testing<SUI>(init_stake_amount),
             option::none(),

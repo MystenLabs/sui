@@ -35,6 +35,8 @@ module sui::genesis {
         validator_sui_addresses: vector<address>,
         validator_names: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
+        validator_consensus_addresses: vector<vector<u8>>,
+        validator_worker_addressess: vector<vector<u8>>,
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
@@ -49,6 +51,8 @@ module sui::genesis {
                 && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
                 && vector::length(&validator_net_addresses) == count
+                && vector::length(&validator_consensus_addresses) == count
+                && vector::length(&validator_worker_addressess) == count
                 && vector::length(&validator_gas_prices) == count
                 && vector::length(&validator_commission_rates) == count,
             1
@@ -61,6 +65,8 @@ module sui::genesis {
             let proof_of_possession = *vector::borrow(&validator_proof_of_possessions, i);
             let name = *vector::borrow(&validator_names, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
+            let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
+            let worker_address = *vector::borrow(&validator_worker_addressess, i);
             let stake = *vector::borrow(&validator_stakes, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
@@ -71,6 +77,8 @@ module sui::genesis {
                 proof_of_possession,
                 name,
                 net_address,
+                consensus_address,
+                worker_address,
                 balance::increase_supply(&mut sui_supply, stake),
                 option::none(),
                 gas_price,

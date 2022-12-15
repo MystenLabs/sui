@@ -5487,6 +5487,7 @@
       "ValidatorMetadata": {
         "type": "object",
         "required": [
+          "consensus_address",
           "name",
           "net_address",
           "network_pubkey_bytes",
@@ -5496,9 +5497,18 @@
           "next_epoch_stake",
           "proof_of_possession_bytes",
           "pubkey_bytes",
-          "sui_address"
+          "sui_address",
+          "worker_address"
         ],
         "properties": {
+          "consensus_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
           "name": {
             "type": "array",
             "items": {
@@ -5561,6 +5571,14 @@
           },
           "sui_address": {
             "$ref": "#/components/schemas/SuiAddress"
+          },
+          "worker_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           }
         }
       },

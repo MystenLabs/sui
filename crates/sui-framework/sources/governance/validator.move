@@ -43,6 +43,10 @@ module sui::validator {
         name: vector<u8>,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
+        /// The address of the narwhal primary
+        consensus_address: vector<u8>,
+        /// The address of the narwhal worker
+        worker_address: vector<u8>,
         /// Total amount of validator stake that would be active in the next epoch.
         next_epoch_stake: u64,
         /// Total amount of delegated stake that would be active in the next epoch.
@@ -97,6 +101,8 @@ module sui::validator {
         proof_of_possession: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
+        consensus_address: vector<u8>,
+        worker_address: vector<u8>,
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
@@ -125,6 +131,8 @@ module sui::validator {
                 proof_of_possession,
                 name,
                 net_address,
+                consensus_address,
+                worker_address,
                 next_epoch_stake: stake_amount,
                 next_epoch_delegation: 0,
                 next_epoch_gas_price: gas_price,
@@ -303,6 +311,8 @@ module sui::validator {
         proof_of_possession: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
+        consensus_address: vector<u8>,
+        worker_address: vector<u8>,
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
@@ -326,6 +336,8 @@ module sui::validator {
                 proof_of_possession,
                 name,
                 net_address,
+                consensus_address,
+                worker_address,
                 next_epoch_stake: stake_amount,
                 next_epoch_delegation: 0,
                 next_epoch_gas_price: gas_price,

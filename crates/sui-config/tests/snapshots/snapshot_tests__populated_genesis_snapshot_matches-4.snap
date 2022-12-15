@@ -207,6 +207,8 @@ validators:
         name:
           - 48
         net_address: []
+        consensus_address: []
+        worker_address: []
         next_epoch_stake: 1
         next_epoch_delegation: 0
         next_epoch_gas_price: 1
@@ -424,6 +426,8 @@ validators:
       name:
         - 48
       net_address: []
+      consensus_address: []
+      worker_address: []
       next_epoch_stake: 1
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
