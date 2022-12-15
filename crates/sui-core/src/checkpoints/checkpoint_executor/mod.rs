@@ -49,7 +49,7 @@ mod metrics;
 pub(crate) mod tests;
 
 const TASKS_PER_CORE: usize = 1;
-const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 5;
+const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 2;
 
 type CheckpointExecutionBuffer = FuturesOrdered<
     JoinHandle<(
@@ -447,15 +447,24 @@ impl CheckpointExecutorEventLoop {
         next_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
         current_epoch: u64,
     ) {
+        info!("Notifying end of epoch {:?}", current_epoch);
+
+        let next_epoch = current_epoch + 1;
         let end_of_epoch_message = EndOfEpochMessage {
             next_committee,
-            next_epoch: current_epoch + 1,
+            next_epoch,
         };
         let _ = self.end_of_epoch_event_sender.send(end_of_epoch_message);
         self.authority_state
             .epoch_store()
             .wait_epoch_terminated()
             .await;
+
+        self.metrics.current_local_epoch.set(next_epoch as i64);
+        info!(
+            "Reconfig complete. New epoch: {:?}. Resuming checkpoint execution",
+            next_epoch
+        );
     }
 }
 
