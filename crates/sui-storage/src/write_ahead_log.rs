@@ -212,8 +212,8 @@ where
     mutex_table: MutexTable<TransactionDigest>,
 }
 
-const MUTEX_TABLE_SIZE: usize = 1024;
-const MUTEX_TABLE_SHARD_SIZE: usize = 128;
+pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
+pub(crate) const MUTEX_TABLE_SHARD_SIZE: usize = 128;
 
 impl<C, ExecutionOutput> DBWriteAheadLog<C, ExecutionOutput>
 where

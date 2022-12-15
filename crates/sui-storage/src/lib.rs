@@ -11,6 +11,7 @@ pub mod event_store;
 pub mod mutex_table;
 pub mod node_sync_store;
 pub mod write_ahead_log;
+pub mod write_path_pending_tx_log;
 
 use rocksdb::Options;
 use std::future::Future;

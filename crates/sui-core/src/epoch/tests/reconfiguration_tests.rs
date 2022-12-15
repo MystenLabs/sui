@@ -31,8 +31,8 @@ use crate::{
     authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
-    test_utils::to_sender_signed_transaction,
 };
+use sui_types::utils::to_sender_signed_transaction;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_start_epoch_change() {

@@ -11,9 +11,7 @@ use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
-use sui_core::test_utils::{
-    dummy_transaction_effects, to_sender_signed_transaction, to_sender_signed_transaction_arc,
-};
+use sui_core::test_utils::dummy_transaction_effects;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_keys::keystore::AccountKeystore;
@@ -34,6 +32,7 @@ use sui_types::messages::{
     VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::object::Object;
+use sui_types::utils::{to_sender_signed_transaction, to_sender_signed_transaction_arc};
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;

@@ -879,6 +879,7 @@ impl<S> Envelope<SenderSignedData, S> {
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
 pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+pub type TrustedTransction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
 
 impl Transaction {
     pub fn from_data_and_signer(
