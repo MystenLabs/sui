@@ -20,7 +20,7 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
 use std::path::Path;
-use sui_storage::fullnode_pending_tx_log::FullNodePendingTransactionLog;
+use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransactionEffects, ExecuteTransactionRequest, ExecuteTransactionRequestType,
@@ -45,7 +45,7 @@ pub struct TransactiondOrchestrator<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
-    pending_tx_log: Arc<FullNodePendingTransactionLog>,
+    pending_tx_log: Arc<WritePathPendingTransactionLog>,
     metrics: Arc<TransactionOrchestratorMetrics>,
 }
 
@@ -66,7 +66,7 @@ where
         let state_clone = validator_state.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
         let metrics_clone = metrics.clone();
-        let pending_tx_log = Arc::new(FullNodePendingTransactionLog::new(
+        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
             parent_path.join("fullnode_pending_transactions"),
         ));
         let pending_tx_log_clone = pending_tx_log.clone();
@@ -109,7 +109,7 @@ where
         // TDOO: `should_enqueue` will be used to determine if the transaction should be enqueued.
         let _should_enqueue = self
             .pending_tx_log
-            .write_pending_transaction(&transaction)
+            .write_pending_transaction_maybe(&transaction)
             .await?;
 
         let wait_for_local_execution = matches!(
@@ -240,12 +240,19 @@ where
     async fn loop_execute_finalized_tx_locally(
         validator_state: Arc<AuthorityState>,
         mut effects_receiver: Receiver<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>,
-        pending_transaction_log: Arc<FullNodePendingTransactionLog>,
+        pending_transaction_log: Arc<WritePathPendingTransactionLog>,
         metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
+                    let tx_digest = tx_cert.digest();
+                    if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
+                        error!(
+                            ?tx_digest,
+                            "Failed to finish transaction in pending transaction log: {err}"
+                        );
+                    }
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
                         &tx_cert,
