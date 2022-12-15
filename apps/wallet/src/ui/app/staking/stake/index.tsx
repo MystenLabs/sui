@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest } from '@mysten/sui.js';
+import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
@@ -10,13 +10,18 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import StakeForm from './StakeForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
-import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
+import {
+    useAppSelector,
+    useAppDispatch,
+    useCoinDecimals,
+    useIndividualCoinMaxBalance,
+} from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { StakeTokens } from '_redux/slices/transactions';
+import { stakeTokens } from '_redux/slices/transactions';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -50,6 +55,7 @@ function StakePage() {
     const [sendError, setSendError] = useState<string | null>(null);
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
+    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
@@ -59,7 +65,8 @@ function StakePage() {
                 gasAggregateBalance,
                 totalGasCoins,
                 coinDecimals,
-                gasDecimals
+                gasDecimals,
+                maxSuiSingleCoinBalance
             ),
         [
             coinType,
@@ -69,6 +76,7 @@ function StakePage() {
             totalGasCoins,
             coinDecimals,
             gasDecimals,
+            maxSuiSingleCoinBalance,
         ]
     );
 
@@ -92,7 +100,7 @@ function StakePage() {
                 );
 
                 const response = await dispatch(
-                    StakeTokens({
+                    stakeTokens({
                         amount: bigIntAmount,
                         tokenTypeArg: coinType,
                     })

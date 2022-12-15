@@ -45,10 +45,6 @@
     color: colors.$gray-80;
 }
 
-.error {
-    @include utils.error-message-box;
-}
-
 .muted {
     font-size: 10px;
     font-weight: 400;
