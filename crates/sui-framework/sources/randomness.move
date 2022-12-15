@@ -1,6 +1,8 @@
 // // Copyright (c) Mysten Labs, Inc.
 // // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Since the first version is insecure, should we name the module differently? e.g., insecure_randomness?
+
 /// Randomness objects can only be created, set or consumed. They cannot be created and consumed
 /// in the *same* transaction since it might allow validators decide whether to create and use those
 /// objects *after* seeing the randomness they depend on.
@@ -15,14 +17,14 @@
 ///   signature. This operation verifies the signature and sets the value of the randomness object
 ///   to be the hash of the signature.
 ///
-///   Note that there is exactly one signature that could pass this verification for an object,
+///   Note that there is a single signature that could pass the verification for a specific object,
 ///   thus, the only options the owner of the object has after retrieving the signature (and learning
 ///   the randomness) is to either set the randomness or leave it unset. Applications that use
 ///   Randomness objects must make sure they handle both options (e.g., debit the user on object
 ///   creation so even if the user aborts, depending on the randomness it received, the application
 ///   is not harmed).
 ///
-/// - Once set, the actual randomness value can be read/consumed.
+/// - Once set, the random value can be read/consumed.
 ///
 ///
 /// This object can be used as a shared-/owned-object.
@@ -56,6 +58,7 @@ module sui::randomness {
             epoch: tx_context::epoch(ctx),
             value: option::none(),
         }
+        // TODO: Front load the fee?
     }
 
     public fun transfer<T>(self: Randomness<T>, to: address) {
@@ -101,10 +104,10 @@ module sui::randomness {
         buffer
     }
 
-    /// Verify signature sig on message "randomness":epoch:id
+    /// Verify signature sig on message msg using the epoch's BLS key.
     native fun native_verify_tbls_signature(epoch: u64, msg: &vector<u8>, sig: &vector<u8>): bool;
 
-    /// Helper functions to sign on messages.
+    /// Helper functions to sign on messages in tests.
     native fun native_tbls_sign(epoch: u64, msg: &vector<u8>): vector<u8>;
 
     #[test_only]

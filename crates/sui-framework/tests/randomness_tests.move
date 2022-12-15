@@ -3,19 +3,18 @@
 
 #[test_only]
 module sui::randomness_tests {
+    use std::option;
     use sui::randomness;
     use sui::test_scenario;
     use sui::tx_context;
-    use std::option;
 
-    const TEST_USER1_ADDR: address = @0xA11CE;
-    const TEST_USER2_ADDR: address = @0xA12CE;
+    const TEST_USER_ADDR: address = @0xA11CE;
 
     struct WITENESS has drop {}
 
     #[test]
-    fun test_tbls() {
-        let scenario_val = test_scenario::begin(TEST_USER1_ADDR);
+    fun test_tbls_happy_flow() {
+        let scenario_val = test_scenario::begin(TEST_USER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
@@ -36,7 +35,7 @@ module sui::randomness_tests {
     #[test]
     #[expected_failure(abort_code = randomness::EInvalidSignature)]
     fun test_tbls_invalid_signature() {
-        let scenario_val = test_scenario::begin(TEST_USER1_ADDR);
+        let scenario_val = test_scenario::begin(TEST_USER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
