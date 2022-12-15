@@ -3,7 +3,7 @@
 
 module contract::tournament {
     // imports
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use std::vector;
     use sui::sui::SUI; // coin type
     use sui::balance::{Self, Balance};
@@ -11,7 +11,7 @@ module contract::tournament {
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use contract::satoshi_flip_match::{Self, Match, Outcome};
-
+    use sui::dynamic_object_field as dof;
 
     // structs
     struct Tournament has key {
@@ -21,10 +21,13 @@ module contract::tournament {
         capacity: u64,
         status: u64, // Status -> 0: pending | 1: running | 2: finished
         round: u64,
+        matches: vector<ID>,
     }
 
     // Player default entry fee in MIST
     const ENTRY_FEE: u64 = 10000;
+
+    // Error codes
     const ENotEnoughMoney: u64 = 0;
     const EMaxPlayersReached: u64 = 1;
     const EPlayerNoExist: u64 = 2;
@@ -32,6 +35,8 @@ module contract::tournament {
     const ECannotWithdraw: u64 = 4;
     const ECannotStartRound: u64 = 5;
     const ETournamentEnd: u64 = 6;
+    const EPlayerAlreadyExists: u64 = 7;
+    const EMatchNotFound: u64 = 8;
 
     // Tournament initialization. 
     // Player can initialize a new tournament and share it with other players. 
@@ -53,6 +58,7 @@ module contract::tournament {
             capacity,
             status: 0,
             round: 0,
+            matches: vector::empty(),
         };
 
         // Make tournament shared obj so that every player can access it
@@ -63,9 +69,13 @@ module contract::tournament {
         // Check if more players can join
         assert!(tournament.capacity < vector::length(&tournament.players), EMaxPlayersReached);
 
+        // Check if player is already in tournament
+        assert!(vector::contains(&tournament.players, tx_context::sender(ctx)), EPlayerAlreadyExists);
+
         // Make sure player has given enough mist
         assert!(coin::value(&player_coin) >= ENTRY_FEE, ENotEnoughMoney);
 
+        // Determine if we should split player_coin and give back change
         calc_player_change(&mut player_coin, ctx); 
 
         vector::push_back(&mut tournament.players, tx_context::sender(ctx));
@@ -112,7 +122,7 @@ module contract::tournament {
         let num_of_players = vector::length(&tournament.players);
 
         // Bail early if this is the last player
-        assert!(num_of_players < 2, ETournamentEnd);
+        assert!(num_of_players > 1, ETournamentEnd);
 
         // Make sure you are in the correct round
         assert!((tournament.capacity / (2^tournament.round)) == num_of_players, ECannotStartRound);
@@ -128,20 +138,43 @@ module contract::tournament {
             let guesser = vector::pop_back(&mut tournament.players);
             
             // Create a match for current pair of host-guesser
-            satoshi_flip_match::create(host, guesser, ctx);
+            let match = satoshi_flip_match::create(host, guesser, ctx);
+            let match_id = satoshi_flip_match::id(match);
+
+            // Include match to tournament
+            vector::add(&mut tournament.matches, match_id);
+
+            // Transfer match to host
+            transfer::transfer(match, host);
 
             i = i - 2;
         };
-
-        tournament.round = tournament.round + 1;
     }
 
-    fun advance_round(tournament: &mut Tournament, match: Match, ctx: &mut TxContext) {
-        // Are we going to handle guess, reveal functions here?
-        
-        // Get winners for all active matches
-        // Write winners to tournament.players
-        // proceed to next round
+    // Get all active matches and update tournament's players with winners
+    fun end_round(tournament: &mut Tournament, match: Match, ctx: &mut TxContext) {
+        // Get matches length from tournament
+        let i = vector::length(&tournament.matches);
+
+        while(i > 0) {
+            // Remove match from tournament and get their ID
+            let match_id = vector::pop_back(&mut tournament.matches);
+
+            // Make sure that match is part of the tournament
+            assert!(dof::exists_(&tournament, match_id), EMatchNotFound);
+
+            // Find match dynamic object field in tournament
+            let match = dof::remove(tournament, match_id);
+
+            // Get match winner and add them to tournament's players
+            let winner = satoshi_flip_match::get_winner(&match);
+            vector::push_back(&mut tournament.players, winner);
+
+            i = i - 1;
+        };
+
+        // Increment round counter for next iteration
+        tournament.round = tournament.round + 1;
     }
 }
 
