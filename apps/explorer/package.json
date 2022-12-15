@@ -7,7 +7,7 @@
         "dev:static": "VITE_NETWORK=STATIC vite --port 8080",
         "test": "pnpm test:unit",
         "test:unit": "vitest run",
-        "test:wait-on": "wait-on --log tcp:3000 && wait-on --log --verbose --timeout 120000 tcp:9123",
+        "test:wait-on": "wait-on --log tcp:3000 && wait-on --log --verbose --timeout 120000 tcp:127.0.0.1:9123",
         "test:cypress": "start-server-and-test dev:static 8080 'cypress run --spec \"cypress/e2e/static/*\"'",
         "typecheck": "tsc --noEmit",
         "build": "pnpm typecheck && vite build",
