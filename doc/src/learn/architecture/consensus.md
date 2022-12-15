@@ -1,12 +1,12 @@
 ---
-title: Narwhal, Bullshark, and Tusk, Sui's Consensus Engine
+title: Narwhal, Bullshark, and Tusk, Sui's Mempool and Consensus Engines
 ---
 
-This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2201.05677), the high-throughput mempool and consensus offered by Mysten Labs. Sui runs consensus as needed to periodically checkpoint its state. And for those transactions that require a total ordering, Narwhal and either Bullshark or Tusk comprise the Sui Consensus Engine.
+This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs and used in Sui. As of Dec 2022, Sui uses Narwhal as the mempool and Bullshark as the consensu engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
 
-The dual name highlights that the systems split the responsibilities of:
+The names highlight that the components split the responsibilities of:
 - ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
-- agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2201.05677) or [Tusk](https://github.com/MystenLabs/narwhal)
+- agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2209.05633) or [Tusk](https://arxiv.org/abs/2105.11827)
 
 In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
@@ -99,11 +99,15 @@ Narwhal and Tusk started [as a research prototype](https://github.com/facebookre
 [Bullshark: DAG BFT Protocols Made Practical](https://arxiv.org/pdf/2201.05677.pdf) - 
 Bullshark replaces Tusk for even greater performance.
 
+[Bullshark: The Partially Synchronous Version](https://arxiv.org/pdf/2209.05633.pdf) - 
+A simplified version of Bullshark that is used in Sui today.
+
 [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) - Explains the evolution of the consensus protocol used by Sui.
 
 ### Bibliography
 
 - Danezis, G., Kogias, E. K., Sonnino, A., & Spiegelman, A. (2021). Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus. ArXiv:2105.11827 [Cs]. http://arxiv.org/abs/2105.11827
 - Giridharan, N., Kokoris-Kogias, L., Sonnino, A., & Spiegelman, A. (2022). Bullshark: DAG BFT Protocols Made Practical. ArXiv:2201.05677 [Cs]. http://arxiv.org/abs/2201.05677
+- Spiegelman, A., Giridharan, N., Sonnino, A., & Kokoris-Kogias, L. (2022). Bullshark: The Partially Synchronous Version. ArXiv:2209.05633 [Cs]. https://arxiv.org/abs/2209.05633
 - Keidar, I., Kokoris-Kogias, E., Naor, O., & Spiegelman, A. (2021). All You Need is DAG. ArXiv:2102.08325 [Cs]. http://arxiv.org/abs/2102.08325
 - Wang, Q., Yu, J., Chen, S., & Xiang, Y. (2020). SoK: Diving into DAG-based Blockchain Systems. ArXiv:2012.06128 [Cs]. http://arxiv.org/abs/2012.06128
