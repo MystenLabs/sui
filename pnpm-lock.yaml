@@ -103,6 +103,7 @@ importers:
       vite: ^4.0.0
       vite-plugin-svgr: ^2.4.0
       vitest: ^0.25.7
+      wait-on: ^6.0.1
       web-vitals: ^3.1.0
       zod: ^3.19.1
     dependencies:
@@ -183,6 +184,7 @@ importers:
       vite: 4.0.0_@types+node@18.11.13
       vite-plugin-svgr: 2.4.0_vite@4.0.0
       vitest: 0.25.7_@vitest+ui@0.25.7
+      wait-on: 6.0.1
 
   apps/wallet:
     specifiers:
@@ -4292,7 +4294,7 @@ packages:
       '@motionone/types': 10.15.1
       '@motionone/utils': 10.15.1
       hey-listen: 1.0.8
-      tslib: 2.4.0
+      tslib: 2.4.1
     dev: false
 
   /@motionone/easing/10.15.1:
@@ -7768,7 +7770,7 @@ packages:
   /axios/0.21.4_debug@4.3.2:
     resolution: {integrity: sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
     transitivePeerDependencies:
       - debug
     dev: true
@@ -7776,7 +7778,7 @@ packages:
   /axios/0.25.0:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
     transitivePeerDependencies:
       - debug
     dev: true
@@ -7784,7 +7786,7 @@ packages:
   /axios/0.27.2:
     resolution: {integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
       form-data: 4.0.0
     transitivePeerDependencies:
       - debug
@@ -11503,7 +11505,7 @@ packages:
     engines: {node: '>=8.9.0'}
     dev: true
 
-  /follow-redirects/1.15.1:
+  /follow-redirects/1.15.1_debug@4.3.2:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
     peerDependencies:
@@ -11511,6 +11513,8 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dependencies:
+      debug: 4.3.2
     dev: true
 
   /for-each/0.3.3:
@@ -14168,10 +14172,6 @@ packages:
       arrify: 1.0.1
       is-plain-obj: 1.1.0
       kind-of: 6.0.3
-    dev: true
-
-  /minimist/1.2.6:
-    resolution: {integrity: sha512-Jsjnk4bw3YJqYzbdyBiNsPWHPfO++UGG749Cxs6peCu5Xg4nrena6OVxOYxrQTqww0Jmwt+Ref8rggumkTLz9Q==}
     dev: true
 
   /minimist/1.2.7:
@@ -19435,7 +19435,7 @@ packages:
       joi: 17.6.0
       lodash: 4.17.21
       minimist: 1.2.7
-      rxjs: 7.5.6
+      rxjs: 7.5.7
     transitivePeerDependencies:
       - debug
     dev: true
@@ -19448,8 +19448,8 @@ packages:
       axios: 0.25.0
       joi: 17.6.0
       lodash: 4.17.21
-      minimist: 1.2.6
-      rxjs: 7.5.6
+      minimist: 1.2.7
+      rxjs: 7.5.7
     transitivePeerDependencies:
       - debug
     dev: true
