@@ -8,14 +8,6 @@
       "outputs": ["coverage/**"]
     },
     "build": {
-      "inputs": [
-        "src/**/*",
-        "public/**",
-        ".storybook/**",
-        "*.ts",
-        "*.js",
-        "*.json"
-      ],
       "dependsOn": ["^build"],
       "outputs": ["build/**", "dist/**", "storybook-static/**"]
     },
