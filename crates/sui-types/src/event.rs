@@ -21,6 +21,7 @@ use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 use tracing::error;
 
+use crate::base_types::ObjectDigest;
 use crate::error::SuiError;
 use crate::object::MoveObject;
 use crate::object::ObjectFormatOptions;
@@ -160,6 +161,8 @@ pub enum Event {
     Publish {
         sender: SuiAddress,
         package_id: ObjectID,
+        version: SequenceNumber,
+        digest: ObjectDigest,
     },
     /// Coin balance changing event
     CoinBalanceChange {
@@ -471,8 +474,18 @@ impl Event {
             | Event::MutateObject { version, .. }
             | Event::CoinBalanceChange { version, .. }
             | Event::NewObject { version, .. }
-            | Event::DeleteObject { version, .. } => Some(version),
+            | Event::DeleteObject { version, .. }
+            | Event::Publish { version, .. } => Some(version),
             _ => None,
+        }
+    }
+
+    /// Extracts the digest from a SuiEvent::Publish event
+    pub fn digest(&self) -> Option<ObjectDigest> {
+        if let Event::Publish { digest, .. } = self {
+            Some(*digest)
+        } else {
+            None
         }
     }
 

@@ -2074,6 +2074,8 @@ pub enum SuiEvent {
     Publish {
         sender: SuiAddress,
         package_id: ObjectID,
+        version: SequenceNumber,
+        digest: ObjectDigest,
     },
     /// Coin balance changing event
     #[serde(rename_all = "camelCase")]
@@ -2153,7 +2155,17 @@ impl TryFrom<SuiEvent> for Event {
                 type_: parse_sui_struct_tag(&type_)?,
                 contents: bcs,
             },
-            SuiEvent::Publish { sender, package_id } => Event::Publish { sender, package_id },
+            SuiEvent::Publish {
+                sender,
+                package_id,
+                version,
+                digest,
+            } => Event::Publish {
+                sender,
+                package_id,
+                version,
+                digest,
+            },
             SuiEvent::TransferObject {
                 package_id,
                 transaction_module,
@@ -2273,7 +2285,17 @@ impl SuiEvent {
                     bcs,
                 }
             }
-            Event::Publish { sender, package_id } => SuiEvent::Publish { sender, package_id },
+            Event::Publish {
+                sender,
+                package_id,
+                version,
+                digest,
+            } => SuiEvent::Publish {
+                sender,
+                package_id,
+                version,
+                digest,
+            },
             Event::TransferObject {
                 package_id,
                 transaction_module,
@@ -2416,9 +2438,20 @@ impl PartialEq<SuiEvent> for Event {
             Event::Publish {
                 sender: self_sender,
                 package_id: self_package_id,
+                version: self_version,
+                digest: self_digest,
             } => {
-                if let SuiEvent::Publish { package_id, sender } = other {
-                    package_id == self_package_id && self_sender == sender
+                if let SuiEvent::Publish {
+                    package_id,
+                    sender,
+                    version,
+                    digest,
+                } = other
+                {
+                    package_id == self_package_id
+                        && self_sender == sender
+                        && self_version == version
+                        && self_digest == digest
                 } else {
                     false
                 }

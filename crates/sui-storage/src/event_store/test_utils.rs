@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
 use sui_types::event::{Event, EventEnvelope};
 use sui_types::gas_coin::GAS;
-use sui_types::object::Owner;
+use sui_types::object::{Owner, PACKAGE_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use super::*;
@@ -63,6 +63,8 @@ pub fn new_test_publish_event(
         Event::Publish {
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             package_id: ObjectID::random(),
+            version: PACKAGE_VERSION,
+            digest: ObjectDigest::random(),
         },
         None,
     )

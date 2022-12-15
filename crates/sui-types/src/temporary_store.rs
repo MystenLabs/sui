@@ -307,6 +307,8 @@ impl<S> TemporaryStore<S> {
                     Event::Publish {
                         sender: ctx.sender,
                         package_id: id,
+                        version: obj.version(),
+                        digest: obj.digest(),
                     }
                 } else {
                     Event::new_object(

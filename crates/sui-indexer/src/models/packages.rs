@@ -42,7 +42,9 @@ pub async fn commit_packages_from_events(
     events: Vec<SuiEvent>,
 ) -> Result<usize, IndexerError> {
     let sender_pkg_pair_iter = events.into_iter().filter_map(|event| match event {
-        SuiEvent::Publish { sender, package_id } => Some((sender, package_id)),
+        SuiEvent::Publish {
+            sender, package_id, ..
+        } => Some((sender, package_id)),
         _ => None,
     });
 
