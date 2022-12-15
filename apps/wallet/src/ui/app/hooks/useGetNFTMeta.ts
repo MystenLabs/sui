@@ -4,7 +4,7 @@
 import { getObjectFields, isSuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { useGetObjectData } from './useGetObjectData';
+import { useGetObject } from './useGetObject';
 
 export type NFTMetadata = {
     name: string | null;
@@ -13,7 +13,7 @@ export type NFTMetadata = {
 };
 
 export function useGetNFTMeta(objectID: string): NFTMetadata | null {
-    const { data, isError } = useGetObjectData(objectID);
+    const { data, isError } = useGetObject(objectID);
 
     const nftMeta = useMemo(() => {
         if (isError) return null;

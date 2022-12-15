@@ -9,8 +9,8 @@ import { notEmpty } from '../helpers';
 import { useAppSelector } from '../hooks';
 import { api } from '../redux/store/thunk-extras';
 
-const STATE_OBJECT = '0x5';
-const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
+export const STATE_OBJECT = '0x5';
+export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
 
 // TODO: Generalize into SDK:
 interface SystemStateObject {
@@ -45,6 +45,20 @@ interface SystemStateObject {
 interface PendingDelegation {
     name: string;
     staked: bigint;
+}
+
+export function getName(rawName: string | number[]) {
+    let name: string;
+
+    if (Array.isArray(rawName)) {
+        name = String.fromCharCode(...rawName);
+    } else {
+        name = Buffer.from(rawName, 'base64').toString();
+        if (!VALDIATOR_NAME.test(name)) {
+            name = rawName;
+        }
+    }
+    return name;
 }
 
 /**
@@ -87,19 +101,8 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
 
                     if (!filteredDelegations.length) return null;
 
-                    let name: string;
-                    const rawName = validator.fields.metadata.fields.name;
-                    if (Array.isArray(rawName)) {
-                        name = String.fromCharCode(...rawName);
-                    } else {
-                        name = Buffer.from(rawName, 'base64').toString();
-                        if (!VALDIATOR_NAME.test(name)) {
-                            name = rawName;
-                        }
-                    }
-
                     return {
-                        name,
+                        name: getName(validator.fields.metadata.fields.name),
                         staked: filteredDelegations.reduce(
                             (acc, delegation) =>
                                 acc + BigInt(delegation.fields.sui_amount),
