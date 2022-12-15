@@ -6,12 +6,7 @@ use fastcrypto::traits::KeyPair;
 use sui_types::{committee::Committee, crypto::AuthorityKeyPair};
 use tempfile::tempdir;
 
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -160,19 +155,12 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     ));
 
     // Ensure we have end of epoch notification
-    let EndOfEpochMessage {
-        next_committee,
-        // TODO -- check this as well
-        next_epoch: _next_epoch,
-    } = reconfig_channel.recv().await.unwrap();
+    let next_committee = reconfig_channel.recv().await.unwrap();
+    assert_eq!(second_committee.committee(), &next_committee);
 
-    assert!(committee_matches(
-        second_committee.committee().voting_rights.clone(),
-        next_committee
-    ));
-
-    // simulate reconfig finishing
-    authority_state.epoch_store().epoch_terminated();
+    authority_state
+        .reconfigure(second_committee.committee().clone())
+        .unwrap();
 
     // checkpoint execution should resume
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -182,19 +170,25 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     ));
 }
 
-fn committee_matches(
-    first_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
-    second_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
-) -> bool {
-    let mut first_hasher = DefaultHasher::new();
-    first_committee.hash(&mut first_hasher);
-    let first_hash = first_hasher.finish();
+// TODO REMOVE
+#[tokio::test]
+pub async fn test_simple_reconfig_DEBUGGING_ONLY() {
+    let buffer_size = 10;
+    let tempdir = tempdir().unwrap();
+    let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    let mut second_hasher = DefaultHasher::new();
-    second_committee.hash(&mut second_hasher);
-    let second_hash = second_hasher.finish();
+    let (authority_state, _executor, _checkpoint_sender, _first_committee): (
+        Arc<AuthorityState>,
+        CheckpointExecutor,
+        Sender<VerifiedCheckpoint>,
+        CommitteeFixture,
+    ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
+    let second_committee = CommitteeFixture::generate(rand::rngs::OsRng, 1, 4);
 
-    first_hash == second_hash
+    // This will fail with the following: https://gist.github.com/williampsmith/396022a474f20d3f7c618e6ede15ef1b
+    authority_state
+        .reconfigure(second_committee.committee().clone())
+        .unwrap();
 }
 
 async fn init_executor_test(
@@ -247,7 +241,8 @@ fn sync_end_of_epoch_checkpoint(
     previous_checkpoint: VerifiedCheckpoint,
     committee: &CommitteeFixture,
 ) -> (VerifiedCheckpoint, CommitteeFixture) {
-    let new_committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let new_committee =
+        CommitteeFixture::generate(rand::rngs::OsRng, committee.committee().epoch + 1, 4);
     let (_sequence_number, _digest, checkpoint) = committee.make_end_of_epoch_checkpoint(
         previous_checkpoint,
         new_committee.committee().voting_rights.clone(),

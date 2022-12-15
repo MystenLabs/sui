@@ -8,7 +8,7 @@ use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
-use checkpoint_executor::{CheckpointExecutor, EndOfEpochMessage};
+use checkpoint_executor::CheckpointExecutor;
 use futures::TryFutureExt;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
@@ -48,6 +48,7 @@ use sui_storage::{
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
+use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::messages::VerifiedCertificate;
 use sui_types::messages::VerifiedCertifiedTransactionEffects;
@@ -90,7 +91,7 @@ pub struct SuiNode {
     checkpoint_store: Arc<CheckpointStore>,
     _checkpoint_executor_handle: checkpoint_executor::Handle,
 
-    reconfig_channel: tokio::sync::broadcast::Receiver<EndOfEpochMessage>,
+    reconfig_channel: tokio::sync::broadcast::Receiver<Committee>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -560,9 +561,8 @@ impl SuiNode {
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
     pub async fn monitor_reconfiguration(mut self) -> Result<()> {
         loop {
-            let EndOfEpochMessage {
-                next_committee: _next_committee,
-                next_epoch,
+            let Committee {
+                epoch: next_epoch, ..
             } = self
                 .reconfig_channel
                 .recv()

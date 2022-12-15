@@ -24,6 +24,7 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
+    committee::Committee,
     crypto::AuthorityPublicKeyBytes,
     error::SuiResult,
     messages::{SignedTransactionEffects, TransactionEffects, VerifiedCertificate},
@@ -57,12 +58,6 @@ type CheckpointExecutionBuffer = FuturesOrdered<
         Option<Vec<(AuthorityPublicKeyBytes, u64)>>,
     )>,
 >;
-
-#[derive(Clone)]
-pub struct EndOfEpochMessage {
-    pub next_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
-    pub next_epoch: u64,
-}
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
@@ -99,9 +94,7 @@ impl CheckpointExecutor {
         }
     }
 
-    pub fn start(
-        self,
-    ) -> Result<(Handle, broadcast::Receiver<EndOfEpochMessage>), TypedStoreError> {
+    pub fn start(self) -> Result<(Handle, broadcast::Receiver<Committee>), TypedStoreError> {
         let Self {
             mailbox,
             checkpoint_store,
@@ -110,7 +103,7 @@ impl CheckpointExecutor {
         } = self;
 
         let (end_of_epoch_event_sender, _receiver) =
-            broadcast::channel::<EndOfEpochMessage>(END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY);
+            broadcast::channel::<Committee>(END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY);
 
         let executor = CheckpointExecutorEventLoop::new(
             mailbox,
@@ -136,19 +129,19 @@ impl CheckpointExecutor {
 }
 
 pub struct Handle {
-    end_of_epoch_event_sender: broadcast::Sender<EndOfEpochMessage>,
+    end_of_epoch_event_sender: broadcast::Sender<Committee>,
     _event_loop_handle: JoinHandle<()>,
 }
 
 impl Handle {
-    pub fn subscribe_to_end_of_epoch(&self) -> broadcast::Receiver<EndOfEpochMessage> {
+    pub fn subscribe_to_end_of_epoch(&self) -> broadcast::Receiver<Committee> {
         self.end_of_epoch_event_sender.subscribe()
     }
 }
 
 pub struct CheckpointExecutorEventLoop {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
-    end_of_epoch_event_sender: broadcast::Sender<EndOfEpochMessage>,
+    end_of_epoch_event_sender: broadcast::Sender<Committee>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_state: Arc<AuthorityState>,
     highest_scheduled_seq_num: Option<CheckpointSequenceNumber>,
@@ -172,7 +165,7 @@ pub struct CheckpointExecutorEventLoop {
 impl CheckpointExecutorEventLoop {
     fn new(
         mailbox: broadcast::Receiver<VerifiedCheckpoint>,
-        end_of_epoch_event_sender: broadcast::Sender<EndOfEpochMessage>,
+        end_of_epoch_event_sender: broadcast::Sender<Committee>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
         metrics: Arc<CheckpointExecutorMetrics>,
@@ -450,10 +443,8 @@ impl CheckpointExecutorEventLoop {
         info!("Notifying end of epoch {:?}", current_epoch);
 
         let next_epoch = current_epoch + 1;
-        let end_of_epoch_message = EndOfEpochMessage {
-            next_committee,
-            next_epoch,
-        };
+        let end_of_epoch_message = Committee::new(next_epoch, next_committee.into_iter().collect())
+            .unwrap_or_else(|err| panic!("Failed to create new committee object: {:?}", err));
         let _ = self.end_of_epoch_event_sender.send(end_of_epoch_message);
         self.authority_state
             .epoch_store()
