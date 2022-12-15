@@ -12,7 +12,6 @@ use jsonrpsee::server::{AllowHosts, ServerBuilder};
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use tap::TapFallible;
-use tower::util::option_layer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
@@ -105,13 +104,6 @@ impl JsonRpcServerBuilder {
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
         let methods_names = self.module.method_names().collect::<Vec<_>>();
 
-        let metrics_layer = option_layer(self.registry.map(|registry| {
-            MetricsLayer::new(&registry, &methods_names);
-        }));
-        let middleware = tower::ServiceBuilder::new()
-            .layer(cors)
-            .layer(metrics_layer);
-
         let max_connection = env::var("RPC_MAX_CONNECTION")
             .ok()
             .and_then(|o| {
@@ -121,15 +113,29 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let server = ServerBuilder::default()
-            .max_connections(max_connection)
-            .set_host_filtering(AllowHosts::Any)
-            .set_middleware(middleware)
-            .build(listen_address)
-            .await?;
+        let (addr, handle) = if let Some(registry) = &self.registry {
+            let metrics_layer = MetricsLayer::new(registry, &methods_names);
+            let middleware = tower::ServiceBuilder::new()
+                .layer(cors)
+                .layer(metrics_layer);
 
-        let addr = server.local_addr()?;
-        let handle = server.start(self.module)?;
+            let server = ServerBuilder::default()
+                .max_connections(max_connection)
+                .set_host_filtering(AllowHosts::Any)
+                .set_middleware(middleware)
+                .build(listen_address)
+                .await?;
+            (server.local_addr()?, server.start(self.module)?)
+        } else {
+            let middleware = tower::ServiceBuilder::new().layer(cors);
+            let server = ServerBuilder::default()
+                .max_connections(max_connection)
+                .set_host_filtering(AllowHosts::Any)
+                .set_middleware(middleware)
+                .build(listen_address)
+                .await?;
+            (server.local_addr()?, server.start(self.module)?)
+        };
 
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
         info!("Available JSON-RPC methods : {:?}", methods_names);
