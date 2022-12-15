@@ -491,12 +491,6 @@ impl AsRef<[u8]> for TransactionDigest {
     }
 }
 
-impl fmt::Display for TransactionDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
-    }
-}
-
 impl fmt::LowerHex for TransactionDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
@@ -528,6 +522,43 @@ impl Borrow<[u8]> for TransactionDigest {
 impl Borrow<[u8]> for &TransactionDigest {
     fn borrow(&self) -> &[u8] {
         &self.0
+    }
+}
+
+impl fmt::Display for TransactionDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "t#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
+        )
+    }
+}
+
+impl fmt::Debug for TransactionDigest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "t#{}", Base64::encode(self.0))
+    }
+}
+
+impl TryFrom<&[u8]> for TransactionDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
+        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
+            .try_into()
+            .map_err(|_| SuiError::InvalidTransactionDigest)?;
+        Ok(Self(arr))
+    }
+}
+
+impl FromStr for TransactionDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow!(e))?);
+        Ok(TransactionDigest(result))
     }
 }
 
@@ -628,10 +659,19 @@ pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
 }
 
-impl std::fmt::Debug for ObjectDigest {
+impl fmt::Display for ObjectDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0);
-        write!(f, "o#{}", s)?;
+        write!(
+            f,
+            "o#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
+        )
+    }
+}
+
+impl fmt::Debug for ObjectDigest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "o#{}", Base64::encode(self.0))?;
         Ok(())
     }
 }
@@ -639,12 +679,6 @@ impl std::fmt::Debug for ObjectDigest {
 impl AsRef<[u8]> for ObjectDigest {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
-    }
-}
-
-impl fmt::Display for ObjectDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
     }
 }
 
@@ -668,18 +702,19 @@ impl TryFrom<&[u8]> for ObjectDigest {
     }
 }
 
-impl std::fmt::Debug for TransactionDigest {
+impl fmt::Display for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base58::encode(self.0);
-        write!(f, "{}", s)?;
-        Ok(())
+        write!(
+            f,
+            "e#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
+        )
     }
 }
 
-impl std::fmt::Debug for TransactionEffectsDigest {
+impl fmt::Debug for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
-        write!(f, "{}", s)?;
+        write!(f, "e#{}", Base64::encode(self.0))?;
         Ok(())
     }
 }
@@ -742,17 +777,6 @@ impl From<u64> for SequenceNumber {
 impl From<SequenceNumber> for usize {
     fn from(value: SequenceNumber) -> Self {
         value.0 as usize
-    }
-}
-
-impl TryFrom<&[u8]> for TransactionDigest {
-    type Error = SuiError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
-            .try_into()
-            .map_err(|_| SuiError::InvalidTransactionDigest)?;
-        Ok(Self(arr))
     }
 }
 
@@ -1016,15 +1040,5 @@ impl FromStr for ObjectID {
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
         // Try to match both the literal (0xABC..) and the normal (ABC)
         decode_bytes_hex(s).or_else(|_| Self::from_hex_literal(s))
-    }
-}
-
-impl FromStr for TransactionDigest {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow!(e))?);
-        Ok(TransactionDigest(result))
     }
 }

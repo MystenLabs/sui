@@ -12,6 +12,7 @@ use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
+    encoding::{Base64, Encoding},
     hash::{Digest, Hash, HashFunction},
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService, Verifier,
@@ -115,7 +116,7 @@ pub struct BatchDigest(pub [u8; crypto::DIGEST_LENGTH]);
 
 impl fmt::Debug for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "b#{}", base64::encode(self.0))
     }
 }
 
@@ -123,8 +124,8 @@ impl fmt::Display for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            "b#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
         )
     }
 }
@@ -299,7 +300,7 @@ impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
 
 impl fmt::Debug for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "h#{}", Base64::encode(self.0))
     }
 }
 
@@ -307,8 +308,8 @@ impl fmt::Display for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            "h#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
         )
     }
 }
@@ -447,7 +448,7 @@ impl From<VoteDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
 
 impl fmt::Debug for VoteDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "v#{}", Base64::encode(self.0))
     }
 }
 
@@ -455,8 +456,8 @@ impl fmt::Display for VoteDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            "v#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
         )
     }
 }
@@ -732,7 +733,7 @@ impl From<CertificateDigest> for CertificateDigestProto {
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "c#{}", Base64::encode(self.0))
     }
 }
 
@@ -740,8 +741,8 @@ impl fmt::Display for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            "c#{}",
+            Base64::encode(self.0).get(0..8).ok_or(fmt::Error)?
         )
     }
 }
