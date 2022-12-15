@@ -53,8 +53,8 @@ function ValidatorListItem({
     return (
         <div
             className={cl(
-                'flex justify-between w-full hover:bg-sui/10 py-3.5 px-2.5 rounded-lg group',
-                selected && 'bg-sui/10'
+                selected && 'bg-sui/10 px-2.5',
+                'flex justify-between w-full hover:bg-sui/10 py-3.5 px-1.5 hover:px-2.5 rounded-lg group'
             )}
             role="button"
         >
@@ -78,8 +78,8 @@ function ValidatorListItem({
                         type={ExplorerLinkType.address}
                         address={address}
                         className={cl(
-                            'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark',
-                            selected && 'text-hero-dark'
+                            selected && 'text-hero-dark',
+                            'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark'
                         )}
                         showIcon={false}
                     >
