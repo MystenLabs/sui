@@ -1112,7 +1112,10 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::Object(object_read, bcs) => {
                 let object = if *bcs {
                     match object_read.object() {
-                        Ok(v) => format!("{:?}", bcs::to_bytes(v).unwrap()),
+                        Ok(v) => {
+                            let bcs_version = bcs::to_bytes(v).unwrap();
+                            format!("{:?}\nNumber of bytes: {}", bcs_version, bcs_version.len())
+                        },
                         Err(err) => format!("{err}").red().to_string(),
                     }
                 } else {
