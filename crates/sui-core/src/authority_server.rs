@@ -161,6 +161,9 @@ pub struct ValidatorServiceMetrics {
     pub handle_transaction_non_consensus_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
+
+    num_rejected_tx_in_epoch_boundary: IntCounter,
+    num_rejected_cert_in_epoch_boundary: IntCounter,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -222,6 +225,18 @@ impl ValidatorServiceMetrics {
                 "validator_service_handle_certificate_non_consensus_latency",
                 "Latency of handling a non-consensus transaction certificate",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            num_rejected_tx_in_epoch_boundary: register_int_counter_with_registry!(
+                "validator_service_num_rejected_tx_in_epoch_boundary",
+                "Number of rejected transaction during epoch transitioning",
+                registry,
+            )
+            .unwrap(),
+            num_rejected_cert_in_epoch_boundary: register_int_counter_with_registry!(
+                "validator_service_num_rejected_cert_in_epoch_boundary",
+                "Number of rejected transaction certificate during epoch transitioning",
                 registry,
             )
             .unwrap(),
@@ -288,7 +303,12 @@ impl ValidatorService {
         let info = state
             .handle_transaction(transaction)
             .instrument(span)
-            .await?;
+            .await
+            .tap_err(|e| {
+                if let SuiError::ValidatorHaltedAtEpochEnd = e {
+                    metrics.num_rejected_tx_in_epoch_boundary.inc();
+                }
+            })?;
 
         Ok(tonic::Response::new(info.into()))
     }
@@ -339,7 +359,11 @@ impl ValidatorService {
                 &state.name,
                 certificate.clone().into(),
             );
-            let waiter = consensus_adapter.submit(transaction)?;
+            let waiter = consensus_adapter.submit(transaction).tap_err(|e| {
+                if let SuiError::ValidatorHaltedAtEpochEnd = e {
+                    metrics.num_rejected_cert_in_epoch_boundary.inc();
+                }
+            })?;
             if certificate.contains_shared_object() {
                 // This is expect on tokio JoinHandle result, not SuiResult
                 waiter
