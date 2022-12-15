@@ -81,7 +81,7 @@ async fn get_network_peers_from_admin_server() {
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -105,7 +105,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -122,6 +122,8 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
         name_1,
@@ -133,6 +135,7 @@ async fn get_network_peers_from_admin_server() {
         TrivialTransactionValidator::default(),
         store.batch_store,
         metrics_1,
+        &mut tx_shutdown_worker,
     );
 
     // Test getting all known peers for primary 1
@@ -194,7 +197,7 @@ async fn get_network_peers_from_admin_server() {
         .unwrap(),
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -218,7 +221,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

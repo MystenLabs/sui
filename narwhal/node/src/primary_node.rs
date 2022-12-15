@@ -1,56 +1,156 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
-use consensus::{
-    bullshark::Bullshark,
-    dag::Dag,
-    metrics::{ChannelMetrics, ConsensusMetrics},
-    Consensus,
-};
-
+use crate::{try_join_all, FuturesUnordered, NodeError};
+use config::{Parameters, SharedCommittee, SharedWorkerCache};
+use consensus::bullshark::Bullshark;
+use consensus::dag::Dag;
+use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
+use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{
-    get_restored_consensus_output, ExecutionState, Executor, SubscriberError, SubscriberResult,
-};
+use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
-use futures::future::try_join_all;
-use futures::stream::FuturesUnordered;
+use mysten_metrics::{RegistryID, RegistryService};
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
-pub use storage::NodeStorage;
-use thiserror::Error;
-use tokio::sync::oneshot;
-use tokio::{sync::watch, task::JoinHandle};
+use storage::NodeStorage;
+use tokio::sync::{oneshot, watch, RwLock};
+use tokio::task::JoinHandle;
 use tracing::{debug, info};
 use types::{
     metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
 };
-use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
-pub mod execution_state;
-pub mod metrics;
-pub mod primary_node;
-pub mod worker_node;
-
-#[derive(Debug, Error, Clone)]
-pub enum NodeError {
-    #[error("Failure while booting node: {0}")]
-    NodeBootstrapError(#[from] SubscriberError),
-
-    #[error("Node is already running")]
-    NodeAlreadyRunning,
-
-    #[error("Worker nodes with ids {0:?} already running")]
-    WorkerNodesAlreadyRunning(Vec<WorkerId>),
+struct PrimaryNodeInner {
+    // The configuration parameters.
+    parameters: Parameters,
+    // Whether to run consensus (and an executor client) or not.
+    // If true, an internal consensus will be used, else an external consensus will be used.
+    // If an external consensus will be used, then this bool will also ensure that the
+    // corresponding gRPC server that is used for communication between narwhal and
+    // external consensus is also spawned.
+    internal_consensus: bool,
+    // A prometheus RegistryService to use for the metrics
+    registry_service: RegistryService,
+    // The latest registry id used for the node
+    registry_id: Option<RegistryID>,
+    // The task handles created from primary
+    handles: FuturesUnordered<JoinHandle<()>>,
+    // The shutdown signal channel
+    tx_shutdown: Option<PreSubscribedBroadcastSender>,
 }
 
-/// High level functions to spawn the primary and the workers.
-pub struct Node;
-
-impl Node {
+impl PrimaryNodeInner {
     /// The default channel capacity.
     pub const CHANNEL_CAPACITY: usize = 1_000;
+
+    // Starts the primary node with the provided info. If the node is already running then this
+    // method will return an error instead.
+    async fn start<State>(
+        &mut self, // The private-public key pair of this authority.
+        keypair: KeyPair,
+        // The private-public network key pair of this authority.
+        network_keypair: NetworkKeyPair,
+        // The committee information.
+        committee: SharedCommittee,
+        // The worker information cache.
+        worker_cache: SharedWorkerCache,
+        // The node's store //TODO: replace this by a path so the method can open and independent storage
+        store: &NodeStorage,
+        // The state used by the client to execute transactions.
+        execution_state: Arc<State>,
+    ) -> Result<(), NodeError>
+    where
+        State: ExecutionState + Send + Sync + 'static,
+    {
+        if self.is_running().await {
+            return Err(NodeError::NodeAlreadyRunning);
+        }
+
+        // create a new registry
+        let registry = Registry::new();
+
+        // create the channel to send the shutdown signal
+        let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
+        // spawn primary if not already running
+        let handles = Self::spawn_primary(
+            keypair,
+            network_keypair,
+            committee,
+            worker_cache,
+            store,
+            self.parameters.clone(),
+            self.internal_consensus,
+            execution_state,
+            &registry,
+            &mut tx_shutdown,
+        )
+        .await?;
+
+        // store the registry
+        self.swap_registry(Some(registry));
+
+        // now keep the handlers
+        self.handles.clear();
+        self.handles.extend(handles);
+        self.tx_shutdown = Some(tx_shutdown);
+
+        Ok(())
+    }
+
+    // Will shutdown the primary node and wait until the node has shutdown by waiting on the
+    // underlying components handles. If the node was not already running then the
+    // method will return immediately.
+    async fn shutdown(&mut self) {
+        if !self.is_running().await {
+            return;
+        }
+
+        // send the shutdown signal to the node
+        info!("Sending shutdown message to narwhal");
+
+        if let Some(tx_shutdown) = self.tx_shutdown.as_ref() {
+            tx_shutdown
+                .send()
+                .expect("Couldn't send the shutdown signal to downstream components");
+            self.tx_shutdown = None
+        }
+
+        // Now wait until handles have been completed
+        try_join_all(&mut self.handles).await.unwrap();
+
+        self.swap_registry(None);
+
+        info!("Narwhal primary shutdown is complete");
+    }
+
+    // Helper method useful to wait on the execution of the primary node
+    async fn wait(&mut self) {
+        try_join_all(&mut self.handles).await.unwrap();
+    }
+
+    // If any of the underlying handles haven't still finished, then this method will return
+    // true, otherwise false will returned instead.
+    async fn is_running(&self) -> bool {
+        self.handles.iter().any(|h| !h.is_finished())
+    }
+
+    // Accepts an Option registry. If it's Some, then the new registry will be added in the
+    // registry service and the registry_id will be updated. Also, any previous registry will
+    // be removed. If None is passed, then the registry_id is updated to None and any old
+    // registry is removed from the RegistryService.
+    fn swap_registry(&mut self, registry: Option<Registry>) {
+        if let Some(registry_id) = self.registry_id {
+            self.registry_service.remove(registry_id);
+        }
+
+        if let Some(registry) = registry {
+            self.registry_id = Some(self.registry_service.add(registry));
+        } else {
+            self.registry_id = None
+        }
+    }
 
     /// Spawn a new primary. Optionally also spawn the consensus and a client executing transactions.
     pub async fn spawn_primary<State>(
@@ -76,12 +176,12 @@ impl Node {
         execution_state: Arc<State>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
+        // The channel to send the shutdown signal
+        tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
     {
-        let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-
         // These gauge is porcelain: do not modify it without also modifying `primary::metrics::PrimaryChannelMetrics::replace_registered_new_certificates_metric`
         // This hack avoids a cyclic dependency in the initialization of consensus and primary
         let new_certificates_counter = IntGauge::new(
@@ -153,7 +253,7 @@ impl Node {
             rx_consensus_round_updates,
             dag,
             network_model,
-            &mut tx_shutdown,
+            tx_shutdown,
             tx_committed_certificates,
             registry,
             Some(tx_executor_network),
@@ -246,47 +346,74 @@ impl Node {
             .chain(std::iter::once(consensus_handles))
             .collect())
     }
+}
 
-    /// Spawn a specified number of workers.
-    pub fn spawn_workers(
-        // The public key of this authority.
-        primary_name: PublicKey,
-        // The ids & keypairs of the workers to spawn.
-        ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
+pub struct PrimaryNode {
+    internal: Arc<RwLock<PrimaryNodeInner>>,
+}
+
+impl PrimaryNode {
+    pub fn new(
+        parameters: Parameters,
+        internal_consensus: bool,
+        registry_service: RegistryService,
+    ) -> PrimaryNode {
+        let inner = PrimaryNodeInner {
+            parameters,
+            internal_consensus,
+            registry_service,
+            registry_id: None,
+            handles: FuturesUnordered::new(),
+            tx_shutdown: None,
+        };
+
+        Self {
+            internal: Arc::new(RwLock::new(inner)),
+        }
+    }
+
+    pub async fn start<State>(
+        &self, // The private-public key pair of this authority.
+        keypair: KeyPair,
+        // The private-public network key pair of this authority.
+        network_keypair: NetworkKeyPair,
         // The committee information.
         committee: SharedCommittee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
-        // The node's storage,
+        // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
-        // The configuration parameters.
-        parameters: Parameters,
-        // The transaction validator defining Tx acceptance,
-        tx_validator: impl TransactionValidator,
-        // The prometheus metrics Registry
-        registry: &Registry,
-    ) -> Vec<JoinHandle<()>> {
-        let mut handles = Vec::new();
-
-        let metrics = initialise_metrics(registry);
-
-        for (id, keypair) in ids_and_keypairs {
-            let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-
-            let worker_handles = Worker::spawn(
-                primary_name.clone(),
+        // The state used by the client to execute transactions.
+        execution_state: Arc<State>,
+    ) -> Result<(), NodeError>
+    where
+        State: ExecutionState + Send + Sync + 'static,
+    {
+        let mut guard = self.internal.write().await;
+        guard
+            .start(
                 keypair,
-                id,
-                committee.clone(),
-                worker_cache.clone(),
-                parameters.clone(),
-                tx_validator.clone(),
-                store.batch_store.clone(),
-                metrics.clone(),
-                &mut tx_shutdown,
-            );
-            handles.extend(worker_handles);
-        }
-        handles
+                network_keypair,
+                committee,
+                worker_cache,
+                store,
+                execution_state,
+            )
+            .await
+    }
+
+    pub async fn shutdown(&self) {
+        let mut guard = self.internal.write().await;
+        guard.shutdown().await
+    }
+
+    pub async fn is_running(&self) -> bool {
+        let guard = self.internal.read().await;
+        guard.is_running().await
+    }
+
+    pub async fn wait(&self) {
+        let mut guard = self.internal.write().await;
+        guard.wait().await
     }
 }

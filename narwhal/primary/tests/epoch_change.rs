@@ -57,7 +57,7 @@ async fn test_restart_with_new_committee_change() {
         tx_channels.push(tx_feedback.clone());
         let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-        let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+        let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
         let store = NodeStorage::reopen(temp_dir());
 
@@ -79,7 +79,7 @@ async fn test_restart_with_new_committee_change() {
             rx_consensus_round_updates,
             /* dag */ None,
             NetworkModel::Asynchronous,
-            tx_shutdown,
+            &mut tx_shutdown,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
             None,
@@ -146,7 +146,7 @@ async fn test_restart_with_new_committee_change() {
             tx_channels.push(tx_feedback.clone());
             let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-            let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+            let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
             let store = NodeStorage::reopen(temp_dir());
 
@@ -168,7 +168,7 @@ async fn test_restart_with_new_committee_change() {
                 rx_consensus_round_updates,
                 /* dag */ None,
                 NetworkModel::Asynchronous,
-                tx_shutdown,
+                &mut tx_shutdown,
                 /* tx_committed_certificates */ tx_feedback,
                 &Registry::new(),
                 None,

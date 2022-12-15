@@ -106,7 +106,7 @@ async fn test_get_collections() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -129,7 +129,7 @@ async fn test_get_collections() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -137,6 +137,7 @@ async fn test_get_collections() {
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -149,6 +150,7 @@ async fn test_get_collections() {
         TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics,
+        &mut tx_shutdown_worker,
     );
 
     // Wait for tasks to start
@@ -304,7 +306,7 @@ async fn test_remove_collections() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     Primary::spawn(
         name.clone(),
@@ -323,7 +325,7 @@ async fn test_remove_collections() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -362,6 +364,7 @@ async fn test_remove_collections() {
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -374,6 +377,7 @@ async fn test_remove_collections() {
         TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics,
+        &mut tx_shutdown_worker,
     );
 
     // Test remove no collections
@@ -534,7 +538,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -561,7 +565,7 @@ async fn test_read_causal_signed_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -573,7 +577,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -604,7 +608,7 @@ async fn test_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -754,7 +758,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
@@ -774,7 +778,7 @@ async fn test_read_causal_unsigned_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -786,7 +790,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -810,7 +814,7 @@ async fn test_read_causal_unsigned_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -956,7 +960,7 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -979,7 +983,7 @@ async fn test_get_collections_with_missing_certificates() {
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
         None,
@@ -987,6 +991,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     let registry_1 = Registry::new();
     let metrics_1 = initialise_metrics(&registry_1);
+    let mut tx_shutdown_worker_1 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
@@ -999,6 +1004,7 @@ async fn test_get_collections_with_missing_certificates() {
         TrivialTransactionValidator::default(),
         store_primary_1.batch_store,
         metrics_1,
+        &mut tx_shutdown_worker_1,
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
@@ -1007,7 +1013,7 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let parameters_2 = Parameters {
         batch_size: 200, // Two transactions.
@@ -1039,7 +1045,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
-        tx_shutdown_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -1047,6 +1053,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     let registry_2 = Registry::new();
     let metrics_2 = initialise_metrics(&registry_2);
+    let mut tx_shutdown_worker_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
@@ -1059,6 +1066,7 @@ async fn test_get_collections_with_missing_certificates() {
         TrivialTransactionValidator::default(),
         store_primary_2.batch_store,
         metrics_2,
+        &mut tx_shutdown_worker_2,
     );
 
     // Wait for tasks to start
