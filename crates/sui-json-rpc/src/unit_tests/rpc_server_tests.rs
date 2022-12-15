@@ -122,9 +122,8 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
     let tx_bytes1 = tx_bytes.clone();
-    let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
-    let tx_response: SuiExecuteTransactionResponse = http_client
+    let tx1_response: SuiExecuteTransactionResponse = http_client
         .execute_transaction_serialized_sig(
             tx_bytes1,
             signature_bytes,
@@ -132,24 +131,26 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let effects = if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response {
-        Some(effects)
-    } else {
-        None
-    }
-    .unwrap();
+    let effects =
+        if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx1_response {
+            Some(effects)
+        } else {
+            None
+        }
+        .unwrap();
 
     let obj_id = effects.effects.created.get(0).unwrap().reference.object_id;
 
-    let tx2_response: SuiTBlsSignRandomnessObjectResponse = http_client
+    let _tx2_response: SuiTBlsSignRandomnessObjectResponse = http_client
         .tbls_sign_randomness_object(obj_id, SuiTBlsSignObjectCreationEpoch::PriorEpoch(1))
         .await?;
-    let tx3_response: SuiTBlsSignRandomnessObjectResponse = http_client
+    let _tx3_response: SuiTBlsSignRandomnessObjectResponse = http_client
         .tbls_sign_randomness_object(
             obj_id,
             SuiTBlsSignObjectCreationEpoch::CurrentEpoch(effects),
         )
         .await?;
+
     Ok(())
 }
 

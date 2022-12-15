@@ -14,7 +14,7 @@ use sui_json_rpc_types::SuiTBlsSignObjectCreationEpoch::{CurrentEpoch, PriorEpoc
 use sui_json_rpc_types::{SuiTBlsSignObjectCreationEpoch, SuiTBlsSignRandomnessObjectResponse};
 use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
-use sui_types::crypto::AuthoritySignInfoTrait;
+use sui_types::crypto::{construct_tbls_randomness_object_message, AuthoritySignInfoTrait};
 
 pub struct ThresholdBlsApiImpl {
     state: Arc<AuthorityState>,
@@ -77,10 +77,7 @@ impl ThresholdBlsApiServer for ThresholdBlsApiImpl {
         // node.
 
         // Construct the message to be signed, as done in the Move code of the Randomness object.
-        let domain = "randomness".as_bytes();
-        let mut msg = domain.to_vec();
-        msg.append(&mut u64::to_be_bytes(curr_epoch as u64).to_vec());
-        msg.append(&mut object_id.to_vec());
+        let msg = construct_tbls_randomness_object_message(curr_epoch, &object_id);
 
         let (sk, _pk) = mocked_dkg::generate_full_key_pair(committed_epoch);
         let signature = ThresholdBls12381MinSig::sign(&sk, msg.as_slice());
