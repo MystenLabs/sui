@@ -38,7 +38,7 @@ mod rpc_server_test;
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
     rpc_doc: Project,
-    registry: Option<Registry>,
+    registry: Registry,
 }
 
 pub fn sui_rpc_doc(version: &str) -> Project {
@@ -59,15 +59,7 @@ impl JsonRpcServerBuilder {
         Ok(Self {
             module: RpcModule::new(()),
             rpc_doc: sui_rpc_doc(version),
-            registry: Some(prometheus_registry.clone()),
-        })
-    }
-
-    pub fn new_without_metrics_for_testing() -> anyhow::Result<Self> {
-        Ok(Self {
-            module: RpcModule::new(()),
-            rpc_doc: sui_rpc_doc("0.0.0"),
-            registry: None,
+            registry: prometheus_registry.clone(),
         })
     }
 
@@ -113,29 +105,19 @@ impl JsonRpcServerBuilder {
             })
             .unwrap_or(u32::MAX);
 
-        let (addr, handle) = if let Some(registry) = &self.registry {
-            let metrics_layer = MetricsLayer::new(registry, &methods_names);
-            let middleware = tower::ServiceBuilder::new()
-                .layer(cors)
-                .layer(metrics_layer);
+        let metrics_layer = MetricsLayer::new(&self.registry, &methods_names);
+        let middleware = tower::ServiceBuilder::new()
+            .layer(cors)
+            .layer(metrics_layer);
 
-            let server = ServerBuilder::default()
-                .max_connections(max_connection)
-                .set_host_filtering(AllowHosts::Any)
-                .set_middleware(middleware)
-                .build(listen_address)
-                .await?;
-            (server.local_addr()?, server.start(self.module)?)
-        } else {
-            let middleware = tower::ServiceBuilder::new().layer(cors);
-            let server = ServerBuilder::default()
-                .max_connections(max_connection)
-                .set_host_filtering(AllowHosts::Any)
-                .set_middleware(middleware)
-                .build(listen_address)
-                .await?;
-            (server.local_addr()?, server.start(self.module)?)
-        };
+        let server = ServerBuilder::default()
+            .max_connections(max_connection)
+            .set_host_filtering(AllowHosts::Any)
+            .set_middleware(middleware)
+            .build(listen_address)
+            .await?;
+        let addr = server.local_addr()?;
+        let handle = server.start(self.module)?;
 
         info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
         info!("Available JSON-RPC methods : {:?}", methods_names);
