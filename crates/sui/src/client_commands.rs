@@ -1115,7 +1115,7 @@ impl Display for SuiClientCommandResult {
                         Ok(v) => {
                             let bcs_version = bcs::to_bytes(v).unwrap();
                             format!("{:?}\nNumber of bytes: {}", bcs_version, bcs_version.len())
-                        },
+                        }
                         Err(err) => format!("{err}").red().to_string(),
                     }
                 } else {
