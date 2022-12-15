@@ -99,7 +99,9 @@ impl CheckpointExecutor {
         }
     }
 
-    pub fn start(self) -> Result<Handle, TypedStoreError> {
+    pub fn start(
+        self,
+    ) -> Result<(Handle, broadcast::Receiver<EndOfEpochMessage>), TypedStoreError> {
         let Self {
             mailbox,
             checkpoint_store,
@@ -118,11 +120,18 @@ impl CheckpointExecutor {
             metrics,
         )?;
 
+        // Return a single pre-subscribed recv channel for end of
+        // epoch before starting to prevent race condition
+        let end_of_epoch_recv_channel = end_of_epoch_event_sender.subscribe();
+
         let event_loop_handle = tokio::spawn(executor.run());
-        Ok(Handle {
-            end_of_epoch_event_sender,
-            _event_loop_handle: event_loop_handle,
-        })
+        Ok((
+            Handle {
+                end_of_epoch_event_sender,
+                _event_loop_handle: event_loop_handle,
+            },
+            end_of_epoch_recv_channel,
+        ))
     }
 }
 

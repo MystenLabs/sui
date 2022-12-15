@@ -183,15 +183,13 @@ impl SuiNode {
         )
         .await;
 
-        let checkpoint_executor_handle = CheckpointExecutor::new(
+        let (checkpoint_executor_handle, reconfig_channel) = CheckpointExecutor::new(
             state_sync_handle.subscribe_to_synced_checkpoints(),
             checkpoint_store.clone(),
             state.clone(),
             &prometheus_registry,
         )
         .start()?;
-
-        let reconfig_channel = checkpoint_executor_handle.subscribe_to_end_of_epoch();
 
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
