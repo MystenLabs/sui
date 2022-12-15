@@ -34,7 +34,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_stream::StreamExt;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use typed_store::{rocks::TypedStoreError, Map};
 
 use crate::{
