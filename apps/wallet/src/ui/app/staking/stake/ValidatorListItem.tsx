@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'classnames';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
@@ -36,78 +36,84 @@ export function ValidatorListItem({
     );
 
     return (
-        <motion.div
-            whileHover={{ scale: 0.97 }}
-            animate={selected ? { scale: 0.97 } : { scale: 1 }}
-        >
-            <div
-                className={cl(
-                    selected && 'bg-sui/10',
-                    'flex justify-between w-full hover:bg-sui/10 py-3.5 px-2 rounded-lg group items-center'
-                )}
-                role="button"
+        <AnimatePresence>
+            <motion.div
+                whileHover={{ scale: 0.97 }}
+                animate={selected ? { scale: 0.97 } : { scale: 1 }}
             >
-                <div className="flex gap-2.5 items-center">
-                    <div className="relative">
-                        {selected && (
-                            <Icon
-                                icon={SuiIcons.CheckFill}
-                                className="absolute text-success text-heading6 translate-x-4 -translate-y-1 rounded-full bg-white"
-                            />
-                        )}
-
-                        <ImageIcon src={logo} alt={name} />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 capitalize">
-                        <Text variant="body" weight="semibold" color="gray-90">
-                            {name}
-                        </Text>
-                        <ExplorerLink
-                            type={ExplorerLinkType.address}
-                            address={address}
-                            className={cl(
-                                selected && 'text-hero-dark',
-                                'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark'
-                            )}
-                            showIcon={false}
-                        >
-                            {truncatedAddress}
-                        </ExplorerLink>
-                    </div>
-                </div>
-                <div className="flex gap-0.5 items-center">
-                    {typeof apy !== 'string' && (
-                        <Text
-                            variant="body"
-                            weight="semibold"
-                            color="steel-darker"
-                        >
-                            {apy}
-                        </Text>
+                <div
+                    className={cl(
+                        selected && 'bg-sui/10',
+                        'flex justify-between w-full hover:bg-sui/10 py-3.5 px-2 rounded-lg group items-center'
                     )}
-                    <div className="flex gap-0.5 leading-none">
-                        <Text
-                            variant="subtitleSmall"
-                            weight="medium"
-                            color="steel-dark"
-                        >
-                            {typeof apy === 'string' ? apy : '% APY'}
-                        </Text>
-                        <div
-                            className={cl(
-                                selected && '!opacity-100',
-                                'text-steel items-baseline text-subtitle h-3 flex opacity-0 group-hover:opacity-100'
+                    role="button"
+                >
+                    <div className="flex gap-2.5 items-center">
+                        <div className="relative">
+                            {selected && (
+                                <Icon
+                                    icon={SuiIcons.CheckFill}
+                                    className="absolute text-success text-heading6 translate-x-4 -translate-y-1 rounded-full bg-white"
+                                />
                             )}
-                        >
-                            <IconTooltip
-                                tip="Annual Percentage Yield"
-                                placement="top"
-                            />
+
+                            <ImageIcon src={logo} alt={name} />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 capitalize">
+                            <Text
+                                variant="body"
+                                weight="semibold"
+                                color="gray-90"
+                            >
+                                {name}
+                            </Text>
+                            <ExplorerLink
+                                type={ExplorerLinkType.address}
+                                address={address}
+                                className={cl(
+                                    selected && 'text-hero-dark',
+                                    'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark'
+                                )}
+                                showIcon={false}
+                            >
+                                {truncatedAddress}
+                            </ExplorerLink>
+                        </div>
+                    </div>
+                    <div className="flex gap-0.5 items-center">
+                        {typeof apy !== 'string' && (
+                            <Text
+                                variant="body"
+                                weight="semibold"
+                                color="steel-darker"
+                            >
+                                {apy}
+                            </Text>
+                        )}
+                        <div className="flex gap-0.5 leading-none">
+                            <Text
+                                variant="subtitleSmall"
+                                weight="medium"
+                                color="steel-dark"
+                            >
+                                {typeof apy === 'string' ? apy : '% APY'}
+                            </Text>
+                            <div
+                                className={cl(
+                                    selected && '!opacity-100',
+                                    'text-steel items-baseline text-subtitle h-3 flex opacity-0 group-hover:opacity-100'
+                                )}
+                            >
+                                <IconTooltip
+                                    tip="Annual Percentage Yield"
+                                    placement="top"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </motion.div>
+            </motion.div>
+        </AnimatePresence>
     );
 }
