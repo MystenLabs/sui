@@ -205,8 +205,9 @@ function TokenView({ data }: { data: DataType }) {
                                     <td>{key}</td>
                                     <td>
                                         {/* TODO: Use normalized module to determine this display. */}
-                                        {value.startsWith('http://') ||
-                                        value.startsWith('https://') ? (
+                                        {typeof value === 'string' &&
+                                        (value.startsWith('http://') ||
+                                            value.startsWith('https://')) ? (
                                             <Link
                                                 href={value}
                                                 target="_blank"
