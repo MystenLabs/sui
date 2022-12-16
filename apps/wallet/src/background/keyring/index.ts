@@ -32,11 +32,11 @@ class Keyring {
     #locked = true;
     #keypair: Keypair | null = null;
     #vault: VaultStorage;
-    #reviveDone: Promise<void>;
+    public readonly reviveDone: Promise<void>;
 
     constructor() {
         this.#vault = new VaultStorage();
-        this.#reviveDone = this.revive().catch((e) => {
+        this.reviveDone = this.revive().catch((e) => {
             // if for some reason decrypting the vault fails or anything else catch
             // the error to allow the user to login using the password
         });
@@ -134,7 +134,7 @@ class Keyring {
             } else if (isKeyringPayload(payload, 'walletStatusUpdate')) {
                 // wait to avoid ui showing locked and then unlocked screen
                 // ui waits until it receives this status to render
-                await this.#reviveDone;
+                await this.reviveDone;
                 uiConnection.send(
                     createMessage<KeyringPayload<'walletStatusUpdate'>>(
                         {

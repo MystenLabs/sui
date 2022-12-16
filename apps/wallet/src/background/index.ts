@@ -45,7 +45,7 @@ Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
 
 Browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === LOCK_ALARM_NAME) {
-        Keyring.lock();
+        Keyring.reviveDone.finally(() => Keyring.lock());
     }
 });
 
