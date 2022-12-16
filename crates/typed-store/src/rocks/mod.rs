@@ -12,8 +12,8 @@ use crate::{
 use bincode::Options;
 use collectable::TryExtend;
 use rocksdb::{
-    properties, AsColumnFamilyRef, ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded,
-    WriteBatch,
+    properties, AsColumnFamilyRef, ColumnFamilyDescriptor, DBIteratorWithThreadMode,
+    DBWithThreadMode, IteratorMode, MultiThreaded, WriteBatch,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -211,6 +211,12 @@ impl<K, V> DBMap<K, V> {
         self.rocksdb
             .cf_handle(&self.cf)
             .expect("Map-keying column family should have been checked at DB creation")
+    }
+
+    pub fn iterator_cf(
+        &self,
+    ) -> DBIteratorWithThreadMode<'_, rocksdb::DBWithThreadMode<MultiThreaded>> {
+        self.rocksdb.iterator_cf(&self.cf(), IteratorMode::Start)
     }
 
     fn get_int_property(
@@ -1051,7 +1057,7 @@ pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
 
 /// TODO: Good description of why we're doing this : RocksDB stores keys in BE and has a seek operator on iterators, see https://github.com/facebook/rocksdb/wiki/Iterator#introduction
 #[inline]
-pub(crate) fn be_fix_int_ser<S>(t: &S) -> Result<Vec<u8>, TypedStoreError>
+pub fn be_fix_int_ser<S>(t: &S) -> Result<Vec<u8>, TypedStoreError>
 where
     S: ?Sized + serde::Serialize,
 {

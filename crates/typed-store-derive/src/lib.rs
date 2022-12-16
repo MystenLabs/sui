@@ -549,6 +549,30 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 })
             }
 
+            /// Get key value sizes from the db
+            /// Tables must be opened in read only mode using `open_tables_read_only`
+            pub fn table_summary(&self, table_name: &str) -> eyre::Result<(usize, usize, usize)> {
+                let mut count = 0;
+                let mut key_bytes = 0;
+                let mut value_bytes = 0;
+                Ok(match table_name {
+                    #(
+                        stringify!(#field_names) => {
+                            typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
+                            let mut iter = self.#field_names.iterator_cf().map(Result::unwrap);
+                            for (key, value) in iter {
+                                count += 1;
+                                key_bytes += key.len();
+                                value_bytes += value.len();
+                            }
+                            (count, key_bytes, value_bytes)
+                        }
+                    )*
+
+                    _ => eyre::bail!("No such table name: {}", table_name),
+                })
+            }
+
             /// Count the keys in this table
             /// Tables must be opened in read only mode using `open_tables_read_only`
             pub fn count_keys(&self, table_name: &str) -> eyre::Result<usize> {
