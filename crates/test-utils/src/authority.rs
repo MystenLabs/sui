@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::TEST_COMMITTEE_SIZE;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
@@ -13,6 +12,7 @@ use sui_types::object::Object;
 
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
+use sui_types::crypto::TEST_COMMITTEE_SIZE;
 use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
 
 /// The default network buffer size of a test authority.

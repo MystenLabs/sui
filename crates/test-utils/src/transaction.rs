@@ -20,6 +20,7 @@ use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
+use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
@@ -37,12 +38,11 @@ use crate::messages::{
     get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
     make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
-use crate::{test_account_keys, test_committee};
 
 const GAS_BUDGET: u64 = 5000;
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
     create_publish_move_package_transaction(
         gas_object.compute_object_reference(),
         path,
@@ -439,8 +439,9 @@ pub async fn submit_shared_object_transaction(
     transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
 ) -> SuiResult<TransactionEffects> {
-    let committee = test_committee();
-    submit_shared_object_transaction_with_committee(transaction, configs, &committee).await
+    let (committee, key_pairs) = Committee::new_simple_test_committee();
+    submit_shared_object_transaction_with_committee(transaction, configs, &committee, &key_pairs)
+        .await
 }
 
 /// Keep submitting the certificates of a shared-object transaction until it is sequenced by
@@ -450,11 +451,13 @@ pub async fn submit_shared_object_transaction_with_committee(
     transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
     committee: &Committee,
+    key_pairs: &[AuthorityKeyPair],
 ) -> SuiResult<TransactionEffects> {
-    let certificate = make_tx_certs_and_signed_effects_with_committee(vec![transaction], committee)
-        .0
-        .pop()
-        .unwrap();
+    let certificate =
+        make_tx_certs_and_signed_effects_with_committee(vec![transaction], committee, key_pairs)
+            .0
+            .pop()
+            .unwrap();
 
     let replies = loop {
         let futures: Vec<_> = configs

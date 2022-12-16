@@ -11,7 +11,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
-use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::{
@@ -21,7 +21,6 @@ use sui_types::{
 use test_utils::messages::make_transfer_object_transaction;
 use test_utils::messages::make_transfer_sui_transaction;
 use test_utils::messages::move_transaction_with_type_tags;
-use test_utils::test_account_keys;
 use test_utils::transaction::get_framework_object;
 use test_utils::transaction::make_publish_package;
 use test_utils::{
@@ -244,7 +243,7 @@ async fn run_actual_and_estimate_costs(
 ) -> Result<BTreeMap<CommonTransactionCosts, (GasCostSummary, GasCostSummary)>, anyhow::Error> {
     let mut ret = BTreeMap::new();
     let gas_objects = test_gas_objects();
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).

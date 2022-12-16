@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
-use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
@@ -21,8 +20,8 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo,
-    KeypairTraits,
+    deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits,
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::CallArg;
@@ -222,7 +221,7 @@ pub fn make_transactions_with_pre_genesis_objects(
 /// Make a few different test transaction containing the same shared object.
 pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
     // The key pair of the sender of the transaction.
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
 
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
@@ -306,7 +305,7 @@ pub fn make_transfer_object_transaction_with_wallet_context(
 }
 
 pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransaction {
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     let build_config = BuildConfig::default();
@@ -395,7 +394,7 @@ pub fn move_transaction_with_type_tags(
     type_args: &[TypeTag],
     arguments: Vec<CallArg>,
 ) -> VerifiedTransaction {
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
 
     // Make the transaction.
     let data = TransactionData::new_move_call(
@@ -415,25 +414,26 @@ pub fn move_transaction_with_type_tags(
 pub fn make_tx_certs_and_signed_effects(
     transactions: Vec<VerifiedTransaction>,
 ) -> (Vec<VerifiedCertificate>, Vec<SignedTransactionEffects>) {
-    let committee = test_committee();
-    make_tx_certs_and_signed_effects_with_committee(transactions, &committee)
+    let (committee, key_pairs) = Committee::new_simple_test_committee();
+    make_tx_certs_and_signed_effects_with_committee(transactions, &committee, &key_pairs)
 }
 
 /// Make a test certificates for each input transaction.
 pub fn make_tx_certs_and_signed_effects_with_committee(
     transactions: Vec<VerifiedTransaction>,
     committee: &Committee,
+    key_pairs: &[AuthorityKeyPair],
 ) -> (Vec<VerifiedCertificate>, Vec<SignedTransactionEffects>) {
     let mut tx_certs = Vec::new();
     let mut effect_sigs = Vec::new();
     for tx in transactions {
         let mut sigs: Vec<AuthoritySignInfo> = Vec::new();
-        for (key, _, _, _) in test_validator_keys() {
+        for key in key_pairs {
             let vote = VerifiedSignedTransaction::new(
                 committee.epoch,
                 tx.clone(),
                 key.public().into(),
-                &key,
+                key,
             );
             sigs.push(vote.auth_sig().clone());
             if let Ok(tx_cert) =
@@ -444,7 +444,7 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
                 let signed_effects = SignedTransactionEffects::new(
                     committee.epoch(),
                     effects,
-                    &key,
+                    key,
                     AuthorityPublicKeyBytes::from(key.public()),
                 );
                 effect_sigs.push(signed_effects);
