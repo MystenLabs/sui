@@ -112,7 +112,7 @@ function StakingCard() {
                         .integerValue()
                         .toString()
                 );
-
+                // TODO: add unstake functionality on the support roles out
                 const response = await dispatch(
                     stakeTokens({
                         amount: bigIntAmount,
@@ -192,7 +192,7 @@ function StakingCard() {
                                 <Button
                                     size="large"
                                     mode="neutral"
-                                    href="new"
+                                    href="/stake"
                                     disabled={isSubmitting}
                                     className="!text-steel-darker w-1/2"
                                 >
