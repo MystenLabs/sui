@@ -54,7 +54,7 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
-    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
     PrimaryToPrimaryServer, ReconfigureNotification, RequestVoteRequest, RequestVoteResponse,
@@ -722,27 +722,6 @@ impl PrimaryReceiverHandler {
         self.synchronizer
             .sync_batches(header, network, /* max_age */ 0)
             .await?;
-
-        // Check that the time of the header is smaller than the current time. If not but the difference is
-        // small, just wait. Otherwise reject with an error.
-        const TOLERANCE: u64 = 15 * 1000; // 15 sec in milliseconds
-        let current_time = now();
-        if current_time < header.created_at {
-            if header.created_at - current_time < TOLERANCE {
-                // for a small difference we simply wait
-                tokio::time::sleep(Duration::from_millis(header.created_at - current_time)).await;
-            } else {
-                // For larger differences return an error, and log it
-                warn!(
-                    "Rejected header {:?} due to timestamp {} newer than {current_time}",
-                    header, header.created_at
-                );
-                return Err(DagError::InvalidTimestamp {
-                    created_time: header.created_at,
-                    local_time: current_time,
-                });
-            }
-        }
 
         // Store the header.
         self.header_store

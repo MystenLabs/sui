@@ -207,8 +207,8 @@ impl Proposer {
             .max()
             .unwrap_or(0);
         if current_time < parent_max_time {
-            error!(
-                "Current time {} earlier than max parent time {}",
+            debug!(
+                "Current time of this primary is {} earlier than max parent time {}",
                 current_time, parent_max_time
             );
         }
