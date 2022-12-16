@@ -154,7 +154,7 @@ where
                         .with_label_values(&[&name])
                         .observe(req_latency_secs);
 
-                    if !res.status().is_server_error() {
+                    if res.status().is_server_error() {
                         metrics.errors_by_route.with_label_values(&[&name]).inc();
                     }
                 } else {
