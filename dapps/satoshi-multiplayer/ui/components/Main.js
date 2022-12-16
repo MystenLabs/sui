@@ -3,12 +3,15 @@
 
 import Header from "./Header";
 import Modal from "./Modal";
+import { ConnectButton } from "@mysten/wallet-kit";
+
 const Main = () => {
     return (
         <>
-        <Header />
-        <Modal />
-        asdasd
+            <Header />
+            <Modal />
+            asdasd
+            <ConnectButton />
         </>
     )
 }
