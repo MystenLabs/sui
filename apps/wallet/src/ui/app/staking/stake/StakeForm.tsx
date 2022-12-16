@@ -87,12 +87,12 @@ function StakeForm({
                                 component={NumberInput}
                                 allowNegative={false}
                                 name="amount"
-                                className="w-full border-none text-hero-dark text-heading4 font-semibold  placeholder:text-gray-70 placeholder:font-medium"
+                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium"
                                 decimals
                             />
                             <div
                                 role="button"
-                                className="border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker  hover:text-steel-darker text-bodySmall font-medium"
+                                className="border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium"
                                 onClick={setMaxToken}
                             >
                                 Max
