@@ -18,6 +18,7 @@ use sui_types::{
     crypto::get_key_pair,
     gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
 };
+use sui_types::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -298,7 +299,14 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     gas_status.charge_storage_read(
         genesis_objects
             .iter()
-            .map(|o| o.object_size_for_gas_metering())
+            // do not charge for loads of the Sui Framework
+            .filter_map(|o| {
+                if o.id() != SUI_FRAMEWORK_OBJECT_ID && o.id() != MOVE_STDLIB_OBJECT_ID {
+                    Some(o.object_size_for_gas_metering())
+                } else {
+                    None
+                }
+            })
             .sum(),
     )?;
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;

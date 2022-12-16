@@ -56,6 +56,7 @@ pub mod utils;
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID
 pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
+pub const MOVE_STDLIB_OBJECT_ID: ObjectID = ObjectID::from_single_byte(1);
 
 /// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID
