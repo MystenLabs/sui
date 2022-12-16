@@ -877,10 +877,11 @@ async fn test_full_node_event_read_api_ok() {
     let (_sender, _object_id, digest2) = create_devnet_nft(context).await.unwrap();
     wait_for_tx(digest2, node.state().clone()).await;
 
-    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
-    let ts2 = node.state().get_timestamp_ms(&digest2).await.unwrap();
+    // Add a delay to ensure event processing is done after transaction commits.
+    sleep(Duration::from_secs(1)).await;
 
     // query by move event struct name
+    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
     let params = rpc_params![
         EventQuery::MoveEvent(struct_tag_str),
         None::<u64>,
@@ -895,7 +896,7 @@ async fn test_full_node_event_read_api_ok() {
     assert_eq!(events_by_sender.data[0].tx_digest.unwrap(), digest2);
 
     // query all transactions
-
+    let ts2 = node.state().get_timestamp_ms(&digest2).await.unwrap();
     let params = rpc_params![
         EventQuery::TimeRange {
             start_time: ts.unwrap() - HOUR_MS,
