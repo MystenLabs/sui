@@ -22,6 +22,8 @@
 | ----------- | ----------- |
 | Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move)! Find everything you need within the [Sui Developer Guides](doc/src/learn/index.md) and supporting materials below.      | <img src="doc/static/Sui_Icon_Brand.png" alt="sui_icon" width="200"/>      |
 
+[![Documentation (main)](https://img.shields.io/badge/docs-main-59f)](https://mystenlabs.github.io/sui)
+
 ## Quick links
 
 * To learn how to use Sui, take our [end-to-end tutorial](doc/src/explore/tutorials.md).
