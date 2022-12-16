@@ -132,6 +132,22 @@ impl AuthorityPerpetualTables {
         }
     }
 
+    // This is used by indexer to find the correct version of dynamic field child object.
+    // We do not store the version of the child object, but because of lamport timestamp,
+    // we know the child must have version number less then or eq to the parent.
+    pub fn find_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        let Ok(iter) = self.objects
+            .iter()
+            .skip_prior_to(&ObjectKey(object_id, version))else {
+            return None
+        };
+        iter.reverse().next().map(|(_, o)| o)
+    }
+
     pub fn get_latest_parent_entry(
         &self,
         object_id: ObjectID,

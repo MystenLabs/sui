@@ -11,7 +11,6 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
-use fastcrypto::encoding::{Base64, Encoding};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -28,6 +27,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+
+use fastcrypto::encoding::{Base64, Encoding};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -36,6 +37,7 @@ use sui_types::base_types::{
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
+use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
@@ -64,6 +66,7 @@ pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 pub type EventPage = Page<SuiEventEnvelope, EventID>;
 pub type CoinPage = Page<Coin, ObjectID>;
+pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]

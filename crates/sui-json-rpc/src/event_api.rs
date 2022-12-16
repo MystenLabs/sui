@@ -103,7 +103,7 @@ impl EventReadApiServer for EventReadApiImpl {
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
         let descending = descending_order.unwrap_or_default();
-        let limit = cap_page_limit(limit)?;
+        let limit = cap_page_limit(limit);
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state

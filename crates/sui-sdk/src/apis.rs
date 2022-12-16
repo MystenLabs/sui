@@ -10,10 +10,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    Balance, Coin, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo, SuiTransactionResponse,
-    TransactionsPage,
+    Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
+    GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
+    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
@@ -54,6 +54,19 @@ impl ReadApi {
         object_id: ObjectID,
     ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
         Ok(self.api.http.get_objects_owned_by_object(object_id).await?)
+    }
+
+    pub async fn get_dynamic_fields(
+        &self,
+        object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<DynamicFieldPage> {
+        Ok(self
+            .api
+            .http
+            .get_dynamic_fields(object_id, cursor, limit)
+            .await?)
     }
 
     pub async fn get_parsed_object(

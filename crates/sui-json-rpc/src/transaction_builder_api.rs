@@ -11,7 +11,6 @@ use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo, SuiTypeTag, Tr
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::object::Owner;
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
@@ -48,7 +47,7 @@ impl DataReader for AuthorityStateDataReader {
     ) -> Result<Vec<SuiObjectInfo>, anyhow::Error> {
         let refs: Vec<SuiObjectInfo> = self
             .0
-            .get_owner_objects(Owner::AddressOwner(address))?
+            .get_owner_objects(address)?
             .into_iter()
             .map(SuiObjectInfo::from)
             .collect();

@@ -21,7 +21,7 @@ use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer};
@@ -63,7 +63,7 @@ impl CoinReadApi {
     ) -> Result<impl Iterator<Item = ObjectID> + '_, Error> {
         Ok(self
             .state
-            .get_owner_objects_iterator(Owner::AddressOwner(owner))?
+            .get_owner_objects_iterator(owner)?
             .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
             .map(|info|info.object_id))
     }
@@ -119,7 +119,7 @@ impl CoinReadApiServer for CoinReadApi {
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
         // TODO: Add index to improve performance?
-        let limit = cap_page_limit(limit)?;
+        let limit = cap_page_limit(limit);
         let mut coins = self
             .get_owner_coin_iterator(owner, &coin_type)?
             .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != o))

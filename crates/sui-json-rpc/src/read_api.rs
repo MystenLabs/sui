@@ -16,10 +16,10 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionResponse,
-    TransactionsPage,
+    DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType,
+    ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -29,7 +29,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};
 use sui_types::move_package::normalize_modules;
-use sui_types::object::{Data, ObjectRead, Owner};
+use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
 use tracing::debug;
@@ -68,24 +68,59 @@ impl RpcReadApiServer for ReadApi {
     ) -> RpcResult<Vec<SuiObjectInfo>> {
         Ok(self
             .state
-            .get_owner_objects(Owner::AddressOwner(address))
+            .get_owner_objects(address)
             .map_err(|e| anyhow!("{e}"))?
             .into_iter()
             .map(SuiObjectInfo::from)
             .collect())
     }
 
+    // TODO: Remove this
+    // This is very expensive, it's only for backward compatibilities and should be removed asap.
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
     ) -> RpcResult<Vec<SuiObjectInfo>> {
-        Ok(self
+        let dynamic_fields = self
             .state
-            .get_owner_objects(Owner::ObjectOwner(object_id.into()))
-            .map_err(|e| anyhow!("{e}"))?
-            .into_iter()
-            .map(SuiObjectInfo::from)
-            .collect())
+            .get_dynamic_fields(object_id, None, usize::MAX)
+            .map_err(|e| anyhow!("{e}"))?;
+
+        let mut object_info = vec![];
+        for info in dynamic_fields {
+            let object = self
+                .state
+                .get_object_read(&info.object_id)
+                .await
+                .and_then(|read| read.into_object())
+                .map_err(|e| anyhow!(e))?;
+            object_info.push(SuiObjectInfo {
+                object_id: object.id(),
+                version: object.version(),
+                digest: object.digest(),
+                // Package cannot be owned by object, safe to unwrap.
+                type_: format!("{}", object.type_().unwrap()),
+                owner: object.owner,
+                previous_transaction: object.previous_transaction,
+            });
+        }
+        Ok(object_info)
+    }
+
+    async fn get_dynamic_fields(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> RpcResult<DynamicFieldPage> {
+        let limit = cap_page_limit(limit);
+        let mut data = self
+            .state
+            .get_dynamic_fields(parent_object_id, cursor, limit + 1)
+            .map_err(|e| anyhow!("{e}"))?;
+        let next_cursor = data.get(limit).map(|info| info.object_id);
+        data.truncate(limit);
+        Ok(DynamicFieldPage { data, next_cursor })
     }
 
     async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
@@ -98,6 +133,21 @@ impl RpcReadApiServer for ReadApi {
                 anyhow!("{e}")
             })?
             .try_into()?)
+    }
+
+    async fn get_dynamic_field_object(
+        &self,
+        parent_object_id: ObjectID,
+        name: String,
+    ) -> RpcResult<GetObjectDataResponse> {
+        let id = self
+            .state
+            .get_dynamic_field_object_id(parent_object_id, &name)
+            .map_err(|e| anyhow!("{e}"))?
+            .ok_or_else(|| {
+                anyhow!("Cannot find dynamic field [{name}] for object [{parent_object_id}].")
+            })?;
+        self.get_object(id).await
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
@@ -295,7 +345,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
-        let limit = cap_page_limit(limit)?;
+        let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
 
         // Retrieve 1 extra item for next cursor

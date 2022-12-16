@@ -29,6 +29,7 @@ pub mod coin;
 pub mod collection_types;
 pub mod committee;
 pub mod crypto;
+pub mod dynamic_field;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;

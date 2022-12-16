@@ -1032,6 +1032,18 @@ impl AuthorityStore {
         self.lock_service.initialize_locks(&old_locks, true).await?;
         Ok(())
     }
+    /// Return the object with version less then or eq to the provided seq number.
+    /// This is used by indexer to find the correct version of dynamic field child object.
+    /// We do not store the version of the child object, but because of lamport timestamp,
+    /// we know the child must have version number less then or eq to the parent.
+    pub fn find_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        self.perpetual_tables
+            .find_object_lt_or_eq_version(object_id, version)
+    }
 
     /// Returns the last entry we have for this object in the parents_sync index used
     /// to facilitate client and authority sync. In turn the latest entry provides the

@@ -435,6 +435,8 @@ pub enum SuiError {
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
+    #[error("Failure deserializing object in the requested format: {:?}", error)]
+    ObjectDeserializationError { error: String },
     #[error("Event store component is not active on this node")]
     NoEventStore,
 
@@ -521,6 +523,9 @@ pub enum SuiError {
 
     #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object.")]
     UnexpectedGasPaymentObject,
+
+    #[error("Index store not available on this Fullnode.")]
+    IndexStoreNotAvailable,
 
     #[error("unknown error: {0}")]
     Unknown(String),

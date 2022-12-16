@@ -658,6 +658,82 @@
       }
     },
     {
+      "name": "sui_getDynamicFieldObject",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the dynamic field object information for a specified object",
+      "params": [
+        {
+          "name": "parent_object_id",
+          "description": "The ID of the queried parent object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "name",
+          "description": "The Name of the dynamic field",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetObjectDataResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
+        }
+      }
+    },
+    {
+      "name": "sui_getDynamicFields",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the list of dynamic field objects owned by an object.",
+      "params": [
+        {
+          "name": "parent_object_id",
+          "description": "The ID of the parent object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "Optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "DynamicFieldPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_DynamicFieldInfo_and_ObjectID"
+        }
+      }
+    },
+    {
       "name": "sui_getEvents",
       "tags": [
         {
@@ -683,7 +759,7 @@
         },
         {
           "name": "limit",
-          "description": "maximum number of items per page",
+          "description": "maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -1530,7 +1606,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -2635,6 +2711,67 @@
                 }
               }
             }
+          }
+        ]
+      },
+      "DynamicFieldInfo": {
+        "type": "object",
+        "required": [
+          "digest",
+          "name",
+          "objectId",
+          "objectType",
+          "type",
+          "version"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "name": {
+            "type": "string"
+          },
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "objectType": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/DynamicFieldType"
+          },
+          "version": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
+      },
+      "DynamicFieldType": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "DynamicObject"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "DynamicField"
+            ],
+            "properties": {
+              "DynamicField": {
+                "type": "object",
+                "required": [
+                  "wrappedObjectId"
+                ],
+                "properties": {
+                  "wrappedObjectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -4025,6 +4162,30 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Coin"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Page_for_DynamicFieldInfo_and_ObjectID": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DynamicFieldInfo"
             }
           },
           "nextCursor": {

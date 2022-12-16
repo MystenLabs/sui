@@ -13,7 +13,6 @@ use sui_types::messages::{
     QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
     TransactionData,
 };
-use sui_types::object::Owner;
 
 use crate::errors::Error;
 use crate::operations::Operation;
@@ -219,7 +218,7 @@ pub async fn metadata(
     let sender_coins = if let Some(option) = request.options {
         context
             .state
-            .get_owner_objects(Owner::AddressOwner(option.sender))?
+            .get_owner_objects(option.sender)?
             .iter()
             .filter(|info| info.type_.is_gas_coin())
             .map(|info| info.into())

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
@@ -10,12 +9,13 @@ use sui_types::sui_system_state::SuiSystemState;
 use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, CoinPage, EventPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    GetRawObjectDataResponse, MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata,
-    SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionFilter,
-    SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
+    Balance, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
+    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
+    RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
+    SuiTransactionEffects, SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag,
+    TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -97,6 +97,18 @@ pub trait RpcReadApi {
         object_id: ObjectID,
     ) -> RpcResult<Vec<SuiObjectInfo>>;
 
+    /// Return the list of dynamic field objects owned by an object.
+    #[method(name = "getDynamicFields")]
+    async fn get_dynamic_fields(
+        &self,
+        /// The ID of the parent object
+        parent_object_id: ObjectID,
+        /// Optional paging cursor
+        cursor: Option<ObjectID>,
+        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
+        limit: Option<usize>,
+    ) -> RpcResult<DynamicFieldPage>;
+
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
@@ -133,6 +145,16 @@ pub trait RpcReadApi {
         &self,
         /// the ID of the queried object
         object_id: ObjectID,
+    ) -> RpcResult<GetObjectDataResponse>;
+
+    /// Return the dynamic field object information for a specified object
+    #[method(name = "getDynamicFieldObject")]
+    async fn get_dynamic_field_object(
+        &self,
+        /// The ID of the queried parent object
+        parent_object_id: ObjectID,
+        /// The Name of the dynamic field
+        name: String,
     ) -> RpcResult<GetObjectDataResponse>;
 }
 
@@ -193,7 +215,7 @@ pub trait RpcFullNodeReadApi {
         query: TransactionQuery,
         /// Optional paging cursor
         cursor: Option<TransactionDigest>,
-        /// Maximum item returned per page
+        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.  
         descending_order: Option<bool>,
@@ -472,7 +494,7 @@ pub trait EventReadApi {
         query: EventQuery,
         /// optional paging cursor
         cursor: Option<EventID>,
-        /// maximum number of items per page
+        /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.  
         descending_order: Option<bool>,
@@ -524,14 +546,11 @@ pub trait TransactionExecutionApi {
     ) -> RpcResult<SuiExecuteTransactionResponse>;
 }
 
-pub fn cap_page_limit(limit: Option<usize>) -> Result<usize, anyhow::Error> {
-    let limit = limit.unwrap_or(QUERY_MAX_RESULT_LIMIT);
-    if limit == 0 {
-        Err(anyhow!("Page result limit must be larger then 0."))?;
-    }
-    Ok(if limit > QUERY_MAX_RESULT_LIMIT {
+pub fn cap_page_limit(limit: Option<usize>) -> usize {
+    let limit = limit.unwrap_or_default();
+    if limit > QUERY_MAX_RESULT_LIMIT || limit == 0 {
         QUERY_MAX_RESULT_LIMIT
     } else {
         limit
-    })
+    }
 }
