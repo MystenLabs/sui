@@ -462,12 +462,11 @@ impl SuiNode {
             CheckpointMetrics::new(&registry_service.default_registry()),
         );
         let committee = config.genesis()?.narwhal_committee().load();
-
+        let worker_cache = config.narwhal_worker_cache()?;
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair.copy(),
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
-            worker_cache: config.narwhal_worker_cache()?,
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
             execution_state: Arc::new(ConsensusHandler::new(state.clone(), checkpoint_service)),
@@ -486,7 +485,10 @@ impl SuiNode {
             tx_stop,
         };
 
-        narwhal_manager.tx_start.send(committee.clone()).await?;
+        narwhal_manager
+            .tx_start
+            .send((committee.clone(), worker_cache))
+            .await?;
 
         Ok(narwhal_manager)
     }
@@ -605,10 +607,19 @@ impl SuiNode {
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator.
                     let narwhal_committee = system_state.get_current_epoch_narwhal_committee();
+
+                    let transactions_addr = &self
+                        .config
+                        .consensus_config
+                        .as_ref()
+                        .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
+                        .address;
+                    let worker_cache =
+                        system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
                     validator_components
                         .narwhal_manager
                         .tx_start
-                        .send(Arc::new(narwhal_committee))
+                        .send((Arc::new(narwhal_committee), worker_cache))
                         .await?;
                     // TODO: (Laura) wait for start complete signal
                     info!("Starting Narwhal");

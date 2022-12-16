@@ -21,7 +21,7 @@ module sui::governance_test_utils {
         validator::new_for_testing(
             addr,
             x"FF",
-
+            x"FF",
             x"FF",
             x"FF",
             b"ValidatorName",
