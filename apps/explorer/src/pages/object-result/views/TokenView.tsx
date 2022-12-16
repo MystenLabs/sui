@@ -24,6 +24,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
+import { Link } from '~/ui/Link';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function TokenView({ data }: { data: DataType }) {
@@ -202,7 +203,22 @@ function TokenView({ data }: { data: DataType }) {
                             {properties.map(([key, value], index) => (
                                 <tr key={index}>
                                     <td>{key}</td>
-                                    <td>{value}</td>
+                                    <td>
+                                        {/* TODO: Use normalized module to determine this display. */}
+                                        {typeof value === 'string' &&
+                                        (value.startsWith('http://') ||
+                                            value.startsWith('https://')) ? (
+                                            <Link
+                                                href={value}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {value}
+                                            </Link>
+                                        ) : (
+                                            value
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
