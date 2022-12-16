@@ -130,9 +130,22 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         state: &mut Self::State,
         bytecode: &Bytecode,
         index: CodeOffset,
-        _: CodeOffset,
+        last_index: CodeOffset,
     ) -> PartialVMResult<()> {
-        execute_inner(self, state, bytecode, index)
+        execute_inner(self, state, bytecode, index)?;
+        // invariant: the stack should be empty at the end of the block
+        // If it is not, something is wrong with the implementation, so throw an invariant
+        // violation
+        if index == last_index && !self.stack.is_empty() {
+            debug_assert!(
+                false,
+                "Invalid stack transitions. Non-zero stack size at the end of the block",
+            );
+            return Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -301,11 +314,13 @@ fn execute_inner(
 
         // These bytecodes produce references, and hence cannot be ID.
         Bytecode::MutBorrowLoc(_)
-        | Bytecode::ImmBorrowLoc(_)
+        | Bytecode::ImmBorrowLoc(_) => verifier.stack.push(AbstractValue::NonID),
+
         | Bytecode::MutBorrowField(_)
         | Bytecode::MutBorrowFieldGeneric(_)
         | Bytecode::ImmBorrowField(_)
         | Bytecode::ImmBorrowFieldGeneric(_) => {
+            verifier.stack.pop().unwrap();
             verifier.stack.push(AbstractValue::NonID);
         }
 
