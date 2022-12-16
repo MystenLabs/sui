@@ -47,11 +47,15 @@ export function reportWebVitals() {
         return;
     }
 
-    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-        getCLS(sendToVercelAnalytics);
-        getFID(sendToVercelAnalytics);
-        getFCP(sendToVercelAnalytics);
-        getLCP(sendToVercelAnalytics);
-        getTTFB(sendToVercelAnalytics);
-    });
+    import('web-vitals').then(
+        ({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+            getCLS(sendToVercelAnalytics);
+            getFID(sendToVercelAnalytics);
+            getFCP(sendToVercelAnalytics);
+            getLCP(sendToVercelAnalytics);
+            getTTFB(sendToVercelAnalytics);
+        },
+        // Ignore errors:
+        () => {}
+    );
 }
