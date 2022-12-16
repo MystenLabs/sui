@@ -270,7 +270,6 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// 5. Other convenience features
 /// `Tables::describe_tables` is used to get a list of the table names and key-value types as string in a BTreeMap
 ///
-///
 /// // Bad usage example
 /// // Structs fields most only be of type Store<K, V> or DMBap<K, V>
 /// // This will fail to compile with error `All struct members must be of type Store<K, V> or DMBap<K, V>`
@@ -279,7 +278,6 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// //     table1: Store<String, String>,
 /// //     bad_field: u32,
 /// // #}
-/// ```
 
 #[proc_macro_derive(DBMapUtils, attributes(default_options_override_fn))]
 pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {

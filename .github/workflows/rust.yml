@@ -27,6 +27,8 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  # RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
 
 jobs:
   diff:
@@ -76,6 +78,9 @@ jobs:
       - name: Doctests
         run: |
           cargo test --doc
+      - name: rustdoc
+        run: |
+          cargo doc --workspace --no-deps
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
