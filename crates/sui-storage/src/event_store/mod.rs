@@ -435,7 +435,7 @@ pub trait EventStore {
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
     /// Returns at most `limit` events emitted by a given
-    /// transaction, sorted in time order defined by the [descending] parameter.
+    /// transaction, sorted in time order defined by the descending parameter.
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
@@ -446,7 +446,7 @@ pub trait EventStore {
 
     /// Returns at most `limit` events of a certain EventType
     /// (e.g. `TransferObject`) within [start_time, end_time),
-    /// sorted in time order defined by the [descending] parameter.
+    /// sorted in time order defined by the descending parameter.
     async fn events_by_type(
         &self,
         event_type: EventType,
@@ -456,7 +456,7 @@ pub trait EventStore {
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events emitted in a certain Module ID during
-    /// sorted in time order defined by the [descending] parameter.
+    /// sorted in time order defined by the descending parameter.
     async fn events_by_module_id(
         &self,
         module: &ModuleId,
@@ -467,7 +467,7 @@ pub trait EventStore {
 
     /// Returns at most `limit` events with the move event struct name
     /// (e.g. `0x2::devnet_nft::MintNFTEvent`) emitted
-    /// sorted in time order defined by the [descending] parameter.
+    /// sorted in time order defined by the descending parameter.
     async fn events_by_move_event_struct_name(
         &self,
         move_event_struct_name: &str,
@@ -477,7 +477,7 @@ pub trait EventStore {
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events associated with a certain sender
-    /// sorted in time order defined by the [descending] parameter.
+    /// sorted in time order defined by the descending parameter.
     async fn events_by_sender(
         &self,
         sender: &SuiAddress,
@@ -487,7 +487,7 @@ pub trait EventStore {
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events associated with a certain recipient
-    /// sorted in time order defined by the [descending] parameter.
+    /// sorted in time order defined by the descending parameter.
     async fn events_by_recipient(
         &self,
         recipient: &Owner,
@@ -497,7 +497,7 @@ pub trait EventStore {
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events associated with a certain object id
-    /// sorted in time order defined by the [descending] parameter.
+    /// sorted in time order defined by the descending parameter.
     async fn events_by_object(
         &self,
         object: &ObjectID,
@@ -507,7 +507,7 @@ pub trait EventStore {
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Generic event iterator that returns events emitted between
-    /// [start_time, end_time), sorted in time order defined by the [descending] parameter.
+    /// `[start_time, end_time)`, sorted in time order defined by the descending parameter.
     async fn event_iterator(
         &self,
         start_time: u64,

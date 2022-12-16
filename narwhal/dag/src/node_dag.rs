@@ -44,6 +44,7 @@ pub trait Affiliated: fastcrypto::hash::Hash<{ crypto::DIGEST_LENGTH }> {
 /// as this will transitively drop all the nodes they point to and may cause loss of data.
 ///
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NodeDag<T: Affiliated> {
     // Not that we should need to ever serialize this (we'd rather rebuild the Dag from a persistent store)
     // but the way to serialize this in key order is using serde_with and an annotation of:

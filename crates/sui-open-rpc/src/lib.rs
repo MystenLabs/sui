@@ -12,7 +12,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// OPEN-RPC documentation following the OpenRPC specification https://spec.open-rpc.org
+/// OPEN-RPC documentation following the OpenRPC specification <https://spec.open-rpc.org>
 /// The implementation is partial, only required fields and subset of optional fields
 /// in the specification are implemented catered to Sui's need.
 #[derive(Serialize, Deserialize, Clone)]

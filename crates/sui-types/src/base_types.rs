@@ -435,8 +435,7 @@ impl TransactionDigest {
 
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
-    ///
-    /// TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
+    // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
     pub fn genesis() -> Self {
         Self::new([0; TRANSACTION_DIGEST_LENGTH])
     }

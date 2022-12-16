@@ -26,14 +26,14 @@
 //!   the watermark that is shared with other peers, either via notification or when they query for
 //!   our latest checkpoint, and is intended to be used as a guarantee of data availability.
 //!
-//! The [PeerHeights] struct is used to track the highest_synced_checkpoint watermark for all of
+//! The `PeerHeights` struct is used to track the highest_synced_checkpoint watermark for all of
 //! our peers.
 //!
 //! When a new checkpoint is discovered, and we've determined that it is higher than our
 //! highest_verified_checkpoint, then StateSync will kick off a task to synchronize and verify all
 //! checkpoints between our highest_synced_checkpoint and the newly discovered checkpoint. This
 //! process is done by querying one of our peers for the checkpoints we're missing (using the
-//! [PeerHeights] struct as a way to intelligently select which peers have the data available for
+//! `PeerHeights` struct as a way to intelligently select which peers have the data available for
 //! us to query) at which point we will locally verify the signatures on the checkpoint header with
 //! the appropriate committee (based on the epoch). As checkpoints are verified, the
 //! highest_synced_checkpoint watermark will be ratcheted up.
