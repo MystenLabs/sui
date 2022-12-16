@@ -12,14 +12,11 @@ use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_core::authority::AuthorityState;
-use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::quorum_driver::QuorumDriver;
+use sui_sdk::SuiClient;
 
-use crate::errors::{Error, ErrorType};
+use crate::errors::Error;
 use crate::state::{OnlineServerContext, PseudoBlockProvider};
 use crate::types::{Currency, SuiEnv};
-use crate::ErrorType::{UnsupportedBlockchain, UnsupportedNetwork};
 
 /// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
 mod account;
@@ -42,16 +39,11 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(
-        env: SuiEnv,
-        state: Arc<AuthorityState>,
-        quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
-        genesis: &Genesis,
-    ) -> Self {
-        let blocks = Arc::new(PseudoBlockProvider::spawn(state.clone(), genesis));
+    pub fn new(env: SuiEnv, client: SuiClient, genesis: &Genesis) -> Self {
+        let blocks = Arc::new(PseudoBlockProvider::spawn(client.clone(), genesis));
         Self {
             env,
-            context: OnlineServerContext::new(state, quorum_driver, blocks),
+            context: OnlineServerContext::new(client, blocks),
         }
     }
 

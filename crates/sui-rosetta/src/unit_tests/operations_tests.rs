@@ -26,12 +26,12 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
         1000,
     );
 
-    let ops = Operation::from_data(&data)?;
+    let ops = Operation::from_data(&data.clone().try_into()?)?;
     let metadata = ConstructionMetadata {
         sender_coins: vec![gas],
     };
 
-    let parsed_data = Operation::create_data(ops, metadata).await.unwrap();
+    let parsed_data = Operation::create_data(ops, metadata).await?;
     assert_eq!(data, parsed_data);
 
     Ok(())

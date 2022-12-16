@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future;
 use std::sync::Arc;
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
+use futures::StreamExt;
+use sui_sdk::SUI_COIN_TYPE;
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
-    TransactionData,
-};
+use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
 use crate::errors::Error;
 use crate::operations::Operation;
@@ -25,8 +25,7 @@ use crate::types::{
     ConstructionSubmitRequest, MetadataOptions, SignatureType, SigningPayload,
     TransactionIdentifier, TransactionIdentifierResponse,
 };
-use crate::ErrorType::InternalError;
-use crate::{ErrorType, OnlineServerContext, SuiEnv};
+use crate::{OnlineServerContext, SuiEnv};
 use anyhow::anyhow;
 use sui_types::intent::{Intent, IntentMessage};
 
@@ -56,9 +55,7 @@ pub async fn payloads(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let metadata = request
-        .metadata
-        .ok_or_else(|| Error::new(ErrorType::MissingMetadata))?;
+    let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
 
     let data = Operation::create_data(request.operations, metadata).await?;
     let address = data.signer();
@@ -89,9 +86,12 @@ pub async fn combine(
         .to_vec()
         .map_err(|e| anyhow!(e))?;
     let intent_msg: IntentMessage<TransactionData> = bcs::from_bytes(&unsigned_tx)?;
-    let sig = request.signatures.first().unwrap();
-    let sig_bytes = sig.hex_bytes.to_vec().map_err(|e| anyhow!(e))?;
-    let pub_key = sig.public_key.hex_bytes.to_vec().map_err(|e| anyhow!(e))?;
+    let sig = request
+        .signatures
+        .first()
+        .ok_or_else(|| Error::MissingInput("Signature".to_string()))?;
+    let sig_bytes = sig.hex_bytes.to_vec()?;
+    let pub_key = sig.public_key.hex_bytes.to_vec()?;
     let flag = vec![match sig.signature_type {
         SignatureType::Ed25519 => SignatureScheme::ED25519,
         SignatureType::Ecdsa => SignatureScheme::Secp256k1,
@@ -120,30 +120,23 @@ pub async fn submit(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let signed_tx: Transaction = bcs::from_bytes(
-        &request
-            .signed_transaction
-            .to_vec()
-            .map_err(|e| anyhow::anyhow!(e))?,
-    )?;
+    let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
     let signed_tx = signed_tx.verify()?;
-    let hash = *signed_tx.digest();
 
     let response = context
-        .quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: signed_tx,
-            request_type: QuorumDriverRequestType::ImmediateReturn,
-        })
+        .client
+        .quorum_driver()
+        .execute_transaction(
+            signed_tx,
+            Some(ExecuteTransactionRequestType::ImmediateReturn),
+        )
         .await?;
 
-    Ok(match response {
-        QuorumDriverResponse::ImmediateReturn => TransactionIdentifierResponse {
-            transaction_identifier: TransactionIdentifier { hash },
-            metadata: None,
+    Ok(TransactionIdentifierResponse {
+        transaction_identifier: TransactionIdentifier {
+            hash: response.tx_digest,
         },
-        // Should not happen
-        _ => return Err(Error::new(InternalError)),
+        metadata: None,
     })
 }
 
@@ -157,13 +150,13 @@ pub async fn preprocess(
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let sender = request
+    let (sender, amount) = request
         .operations
         .iter()
         .find_map(|op| match (&op.account, &op.amount) {
             (Some(acc), Some(amount)) => {
                 if amount.value.is_negative() {
-                    Some(acc.address)
+                    Some((acc.address, amount.value.abs()))
                 } else {
                     None
                 }
@@ -171,14 +164,13 @@ pub async fn preprocess(
             _ => None,
         })
         .ok_or_else(|| {
-            Error::new_with_msg(
-                ErrorType::MalformedOperationError,
-                "Cannot extract sender's address from operations.",
+            Error::MalformedOperationError(
+                "Cannot extract sender's address from operations.".to_string(),
             )
         })?;
 
     Ok(ConstructionPreprocessResponse {
-        options: Some(MetadataOptions { sender }),
+        options: Some(MetadataOptions { sender, amount }),
         required_public_keys: vec![AccountIdentifier { address: sender }],
     })
 }
@@ -216,13 +208,27 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
 
     let sender_coins = if let Some(option) = request.options {
-        context
-            .state
-            .get_owner_objects(option.sender)?
-            .iter()
-            .filter(|info| info.type_.is_gas_coin())
-            .map(|info| info.into())
+        let mut total = 0u128;
+        let coins = context
+            .client
+            .coin_read_api()
+            .get_coins_stream(option.sender, Some(SUI_COIN_TYPE.to_string()))
+            .take_while(|coin| {
+                let ready = future::ready(total < option.amount);
+                total += coin.balance as u128;
+                ready
+            })
+            .map(|c| c.object_ref())
             .collect::<Vec<_>>()
+            .await;
+
+        if total < option.amount {
+            return Err(Error::InsufficientFund {
+                address: option.sender,
+                amount: option.amount,
+            });
+        }
+        coins
     } else {
         Default::default()
     };
@@ -263,7 +269,7 @@ pub async fn parse(
     } else {
         vec![]
     };
-    let operations = Operation::from_data(&data)?;
+    let operations = Operation::from_data(&data.try_into()?)?;
 
     Ok(ConstructionParseResponse {
         operations,

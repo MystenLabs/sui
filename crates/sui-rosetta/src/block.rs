@@ -43,9 +43,10 @@ pub async fn transaction(
 ) -> Result<BlockTransactionResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
-    let (cert, effects) = context.state.get_transaction(digest).await?;
-    let hash = *cert.digest();
-    let data = &cert.data().intent_message.value;
+    let response = context.client.read_api().get_transaction(digest).await?;
+    let hash = response.certificate.transaction_digest;
+    let data = &response.certificate.data;
+    let effects = response.effects;
 
     let operations = Operation::from_data_and_events(data, &effects.status, &effects.events)?;
 

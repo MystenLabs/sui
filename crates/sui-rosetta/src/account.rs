@@ -5,17 +5,16 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
+use futures::StreamExt;
 
-use sui_core::authority::AuthorityState;
-use sui_types::base_types::SuiAddress;
-use sui_types::gas_coin::GasCoin;
+use sui_sdk::SUI_COIN_TYPE;
 
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, CoinID, CoinIdentifier, SignedValue,
+    Amount, Coin,
 };
-use crate::{ErrorType, OnlineServerContext, SuiEnv, SUI};
+use crate::{OnlineServerContext, SuiEnv};
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
@@ -46,8 +45,16 @@ pub async fn balance(
                 balances: vec![Amount::new(balance.into())],
             })
     } else {
-        let gas_coins = get_coins(&context.state, request.account_identifier.address).await?;
-        let amount: u128 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
+        let amount = context
+            .client
+            .coin_read_api()
+            .get_coins_stream(
+                request.account_identifier.address,
+                Some(SUI_COIN_TYPE.to_string()),
+            )
+            .fold(0u128, |acc, coin| async move { acc + coin.balance as u128 })
+            .await;
+
         Ok(AccountBalanceResponse {
             block_identifier: context.blocks().current_block_identifier().await?,
             balances: vec![Amount::new(amount.into())],
@@ -63,40 +70,19 @@ pub async fn coins(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let coins = get_coins(&context.state, request.account_identifier.address).await?;
+    let coins = context
+        .client
+        .coin_read_api()
+        .get_coins_stream(
+            request.account_identifier.address,
+            Some(SUI_COIN_TYPE.to_string()),
+        )
+        .map(Coin::from)
+        .collect()
+        .await;
+
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,
         coins,
     })
-}
-
-async fn get_coins(state: &AuthorityState, address: SuiAddress) -> Result<Vec<Coin>, Error> {
-    let object_infos = state.get_owner_objects(address)?;
-    let coin_infos = object_infos
-        .iter()
-        .filter(|o| o.type_.is_gas_coin())
-        .map(|info| info.object_id)
-        .collect::<Vec<_>>();
-
-    let objects = state.get_objects(&coin_infos).await?;
-    objects
-        .iter()
-        .flatten()
-        .map(|o| {
-            let coin = GasCoin::try_from(o)?;
-            Ok(Coin {
-                coin_identifier: CoinIdentifier {
-                    identifier: CoinID {
-                        id: o.id(),
-                        version: o.version(),
-                    },
-                },
-                amount: Amount {
-                    value: SignedValue::from(coin.value()),
-                    currency: SUI.clone(),
-                },
-            })
-        })
-        .collect::<Result<Vec<_>, anyhow::Error>>()
-        .map_err(|e| Error::new_with_cause(ErrorType::InternalError, e))
 }

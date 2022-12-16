@@ -1,21 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use anyhow::anyhow;
-use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_core::authority::AuthorityState;
-use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::quorum_driver::QuorumDriver;
+use sui_sdk::SuiClient;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
@@ -28,28 +25,22 @@ use crate::types::{
     CoinChange, CoinID, CoinIdentifier, OperationStatus, OperationType, SignedValue, Transaction,
     TransactionIdentifier,
 };
-use crate::ErrorType::{BlockNotFound, InternalError};
-use crate::{Error, ErrorType, SUI};
+use crate::{Error, SUI};
 
 #[cfg(test)]
 #[path = "unit_tests/balance_changing_tx_tests.rs"]
 mod balance_changing_tx_tests;
 
+#[derive(Clone)]
 pub struct OnlineServerContext {
-    pub state: Arc<AuthorityState>,
-    pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    pub client: SuiClient,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
 
 impl OnlineServerContext {
-    pub fn new(
-        state: Arc<AuthorityState>,
-        quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
-        block_provider: Arc<dyn BlockProvider + Send + Sync>,
-    ) -> Self {
+    pub fn new(client: SuiClient, block_provider: Arc<dyn BlockProvider + Send + Sync>) -> Self {
         Self {
-            state,
-            quorum_driver,
+            client,
             block_provider,
         }
     }
@@ -89,7 +80,10 @@ impl BlockProvider for PseudoBlockProvider {
             .iter()
             .find(|b| b.block.block_identifier.index == index)
             .cloned()
-            .ok_or_else(|| Error::new(BlockNotFound))
+            .ok_or(Error::BlockNotFound {
+                index: Some(index),
+                hash: None,
+            })
     }
 
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
@@ -99,7 +93,10 @@ impl BlockProvider for PseudoBlockProvider {
             .iter()
             .find(|b| b.block.block_identifier.hash == hash)
             .cloned()
-            .ok_or_else(|| Error::new(BlockNotFound))
+            .ok_or(Error::BlockNotFound {
+                index: None,
+                hash: Some(hash),
+            })
     }
 
     async fn current_block(&self) -> Result<BlockResponse, Error> {
@@ -107,11 +104,9 @@ impl BlockProvider for PseudoBlockProvider {
             .read()
             .await
             .last()
-            .ok_or_else(|| {
-                Error::new_with_msg(
-                    BlockNotFound,
-                    "Unexpected error, cannot find the latest block.",
-                )
+            .ok_or(Error::BlockNotFound {
+                index: None,
+                hash: None,
             })
             .cloned()
     }
@@ -129,11 +124,9 @@ impl BlockProvider for PseudoBlockProvider {
             .await
             .first()
             .map(|b| b.block.block_identifier.clone())
-            .ok_or_else(|| {
-                Error::new_with_msg(
-                    BlockNotFound,
-                    "Unexpected error, cannot find the oldest block.",
-                )
+            .ok_or(Error::BlockNotFound {
+                index: None,
+                hash: None,
             })
     }
 
@@ -162,7 +155,7 @@ impl BlockProvider for PseudoBlockProvider {
 }
 
 impl PseudoBlockProvider {
-    pub fn spawn(state: Arc<AuthorityState>, genesis: &Genesis) -> Self {
+    pub fn spawn(client: SuiClient, genesis: &Genesis) -> Self {
         let genesis = genesis_block(genesis);
         let genesis_txs = genesis
             .block
@@ -187,7 +180,7 @@ impl PseudoBlockProvider {
                 error!("Error updating balance, cause: {e:?}")
             }
             loop {
-                if let Err(e) = f.create_next_block(state.clone()).await {
+                if let Err(e) = f.create_next_block(&client).await {
                     error!("Error creating block, cause: {e:?}")
                 }
                 tokio::time::sleep(block_interval).await;
@@ -197,23 +190,29 @@ impl PseudoBlockProvider {
         blocks
     }
 
-    async fn create_next_block(&self, state: Arc<AuthorityState>) -> Result<(), Error> {
+    async fn create_next_block(&self, client: &SuiClient) -> Result<(), Error> {
         let current_block = self.current_block_identifier().await?;
-        let total_tx = state.get_total_transaction_number()?;
+        let total_tx = client.read_api().get_total_transaction_number().await?;
         if total_tx == 0 {
             return Ok(());
         }
         if current_block.index < total_tx {
             let tx_digests = if current_block.index == 0 {
-                state.get_transactions(TransactionQuery::All, None, None, false)?
+                client
+                    .read_api()
+                    .get_transactions(TransactionQuery::All, None, None, false)
+                    .await?
+                    .data
             } else {
                 let cursor = TransactionDigest::new(current_block.hash.0);
-                let mut tx_digests =
-                    state.get_transactions(TransactionQuery::All, Some(cursor), None, false)?;
+                let mut tx_digests = client
+                    .read_api()
+                    .get_transactions(TransactionQuery::All, Some(cursor), None, false)
+                    .await?
+                    .data;
                 if tx_digests.remove(0) != cursor {
-                    return Err(Error::new_with_msg(
-                        ErrorType::InternalError,
-                        "Incorrect data returned from state.",
+                    return Err(Error::DataError(
+                        "Incorrect transaction data returned from Sui.".to_string(),
                     ));
                 }
                 tx_digests
@@ -226,21 +225,21 @@ impl PseudoBlockProvider {
                 index += 1;
                 let block_identifier = BlockIdentifier {
                     index,
-                    hash: digest.as_ref().try_into()?,
+                    hash: digest.into(),
                 };
 
                 // update balance
-                let (tx, effect) = state.get_transaction(digest).await?;
+                let response = client.read_api().get_transaction(digest).await?;
 
                 let operations = Operation::from_data_and_events(
-                    &tx.data().intent_message.value,
-                    &effect.status,
-                    &effect.events,
+                    &response.certificate.data,
+                    &response.effects.status,
+                    &response.effects.events,
                 )?;
 
                 let transaction = Transaction {
                     transaction_identifier: TransactionIdentifier { hash: digest },
-                    operations,
+                    operations: operations.clone(),
                     related_transactions: vec![],
                     metadata: None,
                 };
@@ -251,24 +250,21 @@ impl PseudoBlockProvider {
                         parent_block_identifier: parent_block_identifier.clone(),
                         timestamp: SystemTime::now()
                             .duration_since(UNIX_EPOCH)
-                            .map_err(|e| Error::new_with_cause(InternalError, e))?
-                            .as_millis()
-                            .try_into()?,
+                            .unwrap()
+                            .as_millis() as u64,
                         transactions: vec![transaction],
                         metadata: None,
                     },
                     other_transactions: vec![],
                 };
 
-                let ops = Operation::from_data_and_events(
-                    &tx.data().intent_message.value,
-                    &effect.status,
-                    &effect.events,
-                )?;
-
                 self.blocks.write().await.push(new_block);
-                self.update_balance(index, ops).await.map_err(|e| {
-                    anyhow!("Failed to update balance, tx: {tx}, effect:{effect}, cause : {e}")
+                self.update_balance(index, operations).await.map_err(|e| {
+                    anyhow!(
+                        "Failed to update balance, tx: {}, effect:{}, cause : {e}",
+                        response.certificate,
+                        response.effects
+                    )
                 })?;
                 parent_block_identifier = block_identifier
             }
@@ -364,7 +360,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
         })
         .enumerate()
         .map(|(index, (address, coin))| Operation {
-            operation_identifier: u64::try_from(index).unwrap().into(),
+            operation_identifier: (index as u64).into(),
             related_operations: vec![],
             type_: OperationType::Genesis,
             status: Some(OperationStatus::Success),
@@ -402,9 +398,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_millis()
-                .try_into()
-                .unwrap(),
+                .as_millis() as u64,
             transactions: vec![transaction],
             metadata: None,
         },
