@@ -17,7 +17,7 @@ module contract::tournament {
     use sui::dynamic_object_field as dof;
 
     // Structs.
-    struct Tournament has key, store {
+    struct Tournament has key {
         id: UID,
         players: vector<address>,
         prize: Balance<SUI>,
