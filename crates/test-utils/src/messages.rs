@@ -428,7 +428,7 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
     let mut effect_sigs = Vec::new();
     for tx in transactions {
         let mut sigs: Vec<AuthoritySignInfo> = Vec::new();
-        for (key, _, _, _) in test_validator_keys() {
+        for key in test_validator_keys() {
             let vote = VerifiedSignedTransaction::new(
                 committee.epoch,
                 tx.clone(),
