@@ -3,32 +3,70 @@
 
 import { formatAddress } from '../utils/stringUtils';
 
-import { Link } from '~/ui/Link';
+import { Link, type LinkProps } from '~/ui/Link';
 
-export type AddressLinkProps = {
+export interface AddressLinkProps extends LinkProps {
     address: string;
     noTruncate?: boolean;
-};
+}
 
-export type ObjectLinkProps = {
+export interface ObjectLinkProps extends LinkProps {
     objectId: string;
     noTruncate?: boolean;
-};
+}
 
-export function AddressLink({ address, noTruncate }: AddressLinkProps) {
+export interface TransactionLinkProps extends LinkProps {
+    digest: string;
+    noTruncate?: boolean;
+}
+
+export function AddressLink({
+    address,
+    noTruncate,
+    ...props
+}: AddressLinkProps) {
     const truncatedAddress = noTruncate ? address : formatAddress(address);
     return (
-        <Link variant="mono" to={`/address/${encodeURIComponent(address)}`}>
+        <Link
+            variant="mono"
+            to={`/address/${encodeURIComponent(address)}`}
+            {...props}
+        >
             {truncatedAddress}
         </Link>
     );
 }
 
-export function ObjectLink({ objectId, noTruncate }: ObjectLinkProps) {
+export function ObjectLink({
+    objectId,
+    noTruncate,
+    ...props
+}: ObjectLinkProps) {
     const truncatedObjectId = noTruncate ? objectId : formatAddress(objectId);
     return (
-        <Link variant="mono" to={`/object/${encodeURIComponent(objectId)}`}>
+        <Link
+            variant="mono"
+            to={`/object/${encodeURIComponent(objectId)}`}
+            {...props}
+        >
             {truncatedObjectId}
+        </Link>
+    );
+}
+
+export function TransactionLink({
+    digest,
+    noTruncate,
+    ...props
+}: TransactionLinkProps) {
+    const truncatedDigest = noTruncate ? digest : formatAddress(digest);
+    return (
+        <Link
+            variant="mono"
+            to={`/transaction/${encodeURIComponent(digest)}`}
+            {...props}
+        >
+            {truncatedDigest}
         </Link>
     );
 }

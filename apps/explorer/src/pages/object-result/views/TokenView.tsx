@@ -25,7 +25,7 @@ import { type DataType } from '../ObjectResultType';
 import styles from './ObjectView.module.css';
 
 import { Link } from '~/ui/Link';
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+import { ObjectLink, TransactionLink } from '~/ui/InternalLink';
 
 function TokenView({ data }: { data: DataType }) {
     const viewedData = {
@@ -88,21 +88,21 @@ function TokenView({ data }: { data: DataType }) {
                             <tr>
                                 <td>Type</td>
                                 <td>
-                                    <LinkWithQuery
+                                    {/* TODO: Support module links on `ObjectLink` */}
+                                    <Link
                                         to={genhref(viewedData.objType)}
-                                        className={styles.objecttypelink}
+                                        variant="mono"
                                     >
                                         {trimStdLibPrefix(viewedData.objType)}
-                                    </LinkWithQuery>
+                                    </Link>
                                 </td>
                             </tr>
                             <tr>
                                 <td>Object ID</td>
                                 <td id="objectID" className={styles.objectid}>
-                                    <Longtext
-                                        text={viewedData.id}
-                                        category="object"
-                                        isLink={false}
+                                    <ObjectLink
+                                        objectId={viewedData.id}
+                                        noTruncate
                                     />
                                 </td>
                             </tr>
@@ -111,10 +111,9 @@ function TokenView({ data }: { data: DataType }) {
                                 <tr>
                                     <td>Last Transaction ID</td>
                                     <td>
-                                        <Longtext
-                                            text={viewedData.tx_digest}
-                                            category="transaction"
-                                            isLink
+                                        <TransactionLink
+                                            digest={viewedData.tx_digest}
+                                            noTruncate
                                         />
                                     </td>
                                 </tr>

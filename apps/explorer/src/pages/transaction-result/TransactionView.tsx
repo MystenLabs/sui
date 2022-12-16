@@ -328,9 +328,9 @@ function TransactionView({
         );
     });
 
-    let eventTitlesDisplay = eventTitles.map((et) => (
-        <div key={et[1]} className={styles.eventtitle}>
-            <Longtext text={et[0]} category="unknown" isLink={false} />
+    let eventTitlesDisplay = eventTitles.map(([title, key]) => (
+        <div key={key} className={styles.eventtitle}>
+            {title}
         </div>
     ));
 

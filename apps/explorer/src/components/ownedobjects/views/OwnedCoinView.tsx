@@ -6,13 +6,13 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ReactComponent as OpenIcon } from '../../../assets/SVGIcons/12px/ShowNHideDown.svg';
 import { ReactComponent as ClosedIcon } from '../../../assets/SVGIcons/12px/ShowNHideRight.svg';
-import Longtext from '../../longtext/Longtext';
 import Pagination from '../../pagination/Pagination';
 import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 
 import styles from '../styles/OwnedCoin.module.css';
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
+import { ObjectLink } from '~/ui/InternalLink';
 
 function CoinItem({
     id,
@@ -30,7 +30,7 @@ function CoinItem({
             <div className={styles.openrow}>
                 <div className={styles.label}>Object ID</div>
                 <div className={`${styles.oneline} ${styles.value}`}>
-                    <Longtext text={id} category="object" />
+                    <ObjectLink objectId={id} noTruncate />
                 </div>
             </div>
             <div className={styles.openrow}>
