@@ -13,16 +13,16 @@ use test_utils::transaction::{
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     messages::{move_transaction, test_shared_object_transactions},
-    objects::{test_gas_objects, test_shared_object},
 };
 
 use sui_macros::sim_test;
+use sui_types::object::{generate_test_gas_objects, Object};
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn shared_object_transaction() {
-    let mut objects = test_gas_objects();
-    objects.push(test_shared_object());
+    let mut objects = generate_test_gas_objects();
+    objects.push(Object::shared_for_testing());
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
@@ -42,8 +42,8 @@ async fn shared_object_transaction() {
 /// Same as `shared_object_transaction` but every authorities submit the transaction.
 #[sim_test]
 async fn many_shared_object_transactions() {
-    let mut objects = test_gas_objects();
-    objects.push(test_shared_object());
+    let mut objects = generate_test_gas_objects();
+    objects.push(Object::shared_for_testing());
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
@@ -64,7 +64,7 @@ async fn many_shared_object_transactions() {
 /// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]
 async fn call_shared_object_contract() {
-    let mut gas_objects = test_gas_objects();
+    let mut gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
@@ -142,7 +142,7 @@ async fn call_shared_object_contract() {
 #[sim_test]
 async fn shared_object_flood() {
     telemetry_subscribers::init_for_testing();
-    let mut gas_objects = test_gas_objects();
+    let mut gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
@@ -218,7 +218,7 @@ async fn shared_object_flood() {
 #[sim_test]
 async fn shared_object_sync() {
     telemetry_subscribers::init_for_testing();
-    let mut gas_objects = test_gas_objects();
+    let mut gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
@@ -308,7 +308,7 @@ async fn shared_object_sync() {
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn replay_shared_object_transaction() {
-    let mut gas_objects = test_gas_objects();
+    let mut gas_objects = generate_test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).

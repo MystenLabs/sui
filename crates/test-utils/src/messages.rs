@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
@@ -30,7 +29,9 @@ use sui_types::messages::{
     CertifiedTransaction, ObjectArg, TransactionData, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
 };
-use sui_types::object::Object;
+use sui_types::object::{
+    generate_test_gas_objects, generate_test_gas_objects_with_owner_list, Object,
+};
 use sui_types::utils::{to_sender_signed_transaction, to_sender_signed_transaction_arc};
 
 /// The maximum gas per transaction.
@@ -193,7 +194,7 @@ pub fn make_transactions_with_pre_genesis_objects(
         addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
     }
-    let gas_objects = test_gas_objects_with_owners(addresses_two_by_two);
+    let gas_objects = generate_test_gas_objects_with_owner_list(addresses_two_by_two);
 
     // Make one transaction for every two gas objects.
     let mut transactions = Vec::new();
@@ -225,14 +226,14 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
 
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
-    let shared_object = test_shared_object();
+    let shared_object = Object::shared_for_testing();
     let shared_object_id = shared_object.id();
     let initial_shared_version = shared_object.version();
     let module = "object_basics";
     let function = "create";
     let package_object_ref = genesis::get_framework_object_ref();
 
-    for gas_object in test_gas_objects() {
+    for gas_object in generate_test_gas_objects() {
         let data = TransactionData::new_move_call(
             sender,
             package_object_ref,

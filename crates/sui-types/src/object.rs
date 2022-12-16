@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::crypto::sha3_hash;
+use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
 use crate::messages::InputObjectKind;
@@ -512,6 +512,55 @@ impl Object {
         self.owner = Owner::AddressOwner(new_owner);
     }
 
+    /// Get a `MoveStructLayout` for `self`.
+    /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    pub fn get_layout(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<Option<MoveStructLayout>, SuiError> {
+        match &self.data {
+            Data::Move(m) => Ok(Some(m.get_layout(format, resolver)?)),
+            Data::Package(_) => Ok(None),
+        }
+    }
+
+    /// Treat the object type as a Move struct with one type parameter,
+    /// like this: `S<T>`.
+    /// Returns the inner parameter type `T`.
+    pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
+        let move_struct = self.data.type_().ok_or_else(|| SuiError::TypeError {
+            error: "Object must be a Move object".to_owned(),
+        })?;
+        fp_ensure!(
+            move_struct.type_params.len() == 1,
+            SuiError::TypeError {
+                error: "Move object struct must have one type parameter".to_owned()
+            }
+        );
+        // Index access safe due to checks above.
+        let type_tag = move_struct.type_params[0].clone();
+        Ok(type_tag)
+    }
+
+    pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
+        if !matches!(self.owner, Owner::AddressOwner(_)) {
+            return Err(ExecutionErrorKind::InvalidTransferObject.into());
+        }
+        let has_public_transfer = match &self.data {
+            Data::Move(m) => m.has_public_transfer(),
+            Data::Package(_) => false,
+        };
+        if !has_public_transfer {
+            return Err(ExecutionErrorKind::InvalidTransferObject.into());
+        }
+        Ok(())
+    }
+}
+
+// Testing-related APIs.
+impl Object {
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
@@ -525,6 +574,20 @@ impl Object {
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+    }
+
+    /// make a test shared object.
+    pub fn shared_for_testing() -> Object {
+        thread_local! {
+            static SHARED_OBJECT_ID: ObjectID = ObjectID::random();
+        }
+
+        let obj =
+            MoveObject::new_gas_coin(OBJECT_START_VERSION, SHARED_OBJECT_ID.with(|id| *id), 10);
+        let owner = Owner::Shared {
+            initial_shared_version: obj.version(),
+        };
+        Object::new_move(obj, owner, TransactionDigest::genesis())
     }
 
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
@@ -587,7 +650,7 @@ impl Object {
 
     /// Generate a new gas coin worth `value` with a random object ID and owner
     /// For testing purposes only
-    pub fn new_gas_coin_for_testing(value: u64, owner: SuiAddress) -> Self {
+    pub fn new_gas_with_balance_and_owner_for_testing(value: u64, owner: SuiAddress) -> Self {
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::random(), value);
         Object::new_move(
             obj,
@@ -596,51 +659,52 @@ impl Object {
         )
     }
 
-    /// Get a `MoveStructLayout` for `self`.
-    /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn get_layout(
-        &self,
-        format: ObjectFormatOptions,
-        resolver: &impl GetModule,
-    ) -> Result<Option<MoveStructLayout>, SuiError> {
-        match &self.data {
-            Data::Move(m) => Ok(Some(m.get_layout(format, resolver)?)),
-            Data::Package(_) => Ok(None),
-        }
+    /// Generate a new gas coin object with default balance and random owner.
+    pub fn new_gas_for_testing() -> Self {
+        let gas_object_id = ObjectID::random();
+        let (owner, _) = deterministic_random_account_key();
+        Object::with_id_owner_for_testing(gas_object_id, owner)
+    }
+}
+
+/// Make a few test gas objects (all with the same random owner).
+pub fn generate_test_gas_objects() -> Vec<Object> {
+    thread_local! {
+        static GAS_OBJECTS: Vec<Object> = (0..50)
+            .map(|_| {
+                let gas_object_id = ObjectID::random();
+                let (owner, _) = deterministic_random_account_key();
+                Object::with_id_owner_for_testing(gas_object_id, owner)
+            })
+            .collect();
     }
 
-    /// Treat the object type as a Move struct with one type parameter,
-    /// like this: `S<T>`.
-    /// Returns the inner parameter type `T`.
-    pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.type_().ok_or_else(|| SuiError::TypeError {
-            error: "Object must be a Move object".to_owned(),
-        })?;
-        fp_ensure!(
-            move_struct.type_params.len() == 1,
-            SuiError::TypeError {
-                error: "Move object struct must have one type parameter".to_owned()
-            }
-        );
-        // Index access safe due to checks above.
-        let type_tag = move_struct.type_params[0].clone();
-        Ok(type_tag)
-    }
+    GAS_OBJECTS.with(|v| v.clone())
+}
 
-    pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
-        if !matches!(self.owner, Owner::AddressOwner(_)) {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
-        let has_public_transfer = match &self.data {
-            Data::Move(m) => m.has_public_transfer(),
-            Data::Package(_) => false,
-        };
-        if !has_public_transfer {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
-        Ok(())
-    }
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
+        })
+        .collect()
+}
+
+/// Make a few test gas objects with specific owners.
+pub fn generate_test_gas_objects_with_owner_list<O>(owners: O) -> Vec<Object>
+where
+    O: IntoIterator<Item = SuiAddress>,
+{
+    owners
+        .into_iter()
+        .enumerate()
+        .map(|(_, owner)| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
+        })
+        .collect()
 }
 
 #[allow(clippy::large_enum_variant)]

@@ -14,9 +14,9 @@ use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{ObjectID, TransactionDigest},
+    base_types::ObjectID,
     messages::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
-    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
+    object::Object,
 };
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -36,25 +36,12 @@ pub fn test_gas_objects() -> Vec<Object> {
     GAS_OBJECTS.with(|v| v.clone())
 }
 
-/// Fixture: a a test shared object.
-pub fn test_shared_object() -> Object {
-    thread_local! {
-        static SHARED_OBJECT_ID: ObjectID = ObjectID::random();
-    };
-    let shared_object_id = SHARED_OBJECT_ID.with(|id| *id);
-    let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
-    let owner = Owner::Shared {
-        initial_shared_version: obj.version(),
-    };
-    Object::new_move(obj, owner, TransactionDigest::genesis())
-}
-
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
     let (sender, keypair) = deterministic_random_account_key();
 
     let mut certificates = Vec::new();
-    let shared_object = test_shared_object();
+    let shared_object = Object::shared_for_testing();
     let shared_object_arg = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
@@ -105,7 +92,7 @@ async fn submit_transaction_to_consensus_adapter() {
     // Initialize an authority with a (owned) gas object and a shared object; then
     // make a test certificate.
     let mut objects = test_gas_objects();
-    objects.push(test_shared_object());
+    objects.push(Object::shared_for_testing());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
 
