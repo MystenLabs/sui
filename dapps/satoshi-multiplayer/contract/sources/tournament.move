@@ -37,7 +37,7 @@ module contract::tournament {
         secret_0: Option<vector<u8>>,
         secret_1: Option<vector<u8>>,
         round: u64,
-        winner: Option<address>,
+        // winner: Option<address>,
     }
 
     // Player default entry fee in MIST.
@@ -56,10 +56,11 @@ module contract::tournament {
     const ENotCorrectSecret: u64 = 8;
     const EPlayerNotFound: u64 = 9;
     const EHashNotFound: u64 = 10;
-    
+
     // Match error codes.
     const EMatchNotFound: u64 = 7;
-
+    const EMatchStillRunning: u64 = 11;
+    
     /// Creates and shares tournament.
     entry fun create(capacity: u64, player_coin: Coin<SUI>, ctx: &mut TxContext) {
         // Make sure player has given enough MIST.
@@ -170,7 +171,8 @@ module contract::tournament {
     }
 
     /// Gets all active matches and update tournament's players with winners.
-    entry fun end_round(tournament: &mut Tournament, match: Match, ctx: &mut TxContext) {
+    entry fun end_round(tournament: &mut Tournament, ctx: &mut TxContext) {
+
         // Get matches length from tournament.
         let i = vector::length(&tournament.matches);
 
@@ -178,16 +180,50 @@ module contract::tournament {
             // Remove match from tournament and get their ID.
             let match_id = vector::pop_back(&mut tournament.matches);
 
-            // // Make sure that match is part of the tournament.
+            // Make sure that match is part of the tournament.
             assert!(dof::exists_(&tournament.id, match_id), EMatchNotFound);
 
             // Find match dynamic object field in tournament.
-            let match = dof::borrow(&mut tournament.id, match_id);
+            let match: Match = dof::remove(&mut tournament.id, match_id);
+            let Match {
+                id,
+                last_move_time: _,
+                player_0,
+                player_1,
+                hash_0: _,
+                hash_1: _,
+                secret_0,
+                secret_1,
+                round,
+            } = match;
 
-            // Get match winner and add them to tournament's players.
-            // let winner = option::borrow(&match.winner);
+            // Check if player_0 or player_1 has secret.
+            if(option::is_none(&secret_0)) {
+                // If _0 has no secret, make _1 the winner.
+                vector::push_back(&mut tournament.players, player_1);
+            } else if(option::is_none(&secret_1)) {
+                // If _1 has no secret, make _0 the winner.
+                vector::push_back(&mut tournament.players, player_0);
+            } else {
+                // Extract secrets for both players.
+                let s_0 = option::extract(&mut secret_0);
+                let s_1 = option::extract(&mut secret_1);
 
-            // vector::push_back(&mut tournament.players, winner);
+                // Take last bytes from secrets.
+                let length_0 = vector::length(&s_0) - 1;
+                let length_1 = vector::length(&s_1) - 1;
+                let last_byte_0 = vector::borrow(&s_0, length_0);
+                let last_byte_1 = vector::borrow(&s_1, length_1);
+
+                // Get winner according to players' bytes XOR calc.
+                let result = (*last_byte_0 + *last_byte_1) % 2;
+
+                if(result == 1) {
+                    vector::push_back(&mut tournament.players, player_1);
+                } else {
+                    vector::push_back(&mut tournament.players, player_0);
+                };
+            };
 
             i = i - 1;
         };
@@ -265,9 +301,7 @@ module contract::tournament {
         // Make sure player's hash is the hash of their secret.
         assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
 
-        // Take last byte.
-        // let length = vector::length(&secret) - 1;
-        // let last_byte = vector::borrow(&secret, length);
+        
     }
 
 }
