@@ -1833,7 +1833,6 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
- "serde 1.0.150",
  "subtle",
  "zeroize",
 ]
@@ -9298,7 +9297,6 @@ dependencies = [
  "bcs",
  "bincode",
  "byteorder",
- "curve25519-dalek",
  "derive_more",
  "enum_dispatch",
  "eyre",
@@ -9325,7 +9323,6 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_with",
- "sha2 0.9.9",
  "signature",
  "static_assertions",
  "strum",
