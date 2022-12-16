@@ -27,7 +27,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
-  RUSTFLAGS: -D warnings
+  # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 
 jobs:
