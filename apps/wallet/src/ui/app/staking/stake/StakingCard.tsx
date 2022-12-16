@@ -14,9 +14,10 @@ import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
-import Icon, { SuiIcons } from '_components/icon';
 import Button from '_app/shared/button';
+import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
 import {
     useAppSelector,
     useAppDispatch,
@@ -42,6 +43,7 @@ export type FormValues = typeof initialValues;
 
 function StakingCard() {
     const coinType = GAS_TYPE_ARG;
+
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -50,7 +52,7 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const isUnstaked = searchParams.get('unstake');
+    const unstake = !!searchParams.get('unstake');
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -93,12 +95,13 @@ function StakingCard() {
 
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
+
     const onHandleSubmit = useCallback(
         async (
             { amount }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
-            if (coinType === null) {
+            if (coinType === null || validatorAddress === null) {
                 return;
             }
             setSendError(null);
@@ -114,17 +117,23 @@ function StakingCard() {
                     stakeTokens({
                         amount: bigIntAmount,
                         tokenTypeArg: coinType,
+                        validatorAddress: validatorAddress,
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
                 resetForm();
-                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+                navigate(
+                    `/receipt?${new URLSearchParams({
+                        txdigest: txDigest,
+                    }).toString()}`
+                );
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
+        [coinType, validatorAddress, coinDecimals, dispatch, navigate]
     );
+
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
@@ -132,46 +141,87 @@ function StakingCard() {
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
-    if (!coinType) {
+    if (!coinType || !validatorAddress) {
         return <Navigate to="/" replace={true} />;
     }
 
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full w-full">
-            <BottomMenuLayout>
-                {validatorAddress && (
-                    <ValidateDetailFormCard
-                        validatorAddress={validatorAddress}
-                        unstake={!!isUnstaked}
-                    />
-                )}
-                <Content>
-                    <Loading loading={loadingBalance}>
-                        <div className="flex flex-col justify-between items-center mb-2 mt-2 w-full">
-                            <Text
-                                variant="caption"
-                                color="gray-85"
-                                weight="semibold"
+            <Loading
+                loading={loadingBalance}
+                className="flex justify-center w-full items-center "
+            >
+                <Formik
+                    initialValues={initialValues}
+                    validateOnMount={true}
+                    validationSchema={validationSchema}
+                    onSubmit={onHandleSubmit}
+                >
+                    {({ isSubmitting, isValid, submitForm }) => (
+                        <BottomMenuLayout>
+                            <Content>
+                                <ValidateDetailFormCard
+                                    validatorAddress={validatorAddress}
+                                    unstake={unstake}
+                                />
+                                <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
+                                    <Text
+                                        variant="caption"
+                                        color="gray-85"
+                                        weight="semibold"
+                                    >
+                                        {unstake
+                                            ? 'Enter the amount of SUI to unstake'
+                                            : 'Enter the amount of SUI to stake'}
+                                    </Text>
+                                </div>
+                                <StakeForm
+                                    submitError={sendError}
+                                    coinBalance={coinBalance.toString()}
+                                    coinType={coinType}
+                                    unstake={unstake}
+                                    onClearSubmitError={
+                                        handleOnClearSubmitError
+                                    }
+                                />
+                            </Content>
+                            <Menu
+                                stuckClass="staked-cta"
+                                className="w-full px-0 pb-0 mx-0"
                             >
-                                Enter the amount of SUI to stake
-                            </Text>
-                        </div>
-                        <Formik
-                            initialValues={initialValues}
-                            validateOnMount={true}
-                            validationSchema={validationSchema}
-                            onSubmit={onHandleSubmit}
-                        >
-                            <StakeForm
-                                submitError={sendError}
-                                coinBalance={coinBalance.toString()}
-                                coinType={coinType}
-                                onClearSubmitError={handleOnClearSubmitError}
-                            />
-                        </Formik>
-                    </Loading>
-                </Content>
-            </BottomMenuLayout>
+                                <Button
+                                    size="large"
+                                    mode="neutral"
+                                    href="new"
+                                    disabled={isSubmitting}
+                                    className="!text-steel-darker w-1/2"
+                                >
+                                    <Icon
+                                        icon={SuiIcons.ArrowLeft}
+                                        className="text-body text-gray-65 font-normal"
+                                    />
+                                    Back
+                                </Button>
+                                <Button
+                                    size="large"
+                                    mode="primary"
+                                    onClick={submitForm}
+                                    className=" w-1/2"
+                                    disabled={!isValid || isSubmitting}
+                                >
+                                    {isSubmitting ? (
+                                        <LoadingIndicator />
+                                    ) : unstake ? (
+                                        'UnStake Now'
+                                    ) : (
+                                        'Stake Now'
+                                    )}
+                                </Button>
+                            </Menu>
+                        </BottomMenuLayout>
+                    )}
+                </Formik>
+            </Loading>
         </div>
     );
 }

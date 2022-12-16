@@ -4,6 +4,7 @@
 import { useCallback, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
+import { SelectValidatorCard } from './SelectValidatorCard';
 import StakingCard from './StakingCard';
 import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
@@ -22,11 +23,11 @@ function StakePage() {
         <Overlay
             showModal={showModal}
             setShowModal={setShowModal}
-            title="Stake SUI"
+            title={validatorAddress ? 'Stake & Earn SUI' : 'Select a Validator'}
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
-            {validatorAddress ? <StakingCard /> : null}
+            {validatorAddress ? <StakingCard /> : <SelectValidatorCard />}
         </Overlay>
     );
 }

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
+import { isSuiObject, isSuiMoveObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { getName, STATE_OBJECT } from '../usePendingDelegation';
@@ -8,14 +8,13 @@ import { Card } from '_app/shared/card';
 import CoinBalance from '_app/shared/coin-balance';
 import { ImageIcon } from '_app/shared/image-icon';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject, useAppSelector } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { ValidatorState } from './ValidatorDataTypes';
+import type { ValidatorState } from '../ValidatorDataTypes';
 import type { ReactNode } from 'react';
 
 function SplitList({ children }: { children: ReactNode[] }) {
@@ -74,6 +73,11 @@ export function ValidateDetailFormCard({
                     apy: APY > 0 ? APY : 'N/A',
                     logo: null,
                     address: av.fields.metadata.fields.sui_address,
+                    totalStaked: pending_delegations.reduce(
+                        (acc, fields) =>
+                            (acc += BigInt(fields.fields.sui_amount || 0n)),
+                        0n
+                    ),
                     pendingDelegationAmount:
                         pending_delegationsByAddress.reduce(
                             (acc, fields) =>
@@ -135,14 +139,14 @@ export function ValidateDetailFormCard({
                                 balance={
                                     validatorDataByAddress.pendingDelegationAmount
                                 }
-                                className="text-body medium steel-darker"
-                                type={GAS_TYPE_ARG}
-                                diffSymbol={true}
+                                className="text-body steel-darker"
+                                type={SUI_TYPE_ARG}
+                                diffSymbol
                             />
                         </>
                     }
                 >
-                    <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5 ">
+                    <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5 mb-3.5">
                         <div className="flex gap-2 items-center justify-between ">
                             <div className="flex gap-1 items-baseline text-steel">
                                 <Text
@@ -165,27 +169,26 @@ export function ValidateDetailFormCard({
                                     'string' && '%'}
                             </Text>
                         </div>
+                        {!unstake && (
+                            <div className="flex gap-2 items-center justify-between">
+                                <div className="flex gap-1 items-baseline text-steel">
+                                    <Text
+                                        variant="body"
+                                        weight="medium"
+                                        color="steel-darker"
+                                    >
+                                        Total Staked
+                                    </Text>
+                                </div>
 
-                        <div className="flex gap-2 items-center justify-between mb-3.5">
-                            <div className="flex gap-1 items-baseline text-steel">
-                                <Text
-                                    variant="body"
-                                    weight="medium"
-                                    color="steel-darker"
-                                >
-                                    Total Staked
-                                </Text>
+                                <CoinBalance
+                                    balance={validatorDataByAddress.totalStaked}
+                                    className="text-body font-medium steel-darker"
+                                    type={GAS_TYPE_ARG}
+                                    diffSymbol
+                                />
                             </div>
-
-                            <CoinBalance
-                                balance={
-                                    validatorDataByAddress.pendingDelegationAmount
-                                }
-                                className="text-body font-medium steel-darker"
-                                type={GAS_TYPE_ARG}
-                                diffSymbol
-                            />
-                        </div>
+                        )}
                     </div>
                 </Card>
             )}
