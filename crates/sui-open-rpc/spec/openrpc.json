@@ -5683,7 +5683,8 @@
           "proof_of_possession_bytes",
           "pubkey_bytes",
           "sui_address",
-          "worker_address"
+          "worker_address",
+          "worker_pubkey_bytes"
         ],
         "properties": {
           "consensus_address": {
@@ -5758,6 +5759,14 @@
             "$ref": "#/components/schemas/SuiAddress"
           },
           "worker_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "worker_pubkey_bytes": {
             "type": "array",
             "items": {
               "type": "integer",

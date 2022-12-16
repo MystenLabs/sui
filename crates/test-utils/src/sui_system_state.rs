@@ -27,6 +27,7 @@ pub fn test_validatdor_metadata(
         sui_address,
         pubkey_bytes: pubkey_bytes.as_bytes().to_vec(),
         network_pubkey_bytes: network_keypair.public().as_bytes().to_vec(),
+        worker_pubkey_bytes: vec![],
         proof_of_possession_bytes: vec![],
         name: to_bytes("zero_commission").unwrap(),
         net_address,
