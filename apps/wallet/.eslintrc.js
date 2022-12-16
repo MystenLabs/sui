@@ -60,6 +60,7 @@ module.exports = {
             rules: {
                 // Allow any casting in tests:
                 '@typescript-eslint/no-explicit-any': 'off',
+                '@typescript-eslint/no-non-null-assertion': 'off',
             },
         },
     ],
