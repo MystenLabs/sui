@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use bip32::{ChildNumber, DerivationPath, XPrv};
+use anyhow::anyhow;
+use bip32::{ChildNumber, DerivationPath, Mnemonic, XPrv};
+
 use fastcrypto::ed25519::Ed25519KeyPair;
+use fastcrypto::secp256r1::{Secp256r1KeyPair, Secp256r1PrivateKey};
 use fastcrypto::{
     ed25519::Ed25519PrivateKey,
     secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey},
     traits::{KeyPair, ToFromBytes},
 };
+use signature::rand_core::OsRng;
 use slip10_ed25519::derive_ed25519_private_key;
 use sui_types::{
     base_types::SuiAddress,
@@ -18,10 +22,12 @@ use sui_types::{
 pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
+pub const DERVIATION_PATH_PURPOSE_SECP256R1: u32 = 74;
 
 /// Ed25519 follows SLIP-0010 using hardened path: m/44'/784'/0'/0'/{index}'
-/// Secp256k1 follows BIP-32 using path where the first 3 levels are hardened: m/54'/784'/0'/0/{index}
-/// Note that the purpose for Secp256k1 is registered as 54, to differentiate from Ed25519 with purpose 44.
+/// Secp256k1 follows BIP-32/44 using path where the first 3 levels are hardened: m/54'/784'/0'/0/{index}
+/// Secp256r1 follows BIP-32/44 using path where the first 3 levels are hardened: m/74'/784'/0'/0/{index}
+/// Note that the purpose node is used to distinguish signature schemes.
 pub fn derive_key_pair_from_path(
     seed: &[u8],
     derivation_path: Option<DerivationPath>,
@@ -35,19 +41,28 @@ pub fn derive_key_pair_from_path(
             let sk = Ed25519PrivateKey::from_bytes(&derived)
                 .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
             let kp = Ed25519KeyPair::from(sk);
-            Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
+            Ok((kp.public().into(), SuiKeyPair::Ed25519(kp)))
         }
         SignatureScheme::Secp256k1 => {
             let child_xprv = XPrv::derive_from_path(seed, &path)
                 .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
             let kp = Secp256k1KeyPair::from(
                 Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
-                    .unwrap(),
+                    .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?,
             );
-            Ok((kp.public().into(), SuiKeyPair::Secp256k1SuiKeyPair(kp)))
+            Ok((kp.public().into(), SuiKeyPair::Secp256k1(kp)))
+        }
+        SignatureScheme::Secp256r1 => {
+            let child_xprv = XPrv::derive_from_path(seed, &path)
+                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+            let kp = Secp256r1KeyPair::from(
+                Secp256r1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
+                    .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?,
+            );
+            Ok((kp.public().into(), SuiKeyPair::Secp256r1(kp)))
         }
         SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS is not supported for user key derivation".to_string(),
+            error: "BLS12381 key derivation is currently not supported".to_string(),
         }),
     }
 }
@@ -62,10 +77,10 @@ pub fn validate_path(
                 Some(p) => {
                     // The derivation path must be hardened at all levels with purpose = 44, coin_type = 784
                     if let &[purpose, coin_type, account, change, address] = p.as_ref() {
-                        if purpose
-                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_ED25519, true).unwrap()
-                            && coin_type
-                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
+                        if Some(purpose)
+                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_ED25519, true).ok()
+                            && Some(coin_type)
+                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).ok()
                             && account.is_hardened()
                             && change.is_hardened()
                             && address.is_hardened()
@@ -82,7 +97,7 @@ pub fn validate_path(
                     "m/{DERVIATION_PATH_PURPOSE_ED25519}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0'/0'"
                 )
                 .parse()
-                .unwrap()),
+                .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
             }
         }
         SignatureScheme::Secp256k1 => {
@@ -90,10 +105,10 @@ pub fn validate_path(
                 Some(p) => {
                     // The derivation path must be hardened at first 3 levels with purpose = 54, coin_type = 784
                     if let &[purpose, coin_type, account, change, address] = p.as_ref() {
-                        if purpose
-                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_SECP256K1, true).unwrap()
-                            && coin_type
-                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
+                        if Some(purpose)
+                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_SECP256K1, true).ok()
+                            && Some(coin_type)
+                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).ok()
                             && account.is_hardened()
                             && !change.is_hardened()
                             && !address.is_hardened()
@@ -110,11 +125,51 @@ pub fn validate_path(
                     "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
                 )
                 .parse()
-                .unwrap()),
+                .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
+            }
+        }
+        SignatureScheme::Secp256r1 => {
+            match path {
+                Some(p) => {
+                    // The derivation path must be hardened at first 3 levels with purpose = 74, coin_type = 784
+                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
+                        if Some(purpose)
+                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_SECP256R1, true).ok()
+                            && Some(coin_type)
+                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).ok()
+                            && account.is_hardened()
+                            && !change.is_hardened()
+                            && !address.is_hardened()
+                        {
+                            Ok(p)
+                        } else {
+                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                        }
+                    } else {
+                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                    }
+                }
+                None => Ok(format!(
+                    "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
+                )
+                .parse()
+                .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
             }
         }
         SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS is not supported for user key derivation".to_string(),
+            error: "BLS12381 key derivation is currently not supported".to_string(),
         }),
+    }
+}
+
+pub fn generate_new_key(
+    key_scheme: SignatureScheme,
+    derivation_path: Option<DerivationPath>,
+) -> Result<(SuiAddress, SuiKeyPair, SignatureScheme, String), anyhow::Error> {
+    let mnemonic = Mnemonic::random(OsRng, Default::default());
+    let seed = mnemonic.to_seed("");
+    match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
+        Ok((address, kp)) => Ok((address, kp, key_scheme, mnemonic.phrase().to_string())),
+        Err(e) => Err(anyhow!("Failed to generate keypair: {:?}", e)),
     }
 }

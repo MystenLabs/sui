@@ -20,7 +20,7 @@ use sui_sdk::SuiClient;
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::SuiKeyPair::Ed25519SuiKeyPair;
+use sui_types::crypto::SuiKeyPair;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -209,7 +209,7 @@ impl TestClusterBuilder {
         swarm.config().save(&network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         for key in &swarm.config().account_keys {
-            keystore.add_key(Ed25519SuiKeyPair(key.copy()))?;
+            keystore.add_key(SuiKeyPair::Ed25519(key.copy()))?;
         }
 
         let active_address = keystore.addresses().first().cloned();

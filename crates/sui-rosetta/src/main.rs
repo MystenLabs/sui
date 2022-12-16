@@ -163,11 +163,14 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .into_iter()
         .map(|(address, key)| {
             let (privkey, curve_type) = match key {
-                SuiKeyPair::Ed25519SuiKeyPair(k) => {
+                SuiKeyPair::Ed25519(k) => {
                     (Hex::encode(k.private().as_bytes()), CurveType::Edwards25519)
                 }
-                SuiKeyPair::Secp256k1SuiKeyPair(k) => {
+                SuiKeyPair::Secp256k1(k) => {
                     (Hex::encode(k.private().as_bytes()), CurveType::Secp256k1)
+                }
+                SuiKeyPair::Secp256r1(k) => {
+                    (Hex::encode(k.private().as_bytes()), CurveType::Secp256r1)
                 }
             };
             PrefundedAccount {
@@ -188,9 +191,11 @@ fn test_read_keystore() {
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
-    let key1 = ks.generate_new_key(SignatureScheme::ED25519, None).unwrap();
+    let key1 = ks
+        .generate_and_add_new_key(SignatureScheme::ED25519, None)
+        .unwrap();
     let key2 = ks
-        .generate_new_key(SignatureScheme::Secp256k1, None)
+        .generate_and_add_new_key(SignatureScheme::Secp256k1, None)
         .unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();

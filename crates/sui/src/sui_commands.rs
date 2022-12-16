@@ -325,7 +325,7 @@ async fn genesis(
 
     let mut keystore = FileBasedKeystore::new(&keystore_path)?;
     for key in &network_config.account_keys {
-        keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(key.copy()))?;
+        keystore.add_key(SuiKeyPair::Ed25519(key.copy()))?;
     }
     let active_address = keystore.addresses().pop();
 
@@ -429,12 +429,13 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-            println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1):");
+            println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:");
             let key_scheme = match SignatureScheme::from_flag(read_line()?.trim()) {
                 Ok(s) => s,
                 Err(e) => return Err(anyhow!("{e}")),
             };
-            let (new_address, phrase, scheme) = keystore.generate_new_key(key_scheme, None)?;
+            let (new_address, phrase, scheme) =
+                keystore.generate_and_add_new_key(key_scheme, None)?;
             println!(
                 "Generated new keypair for address with scheme {:?} [{new_address}]",
                 scheme.to_string()

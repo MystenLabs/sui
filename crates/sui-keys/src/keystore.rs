@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use signature::Signer;
@@ -22,7 +22,7 @@ use sui_types::crypto::{
     SignatureScheme, SuiKeyPair,
 };
 
-use crate::key_derive::derive_key_pair_from_path;
+use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 
 #[derive(Serialize, Deserialize)]
 #[enum_dispatch(AccountKeystore)]
@@ -50,23 +50,14 @@ pub trait AccountKeystore: Send + Sync {
         self.keys().iter().map(|k| k.into()).collect()
     }
 
-    fn generate_new_key(
+    fn generate_and_add_new_key(
         &mut self,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
-        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-        match derive_key_pair_from_path(
-            Seed::new(&mnemonic, "").as_bytes(),
-            derivation_path,
-            &key_scheme,
-        ) {
-            Ok((address, keypair)) => {
-                self.add_key(keypair)?;
-                Ok((address, mnemonic.phrase().to_string(), key_scheme))
-            }
-            Err(e) => Err(anyhow!("error generating key {:?}", e)),
-        }
+        let (address, kp, scheme, phrase) = generate_new_key(key_scheme, derivation_path)?;
+        self.add_key(kp)?;
+        Ok((address, phrase, scheme))
     }
 
     fn import_from_mnemonic(
@@ -287,7 +278,7 @@ impl InMemKeystore {
         let mut rng = StdRng::from_seed([0; 32]);
         let keys = (0..initial_key_number)
             .map(|_| get_key_pair_from_rng(&mut rng))
-            .map(|(ad, k)| (ad, SuiKeyPair::Ed25519SuiKeyPair(k)))
+            .map(|(ad, k)| (ad, SuiKeyPair::Ed25519(k)))
             .collect::<BTreeMap<SuiAddress, SuiKeyPair>>();
 
         Self { keys }

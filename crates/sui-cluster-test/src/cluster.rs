@@ -233,9 +233,7 @@ pub async fn new_wallet_context_from_cluster(
     let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
-    keystore
-        .add_key(SuiKeyPair::Ed25519SuiKeyPair(key_pair))
-        .unwrap();
+    keystore.add_key(SuiKeyPair::Ed25519(key_pair)).unwrap();
     SuiClientConfig {
         keystore,
         envs: vec![SuiEnv {

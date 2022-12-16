@@ -1087,11 +1087,11 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     context
         .config
         .keystore
-        .add_key(SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1))?;
+        .add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
     context
         .config
         .keystore
-        .add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
+        .add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
 
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 

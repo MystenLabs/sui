@@ -18,6 +18,7 @@ use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::Ed25519SuiSignature;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::Secp256k1SuiSignature;
+use sui_types::crypto::Secp256r1SuiSignature;
 use sui_types::crypto::Signature;
 use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
@@ -34,7 +35,7 @@ fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
-        keystore.add_key(SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1))?;
+        keystore.add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
     }
 
     // List all addresses with flag
@@ -46,8 +47,8 @@ fn test_addresses_command() -> Result<(), anyhow::Error> {
 fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new(0));
 
-    keystore.add_key(SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1))?;
-    keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
+    keystore.add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
+    keystore.add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
 
     for pk in keystore.keys() {
         let pk1 = pk.clone();
@@ -69,6 +70,13 @@ fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
                 );
                 assert!(pk1.flag() == Secp256k1SuiSignature::SCHEME.flag())
             }
+            Signature::Secp256r1SuiSignature(_) => {
+                assert_eq!(
+                    *sig.as_ref().first().unwrap(),
+                    Secp256r1SuiSignature::SCHEME.flag()
+                );
+                assert!(pk1.flag() == Secp256r1SuiSignature::SCHEME.flag())
+            }
         }
     }
     Ok(())
@@ -79,7 +87,7 @@ fn test_read_write_keystore_with_flag() {
     let dir = tempfile::TempDir::new().unwrap();
 
     // create Secp256k1 keypair
-    let kp_secp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+    let kp_secp = SuiKeyPair::Secp256k1(get_key_pair().1);
     let addr_secp: SuiAddress = (&kp_secp.public()).into();
     let fp_secp = dir.path().join(format!("{}.key", addr_secp));
     let fp_secp_2 = fp_secp.clone();
@@ -103,7 +111,7 @@ fn test_read_write_keystore_with_flag() {
     assert!(kp_secp_read.is_err());
 
     // create Ed25519 keypair
-    let kp_ed = SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1);
+    let kp_ed = SuiKeyPair::Ed25519(get_key_pair().1);
     let addr_ed: SuiAddress = (&kp_ed.public()).into();
     let fp_ed = dir.path().join(format!("{}.key", addr_ed));
     let fp_ed_2 = fp_ed.clone();

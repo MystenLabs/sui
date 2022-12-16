@@ -623,16 +623,12 @@ fn verify_sender_signature_correctly_with_flag() {
     let committee = Committee::new(0, authorities).unwrap();
 
     // create a receiver keypair with Secp256k1
-    let receiver_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+    let receiver_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
     let receiver_address = (&receiver_kp.public()).into();
 
     // create a sender keypair with Secp256k1
-    let sender_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
-
-    // create a sender keypair with Ed25519
-    let sender_kp_2 = SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1);
-
-    // creates transaction envelope with user signed Secp256k1 signature
+    let sender_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
+    // and creates a corresponding transaction
     let tx_data = TransactionData::new_transfer(
         receiver_address,
         random_object_ref(),
@@ -640,6 +636,16 @@ fn verify_sender_signature_correctly_with_flag() {
         random_object_ref(),
         10000,
     );
+
+    // create a sender keypair with Ed25519
+    let sender_kp_2 = SuiKeyPair::Ed25519(get_key_pair().1);
+    let mut tx_data_2 = tx_data.clone();
+    tx_data_2.sender = (&sender_kp_2.public()).into();
+
+    // create a sender keypair with Secp256r1
+    let sender_kp_3 = SuiKeyPair::Secp256r1(get_key_pair().1);
+    let mut tx_data_3 = tx_data.clone();
+    tx_data_3.sender = (&sender_kp_3.public()).into();
 
     let transaction = Transaction::from_data_and_signer(tx_data, Intent::default(), &sender_kp)
         .verify()
@@ -665,20 +671,10 @@ fn verify_sender_signature_correctly_with_flag() {
         .verify(transaction.data(), &committee)
         .is_ok());
 
-    // creates transaction envelope with Ed25519 signature
-    let transaction_1 = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
-            receiver_address,
-            random_object_ref(),
-            (&sender_kp_2.public()).into(),
-            random_object_ref(),
-            10000,
-        ),
-        Intent::default(),
-        &sender_kp_2,
-    )
-    .verify()
-    .unwrap();
+    let transaction_1 =
+        Transaction::from_data_and_signer(tx_data_2, Intent::default(), &sender_kp_2)
+            .verify()
+            .unwrap();
 
     let signed_tx_1 = SignedTransaction::new(
         committee.epoch(),
@@ -703,4 +699,24 @@ fn verify_sender_signature_correctly_with_flag() {
         .auth_sig()
         .verify(transaction.data(), &committee)
         .is_err());
+
+    // create transaction with r1 signer
+    let tx_3 = Transaction::from_data_and_signer(tx_data_3, Intent::default(), &sender_kp_3);
+    let tx_31 = tx_3.clone();
+    let tx_32 = tx_3.clone();
+
+    // r1 signature tx verifies ok
+    assert!(tx_3.verify().is_ok());
+    let verified_tx_3 = tx_31.verify().unwrap();
+    // r1 signature verified and accepted by authority
+    let signed_tx_3 = SignedTransaction::new(
+        committee.epoch(),
+        verified_tx_3.into_message(),
+        &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
+    );
+    assert!(signed_tx_3
+        .auth_sig()
+        .verify(tx_32.data(), &committee)
+        .is_ok());
 }

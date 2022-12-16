@@ -5,12 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
-use bip32::{DerivationPath, Mnemonic};
+use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
-use signature::rand_core::OsRng;
-use sui_keys::key_derive::derive_key_pair_from_path;
+use sui_keys::key_derive::generate_new_key;
 use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use tracing::info;
@@ -19,8 +18,8 @@ use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    get_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair,
-    SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair, SignatureScheme,
+    SuiKeyPair, SuiSignatureInner,
 };
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -30,8 +29,8 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
+    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
     /// And output file to current dir (to generate keypair and add to sui.keystore, use `sui client new-address`)
     Generate {
         key_scheme: SignatureScheme,
@@ -54,7 +53,7 @@ pub enum KeyToolCommand {
         data: String,
     },
     /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
     Import {
         mnemonic_phrase: String,
         key_scheme: SignatureScheme,
@@ -74,23 +73,13 @@ impl KeyToolCommand {
                 key_scheme,
                 derivation_path,
             } => {
-                let k = key_scheme.to_string();
-                if "bls12381" == key_scheme.to_string() {
-                    let (address, keypair): (_, AuthorityKeyPair) = get_key_pair();
-                    let file_name = format!("bls-{address}.key");
-                    write_authority_keypair_to_file(&keypair, &file_name)?;
-                } else {
-                    let mnemonic = Mnemonic::random(OsRng, Default::default());
-                    let seed = mnemonic.to_seed("");
-                    match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
-                        Ok((address, kp)) => {
-                            let file_name = format!("{address}.key");
-                            write_keypair_to_file(&kp, &file_name)?;
-                            println!("{:?} key generated and saved to '{file_name}'", k);
-                        }
-                        Err(e) => println!("Failed to generate keypair: {:?}", e),
-                    }
-                }
+                let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
+                let file = format!("{address}.key");
+                write_keypair_to_file(&kp, &file)?;
+                println!(
+                    "Keypair wrote to file path: {:?} with scheme: {:?}",
+                    file, scheme
+                );
             }
             KeyToolCommand::Show { file } => {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
@@ -162,7 +151,7 @@ impl KeyToolCommand {
                         // Account keypair is encoded with the key scheme flag {},
                         // and network and worker keypair are not.
                         println!("Account Keypair: {}", keypair.encode_base64());
-                        if let SuiKeyPair::Ed25519SuiKeyPair(kp) = keypair {
+                        if let SuiKeyPair::Ed25519(kp) = keypair {
                             println!("Network Keypair: {}", kp.encode_base64());
                             println!("Worker Keypair: {}", kp.encode_base64());
                         };
