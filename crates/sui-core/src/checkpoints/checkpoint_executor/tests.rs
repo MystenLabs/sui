@@ -45,7 +45,7 @@ pub async fn checkpoint_executor_test() {
             &committee,
         );
         let _handle = spawn_monitored_task!(async move { executor.run().await });
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(6)).await;
         // dropping the channel will cause the checkpoint executor process to exit (gracefully)
         drop(checkpoint_sender);
 
