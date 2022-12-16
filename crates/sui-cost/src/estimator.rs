@@ -81,11 +81,7 @@ fn estimate_transaction_inner<S>(
 
     // Step 1: charge min tx fee : can be computed precisely
     gas_status.charge_min_tx_gas()?;
-    // Step 2: if contains shared objs, charge consensus fee : can be computed precisely
-    if tx.shared_input_objects().next().is_some() {
-        gas_status.charge_consensus()?;
-    }
-    // Step 3: charge storage read for all input objects : can be computed precisely
+    // Step 2: charge storage read for all input objects : can be computed precisely
     // Dummy gas obj
     let gas_obj = GasCoin::new(ObjectID::random(), 0).to_object(SequenceNumber::new());
     let mut total_input_obj_size: usize = temporary_store
@@ -96,7 +92,7 @@ fn estimate_transaction_inner<S>(
     total_input_obj_size += gas_obj.object_size_for_gas_metering();
     gas_status.charge_storage_read(total_input_obj_size)?;
 
-    // Steps 4 & 5
+    // Steps 3 & 4
     for single_tx in tx.single_transactions() {
         match single_tx {
             SingleTransactionKind::Publish(module) => {
@@ -111,11 +107,11 @@ fn estimate_transaction_inner<S>(
         gas_status.charge_vm_gas()?;
     }
 
-    // The assumption here is that size number of output objects is roughly double at most
+    // TODO: The assumption here is that size number of output objects is roughly double at most
     // This assumption is not based on any real data. Feedback is welcomed
     let mutated_object_sizes_after = mutated_object_sizes_after.unwrap_or(total_input_obj_size * 2);
 
-    // Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
+    // Step 5: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
     // At this point we need to estimate the effects of mutating objects after execution
     // We need to use some approx this
     gas_status.charge_storage_mutation(
