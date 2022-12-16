@@ -5,9 +5,7 @@ use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
-use mysten_metrics::{
-    monitored_future, monitored_scope, spawn_logged_monitored_task, spawn_monitored_task,
-};
+use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{
@@ -16,6 +14,7 @@ use std::{
     time::Duration,
 };
 use storage::CertificateStore;
+use tokio::task::JoinSet;
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinError, JoinHandle},
@@ -79,7 +78,7 @@ pub(crate) struct CertificateFetcher {
     /// correctness).
     targets: BTreeMap<PublicKey, Round>,
     /// Keeps the handle to the (at most one) inflight fetch certificates task.
-    fetch_certificates_task: FuturesUnordered<JoinHandle<()>>,
+    fetch_certificates_task: JoinSet<()>,
 }
 
 /// Thread-safe internal state of CertificateFetcher shared with its fetch task.
@@ -114,8 +113,7 @@ impl CertificateFetcher {
             tx_certificates_loopback,
             metrics,
         });
-        // Add a future that never returns to fetch_certificates_task, so it is blocked when empty.
-        let fetch_certificates_task = FuturesUnordered::new();
+
         spawn_logged_monitored_task!(
             async move {
                 Self {
@@ -127,7 +125,7 @@ impl CertificateFetcher {
                     rx_shutdown,
                     rx_certificate_fetcher,
                     targets: BTreeMap::new(),
-                    fetch_certificates_task,
+                    fetch_certificates_task: JoinSet::new(),
                 }
                 .run()
                 .await;
@@ -189,14 +187,17 @@ impl CertificateFetcher {
                         self.kickstart();
                     }
                 },
-                _ = self.fetch_certificates_task.next(), if !self.fetch_certificates_task.is_empty() => {
+                Some(result) = self.fetch_certificates_task.join_next(), if !self.fetch_certificates_task.is_empty() => {
+                    // propagate any panics. We don't expect for cancellations to get propagated as
+                    // we gracefully shutdown the component by exiting the loop first
+                    result.unwrap();
+
                     // Kick start another fetch task after the previous one terminates.
                     // If all targets have been fetched, the new task will clean up the targets and exit.
                     if self.fetch_certificates_task.is_empty() {
                         self.kickstart();
                     }
                 },
-
                 _ = self.rx_shutdown.receiver.recv() => {
                     // abort the tasks in the list and then exit
                     self.fetch_certificates_task.iter().for_each(|h|h.abort());
@@ -263,36 +264,35 @@ impl CertificateFetcher {
             self.targets.values().max().unwrap_or(&0),
             gc_round
         );
-        self.fetch_certificates_task
-            .push(spawn_monitored_task!(async move {
-                let _scope = monitored_scope("CertificatesFetching");
-                state
-                    .metrics
-                    .certificate_fetcher_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .inc();
+        self.fetch_certificates_task.spawn(async move {
+            let _scope = monitored_scope("CertificatesFetching");
+            state
+                .metrics
+                .certificate_fetcher_inflight_fetch
+                .with_label_values(&[&committee.epoch.to_string()])
+                .inc();
 
-                let now = Instant::now();
-                match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
-                    .await
-                {
-                    Ok(_) => {
-                        debug!(
-                            "Finished task to fetch certificates successfully, elapsed = {}s",
-                            now.elapsed().as_secs_f64()
-                        );
-                    }
-                    Err(e) => {
-                        warn!("Error from task to fetch certificates: {e}");
-                    }
-                };
+            let now = Instant::now();
+            match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
+                .await
+            {
+                Ok(_) => {
+                    debug!(
+                        "Finished task to fetch certificates successfully, elapsed = {}s",
+                        now.elapsed().as_secs_f64()
+                    );
+                }
+                Err(e) => {
+                    warn!("Error from task to fetch certificates: {e}");
+                }
+            };
 
-                state
-                    .metrics
-                    .certificate_fetcher_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .dec();
-            }));
+            state
+                .metrics
+                .certificate_fetcher_inflight_fetch
+                .with_label_values(&[&committee.epoch.to_string()])
+                .dec();
+        });
     }
 
     fn gc_round(&self) -> Round {
