@@ -167,7 +167,7 @@ impl AuthorityPerEpochStore {
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
-        let wal_path = parent_path.join("recovery_log");
+        let wal_path = AuthorityEpochTables::path(epoch_id, parent_path).join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
         let epoch_alive = NotifyOnce::new();
         Self {
