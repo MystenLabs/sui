@@ -1113,8 +1113,8 @@ impl Display for SuiClientCommandResult {
                 let object = if *bcs {
                     match object_read.object() {
                         Ok(v) => {
-                            let bcs_version = bcs::to_bytes(v).unwrap();
-                            format!("{:?}\nNumber of bytes: {}", bcs_version, bcs_version.len())
+                            let bcs_bytes = bcs::to_bytes(v).unwrap();
+                            format!("{:?}\nNumber of bytes: {}", bcs_bytes, bcs_bytes.len())
                         }
                         Err(err) => format!("{err}").red().to_string(),
                     }
