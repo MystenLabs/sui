@@ -21,7 +21,7 @@ import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 // @ts-expect-error: Defining global prism object:
 globalThis.Prism = Prism;
 // @ts-expect-error: This file is untyped:
-import('prismjs/components/prism-rust');
+import('prismjs/components/prism-rust').catch(() => {});
 
 interface Props {
     id?: string;
