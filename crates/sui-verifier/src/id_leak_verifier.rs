@@ -133,6 +133,9 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         last_index: CodeOffset,
     ) -> PartialVMResult<()> {
         execute_inner(self, state, bytecode, index)?;
+        // invariant: the stack should be empty at the end of the block
+        // If it is not, something is wrong with the implementation, so throw an invariant
+        // violation
         if index == last_index && !self.stack.is_empty() {
             debug_assert!(
                 false,
