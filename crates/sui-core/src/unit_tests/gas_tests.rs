@@ -163,7 +163,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 50);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 110);
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
@@ -172,7 +172,7 @@ async fn test_transfer_sui_insufficient_gas() {
         recipient,
         amount: None,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 50, 1);
+    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 110, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)

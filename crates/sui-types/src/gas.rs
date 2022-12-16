@@ -163,9 +163,6 @@ pub struct SuiCostTable {
     /// Per byte cost to write objects to the store. This is computation cost instead of
     /// storage cost because it does not change the amount of data stored on the db.
     pub object_mutation_per_byte_cost: ComputationCostPerByte,
-    /// Cost to use shared objects in a transaction, which requires full consensus.
-    pub consensus_cost: FixedCost,
-
     /// Unit cost of a byte in the storage. This will be used both for charging for
     /// new storage as well as rebating for deleting storage. That is, we expect users to
     /// get full refund on the object storage when it's deleted.
@@ -181,8 +178,6 @@ pub static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     package_publish_per_byte_cost: ComputationCostPerByte::new(PACKAGE_PUBLISH_COST_PER_BYTE),
     object_read_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_READ_PER_BYTE),
     object_mutation_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_MUTATE_PER_BYTE),
-    consensus_cost: FixedCost::new(CONSENSUS_COST),
-
     storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
@@ -251,10 +246,6 @@ impl<'a> SuiGasStatus<'a> {
 
     pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {
         self.deduct_computation_cost(INIT_SUI_COST_TABLE.min_transaction_cost.deref())
-    }
-
-    pub fn charge_consensus(&mut self) -> Result<(), ExecutionError> {
-        self.deduct_computation_cost(&INIT_SUI_COST_TABLE.consensus_cost)
     }
 
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {

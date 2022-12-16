@@ -51,19 +51,15 @@ pub const MAX_NUM_EVENT_EMIT: u64 = 256;
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
 
 /// Base cost for any Sui transaction
-pub const BASE_TX_COST_FIXED: u64 = 10_000;
-
-/// Additional cost for Move call transactions that use a shared object.
-/// i.e., the base cost of such a transaction is BASE_TX_COST_FIXED + CONSENSUS_COST
-pub const CONSENSUS_COST: u64 = 100_000;
-
-/// Cost per byte of a Move call transaction
-/// i.e., the cost of such a transaction is base_cost + (BASE_TX_COST_PER_BYTE * size)
-pub const BASE_TX_COST_PER_BYTE: u64 = 0;
+pub const BASE_TX_COST_FIXED: u64 = 110_000;
 
 /// Additional cost for a transaction that publishes a package
 /// i.e., the base cost of such a transaction is BASE_TX_COST_FIXED + PACKAGE_PUBLISH_COST_FIXED
 pub const PACKAGE_PUBLISH_COST_FIXED: u64 = 1_000;
+
+/// Cost per byte of a Move call transaction
+/// i.e., the cost of such a transaction is base_cost + (BASE_TX_COST_PER_BYTE * size)
+pub const BASE_TX_COST_PER_BYTE: u64 = 0;
 
 /// Cost per byte for a transaction that publishes a package
 pub const PACKAGE_PUBLISH_COST_PER_BYTE: u64 = 80;
