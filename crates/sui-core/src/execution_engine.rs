@@ -28,7 +28,6 @@ use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind}
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
@@ -40,6 +39,9 @@ use sui_types::{
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+};
+use sui_types::{
+    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use crate::authority::TemporaryStore;
@@ -118,8 +120,10 @@ fn charge_gas_for_object_read<S>(
     // fetching only unique objects.
     let total_size = temporary_store
         .objects()
-        .values()
-        .map(|obj| obj.object_size_for_gas_metering())
+        .iter()
+        // don't charge for loading Sui Framework or Move stdlib
+        .filter(|(id, _)| *id != &SUI_FRAMEWORK_OBJECT_ID && *id != &MOVE_STDLIB_OBJECT_ID)
+        .map(|(_, obj)| obj.object_size_for_gas_metering())
         .sum();
     gas_status.charge_storage_read(total_size)
 }
