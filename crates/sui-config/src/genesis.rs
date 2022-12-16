@@ -82,7 +82,7 @@ impl Genesis {
                     .expect("Can't get narwhal public key");
                 let network_key =
                     narwhal_crypto::NetworkPublicKey::from_bytes(validator.network_key().as_ref())
-                        .expect("Can't get narwhal public key");
+                        .expect("Can't get narwhal network key");
                 let primary_address = validator.narwhal_primary_address.clone();
                 let authority = narwhal_config::Authority {
                     stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::chain_id::ChainId;
 use crate::collection_types::{VecMap, VecSet};
@@ -15,9 +13,11 @@ use crate::{
 };
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+use multiaddr::Multiaddr;
 use narwhal_config::Committee as NarwhalCommittee;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -204,11 +204,32 @@ impl SuiSystemState {
     }
 
     pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
-        // todo: we need the following to be added to the Validator Metadata
-        // todo: on the system state object in order to construct this:
-        // - protocol_key
-        // - network_key
-        // - narwhal_primary_address
-        todo!();
+        let narwhal_committee = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
+                    .expect("Can't get narwhal public key");
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+                let primary_address =
+                    Multiaddr::try_from(validator.metadata.consensus_address.clone())
+                        .expect("Can't get narwhal primary address");
+                let authority = narwhal_config::Authority {
+                    stake: validator.stake_amount as narwhal_config::Stake,
+                    primary_address,
+                    network_key,
+                };
+                (name, authority)
+            })
+            .collect();
+
+        narwhal_config::Committee {
+            authorities: narwhal_committee,
+            epoch: self.epoch as narwhal_config::Epoch,
+        }
     }
 }
