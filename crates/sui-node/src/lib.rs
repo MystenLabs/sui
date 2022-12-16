@@ -74,6 +74,7 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_server_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     narwhal_manager: Option<NarwhalManager>,
+    consensus_adapter: Option<Arc<ConsensusAdapter>>,
     _json_rpc_service: Option<ServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
@@ -257,24 +258,28 @@ impl SuiNode {
 
         let mut validator_server_handle_outer = None;
         let mut narwhal_manager_outer = None;
+        let mut consensus_adapter_outer = None;
 
         if state.is_validator() {
-            let (validator_server_handle, narwhal_manager) = Self::construct_validator_components(
-                config,
-                state.clone(),
-                checkpoint_store.clone(),
-                state_sync_handle.clone(),
-                registry_service.clone(),
-            )
-            .await?;
+            let (validator_server_handle, narwhal_manager, consensus_adapter) =
+                Self::construct_validator_components(
+                    config,
+                    state.clone(),
+                    checkpoint_store.clone(),
+                    state_sync_handle.clone(),
+                    registry_service.clone(),
+                )
+                .await?;
             validator_server_handle_outer = Some(validator_server_handle);
             narwhal_manager_outer = Some(narwhal_manager);
+            consensus_adapter_outer = Some(consensus_adapter);
         }
 
         let node = Self {
             config: config.clone(),
             validator_server_handle: validator_server_handle_outer,
             narwhal_manager: narwhal_manager_outer,
+            consensus_adapter: consensus_adapter_outer,
             _json_rpc_service: json_rpc_service,
             _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
@@ -298,6 +303,10 @@ impl SuiNode {
         info!("SuiNode started!");
 
         Ok(node)
+    }
+
+    pub fn consensus_adapter(&self) -> &Option<Arc<ConsensusAdapter>> {
+        &self.consensus_adapter
     }
 
     fn create_p2p_network(
@@ -389,7 +398,11 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         registry_service: RegistryService,
-    ) -> Result<(tokio::task::JoinHandle<Result<()>>, NarwhalManager)> {
+    ) -> Result<(
+        tokio::task::JoinHandle<Result<()>>,
+        NarwhalManager,
+        Arc<ConsensusAdapter>,
+    )> {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
@@ -419,7 +432,7 @@ impl SuiNode {
         )
         .await?;
 
-        Ok((validator_server_handle, narwhal_manager))
+        Ok((validator_server_handle, narwhal_manager, consensus_adapter))
     }
 
     async fn construct_and_run_narwhal_manager(
@@ -597,7 +610,7 @@ impl SuiNode {
             } else if self.state.is_validator() {
                 info!("Promoting the node from fullnode to validator, starting grpc server");
 
-                let (validator_server_handle, narwhal_manager) =
+                let (validator_server_handle, narwhal_manager, consensus_adapter) =
                     Self::construct_validator_components(
                         &self.config,
                         self.state.clone(),
@@ -608,6 +621,7 @@ impl SuiNode {
                     .await?;
                 self.validator_server_handle = Some(validator_server_handle);
                 self.narwhal_manager = Some(narwhal_manager);
+                self.consensus_adapter = Some(consensus_adapter);
             }
             info!("Reconfiguration finished");
         }
