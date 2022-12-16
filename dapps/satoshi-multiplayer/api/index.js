@@ -11,7 +11,7 @@ const io = require('socket.io')(http, {
 
 
 const port = process.env.PORT || 8000;
-console.log("GSDGSDFGSD");
+
 io.on('connection', (socket) => {
   socket.onAny((ev, ...args) => {
     console.log(ev, args)
