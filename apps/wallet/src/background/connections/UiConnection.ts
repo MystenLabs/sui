@@ -59,7 +59,9 @@ export class UiConnection extends Connection {
                 method: 'walletStatusUpdate',
                 return: {
                     isLocked,
-                    activeAccount: Keyring.keypair?.export(),
+                    activeAccount: (
+                        await Keyring.getActiveAccount()
+                    )?.exportKeypair(),
                     isInitialized: await Keyring.isWalletInitialized(),
                 },
             })
