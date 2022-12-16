@@ -13,7 +13,7 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    StakingPool, StakeSubsidy, SuiSystemState, Validator, ValidatorMetadata, ValidatorSet,
+    StakeSubsidy, StakingPool, SuiSystemState, Validator, ValidatorMetadata, ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 

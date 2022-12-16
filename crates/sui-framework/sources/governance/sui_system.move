@@ -427,9 +427,9 @@ module sui::sui_system {
     }
 
     spec advance_epoch {
-        /// Total supply of SUI shouldn't change.
+        /// Total supply of SUI increases by the amount of stake subsidy we minted.
         ensures balance::supply_value(self.sui_supply) 
-            == old(balance::supply_value(self.sui_supply));
+            == old(balance::supply_value(self.sui_supply)) + old(stake_subsidy::current_epoch_subsidy_amount(self.stake_subsidy));
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

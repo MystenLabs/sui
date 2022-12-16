@@ -883,11 +883,11 @@ gas coins.
 <summary>Specification</summary>
 
 
-Total supply of SUI shouldn't change.
+Total supply of SUI increases by the amount of stake subsidy we minted.
 
 
 <pre><code><b>ensures</b> <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply)
-    == <b>old</b>(<a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply));
+    == <b>old</b>(<a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply)) + <b>old</b>(<a href="stake_subsidy.md#0x2_stake_subsidy_current_epoch_subsidy_amount">stake_subsidy::current_epoch_subsidy_amount</a>(self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>));
 </code></pre>
 
 
