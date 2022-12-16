@@ -9224,7 +9224,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-vm-types",
- "multiaddr 0.17.0",
+ "multiaddr",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-executor",

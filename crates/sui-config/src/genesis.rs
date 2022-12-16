@@ -549,6 +549,7 @@ pub fn generate_genesis_system_object(
 
     let mut pubkeys = Vec::new();
     let mut network_pubkeys = Vec::new();
+    let mut worker_pubkeys = Vec::new();
     let mut proof_of_possessions = Vec::new();
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
@@ -566,6 +567,7 @@ pub fn generate_genesis_system_object(
     {
         pubkeys.push(validator.protocol_key());
         network_pubkeys.push(validator.network_key());
+        worker_pubkeys.push(validator.worker_key());
         proof_of_possessions.push(proof_of_possession.as_ref().to_vec());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
@@ -586,6 +588,7 @@ pub fn generate_genesis_system_object(
         vec![
             CallArg::Pure(bcs::to_bytes(&chain_id).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
