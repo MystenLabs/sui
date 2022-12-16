@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromExportedKeypair } from '@mysten/sui.js';
 import { randomBytes } from '@noble/hashes/utils';
 import Browser from 'webextension-polyfill';
 
 import { Vault } from './Vault';
+import { SESSION_STORAGE } from './storage-utils';
 import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
 
 import type { StoredData } from './Vault';
+import type { ExportedKeypair } from '@mysten/sui.js';
 import type { Storage } from 'webextension-polyfill';
 
-export const IS_SESSION_STORAGE_SUPPORTED = 'chrome' in global;
-const SESSION_STORAGE: Storage.LocalStorageArea | null =
-    // @ts-expect-error chrome
-    IS_SESSION_STORAGE_SUPPORTED ? global.chrome.storage.session : null;
 const LOCAL_STORAGE = Browser.storage.local;
 
 // we use this password + a random one for each time we store the encrypted
@@ -101,19 +100,7 @@ export class VaultStorage {
                     await aVault.encrypt(password)
                 )
         );
-        await ifSessionStorage(async (sessionStorage) => {
-            if (!this.#vault) {
-                return;
-            }
-            const rndPass = getRandomPassword();
-            const ephemeralPass = makeEphemeraPassword(rndPass);
-            await setToStorage(sessionStorage, EPHEMERAL_PASSWORD_KEY, rndPass);
-            await setToStorage(
-                sessionStorage,
-                EPHEMERAL_VAULT_KEY,
-                await this.#vault.encrypt(ephemeralPass)
-            );
-        });
+        await this.updateSessionStorage();
     }
 
     public async lock() {
@@ -165,5 +152,71 @@ export class VaultStorage {
 
     public get entropy() {
         return this.#vault?.entropy || null;
+    }
+
+    public async verifyPassword(password: string) {
+        const encryptedVault = await getFromStorage<StoredData>(
+            LOCAL_STORAGE,
+            VAULT_KEY
+        );
+        if (!encryptedVault) {
+            throw new Error('Wallet is not initialized');
+        }
+        try {
+            await Vault.from(password, encryptedVault);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Import a new keypair to the vault and saves it to storage. If keypair already exists it ignores it.
+     * NOTE: make sure you verify the password before calling this method
+     * @param keypair The keypair to import
+     * @param password The password to be used to store the vault. Make sure to verify that it's the correct password (of the current vault) and then call this function. It does't verify the password see {@link VaultStorage.verifyPassword}.
+     * @returns True if the key was imported, false otherwise
+     */
+    public async importKeypair(keypair: ExportedKeypair, password: string) {
+        if (!this.#vault) {
+            throw new Error('Error, vault is locked. Unlock the vault first.');
+        }
+        const keypairToImport = fromExportedKeypair(keypair);
+        const importedAddress = keypairToImport.getPublicKey().toSuiAddress();
+        const isDuplicate = this.#vault.importedKeypairs.some(
+            (aKeypair) =>
+                aKeypair.getPublicKey().toSuiAddress() === importedAddress
+        );
+        if (isDuplicate) {
+            return false;
+        }
+        this.#vault.importedKeypairs.push(keypairToImport);
+        await setToStorage(
+            LOCAL_STORAGE,
+            VAULT_KEY,
+            await this.#vault.encrypt(password)
+        );
+        await this.updateSessionStorage();
+        return true;
+    }
+
+    public getImportedKeys() {
+        return this.#vault?.importedKeypairs || null;
+    }
+
+    private async updateSessionStorage() {
+        await ifSessionStorage(async (sessionStorage) => {
+            if (!this.#vault) {
+                return;
+            }
+            const rndPass = getRandomPassword();
+            const ephemeralPass = makeEphemeraPassword(rndPass);
+            await setToStorage(sessionStorage, EPHEMERAL_PASSWORD_KEY, rndPass);
+            await setToStorage(
+                sessionStorage,
+                EPHEMERAL_VAULT_KEY,
+                await this.#vault.encrypt(ephemeralPass)
+            );
+        });
     }
 }

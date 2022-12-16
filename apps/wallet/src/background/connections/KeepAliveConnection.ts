@@ -4,7 +4,7 @@
 import { BehaviorSubject, filter, map, take } from 'rxjs';
 
 import Keyring from '_src/background/keyring';
-import { IS_SESSION_STORAGE_SUPPORTED } from '_src/background/keyring/VaultStorage';
+import { IS_SESSION_STORAGE_SUPPORTED } from '_src/background/keyring/storage-utils';
 import { MSG_DISABLE_AUTO_RECONNECT } from '_src/content-script/keep-bg-alive';
 
 import type { Runtime } from 'webextension-polyfill';

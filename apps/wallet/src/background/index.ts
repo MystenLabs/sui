@@ -8,7 +8,7 @@ import { LOCK_ALARM_NAME } from './Alarms';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
-import { IS_SESSION_STORAGE_SUPPORTED } from './keyring/VaultStorage';
+import { IS_SESSION_STORAGE_SUPPORTED } from './keyring/storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 
