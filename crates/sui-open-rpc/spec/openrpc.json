@@ -4468,6 +4468,29 @@
           "BLS12381"
         ]
       },
+      "StakeSubsidy": {
+        "type": "object",
+        "required": [
+          "balance",
+          "current_epoch_amount",
+          "epoch_counter"
+        ],
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/Balance"
+          },
+          "current_epoch_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_counter": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "StakingPool": {
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
@@ -5082,9 +5105,9 @@
           "chain_id",
           "epoch",
           "info",
-          "next_epoch_stake_subsidy",
           "parameters",
           "reference_gas_price",
+          "stake_subsidy",
           "storage_fund",
           "treasury_cap",
           "validator_report_records",
@@ -5102,11 +5125,6 @@
           "info": {
             "$ref": "#/components/schemas/UID"
           },
-          "next_epoch_stake_subsidy": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
           },
@@ -5114,6 +5132,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "stake_subsidy": {
+            "$ref": "#/components/schemas/StakeSubsidy"
           },
           "storage_fund": {
             "$ref": "#/components/schemas/Balance"

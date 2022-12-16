@@ -52,4 +52,9 @@ module sui::stake_subsidy {
         let amount = balance::value(&subsidy.balance);
         balance::split(&mut subsidy.balance, amount)
     }
+
+    /// Returns the amount of stake subsidy to be added at the end of the current epoch.
+    public fun current_epoch_subsidy_amount(subsidy: &StakeSubsidy): u64 {
+        subsidy.current_epoch_amount
+    }
 }
