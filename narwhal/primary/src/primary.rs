@@ -709,11 +709,11 @@ impl PrimaryReceiverHandler {
         for parent in parents.iter() {
             ensure!(
                 parent.round() + 1 == header.round,
-                DagError::MalformedHeader(header.digest())
+                DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
                 parent_authorities.insert(&parent.header.author),
-                DagError::MalformedHeader(header.digest())
+                DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
             stake += committee.stake(&parent.origin());
         }
@@ -881,7 +881,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                         // Report unretriable errors as 400 Bad Request.
                         DagError::InvalidSignature(_)
                         | DagError::InvalidHeaderDigest
-                        | DagError::MalformedHeader(_)
+                        | DagError::HeaderHasBadWorkerIds(_)
+                        | DagError::HeaderHasInvalidParentRoundNumbers(_)
+                        | DagError::HeaderHasDuplicateParentAuthorities(_)
                         | DagError::AlreadyVoted(_, _)
                         | DagError::HeaderRequiresQuorum(_)
                         | DagError::TooOld(_, _, _) => {
