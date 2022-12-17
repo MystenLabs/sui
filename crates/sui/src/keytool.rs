@@ -18,8 +18,8 @@ use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair, SignatureScheme,
-    SuiKeyPair, SuiSignatureInner,
+    get_authority_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64,
+    NetworkKeyPair, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -73,13 +73,21 @@ impl KeyToolCommand {
                 key_scheme,
                 derivation_path,
             } => {
-                let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
-                let file = format!("{address}.key");
-                write_keypair_to_file(&kp, &file)?;
-                println!(
-                    "Keypair wrote to file path: {:?} with scheme: {:?}",
-                    file, scheme
-                );
+                if "bls12381" == key_scheme.to_string() {
+                    // Generate BLS12381 key for authority without key derivation.
+                    // The saved keypair is encoded `privkey || pubkey` without the scheme flag.
+                    let (address, keypair) = get_authority_key_pair();
+                    let file_name = format!("bls-{address}.key");
+                    write_authority_keypair_to_file(&keypair, &file_name)?;
+                } else {
+                    let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
+                    let file = format!("{address}.key");
+                    write_keypair_to_file(&kp, &file)?;
+                    println!(
+                        "Keypair wrote to file path: {:?} with scheme: {:?}",
+                        file, scheme
+                    );
+                }
             }
             KeyToolCommand::Show { file } => {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
