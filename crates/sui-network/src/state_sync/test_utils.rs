@@ -6,8 +6,8 @@ use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},
     crypto::{
-        AuthorityKeyPair, AuthoritySignInfo, AuthoritySignature, AuthorityWeakQuorumSignInfo,
-        KeypairTraits, SuiAuthoritySignature,
+        AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
+        AuthorityWeakQuorumSignInfo, KeypairTraits, SuiAuthoritySignature,
     },
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
@@ -138,6 +138,33 @@ impl CommitteeFixture {
             .unzip();
 
         (ordered_checkpoints, sequence_number_to_digest, checkpoints)
+    }
+
+    pub fn make_end_of_epoch_checkpoint(
+        &self,
+        previous_checkpoint: VerifiedCheckpoint,
+        next_epoch_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
+    ) -> (
+        CheckpointSequenceNumber,
+        CheckpointDigest,
+        VerifiedCheckpoint,
+    ) {
+        let summary = CheckpointSummary {
+            epoch: self.epoch,
+            sequence_number: previous_checkpoint.summary.sequence_number + 1,
+            content_digest: empty_contents().digest(),
+            previous_digest: Some(previous_checkpoint.summary.digest()),
+            epoch_rolling_gas_cost_summary: Default::default(),
+            next_epoch_committee: Some(next_epoch_committee),
+        };
+
+        let checkpoint = self.create_certified_checkpoint(summary);
+
+        (
+            checkpoint.summary.sequence_number,
+            checkpoint.summary.digest(),
+            checkpoint,
+        )
     }
 }
 
