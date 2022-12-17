@@ -145,10 +145,10 @@ function TokenView({ data }: { data: DataType }) {
                                 <tr>
                                     <td>Contract ID</td>
                                     <td>
-                                        <Longtext
-                                            text={viewedData.contract_id.bytes}
-                                            category="object"
-                                            isLink
+                                        <ObjectLink
+                                            objectId={
+                                                viewedData.contract_id.bytes
+                                            }
                                         />
                                     </td>
                                 </tr>

@@ -19,7 +19,6 @@ import {
 import { Fragment } from 'react';
 
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
-import Longtext from '../../components/longtext/Longtext';
 import { getAmount } from '../../utils/getAmount';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
@@ -28,6 +27,7 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import styles from './RecentTxCard.module.css';
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
+import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { TransactionType } from '~/ui/TransactionType';
 
 export type TxnData = {
@@ -42,15 +42,13 @@ export type TxnData = {
     timestamp_ms?: number;
 };
 
+type Category = 'object' | 'transaction' | 'address';
+
 export type LinkObj = {
     url: string;
     name?: string;
-    copy?: boolean;
     category?: Category;
-    isLink?: boolean;
 };
-
-type Category = 'object' | 'transaction' | 'address' | 'unknown';
 
 export function SuiAmount({
     amount,
@@ -80,13 +78,13 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
                 <Fragment key={idx + itm.url}>
-                    <Longtext
-                        text={itm.url}
-                        alttext={itm.name}
-                        category={itm.category || 'unknown'}
-                        isLink={itm?.isLink}
-                        copyButton={itm?.copy ? '16' : 'none'}
-                    />
+                    {itm.category === 'address' ? (
+                        <AddressLink address={itm.url} />
+                    ) : itm.category === 'object' ? (
+                        <ObjectLink objectId={itm.url} />
+                    ) : (
+                        <TransactionLink digest={itm.url} />
+                    )}
                     {idx !== content.length - 1 && <ContentArrowRight />}
                 </Fragment>
             ))}
@@ -109,8 +107,6 @@ export const genTableDataFromTxData = (
                             url: txn.txId,
                             name: truncate(txn.txId, truncateLength),
                             category: 'transaction',
-                            isLink: true,
-                            copy: false,
                         },
                     ]}
                 />
@@ -122,8 +118,6 @@ export const genTableDataFromTxData = (
                             url: txn.From,
                             name: truncate(txn.From, truncateLength),
                             category: 'address',
-                            isLink: true,
-                            copy: false,
                         },
                         ...(txn.To
                             ? [
@@ -131,8 +125,6 @@ export const genTableDataFromTxData = (
                                       url: txn.To,
                                       name: truncate(txn.To, truncateLength),
                                       category: 'address',
-                                      isLink: true,
-                                      copy: false,
                                   } as const,
                               ]
                             : []),
