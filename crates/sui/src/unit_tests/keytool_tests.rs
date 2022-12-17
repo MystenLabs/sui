@@ -291,3 +291,14 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
     Ok(())
 }
+
+#[test]
+fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
+    KeyToolCommand::Generate {
+        key_scheme: SignatureScheme::BLS12381,
+        derivation_path: None,
+    }
+    .execute(&mut keystore)?;
+    Ok(())
+}
