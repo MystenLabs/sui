@@ -88,6 +88,8 @@ function StakeForm({
                             <button
                                 className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium"
                                 onClick={setMaxToken}
+                                disabled={!maxToken}
+                                type="button"
                             >
                                 Max
                             </button>
@@ -141,7 +143,7 @@ function StakeForm({
                     <div className="mt-2 flex flex-col flex-nowrap">
                         <Alert mode="warning">
                             <strong>
-                                {unstake ? 'UnStake failed' : 'Stake failed'}.
+                                {unstake ? 'Unstake failed' : 'Stake failed'}.
                             </strong>
                             <small>{submitError}</small>
                         </Alert>
