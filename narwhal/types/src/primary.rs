@@ -264,7 +264,7 @@ impl Header {
             worker_cache
                 .load()
                 .worker(&self.author, worker_id)
-                .map_err(|_| DagError::MalformedHeader(self.digest()))?;
+                .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
         // Check the signature.
