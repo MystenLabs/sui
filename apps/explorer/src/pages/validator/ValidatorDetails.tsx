@@ -11,6 +11,7 @@ import ErrorResult from '~/components/error-result/ErrorResult';
 import { useGetObject } from '~/hooks/useGetObject';
 import { VALIDATORS_OBJECT_ID, type ValidatorState  } from '~/pages/validator/ValidatorDataTypes';
 import { Heading } from '~/ui/Heading';
+import { ImageIcon } from '~/ui/ImageIcon';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { getValidatorName } from '~/utils/getValidatorName';
 
@@ -70,6 +71,7 @@ function ValidatorDetails() {
                 <LoadingSpinner />
             )}
             <div className="">
+                <ImageIcon />
                 <Heading as="h1" variant="heading2" weight="bold">Shinobi Systems 🚀 stakeview.app</Heading>
             </div>
         </div>
