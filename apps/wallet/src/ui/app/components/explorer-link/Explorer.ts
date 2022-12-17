@@ -8,7 +8,6 @@ import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
     [API_ENV.local]: 'local',
     [API_ENV.devNet]: 'devnet',
-    [API_ENV.staging]: 'staging',
     [API_ENV.testNet]: 'testnet',
     [API_ENV.customRPC]: '',
 };

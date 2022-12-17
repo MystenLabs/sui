@@ -16,7 +16,6 @@ import type { Keypair } from '@mysten/sui.js';
 export enum API_ENV {
     local = 'local',
     devNet = 'devNet',
-    staging = 'staging',
     testNet = 'testNet',
     customRPC = 'customRPC',
 }
@@ -32,7 +31,6 @@ type ApiEndpoints = {
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local' },
     [API_ENV.devNet]: { name: 'Sui Devnet' },
-    [API_ENV.staging]: { name: 'Sui Staging' },
     [API_ENV.customRPC]: { name: 'Custom RPC URL' },
     [API_ENV.testNet]: { name: 'Sui Testnet' },
 };
@@ -45,10 +43,6 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.devNet]: {
         fullNode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
-    },
-    [API_ENV.staging]: {
-        fullNode: process.env.API_ENDPOINT_STAGING_FULLNODE || '',
-        faucet: process.env.API_ENDPOINT_STAGING_FAUCET || '',
     },
     [API_ENV.customRPC]: null,
     [API_ENV.testNet]: {
@@ -83,10 +77,6 @@ type NetworkTypes = keyof typeof API_ENV;
 
 export const generateActiveNetworkList = (): NetworkTypes[] => {
     const excludedNetworks: NetworkTypes[] = [];
-
-    if (process.env.SHOW_STAGING !== 'false') {
-        excludedNetworks.push(API_ENV.staging);
-    }
 
     if (!growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) {
         excludedNetworks.push(API_ENV.testNet);
