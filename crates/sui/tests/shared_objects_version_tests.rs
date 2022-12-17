@@ -10,11 +10,10 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
 };
-use sui_types::object::{Object, Owner, OBJECT_START_VERSION};
+use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use test_utils::messages::move_transaction;
-use test_utils::objects::test_gas_objects;
 use test_utils::transaction::{
     publish_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -153,7 +152,7 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     async fn new() -> Self {
-        let mut gas_objects = test_gas_objects();
+        let mut gas_objects = generate_test_gas_objects();
         let configs = test_authority_configs();
         let node_handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 

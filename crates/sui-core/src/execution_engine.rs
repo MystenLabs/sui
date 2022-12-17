@@ -652,7 +652,7 @@ fn test_pay_empty_coins() {
 
 #[test]
 fn test_pay_empty_recipients() {
-    let coin_objects = vec![Object::new_gas_coin_for_testing(
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
         10,
         SuiAddress::random_for_testing_only(),
     )];
@@ -671,7 +671,7 @@ fn test_pay_empty_recipients() {
 
 #[test]
 fn test_pay_empty_amounts() {
-    let coin_objects = vec![Object::new_gas_coin_for_testing(
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
         10,
         SuiAddress::random_for_testing_only(),
     )];
@@ -692,7 +692,9 @@ fn test_pay_empty_amounts() {
 fn test_pay_arity_mismatch() {
     // different number of recipients and amounts
     let owner = SuiAddress::random_for_testing_only();
-    let coin_objects = vec![Object::new_gas_coin_for_testing(10, owner)];
+    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
+        10, owner,
+    )];
     let recipients = vec![
         SuiAddress::random_for_testing_only(),
         SuiAddress::random_for_testing_only(),
@@ -712,8 +714,14 @@ fn test_pay_arity_mismatch() {
 #[test]
 fn test_pay_insufficient_balance() {
     let coin_objects = vec![
-        Object::new_gas_coin_for_testing(10, SuiAddress::random_for_testing_only()),
-        Object::new_gas_coin_for_testing(5, SuiAddress::random_for_testing_only()),
+        Object::new_gas_with_balance_and_owner_for_testing(
+            10,
+            SuiAddress::random_for_testing_only(),
+        ),
+        Object::new_gas_with_balance_and_owner_for_testing(
+            5,
+            SuiAddress::random_for_testing_only(),
+        ),
     ];
     let recipients = vec![
         SuiAddress::random_for_testing_only(),
@@ -743,8 +751,8 @@ fn test_pay_success_without_delete() {
     // supplied one coin and only needed to use part of it. should
     // mutate 1 object, create 1 object, and delete no objects
     let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_coin_for_testing(10, sender);
-    let coin2 = Object::new_gas_coin_for_testing(5, sender);
+    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
+    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(5, sender);
     let coin_objects = vec![coin1, coin2];
     let recipient1 = SuiAddress::random_for_testing_only();
     let recipient2 = SuiAddress::random_for_testing_only();
@@ -778,8 +786,8 @@ fn test_pay_success_without_delete() {
 fn test_pay_success_delete_one() {
     // supplied two coins, spent all of the first one and some of the second one
     let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_coin_for_testing(10, sender);
-    let coin2 = Object::new_gas_coin_for_testing(5, sender);
+    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
+    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(5, sender);
     let input_coin_id1 = coin1.id();
     let input_coin_id2 = coin2.id();
     let coin_objects = vec![coin1, coin2];
@@ -812,8 +820,8 @@ fn test_pay_success_delete_one() {
 fn test_pay_success_delete_all() {
     // supplied two coins, spent both of them
     let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_coin_for_testing(10, sender);
-    let coin2 = Object::new_gas_coin_for_testing(5, sender);
+    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
+    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(5, sender);
     let input_coin_id1 = coin1.id();
     let input_coin_id2 = coin2.id();
     let coin_objects = vec![coin1, coin2];
@@ -848,7 +856,7 @@ fn test_pay_success_delete_all() {
 #[test]
 fn test_pay_sui_success_one_input_coin() {
     let sender = SuiAddress::random_for_testing_only();
-    let coin = Object::new_gas_coin_for_testing(18, sender);
+    let coin = Object::new_gas_with_balance_and_owner_for_testing(18, sender);
     let mut coin_objects = vec![coin];
 
     let recipient1 = SuiAddress::random_for_testing_only();
@@ -881,9 +889,9 @@ fn test_pay_sui_success_one_input_coin() {
 #[test]
 fn test_pay_sui_success_multiple_input_coins() {
     let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_coin_for_testing(30, sender);
-    let coin2 = Object::new_gas_coin_for_testing(20, sender);
-    let coin3 = Object::new_gas_coin_for_testing(10, sender);
+    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(30, sender);
+    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(20, sender);
+    let coin3 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
     let input_coin_id2 = coin2.id();
     let input_coin_id3 = coin3.id();
     let mut coin_objects = vec![coin1, coin2, coin3];
@@ -924,9 +932,9 @@ fn test_pay_sui_success_multiple_input_coins() {
 #[test]
 fn test_pay_all_sui_success_multiple_input_coins() {
     let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_coin_for_testing(30, sender);
-    let coin2 = Object::new_gas_coin_for_testing(20, sender);
-    let coin3 = Object::new_gas_coin_for_testing(10, sender);
+    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(30, sender);
+    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(20, sender);
+    let coin3 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
     let input_coin_id2 = coin2.id();
     let input_coin_id3 = coin3.id();
     let mut coin_objects = vec![coin1, coin2, coin3];

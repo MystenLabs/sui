@@ -13,7 +13,7 @@ use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
-use sui_types::object::Object;
+use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::{
     gas::GasCostSummary,
     messages::{CallArg, ExecutionStatus, ObjectArg},
@@ -26,7 +26,6 @@ use test_utils::transaction::make_publish_package;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     messages::move_transaction,
-    objects::test_gas_objects,
     transaction::{
         publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
     },
@@ -242,7 +241,7 @@ async fn create_txes(
 async fn run_actual_and_estimate_costs(
 ) -> Result<BTreeMap<CommonTransactionCosts, (GasCostSummary, GasCostSummary)>, anyhow::Error> {
     let mut ret = BTreeMap::new();
-    let gas_objects = test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
     let (sender, keypair) = deterministic_random_account_key();
 
     // Get the authority configs and spawn them. Note that it is important to not drop

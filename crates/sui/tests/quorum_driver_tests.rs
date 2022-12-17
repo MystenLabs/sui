@@ -13,19 +13,18 @@ use sui_types::error::SuiError;
 use sui_types::messages::{
     QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
 };
-use sui_types::object::Object;
+use sui_types::object::{generate_test_gas_objects, Object};
 use test_utils::authority::{
     spawn_test_authorities, test_and_configure_authority_configs, test_authority_configs,
 };
 use test_utils::messages::make_transfer_sui_transaction;
-use test_utils::objects::test_gas_objects;
 
 async fn setup() -> (
     Vec<SuiNodeHandle>,
     AuthorityAggregator<NetworkAuthorityClient>,
     VerifiedTransaction,
 ) {
-    let mut gas_objects = test_gas_objects();
+    let mut gas_objects = generate_test_gas_objects();
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
     let committee_store = handles[0].with(|h| h.state().committee_store().clone());
@@ -169,7 +168,7 @@ async fn test_update_validators() {
 
 #[tokio::test]
 async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
-    let mut gas_objects = test_gas_objects();
+    let mut gas_objects = generate_test_gas_objects();
     let configs = test_and_configure_authority_configs(4);
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
     let committee_store = handles[0].with(|h| h.state().committee_store().clone());
