@@ -186,6 +186,7 @@ impl Proposer {
             if last_header.round == this_round && last_header.epoch == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
                 debug!("Proposer re-using existing header for round {this_round}");
+                self.last_parents.clear(); // Clear parents that are now invalid for next round.
                 return Ok(last_header);
             }
         }
