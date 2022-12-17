@@ -45,6 +45,8 @@ export type MoveEvent = Infer<typeof MoveEvent>;
 export const PublishEvent = object({
   sender: SuiAddress,
   packageId: ObjectId,
+  version: number(),
+  digest: string(),
 });
 
 export type PublishEvent = Infer<typeof PublishEvent>;
