@@ -1055,7 +1055,7 @@ pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
         })
 }
 
-/// TODO: Good description of why we're doing this : RocksDB stores keys in BE and has a seek operator on iterators, see https://github.com/facebook/rocksdb/wiki/Iterator#introduction
+/// TODO: Good description of why we're doing this : RocksDB stores keys in BE and has a seek operator on iterators, see `https://github.com/facebook/rocksdb/wiki/Iterator#introduction`
 #[inline]
 pub fn be_fix_int_ser<S>(t: &S) -> Result<Vec<u8>, TypedStoreError>
 where
