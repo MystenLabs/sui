@@ -30,7 +30,7 @@ use sui_node::metrics;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::batch::UpdateItem;
-use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 use sui_types::messages::TransactionInfoRequest;
@@ -39,7 +39,6 @@ use tracing::log::info;
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::objects::generate_gas_objects_with_owner;
-use test_utils::test_account_keys;
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;
 use tracing::error;
@@ -285,7 +284,7 @@ async fn main() -> Result<()> {
         };
 
         // bring up servers ..
-        let (owner, keypair): (SuiAddress, AccountKeyPair) = test_account_keys().pop().unwrap();
+        let (owner, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
         let primary_gas = generate_gas_objects_with_owner(1, owner);
         let primary_gas_id = primary_gas.get(0).unwrap().id();
         // Make the client runtime wait until we are done creating genesis objects

@@ -11,13 +11,13 @@ use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
+use sui_types::crypto::deterministic_random_account_key;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     messages::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
-use test_utils::test_account_keys;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -27,7 +27,7 @@ pub fn test_gas_objects() -> Vec<Object> {
         static GAS_OBJECTS: Vec<Object> = (0..4)
             .map(|_| {
                 let gas_object_id = ObjectID::random();
-                let (owner, _) = test_account_keys().pop().unwrap();
+                let (owner, _) = deterministic_random_account_key();
                 Object::with_id_owner_for_testing(gas_object_id, owner)
             })
             .collect();
@@ -51,7 +51,7 @@ pub fn test_shared_object() -> Object {
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
 
     let mut certificates = Vec::new();
     let shared_object = test_shared_object();

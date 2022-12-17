@@ -569,6 +569,31 @@ where
     get_key_pair_from_rng(&mut OsRng)
 }
 
+pub const TEST_COMMITTEE_SIZE: usize = 4;
+/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
+    let mut rng = StdRng::from_seed([0; 32]);
+    (0..TEST_COMMITTEE_SIZE)
+        .map(|_| {
+            // TODO: We are generating the keys 4 times to match exactly as how we generate
+            // keys in ConfigBuilder::build (sui-config/src/builder.rs). This is because
+            // we are using these key generation functions as fixtures and we call them
+            // independently in different paths and exact the results to be the same.
+            // We should eliminate them.
+            let key_pair = get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng);
+            get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng);
+            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
+            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
+            key_pair.1
+        })
+        .collect()
+}
+
+pub fn deterministic_random_account_key() -> (SuiAddress, AccountKeyPair) {
+    let mut rng = StdRng::from_seed([0; 32]);
+    get_key_pair_from_rng(&mut rng)
+}
+
 pub fn get_account_key_pair() -> (SuiAddress, AccountKeyPair) {
     get_key_pair()
 }

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::test_account_keys;
+
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::crypto::deterministic_random_account_key;
 use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
 
 /// Make a few test gas objects (all with the same owner).
@@ -10,7 +11,7 @@ pub fn test_gas_objects() -> Vec<Object> {
         static GAS_OBJECTS: Vec<Object> = (0..50)
             .map(|_| {
                 let gas_object_id = ObjectID::random();
-                let (owner, _) = test_account_keys().pop().unwrap();
+                let (owner, _) = deterministic_random_account_key();
                 Object::with_id_owner_for_testing(gas_object_id, owner)
             })
             .collect();
@@ -22,13 +23,13 @@ pub fn test_gas_objects() -> Vec<Object> {
 /// Make a test gas objects.
 pub fn generate_gas_object() -> Object {
     let gas_object_id = ObjectID::random();
-    let (owner, _) = test_account_keys().pop().unwrap();
+    let (owner, _) = deterministic_random_account_key();
     Object::with_id_owner_for_testing(gas_object_id, owner)
 }
 
 pub fn generate_gas_object_with_balance(balance: u64) -> Object {
     let gas_object_id = ObjectID::random();
-    let (owner, _) = test_account_keys().pop().unwrap();
+    let (owner, _) = deterministic_random_account_key();
     Object::with_id_owner_gas_for_testing(gas_object_id, owner, balance)
 }
 
@@ -37,7 +38,7 @@ pub fn generate_gas_objects_for_testing(count: usize) -> Vec<Object> {
     (0..count)
         .map(|_i| {
             let gas_object_id = ObjectID::random();
-            let (owner, _) = test_account_keys().pop().unwrap();
+            let (owner, _) = deterministic_random_account_key();
             Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
         })
         .collect()

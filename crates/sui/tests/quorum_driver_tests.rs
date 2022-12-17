@@ -8,7 +8,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
@@ -19,7 +19,6 @@ use test_utils::authority::{
 };
 use test_utils::messages::make_transfer_sui_transaction;
 use test_utils::objects::test_gas_objects;
-use test_utils::test_account_keys;
 
 async fn setup() -> (
     Vec<SuiNodeHandle>,
@@ -34,7 +33,7 @@ async fn setup() -> (
         .with_committee_store(committee_store)
         .build()
         .unwrap();
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
     let tx = make_transfer_sui_transaction(
         gas_objects.pop().unwrap().compute_object_reference(),
         SuiAddress::default(),
@@ -183,7 +182,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
         QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
 
-    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
     let gas = gas_objects.pop().unwrap();
     let tx = make_tx(&gas, sender, &keypair);
     let names: Vec<_> = aggregator.authority_clients.keys().clone().collect();

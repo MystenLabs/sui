@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{sha3_hash, AuthorityPublicKey};
+use crate::crypto::{random_committee_key_pairs, sha3_hash, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use crate::messages::CommitteeInfo;
+use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
@@ -283,6 +284,24 @@ impl Committee {
         self.voting_rights
             .binary_search_by_key(name, |(a, _)| *a)
             .is_ok()
+    }
+
+    // ===== Testing-only methods =====
+
+    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
+    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
+        let committee = Self::new(
+            0,
+            key_pairs
+                .iter()
+                .map(|key| {
+                    (AuthorityName::from(key.public()), /* voting right */ 1)
+                })
+                .collect(),
+        )
+        .unwrap();
+        (committee, key_pairs)
     }
 }
 
