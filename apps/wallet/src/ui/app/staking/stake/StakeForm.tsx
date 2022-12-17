@@ -64,6 +64,7 @@ function StakeForm({
     const maxToken = formatBalance(coinBalanceMinusGas, coinDecimals);
 
     const setMaxToken = useCallback(() => {
+        if(!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
 
