@@ -52,7 +52,7 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const unstake = !!searchParams.get('unstake');
+    const isUnstake = !!searchParams.get('unstake');
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -108,6 +108,7 @@ function StakingCard() {
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
                 // TODO: add unstake functionality on the support roles out
+                if (isUnstake) return;
                 const response = await dispatch(
                     stakeTokens({
                         amount: bigIntAmount,
@@ -126,7 +127,14 @@ function StakingCard() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [coinType, validatorAddress, coinDecimals, dispatch, navigate]
+        [
+            coinType,
+            validatorAddress,
+            coinDecimals,
+            isUnstake,
+            dispatch,
+            navigate,
+        ]
     );
 
     const handleOnClearSubmitError = useCallback(() => {
@@ -157,7 +165,7 @@ function StakingCard() {
                             <Content>
                                 <ValidateDetailFormCard
                                     validatorAddress={validatorAddress}
-                                    unstake={unstake}
+                                    unstake={isUnstake}
                                 />
                                 <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
                                     <Text
@@ -165,7 +173,7 @@ function StakingCard() {
                                         color="gray-85"
                                         weight="semibold"
                                     >
-                                        {unstake
+                                        {isUnstake
                                             ? 'Enter the amount of SUI to unstake'
                                             : 'Enter the amount of SUI to stake'}
                                     </Text>
@@ -174,7 +182,7 @@ function StakingCard() {
                                     submitError={sendError}
                                     coinBalance={coinBalance}
                                     coinType={coinType}
-                                    unstake={unstake}
+                                    unstake={isUnstake}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
@@ -206,7 +214,7 @@ function StakingCard() {
                                 >
                                     {isSubmitting ? (
                                         <LoadingIndicator />
-                                    ) : unstake ? (
+                                    ) : isUnstake ? (
                                         'UnStake Now'
                                     ) : (
                                         'Stake Now'
