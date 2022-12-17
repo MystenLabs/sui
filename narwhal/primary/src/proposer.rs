@@ -15,7 +15,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use tracing::{debug, error, info};
+use tracing::{debug, enabled, error, info};
 use types::now;
 use types::{
     error::{DagError, DagResult},
@@ -185,6 +185,7 @@ impl Proposer {
         if let Some(last_header) = self.proposer_store.get_last_proposed()? {
             if last_header.round == this_round && last_header.epoch == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
+                debug!("Proposer re-using existing header for round {this_round}");
                 return Ok(last_header);
             }
         }
@@ -222,6 +223,14 @@ impl Proposer {
             &self.signature_service,
         )
         .await;
+
+        if enabled!(tracing::Level::DEBUG) {
+            let mut msg = format!("Created header {header:?} with parent certificates:\n");
+            for parent in parents.iter() {
+                msg.push_str(&format!("{parent:?}\n"));
+            }
+            debug!(msg);
+        }
 
         // Register the header by the current round, to remember that we need to commit
         // it, or re-include the batch digests that it contains.
@@ -488,6 +497,13 @@ impl Proposer {
                         },
                         Ordering::Equal => {
                             // Nothing to do, we can proceed.
+                        }
+                    }
+
+                    // Sanity check: verify provided certs are of the correct round & epoch.
+                    for parent in parents.iter() {
+                        if parent.round() != round || parent.epoch() != epoch {
+                            error!("Proposer received certificate {parent:?} that failed to match expected round {round} or epoch {epoch}. This should not be possible.");
                         }
                     }
 
