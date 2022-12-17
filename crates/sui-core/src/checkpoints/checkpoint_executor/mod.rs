@@ -121,7 +121,7 @@ impl CheckpointExecutor {
         Ok((
             Handle {
                 end_of_epoch_event_sender,
-                _event_loop_handle: event_loop_handle,
+                event_loop_handle,
             },
             end_of_epoch_recv_channel,
         ))
@@ -130,10 +130,18 @@ impl CheckpointExecutor {
 
 pub struct Handle {
     end_of_epoch_event_sender: broadcast::Sender<Committee>,
-    _event_loop_handle: JoinHandle<()>,
+    event_loop_handle: JoinHandle<()>,
 }
 
 impl Handle {
+    pub async fn join(self) -> std::result::Result<(), tokio::task::JoinError> {
+        self.event_loop_handle.await
+    }
+
+    pub fn event_loop_handle(self) -> JoinHandle<()> {
+        self.event_loop_handle
+    }
+
     pub fn subscribe_to_end_of_epoch(&self) -> broadcast::Receiver<Committee> {
         self.end_of_epoch_event_sender.subscribe()
     }
@@ -190,27 +198,34 @@ impl CheckpointExecutorEventLoop {
             self.execute_checkpoints_for_epoch().await
         {
             self.reconfig(next_committee, last_checkpoint.epoch()).await;
-            self.checkpoint_store
-                .update_highest_executed_checkpoint(&last_checkpoint)
-                .unwrap();
             self.end_of_epoch = false;
         }
         // Channel closed
     }
 
     pub async fn handle_crash_recovery(&self) -> SuiResult {
-        if let Some(checkpoint) = self.checkpoint_store.get_highest_executed_checkpoint()? {
-            // last executed checkpoint before shutdown was last of epoch. Make sure
-            // reconfig was successful, otherwise redo
-            if let Some(committee) = checkpoint.next_epoch_committee() {
-                let local_epoch = self.authority_state.epoch();
-                if checkpoint.epoch() == local_epoch {
-                    info!(
-                        "Handling end of epoch pre-reconfig crash recovery for epoch {:?} -> {:?}",
-                        local_epoch,
-                        local_epoch + 1
-                    );
-                    self.reconfig(committee.to_vec(), local_epoch).await;
+        let local_epoch = self.authority_state.epoch();
+
+        match self.checkpoint_store.get_highest_executed_checkpoint()? {
+            // TODO this invariant may no longer hold once we introduce snapshots
+            None => assert_eq!(local_epoch, 0),
+
+            Some(last_checkpoint) => {
+                match last_checkpoint.next_epoch_committee() {
+                    // Make sure there was not an epoch change in this case
+                    None => assert_eq!(local_epoch, last_checkpoint.epoch()),
+                    // Last executed checkpoint before shutdown was last of epoch.
+                    // Make sure reconfig was successful, otherwise redo
+                    Some(committee) => {
+                        if last_checkpoint.epoch() == local_epoch {
+                            info!(
+                                "Handling end of epoch pre-reconfig crash recovery for epoch {:?} -> {:?}",
+                                local_epoch,
+                                local_epoch + 1
+                            );
+                            self.reconfig(committee.to_vec(), local_epoch).await;
+                        }
+                    }
                 }
             }
         }
@@ -262,15 +277,15 @@ impl CheckpointExecutorEventLoop {
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
                         }
-                        // We must not ratchet highest_executed_checkpoint before reconfig. If we
-                        // do and reconfig crashes, node will move forward with checkpoint execution
-                        // in the wrong epoch after startup
                         Some(committee) => {
                             debug!(
                                 "Last checkpoint ({:?}) of epoch {:?} has finished execution",
                                 checkpoint.sequence_number(),
                                 checkpoint.epoch(),
                             );
+                            self.checkpoint_store
+                                .update_highest_executed_checkpoint(&checkpoint)
+                                .unwrap();
                             return Some((checkpoint, committee));
                         }
                     }

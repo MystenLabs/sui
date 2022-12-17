@@ -10,12 +10,14 @@ use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, time::timeout};
 
 use crate::{authority::AuthorityState, checkpoints::CheckpointStore};
 
 use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
 
+/// Test checkpoint executor happy path, test that checkpoint executor correctly
+/// picks up where it left off in the event of a mid-epoch node crash.
 #[tokio::test]
 pub async fn test_checkpoint_executor_crash_recovery() {
     let buffer_size = num_cpus::get() * TASKS_PER_CORE * 2;
@@ -44,10 +46,19 @@ pub async fn test_checkpoint_executor_crash_recovery() {
             None,
             &committee,
         );
-        let (_handle, _reconfig_channel) = executor.start().unwrap();
+        let (executor_handle, _reconfig_channel) = executor.start().unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
+
         // dropping the channel will cause the checkpoint executor process to exit (gracefully)
         drop(checkpoint_sender);
+        timeout(Duration::from_secs(1), async {
+            executor_handle
+                .join()
+                .await
+                .expect("Should exit gracefully");
+        })
+        .await
+        .unwrap();
 
         assert!(matches!(
             checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
@@ -83,10 +94,19 @@ pub async fn test_checkpoint_executor_crash_recovery() {
             Some(last_executed_checkpoint),
             &committee,
         );
-        let (_handle, _reconfig_channel) = executor.start().unwrap();
+        let (executor_handle, _reconfig_channel) = executor.start().unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
+
         // dropping the channel will cause the checkpoint executor process to exit (gracefully)
         drop(checkpoint_sender);
+        timeout(Duration::from_secs(1), async {
+            executor_handle
+                .join()
+                .await
+                .expect("Should exit gracefully");
+        })
+        .await
+        .unwrap();
 
         assert!(matches!(
             checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
@@ -95,6 +115,9 @@ pub async fn test_checkpoint_executor_crash_recovery() {
     }
 }
 
+/// Test that checkpoint execution correctly signals end of epoch after
+/// receiving last checkpoint of epoch, pauses execution until reconfig,
+/// then resumes checkpoint execution after reconfig.
 #[tokio::test]
 pub async fn test_checkpoint_executor_cross_epoch() {
     let buffer_size = 10;
@@ -146,12 +169,10 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let (_handle, mut reconfig_channel) = executor.start().unwrap();
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    // We should have synced up to epoch boundary - 1 (-1 because we do
-    // not ratchet the highest executed checkpoint watermark until after
-    // reconfig is successful)
+    // We should have synced up to epoch boundary
     assert!(matches!(
         checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
-        Some(highest) if highest == (num_to_sync_per_epoch as u64) - 1,
+        Some(highest) if highest == (num_to_sync_per_epoch as u64),
     ));
 
     // Ensure we have end of epoch notification
@@ -168,6 +189,123 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
         Some(highest) if highest == (2 * num_to_sync_per_epoch as u64),
     ));
+}
+
+/// Test that if we crash at end of epoch / during reconfig, we recover on startup
+/// by starting at the old epoch and immediately retrying reconfig
+#[tokio::test]
+pub async fn test_reconfig_crash_recovery() {
+    let tempdir = tempdir().unwrap();
+    let checkpoint_store = CheckpointStore::new(tempdir.path());
+
+    // new Node (syncing from checkpoint 0)
+    let (authority_state, executor, checkpoint_sender, first_committee): (
+        Arc<AuthorityState>,
+        CheckpointExecutor,
+        Sender<VerifiedCheckpoint>,
+        CommitteeFixture,
+    ) = init_executor_test(
+        10, /* StateSync -> Executor channel buffer size */
+        checkpoint_store.clone(),
+    )
+    .await;
+
+    assert!(matches!(
+        checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap(),
+        None,
+    ));
+
+    // sync 1 checkpoint
+    let checkpoint = sync_new_checkpoints(
+        &checkpoint_store,
+        &checkpoint_sender,
+        1,
+        None,
+        &first_committee,
+    )
+    .pop()
+    .unwrap();
+
+    // sync end of epoch checkpoint
+    let (end_of_epoch_checkpoint, second_committee) = sync_end_of_epoch_checkpoint(
+        &checkpoint_store,
+        &checkpoint_sender,
+        checkpoint,
+        &first_committee,
+    );
+    // sync 1 more checkpoint
+    let _next_epoch_checkpoints = sync_new_checkpoints(
+        &checkpoint_store,
+        &checkpoint_sender,
+        1,
+        Some(end_of_epoch_checkpoint.clone()),
+        &second_committee,
+    );
+
+    let (executor_handle, mut reconfig_channel) = executor.start().unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Check that we paused execution at epoch boundary
+    assert_eq!(
+        checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap(),
+        end_of_epoch_checkpoint.sequence_number(),
+    );
+
+    // Check that we have end of epoch notification - this will trigger reconfig
+    let next_committee = reconfig_channel.recv().await.unwrap();
+    assert_eq!(second_committee.committee(), &next_committee);
+
+    // Simulate reconfig crash by dropping the channel and aborting the executor task,
+    // causing checkpoint executor to exit ungracefully.
+    // TODO drop won't work here because we are paused for reconfig and thus are no longer
+    // polling the recv channel. Instead abort() the task
+    drop(checkpoint_sender);
+    executor_handle.event_loop_handle().abort();
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Node restart
+    let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
+        broadcast::channel(10);
+    let executor = CheckpointExecutor::new_for_tests(
+        checkpoint_sender.subscribe(),
+        checkpoint_store.clone(),
+        authority_state.clone(),
+    );
+    let (_handle, mut reconfig_channel) = executor.start().unwrap();
+
+    // Check that post-startup, we remain paused for reconfig
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(
+        checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap(),
+        end_of_epoch_checkpoint.sequence_number(),
+    );
+
+    // Check that end of epoch is re-signaled so that we re-attempt reconfig
+    let next_committee = reconfig_channel.recv().await.unwrap();
+    assert_eq!(second_committee.committee(), &next_committee);
+
+    authority_state
+        .reconfigure(second_committee.committee().clone())
+        .unwrap();
+
+    // checkpoint execution should resume
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(
+        checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap(),
+        end_of_epoch_checkpoint.sequence_number() + 1,
+    );
 }
 
 async fn init_executor_test(
