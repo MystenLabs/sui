@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type GetObjectDataResponse, normalizeSuiAddress } from '@mysten/sui.js';
+import {
+    type GetObjectDataResponse,
+    normalizeSuiAddress,
+} from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { useRpc } from './useRpc';

@@ -4,7 +4,7 @@
 // TODO : Import from  SDK
 import { VALDIATOR_NAME } from '~/pages/validator/ValidatorDataTypes';
 
-export function getValidatorName(rawName: string | number[]) {
+export function getName(rawName: string | number[]) {
     let name: string;
 
     if (Array.isArray(rawName)) {

@@ -9,113 +9,21 @@ import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRi
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { useGetObject } from '~/hooks/useGetObject';
+import {
+    VALIDATORS_OBJECT_ID,
+    type ValidatorState,
+    type Validator,
+} from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
-import { AddressLink } from '~/ui/InternalLink';
+import { ImageIcon } from '~/ui/ImageIcon';
+import { ValidatorLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
+import { getName } from '~/utils/getName';
 
-const VALIDATORS_OBJECT_ID = '0x05';
 const NUMBER_OF_VALIDATORS = 10;
-
-const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
-
-export type ValidatorMetadata = {
-    type: '0x2::validator::ValidatorMetadata';
-    fields: {
-        name: string | number[];
-        net_address: string;
-        next_epoch_stake: number;
-        pubkey_bytes: string;
-        sui_address: string;
-    };
-};
-
-export type Validator = {
-    type: '0x2::validator::Validator';
-    fields: {
-        delegation: bigint;
-        delegation_count: number;
-        metadata: ValidatorMetadata;
-        pending_delegation: bigint;
-        pending_delegation_withdraw: bigint;
-        pending_delegator_count: number;
-        pending_delegator_withdraw_count: number;
-        pending_stake: {
-            type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>';
-            fields: any;
-        };
-        pending_withdraw: bigint;
-        stake_amount: bigint;
-    };
-};
-
-export const STATE_DEFAULT: ValidatorState = {
-    delegation_reward: 0,
-    epoch: 0,
-    id: { id: '', version: 0 },
-    parameters: {
-        type: '0x2::sui_system::SystemParameters',
-        fields: {
-            max_validator_candidate_count: 0,
-            min_validator_stake: BigInt(0),
-        },
-    },
-    storage_fund: 0,
-    treasury_cap: {
-        type: '',
-        fields: {},
-    },
-    validators: {
-        type: '0x2::validator_set::ValidatorSet',
-        fields: {
-            delegation_stake: BigInt(0),
-            active_validators: [],
-            next_epoch_validators: [],
-            pending_removals: '',
-            pending_validators: '',
-            quorum_stake_threshold: BigInt(0),
-            total_validator_stake: BigInt(0),
-        },
-    },
-};
-
-const textDecoder = new TextDecoder();
-
-export type ObjFields = {
-    type: string;
-    fields: any;
-};
-
-export type SystemParams = {
-    type: '0x2::sui_system::SystemParameters';
-    fields: {
-        max_validator_candidate_count: number;
-        min_validator_stake: bigint;
-    };
-};
-
-export type ValidatorState = {
-    delegation_reward: number;
-    epoch: number;
-    id: { id: string; version: number };
-    parameters: SystemParams;
-    storage_fund: number;
-    treasury_cap: ObjFields;
-    validators: {
-        type: '0x2::validator_set::ValidatorSet';
-        fields: {
-            delegation_stake: bigint;
-            active_validators: Validator[];
-            next_epoch_validators: Validator[];
-            pending_removals: string;
-            pending_validators: string;
-            quorum_stake_threshold: bigint;
-            total_validator_stake: bigint;
-        };
-    };
-};
 
 function StakeColumn({ stake }: { stake: bigint }) {
     const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
@@ -133,22 +41,14 @@ function StakeColumn({ stake }: { stake: bigint }) {
 
 export function processValidators(set: Validator[], totalStake: bigint) {
     return set.map((av) => {
-        let name: string;
         const rawName = av.fields.metadata.fields.name;
-        if (Array.isArray(rawName)) {
-            name = String.fromCharCode(...rawName);
-        } else {
-            name = textDecoder.decode(new Base64DataBuffer(rawName).getData());
-            if (!VALDIATOR_NAME.test(name)) {
-                name = rawName;
-            }
-        }
         return {
-            name,
+            name: getName(rawName),
             address: av.fields.metadata.fields.sui_address,
             stake: av.fields.stake_amount,
             stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
             delegation_count: av.fields.delegation_count || 0,
+            logo: null,
         };
     });
 }
@@ -159,7 +59,11 @@ export const getStakePercent = (stake: bigint, total: bigint): number => {
     return bnStake.div(bnTotal).multipliedBy(100).toNumber();
 };
 
-const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
+const validatorsTable = (
+    validatorsData: ValidatorState,
+    limit?: number,
+    showIcon?: boolean
+) => {
     const totalStake = validatorsData.validators.fields.total_validator_stake;
 
     const validators = processValidators(
@@ -170,24 +74,26 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
     return {
-        data: validatorsItems.map((validator) => {
+        data: validatorsItems.map(({ name, stake, address, logo }) => {
             return {
                 name: (
-                    <Text variant="bodySmall/medium" color="steel-darker">
-                        {validator.name}
-                    </Text>
+                    <div className="flex items-center gap-2.5 capitalize">
+                        {showIcon && (
+                            <ImageIcon src={logo} size="sm" alt={name} />
+                        )}
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            {name}
+                        </Text>
+                    </div>
                 ),
-                stake: <StakeColumn stake={validator.stake} />,
+                stake: <StakeColumn stake={stake} />,
                 delegation: (
                     <Text variant="bodySmall/medium" color="steel-darker">
-                        {validator.stake.toString()}
+                        {stake.toString()}
                     </Text>
                 ),
                 address: (
-                    <AddressLink
-                        address={validator.address}
-                        noTruncate={!limit}
-                    />
+                    <ValidatorLink address={address} noTruncate={!limit} />
                 ),
             };
         }),
@@ -208,7 +114,12 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
     };
 };
 
-export function TopValidatorsCard({ limit }: { limit?: number }) {
+type TopValidatorsCardProps = {
+    limit?: number;
+    showIcon?: boolean;
+};
+
+export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
 
@@ -220,8 +131,11 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
             : null;
 
     const tableData = useMemo(
-        () => (validatorData ? validatorsTable(validatorData, limit) : null),
-        [validatorData, limit]
+        () =>
+            validatorData
+                ? validatorsTable(validatorData, limit, showIcon)
+                : null,
+        [validatorData, limit, showIcon]
     );
 
     if (isError || (!isLoading && !tableData?.data.length)) {
