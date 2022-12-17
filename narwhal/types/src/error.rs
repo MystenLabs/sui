@@ -49,8 +49,14 @@ pub enum DagError {
     #[error("Invalid header digest")]
     InvalidHeaderDigest,
 
-    #[error("Malformed header {0}")]
-    MalformedHeader(HeaderDigest),
+    #[error("Header {0} has bad worker IDs")]
+    HeaderHasBadWorkerIds(HeaderDigest),
+
+    #[error("Header {0} has parents with invalid round numbers")]
+    HeaderHasInvalidParentRoundNumbers(HeaderDigest),
+
+    #[error("Header {0} has more than one parent certificate with the same authority")]
+    HeaderHasDuplicateParentAuthorities(HeaderDigest),
 
     #[error("Received message from unknown authority {0}")]
     UnknownAuthority(String),
