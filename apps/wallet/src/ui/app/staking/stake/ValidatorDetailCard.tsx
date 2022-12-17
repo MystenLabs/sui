@@ -36,57 +36,59 @@ export function ValidateDetailFormCard({
             ? (data.details.data.fields as ValidatorState)
             : null;
 
-    const validatorDataByAddress = useMemo(() => {
+    const validatorData = useMemo(() => {
         if (!validatorsData) return null;
-        return validatorsData.validators.fields.active_validators
-            .filter(
+        return (
+            validatorsData.validators.fields.active_validators.find(
                 (av) =>
                     av.fields.metadata.fields.sui_address === validatorAddress
-            )
-            .map((av) => {
-                const rawName = av.fields.metadata.fields.name;
+            ) || null
+        );
+    }, [validatorAddress, validatorsData]);
 
-                const {
-                    sui_balance,
-                    starting_epoch,
-                    pending_delegations,
-                    delegation_token_supply,
-                } = av.fields.delegation_staking_pool.fields;
+    const validatorDataByAddress = useMemo(() => {
+        if (!validatorData || !validatorsData) return null;
 
-                const num_epochs_participated =
-                    validatorsData.epoch - starting_epoch;
+        const {
+            sui_balance,
+            starting_epoch,
+            pending_delegations,
+            delegation_token_supply,
+        } = validatorData.fields.delegation_staking_pool.fields;
 
-                const APY = Math.pow(
-                    1 +
-                        (sui_balance - delegation_token_supply.fields.value) /
-                            delegation_token_supply.fields.value,
-                    365 / num_epochs_participated - 1
-                );
-                const pending_delegationsByAddress = pending_delegations
-                    ? pending_delegations.filter(
-                          (d) => d.fields.delegator === accountAddress
-                      )
-                    : [];
+        const num_epochs_participated = validatorsData.epoch - starting_epoch;
+        const { name: rawName, sui_address } =
+            validatorData.fields.metadata.fields;
 
-                return {
-                    name: getName(rawName),
-                    apy: APY > 0 ? APY : 'N/A',
-                    logo: null,
-                    address: av.fields.metadata.fields.sui_address,
-                    totalStaked: pending_delegations.reduce(
-                        (acc, fields) =>
-                            (acc += BigInt(fields.fields.sui_amount || 0n)),
-                        0n
-                    ),
-                    pendingDelegationAmount:
-                        pending_delegationsByAddress.reduce(
-                            (acc, fields) =>
-                                (acc += BigInt(fields.fields.sui_amount || 0n)),
-                            0n
-                        ),
-                };
-            })[0];
-    }, [accountAddress, validatorAddress, validatorsData]);
+        const APY = Math.pow(
+            1 +
+                (sui_balance - delegation_token_supply.fields.value) /
+                    delegation_token_supply.fields.value,
+            365 / num_epochs_participated - 1
+        );
+        const pending_delegationsByAddress = pending_delegations
+            ? pending_delegations.filter(
+                  (d) => d.fields.delegator === accountAddress
+              )
+            : [];
+
+        return {
+            name: getName(rawName),
+            apy: APY > 0 ? APY : 'N/A',
+            logo: null,
+            address: sui_address,
+            totalStaked: pending_delegations.reduce(
+                (acc, fields) =>
+                    (acc += BigInt(fields.fields.sui_amount || 0n)),
+                0n
+            ),
+            pendingDelegationAmount: pending_delegationsByAddress.reduce(
+                (acc, fields) =>
+                    (acc += BigInt(fields.fields.sui_amount || 0n)),
+                0n
+            ),
+        };
+    }, [accountAddress, validatorData, validatorsData]);
 
     if (isLoading) {
         return (

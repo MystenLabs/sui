@@ -90,20 +90,11 @@ export const stakeTokens = createAsyncThunk<
             )
             .map(({ data }) => data as SuiMoveObject);
 
-        // TODO: fetch the first active validator for now,
-        // repalce it with the user picked one
-        const activeValidators = await Coin.getActiveValidators(
-            api.instance.fullNode
-        );
-        const first_validator = activeValidators[0];
-        const metadata = (first_validator as SuiMoveObject).fields.metadata;
-        const receivingValidatorAddress =
-            validatorAddress ?? (metadata as SuiMoveObject).fields.sui_address;
         const response = await Coin.stakeCoin(
             api.getSignerInstance(keypairVault.getKeypair()),
             coins,
             amount,
-            receivingValidatorAddress
+            validatorAddress
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
         return response;

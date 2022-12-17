@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import { useEffect, useRef, memo, useCallback } from 'react';
 
 import { formatBalance } from '../../hooks/useFormatCoin';
 import { Content } from '_app/shared/bottom-menu-layout';
@@ -11,9 +11,11 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
 import { parseAmount } from '_helpers';
-import { useFormatCoin, useCoinDecimals, useAppSelector } from '_hooks';
-import { accountCoinsSelector } from '_redux/slices/account';
-import { GAS_SYMBOL, Coin } from '_redux/slices/sui-objects/Coin';
+import { useFormatCoin, useCoinDecimals } from '_hooks';
+import {
+    GAS_SYMBOL,
+    DEFAULT_GAS_BUDGET_FOR_STAKE,
+} from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
@@ -21,8 +23,7 @@ import st from './StakeForm.module.scss';
 
 export type StakeFromProps = {
     submitError: string | null;
-    // TODO(ggao): remove this if needed
-    coinBalance: string;
+    coinBalance: bigint;
     coinType: string;
     unstake: boolean;
     onClearSubmitError: () => void;
@@ -49,25 +50,19 @@ function StakeForm({
 
     const [formatted, symbol] = useFormatCoin(coinBalance, coinType);
 
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfTransferType = useMemo(
-        () => allCoins.filter((aCoin) => aCoin.type === coinType),
-        [allCoins, coinType]
-    );
     const [coinDecimals] = useCoinDecimals(coinType);
-    const gasEstimationUnformatted = useMemo(() => {
-        return Coin.computeGasBudgetForPay(
-            allCoinsOfTransferType,
-            parseAmount(amount, coinDecimals)
-        );
-    }, [allCoinsOfTransferType, amount, coinDecimals]);
 
     const [gasBudgetEstimation] = useFormatCoin(
-        gasEstimationUnformatted,
+        DEFAULT_GAS_BUDGET_FOR_STAKE,
         coinType
     );
 
-    const maxToken = formatBalance(coinBalance, coinDecimals);
+    const coinBalanceMinusGas =
+        parseAmount(formatted.toString(), coinDecimals) -
+        parseAmount(gasBudgetEstimation.toString(), coinDecimals);
+
+    const maxToken = formatBalance(coinBalanceMinusGas, coinDecimals);
+
     const setMaxToken = useCallback(() => {
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
@@ -87,16 +82,15 @@ function StakeForm({
                                 component={NumberInput}
                                 allowNegative={false}
                                 name="amount"
-                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium"
+                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium "
                                 decimals
                             />
-                            <div
-                                role="button"
-                                className="border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium"
+                            <button
+                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium"
                                 onClick={setMaxToken}
                             >
                                 Max
-                            </div>
+                            </button>
                         </div>
                     }
                     footer={

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -18,6 +17,7 @@ import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { parseAmount } from '_helpers';
 import {
     useAppSelector,
     useAppDispatch,
@@ -106,12 +106,7 @@ function StakingCard() {
             }
             setSendError(null);
             try {
-                const bigIntAmount = BigInt(
-                    new BigNumber(amount)
-                        .shiftedBy(coinDecimals)
-                        .integerValue()
-                        .toString()
-                );
+                const bigIntAmount = parseAmount(amount, coinDecimals);
                 // TODO: add unstake functionality on the support roles out
                 const response = await dispatch(
                     stakeTokens({
@@ -177,7 +172,7 @@ function StakingCard() {
                                 </div>
                                 <StakeForm
                                     submitError={sendError}
-                                    coinBalance={coinBalance.toString()}
+                                    coinBalance={coinBalance}
                                     coinType={coinType}
                                     unstake={unstake}
                                     onClearSubmitError={
