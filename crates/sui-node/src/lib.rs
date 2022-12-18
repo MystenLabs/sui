@@ -441,6 +441,8 @@ impl SuiNode {
             sender: consensus_adapter.clone(),
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
+            enable_reconfig: config.enable_reconfig,
+            checkpoints_per_epoch: config.checkpoints_per_epoch,
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use sui_types::error::SuiResult;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ReconfigCertStatus {
@@ -45,6 +46,11 @@ impl ReconfigState {
     pub fn should_accept_consensus_certs(&self) -> bool {
         !matches!(self.status, ReconfigCertStatus::RejectAllCerts)
     }
+}
+
+#[async_trait::async_trait]
+pub trait ReconfigurationInitiator {
+    async fn close_epoch(&self) -> SuiResult;
 }
 
 /*
