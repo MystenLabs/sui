@@ -7,6 +7,7 @@ module sui::randomness_tests {
     use sui::randomness;
     use sui::test_scenario;
     use sui::tx_context;
+    use std::vector;
 
     const TEST_USER_ADDR: address = @0xA11CE;
 
@@ -34,16 +35,33 @@ module sui::randomness_tests {
 
     #[test]
     #[expected_failure(abort_code = randomness::EInvalidSignature)]
-    fun test_tbls_invalid_signature() {
+    fun test_tbls_wrong_signature() {
         let scenario_val = test_scenario::begin(TEST_USER_ADDR);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
         let r1 = randomness::new(WITENESS {}, ctx);
         let r2 = randomness::new(WITENESS {}, ctx);
+
+        // Signature should be invalid since we use the the other object.
         let sig = randomness::sign(&r2);
-        // Signature should be invalid.
         randomness::set(&mut r1, sig);
+        abort 42 // never reached.
+    }
+
+    #[test]
+    #[expected_failure(abort_code = randomness::EInvalidSignature)]
+    fun test_tbls_invalid_format() {
+        let scenario_val = test_scenario::begin(TEST_USER_ADDR);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+
+        let r = randomness::new(WITENESS {}, ctx);
+        let sig = randomness::sign(&r);
+
+        // Signature should be invalid because the deserialization would fail.
+        vector::remove(&mut sig, 1);
+        randomness::set(&mut r, sig);
         abort 42 // never reached.
     }
 }

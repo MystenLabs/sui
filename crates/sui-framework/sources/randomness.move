@@ -58,7 +58,7 @@ module sui::randomness {
             epoch: tx_context::epoch(ctx),
             value: option::none(),
         }
-        // TODO: Front load the fee?
+        // TODO: Front load the fee.
     }
 
     public fun transfer<T>(self: Randomness<T>, to: address) {
@@ -96,9 +96,8 @@ module sui::randomness {
 
     fun to_bytes(domain: &vector<u8>, epoch: u64, id: &ID): vector<u8> {
         let buffer: vector<u8> = vector::empty();
-        let domain = *domain;
         // All elements below are of fixed sizes.
-        vector::append(&mut buffer, domain);
+        vector::append(&mut buffer, *domain);
         vector::append(&mut buffer, bcs::to_bytes(&epoch));
         vector::append(&mut buffer, object::id_to_bytes(id));
         buffer
