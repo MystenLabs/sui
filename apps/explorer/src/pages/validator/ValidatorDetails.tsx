@@ -71,7 +71,7 @@ function ValidatorDetails() {
             365 / num_epochs_participated - 1
         );
 
-        const totalStaked = pending_delegations.reduce(
+        const totalStaked = [...pending_delegations]?.reduce(
             (acc, fields) => (acc += BigInt(fields.fields.sui_amount || 0n)),
             0n
         );
@@ -88,7 +88,7 @@ function ValidatorDetails() {
             address: sui_address,
             totalStaked,
             delegators: Object.values(
-                [...pending_delegations].reduce(
+                [...pending_delegations]?.reduce(
                     (acc, delegation) => {
                         return {
                             ...acc,
@@ -185,21 +185,27 @@ function ValidatorDetails() {
             <div className="mt-8 break-all">
                 <TableHeader>Details</TableHeader>
                 <DescriptionList>
-                    <DescriptionItem
-                        title={
+                    {validator.pubkeyBytes && (
+                        <DescriptionItem
+                            title={
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="gray-80"
+                                >
+                                    Public Key
+                                </Text>
+                            }
+                        >
                             <Text
                                 variant="body"
                                 weight="medium"
-                                color="gray-80"
+                                color="gray-90"
                             >
-                                Public Key
+                                {validator.pubkeyBytes}
                             </Text>
-                        }
-                    >
-                        <Text variant="body" weight="medium" color="gray-90">
-                            {validator.pubkeyBytes}
-                        </Text>
-                    </DescriptionItem>
+                        </DescriptionItem>
+                    )}
 
                     <DescriptionItem
                         title={
