@@ -18,6 +18,7 @@ import { Button } from '~/ui/Button';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
+import { AddressLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
@@ -218,14 +219,10 @@ function ValidatorDetails() {
                             </Text>
                         }
                     >
-                        <Text
-                            variant="body"
-                            weight="semibold"
-                            color="gray-90"
-                            mono
-                        >
-                            {validator.suiAddress}
-                        </Text>
+                        <AddressLink
+                            address={validator.suiAddress}
+                            noTruncate
+                        />
                     </DescriptionItem>
                 </DescriptionList>
             </div>
