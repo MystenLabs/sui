@@ -506,14 +506,12 @@ pub trait EventReadApi {
 pub trait ThresholdBlsApi {
     /// Sign an a Randomness object with threshold BLS.
     #[method(name = "tblsSignRandomnessObject")]
-    fn tbls_sign_randomness_object(
+    async fn tbls_sign_randomness_object(
         &self,
         /// The object ID.
         object_id: ObjectID,
-        /// The epoch in which it was created.
-        epoch: EpochId,
-        /// In case the given epoch is the current one, transaction effects certificate for proving that the object was committed.
-        effects: Option<SuiCertifiedTransactionEffects>,
+        /// The epoch in which the object was created if it was in an old epoch, or the effects certificate if it was the current epoch (to verify that the object was committed).
+        object_creation_epoch: SuiTBlsSignObjectCreationEpoch,
     ) -> RpcResult<SuiTBlsSignRandomnessObjectResponse>;
 }
 

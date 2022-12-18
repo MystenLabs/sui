@@ -5,13 +5,18 @@ use std::path::Path;
 
 use std::str::FromStr;
 
+use crate::api::{
+    CoinReadApiClient, RpcFullNodeReadApiClient, RpcReadApiClient, RpcTransactionBuilderClient,
+    ThresholdBlsApiClient, TransactionExecutionApiClient,
+};
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
-    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
+    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTBlsSignObjectCreationEpoch,
+    SuiTBlsSignRandomnessObjectResponse, SuiTransactionResponse, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
@@ -25,10 +30,6 @@ use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
-
-use crate::api::CoinReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 
 use sui_macros::sim_test;
 
@@ -91,6 +92,64 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
             effects.effects.transaction_digest
         );
     }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+
+    let transaction_bytes: TransactionBytes = http_client
+        .transfer_object(
+            *address,
+            objects.first().unwrap().object_id,
+            Some(objects.last().unwrap().object_id),
+            1000,
+            *address,
+        )
+        .await?;
+
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let tx_bytes1 = tx_bytes.clone();
+    let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
+
+    let tx_response: SuiExecuteTransactionResponse = http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes1,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForEffectsCert,
+        )
+        .await?;
+
+    let effects = if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response {
+        Some(effects)
+    } else {
+        None
+    }
+    .unwrap();
+
+    let obj_id = effects.effects.created.get(0).unwrap().reference.object_id;
+
+    let tx2_response: SuiTBlsSignRandomnessObjectResponse = http_client
+        .tbls_sign_randomness_object(obj_id, SuiTBlsSignObjectCreationEpoch::PriorEpoch(1))
+        .await?;
+    let tx3_response: SuiTBlsSignRandomnessObjectResponse = http_client
+        .tbls_sign_randomness_object(
+            obj_id,
+            SuiTBlsSignObjectCreationEpoch::CurrentEpoch(effects),
+        )
+        .await?;
     Ok(())
 }
 

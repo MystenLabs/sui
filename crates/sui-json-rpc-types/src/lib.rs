@@ -397,6 +397,12 @@ impl Display for SuiParsedTransactionResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum SuiTBlsSignObjectCreationEpoch {
+    PriorEpoch(EpochId),
+    CurrentEpoch(SuiCertifiedTransactionEffects),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SuiTBlsSignRandomnessObjectResponse {
     #[schemars(with = "Base64")]
     pub signature: fastcrypto_tbls::types::Signature,

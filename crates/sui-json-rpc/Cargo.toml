@@ -7,7 +7,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-fastcrypto = { workspace = true }
+fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["full"] }
 jsonrpsee-proc-macros = {git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177"}
 hyper = "0.14"
