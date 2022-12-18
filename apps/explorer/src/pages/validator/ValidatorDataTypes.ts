@@ -12,7 +12,7 @@ export type ValidatorMetadata = {
         name: string;
         net_address: string;
         next_epoch_stake: number;
-        pubkey_bytes: string;
+        pubkey_bytes: [];
         sui_address: string;
         next_epoch_delegation: number;
     };

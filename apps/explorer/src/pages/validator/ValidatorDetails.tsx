@@ -1,18 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiObject, isSuiMoveObject, SUI_TYPE_ARG } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
-import { useMemo } from 'react';
+import {
+    isSuiObject,
+    isSuiMoveObject,
+    SUI_TYPE_ARG,
+    Base64DataBuffer,
+} from '@mysten/sui.js';
+import { useMemo, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 
+import { ReactComponent as ArrowRight } from '~/assets/SVGIcons/12px/ArrowRight.svg';
 import ErrorResult from '~/components/error-result/ErrorResult';
+import Pagination from '~/components/pagination/Pagination';
 import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
     type ValidatorState,
 } from '~/pages/validator/ValidatorDataTypes';
+import { Button } from '~/ui/Button';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -22,6 +29,9 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getStakedPercent } from '~/utils/getStakedPercent';
+
+const DELEGATORS_PER_PAGE = 20;
 
 function DelegationAmount({ amount }: { amount?: bigint | number }) {
     const [formattedAmount, symbol] = useFormatCoin(
@@ -40,57 +50,12 @@ function DelegationAmount({ amount }: { amount?: bigint | number }) {
     );
 }
 
-const getStakePercent = (stake: bigint, total: bigint): number => {
-    const bnStake = new BigNumber(stake.toString());
-    const bnTotal = new BigNumber(total.toString());
-    return bnStake
-        .div(bnTotal)
-        .multipliedBy(100)
-        .decimalPlaces(3, BigNumber.ROUND_DOWN)
-        .toNumber();
-};
-
 type Delegators = {
     delegator: string;
     sui_amount: bigint;
     share: number;
     type: string;
 }[];
-
-const delegatorsTable = (delegators: Delegators) => {
-    return {
-        data: delegators.map(({ delegator, sui_amount, share }) => {
-            return {
-                share: (
-                    <Text
-                        variant="bodySmall"
-                        color="steel-darker"
-                        weight="medium"
-                    >
-                        {share} %
-                    </Text>
-                ),
-                amount: <DelegationAmount amount={sui_amount} />,
-
-                address: <AddressLink address={delegator} noTruncate />,
-            };
-        }),
-        columns: [
-            {
-                headerLabel: 'Staker Address',
-                accessorKey: 'address',
-            },
-            {
-                headerLabel: 'Amount',
-                accessorKey: 'amount',
-            },
-            {
-                headerLabel: 'Share',
-                accessorKey: 'share',
-            },
-        ],
-    };
-};
 
 function ValidatorDetails() {
     const { id } = useParams();
@@ -139,7 +104,9 @@ function ValidatorDetails() {
 
         return {
             name: getName(name),
-            pubkeyBytes: getName(pubkey_bytes),
+            pubkeyBytes: new Base64DataBuffer(
+                new Uint8Array(pubkey_bytes)
+            ).toString(),
             suiAddress: sui_address,
             apy: APY > 0 ? APY : 'N/A',
             logo: null,
@@ -162,7 +129,7 @@ function ValidatorDetails() {
                                         acc[`${delegation.fields.delegator}`]
                                             ?.sui_amount || 0n
                                     ),
-                                share: getStakePercent(
+                                share: getStakedPercent(
                                     BigInt(
                                         delegation.fields?.sui_amount || 0n
                                     ) +
@@ -189,13 +156,11 @@ function ValidatorDetails() {
         };
     }, [validatorData, validatorsData]);
 
-    const delegatorTable = useMemo(
+    const delegatorsData = useMemo(
         () =>
             validator
-                ? delegatorsTable(
-                      validator.delegators.sort((a, b) =>
-                          b.share > a.share ? 1 : -1
-                      )
+                ? validator.delegators.sort((a, b) =>
+                      b.share > a.share ? 1 : -1
                   )
                 : null,
         [validator]
@@ -226,7 +191,7 @@ function ValidatorDetails() {
                     variant="square"
                     size="xl"
                 />
-                <div>
+                <div className="flex flex-col gap-3.5">
                     <Heading
                         as="h1"
                         variant="heading2"
@@ -235,37 +200,48 @@ function ValidatorDetails() {
                     >
                         {validator.name}
                     </Heading>
+
+                    <Button type="button" variant="outline">
+                        Stake Coins{' '}
+                        <ArrowRight fill="currentColor" className="ml-2" />
+                    </Button>
                 </div>
             </div>
 
-            <div className="mt-8">
+            <div className="mt-8 break-all">
                 <TableHeader>Details</TableHeader>
                 <DescriptionList>
                     <DescriptionItem
                         title={
                             <Text
                                 variant="body"
-                                weight="semibold"
-                                color="steel-darker"
+                                weight="medium"
+                                color="gray-80"
                             >
                                 Public Key
+                            </Text>
+                        }
+                    >
+                        <Text variant="body" weight="medium" color="gray-90">
+                            {validator.pubkeyBytes}
+                        </Text>
+                    </DescriptionItem>
+
+                    <DescriptionItem
+                        title={
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="gray-80"
+                            >
+                                Sui Address
                             </Text>
                         }
                     >
                         <Text
                             variant="body"
                             weight="semibold"
-                            color="steel-darker"
-                        >
-                            {validator.pubkeyBytes}
-                        </Text>
-                    </DescriptionItem>
-
-                    <DescriptionItem title="Sui Address">
-                        <Text
-                            variant="body"
-                            weight="semibold"
-                            color="sui-dark"
+                            color="gray-90"
                             mono
                         >
                             {validator.suiAddress}
@@ -274,14 +250,83 @@ function ValidatorDetails() {
                 </DescriptionList>
             </div>
 
-            {!!validator.delegators.length && delegatorTable && (
-                <div className="mt-16">
-                    <TableHeader>Delegators1</TableHeader>
-                    <TableCard
-                        data={delegatorTable.data}
-                        columns={delegatorTable.columns}
-                    />
-                </div>
+            {!!delegatorsData?.length && (
+                <DelegatorsList delegators={delegatorsData} />
+            )}
+        </div>
+    );
+}
+
+interface DelegatorsListProps {
+    delegators: Delegators;
+}
+
+function DelegatorsList({ delegators }: DelegatorsListProps) {
+    const [delegatorsPageNumber, setDelegatorsPageNumber] = useState(1);
+    const [delegatorsPerPage, setDelegatorsPerPage] =
+        useState(DELEGATORS_PER_PAGE);
+    const totalDelegatorsCount = delegators.length;
+    const columns = [
+        {
+            headerLabel: 'Staker Address',
+            accessorKey: 'address',
+        },
+        {
+            headerLabel: 'Amount',
+            accessorKey: 'amount',
+        },
+        {
+            headerLabel: 'Share',
+            accessorKey: 'share',
+        },
+    ];
+
+    const stats = {
+        stats_text: 'Delegators',
+        count: totalDelegatorsCount,
+    };
+
+    return (
+        <div className="mt-16">
+            <TableHeader>Delegators</TableHeader>
+            <TableCard
+                data={delegators
+                    .filter(
+                        (_, index) =>
+                            index >=
+                                (delegatorsPageNumber - 1) *
+                                    delegatorsPerPage &&
+                            index < delegatorsPageNumber * delegatorsPerPage
+                    )
+                    .map(({ delegator, sui_amount, share }) => {
+                        return {
+                            share: (
+                                <Text
+                                    variant="bodySmall"
+                                    color="steel-darker"
+                                    weight="medium"
+                                >
+                                    {share} %
+                                </Text>
+                            ),
+                            amount: <DelegationAmount amount={sui_amount} />,
+
+                            address: (
+                                <AddressLink address={delegator} noTruncate />
+                            ),
+                        };
+                    })}
+                columns={columns}
+            />
+            {totalDelegatorsCount > delegatorsPerPage && (
+                <Pagination
+                    totalItems={totalDelegatorsCount}
+                    itemsPerPage={delegatorsPerPage}
+                    currentPage={delegatorsPageNumber}
+                    onPagiChangeFn={setDelegatorsPageNumber}
+                    updateItemsPerPage={setDelegatorsPerPage}
+                    stats={stats}
+                />
             )}
         </div>
     );

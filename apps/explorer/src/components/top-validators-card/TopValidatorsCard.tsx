@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 import { Base64DataBuffer, is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
+=======
+import { isSuiObject, isSuiMoveObject, SUI_TYPE_ARG } from '@mysten/sui.js';
+>>>>>>> 4d752c517 (update validator page)
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -22,6 +26,7 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getStakedPercent } from '~/utils/getStakedPercent';
 
 const NUMBER_OF_VALIDATORS = 10;
 
@@ -46,18 +51,12 @@ export function processValidators(set: Validator[], totalStake: bigint) {
             name: getName(rawName),
             address: av.fields.metadata.fields.sui_address,
             stake: av.fields.stake_amount,
-            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
+            stakePercent: getStakedPercent(av.fields.stake_amount, totalStake),
             delegation_count: av.fields.delegation_count || 0,
             logo: null,
         };
     });
 }
-
-export const getStakePercent = (stake: bigint, total: bigint): number => {
-    const bnStake = new BigNumber(stake.toString());
-    const bnTotal = new BigNumber(total.toString());
-    return bnStake.div(bnTotal).multipliedBy(100).toNumber();
-};
 
 const validatorsTable = (
     validatorsData: ValidatorState,
