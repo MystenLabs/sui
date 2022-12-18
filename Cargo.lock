@@ -8735,6 +8735,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "hyper",
  "jsonrpsee",

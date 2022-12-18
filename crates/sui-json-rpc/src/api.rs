@@ -13,9 +13,9 @@ use sui_json_rpc_types::{
     GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
     RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse, SuiTBlsSignRandomnessObjectResponse,
-    SuiTBlsSignObjectCreationEpoch, SuiTransactionEffects, SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag,
-    TransactionBytes, TransactionsPage,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCreationEpoch,
+    SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse, SuiTransactionEffects,
+    SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
