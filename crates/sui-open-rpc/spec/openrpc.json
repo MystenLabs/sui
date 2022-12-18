@@ -520,13 +520,13 @@
       ]
     },
     {
-      "name": "sui_getBalance",
+      "name": "sui_getAllBalances",
       "tags": [
         {
           "name": "Coin Query API"
         }
       ],
-      "description": "Return the total coin balance for each coin type.",
+      "description": "Return the total coin balance for all coin type, owned by the address owner.",
       "params": [
         {
           "name": "owner",
@@ -534,13 +534,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "coin_type",
-          "description": "fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
-          "schema": {
-            "type": "string"
           }
         }
       ],
@@ -552,6 +545,81 @@
           "items": {
             "$ref": "#/components/schemas/Balance"
           }
+        }
+      }
+    },
+    {
+      "name": "sui_getAllCoins",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return all Coin objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CoinPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
+        }
+      }
+    },
+    {
+      "name": "sui_getBalance",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return the total coin balance for one coin type, owned by the address owner.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_type",
+          "description": "optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "Balance",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Balance"
         }
       }
     },
@@ -588,7 +656,7 @@
           "name": "Coin Query API"
         }
       ],
-      "description": "Return the list of Coin objects owned by an address.",
+      "description": "Return all Coin<`coin_type`> objects owned by an address.",
       "params": [
         {
           "name": "owner",
@@ -600,7 +668,7 @@
         },
         {
           "name": "coin_type",
-          "description": "fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "description": "optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
           "schema": {
             "type": "string"
           }

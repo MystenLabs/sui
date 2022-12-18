@@ -56,6 +56,41 @@ impl CoinReadApi {
         }
     }
 
+    async fn get_coins_internal(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> Result<CoinPage, Error> {
+        // TODO: Add index to improve performance?
+        let limit = cap_page_limit(limit);
+        let mut coins = self
+            .get_owner_coin_iterator(owner, &coin_type)?
+            .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != o))
+            .take(limit + 1)
+            .collect::<Vec<_>>();
+
+        let next_cursor = coins.get(limit).cloned();
+        coins.truncate(limit);
+
+        let mut data = vec![];
+
+        for coin in coins {
+            let (type_, oref, coin) = self.get_coin(&coin).await?;
+            // We have checked these are coin objects, safe to unwrap.
+            let coin_type = type_.type_params.first().unwrap().to_string();
+            data.push(SuiCoin {
+                coin_type,
+                coin_object_id: oref.0,
+                version: oref.1,
+                digest: oref.2,
+                balance: coin.balance.value(),
+            })
+        }
+        Ok(CoinPage { data, next_cursor })
+    }
+
     fn get_owner_coin_iterator<'a>(
         &'a self,
         owner: SuiAddress,
@@ -118,41 +153,50 @@ impl CoinReadApiServer for CoinReadApi {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
-        // TODO: Add index to improve performance?
-        let limit = cap_page_limit(limit);
-        let mut coins = self
-            .get_owner_coin_iterator(owner, &coin_type)?
-            .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != o))
-            .take(limit + 1)
-            .collect::<Vec<_>>();
-
-        let next_cursor = coins.get(limit).cloned();
-        coins.truncate(limit);
-
-        let mut data = vec![];
-
-        for coin in coins {
-            let (type_, oref, coin) = self.get_coin(&coin).await?;
-            // We have checked these are coin objects, safe to unwrap.
-            let coin_type = type_.type_params.first().unwrap().to_string();
-            data.push(SuiCoin {
-                coin_type,
-                coin_object_id: oref.0,
-                version: oref.1,
-                digest: oref.2,
-                balance: coin.balance.value(),
-            })
-        }
-        Ok(CoinPage { data, next_cursor })
+        // Default coin_type to 0x2::sui::SUI
+        let coin_type = coin_type.or_else(|| Some(GAS::type_().to_string()));
+        Ok(self
+            .get_coins_internal(owner, coin_type, cursor, limit)
+            .await?)
     }
 
-    async fn get_balances(
+    async fn get_all_coins(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> RpcResult<CoinPage> {
+        Ok(self.get_coins_internal(owner, None, cursor, limit).await?)
+    }
+
+    async fn get_balance(
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-    ) -> RpcResult<Vec<Balance>> {
+    ) -> RpcResult<Balance> {
+        let coin_type = coin_type.or_else(|| Some(GAS::type_().to_string()));
+
         // TODO: Add index to improve performance?
         let coins = self.get_owner_coin_iterator(owner, &coin_type)?;
+        let mut total_balance = 0u128;
+        let mut coin_object_count = 0;
+
+        for coin in coins {
+            let (_, _, coin) = self.get_coin(&coin).await?;
+            total_balance += coin.balance.value() as u128;
+            coin_object_count += 1;
+        }
+
+        Ok(Balance {
+            coin_type: coin_type.unwrap(),
+            coin_object_count,
+            total_balance,
+        })
+    }
+
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        // TODO: Add index to improve performance?
+        let coins = self.get_owner_coin_iterator(owner, &None)?;
         let mut data: HashMap<String, (u128, usize)> = HashMap::new();
 
         for coin in coins {
