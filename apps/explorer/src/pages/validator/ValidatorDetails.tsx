@@ -119,7 +119,7 @@ function ValidatorDetails() {
                         };
                     },
                     {} as {
-                        [delegator: string]: {
+                        [key: string]: {
                             sui_amount: bigint;
                             delegator: string;
                             type: string;
