@@ -10,6 +10,7 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sui_protocol_constants::STORAGE_REBATE_RATE;
 use tracing::trace;
 
 use crate::coin::Coin;
@@ -31,9 +32,6 @@ use crate::{
         WriteKind,
     },
 };
-
-// TODO: placeholder value here
-const STORAGE_REBATE_RATE: f64 = 1.0;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

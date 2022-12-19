@@ -41,7 +41,7 @@ jobs:
       - name: Install Nodejs
         uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:
-          node-version: "16"
+          node-version: "18"
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

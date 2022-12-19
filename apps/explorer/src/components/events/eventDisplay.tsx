@@ -16,6 +16,7 @@ import { getOwnerStr } from '../../utils/objectUtils';
 import { truncate } from '../../utils/stringUtils';
 
 import type { Category } from '../../pages/transaction-result/TransactionResultType';
+import type { LinkObj } from '../transaction-card/TxCardUtils';
 import type {
     MoveEvent,
     NewObjectEvent,
@@ -28,7 +29,6 @@ import type {
     CoinBalanceChangeEvent,
     MutateObjectEvent,
 } from '@mysten/sui.js';
-import type { LinkObj } from '~/ui/TableCard';
 
 export type ContentItem = {
     label: string;
@@ -187,15 +187,15 @@ export function coinBalanceChangeEventDisplay(
 }
 
 export function getAddressesLinks(item: ContentItem[]): LinkObj[] {
-    return item.map((content) => {
-        return {
-            url: content.value,
-            name: truncate(content.value, 20),
-            copy: false,
-            category: content.category,
-            isLink: true,
-        } as LinkObj;
-    });
+    return item
+        .filter((itm) => !!itm.category)
+        .map((content) => {
+            return {
+                url: content.value,
+                name: truncate(content.value, 20),
+                category: content.category,
+            } as LinkObj;
+        });
 }
 
 export function deleteObjectEventDisplay(

@@ -8,13 +8,13 @@ import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 const linkStyles = cva(
     [
         // TODO: Remove when CSS reset is applied.
-        'cursor-pointer no-underline bg-transparent p-0 border-none',
+        'cursor-pointer no-underline bg-transparent p-0 border-none text-left',
     ],
     {
         variants: {
             variant: {
                 text: 'text-body font-semibold text-steel-dark hover:text-steel-darker active:text-steel disabled:text-gray-60',
-                mono: 'font-mono text-bodySmall font-medium text-sui-dark',
+                mono: 'font-mono text-bodySmall font-medium text-sui-dark break-all',
             },
             uppercase: {
                 true: 'uppercase',

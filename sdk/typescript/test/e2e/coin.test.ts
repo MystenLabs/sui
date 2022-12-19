@@ -6,6 +6,7 @@ import {
   Coin,
   getObjectId,
   LocalTxnDataSerializer,
+  normalizeSuiObjectId,
   ObjectId,
   RawSigner,
   SuiObjectInfo,
@@ -44,6 +45,39 @@ describe('Coin related API', () => {
       toolbox.address()
     );
     expect(coinsAfterSplit.length).toEqual(coins.length + SPLIT_AMOUNTS.length);
+  });
+
+  it('test Coin utility functions', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    coins.forEach((c) => {
+      expect(Coin.isCoin(c)).toBeTruthy;
+      expect(Coin.isSUI(c)).toBeTruthy;
+    })
+  });
+
+  it('test getCoinStructTag', async () => {
+    const exampleStructTag = { 
+      address: normalizeSuiObjectId('0x2'), 
+      module: 'sui', 
+      name: 'SUI', 
+      typeParams: [] 
+    };
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    const coinTypeArg: string = Coin.getCoinTypeArg(coins[0])!;
+    expect(Coin.getCoinStructTag(coinTypeArg)).toStrictEqual(exampleStructTag);
+  });
+
+  it('test Coin balance functions', async () => {
+    const coins = 
+      await toolbox.provider.getCoinBalancesOwnedByAddress(
+        toolbox.address(),
+        '0x2::sui::SUI'
+      );
+    expect(Coin.totalBalance(coins)).toBeGreaterThan(BigInt(0));
   });
 
   it('test selectCoinsWithBalanceGreaterThanOrEqual', async () => {
