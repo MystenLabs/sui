@@ -2591,6 +2591,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-tbls"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=2dcf24facddfd15e83325ab714e3b6cb9cd63afe#2dcf24facddfd15e83325ab714e3b6cb9cd63afe"
+dependencies = [
+ "fastcrypto",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=2dcf24facddfd15e83325ab714e3b6cb9cd63afe#2dcf24facddfd15e83325ab714e3b6cb9cd63afe"
@@ -8593,9 +8602,11 @@ dependencies = [
  "anyhow",
  "bcs",
  "better_any",
+ "bincode",
  "curve25519-dalek-ng",
  "digest 0.10.6",
  "fastcrypto",
+ "fastcrypto-tbls",
  "fastcrypto-zkp",
  "linked-hash-map",
  "move-binary-format",
