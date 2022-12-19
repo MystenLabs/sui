@@ -26,6 +26,7 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-config = { path = "../sui-config" }
 sui-keys =  { path = "../sui-keys" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true

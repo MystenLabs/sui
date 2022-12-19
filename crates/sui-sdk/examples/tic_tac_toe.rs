@@ -13,6 +13,7 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use narwhal_crypto::intent::Intent;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
@@ -24,7 +25,6 @@ use sui_sdk::{
     },
     SuiClient,
 };
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]

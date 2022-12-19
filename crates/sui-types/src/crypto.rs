@@ -36,10 +36,10 @@ use strum::EnumString;
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
-use crate::intent::IntentMessage;
 use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
+use narwhal_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Debug;
 
 pub use enum_dispatch::enum_dispatch;
@@ -71,16 +71,19 @@ pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
 // Creates a proof that the keypair is possesed, as well as binds this proof to a specific SuiAddress.
-pub fn generate_proof_of_possession<K: KeypairTraits>(
-    keypair: &K,
+pub fn generate_proof_of_possession(
+    keypair: &AuthorityKeyPair,
     address: SuiAddress,
-) -> <K as KeypairTraits>::Sig {
+) -> AuthoritySignature {
     let mut domain_with_pk: Vec<u8> = Vec::new();
     domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
     domain_with_pk.extend_from_slice(keypair.public().as_bytes());
     domain_with_pk.extend_from_slice(address.as_ref());
-    // TODO (joyqvq): Use Signature::new_secure
-    keypair.sign(&domain_with_pk[..])
+    let intent_msg = IntentMessage::new(
+        Intent::default().with_scope(IntentScope::ProofOfPossession),
+        domain_with_pk,
+    );
+    AuthoritySignature::new_secure(&intent_msg, None, keypair)
 }
 
 ///////////////////////////////////////////////
@@ -448,97 +451,69 @@ impl FromStr for AuthorityPublicKeyBytes {
 //
 
 pub trait SuiAuthoritySignature {
-    fn new<T>(value: &T, epoch_id: EpochId, secret: &dyn Signer<Self>) -> Self
-    where
-        T: Signable<Vec<u8>>;
-
-    fn verify<T>(
-        &self,
-        value: &T,
-        epoch_id: EpochId,
-        author: AuthorityPublicKeyBytes,
-    ) -> Result<(), SuiError>
-    where
-        T: Signable<Vec<u8>>;
-
     fn verify_secure<T>(
         &self,
         value: &IntentMessage<T>,
+        epoch_id: Option<EpochId>,
         author: AuthorityPublicKeyBytes,
     ) -> Result<(), SuiError>
     where
         T: Serialize;
 
-    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn signature::Signer<Self>) -> Self
+    fn new_secure<T>(
+        value: &IntentMessage<T>,
+        epoch_id: Option<EpochId>,
+        secret: &dyn signature::Signer<Self>,
+    ) -> Self
     where
         T: Serialize;
 }
 
 impl SuiAuthoritySignature for AuthoritySignature {
-    fn new<T>(value: &T, epoch_id: EpochId, secret: &dyn Signer<Self>) -> Self
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut message = Vec::new();
-        value.write(&mut message);
-        epoch_id.write(&mut message);
-        secret.sign(&message)
-    }
-
-    fn verify<T>(
-        &self,
-        value: &T,
-        epoch_id: EpochId,
-        author: AuthorityPublicKeyBytes,
-    ) -> Result<(), SuiError>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        // is this a cryptographically valid public Key?
-        let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
-            SuiError::KeyConversionError(
-                "Failed to serialize public key bytes to valid public key".to_string(),
-            )
-        })?;
-        // serialize the message (see BCS serialization for determinism)
-        let mut message = Vec::new();
-        value.write(&mut message);
-        epoch_id.write(&mut message);
-
-        // perform cryptographic signature check
-        public_key
-            .verify(&message, self)
-            .map_err(|error| SuiError::InvalidSignature {
-                error: error.to_string(),
-            })
-    }
-
-    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn signature::Signer<Self>) -> Self
+    fn new_secure<T>(
+        value: &IntentMessage<T>,
+        epoch_id: Option<EpochId>,
+        secret: &dyn signature::Signer<Self>,
+    ) -> Self
     where
         T: Serialize,
     {
-        secret.sign(&bcs::to_bytes(&value).expect("Message serialization should not fail"))
+        secret.sign(&to_bytes_to_sign(epoch_id, value))
     }
 
     fn verify_secure<T>(
         &self,
         value: &IntentMessage<T>,
+        epoch_id: Option<EpochId>,
         author: AuthorityPublicKeyBytes,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
     {
-        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
         let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
             SuiError::KeyConversionError(
                 "Failed to serialize public key bytes to valid public key".to_string(),
             )
         })?;
         public_key
-            .verify(&message[..], self)
+            .verify(&to_bytes_to_sign(epoch_id, value), self)
             .map_err(|e| SuiError::InvalidSignature {
                 error: format!("{}", e),
             })
+    }
+}
+
+pub fn to_bytes_to_sign<T>(epoch_id: Option<EpochId>, value: &IntentMessage<T>) -> Vec<u8>
+where
+    T: Serialize,
+{
+    let intent_msg_bytes = bcs::to_bytes(value).expect("Message serialization should not fail");
+    match epoch_id {
+        Some(epoch_id) => {
+            let epoch_id = bcs::to_bytes(&epoch_id).expect("EpochId serialization should not fail");
+            epoch_id.into_iter().chain(intent_msg_bytes).collect()
+        }
+        None => intent_msg_bytes,
     }
 }
 
@@ -688,16 +663,6 @@ impl<'de> Deserialize<'de> for Signature {
 }
 
 impl Signature {
-    #[warn(deprecated)]
-    pub fn new<T>(value: &T, secret: &dyn Signer<Signature>) -> Signature
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut message = Vec::new();
-        value.write(&mut message);
-        secret.sign(&message)
-    }
-
     pub fn new_secure<T>(
         value: &IntentMessage<T>,
         secret: &dyn signature::Signer<Signature>,
@@ -966,10 +931,6 @@ pub trait SuiSignature: Sized + signature::Signature {
     fn public_key_bytes(&self) -> &[u8];
     fn scheme(&self) -> SignatureScheme;
 
-    fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>;
-
     fn verify_secure<T>(&self, value: &IntentMessage<T>, author: SuiAddress) -> SuiResult<()>
     where
         T: Serialize;
@@ -992,20 +953,6 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         S::PubKey::SIGNATURE_SCHEME
     }
 
-    fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        // Currently done twice - can we improve on this?;
-        let (sig, pk) = &self.get_verification_inputs(author)?;
-        let mut message = Vec::new();
-        value.write(&mut message);
-        pk.verify(&message[..], sig)
-            .map_err(|e| SuiError::InvalidSignature {
-                error: format!("{}", e),
-            })
-    }
-
     fn verify_secure<T>(&self, value: &IntentMessage<T>, author: SuiAddress) -> Result<(), SuiError>
     where
         T: Serialize,
@@ -1025,7 +972,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 /// TODO: We could also add the aggregated signature as another impl of the trait.
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
-    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult;
+    fn verify<T: Serialize>(&self, data: &T, committee: &Committee) -> SuiResult;
 
     fn add_to_verification_obligation(
         &self,
@@ -1038,7 +985,7 @@ pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {
-    fn verify<T: Signable<Vec<u8>>>(&self, _data: &T, _committee: &Committee) -> SuiResult {
+    fn verify<T: Serialize>(&self, _data: &T, _committee: &Committee) -> SuiResult {
         Ok(())
     }
 
@@ -1060,10 +1007,10 @@ pub fn add_to_verification_obligation_and_verify<S, T>(
 ) -> SuiResult
 where
     S: AuthoritySignInfoTrait,
-    T: Signable<Vec<u8>>,
+    T: Serialize,
 {
     let mut obligation = VerificationObligation::default();
-    let idx = obligation.add_message(data, epoch_id);
+    let idx = obligation.add_message(data, epoch_id, IntentScope::SenderSignedTransaction);
     sig.add_to_verification_obligation(committee, &mut obligation, idx)?;
     obligation.verify_all()?;
     Ok(())
@@ -1076,7 +1023,7 @@ pub struct AuthoritySignInfo {
     pub signature: AuthoritySignature,
 }
 impl AuthoritySignInfoTrait for AuthoritySignInfo {
-    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
+    fn verify<T: Serialize>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
         add_to_verification_obligation_and_verify(self, data, committee, self.epoch)
     }
 
@@ -1109,17 +1056,22 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
 impl AuthoritySignInfo {
     pub fn new<T>(
         epoch: EpochId,
+        scope: IntentScope,
         value: &T,
         name: AuthorityName,
         secret: &dyn Signer<AuthoritySignature>,
     ) -> Self
     where
-        T: Signable<Vec<u8>>,
+        T: Serialize,
     {
         Self {
             epoch,
             authority: name,
-            signature: AuthoritySignature::new(value, epoch, secret),
+            signature: AuthoritySignature::new_secure(
+                &IntentMessage::new(Intent::default().with_scope(scope), value),
+                Some(epoch),
+                secret,
+            ),
         }
     }
 }
@@ -1186,7 +1138,7 @@ static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, P
 impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
     for AuthorityQuorumSignInfo<STRONG_THRESHOLD>
 {
-    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
+    fn verify<T: Serialize>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
         add_to_verification_obligation_and_verify(self, data, committee, self.epoch)
     }
 
@@ -1441,17 +1393,16 @@ impl VerificationObligation {
 
     /// Add a new message to the list of messages to be verified.
     /// Returns the index of the message.
-    pub fn add_message<T>(&mut self, message_value: &T, epoch: EpochId) -> usize
+    pub fn add_message<T>(&mut self, message_value: &T, epoch: EpochId, scope: IntentScope) -> usize
     where
-        T: Signable<Vec<u8>>,
+        T: Serialize,
     {
-        let mut message = Vec::new();
-        message_value.write(&mut message);
-        epoch.write(&mut message);
-
         self.signatures.push(AggregateAuthoritySignature::default());
         self.public_keys.push(Vec::new());
-        self.messages.push(message);
+        self.messages.push(to_bytes_to_sign(
+            Some(epoch),
+            &IntentMessage::new(Intent::default().with_scope(scope), message_value),
+        ));
         self.messages.len() - 1
     }
 
@@ -1496,7 +1447,7 @@ impl VerificationObligation {
 pub mod bcs_signable_test {
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     pub struct Foo(pub String);
 
     #[cfg(test)]
@@ -1511,9 +1462,11 @@ pub mod bcs_signable_test {
     where
         T: super::bcs_signable::BcsSignable,
     {
+        use narwhal_crypto::intent::IntentScope;
+
         let mut obligation = VerificationObligation::default();
         // Add the obligation of the authority signature verifications.
-        let idx = obligation.add_message(value, 0);
+        let idx = obligation.add_message(value, 0, IntentScope::SenderSignedTransaction);
         (obligation, idx)
     }
 }

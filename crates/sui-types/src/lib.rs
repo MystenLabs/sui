@@ -35,7 +35,6 @@ pub mod gas;
 pub mod gas_coin;
 pub mod id;
 pub mod in_memory_storage;
-pub mod intent;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
@@ -52,6 +51,10 @@ pub mod filter;
 
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
+
+#[cfg(test)]
+#[path = "./unit_tests/intent_tests.rs"]
+mod intent_tests;
 
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID

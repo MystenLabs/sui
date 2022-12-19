@@ -8,6 +8,7 @@ use super::write_keypair_to_file;
 use super::KeyToolCommand;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
+use narwhal_crypto::intent::Intent;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
@@ -23,7 +24,6 @@ use sui_types::crypto::Signature;
 use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
-use sui_types::intent::Intent;
 use tempfile::TempDir;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";

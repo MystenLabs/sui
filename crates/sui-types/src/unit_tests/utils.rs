@@ -11,10 +11,10 @@ use crate::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
     },
-    intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
     object::Object,
 };
+use narwhal_crypto::intent::Intent;
 use std::collections::BTreeMap;
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<AuthorityKeyPair>, Committee)

@@ -31,6 +31,7 @@ sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 telemetry-subscribers.workspace = true
 
 workspace-hack.workspace = true

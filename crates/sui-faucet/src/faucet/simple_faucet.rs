@@ -10,6 +10,7 @@ use tap::tap::TapFallible;
 #[cfg(test)]
 use std::collections::HashSet;
 
+use narwhal_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiObjectRead, SuiPaySui, SuiTransactionKind, SuiTransactionResponse,
@@ -19,7 +20,6 @@ use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    intent::Intent,
     messages::{ExecuteTransactionRequestType, Transaction, TransactionData},
 };
 use tokio::sync::{

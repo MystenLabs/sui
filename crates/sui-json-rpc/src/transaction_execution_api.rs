@@ -10,6 +10,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_metrics::spawn_monitored_task;
+use narwhal_crypto::intent::Intent;
 use signature::Signature;
 use std::sync::Arc;
 use sui_core::authority::{AuthorityStore, ResolverWrapper};
@@ -18,7 +19,6 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
-use sui_types::intent::Intent;
 use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
 use sui_types::{crypto, messages::Transaction};
 pub struct FullNodeTransactionExecutionApi {

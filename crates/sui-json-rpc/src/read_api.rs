@@ -6,9 +6,9 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use narwhal_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::intent::{Intent, IntentMessage};
 use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 

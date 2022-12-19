@@ -7,7 +7,10 @@ use config::{
     utils::get_available_port, Authority, Committee, Epoch, SharedWorkerCache, Stake, WorkerCache,
     WorkerId, WorkerIndex, WorkerInfo,
 };
-use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use crypto::{
+    intent::{AppId, Intent, IntentMessage, IntentScope},
+    KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey,
+};
 use fastcrypto::{
     hash::{Digest, Hash as _},
     traits::{AllowedRng, KeyPair as _, Signer as _},
@@ -559,8 +562,14 @@ pub fn mock_signed_certificate(
     let mut votes = Vec::new();
     for signer in signers {
         let pk = signer.public();
+        let intent_msg = IntentMessage::new(
+            Intent::default()
+                .with_app_id(AppId::Narwhal)
+                .with_scope(IntentScope::CertificateDigest),
+            Digest::from(cert.digest()),
+        );
         let sig = signer
-            .try_sign(Digest::from(cert.digest()).as_ref())
+            .try_sign(&bcs::to_bytes(&intent_msg).unwrap())
             .unwrap();
         votes.push((pk.clone(), sig))
     }

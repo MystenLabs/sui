@@ -28,6 +28,8 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
+use narwhal_crypto::intent::Intent;
+use narwhal_crypto::intent::IntentMessage;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -36,8 +38,9 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
+use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
-use sui_types::intent::Intent;
+use sui_types::crypto::{Signature, SignatureScheme};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -45,12 +48,6 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{
-    crypto::{Signature, SignatureScheme},
-    intent::IntentMessage,
-};
-
-use sui_sdk::SuiClient;
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";

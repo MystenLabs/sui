@@ -20,9 +20,9 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use test_utils::messages::make_transactions_with_wallet_context;
 
+use narwhal_crypto::intent::Intent;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
-use sui_types::intent::Intent;
 use sui_types::{
     base_types::SuiAddress,
     messages::{Transaction, TransactionData, VerifiedTransaction},

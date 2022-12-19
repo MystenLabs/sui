@@ -6,7 +6,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
-use signature::{Signer, Verifier};
+use narwhal_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::{fs, path::PathBuf};
 use sui_config::{
     genesis::{Builder, Genesis},
@@ -15,8 +15,8 @@ use sui_config::{
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{
-        generate_proof_of_possession, AuthorityKeyPair, AuthorityPublicKey,
-        AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, NetworkKeyPair, SuiKeyPair,
+        generate_proof_of_possession, AuthorityKeyPair, AuthorityPublicKeyBytes,
+        AuthoritySignature, KeypairTraits, NetworkKeyPair, SuiAuthoritySignature, SuiKeyPair,
         ToFromBytes,
     },
     object::Object,
@@ -191,8 +191,13 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 ));
             }
 
-            // Sign the genesis bytes
-            let signature: AuthoritySignature = keypair.try_sign(&built_genesis_bytes)?;
+            // Sign the genesis bytes with intent scope as genesis.
+            let intent_msg = IntentMessage::new(
+                Intent::default().with_scope(IntentScope::Genesis),
+                &built_genesis_bytes,
+            );
+            // We do not care about the EpochId here, just use default.
+            let signature = AuthoritySignature::new_secure(&intent_msg, None, &keypair);
 
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
@@ -239,14 +244,21 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                         anyhow::anyhow!("missing signature for validator {}", validator.name())
                     })?;
 
-                let pk: AuthorityPublicKey = validator.protocol_key().try_into()?;
-
-                pk.verify(&genesis_bytes, &signature).with_context(|| {
-                    format!(
-                        "failed to validate signature for validator {}",
-                        validator.name()
+                signature
+                    .verify_secure(
+                        &IntentMessage::new(
+                            Intent::default().with_scope(IntentScope::Genesis),
+                            &genesis_bytes,
+                        ),
+                        None,
+                        validator.protocol_key(),
                     )
-                })?;
+                    .with_context(|| {
+                        format!(
+                            "failed to validate signature for validator {}",
+                            validator.name()
+                        )
+                    })?;
             }
 
             if !signatures.is_empty() {

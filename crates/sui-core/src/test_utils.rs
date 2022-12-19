@@ -6,6 +6,7 @@ use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::authority_client::LocalAuthorityClient;
 use crate::epoch::committee_store::CommitteeStore;
 use fastcrypto::traits::KeyPair;
+use narwhal_crypto::intent::IntentScope;
 use prometheus::Registry;
 use signature::Signer;
 use std::collections::BTreeMap;
@@ -84,7 +85,13 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         transaction.data().clone(),
         signers
             .map(|(name, signer)| {
-                AuthoritySignInfo::new(committee.epoch, transaction.data(), *name, signer)
+                AuthoritySignInfo::new(
+                    committee.epoch,
+                    IntentScope::SenderSignedTransaction,
+                    transaction.data(),
+                    *name,
+                    signer,
+                )
             })
             .collect(),
         committee,

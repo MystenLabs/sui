@@ -948,6 +948,7 @@ mod tests {
     use crate::authority_aggregator::NetworkTransactionCertifier;
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
+    use narwhal_crypto::intent::IntentScope;
     use std::collections::HashMap;
     use sui_types::committee::Committee;
     use sui_types::crypto::AuthorityKeyPair;
@@ -1124,7 +1125,13 @@ mod tests {
             gas_used,
             ..Default::default()
         };
-        SignedTransactionEffects::new(state.epoch(), effects, &*state.secret, state.name)
+        SignedTransactionEffects::new(
+            state.epoch(),
+            IntentScope::TransactionEffects,
+            effects,
+            &*state.secret,
+            state.name,
+        )
     }
 
     fn committee() -> (AuthorityKeyPair, Committee) {

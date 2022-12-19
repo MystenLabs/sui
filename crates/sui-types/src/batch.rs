@@ -5,6 +5,7 @@ use crate::base_types::{AuthorityName, ExecutionDigests};
 use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature};
 use crate::error::{SuiError, SuiResult};
 use crate::message_envelope::{Envelope, Message, VerifiedEnvelope};
+use narwhal_crypto::intent::IntentScope;
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
@@ -120,7 +121,7 @@ impl SignedBatch {
         secret: &dyn signature::Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> SignedBatch {
-        Self::new(0, batch, secret, authority)
+        Self::new(0, IntentScope::AuthorityBatch, batch, secret, authority)
     }
 }
 

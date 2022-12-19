@@ -13,7 +13,7 @@ module sui::validator {
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
     use std::option::Option;
-    use sui::bls12381::bls12381_min_sig_verify_with_domain;
+    use sui::bls12381::bls12381_min_sig_verify;
     use sui::staking_pool::{Self, Delegation, StakedSui, StakingPool};
 
     friend sui::genesis;
@@ -84,14 +84,19 @@ module sui::validator {
         sui_address: address,
         pubkey_bytes: vector<u8>
     ) {
-        // The proof of possession is the signature over ValidatorPK || AccountAddress.
-        // This proves that the account address is owned by the holder of ValidatorPK, and ensures
-        // that PK exists.
-        let signed_bytes = pubkey_bytes;
+        // The proof of possession is the signature over `intent || domain || pubkey from protocol key || address from account key` 
+        // produced using the protocol keypair. See `generate_proof_of_possession()` for detail. 
+        // PoP proves that the account address is owned by the holder of the protocol key, and ensures that pubkey exists.
+        
+        // The first three bytes represents the intent [IntentScope::ProofOfPossession, IntentVersion::V0, AppId::Sui]. See `intent.rs` for details. 
+        let signed_bytes: vector<u8> = vector[4, 0, 0, 120];
+        vector::append(&mut signed_bytes, PROOF_OF_POSSESSION_DOMAIN);
+        vector::append(&mut signed_bytes, pubkey_bytes);
         let address_bytes = bcs::to_bytes(&sui_address);
         vector::append(&mut signed_bytes, address_bytes);
+
         assert!(
-            bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
+            bls12381_min_sig_verify(&proof_of_possession, &pubkey_bytes, &signed_bytes) == true,
             0
         );
     }

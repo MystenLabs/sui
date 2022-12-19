@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use narwhal_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::HashMap;
 use sui_types::{
     base_types::AuthorityName,
@@ -14,7 +15,6 @@ use sui_types::{
         CheckpointSummary, VerifiedCheckpoint,
     },
 };
-
 pub struct CommitteeFixture {
     epoch: EpochId,
     validators: HashMap<AuthorityName, (AuthorityKeyPair, StakeUnit)>,
@@ -72,7 +72,12 @@ impl CommitteeFixture {
             .validators
             .iter()
             .map(|(name, (key, _))| {
-                let signature = AuthoritySignature::new(&checkpoint, checkpoint.epoch, key);
+                let intent_msg = IntentMessage::new(
+                    Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    checkpoint.clone(),
+                );
+                let signature =
+                    AuthoritySignature::new_secure(&intent_msg, Some(checkpoint.epoch), key);
                 AuthoritySignInfo {
                     epoch: checkpoint.epoch,
                     authority: *name,

@@ -26,6 +26,7 @@ tracing-subscriber = { version = "0.3.15", features = ["time", "env-filter"] }
 url = "2.3.1"
 axum = "0.5.16"
 itertools = "0.10.5"
+bcs = "0.1.4"
 
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }

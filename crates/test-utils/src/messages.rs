@@ -4,6 +4,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
+use narwhal_crypto::intent::IntentScope;
 use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
@@ -421,6 +422,7 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
                 let effects = dummy_transaction_effects(&tx);
                 let signed_effects = SignedTransactionEffects::new(
                     committee.epoch(),
+                    IntentScope::TransactionEffects,
                     effects,
                     key,
                     AuthorityPublicKeyBytes::from(key.public()),

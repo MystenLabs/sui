@@ -10,7 +10,6 @@ use crate::crypto::{
     SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
-use crate::intent::{Intent, IntentMessage};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
@@ -29,6 +28,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
 };
+use narwhal_crypto::intent::{Intent, IntentMessage, IntentScope};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
@@ -986,6 +986,7 @@ impl VerifiedSignedTransaction {
     ) -> Self {
         Self::new_from_verified(SignedTransaction::new(
             epoch,
+            IntentScope::SenderSignedTransaction,
             transaction.into_inner().into_data(),
             secret,
             authority,

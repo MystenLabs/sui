@@ -37,6 +37,7 @@ sui-sdk = { path = "../sui-sdk" }
 sui-node = { path = "../sui-node" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 mysten-metrics = { path = "../mysten-metrics" }
 
 move-core-types.workspace = true

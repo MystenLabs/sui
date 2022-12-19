@@ -14,6 +14,7 @@ use crate::crypto::{
     Signature, SuiAuthoritySignature, SuiSignature,
 };
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
+use narwhal_crypto::intent::{Intent, IntentMessage};
 
 use super::*;
 
@@ -22,22 +23,22 @@ fn test_signatures() {
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let foo = Foo("hello".into());
-    let foox = Foo("hellox".into());
-    let bar = Bar("hello".into());
-
-    let s = Signature::new(&foo, &sec1);
-    assert!(s.verify(&foo, addr1).is_ok());
-    assert!(s.verify(&foo, addr2).is_err());
-    assert!(s.verify(&foox, addr1).is_err());
-    assert!(s.verify(&bar, addr1).is_err());
+    let foo = IntentMessage::new(Intent::default(), Foo("hello".into()));
+    let foox = IntentMessage::new(Intent::default(), Foo("hellox".into()));
+    let bar = IntentMessage::new(Intent::default(), Bar("hello".into()));
+    let s = Signature::new_secure(&foo, &sec1);
+    assert!(s.verify_secure(&foo, addr1).is_ok());
+    assert!(s.verify_secure(&foo, addr2).is_err());
+    assert!(s.verify_secure(&foox, addr1).is_err());
+    // BCS serialization does not care about the struct name.
+    assert!(s.verify_secure(&bar, addr1).is_ok());
 }
 
 #[test]
 fn test_signatures_serde() {
     let (_, sec1): (_, AccountKeyPair) = get_key_pair();
-    let foo = Foo("hello".into());
-    let s = Signature::new(&foo, &sec1);
+    let foo = IntentMessage::new(Intent::default(), Foo("hello".into()));
+    let s = Signature::new_secure(&foo, &sec1);
 
     let serialized = bincode::serialize(&s).unwrap();
     println!("{:?}", serialized);
@@ -296,7 +297,11 @@ fn test_transaction_digest_serde_human_readable() {
 #[test]
 fn test_authority_signature_serde_not_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), 0, &key);
+    let sig = AuthoritySignature::new_secure(
+        &IntentMessage::new(Intent::default(), Foo("some data".to_string())),
+        Some(0),
+        &key,
+    );
     let serialized = bincode::serialize(&sig).unwrap();
     let bcs_serialized = bcs::to_bytes(&sig).unwrap();
 
@@ -308,7 +313,11 @@ fn test_authority_signature_serde_not_human_readable() {
 #[test]
 fn test_authority_signature_serde_human_readable() {
     let (_, key): (_, AuthorityKeyPair) = get_key_pair();
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), 0, &key);
+    let sig = AuthoritySignature::new_secure(
+        &IntentMessage::new(Intent::default(), Foo("some data".to_string())),
+        Some(0),
+        &key,
+    );
     let serialized = serde_json::to_string(&sig).unwrap();
     assert_eq!(
         format!(r#"{{"sig":"{}"}}"#, Base64::encode(sig.as_ref())),

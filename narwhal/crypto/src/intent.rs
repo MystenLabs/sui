@@ -5,10 +5,6 @@ use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 use serde_repr::Serialize_repr;
 
-#[cfg(test)]
-#[path = "unit_tests/intent_tests.rs"]
-mod intent_tests;
-
 #[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentVersion {
@@ -19,23 +15,24 @@ pub enum IntentVersion {
 #[repr(u8)]
 pub enum AppId {
     Sui = 0,
+    Narwhal = 1,
 }
 
-impl Default for AppId {
-    fn default() -> Self {
-        Self::Sui
-    }
-}
 pub trait SecureIntent: Serialize + private::SealedIntent {}
 
 #[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentScope {
     TransactionData = 0,
-    TransactionEffects = 1,
-    AuthorityBatch = 2,
-    CheckpointSummary = 3,
-    PersonalMessage = 4,
+    CheckpointSummary = 1,
+    PersonalMessage = 2,
+    SenderSignedTransaction = 3,
+    ProofOfPossession = 4,
+    Genesis = 5,
+    CertificateDigest = 6,
+    VoteDigest = 7,
+    TransactionEffects = 8,
+    AuthorityBatch = 9,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]

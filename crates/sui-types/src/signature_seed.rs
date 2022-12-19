@@ -5,11 +5,13 @@
 
 use fastcrypto::traits::AllowedRng;
 use fastcrypto::{hash::Sha3_256, hmac::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
+use serde::Serialize;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
-use crate::crypto::{Signable, Signature, SuiPublicKey};
+use crate::crypto::{Signature, SuiPublicKey};
 use crate::error::SuiError;
+use narwhal_crypto::intent::{Intent, IntentMessage};
 
 #[cfg(test)]
 #[path = "unit_tests/signature_seed_tests.rs"]
@@ -221,11 +223,12 @@ impl SignatureSeed {
         value: &T,
     ) -> Result<Signature, signature::Error>
     where
-        T: Signable<Vec<u8>>,
+        T: Serialize,
     {
         let keypair: K = SignatureSeed::new_deterministic_keypair(self, id, domain)
             .map_err(|_| signature::Error::new())?;
-        Ok(Signature::new(value, &keypair))
+        let intent_msg = IntentMessage::new(Intent::default(), value);
+        Ok(Signature::new_secure(&intent_msg, &keypair))
     }
 
     // Deterministically generate an ed25519 public key via HKDF.

@@ -47,6 +47,7 @@ move-vm-types.workspace = true
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
 narwhal-executor = { path = "../../narwhal/executor" }
+
 sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-constants = { path = "../sui-protocol-constants" }
 

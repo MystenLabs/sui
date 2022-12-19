@@ -8,7 +8,10 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, Epoch, SharedWorkerCache, Stake, WorkerId, WorkerInfo};
-use crypto::{AggregateSignature, PublicKey, Signature};
+use crypto::{
+    intent::{AppId, Intent, IntentMessage, IntentScope},
+    AggregateSignature, PublicKey, Signature,
+};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
@@ -182,10 +185,15 @@ impl HeaderBuilder {
             signature: Signature::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
-
+        let intent_msg = IntentMessage::new(
+            Intent::default()
+                .with_app_id(AppId::Narwhal)
+                .with_scope(IntentScope::CertificateDigest),
+            Digest::from(Hash::digest(&h)),
+        );
         Ok(Header {
             signature: signer
-                .try_sign(Digest::from(Hash::digest(&h)).as_ref())
+                .try_sign(&bcs::to_bytes(&intent_msg).unwrap())
                 .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
             ..h
         })
@@ -405,8 +413,13 @@ impl Vote {
             signature: Signature::default(),
         };
 
-        let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = vote.digest().into();
-        let signature = signer.sign(vote_digest.as_ref());
+        let intent_msg = IntentMessage::new(
+            Intent::default()
+                .with_app_id(AppId::Narwhal)
+                .with_scope(IntentScope::CertificateDigest),
+            Digest::from(vote.digest()),
+        );
+        let signature = signer.sign(&bcs::to_bytes(&intent_msg).unwrap());
 
         Self { signature, ..vote }
     }

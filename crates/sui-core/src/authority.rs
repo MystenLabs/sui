@@ -13,6 +13,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use narwhal_crypto::intent::IntentScope;
 use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
@@ -1164,8 +1165,13 @@ impl AuthorityState {
             );
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects =
-            SignedTransactionEffects::new(self.epoch(), effects, &*self.secret, self.name);
+        let signed_effects = SignedTransactionEffects::new(
+            self.epoch(),
+            IntentScope::TransactionEffects,
+            effects,
+            &*self.secret,
+            self.name,
+        );
         Ok((inner_temp_store, signed_effects))
     }
 
@@ -2369,6 +2375,7 @@ impl AuthorityState {
                 );
                 SignedTransactionEffects::new(
                     cur_epoch,
+                    IntentScope::TransactionEffects,
                     effects.into_data(),
                     &*self.secret,
                     self.name,

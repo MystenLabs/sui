@@ -248,14 +248,19 @@
     sui_address: <b>address</b>,
     pubkey_bytes: <a href="">vector</a>&lt;u8&gt;
 ) {
-    // The proof of possession is the signature over ValidatorPK || AccountAddress.
-    // This proves that the account <b>address</b> is owned by the holder of ValidatorPK, and <b>ensures</b>
-    // that PK <b>exists</b>.
-    <b>let</b> signed_bytes = pubkey_bytes;
+    // The proof of possession is the signature over `intent || domain || pubkey from protocol key || <b>address</b> from account key`
+    // produced using the protocol keypair. See `generate_proof_of_possession()` for detail.
+    // PoP proves that the account <b>address</b> is owned by the holder of the protocol key, and <b>ensures</b> that pubkey <b>exists</b>.
+
+    // The first three bytes represents the intent [IntentScope::ProofOfPossession, IntentVersion::V0, AppId::Sui]. See `intent.rs` for details.
+    <b>let</b> signed_bytes: <a href="">vector</a>&lt;u8&gt; = <a href="">vector</a>[4, 0, 0, 120];
+    <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>);
+    <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, pubkey_bytes);
     <b>let</b> address_bytes = <a href="_to_bytes">bcs::to_bytes</a>(&sui_address);
     <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, address_bytes);
+
     <b>assert</b>!(
-        bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>) == <b>true</b>,
+        bls12381_min_sig_verify(&proof_of_possession, &pubkey_bytes, &signed_bytes) == <b>true</b>,
         0
     );
 }

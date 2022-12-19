@@ -3,6 +3,7 @@
 
 use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
+use narwhal_crypto::intent::IntentScope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 
@@ -59,7 +60,11 @@ impl TransactionValidator for SuiTxValidator {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     self.metrics.certificate_signatures_verified.inc();
                     // todo - verify user signature when we pin signature in certificate
-                    let idx = obligation.add_message(certificate.data(), certificate.epoch());
+                    let idx = obligation.add_message(
+                        certificate.data(),
+                        certificate.epoch(),
+                        IntentScope::SenderSignedTransaction,
+                    );
                     certificate.auth_sig().add_to_verification_obligation(
                         epoch_store.committee(),
                         &mut obligation,
@@ -69,7 +74,11 @@ impl TransactionValidator for SuiTxValidator {
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     self.metrics.checkpoint_signatures_verified.inc();
                     let summary = signature.summary.summary;
-                    let idx = obligation.add_message(&summary, summary.epoch);
+                    let idx = obligation.add_message(
+                        &summary,
+                        summary.epoch,
+                        IntentScope::CheckpointSummary,
+                    );
                     signature
                         .summary
                         .auth_signature

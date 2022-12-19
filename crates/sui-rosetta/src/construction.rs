@@ -27,7 +27,7 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 use anyhow::anyhow;
-use sui_types::intent::{Intent, IntentMessage};
+use narwhal_crypto::intent::{Intent, IntentMessage};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
 

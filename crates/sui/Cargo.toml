@@ -44,6 +44,7 @@ rocksdb = "0.19.0"
 
 tempfile = "3.3.0"
 narwhal-executor = { path = "../../narwhal/executor" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true

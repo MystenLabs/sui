@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
-use crypto::{KeyPair, NetworkKeyPair};
+use crypto::{
+    intent::{AppId, Intent, IntentMessage, IntentScope},
+    KeyPair, NetworkKeyPair,
+};
 use fastcrypto::{
-    hash::Hash,
+    hash::{Digest, Hash},
     traits::{KeyPair as _, Signer},
 };
 use multiaddr::Multiaddr;
@@ -83,7 +86,13 @@ fn get_registry() -> Result<Registry> {
 
     let worker_pk = network_keys[0].public().clone();
     let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
-    let signature = keys[0].sign(certificate.digest().as_ref());
+    let intent_msg = IntentMessage::new(
+        Intent::default()
+            .with_app_id(AppId::Narwhal)
+            .with_scope(IntentScope::CertificateDigest),
+        Digest::from(certificate.digest()),
+    );
+    let signature = keys[0].sign(&bcs::to_bytes(&intent_msg).unwrap());
     let certificate =
         Certificate::new_unsigned(&committee, header.clone(), vec![(pk.clone(), signature)])
             .unwrap();

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
-use crypto::{KeyPair, Signature};
+use crypto::{
+    intent::{AppId, Intent, IntentMessage, IntentScope},
+    KeyPair, Signature,
+};
 use fastcrypto::{
     hash::{Digest, Hash},
     traits::KeyPair as _,
@@ -48,9 +51,15 @@ fn clean_signed_header(kp: KeyPair) -> impl Strategy<Value = Header> {
                 digest: OnceCell::default(),
                 signature: Signature::default(),
             };
+            let intent_msg = IntentMessage::new(
+                Intent::default()
+                    .with_app_id(AppId::Narwhal)
+                    .with_scope(IntentScope::CertificateDigest),
+                Digest::from(header.digest()),
+            );
             Header {
                 digest: OnceCell::with_value(Hash::digest(&header)),
-                signature: kp.sign(Digest::from(Hash::digest(&header)).as_ref()),
+                signature: kp.sign(&bcs::to_bytes(&intent_msg).unwrap()),
                 ..header
             }
         })

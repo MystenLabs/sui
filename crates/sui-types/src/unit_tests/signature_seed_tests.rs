@@ -6,6 +6,7 @@ use fastcrypto::secp256k1::Secp256k1KeyPair;
 use crate::crypto::AccountKeyPair;
 use crate::crypto::SuiSignature;
 use crate::{crypto::bcs_signable_test::Foo, signature_seed::SignatureSeed};
+use narwhal_crypto::intent::{Intent, IntentMessage};
 
 #[cfg(test)]
 const TEST_ID: [u8; 16] = [0u8; 16];
@@ -80,7 +81,9 @@ fn test_deterministic_signing() {
     let id_1 = [1u8; 32];
 
     let msg0 = Foo("test0".to_string());
+    let intent_msg0 = IntentMessage::new(Intent::default(), msg0.clone());
     let msg1 = Foo("test1".to_string());
+    let intent_msg1 = IntentMessage::new(Intent::default(), msg1);
 
     // Create two addresses with a different ID.
     let sui_address_0 = seed
@@ -99,18 +102,18 @@ fn test_deterministic_signing() {
     assert!(sig_1.is_ok());
 
     // Verify signatures.
-    let ver_0 = sig_0_ok.verify(&msg0, sui_address_0);
+    let ver_0 = sig_0_ok.verify_secure(&intent_msg0, sui_address_0);
     assert!(ver_0.is_ok());
 
-    let ver_1 = sig_1.unwrap().verify(&msg0, sui_address_1);
+    let ver_1 = sig_1.unwrap().verify_secure(&intent_msg0, sui_address_1);
     assert!(ver_1.is_ok());
 
     // Ensure that signatures cannot be verified against another address.
-    let ver_0_with_address_1 = sig_0_ok.verify(&msg0, sui_address_1);
+    let ver_0_with_address_1 = sig_0_ok.verify_secure(&intent_msg1, sui_address_1);
     assert!(ver_0_with_address_1.is_err());
 
     // Ensure that signatures cannot be verified against another message.
-    let ver_0_with_msg1 = sig_0_ok.verify(&msg1, sui_address_0);
+    let ver_0_with_msg1 = sig_0_ok.verify_secure(&intent_msg1, sui_address_0);
     assert!(ver_0_with_msg1.is_err());
 
     // As we use ed25519, ensure that signatures on the same message are deterministic.
@@ -140,7 +143,7 @@ fn test_sign_verify_with_secp256k1() {
     let seed = SignatureSeed::default();
     let id_0 = [0u8; 32];
     let msg0 = Foo("test0".to_string());
-
+    let intent_msg = IntentMessage::new(Intent::default(), msg0.clone());
     let sui_address_0 = seed
         .new_deterministic_address::<Secp256k1KeyPair>(&id_0, Some(&TEST_DOMAIN))
         .unwrap();
@@ -149,6 +152,6 @@ fn test_sign_verify_with_secp256k1() {
     assert!(sig_0.is_ok());
     let sig_0_ok = sig_0.unwrap();
 
-    let ver_0 = sig_0_ok.verify(&msg0, sui_address_0);
+    let ver_0 = sig_0_ok.verify_secure(&intent_msg, sui_address_0);
     assert!(ver_0.is_ok());
 }

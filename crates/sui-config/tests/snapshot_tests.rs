@@ -83,7 +83,6 @@ fn populated_genesis_snapshot_matches() {
         narwhal_worker_address: Multiaddr::empty(),
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());
-
     let genesis = Builder::new()
         .add_objects(objects)
         .add_validator(validator, pop)

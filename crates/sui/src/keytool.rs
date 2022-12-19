@@ -9,8 +9,8 @@ use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
+use narwhal_crypto::intent::Intent;
 use sui_keys::key_derive::generate_new_key;
-use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use tracing::info;
 

@@ -9,11 +9,12 @@ use crate::{
         AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
         SuiSignature,
     },
-    intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion, PersonalMessage},
     messages::{Transaction, TransactionData},
     object::Object,
 };
-
+use narwhal_crypto::intent::{
+    AppId, Intent, IntentMessage, IntentScope, IntentVersion, PersonalMessage,
+};
 #[test]
 fn test_personal_message_intent() {
     use crate::crypto::{get_key_pair, Signature};
@@ -73,8 +74,12 @@ fn test_authority_signature_intent() {
     let tx1 = tx.clone();
     assert!(tx.verify().is_ok());
 
-    // signature does not sign on intent fails.
-    let signature_insecure = Signature::new(&data, &sender_key);
+    // signature commits to incorrect intent fails.
+    let incorrect_intent_msg = IntentMessage::new(
+        Intent::default().with_scope(IntentScope::Genesis),
+        data.clone(),
+    );
+    let signature_insecure = Signature::new_secure(&incorrect_intent_msg, &sender_key);
     let tx_1 = Transaction::from_data(data, Intent::default(), signature_insecure);
     assert!(tx_1.verify().is_err());
 
@@ -96,7 +101,7 @@ fn test_authority_signature_intent() {
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, &kp);
-    let verification = s.verify_secure(&tx1.data().intent_message, kp.public().into());
+    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, Some(0), &kp);
+    let verification = s.verify_secure(&tx1.data().intent_message, Some(0), kp.public().into());
     assert!(verification.is_ok())
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use narwhal_crypto::intent::Intent;
 use std::str::FromStr;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
@@ -10,7 +11,6 @@ use sui_sdk::{
     },
     SuiClient,
 };
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
