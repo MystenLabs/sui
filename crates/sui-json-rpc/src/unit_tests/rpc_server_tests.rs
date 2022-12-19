@@ -132,6 +132,8 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
+    println!("!!! tx1 {:?}", &tx1_response);
+
     let effects =
         if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx1_response {
             Some(effects)

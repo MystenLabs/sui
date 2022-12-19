@@ -1557,5 +1557,10 @@ pub fn construct_tbls_randomness_object_message(epoch: EpochId, obj_id: &ObjectI
     let mut msg = TBLS_RANDOMNESS_OBJECT_DOMAIN.to_vec();
     msg.extend_from_slice(&u64::to_be_bytes(epoch as u64));
     msg.extend_from_slice(obj_id.as_ref());
+    // TODO remove
+    println!(
+        "!!! msg - epoch {} obj {} msg {:?}",
+        &epoch, obj_id, &msg
+    );
     msg
 }
