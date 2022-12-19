@@ -12,8 +12,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use std::ops::Deref;
-use fastcrypto::error::FastCryptoError;
+use fastcrypto_tbls::{mocked_dkg, tbls, tbls::ThresholdBls, types};
 
 pub fn verify_tbls_signature(
     _context: &mut NativeContext,
@@ -30,11 +29,14 @@ pub fn verify_tbls_signature(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
 
-    // TODO: verify_bls with the mocked generator - currently compares with msg
-    let res = match msg.as_bytes_ref().deref() == sig.as_bytes_ref().deref() {
+    let (pk_bls, _pk_vss) = mocked_dkg::generate_public_keys(1, epoch);
+    let sig = types::Signature::from(sig.as_bytes_ref());
+    let valid = tbls::ThresholdBls12381MinSig::verify(&pk_bls, &msg.as_bytes_ref(), sig);
+
+    match valid {
         true => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
         _ => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    }; res
+    }
 }
 
 // Used only in tests.
@@ -52,9 +54,11 @@ pub fn tbls_sign(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
 
-    // TODO: verify_bls with the mocked generator - currently returns msg
+    let (sk, _pk) = mocked_dkg::generate_full_key_pair(epoch);
+    let sig = tbls::ThresholdBls12381MinSig::sign(&sk, &msg.as_bytes_ref());
+
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(msg.as_bytes_ref().deref().clone())],
+        smallvec![Value::vector_u8(sig.to_bytes())],
     ))
 }
