@@ -3,7 +3,6 @@
 use anyhow::{anyhow, Result};
 use clap::*;
 use futures::future::join_all;
-use futures::future::try_join_all;
 use futures::StreamExt;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
@@ -311,8 +310,7 @@ async fn main() -> Result<()> {
                 .unwrap();
             server_runtime.block_on(async move {
                 // Setup the network
-                let nodes: Vec<_> = spawn_test_authorities(cloned_gas, &cloned_config).await;
-                let handles: Vec<_> = nodes.into_iter().map(move |node| node.wait()).collect();
+                let _nodes: Vec<_> = spawn_test_authorities(cloned_gas, &cloned_config).await;
                 cloned_barrier.wait().await;
                 let mut follower_handles = vec![];
 
@@ -325,10 +323,6 @@ async fn main() -> Result<()> {
                             follow(auth_client.clone(), opts.download_txes).await
                         }))
                     }
-                }
-
-                if try_join_all(handles).await.is_err() {
-                    error!("Failed while waiting for nodes");
                 }
                 join_all(follower_handles).await;
             });

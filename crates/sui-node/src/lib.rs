@@ -8,6 +8,7 @@ use anemo_tower::trace::DefaultMakeSpan;
 use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
+use arc_swap::ArcSwapOption;
 use checkpoint_executor::CheckpointExecutor;
 use futures::TryFutureExt;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
@@ -16,7 +17,6 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
-use std::option::Option::None;
 use std::{sync::Arc, time::Duration};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
@@ -53,6 +53,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::messages::VerifiedCertificate;
 use sui_types::messages::VerifiedCertifiedTransactionEffects;
 use tokio::sync::mpsc::channel;
+use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tracing::info;
 use typed_store::DBMetrics;
@@ -70,12 +71,17 @@ use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
 use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
+use sui_types::error::{SuiError, SuiResult};
+
+pub struct ValidatorComponents {
+    _validator_server_handle: tokio::task::JoinHandle<Result<()>>,
+    narwhal_manager: NarwhalManager,
+    consensus_adapter: Arc<ConsensusAdapter>,
+}
 
 pub struct SuiNode {
     config: NodeConfig,
-    validator_server_handle: Option<tokio::task::JoinHandle<Result<()>>>,
-    narwhal_manager: Option<NarwhalManager>,
-    consensus_adapter: Option<Arc<ConsensusAdapter>>,
+    validator_components: ArcSwapOption<ValidatorComponents>,
     _json_rpc_service: Option<ServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
@@ -91,14 +97,17 @@ pub struct SuiNode {
     checkpoint_store: Arc<CheckpointStore>,
     _checkpoint_executor_handle: checkpoint_executor::Handle,
 
-    reconfig_channel: tokio::sync::broadcast::Receiver<Committee>,
+    reconfig_channel: Mutex<tokio::sync::broadcast::Receiver<Committee>>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
 }
 
 impl SuiNode {
-    pub async fn start(config: &NodeConfig, registry_service: RegistryService) -> Result<SuiNode> {
+    pub async fn start(
+        config: &NodeConfig,
+        registry_service: RegistryService,
+    ) -> Result<Arc<SuiNode>> {
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
@@ -249,11 +258,7 @@ impl SuiNode {
         )
         .await?;
 
-        let mut validator_server_handle_outer = None;
-        let mut narwhal_manager_outer = None;
-        let mut consensus_adapter_outer = None;
-
-        if state.is_validator() {
+        let validator_components = if state.is_validator() {
             let (validator_server_handle, narwhal_manager, consensus_adapter) =
                 Self::construct_validator_components(
                     config,
@@ -263,16 +268,18 @@ impl SuiNode {
                     registry_service.clone(),
                 )
                 .await?;
-            validator_server_handle_outer = Some(validator_server_handle);
-            narwhal_manager_outer = Some(narwhal_manager);
-            consensus_adapter_outer = Some(consensus_adapter);
-        }
+            Some(Arc::new(ValidatorComponents {
+                _validator_server_handle: validator_server_handle,
+                narwhal_manager,
+                consensus_adapter,
+            }))
+        } else {
+            None
+        };
 
         let node = Self {
             config: config.clone(),
-            validator_server_handle: validator_server_handle_outer,
-            narwhal_manager: narwhal_manager_outer,
-            consensus_adapter: consensus_adapter_outer,
+            validator_components: ArcSwapOption::new(validator_components),
             _json_rpc_service: json_rpc_service,
             _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
@@ -287,19 +294,31 @@ impl SuiNode {
             state_sync: state_sync_handle,
             checkpoint_store,
             _checkpoint_executor_handle: checkpoint_executor_handle,
-            reconfig_channel,
+            reconfig_channel: Mutex::new(reconfig_channel),
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
 
         info!("SuiNode started!");
+        let node = Arc::new(node);
+        let node_copy = node.clone();
+        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
         Ok(node)
     }
 
-    pub fn consensus_adapter(&self) -> &Option<Arc<ConsensusAdapter>> {
-        &self.consensus_adapter
+    pub fn close_epoch(&self) -> SuiResult {
+        self.validator_components
+            .load()
+            .as_ref()
+            .ok_or_else(|| SuiError::from("Node is not a validator"))?
+            .consensus_adapter
+            .close_epoch()
+    }
+
+    pub fn validator_components(&self) -> Option<Arc<ValidatorComponents>> {
+        self.validator_components.load().clone()
     }
 
     fn create_p2p_network(
@@ -559,12 +578,14 @@ impl SuiNode {
 
     /// This function waits for a signal from the checkpoint executor to indicate that on-chain
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
-    pub async fn monitor_reconfiguration(mut self) -> Result<()> {
+    pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
         loop {
             let Committee {
                 epoch: next_epoch, ..
             } = self
                 .reconfig_channel
+                .lock()
+                .await
                 .recv()
                 .await
                 .expect("Reconfiguration channel was closed unexpectedly.");
@@ -579,10 +600,14 @@ impl SuiNode {
                 .expect("Reading Sui system state object cannot fail");
             let new_committee = system_state.get_current_epoch_committee();
             assert_eq!(next_epoch, new_committee.committee.epoch);
-            if let Some(ref narwhal_manager) = self.narwhal_manager {
+            if let Some(validator_components) = self.validator_components() {
                 info!("Reconfiguring the validator.");
                 info!("Shutting down Narwhal");
-                narwhal_manager.tx_stop.send(()).await?;
+                validator_components
+                    .narwhal_manager
+                    .tx_stop
+                    .send(())
+                    .await?;
 
                 // TODO: (Laura) wait for stop complete signal
                 self.state
@@ -592,7 +617,8 @@ impl SuiNode {
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator.
                     let narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-                    narwhal_manager
+                    validator_components
+                        .narwhal_manager
                         .tx_start
                         .send(Arc::new(narwhal_committee))
                         .await?;
@@ -613,9 +639,12 @@ impl SuiNode {
                         self.registry_service.clone(),
                     )
                     .await?;
-                self.validator_server_handle = Some(validator_server_handle);
-                self.narwhal_manager = Some(narwhal_manager);
-                self.consensus_adapter = Some(consensus_adapter);
+                self.validator_components
+                    .swap(Some(Arc::new(ValidatorComponents {
+                        _validator_server_handle: validator_server_handle,
+                        narwhal_manager,
+                        consensus_adapter,
+                    })));
             }
             info!("Reconfiguration finished");
         }
