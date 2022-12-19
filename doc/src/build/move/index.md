@@ -37,9 +37,7 @@ to deepen your understanding of the Move language but not strict prerequisites
 to following the Sui tutorial, which we strived to make self-contained.
 Further, Sui does differ in some ways from Move, which we explore here.
 
-In Sui, Move is used to define, create, and manage programmable [Sui objects](../objects.md) representing user-level assets.  Sui
-imposes additional restrictions on code written in
-Move, creating a dialect of Move (a.k.a. *Sui Move*) that
+In Sui, Move is used to define, create, and manage programmable [Sui objects](../objects.md) representing user-level assets.  Sui's object system is implemented by adding new functionality to Move while also imposing additional restrictions, creating a dialect of Move (a.k.a. *Sui Move*) that
 makes certain parts of the original Move documentation not applicable
 to smart contract development in Sui. Consequently, it's best to simply follow this tutorial
 and the relevant Move documentation links within.
