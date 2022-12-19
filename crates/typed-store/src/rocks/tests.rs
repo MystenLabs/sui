@@ -334,9 +334,10 @@ async fn test_try_extend_from_slice() {
     }
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_insert_batch() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_insert_batch(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
     let insert_batch = db
         .batch()
@@ -349,9 +350,10 @@ async fn test_insert_batch() {
     }
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_insert_batch_across_cf() {
-    let rocks = open_cf(temp_dir(), None, &["First_CF", "Second_CF"]).unwrap();
+async fn test_insert_batch_across_cf(#[values(true, false)] is_transactional: bool) {
+    let rocks = open_rocksdb(temp_dir(), &["First_CF", "Second_CF"], is_transactional);
 
     let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF")).expect("Failed to open storage");
     let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
@@ -378,10 +380,11 @@ async fn test_insert_batch_across_cf() {
     }
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_insert_batch_across_different_db() {
-    let rocks = open_cf(temp_dir(), None, &["First_CF", "Second_CF"]).unwrap();
-    let rocks2 = open_cf(temp_dir(), None, &["First_CF", "Second_CF"]).unwrap();
+async fn test_insert_batch_across_different_db(#[values(true, false)] is_transactional: bool) {
+    let rocks = open_rocksdb(temp_dir(), &["First_CF", "Second_CF"], is_transactional);
+    let rocks2 = open_rocksdb(temp_dir(), &["First_CF", "Second_CF"], is_transactional);
 
     let db_cf_1: DBMap<i32, String> =
         DBMap::reopen(&rocks, Some("First_CF")).expect("Failed to open storage");
@@ -508,11 +511,11 @@ async fn test_is_empty() {
     assert!(db.is_empty());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_multi_insert() {
+async fn test_multi_insert(#[values(true, false)] is_transactional: bool) {
     // Init a DB
-    let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"))
-        .expect("Failed to open storage");
+    let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"), is_transactional);
     // Create kv pairs
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
 
@@ -561,13 +564,6 @@ async fn test_transactional() {
     let opt = rocksdb::Options::default();
     let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
-
-    // write batch operations not supported by transactional db
-    let mut batch = db.batch();
-    batch = batch
-        .insert_batch(&db, vec![(key.to_string(), key.to_string())])
-        .unwrap();
-    assert!(batch.write().is_err());
 
     // transaction is used instead
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
