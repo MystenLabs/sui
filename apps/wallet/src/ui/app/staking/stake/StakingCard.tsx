@@ -52,7 +52,7 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const isUnstake = !!searchParams.get('unstake');
+    const isUnstake = searchParams.get('unstake') === 'true';
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -215,7 +215,7 @@ function StakingCard() {
                                     {isSubmitting ? (
                                         <LoadingIndicator />
                                     ) : isUnstake ? (
-                                        'UnStake Now'
+                                        'Unstake Now'
                                     ) : (
                                         'Stake Now'
                                     )}

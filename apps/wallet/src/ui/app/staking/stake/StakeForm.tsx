@@ -30,10 +30,9 @@ export type StakeFromProps = {
 
 function StakeForm({
     submitError,
-    // TODO(ggao): remove this if needed
     coinBalance,
-    coinType,
     unstake,
+    coinType,
     onClearSubmitError,
 }: StakeFromProps) {
     const {
@@ -47,7 +46,7 @@ function StakeForm({
         onClearRef.current();
     }, [amount]);
 
-    const [formatted] = useFormatCoin(coinBalance, SUI_TYPE_ARG);
+    const [formatted] = useFormatCoin(coinBalance, coinType);
 
     const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
@@ -59,7 +58,7 @@ function StakeForm({
 
     const [maxToken, symbol, isLoading] = useFormatCoin(
         coinBalanceMinusGas,
-        SUI_TYPE_ARG
+        coinType
     );
 
     const setMaxToken = useCallback(() => {
