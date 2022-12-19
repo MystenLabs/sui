@@ -385,7 +385,7 @@ impl ValidatorService {
                 tx_kind = certificate.data().intent_message.value.kind_as_str()
             );
             match state
-                .execute_certificate_internal(&certificate)
+                .execute_certificate(&certificate)
                 .instrument(span)
                 .await
             {

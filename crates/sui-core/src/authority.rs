@@ -745,39 +745,6 @@ impl AuthorityState {
         Ok(())
     }
 
-    /// Executes a certificate for its effects.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate(
-        &self,
-        certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "execute_certificate");
-
-        self.metrics.total_cert_attempts.inc();
-
-        if self.is_fullnode() {
-            return Err(SuiError::GenericStorageError(
-                "cannot execute cert without effects on fullnode".into(),
-            ));
-        }
-
-        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
-            debug!("shared object cert has not been sequenced by narwhal");
-            return Err(SuiError::SharedObjectLockNotSetError);
-        }
-
-        let certs = vec![certificate.clone()];
-        self.database
-            .epoch_store()
-            .insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await?;
-
-        self.notify_read_transaction_info(certificate).await
-    }
-
-    /// Internal logic to execute a certificate.
-    ///
     /// Guarantees that
     /// - If input objects are available, it should return no permanent failure.
     /// - Execution and persisting output are atomic. i.e. outputs are only written to storage,
@@ -788,13 +755,14 @@ impl AuthorityState {
     ///
     /// TODO: Reduce callsites and restrict visibility to pub(crate).
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate_internal(
+    pub async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "execute_certificate_internal");
+        debug!(?tx_digest, "execute_certificate");
 
+        self.metrics.total_cert_attempts.inc();
         let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
@@ -2439,22 +2407,6 @@ impl AuthorityState {
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(seq)
-    }
-
-    /// Returns true if certificate is a shared-object cert but has not been sequenced.
-    fn is_cert_awaiting_sequencing(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
-        // always an error to call this on fullnode.
-        assert!(!self.is_fullnode());
-
-        if !certificate.contains_shared_object() {
-            Ok(false)
-        } else {
-            self.database
-                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
-                    *certificate.digest(),
-                ))
-                .map(|r| !r)
-        }
     }
 
     /// Check whether certificate was processed by consensus.

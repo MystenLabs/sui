@@ -89,7 +89,7 @@ async fn advance_epoch_tx_test_impl(
         .collect::<anyhow::Result<Vec<_>>>()
         .unwrap();
     for (state, cert) in states.iter().zip(results) {
-        state.execute_certificate_internal(&cert).await.unwrap();
+        state.execute_certificate(&cert).await.unwrap();
     }
 }
 
