@@ -53,6 +53,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::messages::VerifiedCertificate;
 use sui_types::messages::VerifiedCertifiedTransactionEffects;
 use tokio::sync::mpsc::channel;
+use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tracing::info;
 use typed_store::DBMetrics;
@@ -72,8 +73,8 @@ use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, Narwh
 use sui_json_rpc::coin_api::CoinReadApi;
 
 pub struct SuiNode {
-    config: NodeConfig,
-    validator_server_handle: Option<tokio::task::JoinHandle<Result<()>>>,
+    _config: NodeConfig,
+    _validator_server_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     narwhal_manager: Option<NarwhalManager>,
     consensus_adapter: Option<Arc<ConsensusAdapter>>,
     _json_rpc_service: Option<ServerHandle>,
@@ -83,22 +84,25 @@ pub struct SuiNode {
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
-    registry_service: RegistryService,
+    _registry_service: RegistryService,
 
     _p2p_network: Network,
     _discovery: discovery::Handle,
-    state_sync: state_sync::Handle,
-    checkpoint_store: Arc<CheckpointStore>,
+    _state_sync: state_sync::Handle,
+    _checkpoint_store: Arc<CheckpointStore>,
     _checkpoint_executor_handle: checkpoint_executor::Handle,
 
-    reconfig_channel: tokio::sync::broadcast::Receiver<Committee>,
+    reconfig_channel: Mutex<tokio::sync::broadcast::Receiver<Committee>>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
 }
 
 impl SuiNode {
-    pub async fn start(config: &NodeConfig, registry_service: RegistryService) -> Result<SuiNode> {
+    pub async fn start(
+        config: &NodeConfig,
+        registry_service: RegistryService,
+    ) -> Result<Arc<SuiNode>> {
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
@@ -269,8 +273,8 @@ impl SuiNode {
         }
 
         let node = Self {
-            config: config.clone(),
-            validator_server_handle: validator_server_handle_outer,
+            _config: config.clone(),
+            _validator_server_handle: validator_server_handle_outer,
             narwhal_manager: narwhal_manager_outer,
             consensus_adapter: consensus_adapter_outer,
             _json_rpc_service: json_rpc_service,
@@ -280,20 +284,23 @@ impl SuiNode {
             state,
             active: active_authority,
             transaction_orchestrator,
-            registry_service,
+            _registry_service: registry_service,
 
             _p2p_network: p2p_network,
             _discovery: discovery_handle,
-            state_sync: state_sync_handle,
-            checkpoint_store,
+            _state_sync: state_sync_handle,
+            _checkpoint_store: checkpoint_store,
             _checkpoint_executor_handle: checkpoint_executor_handle,
-            reconfig_channel,
+            reconfig_channel: Mutex::new(reconfig_channel),
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
 
         info!("SuiNode started!");
+        let node = Arc::new(node);
+        let node_copy = node.clone();
+        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
         Ok(node)
     }
@@ -559,12 +566,14 @@ impl SuiNode {
 
     /// This function waits for a signal from the checkpoint executor to indicate that on-chain
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
-    pub async fn monitor_reconfiguration(mut self) -> Result<()> {
+    pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
         loop {
             let Committee {
                 epoch: next_epoch, ..
             } = self
                 .reconfig_channel
+                .lock()
+                .await
                 .recv()
                 .await
                 .expect("Reconfiguration channel was closed unexpectedly.");
@@ -602,20 +611,8 @@ impl SuiNode {
                     info!("This node is no longer a validator after reconfiguration");
                 }
             } else if self.state.is_validator() {
-                info!("Promoting the node from fullnode to validator, starting grpc server");
-
-                let (validator_server_handle, narwhal_manager, consensus_adapter) =
-                    Self::construct_validator_components(
-                        &self.config,
-                        self.state.clone(),
-                        self.checkpoint_store.clone(),
-                        self.state_sync.clone(),
-                        self.registry_service.clone(),
-                    )
-                    .await?;
-                self.validator_server_handle = Some(validator_server_handle);
-                self.narwhal_manager = Some(narwhal_manager);
-                self.consensus_adapter = Some(consensus_adapter);
+                info!("Switching from fullnode to validator. Must exit and restart");
+                return Ok(());
             }
             info!("Reconfiguration finished");
         }

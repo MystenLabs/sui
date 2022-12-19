@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
@@ -25,7 +26,7 @@ use sui_types::crypto::SuiKeyPair;
 const NUM_VALIDAOTR: usize = 4;
 
 pub struct FullNodeHandle {
-    pub sui_node: SuiNode,
+    pub sui_node: Arc<SuiNode>,
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
