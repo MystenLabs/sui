@@ -21,9 +21,10 @@ module math::randomness_basics {
     }
 
     /// After the object is created, the signature that is associated with this object can be retrieved from nodes.
-    /// It then can be used for setting the object. Afterwards, the random value can be read from obj (see
-    /// randomness::value).
+    /// It then can be used for setting the object.
+    /// After it is set, the random value can be read from object (see randomness::value).
     public entry fun set_randomness(rnd: &mut randomness::Randomness<WITENESS>, sig: vector<u8>) {
+        /// set can be called also from a function that sets it and immediately reads the randomness.
         randomness::set(rnd, sig);
     }
 }
