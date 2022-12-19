@@ -22,11 +22,13 @@ const DEVNET_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.ci.sui.io:443";
+const STAGING_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.staging.sui.io:443";
 const TESTNET_FAUCET_ADDR: &str = "https://faucet.testnet.sui.io:443";
 const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
+const STAGING_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.staging.sui.io:443";
 const TESTNET_FULLNODE_ADDR: &str = "https://fullnode.testnet.sui.io:443";
 
 pub struct ClusterFactory;
@@ -84,6 +86,10 @@ impl Cluster for RemoteRunningCluster {
             Env::CiNomad => (
                 String::from(CONTINUOUS_NOMAD_FULLNODE_ADDR),
                 String::from(CONTINUOUS_NOMAD_FAUCET_ADDR),
+            ),
+            Env::StagingNomad => (
+                String::from(STAGING_NOMAD_FULLNODE_ADDR),
+                String::from(STAGING_NOMAD_FAUCET_ADDR),
             ),
             Env::Testnet => (
                 String::from(TESTNET_FULLNODE_ADDR),

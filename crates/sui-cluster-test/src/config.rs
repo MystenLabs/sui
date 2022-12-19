@@ -8,6 +8,7 @@ pub enum Env {
     Staging,
     Ci,
     CiNomad,
+    StagingNomad,
     Testnet,
     CustomRemote,
     NewLocal,
