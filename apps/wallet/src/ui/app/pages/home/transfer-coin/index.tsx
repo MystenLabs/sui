@@ -12,7 +12,6 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import StepOne from './TransferCoinForm/StepOne';
 import StepTwo from './TransferCoinForm/StepTwo';
-import { parseAmount } from './TransferCoinForm/utils';
 import {
     createValidationSchemaStepOne,
     createValidationSchemaStepTwo,
@@ -21,6 +20,7 @@ import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
+import { parseAmount } from '_helpers';
 import {
     useAppSelector,
     useAppDispatch,

@@ -1,3 +1,5 @@
+@use '_utils';
+
 .container {
     display: flex;
     flex-flow: column nowrap;
@@ -20,10 +22,7 @@
 }
 
 .error {
-    color: #8b1111;
-    line-height: 1em;
-    min-height: 1em;
-    margin-top: 2px;
+    @include utils.error-message-box;
 }
 
 .muted {

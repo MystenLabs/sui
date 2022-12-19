@@ -2,14 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import StakeForm from './StakeForm';
+import { ValidateDetailFormCard } from './ValidatorDetailCard';
 import { createValidationSchema } from './validation';
+import BottomMenuLayout, {
+    Content,
+    Menu,
+} from '_app/shared/bottom-menu-layout';
+import Button from '_app/shared/button';
+import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { parseAmount } from '_helpers';
 import {
     useAppSelector,
     useAppDispatch,
@@ -22,6 +31,7 @@ import {
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { stakeTokens } from '_redux/slices/transactions';
+import { Text } from '_src/ui/app/shared/text';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -32,14 +42,18 @@ const initialValues = {
 
 export type FormValues = typeof initialValues;
 
-export function StakingCard() {
+function StakingCard() {
     const coinType = GAS_TYPE_ARG;
+
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
         () => (coinType && aggregateBalances[coinType]) || BigInt(0),
         [coinType, aggregateBalances]
     );
+    const [searchParams] = useSearchParams();
+    const validatorAddress = searchParams.get('address');
+    const isUnstacked = searchParams.get('unstake') === 'true';
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -80,40 +94,57 @@ export function StakingCard() {
         ]
     );
 
+    const queryClient = useQueryClient();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
+
     const onHandleSubmit = useCallback(
         async (
             { amount }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
-            if (coinType === null) {
+            if (coinType === null || validatorAddress === null) {
                 return;
             }
             setSendError(null);
             try {
-                const bigIntAmount = BigInt(
-                    new BigNumber(amount)
-                        .shiftedBy(coinDecimals)
-                        .integerValue()
-                        .toString()
-                );
-
+                const bigIntAmount = parseAmount(amount, coinDecimals);
+                // TODO: add unstake functionality on the support roles out
+                if (isUnstacked) return;
                 const response = await dispatch(
                     stakeTokens({
                         amount: bigIntAmount,
                         tokenTypeArg: coinType,
+                        validatorAddress: validatorAddress,
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
+
                 resetForm();
-                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+                // TODO: remove this cache invalidation
+                queryClient.invalidateQueries({
+                    queryKey: ['object'],
+                });
+                navigate(
+                    `/receipt?${new URLSearchParams({
+                        txdigest: txDigest,
+                    }).toString()}`
+                );
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
+        [
+            coinType,
+            validatorAddress,
+            coinDecimals,
+            isUnstacked,
+            dispatch,
+            queryClient,
+            navigate,
+        ]
     );
+
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
@@ -121,28 +152,91 @@ export function StakingCard() {
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
-    if (!coinType) {
+    if (!coinType || !validatorAddress) {
         return <Navigate to="/" replace={true} />;
     }
 
     return (
-        <>
-            <h3>Stake {coinSymbol}</h3>
-            <Loading loading={loadingBalance}>
+        <div className="flex flex-col flex-nowrap flex-grow h-full w-full">
+            <Loading
+                loading={loadingBalance}
+                className="flex justify-center w-full items-center "
+            >
                 <Formik
                     initialValues={initialValues}
-                    validateOnMount={false}
+                    validateOnMount={true}
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
-                    <StakeForm
-                        submitError={sendError}
-                        coinBalance={coinBalance.toString()}
-                        coinType={coinType}
-                        onClearSubmitError={handleOnClearSubmitError}
-                    />
+                    {({ isSubmitting, isValid, submitForm }) => (
+                        <BottomMenuLayout>
+                            <Content>
+                                <ValidateDetailFormCard
+                                    validatorAddress={validatorAddress}
+                                    unstake={isUnstacked}
+                                />
+                                <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
+                                    <Text
+                                        variant="caption"
+                                        color="gray-85"
+                                        weight="semibold"
+                                    >
+                                        {isUnstacked
+                                            ? 'Enter the amount of SUI to unstake'
+                                            : 'Enter the amount of SUI to stake'}
+                                    </Text>
+                                </div>
+                                <StakeForm
+                                    submitError={sendError}
+                                    coinBalance={coinBalance}
+                                    coinType={coinType}
+                                    unstake={isUnstacked}
+                                    onClearSubmitError={
+                                        handleOnClearSubmitError
+                                    }
+                                />
+                            </Content>
+                            <Menu
+                                stuckClass="staked-cta"
+                                className="w-full px-0 pb-0 mx-0"
+                            >
+                                <Button
+                                    size="large"
+                                    mode="neutral"
+                                    href="/stake"
+                                    disabled={isSubmitting}
+                                    className="!text-steel-darker w-1/2"
+                                >
+                                    <Icon
+                                        icon={SuiIcons.ArrowLeft}
+                                        className="text-body text-gray-65 font-normal"
+                                    />
+                                    Back
+                                </Button>
+                                <Button
+                                    size="large"
+                                    mode="primary"
+                                    onClick={submitForm}
+                                    className=" w-1/2"
+                                    disabled={
+                                        !isValid || isSubmitting || isUnstacked
+                                    }
+                                >
+                                    {isSubmitting ? (
+                                        <LoadingIndicator />
+                                    ) : isUnstacked ? (
+                                        'Unstake Now'
+                                    ) : (
+                                        'Stake Now'
+                                    )}
+                                </Button>
+                            </Menu>
+                        </BottomMenuLayout>
+                    )}
                 </Formik>
             </Loading>
-        </>
+        </div>
     );
 }
+
+export default StakingCard;

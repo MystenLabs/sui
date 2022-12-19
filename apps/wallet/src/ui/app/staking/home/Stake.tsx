@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useState, useCallback } from 'react';
+import { isSuiObject, isSuiMoveObject } from '@mysten/sui.js';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { FEATURES } from '../../experimentation/features';
-import { usePendingDelegation } from '../usePendingDelegation';
+import { SelectValidatorCard } from '../stake/SelectValidatorCard';
+import { getName, STATE_OBJECT } from '../usePendingDelegation';
 import { ActiveDelegation } from './ActiveDelegation';
 import { DelegationCard, DelegationState } from './DelegationCard';
 import BottomMenuLayout, {
@@ -25,19 +27,87 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
-import { useAppSelector, useObjectsState } from '_hooks';
+import { useAppSelector, useObjectsState, useGetObject } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+
+import type { ValidatorState } from '../ValidatorDataTypes';
+
+type ValidatorProp = {
+    name: string;
+    apy: number | string;
+    logo: string | null;
+    address: string;
+    pendingDelegationAmount: bigint;
+};
 
 function StakeHome() {
     const { loading, error, showError } = useObjectsState();
 
     const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
 
-    const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
-        usePendingDelegation();
+    const totalStaked = useAppSelector(totalActiveStakedSelector);
+    const accountAddress = useAppSelector(({ account }) => account.address);
+    const { data, isLoading } = useGetObject(STATE_OBJECT);
+
+    const validatorsData =
+        data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
+            ? (data.details.data.fields as ValidatorState)
+            : null;
+
+    const validators = useMemo(() => {
+        if (!validatorsData) return [];
+        return validatorsData.validators.fields.active_validators
+            .map((av) => {
+                const rawName = av.fields.metadata.fields.name;
+
+                const {
+                    sui_balance,
+                    starting_epoch,
+                    pending_delegations,
+                    delegation_token_supply,
+                } = av.fields.delegation_staking_pool.fields;
+
+                const num_epochs_participated =
+                    validatorsData.epoch - starting_epoch;
+
+                const APY = Math.pow(
+                    1 +
+                        (sui_balance - delegation_token_supply.fields.value) /
+                            delegation_token_supply.fields.value,
+                    365 / num_epochs_participated - 1
+                );
+
+                const pending_delegationsByAddress = pending_delegations
+                    ? pending_delegations.filter(
+                          (d) => d.fields.delegator === accountAddress
+                      )
+                    : [];
+
+                return {
+                    name: getName(rawName),
+                    apy: APY > 0 ? APY : 'N/A',
+                    logo: null,
+                    address: av.fields.metadata.fields.sui_address,
+                    pendingDelegationAmount:
+                        pending_delegationsByAddress.reduce(
+                            (acc, fields) =>
+                                (acc += BigInt(fields.fields.sui_amount || 0n)),
+                            0n
+                        ),
+                };
+            })
+            .sort((a, b) => (a.name > b.name ? 1 : -1));
+    }, [accountAddress, validatorsData]);
+
+    const totalStakedIncludingPending =
+        totalStaked +
+        validators.reduce(
+            (acc, { pendingDelegationAmount }) => acc + pendingDelegationAmount,
+            0n
+        );
 
     const hasDelegations =
-        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
+        activeDelegationIDs.length > 0 || validators.length > 0;
     const [showModal, setShowModal] = useState(true);
 
     const navigate = useNavigate();
@@ -53,7 +123,7 @@ function StakeHome() {
         <Overlay
             showModal={showModal}
             setShowModal={setShowModal}
-            title={!loading && !pendingDelegationsLoading && pageTitle}
+            title={!loading && !isLoading && pageTitle}
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
@@ -65,14 +135,17 @@ function StakeHome() {
                     </Alert>
                 ) : null}
                 <Loading
-                    loading={loading || pendingDelegationsLoading}
+                    loading={loading || isLoading}
                     className="flex h-full items-center justify-center"
                 >
-                    {hasDelegations && (
+                    {hasDelegations ? (
                         <StakedHomeCard
                             activeDelegationIDs={activeDelegationIDs}
-                            pendingDelegations={pendingDelegations}
+                            validators={validators}
+                            totalStaked={totalStakedIncludingPending}
                         />
+                    ) : (
+                        <SelectValidatorCard />
                     )}
                 </Loading>
             </div>
@@ -82,27 +155,26 @@ function StakeHome() {
 
 type StakedCardProps = {
     activeDelegationIDs: string[];
-    pendingDelegations: {
-        name: string;
-        staked: bigint;
-        validatorAddress: string;
-    }[];
+    validators: ValidatorProp[];
+    totalStaked: bigint;
 };
 
 function StakedHomeCard({
     activeDelegationIDs,
-    pendingDelegations,
+    validators,
+    totalStaked,
 }: StakedCardProps) {
-    const totalStaked = useAppSelector(totalActiveStakedSelector);
     const totalStakedIncludingPending =
         totalStaked +
-        pendingDelegations.reduce((acc, { staked }) => acc + staked, 0n);
+        validators.reduce(
+            (acc, { pendingDelegationAmount }) => acc + pendingDelegationAmount,
+            0n
+        );
 
     const hasDelegations =
-        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
+        activeDelegationIDs.length > 0 || validators.length > 0;
 
-    const numOfValidators =
-        activeDelegationIDs.length + pendingDelegations.length;
+    const numOfValidators = activeDelegationIDs.length + validators.length;
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -160,20 +232,33 @@ function StakedHomeCard({
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {hasDelegations ? (
                                 <>
-                                    {pendingDelegations.map(
-                                        (
-                                            { name, staked, validatorAddress },
-                                            index
-                                        ) => (
-                                            <DelegationCard
-                                                key={index}
-                                                name={name}
-                                                staked={staked}
-                                                state={DelegationState.WARM_UP}
-                                                address={validatorAddress}
-                                            />
+                                    {validators
+                                        .filter(
+                                            ({ pendingDelegationAmount }) =>
+                                                pendingDelegationAmount > 0
                                         )
-                                    )}
+                                        .map(
+                                            (
+                                                {
+                                                    name,
+                                                    pendingDelegationAmount,
+                                                    address,
+                                                },
+                                                index
+                                            ) => (
+                                                <DelegationCard
+                                                    key={index}
+                                                    name={name}
+                                                    staked={
+                                                        pendingDelegationAmount
+                                                    }
+                                                    state={
+                                                        DelegationState.WARM_UP
+                                                    }
+                                                    address={address}
+                                                />
+                                            )
+                                        )}
 
                                     {activeDelegationIDs.map((delegationID) => (
                                         <ActiveDelegation
