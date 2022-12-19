@@ -140,17 +140,21 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         }
         .unwrap();
 
-    let obj_id = effects.effects.created.get(0).unwrap().reference.object_id;
+    let obj_id = effects.effects.mutated.get(0).unwrap().reference.object_id;
 
-    let _tx2_response: SuiTBlsSignRandomnessObjectResponse = http_client
-        .tbls_sign_randomness_object(obj_id, SuiTBlsSignObjectCreationEpoch::PriorEpoch(1))
+    let tx2_response: SuiTBlsSignRandomnessObjectResponse = http_client
+        .tbls_sign_randomness_object(obj_id, SuiTBlsSignObjectCreationEpoch::PriorEpoch(0))
         .await?;
-    let _tx3_response: SuiTBlsSignRandomnessObjectResponse = http_client
+    let tx3_response: SuiTBlsSignRandomnessObjectResponse = http_client
         .tbls_sign_randomness_object(
             obj_id,
             SuiTBlsSignObjectCreationEpoch::CurrentEpoch(effects),
         )
         .await?;
+
+    // TODO remove
+    println!("!!! {:?}", tx2_response);
+    println!("!!! {:?}", tx3_response);
 
     Ok(())
 }

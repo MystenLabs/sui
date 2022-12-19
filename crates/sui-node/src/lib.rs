@@ -72,6 +72,8 @@ use sui_core::consensus_validator::SuiTxValidator;
 use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_types::error::{SuiError, SuiResult};
+use sui_json_rpc::threshold_bls_api::ThresholdBlsApiImpl;
+
 
 pub struct ValidatorComponents {
     _validator_server_handle: tokio::task::JoinHandle<Result<()>>,
@@ -669,6 +671,7 @@ pub async fn build_server(
     server.register_module(CoinReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
+    server.register_module(ThresholdBlsApiImpl::new(state.clone()))?;
     server.register_module(FullNodeTransactionBuilderApi::new(state.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {

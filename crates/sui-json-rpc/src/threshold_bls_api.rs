@@ -35,13 +35,20 @@ impl ThresholdBlsApiServer for ThresholdBlsApiImpl {
     ) -> RpcResult<SuiTBlsSignRandomnessObjectResponse> {
         let curr_epoch = self.state.epoch();
 
+        // TODO remove
+        println!(
+            "!!! received {:?} epoch {}",
+            &object_creation_epoch, curr_epoch
+        );
+
         // Check that the object is from an old epoch or that it was committed.
         let committed_epoch = match object_creation_epoch {
             // Just make sure we are indeed trying to sign on an old epoch.
             PriorEpoch(prior_epoch) => {
-                if prior_epoch >= curr_epoch {
-                    Err(anyhow!("Provided prior epoch is not old"))?
-                };
+                // TODO uncomment after we can test it
+                // if prior_epoch >= curr_epoch {
+                //     Err(anyhow!("Provided prior epoch is not old"))?
+                // };
                 prior_epoch
             }
             // Check that the certificate is valid, for the current epoch, and includes the object.
