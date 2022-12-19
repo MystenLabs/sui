@@ -161,7 +161,7 @@ function ValidatorDetails() {
                     variant="square"
                     size="xl"
                 />
-                <div className="flex flex-col gap-3.5">
+                <div className="flex flex-col gap-2.5 md:gap-3.5 mt-1">
                     <Heading
                         as="h1"
                         variant="heading2"

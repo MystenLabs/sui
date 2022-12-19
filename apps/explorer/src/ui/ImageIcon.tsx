@@ -13,7 +13,7 @@ const imageStyle = cva(
                 sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
                 md: 'w-8 h-8 font-medium text-body',
                 lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading1',
-                xl: 'md:w-31.5 md:h-31.5 w-16 font-medium text-heading1',
+                xl: 'md:w-31.5 md:h-31.5 w-16 font-medium text-heading1 md:text-iconTextLarge',
             },
             variant: {
                 circle: 'rounded-full',
