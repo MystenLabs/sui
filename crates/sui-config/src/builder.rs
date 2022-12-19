@@ -307,7 +307,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
-                    admin_interface_port: utils::get_available_port(),
+                    // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
+                    // provide the entire socket address here to avoid confusion.
+                    admin_interface_port: utils::get_available_port("127.0.0.1"),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
