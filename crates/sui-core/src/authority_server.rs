@@ -2,10 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority::AuthorityState,
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
-};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
@@ -21,12 +17,16 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::*;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::{error::*, messages::*};
 use tap::TapFallible;
-use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, info, Instrument};
+use tokio::task::JoinHandle;
+use tracing::{info, Instrument};
+
+use crate::{
+    authority::AuthorityState,
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -359,59 +359,27 @@ impl ValidatorService {
                 &state.name,
                 certificate.clone().into(),
             );
-            let waiter = consensus_adapter.submit(transaction).tap_err(|e| {
+            let _waiter = consensus_adapter.submit(transaction).tap_err(|e| {
                 if let SuiError::ValidatorHaltedAtEpochEnd = e {
                     metrics.num_rejected_cert_in_epoch_boundary.inc();
                 }
             })?;
-            if certificate.contains_shared_object() {
-                // This is expect on tokio JoinHandle result, not SuiResult
-                waiter
-                    .await
-                    .expect("Tokio runtime failure when waiting for consensus result");
-            }
+            // Do not wait for the result, because the transaction might have already executed.
+            // Instead, check or wait for the existence of certificate effects below.
         }
 
-        // 4) Execute the certificate.
-        // Often we cannot execute a cert due to dependenties haven't been executed, and we will
-        // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
-        // succeed.
-        // TODO: call execute_certificate_internal() instead and remove retries.
-        let mut retry_delay_ms = 200;
-        loop {
-            let span = tracing::debug_span!(
-                "handle_certificate_execution",
-                ?tx_digest,
-                tx_kind = certificate.data().intent_message.value.kind_as_str()
-            );
-            match state
-                .execute_certificate_internal(&certificate)
-                .instrument(span)
-                .await
-            {
-                // For owned object certificates, we could also be getting this error
-                // if this validator hasn't executed some of the causal dependencies.
-                // And that's ok because there must exist 2f+1 that has. So we can
-                // afford this validator returning error.
-                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if shared_object_tx => {
-                    if retry_delay_ms >= 12800 {
-                        return Err(tonic::Status::from(err.unwrap_err()));
-                    }
-                    debug!(
-                        ?tx_digest,
-                        ?retry_delay_ms,
-                        "Certificate failed due to missing dependencies, wait and retry",
-                    );
-                    sleep(Duration::from_millis(retry_delay_ms)).await;
-                    retry_delay_ms *= 2;
-                }
-                Err(e) => {
-                    return Err(tonic::Status::from(e));
-                }
-                Ok(response) => {
-                    return Ok(tonic::Response::new(response.into()));
-                }
-            }
+        // 4) Execute the certificate if it contains only owned object transactions, or wait for
+        // the execution results if it contains shared objects.
+        let res = if certificate.contains_shared_object() {
+            // The transaction needs sequencing by Narwhal before it can be sent for execution.
+            // So rely on the submission to consensus above to execute the certificate.
+            state.notify_read_transaction_info(&certificate).await
+        } else {
+            state.execute_certificate(&certificate).await
+        };
+        match res {
+            Ok(response) => Ok(tonic::Response::new(response.into())),
+            Err(e) => Err(tonic::Status::from(e)),
         }
     }
 }

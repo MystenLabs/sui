@@ -160,11 +160,12 @@ pub struct AuthorityMetrics {
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
+    handle_transaction_latency: Histogram,
+    execute_certificate_latency: Histogram,
+    execute_certificate_with_effects_latency: Histogram,
+    internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
-    handle_transaction_latency: Histogram,
-    handle_certificate_latency: Histogram,
-    handle_node_sync_certificate_latency: Histogram,
 
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
@@ -288,37 +289,44 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            handle_transaction_latency: register_histogram_with_registry!(
+                "authority_state_handle_transaction_latency",
+                "Latency of handling transactions",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            execute_certificate_latency: register_histogram_with_registry!(
+                "authority_state_execute_certificate_latency",
+                "Latency of executing certificates, including waiting for inputs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            execute_certificate_with_effects_latency: register_histogram_with_registry!(
+                "authority_state_execute_certificate_with_effects_latency",
+                "Latency of executing certificates with effects, including waiting for inputs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            internal_execution_latency: register_histogram_with_registry!(
+                "authority_state_internal_execution_latency",
+                "Latency of actual certificate executions",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             prepare_certificate_latency: register_histogram_with_registry!(
-                "validator_prepare_certificate_latency",
-                "Latency of preparing certificate",
+                "authority_state_prepare_certificate_latency",
+                "Latency of executing certificates, before committing the results",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             commit_certificate_latency: register_histogram_with_registry!(
-                "validator_commit_certificate_latency",
-                "Latency of committing certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_transaction_latency: register_histogram_with_registry!(
-                "validator_handle_transaction_latency",
-                "Latency of committing certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_certificate_latency: register_histogram_with_registry!(
-                "validator_handle_certificate_latency",
-                "Latency of handling certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_node_sync_certificate_latency: register_histogram_with_registry!(
-                "fullnode_handle_node_sync_certificate_latency",
-                "Latency of fullnode handling certificate from node sync",
+                "authority_state_commit_certificate_latency",
+                "Latency of committing certificate execution results",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -697,7 +705,7 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = self
             .metrics
-            .handle_node_sync_certificate_latency
+            .execute_certificate_with_effects_latency
             .start_timer();
         let digest = *certificate.digest();
         debug!(tx_digest = ?digest, "execute_certificate_with_effects");
@@ -716,11 +724,8 @@ impl AuthorityState {
 
         let expected_effects_digest = effects.digest();
 
-        let certs = vec![certificate.clone()];
-        self.database
-            .epoch_store()
-            .insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()])
+            .await?;
 
         let observed_effects = self
             .database
@@ -751,6 +756,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate");
 
@@ -767,11 +773,8 @@ impl AuthorityState {
             return Err(SuiError::SharedObjectLockNotSetError);
         }
 
-        let certs = vec![certificate.clone()];
-        self.database
-            .epoch_store()
-            .insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()])
+            .await?;
 
         self.notify_read_transaction_info(certificate).await
     }
@@ -779,23 +782,22 @@ impl AuthorityState {
     /// Internal logic to execute a certificate.
     ///
     /// Guarantees that
-    /// - If input objects are available, it should return no permanent failure.
-    /// - Execution and persisting output are atomic. i.e. outputs are only written to storage,
+    /// - If input objects are available, return no permanent failure.
+    /// - Execution and output commit are atomic. i.e. outputs are only written to storage,
     /// on successful execution; crashed execution has no observable effect and can be retried.
     ///
-    /// Since this function does not set locks or guarantee input objects are available, it should
-    /// only be called by the execution driver, for systems transactions, or in tests.
+    /// It is caller's responsibility to ensure input objects are available and locks are set.
+    /// If this cannot be satisfied by the caller, execute_certificate() should be called instead.
     ///
-    /// TODO: Reduce callsites and restrict visibility to pub(crate).
+    /// Should only be called within sui-core.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate_internal(
+    pub(crate) async fn try_execute_immediately(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate_internal");
-
-        let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -808,7 +810,7 @@ impl AuthorityState {
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
         let span = tracing::debug_span!(
-            "handle_certificate_tx_guard",
+            "execute_certificate_internal_guard",
             ?tx_digest,
             tx_kind = certificate.data().intent_message.value.kind_as_str()
         );
@@ -821,6 +823,15 @@ impl AuthorityState {
         self.process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+    }
+
+    /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
+    /// pre-conditions are not satisfied, and executing change epoch transactions.
+    pub async fn try_execute_for_test(
+        &self,
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        self.try_execute_immediately(certificate).await
     }
 
     pub async fn notify_read_transaction_info(
@@ -1850,10 +1861,10 @@ impl AuthorityState {
     }
 
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
-    /// Currently, only used in tests and deprecated callsites.
-    pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
-        self.node_sync_store
-            .batch_store_certs(certs.iter().cloned())?;
+    pub async fn enqueue_certificates_for_execution(
+        &self,
+        certs: Vec<VerifiedCertificate>,
+    ) -> SuiResult<()> {
         self.epoch_store().insert_pending_certificates(&certs)?;
         self.transaction_manager.enqueue(certs).await
     }

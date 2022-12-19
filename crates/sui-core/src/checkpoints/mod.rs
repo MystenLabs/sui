@@ -496,7 +496,7 @@ impl CheckpointBuilder {
             .await?;
         let signed_effect = self
             .state
-            .execute_certificate_internal(&cert)
+            .try_execute_immediately(&cert)
             .await?
             .signed_effects
             .unwrap();

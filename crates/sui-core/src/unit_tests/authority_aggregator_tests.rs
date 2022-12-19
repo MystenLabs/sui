@@ -93,7 +93,7 @@ pub fn transfer_object_move_transaction(
     )
 }
 
-pub fn crate_object_move_transaction(
+pub fn create_object_move_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
@@ -318,7 +318,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     let gas_ref_1 = gas_object1.compute_object_reference();
     let genesis_objects = vec![pkg, gas_object1];
     let (mut authorities, _, _) = init_local_authorities(4, genesis_objects).await;
-    let tx = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
+    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap();
@@ -492,7 +492,7 @@ async fn test_execute_cert_to_true_effects() {
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create1 = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
+    let create1 = create_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
 
     do_transaction(authority_clients[0], &create1).await;
     do_transaction(authority_clients[1], &create1).await;

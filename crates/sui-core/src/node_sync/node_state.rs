@@ -580,7 +580,7 @@ where
 
         let cert = self.get_cert(epoch_id, digest).await?;
 
-        let result = self.state().execute_certificate_internal(&cert).await;
+        let result = self.state().try_execute_immediately(&cert).await;
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
             e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
@@ -600,7 +600,7 @@ where
 
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
-                self.state().execute_certificate_internal(&cert).await?;
+                self.state().try_execute_immediately(&cert).await?;
                 Ok(SyncStatus::CertExecuted)
             }
             Err(e) => Err(e),

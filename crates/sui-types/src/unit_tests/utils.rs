@@ -11,11 +11,11 @@ use crate::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
     },
-    intent::{Intent, IntentMessage},
+    intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
     object::Object,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<AuthorityKeyPair>, Committee)
 where
@@ -71,17 +71,4 @@ pub fn to_sender_signed_transaction(
         Intent::default(),
         signer,
     ))
-}
-
-// Workaround for benchmark setup.
-pub fn to_sender_signed_transaction_arc(
-    data: TransactionData,
-    signer: &Arc<fastcrypto::ed25519::Ed25519KeyPair>,
-) -> VerifiedTransaction {
-    let data1 = data.clone();
-    let intent_message = IntentMessage::new(Intent::default(), data);
-    // OK to unwrap because this is used for benchmark only.
-    let bytes = bcs::to_bytes(&intent_message).unwrap();
-    let signature: Signature = signer.sign(&bytes);
-    VerifiedTransaction::new_unchecked(Transaction::from_data(data1, Intent::default(), signature))
 }
