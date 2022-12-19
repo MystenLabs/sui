@@ -762,7 +762,7 @@ impl AuthorityState {
             ));
         }
 
-        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
+        if self.is_cert_awaiting_sequencing(certificate)? {
             debug!("shared object cert has not been sequenced by narwhal");
             return Err(SuiError::SharedObjectLockNotSetError);
         }
