@@ -8,7 +8,7 @@ module contract::tournament {
     use std::hash::sha3_256;
 
     use sui::digest::{Self, Sha3256Digest};
-    use sui::object::{Self, UID, ID};
+    use sui::object::{Self, UID};
     use sui::sui::SUI; // coin type
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
@@ -17,6 +17,16 @@ module contract::tournament {
     use sui::dynamic_object_field as dof;
 
     // Structs.
+
+    // admin capability
+    // Gives person havining it the ability to end rounds.
+    // This is in case a player does not act on time.
+    // Will be removed in the future.
+    struct AdminCap has key {
+        id: UID,
+        admin_address: address,
+    }
+
     struct Tournament has key {
         id: UID,
         players: vector<address>,
@@ -46,6 +56,9 @@ module contract::tournament {
     // Tournament error codes.
     const ECannotStartRound: u64 = 4;
     const ETournamentEnd: u64 = 5;
+    const ETournamentNotEnded: u64 = 13;
+    const ENotAdmin: u64 = 14;
+    const ESecretsNotRevealed: u64 = 11;
 
     // Player error codes.
     const ENotEnoughMoney: u64 = 0;
@@ -59,7 +72,15 @@ module contract::tournament {
 
     // Match error codes.
     const EMatchNotFound: u64 = 7;
-    const EMatchStillRunning: u64 = 11;
+    const EMatchStillRunning: u64 = 12;
+
+    // Transfers admin capability to address deploying the contract.
+    fun init(ctx: &mut TxContext){
+        let id = object::new(ctx);
+        let admin_address = tx_context::sender(ctx);
+        let adminCap = AdminCap{ id , admin_address};
+        transfer::transfer(adminCap, tx_context::sender(ctx));
+    }
     
     /// Creates and shares tournament.
     entry fun create(capacity: u64, player_coin: Coin<SUI>, ctx: &mut TxContext) {
@@ -140,6 +161,9 @@ module contract::tournament {
 
     /// Starts n-th round for tournament.
     entry fun start_round(tournament: &mut Tournament, ctx: &mut TxContext) {
+        // Set tournament state to 1 (in case it is 0).
+        tournament.status = 1;
+
         let num_of_players = vector::length(&tournament.players);
 
         // Bail early if this is the last player.
@@ -194,42 +218,110 @@ module contract::tournament {
                 hash_1: _,
                 secret_0,
                 secret_1,
-                round,
+                round: _,
             } = match;
 
-            // Check if player_0 or player_1 has secret.
-            if(option::is_none(&secret_0)) {
-                // If _0 has no secret, make _1 the winner.
+            // Make sure secrets are revealed before deciding the winner
+            assert!((option::is_some(&secret_0) && option::is_some(&secret_1)), ESecretsNotRevealed);
+
+            // Extract secrets for both players.
+            let s_0 = option::extract(&mut secret_0);
+            let s_1 = option::extract(&mut secret_1);
+
+            // Take last bytes from secrets.
+            let length_0 = vector::length(&s_0) - 1;
+            let length_1 = vector::length(&s_1) - 1;
+            let last_byte_0 = vector::borrow(&s_0, length_0);
+            let last_byte_1 = vector::borrow(&s_1, length_1);
+
+            // Get winner according to players' bytes XOR calc.
+            let result = (*last_byte_0 + *last_byte_1) % 2;
+
+            if(result == 1) {
                 vector::push_back(&mut tournament.players, player_1);
-            } else if(option::is_none(&secret_1)) {
-                // If _1 has no secret, make _0 the winner.
-                vector::push_back(&mut tournament.players, player_0);
             } else {
-                // Extract secrets for both players.
-                let s_0 = option::extract(&mut secret_0);
-                let s_1 = option::extract(&mut secret_1);
-
-                // Take last bytes from secrets.
-                let length_0 = vector::length(&s_0) - 1;
-                let length_1 = vector::length(&s_1) - 1;
-                let last_byte_0 = vector::borrow(&s_0, length_0);
-                let last_byte_1 = vector::borrow(&s_1, length_1);
-
-                // Get winner according to players' bytes XOR calc.
-                let result = (*last_byte_0 + *last_byte_1) % 2;
-
-                if(result == 1) {
-                    vector::push_back(&mut tournament.players, player_1);
-                } else {
-                    vector::push_back(&mut tournament.players, player_0);
-                };
+                vector::push_back(&mut tournament.players, player_0);
             };
 
             i = i - 1;
+            object::delete(id);
         };
 
-        // Increment round counter for next iteration.
-        tournament.round = tournament.round + 1;
+
+        if (vector::length(&tournament.players) == 1){
+            let winner = vector::pop_back(&mut tournament.players);
+            let prize_value = balance::value(&mut tournament.prize);
+
+            // Take prize from tournament.
+            let prize = coin::take(&mut tournament.prize, prize_value, ctx);
+
+            // Transfer coin to winner.
+            transfer::transfer(prize, winner);
+
+            // Update tournament status.
+            tournament.status = 2;
+        } else{
+            // Increment round counter for next iteration.
+            tournament.round = tournament.round + 1;
+        };
+    }
+
+    // Function that requires admin capability, can end round, in case players are not acting on time.
+    entry fun admin_end_round(adminCap: &AdminCap, tournament: &mut Tournament, ctx: &mut TxContext){
+        assert!((adminCap.admin_address == tx_context::sender(ctx)), ENotAdmin);
+        let i = vector::length(&tournament.matches);
+        
+        while(i > 0) {
+            // Remove match from tournament and get their ID.
+            let match_id = vector::pop_back(&mut tournament.matches);
+
+            // Make sure that match is part of the tournament.
+            assert!(dof::exists_(&tournament.id, match_id), EMatchNotFound);
+
+            // Find match dynamic object field in tournament.
+            let match: Match = dof::remove(&mut tournament.id, match_id);
+            let Match {
+                id,
+                last_move_time: _,
+                player_0,
+                player_1,
+                hash_0,
+                hash_1,
+                secret_0,
+                secret_1,
+                round: _,
+            } = match;
+
+            if (option::is_none(&hash_0)){
+                vector::push_back(&mut tournament.players, player_1);
+            } else if (option::is_none(&hash_1)){
+                vector::push_back(&mut tournament.players, player_0);
+            } else if (option::is_none(&secret_0)){
+                vector::push_back(&mut tournament.players, player_1);
+            } else if (option::is_none(&secret_1)){
+                vector::push_back(&mut tournament.players, player_0);
+            };
+
+            object::delete(id);
+            i = i - 1;
+        };
+
+        if (vector::length(&tournament.players) == 1){
+            let winner = vector::pop_back(&mut tournament.players);
+            let prize_value = balance::value(&mut tournament.prize);
+
+            // Take prize from tournament.
+            let prize = coin::take(&mut tournament.prize, prize_value, ctx);
+
+            // Transfer coin to winner.
+            transfer::transfer(prize, winner);
+            
+            // Update tournament status.
+            tournament.status = 2;
+        } else{
+            // Increment round counter for next iteration.
+            tournament.round = tournament.round + 1;
+        };
     }
 
     // Match functions.
@@ -245,7 +337,7 @@ module contract::tournament {
             secret_0: option::none(),
             secret_1: option::none(),
             round,
-            winner: option::none(),
+            //winner: option::none(),
         };
         match
     }
@@ -290,16 +382,21 @@ module contract::tournament {
         assert!(!option::is_none(&match.hash_0) && !option::is_none(&match.hash_1), EHashNotFound);
 
         let secret_hash = sha3_256(secret);
-        
-        // Figure who player is _0 or _1 and get hash value from their match.
-        let hash_value = if (tx_context::sender(ctx) == match.player_0) {
-            option::borrow(&match.hash_0)
-        } else {
-            option::borrow(&match.hash_1)
-        };
 
-        // Make sure player's hash is the hash of their secret.
-        assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
+        // Figure out whether player 0 or player 1 is revealing and add their secret to game.
+        if (tx_context::sender(ctx) == match.player_0){
+            let hash_value = option::borrow(&match.hash_0);
+
+            // Make sure player's hash is the hash of their secret.
+            assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
+            option::fill(&mut match.secret_0, secret_hash);
+        } else {
+            let hash_value = option::borrow(&match.hash_1);
+
+            // Make sure player's hash is the hash of their secret.
+            assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
+            option::fill(&mut match.secret_1, secret_hash);
+        }
 
         
     }
