@@ -98,6 +98,7 @@ module.exports = {
         subtitleSmallExtra: ["10px", "1"],
         caption: ["12px", "1"],
         captionSmall: ["11px", "1"],
+        iconTextLarge: ["52px", "1"],
 
         // Heading sizes:
         heading1: ["28px", "0.8"],
