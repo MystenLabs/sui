@@ -46,7 +46,7 @@ jobs:
             return 'true';
 
       - name: Comment PR
-        uses: thollander/actions-comment-pull-request@c22fb302208b7b170d252a61a505d2ea27245eff # pin@v2
+        uses: thollander/actions-comment-pull-request@4159e62bc85fec21089efb305e83a9e7113074e8 # pin@v2
         if: steps.get-artifact.outputs.result == 'true' && steps.source-run-info.outputs.pullRequestNumber
         with:
           pr_number: ${{ steps.source-run-info.outputs.pullRequestNumber }}
