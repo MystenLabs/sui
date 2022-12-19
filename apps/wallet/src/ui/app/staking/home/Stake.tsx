@@ -41,9 +41,9 @@ function StakeHome() {
     const [showModal, setShowModal] = useState(true);
 
     const navigate = useNavigate();
-    const close = useCallback(() => {
+    const close = () => {
         navigate('/tokens');
-    }, [navigate]);
+    };
 
     const pageTitle = hasDelegations
         ? 'Stake & Earn SUI'
