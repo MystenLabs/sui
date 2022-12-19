@@ -720,3 +720,26 @@ fn verify_sender_signature_correctly_with_flag() {
         .verify(tx_32.data(), &committee)
         .is_ok());
 }
+
+#[test]
+fn test_change_epoch_transaction() {
+    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
+    assert!(tx.contains_shared_object());
+    assert_eq!(
+        tx.shared_input_objects().next().unwrap(),
+        (
+            &SUI_SYSTEM_STATE_OBJECT_ID,
+            &SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION
+        )
+    );
+    assert!(tx.is_system_tx());
+    assert_eq!(
+        tx.data()
+            .intent_message
+            .value
+            .input_objects()
+            .unwrap()
+            .len(),
+        1
+    );
+}

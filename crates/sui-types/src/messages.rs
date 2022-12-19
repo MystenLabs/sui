@@ -38,6 +38,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
+    iter,
 };
 use strum::IntoStaticStr;
 use tracing::debug;
@@ -201,6 +202,21 @@ impl SingleTransactionKind {
         &self,
     ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         match &self {
+            Self::Call(_) | Self::ChangeEpoch(_) => {
+                Either::Left(self.all_move_call_shared_input_objects())
+            }
+            _ => Either::Right(iter::empty()),
+        }
+    }
+
+    /// Returns an iterator of all shared input objects used by this transaction.
+    /// It covers both Call and ChangeEpoch transaction kind, because both makes Move calls.
+    /// This function is split out of shared_input_objects because Either type only supports
+    /// two variants, while we need to be able to return three variants (Flatten, Once, Empty).
+    fn all_move_call_shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
+        match &self {
             Self::Call(MoveCall { arguments, .. }) => Either::Left(
                 arguments
                     .iter()
@@ -228,7 +244,11 @@ impl SingleTransactionKind {
                     })
                     .flatten(),
             ),
-            _ => Either::Right(std::iter::empty()),
+            Self::ChangeEpoch(_) => Either::Right(iter::once((
+                &SUI_SYSTEM_STATE_OBJECT_ID,
+                &SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            ))),
+            _ => unreachable!(),
         }
     }
 
@@ -1420,9 +1440,9 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),  
-            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),       
-            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),       
+            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
+            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
+            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
