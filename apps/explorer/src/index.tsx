@@ -31,6 +31,21 @@ if (import.meta.env.PROD) {
         tracesSampler: () => {
             return growthbook.getFeatureValue('explorer-sentry-tracing', 0);
         },
+        beforeSend(event) {
+            try {
+                // Filter out any code from unknown sources:
+                if (
+                    !event.exception?.values?.[0].stacktrace ||
+                    event.exception?.values?.[0].stacktrace?.frames?.[0]
+                        .filename === '<anonymous>'
+                ) {
+                    return null;
+                }
+            } catch (e) {}
+
+            return event;
+        },
+
         denyUrls: [
             // Chrome extensions
             /extensions\//i,
