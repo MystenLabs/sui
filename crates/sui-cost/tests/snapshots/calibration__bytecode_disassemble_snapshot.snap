@@ -4,6 +4,9 @@ expression: bytecode_calib
 ---
 // Move bytecode v6
 module 2.bytecode_calibration_tests {
+use 0000000000000000000000000000000000000001::unit_test;
+
+
 struct ObjectWithU64Field has drop, store {
 	f0: u64
 }
@@ -2362,7 +2365,7 @@ B4:
 unit_test_poison() {
 B0:
 	0: LdU64(0)
-	1: Call[87](create_signers_for_testing(u64): vector<signer>)
+	1: Call unit_test::create_signers_for_testing(u64): vector<signer>
 	2: Pop
 	3: Ret
 }
