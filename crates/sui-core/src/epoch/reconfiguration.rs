@@ -212,7 +212,7 @@ where
                 .process_transaction(advance_epoch_tx.clone().into_unsigned())
                 .await
             {
-                Ok(certificate) => match self.state.execute_certificate_internal(&certificate).await {
+                Ok(certificate) => match self.state.try_execute_immediately(&certificate).await {
                     Ok(_) => {
                         break;
                     }

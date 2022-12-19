@@ -782,16 +782,16 @@ impl AuthorityState {
     /// Internal logic to execute a certificate.
     ///
     /// Guarantees that
-    /// - If input objects are available, it should return no permanent failure.
-    /// - Execution and persisting output are atomic. i.e. outputs are only written to storage,
+    /// - If input objects are available, return no permanent failure.
+    /// - Execution and output commit are atomic. i.e. outputs are only written to storage,
     /// on successful execution; crashed execution has no observable effect and can be retried.
     ///
-    /// Since this function does not set locks or guarantee input objects are available, it should
-    /// only be called by the execution driver, for systems transactions, or in tests.
+    /// It is caller's responsibility to ensure input objects are available and locks are set.
+    /// If this cannot be satisfied by the caller, execute_certificate() should be called instead.
     ///
-    /// TODO: Reduce callsites and restrict visibility to pub(crate).
+    /// Should only be called within sui-core.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate_internal(
+    pub(crate) async fn try_execute_immediately(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
@@ -823,6 +823,15 @@ impl AuthorityState {
         self.process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+    }
+
+    /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
+    /// pre-conditions are not satisfied, and executing change epoch transactions.
+    pub async fn try_execute_for_test(
+        &self,
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        self.try_execute_immediately(certificate).await
     }
 
     pub async fn notify_read_transaction_info(

@@ -1123,7 +1123,7 @@ pub async fn send_and_confirm_transaction_with_shared(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.execute_certificate_internal(&certificate).await
+    authority.try_execute_for_test(&certificate).await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -1433,7 +1433,7 @@ async fn test_handle_confirmation_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .try_execute_for_test(&certified_transfer_transaction)
         .await
         .is_err());
 }
@@ -1496,7 +1496,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // Explanation: providing an old cert that has already been applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
-        .execute_certificate_internal(&certified_transfer_transaction)
+        .try_execute_for_test(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(response.signed_effects.is_none());
@@ -1741,7 +1741,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         let state1 = authority_state.clone();
 
         let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
-            state1.execute_certificate_internal(&clone1).await.unwrap();
+            state1.try_execute_for_test(&clone1).await.unwrap();
         }));
 
         let res = limited_fut.await;
@@ -1764,13 +1764,13 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         // Now run the tx to completion
         //
         // NOTE: this test fails if execute_certificate() is used here instead, while keeping
-        // execute_certificate_internal() above. This is because owned object locks are not cleared
+        // try_execute_for_test() above. This is because owned object locks are not cleared
         // atomically after a transaction completes, causing inconsistency when TransactionManager
         // calss get_missing_input_objects(). This would be an issue for crash recovery too.
         // TODO: fix the issue and test interrupting both execute_certificate() and
-        // execute_certificate_internal(), and calling execute_certificate() again.
+        // try_execute_for_test(), and calling execute_certificate() again.
         let info = authority_state
-            .execute_certificate_internal(&shared_object_cert)
+            .try_execute_for_test(&shared_object_cert)
             .await
             .unwrap();
 
@@ -2688,7 +2688,7 @@ async fn test_store_get_dynamic_object() {
     let add_cert = init_certified_transaction(add_txn, &authority_state);
 
     let add_effects = authority_state
-        .execute_certificate_internal(&add_cert)
+        .try_execute_for_test(&add_cert)
         .await
         .unwrap()
         .signed_effects
@@ -2761,7 +2761,7 @@ async fn test_store_get_dynamic_field() {
     let add_cert = init_certified_transaction(add_txn, &authority_state);
 
     let add_effects = authority_state
-        .execute_certificate_internal(&add_cert)
+        .try_execute_for_test(&add_cert)
         .await
         .unwrap()
         .signed_effects
@@ -3435,7 +3435,7 @@ async fn test_shared_object_transaction() {
     let transaction_digest = certificate.digest();
 
     // Executing the certificate now fails since it was not sequenced.
-    let result = authority.execute_certificate_internal(&certificate).await;
+    let result = authority.try_execute_for_test(&certificate).await;
     assert!(
         matches!(result, Err(SuiError::TransactionInputObjectsErrors { .. })),
         "{:#?}",
@@ -3463,10 +3463,7 @@ async fn test_shared_object_transaction() {
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
     // Finally (Re-)execute the contract should succeed.
-    authority
-        .execute_certificate_internal(&certificate)
-        .await
-        .unwrap();
+    authority.try_execute_for_test(&certificate).await.unwrap();
 
     // Ensure transaction effects are available.
     authority
@@ -3531,7 +3528,7 @@ async fn test_consensus_message_processed() {
         if let TransactionInfoResponse {
             signed_effects: Some(effects),
             ..
-        } = authority.execute_certificate_internal(cert).await.unwrap()
+        } = authority.try_execute_for_test(cert).await.unwrap()
         {
             effects
         } else {
