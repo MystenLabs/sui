@@ -188,6 +188,7 @@ impl Proposer {
         if let Some(last_header) = self.proposer_store.get_last_proposed()? {
             if last_header.round == this_round && last_header.epoch == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
+                self.last_parents.clear(); // Clear parents that are now invalid for next round.
                 return Ok(last_header);
             }
         }
