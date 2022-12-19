@@ -14,6 +14,7 @@ use collectable::TryExtend;
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBIteratorWithThreadMode,
     DBWithThreadMode, IteratorMode, MultiThreaded, Transaction, WriteBatch,
+    WriteBatchWithTransaction,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -190,11 +191,18 @@ impl RocksDB {
         delegate_call!(self.try_catch_up_with_primary())
     }
 
-    pub fn write(&self, batch: rocksdb::WriteBatch) -> Result<(), TypedStoreError> {
-        match self {
-            RocksDB::DBWithThreadMode(db) => Ok(db.write(batch)?),
-            RocksDB::OptimisticTransactionDB(_) => Err(TypedStoreError::RocksDBError(
-                "operation not supported".to_string(),
+    pub fn write(&self, batch: RocksDBBatch) -> Result<(), TypedStoreError> {
+        match (self, batch) {
+            (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
+                db.write(batch)?;
+                Ok(())
+            }
+            (RocksDB::OptimisticTransactionDB(db), RocksDBBatch::Transactional(batch)) => {
+                db.write(batch)?;
+                Ok(())
+            }
+            _ => Err(TypedStoreError::RocksDBError(
+                "using invalid batch type for the database".to_string(),
             )),
         }
     }
@@ -232,6 +240,55 @@ impl RocksDB {
             Self::OptimisticTransactionDB(_) => {
                 panic!("iterator is not implemented for transactional db")
             }
+        }
+    }
+}
+
+pub enum RocksDBBatch {
+    Regular(rocksdb::WriteBatch),
+    Transactional(rocksdb::WriteBatchWithTransaction<true>),
+}
+
+macro_rules! delegate_batch_call {
+    ($self:ident.$method:ident($($args:ident),*)) => {
+        match $self {
+            Self::Regular(b) => b.$method($($args),*),
+            Self::Transactional(b) => b.$method($($args),*),
+        }
+    }
+}
+
+impl RocksDBBatch {
+    fn size_in_bytes(&self) -> usize {
+        delegate_batch_call!(self.size_in_bytes())
+    }
+
+    pub fn delete_cf<K: AsRef<[u8]>>(&mut self, cf: &impl AsColumnFamilyRef, key: K) {
+        delegate_batch_call!(self.delete_cf(cf, key))
+    }
+
+    pub fn put_cf<K, V>(&mut self, cf: &impl AsColumnFamilyRef, key: K, value: V)
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        delegate_batch_call!(self.put_cf(cf, key, value))
+    }
+
+    pub fn delete_range_cf<K: AsRef<[u8]>>(
+        &mut self,
+        cf: &impl AsColumnFamilyRef,
+        from: K,
+        to: K,
+    ) -> Result<(), TypedStoreError> {
+        match self {
+            Self::Regular(batch) => {
+                batch.delete_range_cf(cf, from, to);
+                Ok(())
+            }
+            Self::Transactional(_) => Err(TypedStoreError::RocksDBError(
+                "operation not supported".to_string(),
+            )),
         }
     }
 }
@@ -345,7 +402,18 @@ impl<K, V> DBMap<K, V> {
     }
 
     pub fn batch(&self) -> DBBatch {
-        DBBatch::new(&self.rocksdb, &self.db_metrics, &self.write_sample_interval)
+        let batch = match *self.rocksdb {
+            RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
+            RocksDB::OptimisticTransactionDB(_) => {
+                RocksDBBatch::Transactional(WriteBatchWithTransaction::<true>::default())
+            }
+        };
+        DBBatch::new(
+            &self.rocksdb,
+            batch,
+            &self.db_metrics,
+            &self.write_sample_interval,
+        )
     }
 
     fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
@@ -607,7 +675,7 @@ impl<K, V> DBMap<K, V> {
 ///
 pub struct DBBatch {
     rocksdb: Arc<RocksDB>,
-    batch: WriteBatch,
+    batch: RocksDBBatch,
     db_metrics: Arc<DBMetrics>,
     write_sample_interval: SamplingInterval,
 }
@@ -618,12 +686,13 @@ impl DBBatch {
     /// Use `open_cf` to get the DB reference or an existing open database.
     pub fn new(
         dbref: &Arc<RocksDB>,
+        batch: RocksDBBatch,
         db_metrics: &Arc<DBMetrics>,
         write_sample_interval: &SamplingInterval,
     ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),
-            batch: WriteBatch::default(),
+            batch,
             db_metrics: db_metrics.clone(),
             write_sample_interval: write_sample_interval.clone(),
         }
@@ -664,9 +733,7 @@ impl DBBatch {
         }
         Ok(())
     }
-}
 
-impl DBBatch {
     /// Deletes a set of keys given as an iterator
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
         mut self,
@@ -702,7 +769,7 @@ impl DBBatch {
         let from_buf = be_fix_int_ser(from)?;
         let to_buf = be_fix_int_ser(to)?;
 
-        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf);
+        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf)?;
         Ok(self)
     }
 
