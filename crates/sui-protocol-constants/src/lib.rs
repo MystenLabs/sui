@@ -33,14 +33,23 @@ pub const MAX_BASIC_BLOCKS: usize = 1024;
 /// Maximum stack size value. Enforced by the Move bytecode verifier.
 pub const MAX_VALUE_STACK_SIZE: usize = 1024;
 
-/// Maximum number of type nodes. Enforced by the Move bytecode verifier.
+/// Maximum number of "type nodes", a metric for how big a SignatureToken will be when expanded into a fully qualified type. Enforced by the Move bytecode verifier.
 pub const MAX_TYPE_NODES: usize = 256;
 
-/// Maximum number of pushes in one function. Enforced by the Move bytecode verifier.
+/// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
 pub const MAX_PUSH_SIZE: usize = 10000;
 
-/// Maximum dependency depth. Enforced by the Move bytecode verifier.
-pub const MAX_DEPENDENCY_DEPTH: u64 = 100;
+/// Maximum number of struct definitions in a module. Enforced by the Move bytecode verifier.
+pub const MAX_STRUCT_DEFINITIONS: usize = 200;
+
+/// Maximum number of function definitions in a module. Enforced by the Move bytecode verifier.
+pub const MAX_FUNCTION_DEFINITIONS: usize = 1000;
+
+/// Maximum number of fields allowed in a struct definition. Enforced by the Move bytecode verifier.
+pub const MAX_FIELDS_IN_STRUCT: usize = 32;
+
+/// Maximum dependency depth. Enforced by the Move linker when loading dependent modules.
+pub const MAX_DEPENDENCY_DEPTH: usize = 100;
 
 /// Maximum number of events that a single Move function can emit. Enforced by the Sui adapter during execution.
 // TODO: is this per Move function, or per transaction? And if per-function, can't I get around the limit by calling
