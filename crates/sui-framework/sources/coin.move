@@ -40,10 +40,10 @@ module sui::coin {
         /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
         /// This is metadata for display usage only.
         decimals: u8,
-        /// Name for the token
-        name: string::String,
         /// Symbol for the token
         symbol: ascii::String,
+        /// Name for the token
+        name: string::String,
         /// Description of the token
         description: string::String,
         /// URL for the token logo
@@ -273,8 +273,8 @@ module sui::coin {
             CoinMetadata {
                 id: object::new(ctx),
                 decimals,
-                name: string::utf8(name),
                 symbol: ascii::string(symbol),
+                name: string::utf8(name),
                 description: string::utf8(description),
                 icon_url
             }
