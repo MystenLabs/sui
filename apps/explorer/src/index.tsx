@@ -13,7 +13,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
-import { growthbook } from './utils/growthbook';
+import { featuresPromise, growthbook } from './utils/growthbook';
 import { plausible } from './utils/plausible';
 import { reportWebVitals } from './utils/vitals';
 
@@ -28,8 +28,18 @@ if (import.meta.env.PROD) {
         dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
         environment: import.meta.env.VITE_VERCEL_ENV,
         integrations: [new BrowserTracing()],
-        tracesSampler: () => {
-            return growthbook.getFeatureValue('explorer-sentry-tracing', 0);
+        // NOTE: We don't use `tracesSampler` because it can't be async so we can't wait for the config to load.
+        async beforeSendTransaction(event) {
+            await featuresPromise;
+            const sampleRate = growthbook.getFeatureValue(
+                'explorer-sentry-tracing',
+                0
+            );
+            if (sampleRate > Math.random()) {
+                return event;
+            } else {
+                return null;
+            }
         },
         beforeSend(event) {
             try {
