@@ -25,12 +25,12 @@ import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 import { getStakedPercent } from '~/utils/getStakedPercent';
 
-export type Delegators = {
+type Delegator = {
     delegator: string;
     sui_amount: bigint;
     share: number;
     type: string;
-}[];
+};
 
 function ValidatorDetails() {
     const { id } = useParams();
@@ -119,12 +119,7 @@ function ValidatorDetails() {
                         };
                     },
                     {} as {
-                        [key: string]: {
-                            sui_amount: bigint;
-                            delegator: string;
-                            type: string;
-                            share: number;
-                        };
+                        [key: string]: Delegator;
                     }
                 )
             ),
@@ -187,38 +182,14 @@ function ValidatorDetails() {
                 <TableHeader>Details</TableHeader>
                 <DescriptionList>
                     {validator.pubkeyBytes && (
-                        <DescriptionItem
-                            title={
-                                <Text
-                                    variant="body"
-                                    weight="medium"
-                                    color="gray-80"
-                                >
-                                    Public Key
-                                </Text>
-                            }
-                        >
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="gray-90"
-                            >
+                        <DescriptionItem title="Public Key">
+                            <Text variant="p1" weight="medium" color="gray-90">
                                 {validator.pubkeyBytes}
                             </Text>
                         </DescriptionItem>
                     )}
 
-                    <DescriptionItem
-                        title={
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="gray-80"
-                            >
-                                Sui Address
-                            </Text>
-                        }
-                    >
+                    <DescriptionItem title="Sui Address">
                         <AddressLink
                             address={validator.suiAddress}
                             noTruncate
