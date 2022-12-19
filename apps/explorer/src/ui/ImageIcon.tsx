@@ -3,7 +3,7 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-const imageStyle = cva(['bg-gray-45 text-gray-65 capitalize'], {
+const imageStyle = cva(['bg-gray-45 text-gray-65 capitalize overflow-hidden'], {
     variants: {
         //TODO: verify sizes with design especially for mobile
         size: {
@@ -13,7 +13,7 @@ const imageStyle = cva(['bg-gray-45 text-gray-65 capitalize'], {
             xl: 'md:w-32 md:h-32 w-16 font-medium text-heading1',
         },
         variant: {
-            circle: 'rounded-full overflow-hidden',
+            circle: 'rounded-full',
             square: 'rounded-md',
         },
     },
