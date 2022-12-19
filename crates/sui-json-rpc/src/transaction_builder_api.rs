@@ -281,6 +281,70 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         };
         Ok(TransactionBytes::from_data(data)?)
     }
+
+    async fn request_add_delegation(
+        &self,
+        signer: SuiAddress,
+        coins: Vec<ObjectID>,
+        amount: Option<u64>,
+        validator: SuiAddress,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        Ok(TransactionBytes::from_data(
+            self.builder
+                .request_add_delegation(signer, coins, amount, validator, gas, gas_budget)
+                .await?,
+        )?)
+    }
+
+    async fn request_withdraw_delegation(
+        &self,
+        signer: SuiAddress,
+        delegation: ObjectID,
+        staked_sui: ObjectID,
+        principal_withdraw_amount: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        Ok(TransactionBytes::from_data(
+            self.builder
+                .request_withdraw_delegation(
+                    signer,
+                    delegation,
+                    staked_sui,
+                    principal_withdraw_amount,
+                    gas,
+                    gas_budget,
+                )
+                .await?,
+        )?)
+    }
+
+    async fn request_switch_delegation(
+        &self,
+        signer: SuiAddress,
+        delegation: ObjectID,
+        staked_sui: ObjectID,
+        new_validator_address: SuiAddress,
+        switch_pool_token_amount: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        Ok(TransactionBytes::from_data(
+            self.builder
+                .request_switch_delegation(
+                    signer,
+                    delegation,
+                    staked_sui,
+                    new_validator_address,
+                    switch_pool_token_amount,
+                    gas,
+                    gas_budget,
+                )
+                .await?,
+        )?)
+    }
 }
 
 impl SuiRpcModule for FullNodeTransactionBuilderApi {

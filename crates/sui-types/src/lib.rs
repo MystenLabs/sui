@@ -32,6 +32,7 @@ pub mod dynamic_field;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
+pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
 pub mod intent;

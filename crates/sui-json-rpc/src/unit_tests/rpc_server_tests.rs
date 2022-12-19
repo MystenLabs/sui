@@ -1,14 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::api::CoinReadApiClient;
+use crate::api::GovernanceReadApiClient;
+use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
+use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
+use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::ToFromBytes;
+use signature::Signature;
 use std::path::Path;
 
 #[cfg(not(msim))]
 use std::str::FromStr;
 
-use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_config::{ValidatorInfo, SUI_KEYSTORE_FILENAME};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
     Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
     SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
@@ -17,20 +24,24 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
+use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::sui_system_state::{ValidatorMetadata, SUI_SYSTEM_MODULE_NAME};
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
+use sui_types::{
+    parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+};
 use test_utils::network::TestClusterBuilder;
 
-use crate::api::CoinReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
-
 use sui_macros::sim_test;
+use sui_types::crypto::{
+    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    AuthoritySignature, NetworkKeyPair, SuiKeyPair,
+};
+use sui_types::governance::StakedSui;
 
 use tokio::time::{sleep, Duration};
 
@@ -735,4 +746,297 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     assert_eq!(4, page.data.len());
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_locked_sui() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+    // verify coins and balance before test
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    let balance: Vec<Balance> = http_client.get_all_balances(*address).await?;
+
+    assert_eq!(5, coins.data.len());
+    for coin in &coins.data {
+        assert!(coin.locked_until_epoch.is_none());
+    }
+
+    assert_eq!(1, balance.len());
+    assert!(balance[0].locked_balance.is_empty());
+
+    // lock one coin
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            LOCKED_COIN_MODULE_NAME.to_string(),
+            "lock_coin".to_string(),
+            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
+            vec![
+                SuiJsonValue::from_str(&coins.data[0].coin_object_id.to_string())?,
+                SuiJsonValue::from_str(&format!("{address}"))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
+            ],
+            None,
+            1000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let balances: Vec<Balance> = http_client.get_all_balances(*address).await?;
+
+    assert_eq!(1, balance.len());
+
+    let balance = balances.first().unwrap();
+
+    assert_eq!(4, balance.coin_object_count);
+    assert_eq!(1, balance.locked_balance.len());
+    assert!(balance.locked_balance.contains_key(&20));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<StakedSui> = http_client.get_staked_sui(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    // Check pending delegation before test
+    let pending_delegation = http_client.get_pending_delegations(*address).await?;
+    assert!(pending_delegation.is_empty());
+
+    let validators: Vec<ValidatorMetadata> = http_client.next_epoch_validators().await?;
+
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![objects[0].object_id],
+            Some(1000000),
+            validators[0].sui_address,
+            None,
+            10000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check StakedSui object
+    let staked_sui: Vec<StakedSui> = http_client.get_staked_sui(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].principal());
+    assert!(staked_sui[0].locked_until_epoch().is_none());
+
+    // Check pending delegation
+    let pending_delegation = http_client.get_pending_delegations(*address).await?;
+    assert_eq!(1, pending_delegation.len());
+    assert_eq!(1000000, pending_delegation[0].principal_sui_amount);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+
+    // lock some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            LOCKED_COIN_MODULE_NAME.to_string(),
+            "lock_coin".to_string(),
+            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
+            vec![
+                SuiJsonValue::from_str(&objects[0].object_id.to_string())?,
+                SuiJsonValue::from_str(&format!("{address}"))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
+            ],
+            None,
+            1000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let validators: Vec<ValidatorMetadata> = http_client.next_epoch_validators().await?;
+
+    // Delegate some locked SUI
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    let locked_sui = coins
+        .data
+        .iter()
+        .find_map(|coin| coin.locked_until_epoch.map(|_| coin.coin_object_id))
+        .unwrap();
+
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![locked_sui],
+            Some(1000000),
+            validators[0].sui_address,
+            None,
+            10000,
+        )
+        .await?;
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check StakedSui object
+    let staked_sui: Vec<StakedSui> = http_client.get_staked_sui(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].principal());
+    assert_eq!(Some(20), staked_sui[0].locked_until_epoch());
+
+    // Check pending delegation
+    let pending_delegation = http_client.get_pending_delegations(*address).await?;
+    assert_eq!(1, pending_delegation.len());
+    assert_eq!(1000000, pending_delegation[0].principal_sui_amount);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_next_epoch_validators() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let SuiKeyPair::Ed25519(keypair) = keystore.get_key(&address)? else { panic!() };
+
+    let validators = http_client.next_epoch_validators().await?;
+    assert_eq!(4, validators.len());
+
+    let (validator_info, signature) = get_new_validator(keypair);
+
+    // add validator
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            SUI_SYSTEM_MODULE_NAME.to_string(),
+            "request_add_validator".to_string(),
+            vec![],
+            vec![
+                SuiJsonValue::from_object_id(SUI_SYSTEM_STATE_OBJECT_ID),
+                SuiJsonValue::from_bcs_bytes(validator_info.protocol_key.as_bytes())?,
+                SuiJsonValue::from_bcs_bytes(validator_info.network_key.as_bytes())?,
+                SuiJsonValue::from_bcs_bytes(Signature::as_bytes(&signature))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(validator_info.name())?)?,
+                SuiJsonValue::from_bcs_bytes(&validator_info.network_address.to_vec())?,
+                SuiJsonValue::from_bcs_bytes(&validator_info.p2p_address.to_vec())?,
+                SuiJsonValue::from_bcs_bytes(&validator_info.narwhal_worker_address.to_vec())?,
+                SuiJsonValue::from_object_id(objects[0].object_id),
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"1000")?)?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"50")?)?,
+            ],
+            None,
+            10000,
+        )
+        .await?;
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let validators = http_client.next_epoch_validators().await?;
+    assert_eq!(5, validators.len());
+    Ok(())
+}
+
+pub fn get_new_validator(account_keypair: &AccountKeyPair) -> (ValidatorInfo, AuthoritySignature) {
+    let keypair: AuthorityKeyPair = get_key_pair().1;
+    let worker_keypair: NetworkKeyPair = get_key_pair().1;
+    let network_keypair: NetworkKeyPair = get_key_pair().1;
+    let pop = generate_proof_of_possession(&keypair, account_keypair.public().into());
+    (
+        ValidatorInfo {
+            name: "".to_string(),
+            protocol_key: keypair.public().into(),
+            worker_key: worker_keypair.public().clone(),
+            account_key: account_keypair.public().clone().into(),
+            network_key: network_keypair.public().clone(),
+            stake: 1,
+            delegation: 0,
+            gas_price: 1,
+            commission_rate: 0,
+            network_address: sui_config::utils::new_tcp_network_address(),
+            p2p_address: sui_config::utils::new_tcp_network_address(),
+            narwhal_primary_address: sui_config::utils::new_tcp_network_address(),
+            narwhal_worker_address: sui_config::utils::new_tcp_network_address(),
+        },
+        pop,
+    )
 }

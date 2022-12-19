@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use jsonrpsee::core::RpcResult;
-use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
-use sui_types::sui_system_state::SuiSystemState;
 
 use fastcrypto::encoding::Base64;
+use jsonrpsee::core::RpcResult;
+use jsonrpsee_proc_macros::rpc;
+
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
@@ -25,9 +25,11 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
+use sui_types::governance::{Delegation, PendingDelegation, StakedSui};
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 /// Maximum number of events returned in an event query.
 /// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
@@ -279,8 +281,29 @@ pub trait RpcFullNodeReadApi {
         /// the version of the queried object. If None, default to the latest known version
         version: SequenceNumber,
     ) -> RpcResult<GetPastObjectDataResponse>;
+}
 
-    /// Return the committee information for the asked epoch
+#[open_rpc(namespace = "sui", tag = "Governance Read API")]
+#[rpc(server, client, namespace = "sui")]
+pub trait GovernanceReadApi {
+    /// Return all [StakedSui] owned by the `owner` address.
+    #[method(name = "getStakedSui")]
+    async fn get_staked_sui(&self, owner: SuiAddress) -> RpcResult<Vec<StakedSui>>;
+
+    /// Return all [Delegation] owned by the `owner` address.
+    #[method(name = "getDelegations")]
+    async fn get_delegations(&self, owner: SuiAddress) -> RpcResult<Vec<Delegation>>;
+
+    /// Return all [Delegation] owned by the `owner` address.
+    #[method(name = "getPendingDelegations")]
+    async fn get_pending_delegations(&self, owner: SuiAddress)
+        -> RpcResult<Vec<PendingDelegation>>;
+
+    /// Return all validators scheduled for next epoch.
+    #[method(name = "nextEpochValidators")]
+    async fn next_epoch_validators(&self) -> RpcResult<Vec<ValidatorMetadata>>;
+
+    /// Return the committee information for the asked `epoch`.
     #[method(name = "getCommitteeInfo")]
     async fn get_committee_info(
         &self,
@@ -288,7 +311,7 @@ pub trait RpcFullNodeReadApi {
         epoch: Option<EpochId>,
     ) -> RpcResult<CommitteeInfoResponse>;
 
-    /// Return SuiSystemState
+    /// Return [SuiSystemState]
     #[method(name = "getSuiSystemState")]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
 }
@@ -494,6 +517,62 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
         /// Whether this is a regular transaction or a Dev Inspect Transaction
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
+    ) -> RpcResult<TransactionBytes>;
+
+    /// Add delegated stake to a validator's staking pool using multiple coins and amount.
+    #[method(name = "requestAddDelegation")]
+    async fn request_add_delegation(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// Coin<SUI> or LockedCoin<SUI> object to delegate
+        coins: Vec<ObjectID>,
+        /// delegation amount
+        amount: Option<u64>,
+        /// the validator's Sui address
+        validator: SuiAddress,
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    /// Withdraw some portion of a delegation from a validator's staking pool.
+    #[method(name = "requestWithdrawDelegation")]
+    async fn request_withdraw_delegation(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// Delegation object ID
+        delegation: ObjectID,
+        /// StakedSui object ID
+        staked_sui: ObjectID,
+        /// Principal amount to withdraw
+        principal_withdraw_amount: u64,
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    // Switch delegation from the current validator to a new one.
+    #[method(name = "requestSwitchDelegation")]
+    async fn request_switch_delegation(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// Delegation object ID
+        delegation: ObjectID,
+        /// StakedSui object ID
+        staked_sui: ObjectID,
+        /// Validator to switch to
+        new_validator_address: SuiAddress,
+        /// Switching stake amount
+        switch_pool_token_amount: u64,
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 }
 

@@ -12,7 +12,6 @@ use sui_adapter::execution_mode;
 use sui_json::SuiJsonValue;
 use sui_transaction_builder::TransactionBuilder;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
-use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
 use fastcrypto::encoding::Base64;
@@ -27,7 +26,6 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
-use sui_types::committee::EpochId;
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
 use sui_types::move_package::normalize_modules;
@@ -408,20 +406,6 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .await
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
-    }
-
-    async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<CommitteeInfoResponse> {
-        Ok(self
-            .state
-            .handle_committee_info_request(&CommitteeInfoRequest { epoch })
-            .map_err(|e| anyhow!("{e}"))?)
-    }
-
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
-        Ok(self
-            .state
-            .get_sui_system_state_object()
-            .map_err(|e| anyhow!("{e}"))?)
     }
 }
 
