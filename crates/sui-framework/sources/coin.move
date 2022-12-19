@@ -392,6 +392,38 @@ module sui::coin {
         metadata.icon_url = option::some(url::new_unsafe(url));
     }
 
+    // === Get coin metadata fields for on-chain consumption ===
+
+    public fun get_decimals<T>(
+        metadata: &CoinMetadata<T>
+    ): u8 {
+        metadata.decimals
+    }
+
+    public fun get_name<T>(
+        metadata: &CoinMetadata<T>
+    ): string::String {
+        metadata.name
+    }
+
+    public fun get_symbol<T>(
+        metadata: &CoinMetadata<T>
+    ): ascii::String {
+        metadata.symbol
+    }
+
+    public fun get_description<T>(
+        metadata: &CoinMetadata<T>
+    ): string::String {
+        metadata.description
+    }
+
+    public fun get_icon_url<T>(
+        metadata: &CoinMetadata<T>
+    ): Option<Url> {
+        metadata.icon_url
+    }
+
     // === Test-only code ===
 
     #[test_only]
