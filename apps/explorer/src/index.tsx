@@ -35,6 +35,7 @@ if (import.meta.env.PROD) {
             try {
                 // Filter out any code from unknown sources:
                 if (
+                    !event.exception?.values?.[0].stacktrace ||
                     event.exception?.values?.[0].stacktrace?.frames?.[0]
                         .filename === '<anonymous>'
                 ) {
