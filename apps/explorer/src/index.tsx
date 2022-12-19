@@ -28,7 +28,10 @@ if (import.meta.env.PROD) {
         dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
         environment: import.meta.env.VITE_VERCEL_ENV,
         integrations: [new BrowserTracing()],
-        // NOTE: We don't use `tracesSampler` because it can't be async so we can't wait for the config to load.
+        // NOTE: Even though this is set to 1, we actually will properly sample the event in `beforeSendTransaction`.
+        // We don't do sampling here or in `tracesSampler` because those can't be async, so we can't wait for
+        // the features from growthbook to load before applying sampling.
+        tracesSampleRate: 1,
         async beforeSendTransaction(event) {
             await featuresPromise;
             const sampleRate = growthbook.getFeatureValue(
