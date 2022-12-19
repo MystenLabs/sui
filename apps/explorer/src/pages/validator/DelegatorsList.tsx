@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
 
-import type { Delegators } from './ValidatorDetails';
+import type { Delegator } from './ValidatorDetails';
 
 import Pagination from '~/components/pagination/Pagination';
 import { AddressLink } from '~/ui/InternalLink';
@@ -16,7 +16,7 @@ import { Text } from '~/ui/Text';
 const DELEGATORS_PER_PAGE = 20;
 
 type DelegatorsListProps = {
-    delegators: Delegators;
+    delegators: Delegator[];
 };
 
 export function DelegatorsList({ delegators }: DelegatorsListProps) {

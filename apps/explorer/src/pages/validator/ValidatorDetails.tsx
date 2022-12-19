@@ -25,7 +25,7 @@ import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 import { getStakedPercent } from '~/utils/getStakedPercent';
 
-type Delegator = {
+export type Delegator = {
     delegator: string;
     sui_amount: bigint;
     share: number;
