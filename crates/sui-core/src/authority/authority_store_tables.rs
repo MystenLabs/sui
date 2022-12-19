@@ -8,7 +8,7 @@ use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
 

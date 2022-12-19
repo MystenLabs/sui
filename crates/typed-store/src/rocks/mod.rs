@@ -7,7 +7,7 @@ mod values;
 
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
-    traits::Map,
+    traits::{Map, TableSummary},
 };
 use bincode::Options;
 use collectable::TryExtend;
@@ -613,6 +613,29 @@ impl<K, V> DBMap<K, V> {
 
     pub fn transaction(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
         DBTransaction::new(&self.rocksdb)
+    }
+
+    pub fn table_summary(&self) -> eyre::Result<TableSummary> {
+        let mut num_keys = 0;
+        let mut key_bytes_total = 0;
+        let mut value_bytes_total = 0;
+        let mut key_hist = hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
+        let mut value_hist = hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
+        let iter = self.iterator_cf().map(Result::unwrap);
+        for (key, value) in iter {
+            num_keys += 1;
+            key_bytes_total += key.len();
+            value_bytes_total += value.len();
+            key_hist.record(key.len() as u64)?;
+            value_hist.record(value.len() as u64)?;
+        }
+        Ok(TableSummary {
+            num_keys,
+            key_bytes_total,
+            value_bytes_total,
+            key_hist,
+            value_hist,
+        })
     }
 }
 

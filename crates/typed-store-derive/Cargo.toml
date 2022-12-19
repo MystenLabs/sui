@@ -15,11 +15,12 @@ proc-macro = true
 proc-macro2 = "1.0.47"
 quote = "1.0.23"
 syn = { version = "1.0.104", features = ["full"] }
+typed-store = { path = "../typed-store" }
 workspace-hack.workspace = true
+
 
 [dev-dependencies]
 eyre = "0.6.8"
 rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 tempfile = "3.3.0"
-typed-store = { path = "../typed-store" }
 tokio = { workspace = true, features = ["test-util"] }
