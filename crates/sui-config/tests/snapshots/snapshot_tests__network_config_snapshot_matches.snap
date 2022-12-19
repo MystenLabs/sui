@@ -45,6 +45,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -93,6 +94,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -141,6 +143,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -189,6 +192,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -237,6 +241,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -285,6 +290,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -333,6 +339,7 @@ validator_configs:
     enable-event-processing: false
     enable-checkpoint: false
     enable-reconfig: false
+    checkpoints-per-epoch: 1200
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -346,3 +353,4 @@ account_keys:
   - cHifntmjxd4QLaC71WRMoOeCpvicyDJMbTKRuo2v3R9UjI8DXP6RwO6c5B70OPjZEdiV0XB+RVfcjX6/JKfZeg==
   - mTzV/JVz4RdheOnQVFF3xuCPFF4AYAPyShHQCUizJX9pHbCeXB5wKAz9LCwtuoC4PCML0v4vko2/c16HlmPrbQ==
 genesis: "[fake genesis]"
+
