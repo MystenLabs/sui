@@ -22,6 +22,7 @@ const DEFAULT_FAUCET_URL =
   import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
 const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullNode;
+const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
@@ -88,7 +89,7 @@ export async function publishPackage(
   const { execSync } = require('child_process');
   const compiledModules = JSON.parse(
     execSync(
-      `cargo run --bin sui move build --dump-bytecode-as-base64 --path ${packagePath}`,
+      `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`,
       { encoding: 'utf-8' }
     )
   );

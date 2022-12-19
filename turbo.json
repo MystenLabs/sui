@@ -1,6 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "outputs": ["coverage/**"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["build/**", "dist/**", "storybook-static/**"]

@@ -19,7 +19,6 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
     "build": "pnpm build:types && tsup ./src/index.tsx --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
