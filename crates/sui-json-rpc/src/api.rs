@@ -501,6 +501,22 @@ pub trait EventReadApi {
     ) -> RpcResult<EventPage>;
 }
 
+#[open_rpc(namespace = "sui", tag = "Threshold BLS APIs")]
+#[rpc(server, client, namespace = "sui")]
+pub trait ThresholdBlsApi {
+    /// Sign an a Randomness object with threshold BLS.
+    #[method(name = "tblsSignRandomnessObject")]
+    fn tbls_sign_randomness_object(
+        &self,
+        /// The object ID.
+        object_id: ObjectID,
+        /// The epoch in which it was created.
+        epoch: EpochId,
+        /// In case the given epoch is the current one, transaction effects certificate for proving that the object was committed.
+        effects: Option<SuiCertifiedTransactionEffects>,
+    ) -> RpcResult<SuiTBlsSignRandomnessObjectResponse>;
+}
+
 #[open_rpc(namespace = "sui", tag = "APIs to execute transactions.")]
 #[rpc(server, client, namespace = "sui")]
 pub trait TransactionExecutionApi {

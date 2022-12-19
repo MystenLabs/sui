@@ -2591,6 +2591,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-tbls"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb58b7715088f3aecb714d94ab48fef984f54451#eb58b7715088f3aecb714d94ab48fef984f54451"
+dependencies = [
+ "fastcrypto",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=2dcf24facddfd15e83325ab714e3b6cb9cd63afe#2dcf24facddfd15e83325ab714e3b6cb9cd63afe"
@@ -8772,6 +8781,7 @@ dependencies = [
  "colored",
  "either",
  "fastcrypto",
+ "fastcrypto-tbls",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",

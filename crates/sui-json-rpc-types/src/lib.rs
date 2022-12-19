@@ -29,6 +29,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 
 use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto_tbls;
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -393,6 +394,12 @@ impl Display for SuiParsedTransactionResponse {
             SuiParsedTransactionResponse::SplitCoin(r) => r.fmt(f),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiTBlsSignRandomnessObjectResponse {
+    #[schemars(with = "Base64")]
+    pub signature: fastcrypto_tbls::types::Signature,
 }
 
 #[allow(clippy::large_enum_variant)]
