@@ -4,13 +4,11 @@
 import cl from 'clsx';
 import { useState, useCallback } from 'react';
 
-import Longtext from '../../components/longtext/Longtext';
-
-import type { Category } from './TransactionResultType';
 import type { SuiObjectRef } from '@mysten/sui.js';
 
 import styles from './TxLinks.module.css';
 
+import { ObjectLink } from '~/ui/InternalLink';
 import { IconTooltip } from '~/ui/Tooltip';
 
 type Addresslist = {
@@ -38,17 +36,17 @@ function TxLinks({ data }: { data: Addresslist }) {
                         )
                         .map((obj, idx) => (
                             <li key={idx}>
-                                <Longtext
-                                    text={obj.objectId}
-                                    category={data?.category as Category}
-                                    isLink
-                                    copyButton="16"
-                                    extra={
+                                <div className="inline-flex items-center gap-1.5">
+                                    <ObjectLink
+                                        objectId={obj.objectId}
+                                        noTruncate
+                                    />
+                                    <div className="h-4 w-4 leading-none text-gray-60 hover:text-steel">
                                         <IconTooltip
                                             tip={`VERSION ${obj.version}`}
                                         />
-                                    }
-                                />
+                                    </div>
+                                </div>
                             </li>
                         ))}
                 </ul>

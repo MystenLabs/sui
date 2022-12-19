@@ -17,6 +17,7 @@ import styles from './Longtext.module.css';
 import { Link } from '~/ui/Link';
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 
+/** @deprecated Use new UI components instead of Longtext. */
 function Longtext({
     text,
     category = 'unknown',

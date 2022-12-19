@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
-import Longtext from '../../../components/longtext/Longtext';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
 import TxForID from '../../../components/transaction-card/TxForID';
 import { getOwnerStr } from '../../../utils/objectUtils';
@@ -11,6 +10,7 @@ import { type DataType } from '../ObjectResultType';
 import styles from './ObjectView.module.css';
 
 import { Heading } from '~/ui/Heading';
+import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 function PkgView({ data }: { data: DataType }) {
@@ -20,10 +20,6 @@ function PkgView({ data }: { data: DataType }) {
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
     };
-
-    const isPublisherGenesis =
-        viewedData.objType === 'Move Package' &&
-        viewedData?.publisherAddress === 'Genesis';
 
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
@@ -52,10 +48,9 @@ function PkgView({ data }: { data: DataType }) {
                                             id="objectID"
                                             className={styles.objectid}
                                         >
-                                            <Longtext
-                                                text={viewedData.id}
-                                                category="object"
-                                                isLink={false}
+                                            <ObjectLink
+                                                objectId={viewedData.id}
+                                                noTruncate
                                             />
                                         </td>
                                     </tr>
@@ -69,12 +64,11 @@ function PkgView({ data }: { data: DataType }) {
                                         <tr>
                                             <td>Publisher</td>
                                             <td id="lasttxID">
-                                                <Longtext
-                                                    text={
+                                                <AddressLink
+                                                    address={
                                                         viewedData.publisherAddress
                                                     }
-                                                    category="address"
-                                                    isLink={!isPublisherGenesis}
+                                                    noTruncate
                                                 />
                                             </td>
                                         </tr>
