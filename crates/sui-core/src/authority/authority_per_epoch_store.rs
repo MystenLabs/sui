@@ -281,8 +281,11 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.next_shared_object_versions.multi_get(ids)?)
     }
 
-    pub fn get_last_checkpoint_boundary(&self) -> Option<(u64, u64)> {
-        self.tables.checkpoint_boundary.iter().skip_to_last().next()
+    pub fn get_last_checkpoint_boundary(&self) -> (u64, Option<u64>) {
+        match self.tables.checkpoint_boundary.iter().skip_to_last().next() {
+            Some((idx, height)) => (idx, Some(height)),
+            None => (0, None),
+        }
     }
 
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
@@ -295,12 +298,14 @@ impl AuthorityPerEpochStore {
 
     pub fn get_transactions_in_checkpoint_range(
         &self,
-        from_height_excluded: u64,
+        from_height_excluded: Option<u64>,
         to_height_included: u64,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let iter = self.tables.consensus_message_order.iter();
-        let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
-        let iter = iter.skip_to(&last_previous)?;
+        let mut iter = self.tables.consensus_message_order.iter();
+        if let Some(from_height_excluded) = from_height_excluded {
+            let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
+            iter = iter.skip_to(&last_previous)?;
+        }
         // skip_to lands to key the last_key or key after it
         // technically here we need to check if first item in stream has a key equal to last_previous
         // however in practice this can not happen because number of batches in certificate is
