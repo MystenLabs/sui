@@ -80,8 +80,9 @@ impl ThresholdBlsApiServer for ThresholdBlsApiImpl {
             }
         };
 
-        // Note that we do not try to get the object from the store since it might not exist on the
-        // node.
+        // TODO: Fetch the object from storage and verify it's indeed a Randomness object.
+        // Since we require the object to be committed, we know that at least f+1 honest validators
+        // will have it in their DB.
 
         // Construct the message to be signed, as done in the Move code of the Randomness object.
         let msg = construct_tbls_randomness_object_message(curr_epoch, &object_id);
