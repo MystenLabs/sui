@@ -151,7 +151,6 @@ function StakedHomeCard({
                                             mode="neutral"
                                             diffSymbol
                                             className="!text-gray-60"
-                                            title="This value currently is not available"
                                         />
                                     }
                                 />
