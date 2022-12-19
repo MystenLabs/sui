@@ -15,13 +15,15 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
-use sui_types::base_types::ObjectRef;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::utils::create_fake_transaction;
+use sui_types::messages::{TransactionData, VerifiedTransaction};
+use sui_types::signature_seed::SignatureSeed;
+use sui_types::utils::{create_fake_transaction, to_sender_signed_transaction};
 use sui_types::{
     base_types::{random_object_ref, AuthorityName, ExecutionDigests, TransactionDigest},
     committee::Committee,
@@ -35,6 +37,11 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+/// The maximum gas per transaction.
+pub const MAX_GAS: u64 = 2_000;
+
+/// The size of the committee used for tests.
+pub const TEST_COMMITTEE_SIZE: usize = 4;
 
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
@@ -230,4 +237,51 @@ pub async fn init_local_authorities_with_genesis(
         ),
         states,
     )
+}
+
+pub fn make_transfer_sui_transaction(
+    gas_object: ObjectRef,
+    recipient: SuiAddress,
+    amount: Option<u64>,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+) -> VerifiedTransaction {
+    let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
+    to_sender_signed_transaction(data, keypair)
+}
+
+pub fn make_transfer_object_transaction(
+    object_ref: ObjectRef,
+    gas_object: ObjectRef,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    recipient: SuiAddress,
+) -> VerifiedTransaction {
+    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    to_sender_signed_transaction(data, keypair)
+}
+
+pub fn test_gas_objects() -> Vec<Object> {
+    thread_local! {
+        static GAS_OBJECTS: Vec<Object> = (0..50)
+            .map(|_| {
+                let gas_object_id = ObjectID::random();
+                let (owner, _) = test_account_keys().pop().unwrap();
+                Object::with_id_owner_for_testing(gas_object_id, owner)
+            })
+            .collect();
+    }
+
+    GAS_OBJECTS.with(|v| v.clone())
+}
+
+/// Generate `COMMITTEE_SIZE` test cryptographic key pairs.
+pub fn test_account_keys() -> Vec<(SuiAddress, AccountKeyPair)> {
+    let mut vec = Vec::new();
+    let ss = SignatureSeed::from_bytes(&[0; 32]).unwrap();
+    for i in 0..TEST_COMMITTEE_SIZE {
+        let kp: AccountKeyPair = ss.new_deterministic_keypair(&[i as u8], Some(&[])).unwrap();
+        vec.push((kp.public().into(), kp));
+    }
+    vec
 }

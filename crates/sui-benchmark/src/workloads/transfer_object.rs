@@ -13,7 +13,7 @@ use sui_types::{
     object::Owner,
 };
 
-use test_utils::messages::make_transfer_object_transaction;
+use sui_core::test_utils::make_transfer_object_transaction;
 
 use crate::ValidatorProxy;
 

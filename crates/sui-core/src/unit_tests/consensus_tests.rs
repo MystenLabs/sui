@@ -22,7 +22,7 @@ use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Fixture: a few test gas objects.
-pub fn test_gas_objects() -> Vec<Object> {
+pub fn test_gas_objects_for_deterministic_keys() -> Vec<Object> {
     thread_local! {
         static GAS_OBJECTS: Vec<Object> = (0..4)
             .map(|_| {
@@ -46,7 +46,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
     };
-    for gas_object in test_gas_objects() {
+    for gas_object in test_gas_objects_for_deterministic_keys() {
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
@@ -91,7 +91,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 async fn submit_transaction_to_consensus_adapter() {
     // Initialize an authority with a (owned) gas object and a shared object; then
     // make a test certificate.
-    let mut objects = test_gas_objects();
+    let mut objects = test_gas_objects_for_deterministic_keys();
     objects.push(Object::shared_for_testing());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();

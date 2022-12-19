@@ -323,6 +323,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_utils::make_transfer_sui_transaction;
     use crate::{
         authority_active::gossip::GossipMetrics, authority_aggregator::AuthorityAggregatorBuilder,
         authority_client::NetworkAuthorityClient, node_sync::SyncStatus,
@@ -335,10 +336,7 @@ mod test {
         messages::{ExecutionStatus, VerifiedTransaction},
         object::Object,
     };
-    use test_utils::{
-        authority::{spawn_test_authorities, test_and_configure_authority_configs},
-        messages::make_transfer_sui_transaction,
-    };
+    use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
     use tokio::{sync::broadcast, time::Instant};
 
     #[derive(Clone)]

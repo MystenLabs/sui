@@ -129,7 +129,9 @@ mod tests {
 
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
-        consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
+        consensus_adapter::consensus_tests::{
+            test_certificates, test_gas_objects_for_deterministic_keys,
+        },
         consensus_validator::SuiTxValidator,
     };
 
@@ -140,7 +142,7 @@ mod tests {
     async fn accept_valid_transaction() {
         // Initialize an authority with a (owned) gas object and a shared object; then
         // make a test certificate.
-        let mut objects = test_gas_objects();
+        let mut objects = test_gas_objects_for_deterministic_keys();
         objects.push(Object::shared_for_testing());
 
         let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
