@@ -409,12 +409,11 @@ impl ConsensusAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
     /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
-    async fn close_epoch(&self) -> SuiResult {
+    fn close_epoch(&self) -> SuiResult {
         let epoch_store = self.authority.epoch_store();
         let send_end_of_publish = {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();

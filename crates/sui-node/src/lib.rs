@@ -69,6 +69,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_types::error::{SuiError, SuiResult};

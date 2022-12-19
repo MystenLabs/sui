@@ -48,9 +48,8 @@ impl ReconfigState {
     }
 }
 
-#[async_trait::async_trait]
 pub trait ReconfigurationInitiator {
-    async fn close_epoch(&self) -> SuiResult;
+    fn close_epoch(&self) -> SuiResult;
 }
 
 /*
