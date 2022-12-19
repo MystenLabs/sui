@@ -15,22 +15,25 @@ export type ExtractProps<T> = T extends ComponentType<infer P> ? P : T;
 
 type TitleProps = ExtractProps<typeof Dialog.Title>;
 
-export const Title = styled((props: TitleProps) => <Dialog.Title {...props} />, {
-  margin: 0,
-  padding: "0 $2",
-  fontSize: "$lg",
-  fontWeight: "$title",
-  color: "$textDark",
-});
+export const Title = styled(
+  (props: TitleProps) => <Dialog.Title {...props} />,
+  {
+    margin: 0,
+    padding: "0 $2",
+    fontSize: "$lg",
+    fontWeight: "$title",
+    color: "$textDark",
+  }
+);
 
-export const Overlay = styled('div', {
+export const Overlay = styled("div", {
   backgroundColor: "$backdrop",
   position: "fixed",
   inset: 0,
   zIndex: 100,
 });
 
-export const Content = styled('div', {
+export const Content = styled("div", {
   position: "fixed",
   inset: 0,
   zIndex: 100,
@@ -48,32 +51,35 @@ export const Content = styled('div', {
   },
 });
 
-export const Body = styled((props: ExtractProps<typeof Dialog.Panel>) => <Dialog.Panel {...props} />, {
-  position: "relative",
-  overflow: "hidden",
-  backgroundColor: "$background",
-  borderRadius: "$modal",
-  boxShadow: "$modal",
-  display: "flex",
-  flexDirection: "column",
-  pointerEvents: "auto",
+export const Body = styled(
+  (props: ExtractProps<typeof Dialog.Panel>) => <Dialog.Panel {...props} />,
+  {
+    position: "relative",
+    overflow: "hidden",
+    backgroundColor: "$background",
+    borderRadius: "$modal",
+    boxShadow: "$modal",
+    display: "flex",
+    flexDirection: "column",
+    pointerEvents: "auto",
 
-  variants: {
-    connect: {
-      true: {
-        width: "100%",
-        minHeight: "50vh",
-        maxWidth: "700px",
-        maxHeight: "85vh",
-        "@md": {
-          flexDirection: "row",
+    variants: {
+      connect: {
+        true: {
+          width: "100%",
+          minHeight: "50vh",
+          maxWidth: "700px",
+          maxHeight: "85vh",
+          "@md": {
+            flexDirection: "row",
+          },
         },
       },
     },
-  },
-});
+  }
+);
 
-const Close = styled('button', {
+const Close = styled("button", {
   position: "absolute",
   cursor: "pointer",
   padding: 7,
@@ -88,9 +94,9 @@ const Close = styled('button', {
   borderRadius: "$close",
 });
 
-export function CloseButton() {
+export function CloseButton({ onClick }: { onClick(): void }) {
   return (
-    <Close aria-label="Close">
+    <Close aria-label="Close" onClick={onClick}>
       <CloseIcon />
     </Close>
   );

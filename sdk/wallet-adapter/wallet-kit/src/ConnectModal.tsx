@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWallet } from "@mysten/wallet-adapter-react";
-import { Dialog } from '@headlessui/react'
+import { Dialog } from "@headlessui/react";
 import { useEffect, useState } from "react";
 import { styled } from "./stitches";
 import { Button, Panel } from "./utils/ui";
@@ -145,87 +145,81 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
   }, [wallet, selected, connected]);
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-    >
-        <Overlay />
-        <Content>
-          <Body connect>
-            <LeftPanel hasSelected={!!selected}>
-              <WalletList
-                selected={selected}
-                onChange={(walletName) => {
-                  setSelected(walletName);
-                  select(walletName);
-                }}
-              />
-              <MobileInfoButton onClick={() => setSelected(SELECTED_INFO)}>
-                What is a Wallet
-              </MobileInfoButton>
-            </LeftPanel>
+    <Dialog open={open} onClose={onClose}>
+      <Overlay />
+      <Content>
+        <Body connect>
+          <LeftPanel hasSelected={!!selected}>
+            <WalletList
+              selected={selected}
+              onChange={(walletName) => {
+                setSelected(walletName);
+                select(walletName);
+              }}
+            />
+            <MobileInfoButton onClick={() => setSelected(SELECTED_INFO)}>
+              What is a Wallet
+            </MobileInfoButton>
+          </LeftPanel>
 
-            <Panel responsiveHidden={!selected}>
-              <BackButton onClick={() => setSelected(null)} aria-label="Back">
-                <BackIcon />
-              </BackButton>
+          <Panel responsiveHidden={!selected}>
+            <BackButton onClick={() => setSelected(null)} aria-label="Back">
+              <BackIcon />
+            </BackButton>
 
-              {!selected || selected === SELECTED_INFO ? (
-                <>
-                  <Title css={{ textAlign: "center" }}>What is a Wallet</Title>
+            {!selected || selected === SELECTED_INFO ? (
+              <>
+                <Title css={{ textAlign: "center" }}>What is a Wallet</Title>
 
-                  <BodyCopy>
-                    <WhatIsAWallet />
-                  </BodyCopy>
-                </>
-              ) : selected && selected !== SELECTED_GETTING_STARTED ? (
                 <BodyCopy>
-                  <SelectedWalletIcon src={wallet?.icon} />
-                  <OpeningWalletTitle>Opening {selected}</OpeningWalletTitle>
-                  <ConnectionText isError={isError}>
-                    {isError
-                      ? "Connection failed"
-                      : "Confirm connection in the wallet..."}
-                  </ConnectionText>
-
-                  {isError && (
-                    <ButtonContainer>
-                      <Button
-                        color="secondary"
-                        onClick={() => select(selected)}
-                      >
-                        Retry Connection
-                      </Button>
-                    </ButtonContainer>
-                  )}
+                  <WhatIsAWallet />
                 </BodyCopy>
-              ) : (
-                <>
-                  <Title css={{ textAlign: "center" }}>
-                    Get Started with Sui
-                  </Title>
+              </>
+            ) : selected && selected !== SELECTED_GETTING_STARTED ? (
+              <BodyCopy>
+                <SelectedWalletIcon src={wallet?.icon} />
+                <OpeningWalletTitle>Opening {selected}</OpeningWalletTitle>
+                <ConnectionText isError={isError}>
+                  {isError
+                    ? "Connection failed"
+                    : "Confirm connection in the wallet..."}
+                </ConnectionText>
 
-                  <BodyCopy>
-                    <GettingStarted />
-                    <ButtonContainer>
-                      <Button
-                        as="a"
-                        color="secondary"
-                        href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Install Wallet Extension
-                      </Button>
-                    </ButtonContainer>
-                  </BodyCopy>
-                </>
-              )}
-            </Panel>
+                {isError && (
+                  <ButtonContainer>
+                    <Button color="secondary" onClick={() => select(selected)}>
+                      Retry Connection
+                    </Button>
+                  </ButtonContainer>
+                )}
+              </BodyCopy>
+            ) : (
+              <>
+                <Title css={{ textAlign: "center" }}>
+                  Get Started with Sui
+                </Title>
 
-            <CloseButton />
-          </Body>
-        </Content>
+                <BodyCopy>
+                  <GettingStarted />
+                  <ButtonContainer>
+                    <Button
+                      as="a"
+                      color="secondary"
+                      href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Install Wallet Extension
+                    </Button>
+                  </ButtonContainer>
+                </BodyCopy>
+              </>
+            )}
+          </Panel>
+
+          <CloseButton onClick={onClose} />
+        </Body>
+      </Content>
     </Dialog>
   );
 }

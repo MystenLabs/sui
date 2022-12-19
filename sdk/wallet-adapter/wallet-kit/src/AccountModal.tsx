@@ -63,7 +63,7 @@ export function AccountModal({ account, open, onClose }: AccountModalProps) {
               </Button>
             </ButtonGroup>
 
-            <CloseButton />
+            <CloseButton onClick={onClose} />
           </Body>
         </Content>
     </Dialog>
