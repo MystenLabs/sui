@@ -74,6 +74,10 @@ module.exports = {
     },
 
     extend: {
+      colors: {
+        'gradient-blue-start': '#589AEA',
+        'gradient-blue-end': '#4C75A6',
+      },
       // Line-heights that are found in the design:
       lineHeight: {
         80: "0.8",
@@ -133,6 +137,10 @@ module.exports = {
       },
       height: {
         header: "68px",
+        31.5: "7.5rem",
+      },
+      width: {
+        31.5: "7.5rem",
       },
       transitionTimingFunction: {
         "ease-in-out-cubic": "cubic-bezier(0.65, 0, 0.35, 1)",
