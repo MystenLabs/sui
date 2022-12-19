@@ -262,7 +262,7 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(
-        `Error fetching module: ${err} for package ${packageId}, module ${moduleName}}`
+        `Error fetching module: ${err} for package ${packageId}, module ${moduleName}`
       );
     }
   }
@@ -282,7 +282,7 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(
-        `Error fetching function: ${err} for package ${packageId}, module ${moduleName} and function ${functionName}}`
+        `Error fetching function: ${err} for package ${packageId}, module ${moduleName} and function ${functionName}`
       );
     }
   }
@@ -301,7 +301,7 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(
-        `Error fetching struct: ${err} for package ${packageId}, module ${moduleName} and struct ${structName}}`
+        `Error fetching struct: ${err} for package ${packageId}, module ${moduleName} and struct ${structName}`
       );
     }
   }
@@ -617,7 +617,7 @@ export class JsonRpcProvider extends Provider {
       }
       return resp;
     } catch (err) {
-      throw new Error(`Error executing transaction with request type: ${err}}`);
+      throw new Error(`Error executing transaction with request type: ${err}`);
     }
   }
 

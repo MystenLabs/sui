@@ -12,6 +12,7 @@ import {
   array,
   record,
   any,
+  optional,
 } from 'superstruct';
 import {
   ObjectId,
@@ -45,8 +46,8 @@ export type MoveEvent = Infer<typeof MoveEvent>;
 export const PublishEvent = object({
   sender: SuiAddress,
   packageId: ObjectId,
-  version: number(),
-  digest: string(),
+  version: optional(number()),
+  digest: optional(string()),
 });
 
 export type PublishEvent = Infer<typeof PublishEvent>;

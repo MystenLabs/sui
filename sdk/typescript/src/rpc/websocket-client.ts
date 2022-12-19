@@ -277,7 +277,7 @@ export class WebsocketClient {
       return this.eventSubscriptions.delete(id) || removedOnNode;
     } catch (err) {
       throw new Error(
-        `Error unsubscribing from event: ${err}, subscription: ${id}}`
+        `Error unsubscribing from event: ${err}, subscription: ${id}`
       );
     }
   }
