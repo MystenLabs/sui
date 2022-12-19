@@ -30,8 +30,6 @@ use sui_types::sui_serde::KeyPairBase64;
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
 
-pub const DEFAULT_CHECKPOINTS_PER_EPOCH: u64 = 1200;
-
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -70,13 +68,13 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_checkpoint: bool,
 
-    #[serde(default)]
-    pub enable_reconfig: bool,
-
-    /// Number of checkpoints per epoch. Exposing this in config to allow easier testing.
-    /// It will be removed down the road.
+    /// Number of checkpoints per epoch.
+    /// Some means reconfiguration is enabled.
+    /// None means reconfiguration is disabled.
+    /// Exposing this in config to allow easier testing with shorter epoch.
+    /// TODO: It will be removed down the road.
     #[serde(default = "default_checkpoints_per_epoch")]
-    pub checkpoints_per_epoch: u64,
+    pub checkpoints_per_epoch: Option<u64>,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -130,8 +128,8 @@ pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
 }
 
-pub fn default_checkpoints_per_epoch() -> u64 {
-    DEFAULT_CHECKPOINTS_PER_EPOCH
+pub fn default_checkpoints_per_epoch() -> Option<u64> {
+    None
 }
 
 pub fn bool_true() -> bool {

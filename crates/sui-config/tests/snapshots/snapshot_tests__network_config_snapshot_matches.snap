@@ -44,8 +44,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -93,8 +92,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -142,8 +140,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -191,8 +188,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -240,8 +236,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -289,8 +284,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -338,8 +332,7 @@ validator_configs:
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-checkpoint: false
-    enable-reconfig: false
-    checkpoints-per-epoch: 1200
+    checkpoints-per-epoch: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:

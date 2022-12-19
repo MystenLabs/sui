@@ -34,8 +34,7 @@ pub struct SubmitCheckpointToConsensus<T> {
     pub sender: T,
     pub signer: StableSyncAuthoritySigner,
     pub authority: AuthorityName,
-    pub enable_reconfig: bool,
-    pub checkpoints_per_epoch: u64,
+    pub checkpoints_per_epoch: Option<u64>,
 }
 
 pub struct LogCheckpointOutput;
@@ -71,10 +70,10 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         let message = CheckpointSignatureMessage { summary };
         let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
         self.sender.submit_to_consensus(&transaction).await?;
-        if self.enable_reconfig
-            && (checkpoint_seq != 0 && checkpoint_seq % self.checkpoints_per_epoch == 0)
-        {
-            self.sender.close_epoch().await?;
+        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
+            if checkpoint_seq != 0 && checkpoint_seq % checkpoints_per_epoch == 0 {
+                self.sender.close_epoch().await?;
+            }
         }
         Ok(())
     }
