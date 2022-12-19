@@ -24,8 +24,8 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import { Link } from '~/ui/Link';
 import { ObjectLink, TransactionLink } from '~/ui/InternalLink';
+import { Link } from '~/ui/Link';
 
 function TokenView({ data }: { data: DataType }) {
     const viewedData = {
