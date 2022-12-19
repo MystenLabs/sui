@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::default_checkpoints_per_epoch;
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
@@ -311,7 +312,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_checkpoint: false,
-                    enable_reconfig: false,
+                    checkpoints_per_epoch: default_checkpoints_per_epoch(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,

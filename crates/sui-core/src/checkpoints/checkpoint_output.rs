@@ -3,6 +3,7 @@
 
 use crate::authority::StableSyncAuthoritySigner;
 use crate::consensus_adapter::SubmitToConsensus;
+use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use fastcrypto::encoding::{Encoding, Hex};
 use sui_types::base_types::AuthorityName;
@@ -33,6 +34,7 @@ pub struct SubmitCheckpointToConsensus<T> {
     pub sender: T,
     pub signer: StableSyncAuthoritySigner,
     pub authority: AuthorityName,
+    pub checkpoints_per_epoch: Option<u64>,
 }
 
 pub struct LogCheckpointOutput;
@@ -48,12 +50,15 @@ impl LogCheckpointOutput {
 }
 
 #[async_trait]
-impl<T: SubmitToConsensus> CheckpointOutput for SubmitCheckpointToConsensus<T> {
+impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
+    for SubmitCheckpointToConsensus<T>
+{
     async fn checkpoint_created(
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
     ) -> SuiResult {
+        let checkpoint_seq = summary.sequence_number;
         LogCheckpointOutput
             .checkpoint_created(summary, contents)
             .await?;
@@ -64,7 +69,13 @@ impl<T: SubmitToConsensus> CheckpointOutput for SubmitCheckpointToConsensus<T> {
         );
         let message = CheckpointSignatureMessage { summary };
         let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
-        self.sender.submit_to_consensus(&transaction).await
+        self.sender.submit_to_consensus(&transaction).await?;
+        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
+            if checkpoint_seq != 0 && checkpoint_seq % checkpoints_per_epoch == 0 {
+                self.sender.close_epoch().await?;
+            }
+        }
+        Ok(())
     }
 }
 

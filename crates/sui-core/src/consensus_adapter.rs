@@ -265,28 +265,6 @@ impl ConsensusAdapter {
         position
     }
 
-    /// This method is called externally to begin reconfiguration
-    /// It transition reconfig state to reject new certificates from user
-    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
-    pub fn close_epoch(self: &Arc<Self>) -> SuiResult {
-        let epoch_store = self.authority.epoch_store();
-        let send_end_of_publish = {
-            let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
-            let pending_certificates = self.pending_certificates.lock();
-            let send_end_of_publish = pending_certificates.is_empty();
-            self.authority.close_user_certs(reconfig_guard);
-            send_end_of_publish
-        };
-        if send_end_of_publish {
-            if let Err(err) = self.submit(ConsensusTransaction::new_end_of_publish(
-                self.authority.name,
-            )) {
-                warn!("Error when sending end of publish message: {:?}", err);
-            }
-        }
-        Ok(())
-    }
-
     /// This method blocks until transaction is persisted in local database
     /// It then returns handle to async task, user can join this handle to await while transaction is processed by consensus
     ///
@@ -431,6 +409,31 @@ impl ConsensusAdapter {
     }
 }
 
+#[async_trait::async_trait]
+impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
+    /// This method is called externally to begin reconfiguration
+    /// It transition reconfig state to reject new certificates from user
+    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
+    async fn close_epoch(&self) -> SuiResult {
+        let epoch_store = self.authority.epoch_store();
+        let send_end_of_publish = {
+            let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
+            let pending_certificates = self.pending_certificates.lock();
+            let send_end_of_publish = pending_certificates.is_empty();
+            self.authority.close_user_certs(reconfig_guard);
+            send_end_of_publish
+        };
+        if send_end_of_publish {
+            if let Err(err) = self.submit(ConsensusTransaction::new_end_of_publish(
+                self.authority.name,
+            )) {
+                warn!("Error when sending end of publish message: {:?}", err);
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Tracks number of inflight consensus requests and relevant metrics
 struct InflightDropGuard<'a> {
     adapter: &'a ConsensusAdapter,
@@ -463,6 +466,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
 }
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::epoch::reconfiguration::ReconfigurationInitiator;
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {

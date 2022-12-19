@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::default_checkpoints_per_epoch;
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
 use fastcrypto::traits::KeyPair;
@@ -192,7 +193,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
             enable_checkpoint: false,
-            enable_reconfig: false,
+            checkpoints_per_epoch: default_checkpoints_per_epoch(),
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
