@@ -25,7 +25,7 @@ use tokio::{
     sync::{oneshot, watch},
     task::{JoinHandle, JoinSet},
 };
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, enabled, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -366,7 +366,7 @@ impl Core {
                                 &header,
                             )?;
                         },
-                        Some(Err(e)) => debug!("failed to get vote for header {header}: {e:?}"),
+                        Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
                         None => break,
                     }
                 },
@@ -377,9 +377,28 @@ impl Core {
             }
         }
 
-        // Check if we successfully formed a certificate.
-        let certificate =
-            certificate.ok_or_else(|| DagError::CouldNotFormCertificate(header.digest()))?;
+        let certificate = certificate.ok_or_else(|| {
+            // Log detailed header info if we failed to form a certificate.
+            if enabled!(tracing::Level::WARN) {
+                let mut msg = format!(
+                    "Failed to form certificate from header {header:?} with parent certificates:\n"
+                );
+                for parent_digest in header.parents.iter() {
+                    let parent_msg = match certificate_store.read(*parent_digest) {
+                        Ok(Some(cert)) => format!("{cert:?}\n"),
+                        Ok(None) => {
+                            format!("!!!missing certificate for digest {parent_digest:?}!!!\n")
+                        }
+                        Err(e) => format!(
+                            "!!!error retreiving certificate for digest {parent_digest:?}: {e:?}\n"
+                        ),
+                    };
+                    msg.push_str(&parent_msg);
+                }
+                warn!(msg);
+            }
+            DagError::CouldNotFormCertificate(header.digest())
+        })?;
         debug!("Assembled {certificate:?}");
 
         Ok(certificate)
