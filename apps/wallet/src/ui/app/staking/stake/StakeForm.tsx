@@ -1,17 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo, useCallback } from 'react';
 
-import { formatBalance } from '../../hooks/useFormatCoin';
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { parseAmount } from '_helpers';
-import { useFormatCoin, useCoinDecimals } from '_hooks';
+import { useFormatCoin } from '_hooks';
 import {
     GAS_SYMBOL,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
@@ -48,20 +47,20 @@ function StakeForm({
         onClearRef.current();
     }, [amount]);
 
-    const [formatted, symbol] = useFormatCoin(coinBalance, coinType);
-
-    const [coinDecimals] = useCoinDecimals(coinType);
+    const [formatted] = useFormatCoin(coinBalance, SUI_TYPE_ARG);
 
     const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
-        coinType
+        SUI_TYPE_ARG
     );
 
     const coinBalanceMinusGas =
-        parseAmount(formatted.toString(), coinDecimals) -
-        parseAmount(gasBudgetEstimation.toString(), coinDecimals);
+        coinBalance - BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE);
 
-    const maxToken = formatBalance(coinBalanceMinusGas, coinDecimals);
+    const [maxToken, symbol, isLoading] = useFormatCoin(
+        coinBalanceMinusGas,
+        SUI_TYPE_ARG
+    );
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
@@ -83,13 +82,13 @@ function StakeForm({
                                 component={NumberInput}
                                 allowNegative={false}
                                 name="amount"
-                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium "
+                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium"
                                 decimals
                             />
                             <button
                                 className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium"
                                 onClick={setMaxToken}
-                                disabled={!maxToken}
+                                disabled={!isLoading}
                                 type="button"
                             >
                                 Max

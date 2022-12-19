@@ -15,11 +15,6 @@ import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 import type { ValidatorState } from '../ValidatorDataTypes';
-import type { ReactNode } from 'react';
-
-function SplitList({ children }: { children: ReactNode[] }) {
-    return <div className="flex py-2.5 gap-2 items-center">{children}</div>;
-}
 
 export function ValidateDetailFormCard({
     validatorAddress,
@@ -36,7 +31,7 @@ export function ValidateDetailFormCard({
             ? (data.details.data.fields as ValidatorState)
             : null;
 
-    const validatorData = useMemo(() => {
+    const validatorByAddress = useMemo(() => {
         if (!validatorsData) return null;
         return (
             validatorsData.validators.fields.active_validators.find(
@@ -46,19 +41,19 @@ export function ValidateDetailFormCard({
         );
     }, [validatorAddress, validatorsData]);
 
-    const validatorDataByAddress = useMemo(() => {
-        if (!validatorData || !validatorsData) return null;
+    const validatorData = useMemo(() => {
+        if (!validatorByAddress || !validatorsData) return null;
 
         const {
             sui_balance,
             starting_epoch,
             pending_delegations,
             delegation_token_supply,
-        } = validatorData.fields.delegation_staking_pool.fields;
+        } = validatorByAddress.fields.delegation_staking_pool.fields;
 
         const num_epochs_participated = validatorsData.epoch - starting_epoch;
         const { name: rawName, sui_address } =
-            validatorData.fields.metadata.fields;
+            validatorByAddress.fields.metadata.fields;
 
         const APY = Math.pow(
             1 +
@@ -88,7 +83,7 @@ export function ValidateDetailFormCard({
                 0n
             ),
         };
-    }, [accountAddress, validatorData, validatorsData]);
+    }, [accountAddress, validatorByAddress, validatorsData]);
 
     if (isLoading) {
         return (
@@ -112,20 +107,20 @@ export function ValidateDetailFormCard({
 
     return (
         <div className="w-full">
-            {validatorDataByAddress && (
+            {validatorData && (
                 <Card
                     header={
-                        <SplitList>
+                        <div className="flex py-2.5 gap-2 items-center">
                             <ImageIcon
-                                src={validatorDataByAddress.logo}
-                                alt={validatorDataByAddress.name}
+                                src={validatorData.logo}
+                                alt={validatorData.name}
                                 size="small"
                                 variant="circle"
                             />
                             <Text variant="body" weight="semibold">
-                                {validatorDataByAddress.name}
+                                {validatorData.name}
                             </Text>
-                        </SplitList>
+                        </div>
                     }
                     footer={
                         <>
@@ -138,9 +133,7 @@ export function ValidateDetailFormCard({
                             </Text>
 
                             <CoinBalance
-                                balance={
-                                    validatorDataByAddress.pendingDelegationAmount
-                                }
+                                balance={validatorData.pendingDelegationAmount}
                                 className="text-body steel-darker"
                                 type={SUI_TYPE_ARG}
                                 diffSymbol
@@ -166,9 +159,8 @@ export function ValidateDetailFormCard({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {validatorDataByAddress.apy}{' '}
-                                {typeof validatorDataByAddress.apy !==
-                                    'string' && '%'}
+                                {validatorData.apy}{' '}
+                                {typeof validatorData.apy !== 'string' && '%'}
                             </Text>
                         </div>
                         {!unstake && (
@@ -184,7 +176,7 @@ export function ValidateDetailFormCard({
                                 </div>
 
                                 <CoinBalance
-                                    balance={validatorDataByAddress.totalStaked}
+                                    balance={validatorData.totalStaked}
                                     className="text-body font-medium steel-darker"
                                     type={GAS_TYPE_ARG}
                                     diffSymbol
