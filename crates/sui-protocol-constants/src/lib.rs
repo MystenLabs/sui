@@ -24,7 +24,7 @@ pub const MAX_LOOP_DEPTH: usize = 5;
 /// Maximum number of type arguments that can be bound to generic type parameters. Enforced by the Move bytecode verifier.
 pub const MAX_GENERIC_INSTANTIATION_LENGTH: usize = 32;
 
-/// Maximum number of paramters that a Move function can have. Enforced by the Move bytecode verifier.
+/// Maximum number of parameters that a Move function can have. Enforced by the Move bytecode verifier.
 pub const MAX_FUNCTION_PARAMETERS: usize = 128;
 
 /// Maximum number of basic blocks that a Move function can have. Enforced by the Move bytecode verifier.
@@ -97,3 +97,10 @@ pub const OBJ_DATA_COST_REFUNDABLE: u64 = 100;
 // This depends on the size of various fields including the effects
 // TODO: I don't fully understand this^ and more details would be useful
 pub const OBJ_METADATA_COST_NON_REFUNDABLE: u64 = 50;
+
+/// === Tokenomics ===
+
+// TODO: placeholder value here
+pub const STORAGE_REBATE_RATE: f64 = 1.0;
+
+pub const STORAGE_FUND_REINVEST_RATE: u64 = 0;
