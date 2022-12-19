@@ -10,6 +10,7 @@ use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
 use sui_adapter::adapter;
+use sui_protocol_constants::STORAGE_FUND_REINVEST_RATE;
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
@@ -317,6 +318,7 @@ fn execution_loop<
                         CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                         CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
                         CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
                     ],
                     gas_status.create_move_gas_status(),
                     tx_ctx,
