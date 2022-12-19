@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -17,8 +18,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, SenderSignedData, SignedTransactionEffects,
-    TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
+    SignedTransactionEffects, TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::debug;
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
@@ -56,6 +57,12 @@ pub struct AuthorityPerEpochStore {
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
     epoch_alive: NotifyOnce,
     end_of_publish: Mutex<StakeAggregator<(), true>>,
+    /// Pending certificates that we are waiting to be sequenced by consensus.
+    /// This is an in-memory 'index' of a AuthorityPerEpochTables::pending_consensus_transactions.
+    /// We need to keep track of those in order to know when to send EndOfPublish message.
+    /// Lock ordering: this is a 'leaf' lock, no other locks should be acquired in the scope of this lock
+    /// In particular, this lock is always acquired after taking read or write lock on reconfig state
+    pending_consensus_certificates: Mutex<HashSet<TransactionDigest>>,
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
     wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
@@ -156,6 +163,13 @@ impl AuthorityEpochTables {
             .unwrap_or_default();
         Ok(state)
     }
+
+    pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
+        self.pending_consensus_transactions
+            .iter()
+            .map(|(_k, v)| v)
+            .collect()
+    }
 }
 
 impl AuthorityPerEpochStore {
@@ -170,6 +184,17 @@ impl AuthorityPerEpochStore {
         let wal_path = AuthorityEpochTables::path(epoch_id, parent_path).join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
         let epoch_alive = NotifyOnce::new();
+        let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
+        let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
+            .iter()
+            .filter_map(|transaction| {
+                if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+                    Some(*certificate.digest())
+                } else {
+                    None
+                }
+            })
+            .collect();
         Self {
             committee,
             tables,
@@ -177,6 +202,7 @@ impl AuthorityPerEpochStore {
             epoch_alive,
             consensus_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
+            pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             wal,
         }
     }
@@ -324,11 +350,7 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
-        self.tables
-            .pending_consensus_transactions
-            .iter()
-            .map(|(_k, v)| v)
-            .collect()
+        self.tables.get_all_pending_consensus_transactions()
     }
 
     /// Read shared object locks / versions for a specific transaction.
@@ -387,12 +409,26 @@ impl AuthorityPerEpochStore {
         self.tables
             .pending_consensus_transactions
             .insert(&transaction.key(), transaction)?;
+        if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+            self.pending_consensus_certificates
+                .lock()
+                .insert(*cert.digest());
+        }
         Ok(())
     }
 
     pub fn remove_pending_consensus_transaction(&self, key: &ConsensusTransactionKey) -> SuiResult {
         self.tables.pending_consensus_transactions.remove(key)?;
+        if let ConsensusTransactionKey::Certificate(cert) = key {
+            self.pending_consensus_certificates
+                .lock()
+                .remove(cert.as_ref());
+        }
         Ok(())
+    }
+
+    pub fn pending_consensus_certificates_empty(&self) -> bool {
+        self.pending_consensus_certificates.lock().is_empty()
     }
 
     /// Stores a list of pending certificates to be executed.
