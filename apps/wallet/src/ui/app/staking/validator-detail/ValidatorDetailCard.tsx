@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
+
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
@@ -63,7 +65,7 @@ export function ValidatorDetailCard({
                                             value={
                                                 <CoinBalance
                                                     balance={suiEarned}
-                                                    type={GAS_TYPE_ARG}
+                                                    type={SUI_TYPE_ARG}
                                                     mode="neutral"
                                                     className="!text-gray-60"
                                                     diffSymbol

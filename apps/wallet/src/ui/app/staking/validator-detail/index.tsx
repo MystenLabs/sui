@@ -45,7 +45,6 @@ export function ValidatorDetail() {
             title={
                 <div className="flex gap-2 items-center capitalize">
                     <ImageIcon src={logo} alt={validatorName} size="small" />
-
                     {validatorName}
                 </div>
             }
@@ -68,7 +67,7 @@ export function ValidatorDetail() {
                         validatorAddress={validatorData.validatorAddress}
                         pendingDelegationAmount={validatorData.staked || 0n}
                         suiEarned={0n}
-                        apy={'0.00%'}
+                        apy={'N/A'}
                         commissionRate={0}
                     />
                 )}
