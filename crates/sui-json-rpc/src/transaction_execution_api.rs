@@ -61,7 +61,6 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         )
         .map_err(|e| anyhow!(e))?;
         let txn = Transaction::from_data(tx_data, Intent::default(), signature);
-        let txn_digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
@@ -76,7 +75,6 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
 
         SuiExecuteTransactionResponse::from_execute_transaction_response(
             response,
-            txn_digest,
             self.module_cache.as_ref(),
         )
         .map_err(jsonrpsee::core::Error::from)
@@ -94,7 +92,6 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             .map_err(|e| anyhow!(e))?;
 
         let txn = Transaction::from_data(tx_data, Intent::default(), signature);
-        let txn_digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
@@ -109,7 +106,6 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
 
         SuiExecuteTransactionResponse::from_execute_transaction_response(
             response,
-            txn_digest,
             self.module_cache.as_ref(),
         )
         .map_err(jsonrpsee::core::Error::from)

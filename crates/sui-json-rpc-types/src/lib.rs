@@ -398,12 +398,6 @@ impl Display for SuiParsedTransactionResponse {
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiExecuteTransactionResponse {
-    ImmediateReturn {
-        tx_digest: TransactionDigest,
-    },
-    TxCert {
-        certificate: SuiCertifiedTransaction,
-    },
     // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert {
         certificate: SuiCertifiedTransaction,
@@ -417,18 +411,9 @@ pub enum SuiExecuteTransactionResponse {
 impl SuiExecuteTransactionResponse {
     pub fn from_execute_transaction_response(
         resp: ExecuteTransactionResponse,
-        tx_digest: TransactionDigest,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
         Ok(match resp {
-            ExecuteTransactionResponse::ImmediateReturn => {
-                SuiExecuteTransactionResponse::ImmediateReturn { tx_digest }
-            }
-            ExecuteTransactionResponse::TxCert(certificate) => {
-                SuiExecuteTransactionResponse::TxCert {
-                    certificate: (*certificate).try_into()?,
-                }
-            }
             ExecuteTransactionResponse::EffectsCert(cert) => {
                 let (certificate, effects, is_executed_locally) = *cert;
                 let certificate: SuiCertifiedTransaction = certificate.try_into()?;

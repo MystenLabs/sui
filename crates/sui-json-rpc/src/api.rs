@@ -526,14 +526,9 @@ pub trait EventReadApi {
 pub trait TransactionExecutionApi {
     /// Execute the transaction and wait for results if desired.
     /// Request types:
-    /// 1. ImmediateReturn: immediately returns a response to client without waiting
-    ///     for any execution results.  Note the transaction may fail without being
-    ///     noticed by client in this mode. After getting the response, the client
-    ///     may poll the node to check the result of the transaction.
-    /// 2. WaitForTxCert: waits for TransactionCertificate and then return to client.
-    /// 3. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
+    /// 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
     ///     This mode is a proxy for transaction finality.
-    /// 4. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node
+    /// 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node
     ///     executed the transaction locally before returning the client. The local execution
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,

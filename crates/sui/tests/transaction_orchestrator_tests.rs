@@ -4,16 +4,14 @@
 use prometheus::Registry;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
-use sui_node::SuiNode;
-use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverRequest, QuorumDriverRequestType, VerifiedTransaction,
+    QuorumDriverRequest, VerifiedTransaction,
 };
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
+use test_utils::transaction::wait_for_tx;
 
 #[tokio::test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
@@ -41,10 +39,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let digest = *txn.digest();
     orchestrator
         .quorum_driver()
-        .execute_transaction(QuorumDriverRequest {
-            transaction: txn,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: txn })
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
@@ -63,72 +58,11 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .await
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    if let ExecuteTransactionResponse::EffectsCert(result) = res {
-        let (_, _, executed_locally) = *result;
-        assert!(executed_locally);
-    };
+    let ExecuteTransactionResponse::EffectsCert(result) = res;
+    let (_, _, executed_locally) = *result;
+    assert!(executed_locally);
 
     assert!(node.state().get_transaction(digest).await.is_ok());
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.sui_node;
-
-    let active = node.active();
-
-    let net = active.agg_aggregator();
-    let temp_dir = tempfile::tempdir().unwrap();
-    let orchestrator =
-        TransactiondOrchestrator::new(net, node.state(), temp_dir.path(), &Registry::new());
-
-    let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
-    assert!(
-        txns.len() >= txn_count,
-        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
-        txn_count,
-    );
-
-    // Test ImmediateReturn and WaitForTxCert eventually are executed too
-    let txn = txns.swap_remove(0);
-    let digest1 = *txn.digest();
-
-    execute_with_orchestrator(
-        &orchestrator,
-        txn,
-        ExecuteTransactionRequestType::ImmediateReturn,
-    )
-    .await
-    .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest1, e));
-
-    let txn = txns.swap_remove(0);
-    let digest2 = *txn.digest();
-    execute_with_orchestrator(
-        &orchestrator,
-        txn,
-        ExecuteTransactionRequestType::WaitForTxCert,
-    )
-    .await
-    .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest2, e));
-
-    let txn = txns.swap_remove(0);
-    let digest3 = *txn.digest();
-    execute_with_orchestrator(
-        &orchestrator,
-        txn,
-        ExecuteTransactionRequestType::WaitForEffectsCert,
-    )
-    .await
-    .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest3, e));
-
-    let digests = vec![digest1, digest2, digest3];
-    wait_for_all_txes(digests.clone(), node.state().clone()).await;
-    node_knows_txes(node, &digests).await;
 
     Ok(())
 }
@@ -205,12 +139,6 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     assert!(pending_txes.is_empty());
 
     Ok(())
-}
-
-async fn node_knows_txes(node: &SuiNode, digests: &Vec<TransactionDigest>) {
-    for digest in digests {
-        assert!(node.state().get_transaction(*digest).await.is_ok());
-    }
 }
 
 async fn execute_with_orchestrator(
