@@ -6,11 +6,11 @@ use std::net::{IpAddr, TcpListener, TcpStream};
 /// Return an ephemeral, available port. On unix systems, the port returned will be in the
 /// TIME_WAIT state ensuring that the OS won't hand out this port for some grace period.
 /// Callers should be able to bind to this port given they use SO_REUSEADDR.
-pub fn get_available_port() -> u16 {
+pub fn get_available_port(host: &str) -> u16 {
     const MAX_PORT_RETRIES: u32 = 1000;
 
     for _ in 0..MAX_PORT_RETRIES {
-        if let Ok(port) = get_ephemeral_port() {
+        if let Ok(port) = get_ephemeral_port(host) {
             return port;
         }
     }
@@ -18,9 +18,9 @@ pub fn get_available_port() -> u16 {
     panic!("Error: could not find an available port");
 }
 
-fn get_ephemeral_port() -> std::io::Result<u16> {
+fn get_ephemeral_port(host: &str) -> std::io::Result<u16> {
     // Request a random available port from the OS
-    let listener = TcpListener::bind(("localhost", 0))?;
+    let listener = TcpListener::bind((host, 0))?;
     let addr = listener.local_addr()?;
 
     // Create and accept a connection (which we'll promptly drop) in order to force the port
@@ -33,19 +33,29 @@ fn get_ephemeral_port() -> std::io::Result<u16> {
 }
 
 pub fn new_tcp_network_address() -> multiaddr::Multiaddr {
-    format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
+    let host = format!("{}", get_local_ip_for_tests());
+    format!("/ip4/{}/tcp/{}/http", host, get_available_port(&host))
         .parse()
         .unwrap()
 }
 
 pub fn new_udp_network_address() -> multiaddr::Multiaddr {
-    format!("/ip4/127.0.0.1/udp/{}", get_available_port())
+    let host = format!("{}", get_local_ip_for_tests());
+    format!("/ip4/{}/udp/{}", host, get_available_port(&host))
         .parse()
         .unwrap()
 }
 
 pub fn available_local_socket_address() -> std::net::SocketAddr {
-    format!("127.0.0.1:{}", get_available_port())
+    let host = "127.0.0.1";
+    format!("{}:{}", host, get_available_port(host))
+        .parse()
+        .unwrap()
+}
+
+pub fn available_network_socket_address() -> std::net::SocketAddr {
+    let host = "127.0.0.1";
+    format!("{}:{}", host, get_available_port(host))
         .parse()
         .unwrap()
 }

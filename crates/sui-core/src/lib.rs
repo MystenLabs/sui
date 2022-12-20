@@ -19,7 +19,6 @@ mod histogram;
 pub mod metrics;
 mod module_cache_gauge;
 pub mod narwhal_manager;
-mod node_sync;
 mod notify_once;
 mod query_helpers;
 pub mod quorum_driver;

@@ -831,7 +831,7 @@ impl CheckpointServiceNotify for CheckpointService {
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
             Hex::encode(info.summary.summary.digest()),
-            info.summary.auth_signature.authority
+            info.summary.auth_signature.authority.concise(),
         );
         // While it can be tempting to make last_signature_index into AtomicU64, this won't work
         // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions

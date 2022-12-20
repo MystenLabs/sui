@@ -30,27 +30,13 @@
 */
 
 use arc_swap::ArcSwap;
-use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use sui_types::{base_types::AuthorityName, error::SuiResult};
-use tokio::{
-    sync::{oneshot, Mutex, MutexGuard},
-    task::JoinHandle,
-    time::timeout,
-};
-use tracing::{debug, error, info, warn};
+use tokio::sync::Mutex;
+use tracing::debug;
 
-use crate::{
-    authority::AuthorityState,
-    authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
-    node_sync::{node_sync_process, NodeSyncHandle, NodeSyncState},
-};
-use futures::pin_mut;
-use once_cell::sync::OnceCell;
-
-use tap::TapFallible;
+use crate::{authority::AuthorityState, authority_aggregator::AuthorityAggregator};
 
 use tokio::time::Instant;
 pub mod gossip;
@@ -101,19 +87,9 @@ impl AuthorityHealth {
     }
 }
 
-struct NodeSyncProcessHandle(JoinHandle<()>, oneshot::Sender<()>);
-
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
-
-    // Handle that holds a channel connected to NodeSyncState, used to send sync requests
-    // into NodeSyncState.
-    node_sync_handle: OnceCell<NodeSyncHandle>,
-
-    // JoinHandle for the tokio task that is running the NodeSyncState::start(), as well as a
-    // cancel sender which can be used to terminate that task gracefully.
-    node_sync_process: Arc<Mutex<Option<NodeSyncProcessHandle>>>,
 
     // The network interfaces to other authorities
     pub net: ArcSwap<AuthorityAggregator<A>>,
@@ -142,8 +118,6 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
-            node_sync_handle: OnceCell::new(),
-            node_sync_process: Default::default(),
             net: ArcSwap::from(net),
             gossip_metrics: GossipMetrics::new(prometheus_registry),
         })
@@ -217,99 +191,9 @@ impl<A> Clone for ActiveAuthority<A> {
     fn clone(&self) -> Self {
         ActiveAuthority {
             state: self.state.clone(),
-            node_sync_handle: self.node_sync_handle.clone(),
-            node_sync_process: self.node_sync_process.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
         }
-    }
-}
-
-impl<A> ActiveAuthority<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    pub fn node_sync_handle(self: Arc<Self>) -> NodeSyncHandle {
-        self.node_sync_handle
-            .get_or_init(|| {
-                let node_sync_state = Arc::new(NodeSyncState::new(self.clone()));
-
-                NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone())
-            })
-            .clone()
-    }
-
-    /// Restart the node sync process only if one currently exists.
-    pub async fn respawn_node_sync_process(self: Arc<Self>) {
-        let self_lock = self.clone();
-        let lock_guard = self_lock.node_sync_process.lock().await;
-        if lock_guard.is_some() {
-            self.respawn_node_sync_process_impl(lock_guard).await
-        } else {
-            debug!("no active node sync process - not respawning");
-        }
-    }
-
-    /// Start the node sync process.
-    pub async fn spawn_node_sync_process(self: Arc<Self>) {
-        let self_lock = self.clone();
-        let lock_guard = self_lock.node_sync_process.lock().await;
-        self.respawn_node_sync_process_impl(lock_guard).await
-    }
-
-    async fn cancel_node_sync_process_impl(
-        lock_guard: &mut MutexGuard<'_, Option<NodeSyncProcessHandle>>,
-    ) {
-        if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
-            info!("sending cancel request to node sync task");
-            let _ = cancel_sender
-                .send(())
-                .tap_err(|_| warn!("failed to request cancellation of node sync task"));
-
-            pin_mut!(join_handle);
-
-            // try to join the task, then kill it if it doesn't cancel on its own.
-            info!("waiting node sync task to exit");
-            if timeout(Duration::from_secs(1), &mut join_handle)
-                .await
-                .is_err()
-            {
-                error!("node sync task did not terminate on its own. aborting.");
-                join_handle.abort();
-                let _ = join_handle.await;
-            }
-        }
-    }
-
-    async fn respawn_node_sync_process_impl(
-        self: Arc<Self>,
-        mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
-    ) {
-        let epoch = self.state.epoch();
-        info!(?epoch, "respawn_node_sync_process");
-        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
-
-        let (cancel_sender, cancel_receiver) = oneshot::channel();
-        let aggregator = self.agg_aggregator();
-
-        let node_sync_handle = self.clone().node_sync_handle();
-        let node_sync_store = self.state.node_sync_store.clone();
-
-        info!("spawning node sync task");
-        let join_handle = spawn_monitored_task!(node_sync_process(
-            node_sync_handle,
-            node_sync_store,
-            epoch,
-            aggregator,
-            cancel_receiver,
-        ));
-
-        *lock_guard = Some(NodeSyncProcessHandle(join_handle, cancel_sender));
-    }
-
-    pub async fn cancel_node_sync_process_for_tests(&self) {
-        let mut lock_guard = self.node_sync_process.lock().await;
-        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
     }
 }

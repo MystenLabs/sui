@@ -64,12 +64,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     // A small delay is needed for post processing operations following the transaction to finish.
     sleep(Duration::from_secs(1)).await;
 
-    // verify that the intermediate sync data is cleared.
-    let sync_store = node.state().node_sync_store.clone();
-    let epoch_id = 0;
-    assert!(sync_store.get_cert(epoch_id, &digest).unwrap().is_none());
-    assert!(sync_store.get_effects(epoch_id, &digest).unwrap().is_none());
-
     // verify that the node has seen the transfer
     let object_read = node.state().get_object_read(&transferred_object).await?;
     let object = object_read.into_object()?;

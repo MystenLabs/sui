@@ -5,7 +5,6 @@ use std::path::Path;
 
 use std::str::FromStr;
 
-use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
@@ -34,11 +33,7 @@ use sui_macros::sim_test;
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
 
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
@@ -50,11 +45,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -96,11 +87,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_publish() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -133,11 +120,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -187,11 +170,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -207,11 +186,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_coins() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -253,11 +228,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_balances() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -462,11 +433,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -517,12 +484,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let mut cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let mut cluster = TestClusterBuilder::new().build().await.unwrap();
 
     let context = &mut cluster.wallet;
 
@@ -659,7 +621,6 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(get_available_port())
         .enable_fullnode_events()
         .build()
         .await

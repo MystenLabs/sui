@@ -4,7 +4,6 @@
 use fastcrypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
 use sui_config::genesis::Genesis;
-use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -63,21 +62,13 @@ pub(crate) async fn init_state(
     let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
-    let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
-
-    let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-        node_sync_path,
-        None,
-        None,
-    ));
 
     AuthorityState::new(
         name,
         secrete,
         store,
-        node_sync_store,
         committee_store,
         None,
         None,

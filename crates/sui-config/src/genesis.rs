@@ -637,6 +637,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn ceremony() {
         let dir = tempfile::TempDir::new().unwrap();
 

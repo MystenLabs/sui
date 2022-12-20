@@ -10,7 +10,6 @@ use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
 use signature::rand_core::OsRng;
 
-use sui_config::utils::get_available_port;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -35,12 +34,7 @@ use crate::types::SignedValue;
 
 #[tokio::test]
 async fn test_transfer_sui() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -56,12 +50,7 @@ async fn test_transfer_sui() {
 
 #[tokio::test]
 async fn test_transfer_sui_whole_coin() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -77,12 +66,7 @@ async fn test_transfer_sui_whole_coin() {
 
 #[tokio::test]
 async fn test_transfer_object() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -99,12 +83,7 @@ async fn test_transfer_object() {
 
 #[tokio::test]
 async fn test_publish_and_move_call() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -168,12 +147,7 @@ async fn test_publish_and_move_call() {
 
 #[tokio::test]
 async fn test_split_coin() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -191,12 +165,7 @@ async fn test_split_coin() {
 
 #[tokio::test]
 async fn test_merge_coin() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -215,12 +184,7 @@ async fn test_merge_coin() {
 
 #[tokio::test]
 async fn test_pay() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -238,12 +202,7 @@ async fn test_pay() {
 
 #[tokio::test]
 async fn test_pay_multiple_coin_multiple_recipient() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -271,12 +230,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
 
 #[tokio::test]
 async fn test_pay_sui_multiple_coin_same_recipient() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -295,12 +249,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
 
 #[tokio::test]
 async fn test_pay_sui() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
@@ -328,12 +277,7 @@ async fn test_pay_sui() {
 
 #[tokio::test]
 async fn test_pay_all_sui() {
-    let port = get_available_port();
-    let network = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 

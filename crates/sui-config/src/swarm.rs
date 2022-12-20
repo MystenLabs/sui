@@ -149,17 +149,18 @@ impl<'a> FullnodeConfigBuilder<'a> {
             .unwrap_or_else(|| OsRng.next_u32().to_string().into());
 
         let listen_ip = self.listen_ip.unwrap_or_else(utils::get_local_ip_for_tests);
+        let listen_ip_str = format!("{}", listen_ip);
 
         let network_address = format!(
             "/ip4/{}/tcp/{}/http",
             listen_ip,
-            utils::get_available_port()
+            utils::get_available_port(&listen_ip_str)
         )
         .parse()
         .unwrap();
 
         let p2p_config = {
-            let address = utils::available_local_socket_address();
+            let address = SocketAddr::new(listen_ip, utils::get_available_port(&listen_ip_str));
             let seed_peers = validator_configs
                 .iter()
                 .map(|config| SeedPeer {
@@ -176,7 +177,9 @@ impl<'a> FullnodeConfigBuilder<'a> {
             }
         };
 
-        let rpc_port = self.rpc_port.unwrap_or_else(utils::get_available_port);
+        let rpc_port = self
+            .rpc_port
+            .unwrap_or_else(|| utils::get_available_port(&listen_ip_str));
         let jsonrpc_server_url = format!("{}:{}", listen_ip, rpc_port);
         let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
@@ -188,7 +191,9 @@ impl<'a> FullnodeConfigBuilder<'a> {
             db_path: db_path.join(dir_name),
             network_address,
             metrics_address: utils::available_local_socket_address(),
-            admin_interface_port: utils::get_available_port(),
+            // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
+            // provide the entire socket address here to avoid confusion.
+            admin_interface_port: utils::get_available_port("127.0.0.1"),
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
