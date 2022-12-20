@@ -13,7 +13,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { STATE_OBJECT } from '../usePendingDelegation';
 import StakeForm from './StakeForm';
-import { ValidatorCard } from './ValidatorCard';
+import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
     Content,
@@ -58,7 +58,7 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const isUnstacked = searchParams.get('unstake') === 'true';
+    const unstake = searchParams.get('unstake') === 'true';
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -115,7 +115,7 @@ function StakingCard() {
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
                 // TODO: add unstake functionality on the support roles out
-                if (isUnstacked) return;
+                if (unstake) return;
                 const response = await dispatch(
                     stakeTokens({
                         amount: bigIntAmount,
@@ -143,7 +143,7 @@ function StakingCard() {
             coinType,
             validatorAddress,
             coinDecimals,
-            isUnstacked,
+            unstake,
             dispatch,
             queryClient,
             navigate,
@@ -162,10 +162,10 @@ function StakingCard() {
     }
 
     return (
-        <div className="flex flex-col flex-nowrap flex-grow h-full w-full">
+        <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
                 loading={loadingBalance}
-                className="flex justify-center w-full items-center "
+                className="flex justify-center w-full h-full items-center "
             >
                 <Formik
                     initialValues={initialValues}
@@ -176,9 +176,9 @@ function StakingCard() {
                     {({ isSubmitting, isValid, submitForm }) => (
                         <BottomMenuLayout>
                             <Content>
-                                <ValidatorCard
+                                <ValidatorFormDetail
                                     validatorAddress={validatorAddress}
-                                    unstake={isUnstacked}
+                                    unstake={unstake}
                                 />
                                 <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
                                     <Text
@@ -186,7 +186,7 @@ function StakingCard() {
                                         color="gray-85"
                                         weight="semibold"
                                     >
-                                        {isUnstacked
+                                        {unstake
                                             ? 'Enter the amount of SUI to unstake'
                                             : 'Enter the amount of SUI to stake'}
                                     </Text>
@@ -195,7 +195,7 @@ function StakingCard() {
                                     submitError={sendError}
                                     coinBalance={coinBalance}
                                     coinType={coinType}
-                                    unstake={isUnstacked}
+                                    unstake={unstake}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
@@ -224,12 +224,12 @@ function StakingCard() {
                                     onClick={submitForm}
                                     className=" w-1/2"
                                     disabled={
-                                        !isValid || isSubmitting || isUnstacked
+                                        !isValid || isSubmitting || unstake
                                     }
                                 >
                                     {isSubmitting ? (
-                                        <LoadingIndicator />
-                                    ) : isUnstacked ? (
+                                        <LoadingIndicator className="border-white" />
+                                    ) : unstake ? (
                                         'Unstake Now'
                                     ) : (
                                         'Stake Now'

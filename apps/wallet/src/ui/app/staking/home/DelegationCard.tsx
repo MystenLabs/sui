@@ -30,8 +30,6 @@ const STATE_TO_COPY = {
     [DelegationState.COOL_DOWN]: 'In Cool-down',
 };
 
-const APY_TOOLTIP = 'Annual Percentage Yield';
-
 // TODO: Add these classes when we add delegation detail page.
 
 export function DelegationCard({
@@ -56,7 +54,10 @@ export function DelegationCard({
                 <ImageIcon src={icon} alt={name} />
 
                 <div className="text-gray-60 text-p1 opacity-0 group-hover:opacity-100">
-                    <IconTooltip tip={`${APY_TOOLTIP}`} placement="top" />
+                    <IconTooltip
+                        tip="Annual Percentage Yield"
+                        placement="top"
+                    />
                 </div>
             </div>
 

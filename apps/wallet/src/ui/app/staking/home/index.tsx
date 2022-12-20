@@ -31,10 +31,10 @@ export function Staking() {
 
     return (
         <Routes>
-            <Route path="/*" element={<StakeHome />} />
+            <Route path="/*" element={<Validators />} />
             <Route path="/validator-details" element={<ValidatorDetail />} />
             {stakingEnabled ? (
-                <Route path="/new" element={<StakeNew />} />
+                <Route path="/new" element={<StakePage />} />
             ) : null}
         </Routes>
     );

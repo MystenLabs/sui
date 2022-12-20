@@ -11,10 +11,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
 import { useFormatCoin } from '_hooks';
-import {
-    GAS_SYMBOL,
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-} from '_redux/slices/sui-objects/Coin';
+import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
@@ -46,8 +43,6 @@ function StakeForm({
         onClearRef.current();
     }, [amount]);
 
-    const [formatted] = useFormatCoin(coinBalance, coinType);
-
     const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
         SUI_TYPE_ARG
@@ -76,6 +71,7 @@ function StakeForm({
             <Content>
                 <Card
                     variant="blue"
+                    titleDivider
                     header={
                         <div className="p-2.5 w-full flex bg-white">
                             <Field
@@ -102,37 +98,18 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Gas Fee
+                                Gas Fees
                             </Text>
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {gasBudgetEstimation} {GAS_SYMBOL}
+                                {gasBudgetEstimation} {symbol}
                             </Text>
                         </div>
                     }
-                >
-                    {!unstake && (
-                        <div className="flex justify-between w-full mb-3.5">
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                Available balance:
-                            </Text>
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                {formatted} {symbol}
-                            </Text>
-                        </div>
-                    )}
-                </Card>
+                ></Card>
                 <ErrorMessage
                     className={st.error}
                     name="amount"

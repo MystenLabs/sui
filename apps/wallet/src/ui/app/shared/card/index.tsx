@@ -15,6 +15,9 @@ const cardContentStyle = cva([], {
             none: 'p-0',
             small: 'p-3.5',
         },
+        titleDivider: {
+            true: 'border-t border-t-gray-45 border-solid border-0 border-transparent',
+        },
     },
     defaultVariants: {
         variant: 'white',

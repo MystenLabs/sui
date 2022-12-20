@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
+import { FEATURES } from '../../experimentation/features';
 import StakeAmount from '../home/StakeAmount';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -37,6 +39,8 @@ export function ValidatorDetailCard({
     const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(
         validatorAddress
     )}`;
+
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full">
@@ -155,6 +159,7 @@ export function ValidatorDetailCard({
                                 mode="outline"
                                 href={stakeByValidatorAddress}
                                 className="bg-gray-50 w-full"
+                                disabled={!stakingEnabled}
                             >
                                 <Icon
                                     icon={SuiIcons.Add}
@@ -162,11 +167,10 @@ export function ValidatorDetailCard({
                                 />
                                 Stake SUI
                             </Button>
-                            {totalStakedIncludingPending > 0 && (
+                            {Boolean(totalStakedIncludingPending) && (
                                 <Button
                                     size="large"
                                     mode="outline"
-                                    disabled
                                     href={
                                         stakeByValidatorAddress +
                                         '&unstake=true'
@@ -186,7 +190,7 @@ export function ValidatorDetailCard({
                                 <Button
                                     size="large"
                                     mode="outline"
-                                    disabled={true}
+                                    disabled
                                     href={
                                         stakeByValidatorAddress +
                                         '&unstake=true'

@@ -3,20 +3,19 @@
 import { is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
+import StakeAmount from '../home/StakeAmount';
 import { getName, STATE_OBJECT } from '../usePendingDelegation';
 import { Card } from '_app/shared/card';
-import CoinBalance from '_app/shared/coin-balance';
 import { ImageIcon } from '_app/shared/image-icon';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject, useAppSelector } from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 import type { ValidatorState } from '../ValidatorDataTypes';
 
-export function ValidatorCard({
+export function ValidatorFormDetail({
     validatorAddress,
     unstake,
 }: {
@@ -108,6 +107,7 @@ export function ValidatorCard({
         <div className="w-full">
             {validatorData && (
                 <Card
+                    titleDivider
                     header={
                         <div className="flex py-2.5 gap-2 items-center capitalize">
                             <ImageIcon
@@ -131,11 +131,12 @@ export function ValidatorCard({
                                 Your Staked SUI
                             </Text>
 
-                            <CoinBalance
+                            <StakeAmount
                                 balance={validatorData.pendingDelegationAmount}
-                                className="text-body steel-darker"
                                 type={SUI_TYPE_ARG}
-                                diffSymbol
+                                size="body"
+                                color="steel-darker"
+                                symbolColor="steel-darker"
                             />
                         </>
                     }
@@ -173,12 +174,12 @@ export function ValidatorCard({
                                         Total Staked
                                     </Text>
                                 </div>
-
-                                <CoinBalance
+                                <StakeAmount
                                     balance={validatorData.totalStaked}
-                                    className="text-body font-medium steel-darker"
-                                    type={GAS_TYPE_ARG}
-                                    diffSymbol
+                                    type={SUI_TYPE_ARG}
+                                    size="body"
+                                    color="steel-darker"
+                                    symbolColor="steel-darker"
                                 />
                             </div>
                         )}

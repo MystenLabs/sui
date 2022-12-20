@@ -8,7 +8,7 @@ import { useFormatCoin } from '_hooks';
 
 //TODO unify StakeAmount and CoinBalance
 
-type Colors = 'gray-90' | 'success-dark' | 'gray-60';
+type Colors = 'gray-90' | 'success-dark' | 'gray-60' | 'steel-darker';
 
 interface StakeAmountProps {
     balance: bigint;
