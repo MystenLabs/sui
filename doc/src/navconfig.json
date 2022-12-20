@@ -227,6 +227,29 @@
         "fileName": "explore/sui-explorer"
       },
       {
+        "label": "Sui Move by Example",
+        "fileName": "explore/move-examples/index",
+        "title": "Sui Move by Example",
+        "items": [
+          {
+            "label": "Basics",
+            "fileName": "explore/move-examples/basics"
+          },
+          {
+            "label": "Patterns",
+            "fileName": "explore/move-examples/patterns"
+          },
+          {
+            "label": "Samples",
+            "fileName": "explore/move-examples/samples"
+          },
+          {
+            "label": "Additional Resources",
+            "fileName": "explore/move-examples/additional-resources"
+          }
+        ]
+      },
+      {
         "label": "Sui Wallet",
         "fileName": "explore/wallet-browser"
       },
