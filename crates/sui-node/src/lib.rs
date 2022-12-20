@@ -70,14 +70,17 @@ use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::narwhal_manager::{run_narwhal_manager, NarwhalConfiguration, NarwhalManager};
+use sui_core::narwhal_manager::{
+    run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
+};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
     _validator_server_handle: tokio::task::JoinHandle<Result<()>>,
-    narwhal_manager: NarwhalManager,
+    narwhal_manager: NarwhalManager<ConsensusHandler>,
     consensus_adapter: Arc<ConsensusAdapter>,
+    checkpoint_service: Arc<CheckpointService>,
 }
 
 pub struct SuiNode {
@@ -252,7 +255,7 @@ impl SuiNode {
         .await?;
 
         let validator_components = if state.is_validator() {
-            let (validator_server_handle, narwhal_manager, consensus_adapter) =
+            Some(
                 Self::construct_validator_components(
                     config,
                     state.clone(),
@@ -260,12 +263,8 @@ impl SuiNode {
                     state_sync_handle.clone(),
                     registry_service.clone(),
                 )
-                .await?;
-            Some(Arc::new(ValidatorComponents {
-                _validator_server_handle: validator_server_handle,
-                narwhal_manager,
-                consensus_adapter,
-            }))
+                .await?,
+            )
         } else {
             None
         };
@@ -404,11 +403,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         registry_service: RegistryService,
-    ) -> Result<(
-        tokio::task::JoinHandle<Result<()>>,
-        NarwhalManager,
-        Arc<ConsensusAdapter>,
-    )> {
+    ) -> Result<Arc<ValidatorComponents>> {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
@@ -427,31 +422,42 @@ impl SuiNode {
         )
         .await?;
 
-        let narwhal_manager = Self::construct_and_run_narwhal_manager(
+        let checkpoint_service = Self::start_checkpoint_service(
             config,
-            consensus_config,
             consensus_adapter.clone(),
             checkpoint_store.clone(),
             state.clone(),
             state_sync_handle,
+            &registry_service,
+        );
+
+        let narwhal_manager = Self::construct_and_run_narwhal_manager(
+            config,
+            consensus_config,
+            state.clone(),
+            checkpoint_service.clone(),
             registry_service,
         )
         .await?;
 
-        Ok((validator_server_handle, narwhal_manager, consensus_adapter))
+        Ok(Arc::new(ValidatorComponents {
+            _validator_server_handle: validator_server_handle,
+            narwhal_manager,
+            consensus_adapter,
+            checkpoint_service,
+        }))
     }
 
-    async fn construct_and_run_narwhal_manager(
+    fn start_checkpoint_service(
         config: &NodeConfig,
-        consensus_config: &ConsensusConfig,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
-        registry_service: RegistryService,
-    ) -> Result<NarwhalManager> {
+        registry_service: &RegistryService,
+    ) -> Arc<CheckpointService> {
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
-            sender: consensus_adapter.clone(),
+            sender: consensus_adapter,
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
             checkpoints_per_epoch: config.checkpoints_per_epoch,
@@ -459,15 +465,24 @@ impl SuiNode {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
 
-        let checkpoint_service = CheckpointService::spawn(
+        CheckpointService::spawn(
             state.clone(),
-            checkpoint_store.clone(),
-            Box::new(state.database.clone()),
+            checkpoint_store,
+            Box::new(state.db()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
             Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new(&registry_service.default_registry()),
-        );
+        )
+    }
+
+    async fn construct_and_run_narwhal_manager(
+        config: &NodeConfig,
+        consensus_config: &ConsensusConfig,
+        state: Arc<AuthorityState>,
+        checkpoint_service: Arc<CheckpointService>,
+        registry_service: RegistryService,
+    ) -> Result<NarwhalManager<ConsensusHandler>> {
         let system_state = state
             .get_sui_system_state_object()
             .expect("Reading Sui system state object cannot fail");
@@ -479,14 +494,13 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
             .address;
         let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
-
+        let consensus_handler = Arc::new(ConsensusHandler::new(state.clone(), checkpoint_service));
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair.copy(),
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
-            execution_state: Arc::new(ConsensusHandler::new(state.clone(), checkpoint_service)),
             tx_validator: SuiTxValidator::new(state.clone(), &registry_service.default_registry()),
             registry_service,
         };
@@ -502,10 +516,12 @@ impl SuiNode {
             tx_stop,
         };
 
-        narwhal_manager
-            .tx_start
-            .send((committee.clone(), worker_cache))
-            .await?;
+        let msg = NarwhalStartMessage {
+            committee: committee.clone(),
+            shared_worker_cache: worker_cache,
+            execution_state: consensus_handler,
+        };
+        narwhal_manager.tx_start.send(msg).await?;
 
         Ok(narwhal_manager)
     }
@@ -633,10 +649,18 @@ impl SuiNode {
                         .address;
                     let worker_cache =
                         system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+                    let consensus_handler = Arc::new(ConsensusHandler::new(
+                        self.state.clone(),
+                        validator_components.checkpoint_service.clone(),
+                    ));
                     validator_components
                         .narwhal_manager
                         .tx_start
-                        .send((Arc::new(narwhal_committee), worker_cache))
+                        .send(NarwhalStartMessage {
+                            committee: Arc::new(narwhal_committee),
+                            shared_worker_cache: worker_cache,
+                            execution_state: consensus_handler,
+                        })
                         .await?;
                     // TODO: (Laura) wait for start complete signal
                     info!("Starting Narwhal");
@@ -646,21 +670,15 @@ impl SuiNode {
             } else if self.state.is_validator() {
                 info!("Promoting the node from fullnode to validator, starting grpc server");
 
-                let (validator_server_handle, narwhal_manager, consensus_adapter) =
-                    Self::construct_validator_components(
-                        &self.config,
-                        self.state.clone(),
-                        self.checkpoint_store.clone(),
-                        self.state_sync.clone(),
-                        self.registry_service.clone(),
-                    )
-                    .await?;
-                self.validator_components
-                    .swap(Some(Arc::new(ValidatorComponents {
-                        _validator_server_handle: validator_server_handle,
-                        narwhal_manager,
-                        consensus_adapter,
-                    })));
+                let validator_components = Self::construct_validator_components(
+                    &self.config,
+                    self.state.clone(),
+                    self.checkpoint_store.clone(),
+                    self.state_sync.clone(),
+                    self.registry_service.clone(),
+                )
+                .await?;
+                self.validator_components.swap(Some(validator_components));
             }
             info!("Reconfiguration finished");
         }

@@ -11,11 +11,12 @@ use narwhal_types::ConsensusOutput;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
-use sui_types::base_types::AuthorityName;
+use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::messages::ConsensusTransaction;
 use tracing::{debug, instrument, warn};
 
 pub struct ConsensusHandler {
+    _epoch: EpochId,
     state: Arc<AuthorityState>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
@@ -25,6 +26,7 @@ impl ConsensusHandler {
     pub fn new(state: Arc<AuthorityState>, checkpoint_service: Arc<CheckpointService>) -> Self {
         let last_seen = Mutex::new(Default::default());
         Self {
+            _epoch: state.epoch(),
             state,
             last_seen,
             checkpoint_service,
