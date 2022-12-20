@@ -749,7 +749,7 @@ impl AuthorityState {
 
     /// Executes a certificate for its effects.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate(
+    pub(crate) async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
@@ -759,15 +759,16 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if self.is_fullnode() {
-            return Err(SuiError::GenericStorageError(
-                "cannot execute cert without effects on fullnode".into(),
-            ));
-        }
-
-        if self.is_cert_awaiting_sequencing(certificate)? {
-            debug!("shared object cert has not been sequenced by narwhal");
-            return Err(SuiError::SharedObjectLockNotSetError);
+        if certificate.contains_shared_object()
+            && !self
+                .database
+                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+                    *certificate.digest(),
+                ))?
+        {
+            return Err(SuiError::CertificateNotSequencedError {
+                digest: *certificate.digest(),
+            });
         }
 
         self.enqueue_certificates_for_execution(vec![certificate.clone()])
@@ -2439,22 +2440,6 @@ impl AuthorityState {
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(seq)
-    }
-
-    /// Returns true if certificate is a shared-object cert but has not been sequenced.
-    fn is_cert_awaiting_sequencing(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
-        // always an error to call this on fullnode.
-        assert!(!self.is_fullnode());
-
-        if !certificate.contains_shared_object() {
-            Ok(false)
-        } else {
-            self.database
-                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
-                    *certificate.digest(),
-                ))
-                .map(|r| !r)
-        }
     }
 
     /// Check whether certificate was processed by consensus.

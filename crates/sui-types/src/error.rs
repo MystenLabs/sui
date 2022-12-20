@@ -76,8 +76,6 @@ pub enum SuiError {
     NotSharedObjectError,
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
-    #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
     #[error(
@@ -98,7 +96,8 @@ pub enum SuiError {
     IncorrectSigner { error: String },
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
-    // Certificate verification
+
+    // Certificate verification and execution
     #[error(
         "Signature or certificate from wrong epoch, expected {expected_epoch}, got {actual_epoch}"
     )]
@@ -169,6 +168,11 @@ pub enum SuiError {
         effects_digests: Vec<TransactionEffectsDigest>,
         checkpoint: CheckpointSequenceNumber,
     },
+    #[error("The shared locks for this transaction have not yet been set.")]
+    SharedObjectLockNotSetError,
+    #[error("The certificate needs to be sequenced by Narwhal before execution: {digest:?}")]
+    CertificateNotSequencedError { digest: TransactionDigest },
+
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
