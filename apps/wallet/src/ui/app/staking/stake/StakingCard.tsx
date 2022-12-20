@@ -114,7 +114,7 @@ function StakingCard() {
             setSendError(null);
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
-                // TODO: add unstake functionality on the support roles out
+                // TODO: add unstake functionality
                 if (unstake) return;
                 const response = await dispatch(
                     stakeTokens({
