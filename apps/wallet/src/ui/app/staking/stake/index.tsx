@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
 import { SelectValidatorCard } from './SelectValidatorCard';
@@ -15,9 +15,9 @@ function StakePage() {
     const [showModal, setShowModal] = useState(true);
 
     const navigate = useNavigate();
-    const close = useCallback(() => {
+    const close = () => {
         navigate('/');
-    }, [navigate]);
+    };
 
     return (
         <Overlay

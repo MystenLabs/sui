@@ -159,9 +159,10 @@ export function ValidatorDetailCard({
                                 <Button
                                     size="large"
                                     mode="outline"
-                                    disabled={true}
+                                    disabled
                                     href={
-                                        stakeByValidatorAddress + '&unstake=1'
+                                        stakeByValidatorAddress +
+                                        '&unstake=true'
                                     }
                                     className="w-full"
                                 >
@@ -173,6 +174,22 @@ export function ValidatorDetailCard({
                                 </Button>
                             )}
                         </div>
+                        {totalStakedIncludingPending > 1 && (
+                            <div className="w-full">
+                                <Button
+                                    size="large"
+                                    mode="outline"
+                                    disabled={true}
+                                    href={
+                                        stakeByValidatorAddress +
+                                        '&unstake=true'
+                                    }
+                                    className="w-full"
+                                >
+                                    Unstake All SUI
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </Content>
                 <Button

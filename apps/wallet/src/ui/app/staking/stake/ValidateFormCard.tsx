@@ -16,7 +16,7 @@ import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 import type { ValidatorState } from '../ValidatorDataTypes';
 
-export function ValidateDetailFormCard({
+export function ValidateFormCard({
     validatorAddress,
     unstake,
 }: {
@@ -33,29 +33,26 @@ export function ValidateDetailFormCard({
             ? (data.details.data.fields as ValidatorState)
             : null;
 
-    const validatorByAddress = useMemo(() => {
+    const validatorData = useMemo(() => {
         if (!validatorsData) return null;
-        return (
+
+        const validator =
             validatorsData.validators.fields.active_validators.find(
                 (av) =>
                     av.fields.metadata.fields.sui_address === validatorAddress
-            ) || null
-        );
-    }, [validatorAddress, validatorsData]);
+            );
 
-    const validatorData = useMemo(() => {
-        if (!validatorByAddress || !validatorsData) return null;
+        if (!validator) return null;
 
         const {
             sui_balance,
             starting_epoch,
             pending_delegations,
             delegation_token_supply,
-        } = validatorByAddress.fields.delegation_staking_pool.fields;
+        } = validator.fields.delegation_staking_pool.fields;
 
         const num_epochs_participated = validatorsData.epoch - starting_epoch;
-        const { name: rawName, sui_address } =
-            validatorByAddress.fields.metadata.fields;
+        const { name: rawName, sui_address } = validator.fields.metadata.fields;
 
         const APY = Math.pow(
             1 +
@@ -85,7 +82,7 @@ export function ValidateDetailFormCard({
                 0n
             ),
         };
-    }, [accountAddress, validatorByAddress, validatorsData]);
+    }, [accountAddress, validatorAddress, validatorsData]);
 
     if (isLoading) {
         return (

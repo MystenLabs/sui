@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 
 import { usePendingDelegation } from '../usePendingDelegation';
@@ -22,9 +22,9 @@ export function ValidatorDetail() {
         usePendingDelegation();
 
     const navigate = useNavigate();
-    const close = useCallback(() => {
+    const close = () => {
         navigate('/');
-    }, [navigate]);
+    };
 
     if (!validatorAddressParams) {
         return <Navigate to={'/stake'} replace={true} />;
