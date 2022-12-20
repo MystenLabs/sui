@@ -57,7 +57,7 @@
         "react-error-boundary": "^3.1.4",
         "react-hook-form": "^7.40.0",
         "react-hot-toast": "^2.4.0",
-        "react-router-dom": "^6.2.1",
+        "react-router-dom": "^6.5.0",
         "topojson-client": "^3.1.0",
         "web-vitals": "^3.1.0",
         "zod": "^3.19.1"

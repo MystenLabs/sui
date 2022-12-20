@@ -5,6 +5,10 @@ pre {
     overflow: scroll;
 }
 
+div.code {
+    @apply overflow-auto whitespace-pre border-solid border-gray-45 p-2 text-sm;
+}
+
 section .codeview {
     border-color: transparent !important;
     @apply pl-0 pr-0 font-mono text-sm;
