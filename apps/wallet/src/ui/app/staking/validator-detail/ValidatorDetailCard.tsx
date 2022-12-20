@@ -149,7 +149,7 @@ export function ValidatorDetailCard({
                                 </div>
                             </Card>
                         </div>
-                        <div className="flex gap-2.5 mb-8 w-full mt-3.75">
+                        <div className="flex gap-2.5  w-full my-3.75">
                             <Button
                                 size="large"
                                 mode="outline"

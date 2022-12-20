@@ -109,7 +109,7 @@ export function ValidatorCard({
             {validatorData && (
                 <Card
                     header={
-                        <div className="flex py-2.5 gap-2 items-center">
+                        <div className="flex py-2.5 gap-2 items-center capitalize">
                             <ImageIcon
                                 src={validatorData.logo}
                                 alt={validatorData.name}
