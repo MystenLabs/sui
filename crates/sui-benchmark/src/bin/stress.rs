@@ -8,6 +8,7 @@ use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
@@ -33,6 +34,7 @@ use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 use sui_types::messages::TransactionInfoRequest;
+use tokio::time::sleep;
 use tracing::log::info;
 
 use sui_types::object::generate_test_gas_objects_with_owner;
@@ -299,8 +301,9 @@ async fn main() -> Result<()> {
             LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(aggregator)),
         );
 
-        // spawn a thread to spin up sui nodes on the multi-threaded server runtime
-        let _ = std::thread::spawn(move || {
+        // spawn a thread to spin up sui nodes on the multi-threaded server runtime.
+        // running forever
+        let _validators = std::thread::spawn(move || {
             // create server runtime
             let server_runtime = Builder::new_multi_thread()
                 .thread_stack_size(32 * 1024 * 1024)
@@ -324,7 +327,12 @@ async fn main() -> Result<()> {
                         }))
                     }
                 }
+
+                // This thread cannot exit, otherwise validators will shutdown.
                 join_all(follower_handles).await;
+                loop {
+                    sleep(Duration::from_secs(300)).await;
+                }
             });
         });
         (primary_gas_id, owner, Arc::new(keypair), proxy)
