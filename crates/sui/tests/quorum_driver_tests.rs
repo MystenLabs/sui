@@ -6,6 +6,7 @@ use std::time::Duration;
 use sui_core::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
+use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
@@ -17,7 +18,6 @@ use sui_types::object::{generate_test_gas_objects, Object};
 use test_utils::authority::{
     spawn_test_authorities, test_and_configure_authority_configs, test_authority_configs,
 };
-use test_utils::messages::make_transfer_sui_transaction;
 
 async fn setup() -> (
     Vec<SuiNodeHandle>,

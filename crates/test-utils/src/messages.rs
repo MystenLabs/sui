@@ -271,28 +271,6 @@ pub fn create_publish_move_package_transaction(
     to_sender_signed_transaction(data, keypair)
 }
 
-pub fn make_transfer_sui_transaction(
-    gas_object: ObjectRef,
-    recipient: SuiAddress,
-    amount: Option<u64>,
-    sender: SuiAddress,
-    keypair: &AccountKeyPair,
-) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
-    to_sender_signed_transaction(data, keypair)
-}
-
-pub fn make_transfer_object_transaction(
-    object_ref: ObjectRef,
-    gas_object: ObjectRef,
-    sender: SuiAddress,
-    keypair: &AccountKeyPair,
-    recipient: SuiAddress,
-) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    to_sender_signed_transaction(data, keypair)
-}
-
 pub fn make_transfer_object_transaction_with_wallet_context(
     object_ref: ObjectRef,
     gas_object: ObjectRef,
