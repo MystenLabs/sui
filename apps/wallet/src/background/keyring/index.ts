@@ -18,11 +18,11 @@ import {
     AUTO_LOCK_TIMER_STORAGE_KEY,
 } from '_src/shared/constants';
 
+import type { UiConnection } from '../connections/UiConnection';
 import type { SuiAddress, ExportedKeypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { ErrorPayload } from '_payloads';
 import type { KeyringPayload } from '_payloads/keyring';
-import type { Connection } from '_src/background/connections/Connection';
 
 /** The key for the extension's storage, that holds the index of the last derived account (zero based) */
 const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';
@@ -180,7 +180,7 @@ export class Keyring {
         return added;
     }
 
-    public async handleUiMessage(msg: Message, uiConnection: Connection) {
+    public async handleUiMessage(msg: Message, uiConnection: UiConnection) {
         const { id, payload } = msg;
         try {
             if (
@@ -189,23 +189,7 @@ export class Keyring {
             ) {
                 const { password, importedEntropy } = payload.args;
                 await this.createVault(password, importedEntropy);
-                await this.unlock(password);
-                const activeAccount = await this.getActiveAccount();
-                if (!activeAccount) {
-                    throw new Error('Error created vault is empty');
-                }
-                uiConnection.send(
-                    createMessage<KeyringPayload<'create'>>(
-                        {
-                            type: 'keyring',
-                            method: 'create',
-                            return: {
-                                keypair: activeAccount.exportKeypair(),
-                            },
-                        },
-                        id
-                    )
-                );
+                uiConnection.send(createMessage({ type: 'done' }, id));
             } else if (isKeyringPayload(payload, 'getEntropy')) {
                 if (this.#locked) {
                     throw new Error('Keyring is locked. Unlock it first.');
@@ -230,22 +214,7 @@ export class Keyring {
                 // wait to avoid ui showing locked and then unlocked screen
                 // ui waits until it receives this status to render
                 await this.reviveDone;
-                uiConnection.send(
-                    createMessage<KeyringPayload<'walletStatusUpdate'>>(
-                        {
-                            type: 'keyring',
-                            method: 'walletStatusUpdate',
-                            return: {
-                                isLocked: this.isLocked,
-                                isInitialized: await this.isWalletInitialized(),
-                                activeAccount: (
-                                    await this.getActiveAccount()
-                                )?.exportKeypair(),
-                            },
-                        },
-                        id
-                    )
-                );
+                uiConnection.sendLockedStatusUpdate(this.isLocked, id);
             } else if (isKeyringPayload(payload, 'lock')) {
                 this.lock();
                 uiConnection.send(createMessage({ type: 'done' }, id));

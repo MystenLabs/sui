@@ -48,9 +48,13 @@ Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
     connections.notifyWalletStatusChange(origin, { accounts });
 });
 
-Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
-    connections.notifyForLockedStatusUpdate(isLocked);
-});
+const keyringStatusCallback = () => {
+    connections.notifyForLockedStatusUpdate(Keyring.isLocked);
+};
+
+Keyring.on('lockedStatusUpdate', keyringStatusCallback);
+Keyring.on('accountsChanged', keyringStatusCallback);
+Keyring.on('activeAccountChanged', keyringStatusCallback);
 
 Browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === LOCK_ALARM_NAME) {

@@ -13,10 +13,13 @@ export type TransactionDryRun = Parameters<
 
 export function useTransactionDryRun(txData: TransactionDryRun) {
     const signer = useSigner();
-
-    const response = useQuery(['executeDryRunTxn', txData], async () => {
-        return signer.dryRunTransaction(txData);
+    const response = useQuery({
+        queryKey: ['executeDryRunTxn', txData],
+        queryFn: async () => {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            return signer!.dryRunTransaction(txData);
+        },
+        enabled: !!signer,
     });
-
     return response;
 }

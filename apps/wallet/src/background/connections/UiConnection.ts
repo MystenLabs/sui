@@ -54,19 +54,28 @@ export class UiConnection extends Connection {
             });
     }
 
-    public async sendLockedStatusUpdate(isLocked: boolean) {
+    public async sendLockedStatusUpdate(
+        isLocked: boolean,
+        replyForId?: string
+    ) {
         this.send(
-            createMessage<KeyringPayload<'walletStatusUpdate'>>({
-                type: 'keyring',
-                method: 'walletStatusUpdate',
-                return: {
-                    isLocked,
-                    activeAccount: (
-                        await Keyring.getActiveAccount()
-                    )?.exportKeypair(),
-                    isInitialized: await Keyring.isWalletInitialized(),
+            createMessage<KeyringPayload<'walletStatusUpdate'>>(
+                {
+                    type: 'keyring',
+                    method: 'walletStatusUpdate',
+                    return: {
+                        isLocked,
+                        accounts:
+                            (await Keyring.getAccounts())?.map((anAccount) =>
+                                anAccount.toJSON()
+                            ) || [],
+                        activeAddress:
+                            (await Keyring.getActiveAccount())?.address || null,
+                        isInitialized: await Keyring.isWalletInitialized(),
+                    },
                 },
-            })
+                replyForId
+            )
         );
     }
 

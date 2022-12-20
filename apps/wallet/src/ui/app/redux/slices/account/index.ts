@@ -9,23 +9,17 @@ import {
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
-import { isKeyringPayload } from '_payloads/keyring';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 
-import type {
-    ObjectId,
-    SuiAddress,
-    SuiMoveObject,
-    ExportedKeypair,
-} from '@mysten/sui.js';
+import type { ObjectId, SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const createVault = createAsyncThunk<
-    ExportedKeypair,
+    void,
     {
         importedEntropy?: string;
         password: string;
@@ -34,18 +28,8 @@ export const createVault = createAsyncThunk<
 >(
     'account/createVault',
     async ({ importedEntropy, password }, { extra: { background } }) => {
-        const { payload } = await background.createVault(
-            password,
-            importedEntropy
-        );
+        await background.createVault(password, importedEntropy);
         await background.unlockWallet(password);
-        if (!isKeyringPayload(payload, 'create')) {
-            throw new Error('Unknown payload');
-        }
-        if (!payload.return?.keypair) {
-            throw new Error('Empty keypair in payload');
-        }
-        return payload.return.keypair;
     }
 );
 
@@ -94,12 +78,12 @@ const accountSlice = createSlice({
                 payload,
             }: PayloadAction<KeyringPayload<'walletStatusUpdate'>['return']>
         ) => {
-            if (typeof payload?.isLocked !== 'undefined') {
-                state.isLocked = payload.isLocked;
+            if (!payload) {
+                return;
             }
-            if (typeof payload?.isInitialized !== 'undefined') {
-                state.isInitialized = payload.isInitialized;
-            }
+            state.isLocked = payload.isLocked;
+            state.isInitialized = payload.isInitialized;
+            state.address = payload.activeAddress || null; // is already normalized
         },
     },
     extraReducers: (builder) =>

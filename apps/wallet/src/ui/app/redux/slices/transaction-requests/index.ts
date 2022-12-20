@@ -13,6 +13,8 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { activeAccountSelector } from '../account';
+
 import type {
     SuiMoveNormalizedFunction,
     SuiTransactionResponse,
@@ -74,12 +76,13 @@ export const deserializeTxn = createAsyncThunk<
     AppThunkConfig
 >(
     'deserialize-transaction',
-    async (data, { dispatch, extra: { api, keypairVault, background } }) => {
+    async (data, { dispatch, extra: { api, background }, getState }) => {
         const { id, serializedTxn } = data;
-        const signer = api.getSignerInstance(
-            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
-            background
-        );
+        const activeAddress = activeAccountSelector(getState());
+        if (!activeAddress) {
+            throw new Error('Error, active address is not defined');
+        }
+        const signer = api.getSignerInstance(activeAddress, background);
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
         const version = await api.instance.fullNode.getRpcApiVersion();
@@ -136,9 +139,13 @@ export const respondToTransactionRequest = createAsyncThunk<
     'respond-to-transaction-request',
     async (
         { txRequestID, approved },
-        { extra: { background, api, keypairVault }, getState }
+        { extra: { background, api }, getState }
     ) => {
         const state = getState();
+        const activeAddress = activeAccountSelector(state);
+        if (!activeAddress) {
+            throw new Error('Error, active address is not defined');
+        }
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
         if (!txRequest) {
             throw new Error(`TransactionRequest ${txRequestID} not found`);
@@ -146,10 +153,7 @@ export const respondToTransactionRequest = createAsyncThunk<
         let txResult: SuiTransactionResponse | undefined = undefined;
         let tsResultError: string | undefined;
         if (approved) {
-            const signer = api.getSignerInstance(
-                keypairVault.getKeypair().getPublicKey().toSuiAddress(),
-                background
-            );
+            const signer = api.getSignerInstance(activeAddress, background);
             try {
                 let response: SuiExecuteTransactionResponse;
                 if (
