@@ -9,6 +9,11 @@ const GROWTHBOOK_API_KEY = import.meta.env.PROD
 
 export const growthbook = new GrowthBook();
 
+let resolveFeaturesPromise: () => void;
+export const featuresPromise: Promise<void> = new Promise((resolve) => {
+    resolveFeaturesPromise = resolve;
+});
+
 export async function loadFeatures() {
     try {
         const res = await fetch(
@@ -24,6 +29,8 @@ export async function loadFeatures() {
         growthbook.setFeatures(data.features);
     } catch (e) {
         console.warn('Failed to fetch feature definitions from Growthbook', e);
+    } finally {
+        resolveFeaturesPromise();
     }
 }
 
