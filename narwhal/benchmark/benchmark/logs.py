@@ -257,7 +257,7 @@ class LogParser:
         batch_creation_latency = mean(
             self.batch_creation_latencies.values()) * 1000
         batch_to_header_latency = mean(
-            self.batch_to_header_latencies.values()) * 2 * 1000
+            self.batch_to_header_latencies.values()) * 1000
         header_to_cert_latency = mean(
             self.header_to_cert_latencies.values()) * 1000
         cert_commit_latency = mean(
@@ -291,8 +291,9 @@ class LogParser:
             '\n'
             ' + RESULTS:\n'
             f' Batch creation latency: {round(batch_creation_latency):,} ms\n'
-            f' Batch to header latency: {round(batch_to_header_latency):,} ms\n'
-            f' Header to certificate latency: {round(header_to_cert_latency):,} ms\n'
+            f' Header creation latency: {round(batch_to_header_latency * 2):,} ms\n'
+            f' \tBatch to header latency: {round(batch_to_header_latency):,} ms\n'
+            f' Certificate creation latency: {round(header_to_cert_latency):,} ms\n'
             f' \tRequest vote outbound latency: {round(request_vote_outbound_latency):,} ms\n'
             f' Certificate commit latency: {round(cert_commit_latency):,} ms\n'
             f'\n'

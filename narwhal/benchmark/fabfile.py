@@ -28,7 +28,7 @@ def local(ctx, debug=True):
     node_params = {
         'header_num_of_batches_threshold': 1,
         'max_header_num_of_batches': 1000,
-        'max_header_delay': '5000ms',  # ms
+        'max_header_delay': '2000ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
         'sync_retry_nodes': 3,  # number of nodes
