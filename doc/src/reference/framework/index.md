@@ -15,7 +15,7 @@ Modules:
  * [bcs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bcs.md)
  * [bls12381](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bls12381.md)
  * [bulletproofs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bulletproofs.md)
- * [coin](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/coin.md
+ * [coin](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/coin.md)
 * [devnet_nft](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/devnet_nft.md)
 * [digest](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/digest.md)
 * [dynamic_field](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/dynamic_field.md)
@@ -23,8 +23,8 @@ Modules:
 * [ecdsa](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa.md)
 * [ecdsa_k1](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_k1.md)
 * [ed25519](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ed25519.md)
-* [elliptic_curve]https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/elliptic_curve.md
-* [epoch_time_lock]https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/epoch_time_lock.md
+* [elliptic_curve](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/elliptic_curve.md)
+* [epoch_time_lock](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/epoch_time_lock.md)
 * [erc721_metadata](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/erc721_metadata.md)
 * [event](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/event.md)
 * [genesis](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/genesis.md)
