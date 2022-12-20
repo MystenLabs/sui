@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiObject, isSuiMoveObject, Base64DataBuffer } from '@mysten/sui.js';
+import { useWallet, ConnectButton } from '@mysten/wallet-kit';
+import clsx from 'clsx';
 import { useMemo } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 
@@ -34,7 +36,8 @@ export type Delegator = {
 
 function ValidatorDetails() {
     const { id } = useParams();
-
+    const { connected } = useWallet();
+    console.log(connected)
     const { data, isLoading } = useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorsData =
@@ -170,11 +173,25 @@ function ValidatorDetails() {
                     >
                         {validator.name}
                     </Heading>
+                    {!connected ? (<ConnectButton
+                        connectText={
+                            <>
+                                Connect Wallet
+                                <ArrowRight
+                                    fill="currentColor"
+                                    className="-rotate-45"
+                                />
+                            </>
+                        }
+                        size="md"
+                        className='!bg-white border border-solid border-steel text-steel-dark hover:text-steel-darker hover:border-steel-dark active:text-steel active:border-steel disabled:border-gray-45 disabled:text-steel-dark'
+                    
+                    /> ) :(<Button type="button" variant="outline">
+                    Stake Coins{' '}
+                    <ArrowRight fill="currentColor" className="ml-2" />
+                </Button>)}
 
-                    <Button type="button" variant="outline">
-                        Stake Coins{' '}
-                        <ArrowRight fill="currentColor" className="ml-2" />
-                    </Button>
+                    
                 </div>
             </div>
 
