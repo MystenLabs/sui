@@ -22,6 +22,7 @@ import {
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
+import { getEventsSummary } from '_app/hooks/useTransactionSummary';
 import { notEmpty } from '_helpers';
 
 import type {
@@ -187,6 +188,14 @@ export const getTransactionsByAddress = createAsyncThunk<
             );
             const sender = getTransactionSender(txEff.certificate);
             const amountByRecipient = getAmount(txn);
+            const { coins: eventsSummary } = getEventsSummary(
+                txEff.effects,
+                address
+            );
+            const amountTransfers = eventsSummary.reduce(
+                (acc, { amount }) => acc + amount,
+                0
+            );
 
             // todo: handle multiple recipients, for now just return first
             const amount =
@@ -205,8 +214,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                 error: getExecutionStatusError(txEff),
                 timestampMs: txEff.timestamp_ms,
                 ...(recipient && { to: recipient }),
-                ...(amount && {
-                    amount,
+                ...((amount || amountTransfers) && {
+                    amount: Math.abs(amount || amountTransfers),
                 }),
                 ...((txTransferObject?.objectRef?.objectId ||
                     metaDataObjectId.length > 0) && {
