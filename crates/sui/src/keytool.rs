@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use sui_keys::key_derive::generate_new_key;
 use sui_types::intent::Intent;
@@ -29,21 +28,21 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
-    /// And output file to current dir (to generate keypair and add to sui.keystore, use `sui client new-address`)
+    /// Generate a new keypair given a key scheme, can be one of ed25519, secp256k1, secp256r1, bls12381.
+    /// The optional derivation path is supported, the default values are used if not provided:
+    /// m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+    /// The output file is saved to current dir (to generate keypair and add to sui.keystore, use `sui client new-address`)
+    /// The file content is a Base64 encoded string: `flag || privkey || pubkey`.
     Generate {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
-    Show {
-        file: PathBuf,
-    },
-    /// Extract components of a base64-encoded keypair to reveal the Sui address, public key, and key scheme flag.
-    Unpack {
-        keypair: SuiKeyPair,
-    },
-    /// List all keys by its address, public key, key scheme in the keystore
+    /// Given the file at path, read it as Base64 encoded string of `flag || privkey || pubkey`.
+    /// Outputs its address, public key and key scheme.
+    Show { file: PathBuf },
+    /// Given a Base64 encoded `flag || privkey || pubkey` string, outputs its address, public key and key scheme.
+    Unpack { keypair: SuiKeyPair },
+    /// List all keys in ~/.sui/sui.keystore by its address, public key and key scheme.
     List,
     /// Create signature using the sui keystore and provided data.
     Sign {
@@ -59,11 +58,10 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
-    /// Read keypair from path and show its base64 encoded value with flag. This is useful
-    /// to generate protocol, account, worker, network keys in NodeConfig with its expected encoding.
-    LoadKeypair {
-        file: PathBuf,
-    },
+    /// Given the file at path, read it as Base64 encoded string of `flag || privkey || pubkey`.
+    /// Output a Base64 encoded string of `flag || privkey || pubkey`.
+    /// Also outputs Base64 encoded string of `privkey || pubkey` accepted by ValidatorConfig and NodeConfig
+    LoadKeypair { file: PathBuf },
 }
 
 impl KeyToolCommand {
@@ -93,8 +91,11 @@ impl KeyToolCommand {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
                 match res {
                     Ok(keypair) => {
-                        println!("Public Key: {}", Base64::encode(keypair.public()));
-                        println!("Flag: {}", keypair.public().flag());
+                        println!("Keypair Base64: {:?}", keypair.encode_base64());
+                        println!("Address: {:?}", SuiAddress::from(&keypair.public()));
+                        println!("Pubkey Base64: {:?}", keypair.public());
+                        println!("Pubkey Hex: {:?}", Hex::encode(keypair.public().as_ref()));
+                        println!("Scheme: {:?}", keypair.public().scheme());
                     }
                     Err(e) => {
                         println!("Failed to read keypair at path {:?} err: {:?}", file, e)
@@ -103,7 +104,11 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Unpack { keypair } => {
-                store_and_print_keypair((&keypair.public()).into(), keypair)
+                println!("Keypair Base64: {:?}", keypair.encode_base64());
+                println!("Address: {:?}", SuiAddress::from(&keypair.public()));
+                println!("Pubkey Base64: {:?}", keypair.public());
+                println!("Pubkey Hex: {:?}", Hex::encode(keypair.public().as_ref()));
+                println!("Scheme: {:?}", keypair.public().scheme());
             }
             KeyToolCommand::List => {
                 println!(
@@ -156,13 +161,22 @@ impl KeyToolCommand {
             KeyToolCommand::LoadKeypair { file } => {
                 match read_keypair_from_file(&file) {
                     Ok(keypair) => {
-                        // Account keypair is encoded with the key scheme flag {},
-                        // and network and worker keypair are not.
-                        println!("Account Keypair: {}", keypair.encode_base64());
-                        if let SuiKeyPair::Ed25519(kp) = keypair {
-                            println!("Network Keypair: {}", kp.encode_base64());
-                            println!("Worker Keypair: {}", kp.encode_base64());
-                        };
+                        println!(
+                            "Encoded with flag (uses as input for `keytool unpack`): {}",
+                            keypair.encode_base64()
+                        );
+                        // In validator config, the keypairs are encoded without flag.
+                        match keypair {
+                            SuiKeyPair::Ed25519(kp) => {
+                                println!("Ed25519 Keypair: {}", kp.encode_base64())
+                            }
+                            SuiKeyPair::Secp256k1(kp) => {
+                                println!("Secp256k1 Keypair: {}", kp.encode_base64())
+                            }
+                            SuiKeyPair::Secp256r1(kp) => {
+                                println!("Secp256r1 Keypair: {}", kp.encode_base64())
+                            }
+                        }
                     }
                     Err(_) => {
                         // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
@@ -179,20 +193,6 @@ impl KeyToolCommand {
 
         Ok(())
     }
-}
-
-fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
-    let path_str = format!("{}.key", address).to_lowercase();
-    let path = Path::new(&path_str);
-    let address = format!("{}", address);
-    let kp = keypair.encode_base64();
-    let flag = keypair.public().flag();
-    let out_str = format!("address: {}\nkeypair: {}\nflag: {}", address, kp, flag);
-    fs::write(path, out_str).unwrap();
-    println!(
-        "Address, keypair and key scheme written to {}",
-        path.to_str().unwrap()
-    );
 }
 
 pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
