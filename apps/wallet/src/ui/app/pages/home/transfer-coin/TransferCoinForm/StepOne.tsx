@@ -65,7 +65,7 @@ function StepOne({
         <Form
             className={cl(st.container, st.amount)}
             autoComplete="off"
-            noValidate={true}
+            noValidate
         >
             <Content>
                 <div className={st.group}>

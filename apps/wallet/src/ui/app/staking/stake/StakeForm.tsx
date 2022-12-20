@@ -54,9 +54,10 @@ function StakeForm({
     );
 
     const coinBalanceMinusGas =
-        coinBalance - BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE);
+        coinBalance -
+        BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
-    const [maxToken, symbol, isLoading] = useFormatCoin(
+    const [maxToken, symbol, queryResult] = useFormatCoin(
         coinBalanceMinusGas,
         coinType
     );
@@ -85,9 +86,9 @@ function StakeForm({
                                 decimals
                             />
                             <button
-                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium"
+                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
                                 onClick={setMaxToken}
-                                disabled={!isLoading}
+                                disabled={queryResult.isLoading}
                                 type="button"
                             >
                                 Max
