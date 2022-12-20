@@ -13,6 +13,8 @@ use typed_store::traits::TypedStoreDebug;
 
 use typed_store_derive::DBMapUtils;
 
+const CURRENT_EPOCH_KEY: u64 = 0;
+
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
 pub struct AuthorityPerpetualTables {
@@ -79,6 +81,10 @@ pub struct AuthorityPerpetualTables {
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+
+    /// A singleton table that stores the current epoch number. This number should match the epoch
+    /// of the per-epoch table in the authority store.
+    current_epoch: DBMap<u64, u64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -181,14 +187,18 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn get_epoch(&self) -> SuiResult<EpochId> {
-        Ok(self.get_sui_system_state_object()?.epoch)
+        match self.current_epoch.get(&CURRENT_EPOCH_KEY)? {
+            Some(epoch) => Ok(epoch),
+            None => {
+                self.set_epoch(0)?;
+                Ok(0)
+            }
+        }
     }
 
-    pub fn get_committee(&self) -> SuiResult<Committee> {
-        Ok(self
-            .get_sui_system_state_object()?
-            .get_current_epoch_committee()
-            .committee)
+    pub fn set_epoch(&self, epoch: EpochId) -> SuiResult {
+        self.current_epoch.insert(&CURRENT_EPOCH_KEY, &epoch)?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
