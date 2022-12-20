@@ -456,9 +456,10 @@ impl Core {
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        let tasks = self
-            .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
+        let tasks = self.network.broadcast(
+            network_keys,
+            &PrimaryMessage::Certificate(certificate.clone()),
+        );
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,
@@ -479,6 +480,16 @@ impl Core {
             .header_to_certificate_latency
             .with_label_values(&[&epoch.to_string()])
             .observe(created_at.elapsed().as_secs_f64());
+
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            certificate.header.digest(),
+            created_at.elapsed().as_secs_f64(),
+            certificate.digest()
+        );
+
         Ok(())
     }
 

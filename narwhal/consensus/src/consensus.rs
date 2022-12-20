@@ -183,6 +183,15 @@ impl ConsensusState {
             .with_label_values(&[])
             .set(last_committed_round as i64);
 
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Certificate {:?} took {} seconds to be committed at round {}",
+            certificate.digest(),
+            certificate.metadata.created_at.elapsed().as_secs_f64(),
+            last_committed_round
+        );
+
         self.metrics
             .certificate_commit_latency
             .observe(certificate.metadata.created_at.elapsed().as_secs_f64());

@@ -241,7 +241,18 @@ impl Proposer {
         self.proposed_headers.insert(this_round, header.clone());
 
         // Update metrics related to latency
-        for (_, _, created_at_timestamp) in digests {
+        for (_digest, _worker_id, created_at_timestamp) in digests {
+            #[cfg(feature = "benchmark")]
+            {
+                // NOTE: This log entry is used to compute performance.
+                tracing::info!(
+                    "Batch {:?} from worker {} took {} seconds to be included in a proposed header",
+                    _digest,
+                    _worker_id,
+                    created_at_timestamp.elapsed().as_secs_f64()
+                );
+            }
+
             self.metrics
                 .proposer_batch_latency
                 .observe(created_at_timestamp.elapsed().as_secs_f64());
