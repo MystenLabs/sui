@@ -69,12 +69,14 @@ where
         let future = Box::pin(async move {
             metrics.total_requests_received.inc();
             metrics.current_requests_in_flight.inc();
+            let _metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
+                metrics.current_requests_in_flight.dec();
+            });
 
             let timer = metrics.process_latency.start_timer();
             let resp = inner.oneshot(req).await;
 
             let elapsed = timer.stop_and_record();
-            metrics.current_requests_in_flight.dec();
 
             match &resp {
                 Result::Ok(_) => {
