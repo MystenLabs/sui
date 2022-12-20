@@ -15,43 +15,13 @@ module contract::tournament {
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::dynamic_object_field as dof;
+    // use sui::test_scenario;
 
-    // Structs.
-
-    // admin capability
-    // Gives person havining it the ability to end rounds.
-    // This is in case a player does not act on time.
-    // Will be removed in the future.
-    struct AdminCap has key {
-        id: UID,
-        admin_address: address,
-    }
-
-    struct Tournament has key {
-        id: UID,
-        players: vector<address>,
-        prize: Balance<SUI>,
-        capacity: u64,
-        status: u64, // Status -> 0: pending | 1: running | 2: finished
-        round: u64,
-        matches: vector<address>,
-    }
-
-    struct Match has key, store {
-        id: UID,
-        last_move_time: u64,
-        player_0: address,
-        player_1: address,
-        hash_0: Option<Sha3256Digest>,
-        hash_1: Option<Sha3256Digest>,
-        secret_0: Option<vector<u8>>,
-        secret_1: Option<vector<u8>>,
-        round: u64,
-        // winner: Option<address>,
-    }
 
     // Player default entry fee in MIST.
     const ENTRY_FEE: u64 = 10000;
+    const ROUND_DURATION: u64 = 1;
+
 
     // Tournament error codes.
     const ECannotStartRound: u64 = 4;
@@ -59,6 +29,8 @@ module contract::tournament {
     const ETournamentNotEnded: u64 = 13;
     const ENotAdmin: u64 = 14;
     const ESecretsNotRevealed: u64 = 11;
+    const ECannotEndRound: u64 = 14;
+    const ECannotJoin: u64 = 17;
 
     // Player error codes.
     const ENotEnoughMoney: u64 = 0;
@@ -69,17 +41,55 @@ module contract::tournament {
     const ENotCorrectSecret: u64 = 8;
     const EPlayerNotFound: u64 = 9;
     const EHashNotFound: u64 = 10;
+    const ECannotReveal: u64 = 15;
+    const ECannotSetHash: u64 = 16;
 
     // Match error codes.
     const EMatchNotFound: u64 = 7;
     const EMatchStillRunning: u64 = 12;
 
+
+    // Structs.
+
+    // Admin capability.
+    // Gives person havining it the ability to end rounds.
+    // This is in case a player does not act on time.
+    // Will be removed in the future.
+    struct AdminCap has key {
+        id: UID,
+        admin: address,
+    }
+
+    struct Tournament has key {
+        id: UID,
+        players: vector<address>,
+        prize: Balance<SUI>,
+        capacity: u64,
+        status: u64, // Status -> 0: pending | 1: running | 2: finished
+        round: u64,
+        round_started: u64,
+        matches: vector<address>,
+    }
+
+    struct Match has key, store {
+        id: UID,
+        player_0: address,
+        player_1: address,
+        hash_0: Option<Sha3256Digest>,
+        hash_1: Option<Sha3256Digest>,
+        secret_0: Option<vector<u8>>,
+        secret_1: Option<vector<u8>>,
+        round: u64,
+        // winner: Option<address>,
+    }
+
+
     // Transfers admin capability to address deploying the contract.
     fun init(ctx: &mut TxContext){
         let id = object::new(ctx);
-        let admin_address = tx_context::sender(ctx);
-        let adminCap = AdminCap{ id , admin_address};
-        transfer::transfer(adminCap, tx_context::sender(ctx));
+        let admin = tx_context::sender(ctx);
+        let adminCap = AdminCap{ id , admin};
+        transfer::transfer(adminCap, admin);
     }
     
     /// Creates and shares tournament.
@@ -98,6 +108,7 @@ module contract::tournament {
             capacity,
             status: 0,
             round: 0,
+            round_started: tx_context::epoch(ctx),
             matches: vector::empty(),
         };
 
@@ -107,6 +118,8 @@ module contract::tournament {
 
     /// Handles the process of a player joining a tournament.
     entry fun join(tournament: &mut Tournament, player_coin: Coin<SUI>, ctx: &mut TxContext) {
+        // Make sure match has not yet started.
+        assert!(tournament.status == 0, ECannotJoin);
         // Check if more players can join.
         assert!(tournament.capacity < vector::length(&tournament.players), EMaxPlayersReached);
 
@@ -161,8 +174,7 @@ module contract::tournament {
 
     /// Starts n-th round for tournament.
     entry fun start_round(tournament: &mut Tournament, ctx: &mut TxContext) {
-        // Set tournament state to 1 (in case it is 0).
-        tournament.status = 1;
+        assert!(tournament.status != 2, ECannotStartRound);
 
         let num_of_players = vector::length(&tournament.players);
 
@@ -171,6 +183,12 @@ module contract::tournament {
 
         // Make sure you are in the correct round.
         assert!((tournament.capacity / (2^tournament.round)) == num_of_players, ECannotStartRound);
+
+        // Set tournament state to 1 (in case it is 0).
+        tournament.status = 1;
+
+        // Update start round time.
+        tournament.round_started = tx_context::epoch(ctx);
 
         let i = num_of_players;
 
@@ -197,6 +215,9 @@ module contract::tournament {
     /// Gets all active matches and update tournament's players with winners.
     entry fun end_round(tournament: &mut Tournament, ctx: &mut TxContext) {
 
+        assert!((tx_context::epoch(ctx) - tournament.round_started > ROUND_DURATION), ECannotEndRound);
+        assert!(tournament.status == 1, ECannotEndRound);
+
         // Get matches length from tournament.
         let i = vector::length(&tournament.matches);
 
@@ -211,42 +232,48 @@ module contract::tournament {
             let match: Match = dof::remove(&mut tournament.id, match_id);
             let Match {
                 id,
-                last_move_time: _,
                 player_0,
                 player_1,
-                hash_0: _,
-                hash_1: _,
+                hash_0,
+                hash_1,
                 secret_0,
                 secret_1,
                 round: _,
             } = match;
 
-            // Make sure secrets are revealed before deciding the winner
-            assert!((option::is_some(&secret_0) && option::is_some(&secret_1)), ESecretsNotRevealed);
-
-            // Extract secrets for both players.
-            let s_0 = option::extract(&mut secret_0);
-            let s_1 = option::extract(&mut secret_1);
-
-            // Take last bytes from secrets.
-            let length_0 = vector::length(&s_0) - 1;
-            let length_1 = vector::length(&s_1) - 1;
-            let last_byte_0 = vector::borrow(&s_0, length_0);
-            let last_byte_1 = vector::borrow(&s_1, length_1);
-
-            // Get winner according to players' bytes XOR calc.
-            let result = (*last_byte_0 + *last_byte_1) % 2;
-
-            if(result == 1) {
+            if (option::is_none(&hash_0)){
                 vector::push_back(&mut tournament.players, player_1);
-            } else {
+            } else if (option::is_none(&hash_1)){
                 vector::push_back(&mut tournament.players, player_0);
-            };
+            } else if (option::is_none(&secret_0)){
+                vector::push_back(&mut tournament.players, player_1);
+            } else if (option::is_none(&secret_1)){
+                vector::push_back(&mut tournament.players, player_0);
+            } else {
 
+                // Extract secrets for both players.
+                let s_0 = option::extract(&mut secret_0);
+                let s_1 = option::extract(&mut secret_1);
+
+                // Take last bytes from secrets.
+                let length_0 = vector::length(&s_0) - 1;
+                let length_1 = vector::length(&s_1) - 1;
+                let last_byte_0 = vector::borrow(&s_0, length_0);
+                let last_byte_1 = vector::borrow(&s_1, length_1);
+
+                // Get winner according to players' bytes XOR calc.
+                let result = (*last_byte_0 + *last_byte_1) % 2;
+
+                if(result == 1) {
+                    vector::push_back(&mut tournament.players, player_1);
+                } else {
+                    vector::push_back(&mut tournament.players, player_0);
+                };
+            };
             i = i - 1;
             object::delete(id);
+            // Do we need to destroy the options?
         };
-
 
         if (vector::length(&tournament.players) == 1){
             let winner = vector::pop_back(&mut tournament.players);
@@ -268,7 +295,7 @@ module contract::tournament {
 
     // Function that requires admin capability, can end round, in case players are not acting on time.
     entry fun admin_end_round(adminCap: &AdminCap, tournament: &mut Tournament, ctx: &mut TxContext){
-        assert!((adminCap.admin_address == tx_context::sender(ctx)), ENotAdmin);
+        assert!((adminCap.admin == tx_context::sender(ctx)), ENotAdmin);
         let i = vector::length(&tournament.matches);
         
         while(i > 0) {
@@ -282,7 +309,6 @@ module contract::tournament {
             let match: Match = dof::remove(&mut tournament.id, match_id);
             let Match {
                 id,
-                last_move_time: _,
                 player_0,
                 player_1,
                 hash_0,
@@ -326,10 +352,9 @@ module contract::tournament {
 
     // Match functions.
 
-    fun create_match(player_0: address, player_1: address, round: u64, ctx: &mut TxContext): Match{
+    fun create_match(player_0: address, player_1: address, round: u64, ctx: &mut TxContext): Match {
         let match = Match{
             id: object::new(ctx),
-            last_move_time: tx_context::epoch(ctx),
             player_0,
             player_1,
             hash_0: option::none(),
@@ -337,13 +362,14 @@ module contract::tournament {
             secret_0: option::none(),
             secret_1: option::none(),
             round,
-            //winner: option::none(),
         };
         match
     }
 
     /// Updates player's respective match with their hash.
     entry fun set_hash(tournament: &mut Tournament, match_id: address, hash: vector<u8>, ctx: &mut TxContext) {
+        assert!(tournament.status == 1, ECannotSetHash);
+
         // Make sure match exists.
         assert!(dof::exists_(&tournament.id, match_id), EMatchNotFound);
 
@@ -363,12 +389,12 @@ module contract::tournament {
             option::fill(&mut match.hash_1, hash_value);
         };
 
-        // Update last move time with current epoch.
-        match.last_move_time = tx_context::epoch(ctx);
     }
 
     /// Checks match validity according to players' hashes & secrets.
     entry fun reveal(tournament: &mut Tournament, match_id: address, secret: vector<u8>, ctx: &mut TxContext) {
+        assert!(tournament.status == 1, ECannotReveal);
+
         // Make sure match exists.
         assert!(dof::exists_(&tournament.id, match_id), EMatchNotFound);
 
@@ -397,9 +423,8 @@ module contract::tournament {
             assert!(secret_hash == digest::sha3_256_digest_to_bytes(hash_value), ENotCorrectSecret);
             option::fill(&mut match.secret_1, secret_hash);
         }
-
-        
     }
 
 }
+
 
