@@ -718,7 +718,7 @@ where
         // Verify the checkpoint
         let checkpoint = {
             let checkpoint = maybe_checkpoint
-                .ok_or_else(|| anyhow::anyhow!("no peers where able to help sync"))?;
+                .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
 
             if checkpoint.sequence_number() != next
                 || current.as_ref().map(|x| x.digest()) != checkpoint.previous_digest()
@@ -786,13 +786,15 @@ async fn sync_checkpoint_contents<S>(
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
-    let mut highest_synced = None;
-
-    let start = store
+    let mut highest_synced = store
         .get_highest_synced_checkpoint()
-        .expect("store operation should not fail")
+        .expect("store operation should not fail");
+
+    let start = highest_synced
+        .as_ref()
         .map(|x| x.sequence_number().saturating_add(1))
         .unwrap_or(0);
+
     for checkpoint in (start..=target_checkpoint.sequence_number()).map(|next| {
         store
             .get_checkpoint_by_sequence_number(next)
@@ -808,7 +810,16 @@ async fn sync_checkpoint_contents<S>(
         )
         .await
         {
-            Ok(checkpoint) => {
+            Ok((checkpoint, num_txns)) => {
+                if let Some(highest_synced) = &highest_synced {
+                    // if this fails, there is a bug in checkpoint construction (or the chain is
+                    // corrupted)
+                    assert_eq!(
+                        highest_synced.summary.network_total_transactions + num_txns,
+                        checkpoint.summary.network_total_transactions
+                    );
+                }
+
                 store
                     .update_highest_synced_checkpoint(&checkpoint)
                     .expect("store operation should not fail");
@@ -839,7 +850,7 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     transaction_download_concurrency: usize,
     checkpoint: VerifiedCheckpoint,
-) -> Result<VerifiedCheckpoint>
+) -> Result<(VerifiedCheckpoint, u64)>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -863,6 +874,8 @@ where
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
 
+    let num_txns = contents.size() as u64;
+
     // Sync transactions and effects
     let mut stream = contents
         .into_inner()
@@ -875,7 +888,7 @@ where
         result?;
     }
 
-    Ok(checkpoint)
+    Ok((checkpoint, num_txns))
 }
 
 async fn get_checkpoint_contents<S>(
