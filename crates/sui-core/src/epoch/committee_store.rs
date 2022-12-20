@@ -56,9 +56,10 @@ impl CommitteeStore {
         if let Some(old_committee) = self.get_committee(&new_committee.epoch)? {
             // If somehow we already have this committee in the store, they must be the same.
             assert_eq!(&old_committee, new_committee);
+        } else {
+            self.committee_map
+                .insert(&new_committee.epoch, new_committee)?;
         }
-        self.committee_map
-            .insert(&new_committee.epoch, new_committee)?;
         Ok(())
     }
 
