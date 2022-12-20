@@ -19,6 +19,7 @@ module.exports = {
             },
             spacing: {
                 7.5: '1.875rem',
+                8: '2rem',
             },
             height: {
                 header: '68px',
