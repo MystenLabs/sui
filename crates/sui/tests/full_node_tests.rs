@@ -951,25 +951,16 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    match res {
-        ExecuteTransactionResponse::EffectsCert(res) => {
-            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
-            let (ct, cte, is_executed_locally) = *res;
-            assert_eq!(*ct.digest(), digest);
-            assert_eq!(*certified_txn.digest(), digest);
-            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
-            assert!(is_executed_locally);
-            // verify that the node has sequenced and executed the txn
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
-        }
-        other => {
-            panic!(
-                "WaitForLocalExecution should get EffectCerts, but got: {:?}",
-                other
-            );
-        }
-    };
+    let ExecuteTransactionResponse::EffectsCert(res) = res;
+    let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+    let (ct, cte, is_executed_locally) = *res;
+    assert_eq!(*ct.digest(), digest);
+    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert!(is_executed_locally);
+    // verify that the node has sequenced and executed the txn
+    node.state().get_transaction(digest).await
+        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
     let txn = txns.swap_remove(0);
@@ -982,79 +973,16 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    match res {
-        ExecuteTransactionResponse::EffectsCert(res) => {
-            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
-            let (ct, cte, is_executed_locally) = *res;
-            assert_eq!(*ct.digest(), digest);
-            assert_eq!(*certified_txn.digest(), digest);
-            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
-            assert!(!is_executed_locally);
-            wait_for_tx(digest, node.state().clone()).await;
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
-        }
-        other => {
-            panic!(
-                "WaitForEffectsCert should get EffectCerts, but got: {:?}",
-                other
-            );
-        }
-    };
-
-    // Test WaitForTxCert
-    let txn = txns.swap_remove(0);
-    let digest = *txn.digest();
-    let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn.into(),
-            request_type: ExecuteTransactionRequestType::WaitForTxCert,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-
-    match res {
-        ExecuteTransactionResponse::TxCert(res) => {
-            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
-            let ct = *res;
-            assert_eq!(*ct.digest(), digest);
-            assert_eq!(*certified_txn.digest(), digest);
-            wait_for_tx(digest, node.state().clone()).await;
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForTxCert: {:?}", digest, e));
-        }
-        other => {
-            panic!("WaitForTxCert should get TxCert, but got: {:?}", other);
-        }
-    };
-
-    // Test ImmediateReturn
-    let txn = txns.swap_remove(0);
-    let digest = *txn.digest();
-    let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn.into(),
-            request_type: ExecuteTransactionRequestType::ImmediateReturn,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-
-    match res {
-        ExecuteTransactionResponse::ImmediateReturn => {
-            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
-            assert_eq!(*certified_txn.digest(), digest);
-
-            wait_for_tx(digest, node.state().clone()).await;
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
-        }
-        other => {
-            panic!(
-                "ImmediateReturn should get ImmediateReturn, but got: {:?}",
-                other
-            );
-        }
-    };
+    let ExecuteTransactionResponse::EffectsCert(res) = res;
+    let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+    let (ct, cte, is_executed_locally) = *res;
+    assert_eq!(*ct.digest(), digest);
+    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert!(!is_executed_locally);
+    wait_for_tx(digest, node.state().clone()).await;
+    node.state().get_transaction(digest).await
+        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())
 }
@@ -1104,17 +1032,13 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             .await
             .unwrap();
 
-        if let SuiExecuteTransactionResponse::EffectsCert {
+        let SuiExecuteTransactionResponse::EffectsCert {
             certificate,
             effects: _,
             confirmed_local_execution,
-        } = response
-        {
-            assert_eq!(&certificate.transaction_digest, tx_digest);
-            assert!(confirmed_local_execution);
-        } else {
-            panic!("Expect EffectsCert but got {:?}", response);
-        }
+        } = response;
+        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert!(confirmed_local_execution);
     }
     Ok(())
 }
@@ -1148,17 +1072,13 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    if let SuiExecuteTransactionResponse::EffectsCert {
+    let SuiExecuteTransactionResponse::EffectsCert {
         certificate,
         effects: _,
         confirmed_local_execution,
-    } = response
-    {
-        assert_eq!(&certificate.transaction_digest, tx_digest);
-        assert!(confirmed_local_execution);
-    } else {
-        panic!("Expect EffectsCert but got {:?}", response);
-    }
+    } = response;
+    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert!(confirmed_local_execution);
 
     let _response: SuiTransactionResponse = jsonrpc_client
         .request("sui_getTransaction", rpc_params![*tx_digest])
@@ -1177,60 +1097,13 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    if let SuiExecuteTransactionResponse::EffectsCert {
+    let SuiExecuteTransactionResponse::EffectsCert {
         certificate,
         effects: _,
         confirmed_local_execution,
-    } = response
-    {
-        assert_eq!(&certificate.transaction_digest, tx_digest);
-        assert!(!confirmed_local_execution);
-    } else {
-        panic!("Expect EffectsCert but got {:?}", response);
-    }
-
-    // Test request with ExecuteTransactionRequestType::WaitForTxCert
-    let txn = txns.swap_remove(0);
-    let tx_digest = txn.digest();
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
-    let params = rpc_params![
-        tx_bytes,
-        signature,
-        ExecuteTransactionRequestType::WaitForTxCert
-    ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransactionSerializedSig", params)
-        .await
-        .unwrap();
-
-    if let SuiExecuteTransactionResponse::TxCert { certificate } = response {
-        assert_eq!(&certificate.transaction_digest, tx_digest);
-    } else {
-        panic!("Expect TxCert but got {:?}", response);
-    }
-
-    // Test request with ExecuteTransactionRequestType::ImmediateReturn
-    let txn = txns.swap_remove(0);
-    let tx_digest = txn.digest();
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
-    let params = rpc_params![
-        tx_bytes,
-        signature,
-        ExecuteTransactionRequestType::ImmediateReturn
-    ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransactionSerializedSig", params)
-        .await
-        .unwrap();
-
-    if let SuiExecuteTransactionResponse::ImmediateReturn {
-        tx_digest: transaction_digest,
-    } = response
-    {
-        assert_eq!(&transaction_digest, tx_digest);
-    } else {
-        panic!("Expect ImmediateReturn but got {:?}", response);
-    }
+    } = response;
+    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert!(!confirmed_local_execution);
 
     Ok(())
 }

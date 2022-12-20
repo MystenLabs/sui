@@ -11,9 +11,7 @@ use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::error::SuiError;
-use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
-};
+use sui_types::messages::{QuorumDriverRequest, QuorumDriverResponse, VerifiedTransaction};
 use sui_types::object::{generate_test_gas_objects, Object};
 use test_utils::authority::{
     spawn_test_authorities, test_and_configure_authority_configs, test_authority_configs,
@@ -44,62 +42,6 @@ async fn setup() -> (
 }
 
 #[tokio::test]
-async fn test_execute_transaction_immediate() {
-    let (_handles, aggregator, tx) = setup().await;
-    let digest = *tx.digest();
-
-    let quorum_driver_handler =
-        QuorumDriverHandler::new(Arc::new(aggregator), QuorumDriverMetrics::new_for_tests());
-    let quorum_driver = quorum_driver_handler.clone_quorum_driver();
-    let handle = tokio::task::spawn(async move {
-        let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
-        assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.data().transaction_digest, digest);
-    });
-    assert!(matches!(
-        quorum_driver
-            .execute_transaction(QuorumDriverRequest {
-                transaction: tx,
-                request_type: QuorumDriverRequestType::ImmediateReturn,
-            })
-            .await
-            .unwrap(),
-        QuorumDriverResponse::ImmediateReturn
-    ));
-
-    handle.await.unwrap();
-}
-
-#[tokio::test]
-async fn test_execute_transaction_wait_for_cert() {
-    let (_handles, aggregator, tx) = setup().await;
-    let digest = *tx.digest();
-
-    let quorum_driver_handler =
-        QuorumDriverHandler::new(Arc::new(aggregator), QuorumDriverMetrics::new_for_tests());
-    let quorum_driver = quorum_driver_handler.clone_quorum_driver();
-    let handle = tokio::task::spawn(async move {
-        let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
-        assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.data().transaction_digest, digest);
-    });
-    if let QuorumDriverResponse::TxCert(cert) = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx,
-            request_type: QuorumDriverRequestType::WaitForTxCert,
-        })
-        .await
-        .unwrap()
-    {
-        assert_eq!(*cert.digest(), digest);
-    } else {
-        unreachable!();
-    }
-
-    handle.await.unwrap();
-}
-
-#[tokio::test]
 async fn test_execute_transaction_wait_for_effects() {
     let (_handles, aggregator, tx) = setup().await;
     let digest = *tx.digest();
@@ -112,20 +54,13 @@ async fn test_execute_transaction_wait_for_effects() {
         assert_eq!(*cert.digest(), digest);
         assert_eq!(effects.data().transaction_digest, digest);
     });
-    if let QuorumDriverResponse::EffectsCert(result) = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+    let QuorumDriverResponse::EffectsCert(result) = quorum_driver
+        .execute_transaction(QuorumDriverRequest { transaction: tx })
         .await
-        .unwrap()
-    {
-        let (cert, effects) = *result;
-        assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.data().transaction_digest, digest);
-    } else {
-        unreachable!();
-    }
+        .unwrap();
+    let (cert, effects) = *result;
+    assert_eq!(*cert.digest(), digest);
+    assert_eq!(effects.data().transaction_digest, digest);
 
     handle.await.unwrap();
 }
@@ -143,10 +78,7 @@ async fn test_update_validators() {
         tokio::time::sleep(Duration::from_secs(3)).await;
 
         let result = quorum_driver
-            .execute_transaction(QuorumDriverRequest {
-                transaction: tx,
-                request_type: QuorumDriverRequestType::WaitForEffectsCert,
-            })
+            .execute_transaction(QuorumDriverRequest { transaction: tx })
             .await;
         // This now will fail due to epoch mismatch.
         assert!(result.is_err());
@@ -196,10 +128,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
 
     let tx2 = make_tx(&gas, sender, &keypair);
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx2,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx2 })
         .await;
     match res {
         // If aggregator gets two bad responses from 0 and 1 before getting two good responses from 2 and 3,
@@ -225,10 +154,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
     let tx2 = make_tx(&gas, sender, &keypair);
 
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx2,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx2 })
         .await;
     // Aggregator gets three bad responses, and tries tx, which should succeed.
     if let Err(SuiError::QuorumFailedToProcessTransactionWithConflictingTransactionRetried {
@@ -250,10 +176,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
     let tx2 = make_tx(&gas, sender, &keypair);
 
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx2,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx2 })
         .await;
     // Aggregator gets three good responses and execution succeeds.
     assert!(res.is_ok());
@@ -270,10 +193,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
     let tx3 = make_tx(&gas, sender, &keypair);
 
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx3,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx3 })
         .await;
     match res {
         // If aggregator gets two bad responses from 0 and 1, it will retry tx, but it will fail due to equivocaiton.
@@ -295,10 +215,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
     assert!(client2.handle_transaction(tx2.clone()).await.is_ok());
     println!("tx2: {:?}", tx2.digest());
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx2,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx2 })
         .await;
     match res {
         // if aggregator gets two bad responses from 0 and 1 first, it will try to retry tx (stake = 2), but that will fail
@@ -321,10 +238,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
     assert!(client2.handle_transaction(tx2).await.is_ok());
 
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx })
         .await;
     assert!(res.is_ok());
 
@@ -339,10 +253,7 @@ async fn test_retry_on_object_locked() -> Result<(), anyhow::Error> {
 
     let tx4 = make_tx(&gas, sender, &keypair);
     let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx4,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
-        })
+        .execute_transaction(QuorumDriverRequest { transaction: tx4 })
         .await;
     if !matches!(res, Err(SuiError::QuorumFailedToProcessTransaction { .. })) {
         panic!(

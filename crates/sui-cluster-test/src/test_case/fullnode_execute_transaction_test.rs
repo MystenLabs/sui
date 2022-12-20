@@ -49,41 +49,6 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
 
         let fullnode = ctx.get_fullnode_client();
 
-        // Test WaitForEffectsCert
-        let txn = txns.swap_remove(0);
-        let txn_digest = *txn.digest();
-
-        info!("Test execution with ImmediateReturn");
-        let response = fullnode
-            .quorum_driver()
-            .execute_transaction(
-                txn.clone(),
-                Some(ExecuteTransactionRequestType::ImmediateReturn),
-            )
-            .await?;
-        assert_eq!(txn_digest, response.tx_digest);
-
-        // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![txn_digest], 5).await;
-        Self::verify_transaction(fullnode, txn_digest).await;
-
-        info!("Test execution with WaitForTxCert");
-        let txn = txns.swap_remove(0);
-        let txn_digest = *txn.digest();
-        let response = fullnode
-            .quorum_driver()
-            .execute_transaction(
-                txn.clone(),
-                Some(ExecuteTransactionRequestType::WaitForTxCert),
-            )
-            .await?;
-        assert_eq!(txn_digest, response.tx_digest);
-        response.tx_cert.unwrap();
-
-        // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![txn_digest], 5).await;
-        Self::verify_transaction(fullnode, txn_digest).await;
-
         info!("Test execution with WaitForEffectsCert");
         let txn = txns.swap_remove(0);
         let txn_digest = *txn.digest();
