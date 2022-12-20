@@ -210,6 +210,50 @@ impl NodeConfig {
         }
         .into())
     }
+
+    #[allow(clippy::mutable_key_type)]
+    pub fn narwhal_worker_cache_inner(&self) -> Result<narwhal_config::WorkerCache> {
+        let genesis = self.genesis()?;
+        let consensus_config = self
+            .consensus_config()
+            .ok_or_else(|| anyhow!("cannot generate worker cache without ConsensusConfig"))?;
+        let workers = genesis
+            .validator_set()
+            .iter()
+            .map(|validator| {
+                let name = AuthorityPublicKey::from_bytes(validator.protocol_key().as_ref())
+                    .expect("Can't get protocol key");
+                let worker_address = if name != *self.protocol_key_pair().public() {
+                    validator.narwhal_worker_address.clone()
+                } else {
+                    // Use internal worker addresses for our own node if configured.
+                    consensus_config
+                        .internal_worker_address
+                        .as_ref()
+                        .unwrap_or(&validator.narwhal_worker_address)
+                        .clone()
+                };
+                let workers = [(
+                    0, // worker_id
+                    narwhal_config::WorkerInfo {
+                        name: NetworkPublicKey::from_bytes(validator.worker_key().as_ref())
+                            .expect("Can't get worker key"),
+                        transactions: consensus_config.address.clone(),
+                        worker_address,
+                    },
+                )]
+                .into_iter()
+                .collect();
+                let worker_index = narwhal_config::WorkerIndex(workers);
+
+                (name, worker_index)
+            })
+            .collect();
+        Ok(narwhal_config::WorkerCache {
+            workers,
+            epoch: genesis.epoch() as narwhal_config::Epoch,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

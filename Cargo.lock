@@ -9487,6 +9487,7 @@ name = "test-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "futures",
  "jsonrpsee",
@@ -9494,6 +9495,11 @@ dependencies = [
  "multiaddr",
  "mysten-metrics",
  "mysten-network",
+ "narwhal-config",
+ "narwhal-executor",
+ "narwhal-test-utils",
+ "narwhal-types",
+ "narwhal-worker",
  "once_cell",
  "prometheus",
  "rand 0.8.5",

@@ -3,10 +3,12 @@
 
 pub mod authority;
 pub mod messages;
+pub mod narwhal_manager;
 pub mod network;
 pub mod objects;
 pub mod sui_system_state;
 pub mod transaction;
+
 use rand::{rngs::StdRng, SeedableRng};
 use sui_types::{
     base_types::SuiAddress,
