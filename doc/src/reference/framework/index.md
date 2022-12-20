@@ -6,9 +6,7 @@ The Sui Framework includes the core on-chain libraries for Sui Move developers. 
 
 **Note:** The modules listed here may not include new modules that were recently added to the repository. Last update: 12/20/22
 
-https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/
-
-Modules:
+**Modules:**
  * [address](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/address.md)
  * [bag](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bag.md)
  * [balance](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/balance.md)
