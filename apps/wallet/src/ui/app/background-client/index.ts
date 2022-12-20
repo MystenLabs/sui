@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Base64DataBuffer, publicKeyFromSerialized } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -17,7 +18,11 @@ import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
+import type {
+    SignaturePubkeyPair,
+    SuiAddress,
+    SuiTransactionResponse,
+} from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type {
@@ -200,6 +205,43 @@ export class BackgroundClient {
                     args: { timeout },
                 })
             ).pipe(take(1))
+        );
+    }
+
+    public async signData(
+        address: SuiAddress,
+        data: Base64DataBuffer
+    ): Promise<SignaturePubkeyPair> {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'signData'>>({
+                    type: 'keyring',
+                    method: 'signData',
+                    args: { data: data.toString(), address },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isKeyringPayload(payload, 'signData') &&
+                        payload.return
+                    ) {
+                        const { signatureScheme, signature, pubKey } =
+                            payload.return;
+                        return {
+                            signatureScheme,
+                            signature: new Base64DataBuffer(signature),
+                            pubKey: publicKeyFromSerialized(
+                                signatureScheme,
+                                pubKey
+                            ),
+                        };
+                    }
+                    throw new Error(
+                        'Error unknown response for signData message'
+                    );
+                })
+            )
         );
     }
 
