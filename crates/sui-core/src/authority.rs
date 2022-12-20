@@ -1933,7 +1933,9 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        self.db().perpetual_tables.set_epoch(new_committee.epoch)?;
+        self.db()
+            .perpetual_tables
+            .set_recovery_epoch(new_committee.epoch)?;
         self.db().reopen_epoch_db(new_committee);
         Ok(())
     }

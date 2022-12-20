@@ -65,7 +65,10 @@ impl AuthorityStore {
         committee_store: &Arc<CommitteeStore>,
     ) -> SuiResult<Self> {
         let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
-        let cur_epoch = perpetual_tables.get_epoch()?;
+        if perpetual_tables.database_is_empty()? {
+            perpetual_tables.set_recovery_epoch(0)?;
+        }
+        let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
         let committee = match committee_store.get_committee(&cur_epoch)? {
             Some(committee) => committee,
             None => {
@@ -85,17 +88,18 @@ impl AuthorityStore {
         committee: &Committee,
         genesis: &Genesis,
     ) -> SuiResult<Self> {
+        // TODO: Since we always start at genesis, the committee should be technically the same
+        // as the genesis committee.
         assert_eq!(committee.epoch, 0);
         let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
-        let store = Self::open_inner(
+        Self::open_inner(
             path,
             db_options,
             genesis,
             perpetual_tables,
             committee.clone(),
         )
-        .await?;
-        Ok(store)
+        .await
     }
 
     async fn open_inner(
