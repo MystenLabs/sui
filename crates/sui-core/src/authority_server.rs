@@ -337,7 +337,18 @@ impl ValidatorService {
             return Ok(tonic::Response::new(response.into()));
         }
 
-        // 2) Verify cert signatures
+        // 2) Validate if cert can be executed, and verify the cert.
+        if state.is_fullnode() {
+            return Err(tonic::Status::unimplemented(format!(
+                "Cannot execute certificate without effects on fullnode! {:?}",
+                certificate.digest()
+            )));
+        }
+        if certificate.is_system_tx() {
+            return Err(tonic::Status::invalid_argument(format!(
+                "Cannot execute system certificate via RPC interface! {certificate:?}"
+            )));
+        }
         let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
         let certificate = {
             let epoch_store = state.epoch_store();
