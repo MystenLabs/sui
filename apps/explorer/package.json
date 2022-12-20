@@ -41,7 +41,6 @@
         "@tanstack/react-query": "^4.19.1",
         "@tanstack/react-query-devtools": "^4.19.1",
         "@tanstack/react-table": "^8.7.0",
-        "@vercel/analytics": "^0.1.6",
         "@visx/geo": "^2.10.0",
         "@visx/responsive": "^2.10.0",
         "@visx/tooltip": "^2.10.0",
