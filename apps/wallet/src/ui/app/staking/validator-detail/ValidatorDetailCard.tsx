@@ -3,11 +3,11 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
+import StakeAmount from '../home/StakeAmount';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
 import { CardItem } from '_app/shared/card/CardItem';
-import CoinBalance from '_app/shared/coin-balance';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import { totalActiveStakedSelector } from '_app/staking/selectors';
@@ -43,19 +43,22 @@ export function ValidatorDetailCard({
             <BottomMenuLayout>
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
-                        <div className="mb-4 w-full flex">
+                        <div className="w-full flex">
                             <Card
                                 header={
                                     <div className="grid grid-cols-2 divide-x divide-solid divide-gray-45 divide-y-0 w-full">
                                         <CardItem
                                             title="Your Stake"
                                             value={
-                                                <CoinBalance
+                                                <StakeAmount
                                                     balance={
                                                         totalStakedIncludingPending
                                                     }
                                                     type={GAS_TYPE_ARG}
                                                     diffSymbol
+                                                    size="heading4"
+                                                    color="gray-90"
+                                                    symbolColor="steel"
                                                 />
                                             }
                                         />
@@ -63,12 +66,13 @@ export function ValidatorDetailCard({
                                         <CardItem
                                             title="EARNED"
                                             value={
-                                                <CoinBalance
+                                                <StakeAmount
                                                     balance={suiEarned}
                                                     type={SUI_TYPE_ARG}
-                                                    mode="neutral"
-                                                    className="!text-gray-60"
                                                     diffSymbol
+                                                    symbolColor="gray-60"
+                                                    size="heading4"
+                                                    color="gray-60"
                                                 />
                                             }
                                         />
@@ -145,14 +149,17 @@ export function ValidatorDetailCard({
                                 </div>
                             </Card>
                         </div>
-                        <div className="flex gap-2.5 mb-8 w-full mt-4">
+                        <div className="flex gap-2.5 mb-8 w-full mt-3.75">
                             <Button
                                 size="large"
                                 mode="outline"
                                 href={stakeByValidatorAddress}
                                 className="bg-gray-50 w-full"
                             >
-                                <Icon icon={SuiIcons.Add} />
+                                <Icon
+                                    icon={SuiIcons.Add}
+                                    className="font-normal"
+                                />
                                 Stake SUI
                             </Button>
                             {totalStakedIncludingPending > 0 && (
@@ -168,7 +175,7 @@ export function ValidatorDetailCard({
                                 >
                                     <Icon
                                         icon={SuiIcons.Remove}
-                                        className="text-heading6"
+                                        className="text-heading6 font-normal"
                                     />
                                     Unstake SUI
                                 </Button>

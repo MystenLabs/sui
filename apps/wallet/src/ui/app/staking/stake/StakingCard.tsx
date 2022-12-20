@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    normalizeSuiAddress,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { STATE_OBJECT } from '../usePendingDelegation';
 import StakeForm from './StakeForm';
-import { ValidateFormCard } from './ValidateFormCard';
+import { ValidatorCard } from './ValidatorCard';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
     Content,
@@ -52,7 +58,7 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const isUnstake = searchParams.get('unstake') === 'true';
+    const isUnstacked = searchParams.get('unstake') === 'true';
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -93,6 +99,7 @@ function StakingCard() {
         ]
     );
 
+    const queryClient = useQueryClient();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
@@ -108,7 +115,7 @@ function StakingCard() {
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
                 // TODO: add unstake functionality on the support roles out
-                if (isUnstake) return;
+                if (isUnstacked) return;
                 const response = await dispatch(
                     stakeTokens({
                         amount: bigIntAmount,
@@ -117,7 +124,12 @@ function StakingCard() {
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
+                // Not sure if this is the best way to do this, but invalidate the query query for 0x5
+                queryClient.invalidateQueries({
+                    queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
+                });
                 resetForm();
+
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
@@ -131,8 +143,9 @@ function StakingCard() {
             coinType,
             validatorAddress,
             coinDecimals,
-            isUnstake,
+            isUnstacked,
             dispatch,
+            queryClient,
             navigate,
         ]
     );
@@ -156,16 +169,16 @@ function StakingCard() {
             >
                 <Formik
                     initialValues={initialValues}
-                    validateOnMount={true}
+                    validateOnMount
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
                     {({ isSubmitting, isValid, submitForm }) => (
                         <BottomMenuLayout>
                             <Content>
-                                <ValidateFormCard
+                                <ValidatorCard
                                     validatorAddress={validatorAddress}
-                                    unstake={isUnstake}
+                                    unstake={isUnstacked}
                                 />
                                 <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
                                     <Text
@@ -173,7 +186,7 @@ function StakingCard() {
                                         color="gray-85"
                                         weight="semibold"
                                     >
-                                        {isUnstake
+                                        {isUnstacked
                                             ? 'Enter the amount of SUI to unstake'
                                             : 'Enter the amount of SUI to stake'}
                                     </Text>
@@ -182,7 +195,7 @@ function StakingCard() {
                                     submitError={sendError}
                                     coinBalance={coinBalance}
                                     coinType={coinType}
-                                    unstake={isUnstake}
+                                    unstake={isUnstacked}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
@@ -210,11 +223,13 @@ function StakingCard() {
                                     mode="primary"
                                     onClick={submitForm}
                                     className=" w-1/2"
-                                    disabled={!isValid || isSubmitting}
+                                    disabled={
+                                        !isValid || isSubmitting || isUnstacked
+                                    }
                                 >
                                     {isSubmitting ? (
                                         <LoadingIndicator />
-                                    ) : isUnstake ? (
+                                    ) : isUnstacked ? (
                                         'Unstake Now'
                                     ) : (
                                         'Stake Now'

@@ -16,7 +16,7 @@ import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 import type { ValidatorState } from '../ValidatorDataTypes';
 
-export function ValidateFormCard({
+export function ValidatorCard({
     validatorAddress,
     unstake,
 }: {

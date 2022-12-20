@@ -5,9 +5,8 @@ import { is, SuiObject, type SuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { notEmpty } from '../helpers';
-import { useAppSelector } from '../hooks';
-import { api } from '../redux/store/thunk-extras';
+import { notEmpty } from '_helpers';
+import { useGetObject, useAppSelector } from '_hooks';
 
 export const STATE_OBJECT = '0x5';
 export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
@@ -43,12 +42,6 @@ interface SystemStateObject {
     };
 }
 
-interface PendingDelegation {
-    name: string;
-    staked: bigint;
-    validatorAddress: SuiAddress;
-}
-
 export function getName(rawName: string | number[]) {
     let name: string;
 
@@ -62,6 +55,11 @@ export function getName(rawName: string | number[]) {
     }
     return name;
 }
+interface PendingDelegation {
+    name: string;
+    staked: bigint;
+    validatorAddress: SuiAddress;
+}
 
 /**
  * Fetches the pending delegations from the system object. This is currently pretty hacky and expensive.
@@ -69,10 +67,7 @@ export function getName(rawName: string | number[]) {
 export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
     const address = useAppSelector(({ account: { address } }) => address);
 
-    // TODO: Use generlized `useGetObject` hook when it lands:
-    const objectQuery = useQuery(['object', STATE_OBJECT], async () => {
-        return api.instance.fullNode.getObject(STATE_OBJECT);
-    });
+    const objectQuery = useGetObject(STATE_OBJECT);
 
     const { data } = objectQuery;
 

@@ -50,7 +50,7 @@ export function DelegationCard({
             to={`/stake/validator-details?address=${encodeURIComponent(
                 address
             )}`}
-            className="flex no-underline flex-col p-3.5 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/10 bg-transparent"
+            className="flex no-underline flex-col py-3 px-3.75 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/10 bg-transparent"
         >
             <div className="flex justify-between items-center mb-2">
                 <ImageIcon src={icon} alt={name} />

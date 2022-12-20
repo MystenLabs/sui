@@ -38,7 +38,7 @@ export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
             {src ? (
                 <img src={src} className="h-full w-full" alt={alt} />
             ) : (
-                <div className="h-full w-full flex items-center justify-center font-medium text-bodySmall">
+                <div className="h-full w-full flex items-center justify-center font-medium text-bodySmall capitalize">
                     {alt.slice(0, 2)}
                 </div>
             )}
