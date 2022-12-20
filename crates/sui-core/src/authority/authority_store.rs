@@ -144,7 +144,7 @@ impl AuthorityStore {
         Ok(store)
     }
 
-    pub(crate) fn reopen_epoch_db(&self, new_committee: Committee) {
+    pub(crate) async fn reopen_epoch_db(&self, new_committee: Committee) {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
             new_committee,
@@ -152,7 +152,7 @@ impl AuthorityStore {
             self.db_options.clone(),
         ));
         let previous_store = self.epoch_store.swap(epoch_tables);
-        previous_store.epoch_terminated();
+        previous_store.epoch_terminated().await;
     }
 
     pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore>> {

@@ -1927,7 +1927,7 @@ impl AuthorityState {
         })
     }
 
-    pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {
+    pub async fn reconfigure(&self, new_committee: Committee) -> SuiResult {
         fp_ensure!(
             self.epoch() + 1 == new_committee.epoch,
             SuiError::from("Invalid new epoch")
@@ -1937,7 +1937,7 @@ impl AuthorityState {
         self.db()
             .perpetual_tables
             .set_recovery_epoch(new_committee.epoch)?;
-        self.db().reopen_epoch_db(new_committee);
+        self.db().reopen_epoch_db(new_committee).await;
         Ok(())
     }
 

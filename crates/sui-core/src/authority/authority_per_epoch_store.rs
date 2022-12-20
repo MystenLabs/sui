@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::{select, Either};
+use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -55,7 +58,14 @@ pub struct AuthorityPerEpochStore {
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
-    epoch_alive: NotifyOnce,
+    /// This is used to notify all epoch specific tasks that epoch has ended.
+    epoch_alive_notify: NotifyOnce,
+    /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
+    /// See comments in AuthorityPerEpochStore::epoch_terminated() on how this is used
+    /// Crash recovery note: we write next epoch in the database first, and then use this lock to
+    /// wait for in-memory tasks for the epoch to finish. If node crashes at this stage validator
+    /// will start with the new epoch(and will open instance of per-epoch store for a new epoch).
+    epoch_alive: tokio::sync::RwLock<bool>,
     end_of_publish: Mutex<StakeAggregator<(), true>>,
     /// Pending certificates that we are waiting to be sequenced by consensus.
     /// This is an in-memory 'index' of a AuthorityPerEpochTables::pending_consensus_transactions.
@@ -183,7 +193,7 @@ impl AuthorityPerEpochStore {
             .expect("Load reconfig state at initialization cannot fail");
         let wal_path = AuthorityEpochTables::path(epoch_id, parent_path).join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
-        let epoch_alive = NotifyOnce::new();
+        let epoch_alive_notify = NotifyOnce::new();
         let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
             .iter()
@@ -199,7 +209,8 @@ impl AuthorityPerEpochStore {
             committee,
             tables,
             reconfig_state_mem: RwLock::new(reconfig_state),
-            epoch_alive,
+            epoch_alive_notify,
+            epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -649,15 +660,43 @@ impl AuthorityPerEpochStore {
     }
 
     /// Notify epoch is terminated, can only be called once on epoch store
-    pub fn epoch_terminated(&self) {
-        self.epoch_alive
+    pub async fn epoch_terminated(&self) {
+        // Notify interested tasks that epoch has ended
+        self.epoch_alive_notify
             .notify()
             .expect("epoch_terminated called twice on same epoch store");
+        // This `write` acts as a barrier - it waits for futures executing in
+        // `within_alive_epoch` to terminate before we can continue here
+        debug!("Epoch terminated - waiting for pending tasks to complete");
+        *self.epoch_alive.write().await = false;
+        debug!("All pending epoch tasks completed");
     }
 
     /// Waits for the notification about epoch termination
     pub async fn wait_epoch_terminated(&self) {
-        self.epoch_alive.wait().await
+        self.epoch_alive_notify.wait().await
+    }
+
+    /// This function executes given future until epoch_terminated is called
+    /// If future finishes before epoch_terminated is called, future result is returned
+    /// If epoch_terminated is called before future is resolved, error is returned
+    ///
+    /// In addition to the early termination guarantee, this function also prevents epoch_terminated()
+    /// if future is being executed.
+    #[allow(clippy::result_unit_err)]
+    pub async fn within_alive_epoch<F: Future + Send>(&self, f: F) -> Result<F::Output, ()> {
+        // This guard is kept in the future until it resolves, preventing `epoch_terminated` to
+        // acquire a write lock
+        let guard = self.epoch_alive.read().await;
+        if !*guard {
+            return Err(());
+        }
+        let terminated = self.wait_epoch_terminated().boxed();
+        let f = f.boxed();
+        match select(terminated, f).await {
+            Either::Left((_, _f)) => Err(()),
+            Either::Right((result, _)) => Ok(result),
+        }
     }
 }
 

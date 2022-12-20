@@ -288,15 +288,21 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        let epoch_terminated = epoch_store.wait_epoch_terminated().boxed();
-        let submit_and_wait = self
-            .submit_and_wait_inner(transaction, &epoch_store)
-            .boxed();
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
         //
         // This is needed because submit_and_wait_inner waits on read_notify for consensus message to be processed,
         // which may never happen on epoch boundary.
-        select(submit_and_wait, epoch_terminated).await;
+        //
+        // In addition to that, within_alive_epoch ensures that all pending consensus
+        // adapter tasks are stopped before reconfiguration can proceed.
+        //
+        // This is essential because narwhal workers reuse same ports when narwhal restarts,
+        // this means we might be sending transactions from previous epochs to narwhal of
+        // new epoch if we have not had this barrier.
+        epoch_store
+            .within_alive_epoch(self.submit_and_wait_inner(transaction, &epoch_store))
+            .await
+            .ok(); // result here indicates if epoch ended earlier, we don't care about it
     }
 
     #[allow(clippy::option_map_unit_fn)]
