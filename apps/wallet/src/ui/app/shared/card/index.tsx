@@ -44,10 +44,10 @@ export function Card({ header, footer, children, ...styleProps }: CardProps) {
                 {children}
                 {footer && (
                     <div className={'flex flex-col pt-0 justify-center'}>
-                        <span className="h-px w-full bg-gray-45 lg:w-1/3 px-4"></span>
-                        <div className="flex justify-between pt-3.5">
-                            {footer}
-                        </div>
+                        {children && (
+                            <span className="h-px w-full bg-gray-45 lg:w-1/3 px-4 mb-3.5"></span>
+                        )}
+                        <div className="flex justify-between">{footer}</div>
                     </div>
                 )}
             </div>
