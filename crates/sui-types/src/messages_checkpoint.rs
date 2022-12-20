@@ -132,6 +132,9 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
+    /// Total number of transactions committed since genesis, including those in this
+    /// checkpoint.
+    pub network_total_transactions: u64,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
     /// The running total gas costs of all transactions included in the current epoch so far
@@ -151,6 +154,7 @@ impl CheckpointSummary {
     pub fn new(
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
+        network_total_transactions: u64,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
@@ -161,6 +165,7 @@ impl CheckpointSummary {
         Self {
             epoch,
             sequence_number,
+            network_total_transactions,
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
@@ -242,6 +247,7 @@ impl SignedCheckpointSummary {
     pub fn new(
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
+        network_total_transactions: u64,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
@@ -252,6 +258,7 @@ impl SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
             epoch,
             sequence_number,
+            network_total_transactions,
             transactions,
             previous_digest,
             epoch_rolling_gas_cost_summary,
@@ -455,6 +462,21 @@ impl CheckpointContents {
         self.transactions.iter()
     }
 
+    /// Return an iterator that enumerates the transactions in the contents.
+    /// The iterator item is a tuple of (sequence_number, &ExecutionDigests),
+    /// where the sequence_number indicates the index of the transaction in the
+    /// global ordering of executed transactions since genesis.
+    pub fn enumerate_transactions(
+        &self,
+        ckpt: &CheckpointSummary,
+    ) -> impl Iterator<Item = (u64, &ExecutionDigests)> {
+        let start = ckpt.network_total_transactions - self.size() as u64;
+
+        (0u64..)
+            .zip(self.iter())
+            .map(move |(i, digests)| (i + start, digests))
+    }
+
     pub fn into_inner(self) -> Vec<ExecutionDigests> {
         self.transactions
     }
@@ -502,6 +524,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
@@ -539,6 +562,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
@@ -567,6 +591,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
