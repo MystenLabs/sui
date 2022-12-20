@@ -1766,7 +1766,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         // NOTE: this test fails if execute_certificate() is used here instead, while keeping
         // try_execute_for_test() above. This is because owned object locks are not cleared
         // atomically after a transaction completes, causing inconsistency when TransactionManager
-        // calss get_missing_input_objects(). This would be an issue for crash recovery too.
+        // calls get_missing_input_objects(). This would be an issue for crash recovery too.
         // TODO: fix the issue and test interrupting both execute_certificate() and
         // try_execute_for_test(), and calling execute_certificate() again.
         let info = authority_state
@@ -2231,7 +2231,7 @@ async fn test_authority_persist() {
 
     // Create an authority
     let store = Arc::new(
-        AuthorityStore::open_with_committee(
+        AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,
@@ -2265,7 +2265,7 @@ async fn test_authority_persist() {
             &mut StdRng::from_seed(seed),
         );
     let store = Arc::new(
-        AuthorityStore::open_with_committee(
+        AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,

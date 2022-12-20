@@ -94,7 +94,7 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open_with_committee(
+            AuthorityStore::open_with_committee_for_testing(
                 &path,
                 None,
                 &committee,
@@ -134,7 +134,7 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open_with_committee(
+            AuthorityStore::open_with_committee_for_testing(
                 &path,
                 None,
                 &committee,
@@ -170,7 +170,7 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open_with_committee(
+            AuthorityStore::open_with_committee_for_testing(
                 &path,
                 None,
                 &committee,
@@ -204,7 +204,7 @@ async fn test_batch_manager_happy_path() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
-        AuthorityStore::open_with_committee(
+        AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,
@@ -287,7 +287,7 @@ async fn test_batch_manager_out_of_order() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
-        AuthorityStore::open_with_committee(
+        AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,
@@ -364,7 +364,7 @@ async fn test_batch_manager_drop_out_of_order() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
-        AuthorityStore::open_with_committee(
+        AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,
@@ -742,7 +742,7 @@ async fn test_safe_batch_stream() {
     authorities.insert(public_key_bytes, 1);
     let committee = Committee::new(0, authorities).unwrap();
     let store = Arc::new(
-        AuthorityStore::open_with_committee(
+        AuthorityStore::open_with_committee_for_testing(
             &path.join("store"),
             None,
             &committee,

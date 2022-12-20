@@ -13,6 +13,8 @@ use typed_store::traits::TypedStoreDebug;
 
 use typed_store_derive::DBMapUtils;
 
+const CURRENT_EPOCH_KEY: u64 = 0;
+
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
 pub struct AuthorityPerpetualTables {
@@ -79,6 +81,12 @@ pub struct AuthorityPerpetualTables {
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+
+    /// A singleton table that stores the current epoch number. This is used only for the purpose of
+    /// crash recovery so that when we restart we know which epoch we are at. This is needed because
+    /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.
+    /// This number should match the epoch of the per-epoch table in the authority store.
+    current_epoch: DBMap<u64, u64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -180,15 +188,16 @@ impl AuthorityPerpetualTables {
         Ok(result)
     }
 
-    pub fn get_epoch(&self) -> SuiResult<EpochId> {
-        Ok(self.get_sui_system_state_object()?.epoch)
+    pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
+        Ok(self
+            .current_epoch
+            .get(&CURRENT_EPOCH_KEY)?
+            .expect("Must have current epoch."))
     }
 
-    pub fn get_committee(&self) -> SuiResult<Committee> {
-        Ok(self
-            .get_sui_system_state_object()?
-            .get_current_epoch_committee()
-            .committee)
+    pub fn set_recovery_epoch(&self, epoch: EpochId) -> SuiResult {
+        self.current_epoch.insert(&CURRENT_EPOCH_KEY, &epoch)?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {

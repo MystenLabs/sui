@@ -124,14 +124,21 @@ impl SuiNode {
         let genesis = config.genesis()?;
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
-        let committee = genesis.committee()?;
-        let store =
-            Arc::new(AuthorityStore::open(&config.db_path().join("store"), None, genesis).await?);
+        let genesis_committee = genesis.committee()?;
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
-            &committee,
+            &genesis_committee,
             None,
         ));
+        let store = Arc::new(
+            AuthorityStore::open(
+                &config.db_path().join("store"),
+                None,
+                genesis,
+                &committee_store,
+            )
+            .await?,
+        );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let state_sync_store = RocksDbStore::new(

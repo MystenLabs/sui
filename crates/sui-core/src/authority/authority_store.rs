@@ -57,27 +57,40 @@ pub struct AuthorityStore {
 
 impl AuthorityStore {
     /// Open an authority store by directory path.
-    /// If the store is empty, initialize it using genesis objects.
+    /// If the store is empty, initialize it using genesis.
     pub async fn open(
         path: &Path,
         db_options: Option<Options>,
         genesis: &Genesis,
+        committee_store: &Arc<CommitteeStore>,
     ) -> SuiResult<Self> {
         let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
-        let committee = if perpetual_tables.database_is_empty()? {
-            genesis.committee()?
-        } else {
-            perpetual_tables.get_committee()?
+        if perpetual_tables.database_is_empty()? {
+            perpetual_tables.set_recovery_epoch(0)?;
+        }
+        let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
+        let committee = match committee_store.get_committee(&cur_epoch)? {
+            Some(committee) => committee,
+            None => {
+                // If we cannot find the corresponding committee from the committee store, we must
+                // be at genesis. This is because we always first insert to the committee store
+                // before updating the current epoch in the perpetual tables.
+                assert_eq!(cur_epoch, 0);
+                genesis.committee()?
+            }
         };
         Self::open_inner(path, db_options, genesis, perpetual_tables, committee).await
     }
 
-    pub async fn open_with_committee(
+    pub async fn open_with_committee_for_testing(
         path: &Path,
         db_options: Option<Options>,
         committee: &Committee,
         genesis: &Genesis,
     ) -> SuiResult<Self> {
+        // TODO: Since we always start at genesis, the committee should be technically the same
+        // as the genesis committee.
+        assert_eq!(committee.epoch, 0);
         let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
         Self::open_inner(
             path,

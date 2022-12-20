@@ -271,7 +271,7 @@ mod tests {
             );
 
         let store = Arc::new(
-            AuthorityStore::open_with_committee(
+            AuthorityStore::open_with_committee_for_testing(
                 &path,
                 None,
                 &committee,

@@ -1808,7 +1808,7 @@ impl AuthorityState {
 
         // unwrap ok - for testing only.
         let store = Arc::new(
-            AuthorityStore::open_with_committee(
+            AuthorityStore::open_with_committee_for_testing(
                 &path.join("store"),
                 None,
                 &genesis_committee,
@@ -1927,14 +1927,15 @@ impl AuthorityState {
     }
 
     pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {
-        // TODO: We should move the committee into epoch db store, so that the operation below
-        // can become atomic.
         fp_ensure!(
             self.epoch() + 1 == new_committee.epoch,
-            SuiError::from("Invalid new epoch to sign and update")
+            SuiError::from("Invalid new epoch")
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
+        self.db()
+            .perpetual_tables
+            .set_recovery_epoch(new_committee.epoch)?;
         self.db().reopen_epoch_db(new_committee);
         Ok(())
     }
