@@ -34,7 +34,6 @@
         "@hookform/resolvers": "^2.9.10",
         "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
-        "@mysten/wallet-adapter-all-wallets": "workspace:*",
         "@mysten/wallet-kit": "workspace:*",
         "@sentry/react": "^7.24.2",
         "@sentry/tracing": "^7.24.2",

@@ -3,10 +3,11 @@
   "include": ["src"],
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "baseUrl": "."
   },
   "references": [
-    { "path": "../adapters/base-adapter" },
-    { "path": "../../typescript" }
+    { "path": "../../typescript" },
+    { "path": "../adapters/base-adapter" }
   ]
 }
