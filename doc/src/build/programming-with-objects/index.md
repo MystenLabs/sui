@@ -6,7 +6,7 @@ Sui is a blockchain centered on [objects](../../learn/objects.md). Once you star
 
 In this tutorial series, we will walk through all the powerful ways to interact with objects in [Sui Move](../../learn/sui-move-diffs.md). At the end, we will also explore the designs of a few (close-to-)real-world examples to demonstrate the tradeoffs of using different object types and ownership relationships.
 
-Note, you can find Sui Move programming examples at: https://examples.sui.io/
+[Sui Move programming examples](../explore/move-examples/index.md) are also available in the Explore section.
 
 ## Prerequisites
 

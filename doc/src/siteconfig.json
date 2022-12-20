@@ -181,11 +181,6 @@
             "external": true
           },
           {
-            "name": "Sui by Example",
-            "url": "https://examples.sui.io/",
-            "external": true
-          },
-          {
             "name": "Why We Created Sui Move",
             "url": "https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b",
             "external": true            

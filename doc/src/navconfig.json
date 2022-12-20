@@ -228,93 +228,20 @@
       },
       {
         "label": "Sui Move by Example",
-        "fileName": "explore/move-examples",
+        "fileName": "explore/move-examples/index",
         "title": "Sui Move by Example",
         "items": [
           {
-            "label": "Sui Basics",
-            "fileName": "explore/move-examples/basics",
-            "title": "Sui Basics",
-            "items": [
-              {
-                "label": "Move.toml",
-                "fileName": "explore/move-examples/basics/move-toml"
-              },
-              {
-                "label": "Init Function",
-                "fileName": "explore/move-examples/basics/init-function"
-              },
-              {
-                "label": "Entry Functions",
-                "fileName": "explore/move-examples/basics/entry-functions"
-              },
-              {
-                "label": "Strings",
-                "fileName": "explore/move-examples/basics/strings"
-              },
-              {
-                "label": "Shared Object",
-                "fileName": "explore/move-examples/basics/shared-object"
-              },
-              {
-                "label": "Transfer",
-                "fileName": "explore/move-examples/basics/transfer"
-              },
-              {
-                "label": "Custom Transfer",
-                "fileName": "explore/move-examples/basics/custom-transfer"
-              },
-              {
-                "label": "Events",
-                "fileName": "explore/move-examples/basics/events"
-              },
-              {
-                "label": "One Time Witness",
-                "fileName": "explore/move-examples/basics/one-time-witness"
-              }
-            ]
+            "label": "Basics",
+            "fileName": "explore/move-examples/basics"
           },
           {
             "label": "Patterns",
-            "fileName": "explore/move-examples/patterns",
-            "title": "Patterns",
-            "items": [
-              {
-                "label": "Capability",
-                "fileName": "explore/move-examples/patterns/capability"
-              },
-              {
-                "label": "Witness", 
-                "fileName": "explore/move-examples/patterns/witness"
-              },
-              {
-                "label": "Transferable Witness",
-                "fileName": "explore/move-examples/patterns/transferable-witness"
-              },
-              {
-                "label": "Hot Potato",
-                "fileName": "explore/move-examples/patterns/hot-potato"
-              },
-              {
-                "label": "ID Pointer",
-                "fileName": "explore/move-examples/patterns/id-pointer"
-              }
-            ]
+            "fileName": "explore/move-examples/patterns"
           },
           {
             "label": "Samples",
-            "fileName": "explore/move-examples/samples",
-            "title": "Samples",
-            "items": [
-              {
-                "label": "Make an NFT",
-                "fileName": "explore/move-examples/samples/nft"
-              },
-              {
-                "label": "Create a Coin (ERC20)",
-                "fileName": "explore/move-examples/samples/coin"
-              }
-            ]
+            "fileName": "explore/move-examples/samples"
           },
           {
             "label": "Additional Resources",
