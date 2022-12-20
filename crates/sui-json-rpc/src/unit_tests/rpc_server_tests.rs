@@ -227,16 +227,15 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_get_balances() -> Result<(), anyhow::Error> {
+async fn test_get_balance() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let result: Vec<Balance> = http_client.get_balances(*address, None).await?;
-    assert_eq!(1, result.len());
-    assert_eq!("0x2::sui::SUI", result[0].coin_type);
-    assert_eq!(500000000000000, result[0].total_balance);
-    assert_eq!(5, result[0].coin_object_count);
+    let result: Balance = http_client.get_balance(*address, None).await?;
+    assert_eq!("0x2::sui::SUI", result.coin_type);
+    assert_eq!(500000000000000, result.total_balance);
+    assert_eq!(5, result.coin_object_count);
 
     Ok(())
 }

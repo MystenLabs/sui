@@ -199,6 +199,15 @@ impl CoinReadApi {
             .await?)
     }
 
+    pub async fn get_all_coins(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<CoinPage> {
+        Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
+    }
+
     pub fn get_coins_stream(
         &self,
         owner: SuiAddress,
@@ -225,12 +234,16 @@ impl CoinReadApi {
         )
     }
 
-    pub async fn get_balances(
+    pub async fn get_balance(
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-    ) -> SuiRpcResult<Vec<Balance>> {
-        Ok(self.api.http.get_balances(owner, coin_type).await?)
+    ) -> SuiRpcResult<Balance> {
+        Ok(self.api.http.get_balance(owner, coin_type).await?)
+    }
+
+    pub async fn get_all_balances(&self, owner: SuiAddress) -> SuiRpcResult<Vec<Balance>> {
+        Ok(self.api.http.get_all_balances(owner).await?)
     }
 
     pub async fn get_coin_metadata(&self, coin_type: String) -> SuiRpcResult<SuiCoinMetadata> {

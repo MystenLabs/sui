@@ -37,13 +37,13 @@ pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 #[open_rpc(namespace = "sui", tag = "Coin Query API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait CoinReadApi {
-    /// Return the list of Coin objects owned by an address.
+    /// Return all Coin<`coin_type`> objects owned by an address.
     #[method(name = "getCoins")]
     async fn get_coins(
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        /// optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
         /// optional paging cursor
         cursor: Option<ObjectID>,
@@ -51,14 +51,34 @@ pub trait CoinReadApi {
         limit: Option<usize>,
     ) -> RpcResult<CoinPage>;
 
-    /// Return the total coin balance for each coin type.
-    #[method(name = "getBalance")]
-    async fn get_balances(
+    /// Return all Coin objects owned by an address.
+    #[method(name = "getAllCoins")]
+    async fn get_all_coins(
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        /// optional paging cursor
+        cursor: Option<ObjectID>,
+        /// maximum number of items per page
+        limit: Option<usize>,
+    ) -> RpcResult<CoinPage>;
+
+    /// Return the total coin balance for one coin type, owned by the address owner.
+    #[method(name = "getBalance")]
+    async fn get_balance(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
+    ) -> RpcResult<Balance>;
+
+    /// Return the total coin balance for all coin type, owned by the address owner.
+    #[method(name = "getAllBalances")]
+    async fn get_all_balances(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
 
     /// Return metadata(e.g., symbol, decimals) for a coin
