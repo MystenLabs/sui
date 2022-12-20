@@ -241,6 +241,12 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                     .subscriber_current_round
                     .set(cert.round() as i64);
                 self.metrics.subscriber_processed_certificates.inc();
+                #[cfg(feature = "benchmark")]
+                // NOTE: This log entry is used to compute performance.
+                tracing::info!(
+                    "Execution took {} seconds",
+                    cert.metadata.created_at.elapsed().as_secs_f64()
+                );
                 self.metrics
                     .subscriber_certificate_latency
                     .observe(cert.metadata.created_at.elapsed().as_secs_f64());

@@ -313,6 +313,11 @@ impl Core {
             });
         }
 
+        tracing::info!(
+            "tracking header inside propose_header {} current elapsed time {}",
+            header.digest(),
+            header.created_at.elapsed().as_secs_f64()
+        );
         // Process the header.
         header_store
             .async_write(header.digest(), header.clone())
@@ -325,6 +330,12 @@ impl Core {
             .proposed_header_round
             .with_label_values(&[&header.epoch.to_string()])
             .set(header.round as i64);
+
+        tracing::info!(
+            "tracking header after write to store {} current elapsed time {}",
+            header.digest(),
+            header.created_at.elapsed().as_secs_f64()
+        );
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
@@ -374,6 +385,12 @@ impl Core {
             }
         }
 
+        tracing::info!(
+            "tracking header after all votes requests {} current elapsed time {}",
+            header.digest(),
+            header.created_at.elapsed().as_secs_f64()
+        );
+
         // Check if we successfully formed a certificate.
         let certificate =
             certificate.ok_or_else(|| DagError::CouldNotFormCertificate(header.digest()))?;
@@ -417,12 +434,24 @@ impl Core {
 
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_own_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+        tracing::info!(
+            "tracking header before process internal {} current elapsed time {}",
+            certificate.header.digest(),
+            certificate.header.created_at.elapsed().as_secs_f64()
+        );
+
         // Process the new certificate.
         match self.process_certificate_internal(certificate.clone()).await {
             Ok(()) => Ok(()),
             result @ Err(DagError::ShuttingDown) => result,
             _ => panic!("Failed to process locally-created certificate"),
         }?;
+
+        tracing::info!(
+            "tracking header after process internal {} current elapsed time {}",
+            certificate.header.digest(),
+            certificate.header.created_at.elapsed().as_secs_f64()
+        );
 
         // Broadcast the certificate.
         let epoch = certificate.epoch();
@@ -434,9 +463,10 @@ impl Core {
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        let tasks = self
-            .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
+        let tasks = self.network.broadcast(
+            network_keys,
+            &PrimaryMessage::Certificate(certificate.clone()),
+        );
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,
@@ -457,6 +487,16 @@ impl Core {
             .header_to_certificate_latency
             .with_label_values(&[&epoch.to_string()])
             .observe(created_at.elapsed().as_secs_f64());
+
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            certificate.header.digest(),
+            created_at.elapsed().as_secs_f64(),
+            certificate.digest()
+        );
+
         Ok(())
     }
 
@@ -575,7 +615,11 @@ impl Core {
         // corresponding round.
         self.append_certificate_in_aggregator(certificate.clone())
             .await?;
-
+        tracing::info!(
+            "tracking cert {} current elapsed time {}",
+            certificate.digest(),
+            certificate.metadata.created_at.elapsed().as_secs_f64()
+        );
         // Send it to the consensus layer.
         let digest = certificate.header.digest();
         if let Err(e) = self.tx_new_certificates.send(certificate).await {
@@ -733,6 +777,7 @@ impl Core {
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
                     let network = self.network.clone();
+                    tracing::info!("tracking header {} current elapsed time {}", header.digest(), header.created_at.elapsed().as_secs_f64());
                     self.propose_header_future = Some(spawn_monitored_task!(Self::propose_header(
                         name,
                         committee,

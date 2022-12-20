@@ -12,7 +12,9 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, error};
-use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
+use types::{
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult, Timestamp,
+};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -56,6 +58,11 @@ impl ConsensusProtocol for Bullshark {
         state: &mut ConsensusState,
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>> {
+        tracing::info!(
+            "tracking cert in cons process_certificate {} current elapsed time {}",
+            certificate.header.digest(),
+            certificate.metadata.created_at.elapsed().as_secs_f64()
+        );
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
@@ -153,6 +160,11 @@ impl ConsensusProtocol for Bullshark {
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
+                tracing::info!(
+                    "tracking cert till right before completion {} current elapsed time {}",
+                    certificate.header.digest(),
+                    certificate.metadata.created_at.elapsed().as_secs_f64()
+                );
                 // Update and clean up internal state.
                 state.update(&x, self.gc_depth);
 

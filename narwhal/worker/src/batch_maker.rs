@@ -264,6 +264,15 @@ impl BatchMaker {
             return None;
         }
 
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Batch {:?} took {} seconds to create due to {}",
+            batch.digest(),
+            self.batch_start_timestamp.elapsed().as_secs_f64(),
+            reason
+        );
+
         // we are deliberately measuring this after the sending to the downstream
         // channel tx_message as the operation is blocking and affects any further
         // batch creation.

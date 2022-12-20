@@ -20,19 +20,19 @@ def local(ctx, debug=True):
         'faults': 0,
         'nodes': 4,
         'workers': 1,
-        'rate': 50_000,
+        'rate': 200,
         'tx_size': 512,
-        'duration': 20,
+        'duration': 60,
         'failpoints': False
     }
     node_params = {
-        'header_num_of_batches_threshold': 32,
+        'header_num_of_batches_threshold': 1,
         'max_header_num_of_batches': 1000,
-        'max_header_delay': '200ms',  # ms
+        'max_header_delay': '5000ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
         'sync_retry_nodes': 3,  # number of nodes
-        'batch_size': 500_000,  # bytes
+        'batch_size': 50_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
         'block_synchronizer': {
             'range_synchronize_timeout': '30_000ms',
