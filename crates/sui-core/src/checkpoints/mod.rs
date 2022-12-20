@@ -432,6 +432,14 @@ impl CheckpointBuilder {
         let contents = CheckpointContents::new_with_causally_ordered_transactions(
             effects.iter().map(TransactionEffects::execution_digests),
         );
+
+        let num_txns = contents.size() as u64;
+
+        let network_total_transactions = last_checkpoint
+            .as_ref()
+            .map(|(_, c)| c.network_total_transactions + num_txns)
+            .unwrap_or(num_txns);
+
         let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
         let sequence_number = last_checkpoint
             .as_ref()
@@ -440,6 +448,7 @@ impl CheckpointBuilder {
         let summary = CheckpointSummary::new(
             self.state.epoch(),
             sequence_number,
+            network_total_transactions,
             &contents,
             previous_digest,
             epoch_rolling_gas_cost_summary,
