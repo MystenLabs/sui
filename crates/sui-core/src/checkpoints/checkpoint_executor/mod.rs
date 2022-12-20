@@ -512,6 +512,8 @@ async fn execute_transactions(
         .map(|tx| tx.into())
         .collect();
 
+    assert_eq!(txns.len(), execution_digests.len());
+
     let effects_digests: Vec<TransactionEffectsDigest> = execution_digests
         .iter()
         .map(|digest| digest.effects)
