@@ -17,12 +17,7 @@
 //! handles epoch boundaries by calling to reconfig once all checkpoints of an epoch have finished
 //! executing.
 
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
@@ -38,6 +33,7 @@ use sui_types::{
 use tokio::{
     sync::broadcast::{self, error::RecvError},
     task::JoinHandle,
+    time::timeout,
 };
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
@@ -56,6 +52,7 @@ pub(crate) mod tests;
 
 const TASKS_PER_CORE: usize = 1;
 const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 2;
+const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 type CheckpointExecutionBuffer = FuturesOrdered<
     JoinHandle<(
@@ -505,15 +502,18 @@ async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_state: Arc<AuthorityState>,
 ) -> SuiResult {
-    let tx_digests: Vec<TransactionDigest> =
+    let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    // TODO(william)
-    println!("TESTING --- digests: {:?}", tx_digests);
-
-    let txns = get_transactions(&tx_digests, authority_state.clone())?;
-    println!("TESTING --- txns len before: {:?}", txns.len());
-    let num_synced_txns = txns.len();
+    let synced_txns: Vec<VerifiedCertificate> = authority_state
+        .database
+        .perpetual_tables
+        .synced_transactions
+        .multi_get(&all_tx_digests)?
+        .into_iter()
+        .flatten()
+        .map(|tx| tx.into())
+        .collect();
 
     let effects_digests: Vec<TransactionEffectsDigest> = execution_digests
         .iter()
@@ -534,7 +534,7 @@ async fn execute_transactions(
         })
         .collect();
 
-    for tx in txns.clone() {
+    for tx in synced_txns.clone() {
         if tx.contains_shared_object() {
             authority_state
                 .database
@@ -545,69 +545,23 @@ async fn execute_transactions(
     authority_state
         .database
         .epoch_store()
-        .insert_pending_certificates(&txns)?;
+        .insert_pending_certificates(&synced_txns)?;
 
-    // TODO(william) remove this clone after debugging
     authority_state
         .transaction_manager
-        .enqueue(txns.clone())
+        .enqueue(synced_txns)
         .await?;
 
-    let effects = authority_state
-        .database
-        .notify_read_effects(tx_digests)
-        .await?;
-
-    // TODO(william)
-    // println!("TESTING --- effects: {:?}", effects);
-    println!("TESTING --- effects len: {:?}", effects.len());
-    println!("TESTING --- txns len after: {:?}", txns.len());
-    println!("TESTING --- num synced txns: {:?}", num_synced_txns);
-
-    assert_eq!(
-        effects.len(),
-        num_synced_txns,
-        "Missing txn effects from transaction manager"
-    );
-    Ok(())
-}
-
-fn get_transactions(
-    digests: &Vec<TransactionDigest>,
-    authority_state: Arc<AuthorityState>,
-) -> SuiResult<Vec<VerifiedCertificate>> {
-    let synced_txns: Vec<VerifiedCertificate> = authority_state
-        .database
-        .perpetual_tables
-        .synced_transactions
-        .multi_get(digests)?
-        .into_iter()
-        .flatten()
-        .map(|tx| tx.into())
-        .collect();
-
-    println!("TESTING --- synced txns len: {:?}", synced_txns.len());
-
-    // Get set of digests that did not exist in synced_transactions
-    let synced_digests: HashSet<TransactionDigest> =
-        HashSet::from_iter(synced_txns.clone().into_iter().map(|tx| *tx.digest()));
-    let diff: Vec<TransactionDigest> = HashSet::from_iter(digests.clone().into_iter())
-        .difference(&synced_digests)
-        .collect::<HashSet<&TransactionDigest>>()
-        .into_iter()
-        .copied()
-        .collect();
-
-    // Ensure that effects exist for any transaction of this checkpoint that
-    // are not in synced transactions table, as this suggests that they
-    // were executed locally
-    let _ = authority_state
-        .database
-        .perpetual_tables
-        .executed_effects
-        .multi_get(diff)?
-        .into_iter()
-        .map(|tx| assert!(tx.is_some(), "All checkpoint transactions must be either synced, pending execution, or already executed"));
-
-    Ok(synced_txns)
+    // Once synced_txns have been awaited, all txns should have effects committed.
+    let effects_future = authority_state.database.notify_read_effects(all_tx_digests);
+    match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
+        Err(_elapsed) => {
+            panic!(
+                "Transaction effects for checkpoint not present within {:?}",
+                LOCAL_EXECUTION_TIMEOUT
+            )
+        }
+        Ok(Err(err)) => Err(err),
+        Ok(Ok(_)) => Ok(()),
+    }
 }
