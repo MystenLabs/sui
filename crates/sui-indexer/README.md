@@ -29,8 +29,6 @@ and then run
   ```
   
 ### Clean up and re-run
-  ```
-  // clean up all tables in the local DB, run the following command until no more tables are deleted
-`diesel migration revert`
-  // then also delete "__diesel_schema_migrations", you can do that via Postico client
+- Run `diesel migration revert` under `/sui-indexer` until no more tables are deleted;
+- Also delete "__diesel_schema_migrations", you can do this via Postico client
   ```
