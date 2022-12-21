@@ -6,7 +6,7 @@ Sui indexer is an off-fullnode service to serve data from the protocol, includin
 ## Steps to run locally
 ### Prerequisites
 - install local [Postgres server](https://www.postgresql.org/download/)
-- install Diesel CLI, you can follow this [guide](https://diesel.rs/guides/getting-started) until “write Rust” section
+- install Diesel CLI, you can follow the [Diesel Getting Started guide](https://diesel.rs/guides/getting-started) up to the *Write Rust* section
 - [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.
 
 ### Steps
