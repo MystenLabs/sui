@@ -31,6 +31,6 @@ and then run
 ### Clean up and re-run
   ```
   // clean up all tables in the local DB, run the following command until no more tables are deleted
-  diesel migration revert
+`diesel migration revert`
   // then also delete "__diesel_schema_migrations", you can do that via Postico client
   ```
