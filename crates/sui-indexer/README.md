@@ -12,7 +12,7 @@ Sui indexer is an off-fullnode service to serve data from the protocol, includin
 ### Steps
 1. DB setup
   ```
-// DB setup, run below under /sui-indexer
+// DB setup, run the following commands from the /sui-indexer folder
 // .env file under /sui-indexer is required for diesel cmds
 // in .env file, DATABASE_URL should point to your local PG server
 // an example is:
