@@ -27,12 +27,13 @@ use sui_types::{
     committee::Committee,
     crypto::AuthorityPublicKeyBytes,
     error::SuiResult,
-    messages::{SignedTransactionEffects, TransactionEffects, VerifiedCertificate},
+    messages::{TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use tokio::{
     sync::broadcast::{self, error::RecvError},
     task::JoinHandle,
+    time::timeout,
 };
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
@@ -51,6 +52,7 @@ pub(crate) mod tests;
 
 const TASKS_PER_CORE: usize = 1;
 const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 2;
+const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 type CheckpointExecutionBuffer = FuturesOrdered<
     JoinHandle<(
@@ -478,7 +480,7 @@ pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_state: Arc<AuthorityState>,
     checkpoint_store: Arc<CheckpointStore>,
-) -> SuiResult<Vec<SignedTransactionEffects>> {
+) -> SuiResult {
     debug!(
         "Scheduling checkpoint {:?} for execution",
         checkpoint.sequence_number(),
@@ -499,14 +501,15 @@ pub async fn execute_checkpoint(
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_state: Arc<AuthorityState>,
-) -> SuiResult<Vec<SignedTransactionEffects>> {
-    let tx_digests: Vec<TransactionDigest> =
+) -> SuiResult {
+    let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
-    let txns: Vec<VerifiedCertificate> = authority_state
+
+    let synced_txns: Vec<VerifiedCertificate> = authority_state
         .database
         .perpetual_tables
         .synced_transactions
-        .multi_get(&tx_digests)?
+        .multi_get(&all_tx_digests)?
         .into_iter()
         .flatten()
         .map(|tx| tx.into())
@@ -531,7 +534,7 @@ async fn execute_transactions(
         })
         .collect();
 
-    for tx in txns.clone() {
+    for tx in synced_txns.clone() {
         if tx.contains_shared_object() {
             authority_state
                 .database
@@ -542,12 +545,23 @@ async fn execute_transactions(
     authority_state
         .database
         .epoch_store()
-        .insert_pending_certificates(&txns)?;
-
-    authority_state.transaction_manager.enqueue(txns).await?;
+        .insert_pending_certificates(&synced_txns)?;
 
     authority_state
-        .database
-        .notify_read_effects(tx_digests)
-        .await
+        .transaction_manager
+        .enqueue(synced_txns)
+        .await?;
+
+    // Once synced_txns have been awaited, all txns should have effects committed.
+    let effects_future = authority_state.database.notify_read_effects(all_tx_digests);
+    match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
+        Err(_elapsed) => {
+            panic!(
+                "Transaction effects for checkpoint not present within {:?}",
+                LOCAL_EXECUTION_TIMEOUT
+            )
+        }
+        Ok(Err(err)) => Err(err),
+        Ok(Ok(_)) => Ok(()),
+    }
 }
