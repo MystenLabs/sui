@@ -1934,10 +1934,11 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        self.db()
-            .perpetual_tables
+        let db = self.db();
+        db.revert_uncommitted_epoch_transactions().await?;
+        db.perpetual_tables
             .set_recovery_epoch(new_committee.epoch)?;
-        self.db().reopen_epoch_db(new_committee).await;
+        db.reopen_epoch_db(new_committee).await;
         Ok(())
     }
 

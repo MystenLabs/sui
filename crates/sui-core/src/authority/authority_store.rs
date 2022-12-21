@@ -144,6 +144,36 @@ impl AuthorityStore {
         Ok(store)
     }
 
+    /// This function is called at the very end of the epoch.
+    /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
+    pub(crate) async fn revert_uncommitted_epoch_transactions(&self) -> SuiResult {
+        let epoch_store = self.epoch_store.load();
+        {
+            let state = epoch_store.get_reconfig_state_write_lock_guard();
+            if state.should_accept_user_certs() {
+                // Need to change this so that consensus adapter do not accept certificates from user.
+                // This can happen if our local validator did not initiate epoch change locally,
+                // but 2f+1 nodes already concluded the epoch.
+                //
+                // This lock is essentially a barrier for
+                // `epoch_store.pending_consensus_certificates` table we are reading on the line after this block
+                epoch_store.close_user_certs(state);
+            }
+            // lock is dropped here
+        }
+        let pending_certificates = epoch_store.pending_consensus_certificates();
+        debug!(
+            "Reverting {} locally executed transactions that was not included in the epoch",
+            pending_certificates.len()
+        );
+        for digest in pending_certificates {
+            debug!("Reverting {} at the end of epoch", digest);
+            self.revert_state_update(&digest).await?;
+        }
+        debug!("All uncommitted local transactions reverted");
+        Ok(())
+    }
+
     pub(crate) async fn reopen_epoch_db(&self, new_committee: Committee) {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(

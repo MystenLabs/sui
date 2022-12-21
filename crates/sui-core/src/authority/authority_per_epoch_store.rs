@@ -447,6 +447,10 @@ impl AuthorityPerEpochStore {
         self.pending_consensus_certificates.lock().is_empty()
     }
 
+    pub fn pending_consensus_certificates(&self) -> HashSet<TransactionDigest> {
+        self.pending_consensus_certificates.lock().clone()
+    }
+
     /// Stores a list of pending certificates to be executed.
     pub fn insert_pending_certificates(
         &self,
