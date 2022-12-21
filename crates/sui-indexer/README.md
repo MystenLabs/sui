@@ -23,9 +23,9 @@ diesel setup
 diesel migration run
 ```
 2. cargo run under `/sui-indexer`
-  ```sh
-  cargo run --bin sui-indexer -- --db-url "<LOCAL_DB_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
-  ```
+```sh
+cargo run --bin sui-indexer -- --db-url "<LOCAL_DB_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
+```
   
 ### Clean up and re-run
 - Run `diesel migration revert` under `/sui-indexer` until no more tables are deleted;
