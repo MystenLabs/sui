@@ -58,8 +58,8 @@
           "arrow": true
         },
         {
-          "title": "Sui Blog (Medium)",
-          "link": "https://medium.com/mysten-labs",
+          "title": "Sui Developer Forums",
+          "link": "https://forums.sui.io/",
           "external": true,
           "arrow": true
         }
@@ -178,6 +178,11 @@
           {
             "name": "Sui Resources",
             "url": "https://sui.io/resources/",
+            "external": true
+          },
+          {
+            "name": "Sui Partners",
+            "url": "https://sui.io/ecosystem/",
             "external": true
           },
           {
