@@ -8,7 +8,7 @@ module sui::staking_pool {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::epoch_time_lock::{EpochTimeLock};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, ID, UID};
     use sui::locked_coin;
     use sui::coin;
     use std::vector;
@@ -23,6 +23,7 @@ module sui::staking_pool {
     const EINSUFFICIENT_REWARDS_POOL_BALANCE: u64 = 4;
     const EDESTROY_NON_ZERO_BALANCE: u64 = 5;
     const ETOKEN_TIME_LOCK_IS_SOME: u64 = 6;
+    const EWRONG_DELEGATION: u64 = 7;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has store {
@@ -61,6 +62,7 @@ module sui::staking_pool {
     struct PendingDelegationEntry has store, drop {
         delegator: address, 
         sui_amount: u64,
+        staked_sui_id: ID,
     }
 
     /// Struct representing a pending delegation withdraw.
@@ -74,10 +76,8 @@ module sui::staking_pool {
     /// has delegated to a staking pool.
     struct Delegation has key {
         id: UID,
-        /// The sui address of the validator associated with the staking pool this object delgates to.
-        validator_address: address,
-        /// The epoch at which the staking pool started operating.
-        pool_starting_epoch: u64,
+        /// The ID of the corresponding `StakedSui` object.
+        staked_sui_id: ID,
         /// The pool tokens representing the amount of rewards the delegator can get back when they withdraw
         /// from the pool.
         pool_tokens: Balance<DelegationToken>,
@@ -90,6 +90,8 @@ module sui::staking_pool {
         id: UID,
         /// The validator we are staking with.
         validator_address: address,
+        /// The epoch at which the staking pool started operating.
+        pool_starting_epoch: u64,
         /// The epoch at which the delegation is requested.
         delegation_request_epoch: u64,
         /// The staked SUI tokens.
@@ -129,15 +131,19 @@ module sui::staking_pool {
     ) {
         let sui_amount = balance::value(&stake);
         assert!(sui_amount > 0, 0);
-        // insert delegation info into the pendng_delegations vector.         
-        vector::push_back(&mut pool.pending_delegations, PendingDelegationEntry { delegator, sui_amount });
         let staked_sui = StakedSui {
             id: object::new(ctx),
             validator_address: pool.validator_address,
+            pool_starting_epoch: pool.starting_epoch,
             delegation_request_epoch: tx_context::epoch(ctx),
             principal: stake,
             sui_token_lock,
         };
+        // insert delegation info into the pendng_delegations vector.
+        vector::push_back(
+            &mut pool.pending_delegations,
+            PendingDelegationEntry { delegator, sui_amount, staked_sui_id: object::id(&staked_sui) }
+        );
         transfer::transfer(staked_sui, delegator);
     }
 
@@ -182,11 +188,13 @@ module sui::staking_pool {
         staked_sui: &mut StakedSui,
         principal_withdraw_amount: u64,
     ) : (Balance<DelegationToken>, Balance<SUI>, Option<EpochTimeLock>) {
+        // Check that the delegation and staked sui objects match.
+        assert!(object::id(staked_sui) == delegation.staked_sui_id, EWRONG_DELEGATION);
+
         // Check that the delegation information matches the pool. 
         assert!(
-            delegation.validator_address == pool.validator_address &&
-            delegation.validator_address == staked_sui.validator_address &&
-            delegation.pool_starting_epoch == pool.starting_epoch,
+            staked_sui.validator_address == pool.validator_address &&
+            staked_sui.pool_starting_epoch == pool.starting_epoch,
             EWRONG_POOL
         );
 
@@ -238,8 +246,9 @@ module sui::staking_pool {
     /// during the previous epoch.
     public(friend) fun process_pending_delegations(pool: &mut StakingPool, ctx: &mut TxContext) {
         while (!vector::is_empty(&pool.pending_delegations)) {
-            let PendingDelegationEntry { delegator, sui_amount } = vector::pop_back(&mut pool.pending_delegations);
-            mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, ctx);
+            let PendingDelegationEntry { delegator, sui_amount, staked_sui_id } =
+                vector::pop_back(&mut pool.pending_delegations);
+            mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount;
         };
     }
@@ -302,6 +311,7 @@ module sui::staking_pool {
         pool: &mut StakingPool, 
         delegator: address, 
         sui_amount: u64, 
+        staked_sui_id: ID,
         ctx: &mut TxContext
     ) {
         let new_pool_token_amount = get_token_amount(pool, sui_amount);   
@@ -311,8 +321,7 @@ module sui::staking_pool {
 
         let delegation = Delegation {
             id: object::new(ctx),
-            validator_address: pool.validator_address,
-            pool_starting_epoch: pool.starting_epoch,
+            staked_sui_id,
             pool_tokens,
             principal_sui_amount: sui_amount,
         };
@@ -367,8 +376,7 @@ module sui::staking_pool {
     public entry fun destroy_empty_delegation(delegation: Delegation) {
         let Delegation {
             id,
-            validator_address: _,
-            pool_starting_epoch: _,
+            staked_sui_id: _,
             pool_tokens,
             principal_sui_amount,
         } = delegation;
@@ -383,6 +391,7 @@ module sui::staking_pool {
         let StakedSui {
             id,
             validator_address: _,
+            pool_starting_epoch: _,
             delegation_request_epoch: _,
             principal,
             sui_token_lock
@@ -399,7 +408,7 @@ module sui::staking_pool {
 
     public fun sui_balance(pool: &StakingPool) : u64 { pool.sui_balance }
 
-    public fun validator_address(delegation: &Delegation) : address { delegation.validator_address }
+    public fun validator_address(staked_sui: &StakedSui) : address { staked_sui.validator_address }
 
     public fun staked_sui_amount(staked_sui: &StakedSui): u64 { balance::value(&staked_sui.principal) }
 

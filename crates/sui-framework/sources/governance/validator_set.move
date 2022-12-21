@@ -176,7 +176,7 @@ module sui::validator_set {
         principal_withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let validator_address = staking_pool::validator_address(delegation);
+        let validator_address = staking_pool::validator_address(staked_sui);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
 
         assert!(option::is_some(&validator_index_opt), 0); 
@@ -203,7 +203,7 @@ module sui::validator_set {
         switch_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let current_validator_address = staking_pool::validator_address(delegation);
+        let current_validator_address = staking_pool::validator_address(staked_sui);
 
         // check that the validators are not the same and they are both active.
         assert!(current_validator_address != new_validator_address, 0);

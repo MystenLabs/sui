@@ -4411,11 +4411,15 @@
         "type": "object",
         "required": [
           "delegator",
+          "staked_sui_id",
           "sui_amount"
         ],
         "properties": {
           "delegator": {
             "$ref": "#/components/schemas/SuiAddress"
+          },
+          "staked_sui_id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "sui_amount": {
             "type": "integer",
