@@ -863,6 +863,79 @@ impl<'a> DBTransaction<'a> {
         }
     }
 
+    pub fn get<K: Serialize + DeserializeOwned, V: Serialize + DeserializeOwned>(
+        &self,
+        db: &DBMap<K, V>,
+        key: &K,
+    ) -> Result<Option<V>, TypedStoreError> {
+        let key_buf = be_fix_int_ser(key)?;
+        self.transaction
+            .get_cf(&db.cf(), key_buf)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))
+            .map(|res| res.and_then(|bytes| bincode::deserialize::<V>(&bytes).ok()))
+    }
+
+    pub fn multi_get<J: Borrow<K>, K: Serialize + DeserializeOwned, V: DeserializeOwned>(
+        &self,
+        db: &DBMap<K, V>,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<Option<V>>, TypedStoreError> {
+        let cf = db.cf();
+        let keys_bytes: Result<Vec<_>, TypedStoreError> = keys
+            .into_iter()
+            .map(|k| Ok((&cf, be_fix_int_ser(k.borrow())?)))
+            .collect();
+
+        let results = self.transaction.multi_get_cf(keys_bytes?);
+
+        let values_parsed: Result<Vec<_>, TypedStoreError> = results
+            .into_iter()
+            .map(|value_byte| match value_byte? {
+                Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+                None => Ok(None),
+            })
+            .collect();
+
+        values_parsed
+    }
+
+    pub fn iter<K: DeserializeOwned, V: DeserializeOwned>(
+        &'a self,
+        db: &DBMap<K, V>,
+    ) -> Iter<'a, K, V> {
+        let mut db_iter = self.transaction.raw_iterator_cf(&db.cf());
+        db_iter.seek_to_first();
+
+        Iter::new(
+            RocksDBRawIter::OptimisticTransaction(db_iter),
+            db.cf.clone(),
+            &db.db_metrics,
+            &db.iter_latency_sample_interval,
+        )
+    }
+
+    pub fn keys<K: DeserializeOwned, V: DeserializeOwned>(
+        &'a self,
+        db: &DBMap<K, V>,
+    ) -> Keys<'a, K> {
+        let mut db_iter =
+            RocksDBRawIter::OptimisticTransaction(self.transaction.raw_iterator_cf(&db.cf()));
+        db_iter.seek_to_first();
+
+        Keys::new(db_iter)
+    }
+
+    pub fn values<K: DeserializeOwned, V: DeserializeOwned>(
+        &'a self,
+        db: &DBMap<K, V>,
+    ) -> Values<'a, V> {
+        let mut db_iter =
+            RocksDBRawIter::OptimisticTransaction(self.transaction.raw_iterator_cf(&db.cf()));
+        db_iter.seek_to_first();
+
+        Values::new(db_iter)
+    }
+
     pub fn commit(self) -> Result<(), TypedStoreError> {
         self.transaction.commit()?;
         Ok(())
@@ -874,6 +947,7 @@ macro_rules! delegate_iter_call {
         match $self {
             Self::DB(db) => db.$method($($args),*),
             Self::OptimisticTransactionDB(db) => db.$method($($args),*),
+            Self::OptimisticTransaction(db) => db.$method($($args),*),
         }
     }
 }
@@ -882,6 +956,12 @@ pub enum RocksDBRawIter<'a> {
     DB(rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>),
     OptimisticTransactionDB(
         rocksdb::DBRawIteratorWithThreadMode<'a, rocksdb::OptimisticTransactionDB<MultiThreaded>>,
+    ),
+    OptimisticTransaction(
+        rocksdb::DBRawIteratorWithThreadMode<
+            'a,
+            Transaction<'a, rocksdb::OptimisticTransactionDB<MultiThreaded>>,
+        >,
     ),
 }
 
