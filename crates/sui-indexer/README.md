@@ -24,7 +24,7 @@ and then run
 `diesel migration run`
   ```
 2. cargo run under `/sui-indexer`
-  ```
+  ```sh
   cargo run --bin sui-indexer -- --db-url "<LOCAL_DB_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
   ```
   
