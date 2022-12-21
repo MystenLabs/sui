@@ -1,4 +1,4 @@
-Sui indexer is an off-fullnode service to serve data from the protocol, including both data directly generated from chain and derivative data.
+Sui indexer is an off-fullnode service to serve data from Sui protocol, including both data directly generated from chain and derivative data.
 
 ## Current architecture Dec 2022 (will change soon)
 ![indexer_simple](https://user-images.githubusercontent.com/106119108/209000367-4c7d23d8-fef2-4485-8472-89c31f0e2d62.png)
@@ -29,4 +29,4 @@ diesel migration run
   
 ### Clean up and re-run
 - Run `diesel migration revert` under `/sui-indexer` until no more tables are deleted;
-- Also delete "__diesel_schema_migrations", you can do this via Postico client
+- Also delete `__diesel_schema_migrations`, you can do this via Postico client
