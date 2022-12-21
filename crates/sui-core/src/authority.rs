@@ -2596,14 +2596,26 @@ impl AuthorityState {
             transaction,
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
-        let Ok(epoch_store) = self.load_epoch_store(current_epoch) else {
-            // Epoch has changed while this transaction is being processed. Ignore it.
-            return Ok(None);
+        let epoch_store = match self.load_epoch_store(current_epoch) {
+            Ok(s) => s,
+            Err(err) => {
+                // Epoch has changed while this transaction is being processed. Ignore it.
+                debug!(
+                    "Error loading epoch store in process_consensus_transaction: {:?}",
+                    err
+                );
+                return Ok(None);
+            }
         };
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 if certificate.epoch() != current_epoch {
                     // Epoch has changed after this certificate was sequenced, ignore it.
+                    debug!(
+                        "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
+                        certificate.epoch(),
+                        current_epoch
+                    );
                     return Ok(None);
                 }
                 let authority = (&consensus_output.header.author).into();
