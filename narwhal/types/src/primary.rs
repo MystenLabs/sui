@@ -271,7 +271,7 @@ impl Header {
         let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.author
             .verify(digest.as_ref(), &self.signature)
-            .map_err(DagError::from)
+            .map_err(|_| DagError::InvalidSignature)
     }
 }
 
@@ -431,7 +431,7 @@ impl Vote {
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
         self.author
             .verify(vote_digest.as_ref(), &self.signature)
-            .map_err(DagError::from)
+            .map_err(|_| DagError::InvalidSignature)
     }
 }
 #[derive(
@@ -599,8 +599,7 @@ impl Certificate {
             AggregateSignature::aggregate::<Signature, Vec<&Signature>>(
                 sigs.iter().map(|(_, sig)| sig).collect(),
             )
-            .map_err(|_| signature::Error::new())
-            .map_err(DagError::InvalidSignature)?
+            .map_err(|_| DagError::InvalidSignature)?
         };
 
         Ok(Certificate {
@@ -669,8 +668,7 @@ impl Certificate {
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
             .verify(&pks[..], certificate_digest.as_ref())
-            .map_err(|_| signature::Error::new())
-            .map_err(DagError::from)?;
+            .map_err(|_| DagError::InvalidSignature)?;
 
         Ok(())
     }

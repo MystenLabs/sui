@@ -325,6 +325,8 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
+    /// count number of duplicate certificates that the node processed (others + own)
+    pub duplicate_certificates_processed: IntCounterVec,
     /// Latency to perform a garbage collection in core module
     pub gc_core_latency: HistogramVec,
     /// The current Narwhal round in proposer
@@ -401,6 +403,13 @@ impl PrimaryMetrics {
                 "certificates_suspended",
                 "Number of certificates that node suspended processing of",
                 &["epoch", "reason"],
+                registry
+            )
+            .unwrap(),
+            duplicate_certificates_processed: register_int_counter_vec_with_registry!(
+                "duplicate_certificates_processed",
+                "Number of certificates that node processed (others + own)",
+                &["epoch"],
                 registry
             )
             .unwrap(),
