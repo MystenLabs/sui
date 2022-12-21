@@ -16,7 +16,7 @@ Sui indexer is an off-fullnode service to serve data from Sui protocol, includin
 # .env file under /sui-indexer is required for diesel cmds
 # in .env file, DATABASE_URL should point to your local PG server
 # an example is:
-# DATABASE_URL=""postgres://postgres:postgres@localhost/gegao"
+# DATABASE_URL="postgres://postgres:postgres@localhost/gegao"
 diesel setup
 
 # and then run 
@@ -24,7 +24,8 @@ diesel migration run
 ```
 2. cargo run under `/sui-indexer`
 ```sh
-cargo run --bin sui-indexer -- --db-url "<LOCAL_DB_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
+# DATABASE_URL should be the same value as above
+cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
 ```
   
 ### Clean up and re-run
