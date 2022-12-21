@@ -52,12 +52,15 @@ class LogParser:
         except (ValueError, IndexError, AttributeError) as e:
             exception(e)
             raise ParseError(f'Failed to parse nodes\' logs: {e}')
-        proposals, commits, self.configs, primary_ips, batch_to_header_latencies, header_to_cert_latencies, cert_commit_latencies, request_vote_outbound_latencies = zip(
+        proposals, commits, self.configs, primary_ips, batch_to_header_latencies, header_creation_latencies, header_to_cert_latencies, cert_commit_latencies, request_vote_outbound_latencies = zip(
             *results)
         self.proposals = self._merge_results([x.items() for x in proposals])
         self.commits = self._merge_results([x.items() for x in commits])
         self.batch_to_header_latencies = {
             k: v for x in batch_to_header_latencies for k, v in x.items()
+        }
+        self.header_creation_latencies = {
+            k: v for x in header_creation_latencies for k, v in x.items()
         }
         self.header_to_cert_latencies = {
             k: v for x in header_to_cert_latencies for k, v in x.items()
@@ -132,8 +135,12 @@ class LogParser:
         commits = self._merge_results([tmp])
 
         tmp = findall(
-            r'.* Batch ([^ ]+) from worker \d+ took (\d+\.\d+) seconds to be included in a proposed header', log)
+            r'.* Batch ([^ ]+) from worker \d+ took (\d+\.\d+) seconds from creation to be included in a proposed header', log)
         batch_to_header_latencies = {d: float(t) for d, t in tmp}
+
+        tmp = findall(
+            r'.* Header ([^ ]+) was created in (\d+\.\d+) seconds', log)
+        header_creation_latencies = {d: float(t) for d, t in tmp}
 
         tmp = findall(
             r'.* Header ([^ ]+) took (\d+\.\d+) seconds to be materialized to a certificate [^ ]+', log)
@@ -179,7 +186,7 @@ class LogParser:
 
         ip = search(r'booted on (/ip4/\d+.\d+.\d+.\d+)', log).group(1)
 
-        return proposals, commits, configs, ip, batch_to_header_latencies, header_to_cert_latencies, cert_commit_latencies, request_vote_outbound_latencies
+        return proposals, commits, configs, ip, batch_to_header_latencies, header_creation_latencies, header_to_cert_latencies, cert_commit_latencies, request_vote_outbound_latencies
 
     def _parse_workers(self, log):
         if search(r'(?:panicked)', log) is not None:
@@ -256,6 +263,8 @@ class LogParser:
         end_to_end_latency = self._end_to_end_latency() * 1_000
         batch_creation_latency = mean(
             self.batch_creation_latencies.values()) * 1000
+        header_creation_latency = mean(
+            self.header_creation_latencies .values()) * 1000
         batch_to_header_latency = mean(
             self.batch_to_header_latencies.values()) * 1000
         header_to_cert_latency = mean(
@@ -290,12 +299,12 @@ class LogParser:
             f' Max concurrent requests: {max_concurrent_requests:,} \n'
             '\n'
             ' + RESULTS:\n'
-            f' Batch creation latency: {round(batch_creation_latency):,} ms\n'
-            f' Header creation latency: {round(batch_to_header_latency * 2):,} ms\n'
-            f' \tBatch to header latency: {round(batch_to_header_latency):,} ms\n'
-            f' Certificate creation latency: {round(header_to_cert_latency):,} ms\n'
-            f' \tRequest vote outbound latency: {round(request_vote_outbound_latency):,} ms\n'
-            f' Certificate commit latency: {round(cert_commit_latency):,} ms\n'
+            f' Batch creation avg latency: {round(batch_creation_latency):,} ms\n'
+            f' Header creation avg latency: {round(header_creation_latency):,} ms\n'
+            f' \tBatch to header avg latency: {round(batch_to_header_latency):,} ms\n'
+            f' Header to certificate avg latency: {round(header_to_cert_latency):,} ms\n'
+            f' \tRequest vote outbound avg latency: {round(request_vote_outbound_latency):,} ms\n'
+            f' Certificate commit avg latency: {round(cert_commit_latency):,} ms\n'
             f'\n'
             f' Consensus TPS: {round(consensus_tps):,} tx/s\n'
             f' Consensus BPS: {round(consensus_bps):,} B/s\n'

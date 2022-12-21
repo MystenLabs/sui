@@ -267,12 +267,12 @@ impl BatchMaker {
             return None;
         }
 
-        #[cfg(feature = "benchmark")]
-        // NOTE: This log entry is used to compute performance.
-        tracing::info!(
+        let batch_creation_duration = self.batch_start_timestamp.elapsed().as_secs_f64();
+
+        tracing::debug!(
             "Batch {:?} took {} seconds to create due to {}",
             batch.digest(),
-            self.batch_start_timestamp.elapsed().as_secs_f64(),
+            batch_creation_duration,
             reason
         );
 
@@ -282,7 +282,7 @@ impl BatchMaker {
         self.node_metrics
             .created_batch_latency
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
-            .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
+            .observe(batch_creation_duration);
 
         // Clone things to not capture self
         let store = self.store.clone();
