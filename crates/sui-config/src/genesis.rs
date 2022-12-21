@@ -63,10 +63,10 @@ impl Genesis {
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
-        Committee::new(
-            self.epoch(),
-            ValidatorInfo::voting_rights(self.validator_set()),
-        )
+        Ok(self
+            .sui_system_object()
+            .get_current_epoch_committee()
+            .committee)
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
