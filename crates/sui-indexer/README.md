@@ -31,4 +31,3 @@ and then run
 ### Clean up and re-run
 - Run `diesel migration revert` under `/sui-indexer` until no more tables are deleted;
 - Also delete "__diesel_schema_migrations", you can do this via Postico client
-  ```
