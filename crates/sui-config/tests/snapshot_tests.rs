@@ -89,7 +89,6 @@ fn populated_genesis_snapshot_matches() {
         .add_validator(validator, pop)
         .build();
     assert_yaml_snapshot!(genesis.validator_set());
-    assert_yaml_snapshot!(genesis.committee().unwrap());
     assert_yaml_snapshot!(genesis.sui_system_object());
     // Serialized `genesis` is not static and cannot be snapshot tested.
 }
