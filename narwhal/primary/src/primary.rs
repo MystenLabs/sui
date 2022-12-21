@@ -877,7 +877,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 anemo::rpc::Status::new_with_message(
                     match e {
                         // Report unretriable errors as 400 Bad Request.
-                        DagError::InvalidSignature(_)
+                        DagError::InvalidSignature
                         | DagError::InvalidHeaderDigest
                         | DagError::HeaderHasBadWorkerIds(_)
                         | DagError::HeaderHasInvalidParentRoundNumbers(_)

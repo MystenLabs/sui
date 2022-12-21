@@ -502,18 +502,26 @@ impl Core {
         notify: Option<oneshot::Sender<DagResult<()>>>,
     ) -> DagResult<()> {
         let digest = certificate.digest();
-        match self.process_certificate_internal(certificate).await {
-            Ok(()) => {
-                if let Some(notify) = notify {
-                    let _ = notify.send(Ok(())); // no problem if remote side isn't listening
-                }
-                if let Some(notifies) = self.pending_certificates.remove(&digest) {
-                    for notify in notifies {
-                        let _ = notify.send(Ok(())); // no problem if remote side isn't listening
-                    }
-                }
-                Ok(())
+        if self.certificate_store.read(digest)?.is_some() {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.metrics
+                .duplicate_certificates_processed
+                .with_label_values(&[&certificate.epoch().to_string()])
+                .inc();
+            if let Some(notify) = notify {
+                let _ = notify.send(Ok(())); // no problem if remote side isn't listening
             }
+            return Ok(());
+        }
+
+        if let Err(e) = self.sanitize_certificate(&certificate).await {
+            if let Some(notify) = notify {
+                let _ = notify.send(Err(e.clone())); // no problem if remote side isn't listening
+            }
+            return Err(e);
+        }
+
+        match self.process_certificate_internal(certificate).await {
             Err(DagError::Suspended) => {
                 if let Some(notify) = notify {
                     self.pending_certificates
@@ -523,20 +531,22 @@ impl Core {
                 }
                 Ok(())
             }
-            Err(e) => Err(e),
+            result => {
+                if let Some(notify) = notify {
+                    let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+                }
+                if let Some(notifies) = self.pending_certificates.remove(&digest) {
+                    for notify in notifies {
+                        let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+                    }
+                }
+                result
+            }
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
-        if self.certificate_store.read(certificate.digest())?.is_some() {
-            trace!(
-                "Certificate {} has already been processed. Skip processing.",
-                certificate.digest()
-            );
-            return Ok(());
-        }
-
         debug!(
             "Processing certificate {:?} round:{:?}",
             certificate,
@@ -715,18 +725,7 @@ impl Core {
         loop {
             let result = tokio::select! {
                 Some((certificate, notify)) = self.rx_certificates.recv() => {
-                    match self.sanitize_certificate(&certificate).await {
-                        Ok(()) =>  self.process_certificate(certificate, notify).await,
-                        error => {
-                            // `error` is consumed by the notify, so we process it first manually
-                            // and then just return Ok.
-                            Self::process_result(&error);
-                            if let Some(notify) = notify {
-                                let _ = notify.send(error);
-                            }
-                            Ok(())
-                        },
-                    }
+                    self.process_certificate(certificate, notify).await
                 },
 
                 // Here loopback certificates from the `CertificateFetcher` are received. These are
@@ -734,14 +733,11 @@ impl Core {
                 Some(message) = self.rx_certificates_loopback.recv() => {
                     let mut result = Ok(());
                     for cert in message.certificates {
-                        result = match self.sanitize_certificate(&cert).await {
-                            // TODO: consider moving some checks to CertificateFetcher, and skipping
-                            // those checks here?
-                            Ok(()) => self.process_certificate(cert, None).await,
+                        result = match self.process_certificate(cert, None).await {
                             // It is possible that subsequent certificates are above GC round,
                             // so not stopping early.
                             Err(DagError::TooOld(_, _, _)) => continue,
-                            error => error
+                            result => result
                         };
                         if result.is_err() {
                             break;
