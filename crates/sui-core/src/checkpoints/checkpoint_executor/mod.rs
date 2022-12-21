@@ -500,17 +500,13 @@ async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_state: Arc<AuthorityState>,
 ) -> SuiResult<Vec<SignedTransactionEffects>> {
+    let num_digests = execution_digests.len();
     let tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
-    let txns: Vec<VerifiedCertificate> = authority_state
-        .database
-        .perpetual_tables
-        .synced_transactions
-        .multi_get(&tx_digests)?
-        .into_iter()
-        .flatten()
-        .map(|tx| tx.into())
-        .collect();
+
+    let txns = get_transactions(&tx_digests, authority_state.clone())?;
+
+    assert_eq!(txns.len(), num_digests, "Missing txns from store");
 
     let effects_digests: Vec<TransactionEffectsDigest> = execution_digests
         .iter()
@@ -546,8 +542,50 @@ async fn execute_transactions(
 
     authority_state.transaction_manager.enqueue(txns).await?;
 
-    authority_state
+    let effects = authority_state
         .database
         .notify_read_effects(tx_digests)
-        .await
+        .await?;
+
+    assert_eq!(
+        effects.len(),
+        num_digests,
+        "Missing txn effects from transaction manager"
+    );
+    Ok(effects)
+}
+
+fn get_transactions(
+    digests: &Vec<TransactionDigest>,
+    authority_state: Arc<AuthorityState>,
+) -> SuiResult<Vec<VerifiedCertificate>> {
+    let synced_txns = authority_state
+        .database
+        .perpetual_tables
+        .synced_transactions
+        .multi_get(digests)?
+        .into_iter()
+        .flatten()
+        .map(|tx| tx.into());
+
+    let executed_txns = authority_state
+        .database
+        .perpetual_tables
+        .certificates
+        .multi_get(digests)?
+        .into_iter()
+        .flatten()
+        .map(|tx| tx.into());
+
+    let pending_txns = authority_state
+        .database
+        .epoch_store()
+        .multi_get_pending_certificate(digests)?
+        .into_iter()
+        .flatten();
+
+    Ok(synced_txns
+        .chain(executed_txns)
+        .chain(pending_txns)
+        .collect())
 }
