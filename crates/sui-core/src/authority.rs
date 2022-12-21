@@ -1973,7 +1973,7 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    pub async fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
 
