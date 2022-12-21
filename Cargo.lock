@@ -2567,7 +2567,7 @@ dependencies = [
  "readonly",
  "rfc6979",
  "schemars",
- "secp256k1",
+ "secp256k1 0.24.2",
  "serde 1.0.151",
  "serde_bytes",
  "serde_with",
@@ -7525,13 +7525,24 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff55dc09d460954e9ef2fa8a7ced735a964be9981fd50e870b2b3b0705e14964"
+checksum = "d9512ffd81e3a3503ed401f79c33168b9148c75038956039166cd750eaa037c3"
 dependencies = [
  "bitcoin_hashes",
  "rand 0.8.5",
- "secp256k1-sys",
+ "secp256k1-sys 0.6.1",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "550fc3b723a478be77bf74718947cdcdd75144d508aaa70f0a320036905df2a8"
+dependencies = [
+ "bitcoin_hashes",
+ "rand 0.8.5",
+ "secp256k1-sys 0.7.0",
 ]
 
 [[package]]
@@ -7539,6 +7550,15 @@ name = "secp256k1-sys"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83080e2c2fc1006e625be82e5d1eb6a43b7fd9578b617fcc55814daf286bba4b"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8058e28ae464daf5ac14c5c0f78110b58616e796c4e4e28cfcca38fdb13d8f22"
 dependencies = [
  "cc",
 ]
@@ -11426,8 +11446,8 @@ dependencies = [
  "scopeguard",
  "sct",
  "sec1",
- "secp256k1",
- "secp256k1-sys",
+ "secp256k1 0.25.0",
+ "secp256k1-sys 0.6.1",
  "security-framework",
  "security-framework-sys",
  "semver 0.11.0",
