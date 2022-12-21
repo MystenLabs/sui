@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest};
+use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
 use crate::message_envelope::Message;
-use crate::messages::{TransactionEffects, VerifiedCertificate};
+use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
+use crate::messages::{SenderSignedData, TransactionEffects, VerifiedCertificate};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     VerifiedCheckpoint,
@@ -19,6 +20,7 @@ use crate::{
 use move_core_types::ident_str;
 use move_core_types::identifier::{IdentStr, Identifier};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use tap::Pipe;
@@ -405,7 +407,7 @@ impl InMemoryStore {
         if self.epoch_to_committee.len() == epoch {
             self.epoch_to_committee.push(committee);
         } else {
-            panic!("committe was inserted into EpochCommitteeMap out of order");
+            panic!("committee was inserted into EpochCommitteeMap out of order");
         }
     }
 
@@ -549,4 +551,44 @@ impl WriteStore for SharedInMemoryStore {
             .insert_transaction_effects(transaction_effects);
         Ok(())
     }
+}
+
+// The primary key type for object storage.
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
+pub struct ObjectKey(pub ObjectID, pub VersionNumber);
+
+impl ObjectKey {
+    pub const ZERO: ObjectKey = ObjectKey(ObjectID::ZERO, VersionNumber::MIN);
+
+    pub fn max_for_id(id: &ObjectID) -> Self {
+        Self(*id, VersionNumber::MAX)
+    }
+}
+
+impl From<ObjectRef> for ObjectKey {
+    fn from(object_ref: ObjectRef) -> Self {
+        ObjectKey::from(&object_ref)
+    }
+}
+
+impl From<&ObjectRef> for ObjectKey {
+    fn from(object_ref: &ObjectRef) -> Self {
+        Self(object_ref.0, object_ref.1)
+    }
+}
+
+/// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
+/// and immutable objects as well as the gas objects, but not move packages or shared objects.
+pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
+    Ok(tx
+        .intent_message
+        .value
+        .input_objects()?
+        .into_iter()
+        .filter_map(|object| match object {
+            MovePackage(_) | SharedMoveObject { .. } => None,
+            ImmOrOwnedMoveObject(obj) => Some(obj.into()),
+        })
+        .collect())
 }

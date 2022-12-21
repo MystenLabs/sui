@@ -16,7 +16,7 @@ use sui_types::messages::ConsensusTransaction;
 use tracing::{debug, instrument, warn};
 
 pub struct ConsensusHandler {
-    _epoch: EpochId,
+    epoch: EpochId,
     state: Arc<AuthorityState>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
@@ -26,7 +26,7 @@ impl ConsensusHandler {
     pub fn new(state: Arc<AuthorityState>, checkpoint_service: Arc<CheckpointService>) -> Self {
         let last_seen = Mutex::new(Default::default());
         Self {
-            _epoch: state.epoch(),
+            epoch: state.epoch(),
             state,
             last_seen,
             checkpoint_service,
@@ -134,20 +134,28 @@ impl ExecutionState for ConsensusHandler {
         for sequenced_transaction in sequenced_transactions {
             let verified_transaction = match self
                 .state
-                .verify_consensus_transaction(sequenced_transaction)
+                .verify_consensus_transaction(self.epoch, sequenced_transaction)
             {
                 Ok(verified_transaction) => verified_transaction,
                 Err(()) => continue,
             };
 
             self.state
-                .handle_consensus_transaction(verified_transaction, &self.checkpoint_service)
+                .handle_consensus_transaction(
+                    self.epoch,
+                    verified_transaction,
+                    &self.checkpoint_service,
+                )
                 .await
                 .expect("Unrecoverable error in consensus handler");
         }
 
         self.state
-            .handle_commit_boundary(&consensus_output.sub_dag, &self.checkpoint_service)
+            .handle_commit_boundary(
+                self.epoch,
+                &consensus_output.sub_dag,
+                &self.checkpoint_service,
+            )
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 

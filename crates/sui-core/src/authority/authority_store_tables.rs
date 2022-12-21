@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store::ObjectKey, *};
+use super::*;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;

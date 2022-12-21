@@ -3149,9 +3149,13 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+    if let Ok(transaction) = authority.verify_consensus_transaction(cert.epoch(), transaction) {
         authority
-            .handle_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
+            .handle_consensus_transaction(
+                cert.epoch(),
+                transaction,
+                &Arc::new(CheckpointServiceNoop {}),
+            )
             .await
             .unwrap();
     }
@@ -3166,11 +3170,15 @@ pub(crate) async fn send_consensus_no_execution(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+    if let Ok(transaction) = authority.verify_consensus_transaction(cert.epoch(), transaction) {
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.
         authority
-            .process_consensus_transaction(transaction, &Arc::new(CheckpointServiceNoop {}))
+            .process_consensus_transaction(
+                cert.epoch(),
+                transaction,
+                &Arc::new(CheckpointServiceNoop {}),
+            )
             .await
             .unwrap();
     }
