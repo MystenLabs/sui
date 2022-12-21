@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::db_dump::{dump_table, list_tables, table_summary, StoreName};
+use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use clap::Parser;
 use std::path::PathBuf;
 use sui_types::base_types::EpochId;
@@ -14,6 +14,7 @@ pub enum DbToolCommand {
     ListTables,
     Dump(Dump),
     TableSummary(Dump),
+    DuplicatesSummary,
 }
 
 #[derive(Parser)]
@@ -54,11 +55,22 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         DbToolCommand::TableSummary(d) => {
             print_db_table_summary(d.store_name, d.epoch, db_path, &d.table_name)
         }
+        DbToolCommand::DuplicatesSummary => print_db_duplicates_summary(db_path),
     }
 }
 
 pub fn print_db_all_tables(db_path: PathBuf) -> anyhow::Result<()> {
     list_tables(db_path)?.iter().for_each(|t| println!("{}", t));
+    Ok(())
+}
+
+pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
+    let (total_count, duplicate_count, total_bytes, duplicated_bytes) =
+        duplicate_objects_summary(db_path);
+    println!(
+        "Total objects = {}, duplicated objects = {}, total bytes = {}, duplicated bytes = {}",
+        total_count, duplicate_count, total_bytes, duplicated_bytes
+    );
     Ok(())
 }
 

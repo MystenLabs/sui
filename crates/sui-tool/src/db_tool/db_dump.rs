@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use clap::Parser;
 use eyre::eyre;
 use rocksdb::MultiThreaded;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
@@ -14,10 +14,11 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::write_ahead_log::DBWriteAheadLogTables;
 use sui_storage::{lock_service::LockServiceImpl, IndexStoreTables};
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
+use sui_types::object::Data;
 use sui_types::temporary_store::InnerTemporaryStore;
-use typed_store::traits::TableSummary;
+use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -86,6 +87,35 @@ pub fn table_summary(
         }
     }
     .map_err(|err| anyhow!(err.to_string()))
+}
+
+pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
+    let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
+    let iter = perpetual_tables.objects.iter();
+    let mut total_count = 0;
+    let mut duplicate_count = 0;
+    let mut total_bytes = 0;
+    let mut duplicated_bytes = 0;
+
+    let mut object_id: ObjectID = ObjectID::random();
+    let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
+
+    for (key, value) in iter {
+        if let Data::Move(object) = value.data {
+            if object_id != key.0 {
+                for (k, cnt) in data.iter() {
+                    total_bytes += k.len() * cnt;
+                    duplicated_bytes += k.len() * (cnt - 1);
+                    total_count += cnt;
+                    duplicate_count += cnt - 1;
+                }
+                object_id = key.0;
+                data.clear();
+            }
+            *data.entry(object.contents().to_vec()).or_default() += 1;
+        }
+    }
+    (total_count, duplicate_count, total_bytes, duplicated_bytes)
 }
 
 // TODO: condense this using macro or trait dyn skills
