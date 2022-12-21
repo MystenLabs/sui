@@ -553,15 +553,22 @@ async fn execute_transactions(
         .await?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
-    let effects_future = authority_state.database.notify_read_effects(all_tx_digests);
-    match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
-        Err(_elapsed) => {
-            panic!(
-                "Transaction effects for checkpoint not present within {:?}",
-                LOCAL_EXECUTION_TIMEOUT
-            )
+    let mut periods = 1;
+    loop {
+        let effects_future = authority_state
+            .database
+            .notify_read_effects(all_tx_digests.clone());
+
+        match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
+            Err(_elapsed) => {
+                warn!(
+                    "Transaction effects for checkpoint not present within {:?}. ",
+                    LOCAL_EXECUTION_TIMEOUT * periods
+                );
+                periods += 1;
+            }
+            Ok(Err(err)) => return Err(err),
+            Ok(Ok(_)) => return Ok(()),
         }
-        Ok(Err(err)) => Err(err),
-        Ok(Ok(_)) => Ok(()),
     }
 }
