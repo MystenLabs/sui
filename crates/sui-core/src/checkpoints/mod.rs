@@ -456,7 +456,6 @@ impl CheckpointBuilder {
                 Some(
                     self.state
                         .get_sui_system_state_object()
-                        .await
                         .unwrap()
                         .get_current_epoch_committee()
                         .committee,

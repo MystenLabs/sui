@@ -255,7 +255,6 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(if GAS::is_gas(&coin_struct) {
             self.state
                 .get_sui_system_state_object()
-                .await
                 .map_err(Error::from)?
                 .treasury_cap
         } else {

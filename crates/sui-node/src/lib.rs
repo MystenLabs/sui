@@ -593,7 +593,6 @@ impl SuiNode {
             let system_state = self
                 .state
                 .get_sui_system_state_object()
-                .await
                 .expect("Reading Sui system state object cannot fail");
             let new_committee = system_state.get_current_epoch_committee();
             assert_eq!(next_epoch, new_committee.committee.epoch);

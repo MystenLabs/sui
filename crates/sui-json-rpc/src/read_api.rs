@@ -383,7 +383,6 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         Ok(self
             .state
             .get_sui_system_state_object()
-            .await
             .map_err(|e| anyhow!("{e}"))?)
     }
 }
