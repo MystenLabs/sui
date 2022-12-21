@@ -103,14 +103,6 @@ impl ReadStore for RocksDbStore {
             return Ok(Some(transaction.into()));
         }
 
-        if let Some(transaction) = self
-            .authority_store
-            .epoch_store()
-            .get_pending_certificate(digest)?
-        {
-            return Ok(Some(transaction));
-        }
-
         Ok(None)
     }
 

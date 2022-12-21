@@ -329,25 +329,14 @@ impl AuthorityPerEpochStore {
         Ok(roots)
     }
 
-    /// Gets one pending certificate.
+    /// `pending_certificates` table related methods. Should only be used from TransactionManager.
+
+    /// Gets one certificate pending execution.
     pub fn get_pending_certificate(
         &self,
         tx: &TransactionDigest,
     ) -> Result<Option<VerifiedCertificate>, TypedStoreError> {
         Ok(self.tables.pending_certificates.get(tx)?.map(|c| c.into()))
-    }
-
-    pub fn multi_get_pending_certificate(
-        &self,
-        transaction_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedCertificate>>> {
-        Ok(self
-            .tables
-            .pending_certificates
-            .multi_get(transaction_digests)?
-            .into_iter()
-            .map(|o| o.map(|c| c.into()))
-            .collect())
     }
 
     /// Gets all pending certificates. Used during recovery.
