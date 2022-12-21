@@ -69,36 +69,6 @@ impl Genesis {
         )
     }
 
-    #[allow(clippy::mutable_key_type)]
-    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee {
-        let narwhal_committee = self
-            .validator_set
-            .iter()
-            .map(|validator| {
-                // Strong requirement here for narwhal and sui to be on the same version of fastcrypto
-                // for AuthorityPublicBytes to cast to type alias PublicKey defined in narwhal to
-                // construct narwhal Committee struct.
-                let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
-                    .expect("Can't get narwhal public key");
-                let network_key =
-                    narwhal_crypto::NetworkPublicKey::from_bytes(validator.network_key().as_ref())
-                        .expect("Can't get narwhal network key");
-                let primary_address = validator.narwhal_primary_address.clone();
-                let authority = narwhal_config::Authority {
-                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
-                    primary_address,
-                    network_key,
-                };
-
-                (name, authority)
-            })
-            .collect();
-        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch() as narwhal_config::Epoch,
-        }))
-    }
-
     pub fn sui_system_object(&self) -> SuiSystemState {
         let sui_system_object = self
             .objects()

@@ -468,8 +468,18 @@ impl SuiNode {
             Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new(&registry_service.default_registry()),
         );
-        let committee = config.genesis()?.narwhal_committee().load();
-        let worker_cache = config.narwhal_worker_cache()?;
+        let system_state = state
+            .get_sui_system_state_object()
+            .expect("Reading Sui system state object cannot fail");
+        let committee = Arc::new(system_state.get_current_epoch_narwhal_committee());
+
+        let transactions_addr = &config
+            .consensus_config
+            .as_ref()
+            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
+            .address;
+        let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair.copy(),
