@@ -212,6 +212,12 @@ Struct representing a pending delegation.
 <dd>
 
 </dd>
+<dt>
+<code>staked_sui_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -282,16 +288,10 @@ has delegated to a staking pool.
 
 </dd>
 <dt>
-<code>validator_address: <b>address</b></code>
+<code>staked_sui_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
- The sui address of the validator associated with the staking pool this object delgates to.
-</dd>
-<dt>
-<code>pool_starting_epoch: u64</code>
-</dt>
-<dd>
- The epoch at which the staking pool started operating.
+ The ID of the corresponding <code><a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a></code> object.
 </dd>
 <dt>
 <code>pool_tokens: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;</code>
@@ -339,6 +339,12 @@ A self-custodial object holding the staked SUI tokens.
 </dt>
 <dd>
  The validator we are staking with.
+</dd>
+<dt>
+<code>pool_starting_epoch: u64</code>
+</dt>
+<dd>
+ The epoch at which the staking pool started operating.
 </dd>
 <dt>
 <code>delegation_request_epoch: u64</code>
@@ -423,6 +429,15 @@ A self-custodial object holding the staked SUI tokens.
 
 
 
+<a name="0x2_staking_pool_EWRONG_DELEGATION"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWRONG_DELEGATION">EWRONG_DELEGATION</a>: u64 = 7;
+</code></pre>
+
+
+
 <a name="0x2_staking_pool_EWRONG_POOL"></a>
 
 
@@ -491,15 +506,19 @@ when the delegation object containing the pool tokens is distributed to the dele
 ) {
     <b>let</b> sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake.md#0x2_stake">stake</a>);
     <b>assert</b>!(sui_amount &gt; 0, 0);
-    // insert delegation info into the pendng_delegations <a href="">vector</a>.
-    <a href="_push_back">vector::push_back</a>(&<b>mut</b> pool.pending_delegations, <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount });
     <b>let</b> staked_sui = <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         validator_address: pool.validator_address,
+        pool_starting_epoch: pool.starting_epoch,
         delegation_request_epoch: <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
         principal: <a href="stake.md#0x2_stake">stake</a>,
         sui_token_lock,
     };
+    // insert delegation info into the pendng_delegations <a href="">vector</a>.
+    <a href="_push_back">vector::push_back</a>(
+        &<b>mut</b> pool.pending_delegations,
+        <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount, staked_sui_id: <a href="object.md#0x2_object_id">object::id</a>(&staked_sui) }
+    );
     <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(staked_sui, delegator);
 }
 </code></pre>
@@ -584,11 +603,13 @@ time lock if applicable.
     staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
     principal_withdraw_amount: u64,
 ) : (Balance&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a>&gt;, Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
+    // Check that the delegation and staked <a href="sui.md#0x2_sui">sui</a> objects match.
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(staked_sui) == delegation.staked_sui_id, <a href="staking_pool.md#0x2_staking_pool_EWRONG_DELEGATION">EWRONG_DELEGATION</a>);
+
     // Check that the delegation information matches the pool.
     <b>assert</b>!(
-        delegation.validator_address == pool.validator_address &&
-        delegation.validator_address == staked_sui.validator_address &&
-        delegation.pool_starting_epoch == pool.starting_epoch,
+        staked_sui.validator_address == pool.validator_address &&
+        staked_sui.pool_starting_epoch == pool.starting_epoch,
         <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>
     );
 
@@ -697,8 +718,9 @@ during the previous epoch.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">process_pending_delegations</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
     <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&pool.pending_delegations)) {
-        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> pool.pending_delegations);
-        <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool, delegator, sui_amount, ctx);
+        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount, staked_sui_id } =
+            <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> pool.pending_delegations);
+        <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool, delegator, sui_amount, staked_sui_id, ctx);
         pool.sui_balance = pool.sui_balance + sui_amount;
     };
 }
@@ -808,7 +830,7 @@ Given the <code>sui_amount</code>, mint the corresponding amount of pool tokens 
 rate, puts the pool tokens in a delegation object, and gives the delegation object to the delegator.
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegator: <b>address</b>, sui_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegator: <b>address</b>, sui_amount: u64, staked_sui_id: <a href="object.md#0x2_object_ID">object::ID</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -821,6 +843,7 @@ rate, puts the pool tokens in a delegation object, and gives the delegation obje
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     delegator: <b>address</b>,
     sui_amount: u64,
+    staked_sui_id: ID,
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> new_pool_token_amount = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(pool, sui_amount);
@@ -830,8 +853,7 @@ rate, puts the pool tokens in a delegation object, and gives the delegation obje
 
     <b>let</b> delegation = <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        validator_address: pool.validator_address,
-        pool_starting_epoch: pool.starting_epoch,
+        staked_sui_id,
         pool_tokens,
         principal_sui_amount: sui_amount,
     };
@@ -940,8 +962,7 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 <pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_delegation">destroy_empty_delegation</a>(delegation: <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>) {
     <b>let</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a> {
         id,
-        validator_address: _,
-        pool_starting_epoch: _,
+        staked_sui_id: _,
         pool_tokens,
         principal_sui_amount,
     } = delegation;
@@ -976,6 +997,7 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
     <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id,
         validator_address: _,
+        pool_starting_epoch: _,
         delegation_request_epoch: _,
         principal,
         sui_token_lock
@@ -1020,7 +1042,7 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>): <b>address</b>
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): <b>address</b>
 </code></pre>
 
 
@@ -1029,7 +1051,7 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>) : <b>address</b> { delegation.validator_address }
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>) : <b>address</b> { staked_sui.validator_address }
 </code></pre>
 
 

@@ -424,7 +424,7 @@ of the epoch.
     principal_withdraw_amount: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(delegation);
+    <b>let</b> validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(staked_sui);
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
 
     <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
@@ -471,7 +471,7 @@ process them in <code>advance_epoch</code> by calling <code>process_pending_dele
     switch_pool_token_amount: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> current_validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(delegation);
+    <b>let</b> current_validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(staked_sui);
 
     // check that the validators are not the same and they are both active.
     <b>assert</b>!(current_validator_address != new_validator_address, 0);
