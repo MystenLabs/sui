@@ -4,6 +4,14 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
+## Week ending 12/25/22
+
+| Topic | Update | 
+| :------ | :------- |
+| [Sui Move by Example](../explore/move-examples/index.md) | [Relocated this content](https://github.com/MystenLabs/sui/pull/6957) from examples.sui.io to the Explore section of docs.sui.io. |
+| [Sui Framework Reference](../reference/framework/index.md) | [Added links to each module topic in the Framework Reference](https://github.com/MystenLabs/sui/pull/6958) folder in the repo until we can properly add them to the Docs site. |
+
+
 ## Week ending 12/17/22
 
 | Topic | Update | 
