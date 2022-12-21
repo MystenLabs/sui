@@ -1,6 +1,6 @@
 Sui indexer is an off-fullnode service to serve data from the protocol, including both data directly generated from chain and derivative data.
 
-## today's architecture (will be changed soon)
+## Current architecture Dec 2022 (will change soon)
 ![indexer_simple](https://user-images.githubusercontent.com/106119108/209000367-4c7d23d8-fef2-4485-8472-89c31f0e2d62.png)
 
 ## local run instructions
