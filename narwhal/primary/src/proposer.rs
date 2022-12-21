@@ -20,7 +20,7 @@ use types::now;
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, ReconfigureNotification, Round, Timestamp, TimestampMs,
+    BatchDigest, Certificate, Header, ReconfigureNotification, Round, TimestampMs,
 };
 
 /// Messages sent to the proposer about our own batch digests
@@ -88,9 +88,9 @@ pub struct Proposer {
     /// Holds the map of proposed previous round headers, used to ensure that
     /// all batches' digest included will eventually be re-sent.
     proposed_headers: BTreeMap<Round, Header>,
-    /// Commited headers channel on which we get updates on which of
+    /// Committed headers channel on which we get updates on which of
     /// our own headers have been committed.
-    rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
+    rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
 
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
@@ -114,7 +114,7 @@ impl Proposer {
         rx_our_digests: Receiver<OurDigestMessage>,
         tx_headers: Sender<Header>,
         tx_narwhal_round_updates: watch::Sender<Round>,
-        rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
+        rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
@@ -140,7 +140,7 @@ impl Proposer {
                     last_leader: None,
                     digests: Vec::with_capacity(2 * max_header_num_of_batches),
                     proposed_headers: BTreeMap::new(),
-                    rx_commited_own_headers,
+                    rx_committed_own_headers,
                     metrics,
                 }
                 .run()
@@ -241,11 +241,33 @@ impl Proposer {
         self.proposed_headers.insert(this_round, header.clone());
 
         // Update metrics related to latency
-        for (_, _, created_at_timestamp) in digests {
+        for (_digest, _worker_id, created_at_timestamp) in digests.clone() {
+            let batch_inclusion_duration =
+                Duration::from_millis(header.created_at - created_at_timestamp).as_secs_f64();
+
+            #[cfg(feature = "benchmark")]
+            {
+                // NOTE: This log entry is used to compute performance.
+                tracing::info!(
+                    "Batch {:?} from worker {} took {} seconds from creation to be included in a proposed header",
+                    _digest,
+                    _worker_id,
+                    batch_inclusion_duration
+                );
+            }
+
             self.metrics
                 .proposer_batch_latency
-                .observe(created_at_timestamp.elapsed().as_secs_f64());
+                .observe(batch_inclusion_duration);
         }
+
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Header {:?} was created in {} seconds",
+            header.digest(),
+            Duration::from_millis(header.created_at - digests.first().unwrap().2).as_secs_f64()
+        );
 
         Ok(header)
     }
@@ -434,14 +456,14 @@ impl Proposer {
                     }
                 }
 
-                Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
+                Some((commit_round, commit_headers)) = self.rx_committed_own_headers.recv() => {
                     // Remove committed headers from the list of pending
                     for round in &commit_headers {
                         self.proposed_headers.remove(round);
                     }
 
                     // Now for any round much below the current commit round we re-insert
-                    // the batches into the digests we need to send, effectivelly re-sending
+                    // the batches into the digests we need to send, effectively re-sending
                     // them
                     let mut digests_to_resend = Vec::new();
                     let mut retransmit_rounds = Vec::new();

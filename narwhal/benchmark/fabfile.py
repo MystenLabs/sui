@@ -22,13 +22,13 @@ def local(ctx, debug=True):
         'workers': 1,
         'rate': 50_000,
         'tx_size': 512,
-        'duration': 20,
+        'duration': 60,
         'failpoints': False
     }
     node_params = {
         'header_num_of_batches_threshold': 32,
         'max_header_num_of_batches': 1000,
-        'max_header_delay': '200ms',  # ms
+        'max_header_delay': '2000ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
         'sync_retry_nodes': 3,  # number of nodes

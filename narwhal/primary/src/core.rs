@@ -31,7 +31,7 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
     Certificate, CertificateDigest, Header, HeaderDigest, PrimaryToPrimaryClient,
-    ReconfigureNotification, RequestVoteRequest, Round, Timestamp, Vote,
+    ReconfigureNotification, RequestVoteRequest, Round, Vote,
 };
 
 #[cfg(test)]
@@ -390,7 +390,7 @@ impl Core {
                             format!("!!!missing certificate for digest {parent_digest:?}!!!\n")
                         }
                         Err(e) => format!(
-                            "!!!error retreiving certificate for digest {parent_digest:?}: {e:?}\n"
+                            "!!!error retrieving certificate for digest {parent_digest:?}: {e:?}\n"
                         ),
                     };
                     msg.push_str(&parent_msg);
@@ -449,16 +449,19 @@ impl Core {
         // Broadcast the certificate.
         let epoch = certificate.epoch();
         let round = certificate.header.round;
-        let created_at = certificate.header.created_at;
+        let header_to_certificate_duration =
+            Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
+                .as_secs_f64();
         let network_keys = self
             .committee
             .others_primaries(&self.name)
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        let tasks = self
-            .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
+        let tasks = self.network.broadcast(
+            network_keys,
+            &PrimaryMessage::Certificate(certificate.clone()),
+        );
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,
@@ -478,7 +481,17 @@ impl Core {
         self.metrics
             .header_to_certificate_latency
             .with_label_values(&[&epoch.to_string()])
-            .observe(created_at.elapsed().as_secs_f64());
+            .observe(header_to_certificate_duration);
+
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            certificate.header.digest(),
+            header_to_certificate_duration,
+            certificate.digest()
+        );
+
         Ok(())
     }
 
