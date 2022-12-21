@@ -12,6 +12,9 @@ use sui_config::{
     genesis::{Builder, Genesis},
     SUI_GENESIS_FILENAME,
 };
+use sui_keys::keypair_util::{
+    read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{
@@ -20,10 +23,6 @@ use sui_types::{
         ToFromBytes,
     },
     object::Object,
-};
-
-use crate::keytool::{
-    read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
 };
 
 const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
@@ -269,9 +268,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::keytool::{write_authority_keypair_to_file, write_keypair_to_file};
     use anyhow::Result;
     use sui_config::{utils, ValidatorInfo};
+    use sui_keys::keypair_util::{write_authority_keypair_to_file, write_keypair_to_file};
     use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
 
     #[test]

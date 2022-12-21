@@ -10,3 +10,7 @@ enable-event-processing: true
 genesis:
   # Update this to the location of where the genesis file is stored
   genesis-file-location: "genesis.blob"
+protocol-key-pair-path: "protocol.key"
+network-key-pair-path: "network.key"
+account-key-pair-path: "account.key"
+worker-key-pair-path: "worker.key"

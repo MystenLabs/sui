@@ -12,11 +12,9 @@ use serde_with::serde_as;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use sui_keys::keypair_util::{write_authority_keypair_to_file, write_keypair_to_file};
 use sui_types::committee::Committee;
-use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
-};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
 use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
@@ -129,15 +127,28 @@ impl<'a> FullnodeConfigBuilder<'a> {
     }
 
     pub fn build(self) -> Result<NodeConfig, anyhow::Error> {
-        let protocol_key_pair: Arc<AuthorityKeyPair> =
-            Arc::new(get_key_pair_from_rng(&mut OsRng).1);
-        let worker_key_pair: Arc<NetworkKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
-        let account_key_pair: Arc<SuiKeyPair> = Arc::new(
-            get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng)
-                .1
-                .into(),
+        let protocol_key_pair: AuthorityKeyPair = get_key_pair_from_rng(&mut OsRng).1;
+        let worker_key_pair: SuiKeyPair =
+            sui_types::crypto::SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut OsRng).1);
+        let account_key_pair: SuiKeyPair = sui_types::crypto::SuiKeyPair::Ed25519(
+            get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng).1,
         );
-        let network_key_pair: Arc<NetworkKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
+        let network_key_pair: SuiKeyPair =
+            sui_types::crypto::SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut OsRng).1);
+        let protocol_key_pair_path = PathBuf::from("protocol.key");
+        let worker_key_pair_path = PathBuf::from("worker.key");
+        let account_key_pair_path = PathBuf::from("account.key");
+        let network_key_pair_path = PathBuf::from("network.key");
+
+        write_authority_keypair_to_file(&protocol_key_pair, &protocol_key_pair_path)
+            .expect("Fail to write protocol keypair to file");
+        write_keypair_to_file(&worker_key_pair, &worker_key_pair_path)
+            .expect("Fail to write worker keypair to file");
+        write_keypair_to_file(&account_key_pair, &account_key_pair_path)
+            .expect("Fail to write account keypair to file");
+        write_keypair_to_file(&network_key_pair, &network_key_pair_path)
+            .expect("Fail to write network keypair to file");
+
         let validator_configs = &self.network_config.validator_configs;
         let validator_config = &validator_configs[0];
 
@@ -164,7 +175,9 @@ impl<'a> FullnodeConfigBuilder<'a> {
             let seed_peers = validator_configs
                 .iter()
                 .map(|config| SeedPeer {
-                    peer_id: Some(anemo::PeerId(config.network_key_pair.public().0.to_bytes())),
+                    peer_id: Some(anemo::PeerId(
+                        config.network_key_pair().public().0.to_bytes(),
+                    )),
                     address: config.p2p_config.external_address.clone().unwrap(),
                 })
                 .collect();
@@ -184,10 +197,10 @@ impl<'a> FullnodeConfigBuilder<'a> {
         let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
         Ok(NodeConfig {
-            protocol_key_pair,
-            worker_key_pair,
-            account_key_pair,
-            network_key_pair,
+            protocol_key_pair_path,
+            worker_key_pair_path,
+            account_key_pair_path,
+            network_key_pair_path,
             db_path: db_path.join(dir_name),
             network_address,
             metrics_address: utils::available_local_socket_address(),

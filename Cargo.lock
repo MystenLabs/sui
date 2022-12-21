@@ -8462,6 +8462,7 @@ dependencies = [
  "serde_yaml",
  "sui-adapter",
  "sui-framework",
+ "sui-keys",
  "sui-simulator",
  "sui-types",
  "tempfile",

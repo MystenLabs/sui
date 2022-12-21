@@ -12,10 +12,11 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use sui_keys::keypair_util::read_authority_keypair_from_file;
+use sui_keys::keypair_util::read_keypair_from_file;
+use sui_keys::keypair_util::read_network_keypair_from_file;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
@@ -23,7 +24,6 @@ use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::sui_serde::KeyPairBase64;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -32,20 +32,10 @@ pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
-    /// The keypair that is used to deal with consensus transactions
-    #[serde(default = "default_key_pair")]
-    #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub protocol_key_pair: Arc<AuthorityKeyPair>,
-    /// The keypair that is used by the narwhal worker.
-    #[serde(default = "default_worker_key_pair")]
-    #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub worker_key_pair: Arc<NetworkKeyPair>,
-    /// The keypair that the authority uses to receive payments
-    #[serde(default = "default_sui_key_pair")]
-    pub account_key_pair: Arc<SuiKeyPair>,
-    #[serde(default = "default_worker_key_pair")]
-    #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub network_key_pair: Arc<NetworkKeyPair>,
+    pub protocol_key_pair_path: PathBuf,
+    pub worker_key_pair_path: PathBuf,
+    pub account_key_pair_path: PathBuf,
+    pub network_key_pair_path: PathBuf,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -84,18 +74,6 @@ pub struct NodeConfig {
     pub p2p_config: P2pConfig,
 
     pub genesis: Genesis,
-}
-
-fn default_key_pair() -> Arc<AuthorityKeyPair> {
-    Arc::new(sui_types::crypto::get_key_pair().1)
-}
-
-fn default_worker_key_pair() -> Arc<NetworkKeyPair> {
-    Arc::new(sui_types::crypto::get_key_pair().1)
-}
-
-fn default_sui_key_pair() -> Arc<SuiKeyPair> {
-    Arc::new((sui_types::crypto::get_key_pair::<AccountKeyPair>().1).into())
 }
 
 fn default_grpc_address() -> Multiaddr {
@@ -137,24 +115,36 @@ pub fn bool_true() -> bool {
 impl Config for NodeConfig {}
 
 impl NodeConfig {
-    pub fn protocol_key_pair(&self) -> &AuthorityKeyPair {
-        &self.protocol_key_pair
+    pub fn protocol_key_pair(&self) -> AuthorityKeyPair {
+        let path = &self.protocol_key_pair_path;
+        read_authority_keypair_from_file(path)
+            .unwrap_or_else(|e| panic!("Invalid protocol key at path {:?} {:?}", path, e))
     }
 
-    pub fn worker_key_pair(&self) -> &NetworkKeyPair {
-        &self.worker_key_pair
+    pub fn worker_key_pair(&self) -> NetworkKeyPair {
+        let path = &self.worker_key_pair_path;
+        read_network_keypair_from_file(path)
+            .unwrap_or_else(|e| panic!("Invalid worker key at path {:?} {:?}", path, e))
     }
 
-    pub fn network_key_pair(&self) -> &NetworkKeyPair {
-        &self.network_key_pair
+    pub fn network_key_pair(&self) -> NetworkKeyPair {
+        let path = &self.network_key_pair_path;
+        read_network_keypair_from_file(path)
+            .unwrap_or_else(|e| panic!("Invalid network key at path {:?} {:?}", path, e))
+    }
+
+    pub fn account_key_pair(&self) -> SuiKeyPair {
+        let path = &self.account_key_pair_path;
+        read_keypair_from_file(path)
+            .unwrap_or_else(|e| panic!("Invalid account key at path {:?} {:?}", path, e))
     }
 
     pub fn protocol_public_key(&self) -> AuthorityPublicKeyBytes {
-        self.protocol_key_pair.public().into()
+        self.protocol_key_pair().public().into()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        (&self.account_key_pair.public()).into()
+        (&self.account_key_pair().public()).into()
     }
 
     pub fn db_path(&self) -> &Path {

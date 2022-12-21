@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use anyhow::Result;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::info;
 
 use sui_types::base_types::{ObjectID, SuiAddress};

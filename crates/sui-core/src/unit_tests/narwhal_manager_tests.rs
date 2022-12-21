@@ -83,7 +83,7 @@ async fn test_narwhal_manager() {
 
     let narwhal_config = NarwhalConfiguration {
         primary_keypair: config.protocol_key_pair().copy(),
-        network_keypair: config.network_key_pair.copy(),
+        network_keypair: config.network_key_pair().copy(),
         worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
         storage_base_path: consensus_config.db_path().to_path_buf(),
         parameters: consensus_config.narwhal_config().to_owned(),
