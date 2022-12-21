@@ -6,11 +6,12 @@ use std::{
     sync::Arc,
 };
 
+use sui_types::storage::ObjectKey;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::{mpsc::UnboundedSender, RwLock};
 use tracing::{debug, error};
 
-use crate::authority::{authority_store::ObjectKey, AuthorityMetrics, AuthorityStore};
+use crate::authority::{AuthorityMetrics, AuthorityStore};
 
 /// TransactionManager is responsible for managing pending certificates and publishes a stream
 /// of certificates ready to be executed. It works together with AuthorityState for receiving

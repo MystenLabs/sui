@@ -8,19 +8,17 @@ use crate::authority::authority_per_epoch_store::{
 use arc_swap::ArcSwap;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::iter;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     lock_service::ObjectLockStatus,
     mutex_table::{LockGuard, MutexTable},
     LockService,
 };
 use sui_types::object::Owner;
-use sui_types::storage::ChildObjectResolver;
+use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use sui_types::{batch::TxSequenceNumber, object::PACKAGE_VERSION};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -185,8 +183,24 @@ impl AuthorityStore {
         previous_store.epoch_terminated().await;
     }
 
+    // TODO: Deprecate this once we replace all calls with load_epoch_store.
     pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
         self.epoch_store.load()
+    }
+
+    pub fn load_epoch_store(
+        &self,
+        intended_epoch: EpochId,
+    ) -> SuiResult<Guard<Arc<AuthorityPerEpochStore>>> {
+        let store = self.epoch_store.load();
+        fp_ensure!(
+            store.epoch() == intended_epoch,
+            SuiError::StoreAccessEpochMismatch {
+                store_epoch: store.epoch(),
+                intended_epoch,
+            }
+        );
+        Ok(store)
     }
 
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
@@ -1115,17 +1129,6 @@ impl AuthorityStore {
         )
     }
 
-    pub fn consensus_message_processed(
-        &self,
-        key: &ConsensusTransactionKey,
-    ) -> Result<bool, SuiError> {
-        self.epoch_store().is_consensus_message_processed(key)
-    }
-
-    pub fn sent_end_of_publish(&self, authority: &AuthorityName) -> SuiResult<bool> {
-        self.epoch_store().has_sent_end_of_publish(authority)
-    }
-
     pub async fn record_end_of_publish(
         &self,
         authority: AuthorityName,
@@ -1146,158 +1149,6 @@ impl AuthorityStore {
         let key = transaction.key();
         self.epoch_store()
             .finish_consensus_transaction_process(key, consensus_index)
-    }
-
-    /// Caller is responsible to call consensus_message_processed before this method
-    pub async fn record_owned_object_cert_from_consensus(
-        &self,
-        transaction: &ConsensusTransaction,
-        certificate: &VerifiedCertificate,
-        consensus_index: ExecutionIndicesWithHash,
-    ) -> Result<(), SuiError> {
-        let key = transaction.key();
-        self.epoch_store()
-            .finish_consensus_certificate_process(key, certificate, consensus_index)
-    }
-
-    /// Locks a sequence number for the shared objects of the input transaction. Also updates the
-    /// last consensus index, consensus_message_processed and pending_certificates tables.
-    /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
-    ///
-    /// Caller is responsible to call consensus_message_processed before this method
-    pub async fn record_shared_object_cert_from_consensus(
-        &self,
-        transaction: &ConsensusTransaction,
-        certificate: &VerifiedCertificate,
-        consensus_index: ExecutionIndicesWithHash,
-    ) -> Result<(), SuiError> {
-        // Make an iterator to save the certificate.
-        let transaction_digest = *certificate.digest();
-
-        // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.shared_input_objects().map(|(id, _)| id);
-        let epoch_store = self.epoch_store();
-        let versions = epoch_store.multi_get_next_shared_object_versions(ids)?;
-
-        let mut input_object_keys = certificate_input_object_keys(certificate)?;
-        let mut assigned_versions = Vec::new();
-        for ((id, initial_shared_version), v) in
-            certificate.shared_input_objects().zip(versions.iter())
-        {
-            // On epoch changes, the `next_shared_object_versions` table will be empty, and we rely on
-            // parent sync to recover the current version of the object.  However, if an object was
-            // previously aware of the object as owned, and it was upgraded to shared, the version
-            // in parent sync may be out of date, causing a fork.  In that case, we know that the
-            // `initial_shared_version` will be greater than the version in parent sync, and we can
-            // use that.  It is the version that the object was shared at, and can be trusted
-            // because it has been checked and signed by a quorum of other validators when creating
-            // the certificate.
-            let version = match v {
-                Some(v) => *v,
-                None => *initial_shared_version.max(
-                    &self
-                        // TODO: if we use an eventually consistent object store in the future,
-                        // we must make this read strongly consistent somehow!
-                        .get_latest_parent_entry(*id)?
-                        .map(|(objref, _)| objref.1)
-                        .unwrap_or_default(),
-                ),
-            };
-
-            assigned_versions.push((*id, version));
-            input_object_keys.push(ObjectKey(*id, version));
-        }
-
-        let next_version =
-            SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
-        let next_versions: Vec<_> = assigned_versions
-            .iter()
-            .map(|(id, _)| (*id, next_version))
-            .collect();
-
-        trace!(tx_digest = ?transaction_digest,
-               ?assigned_versions, ?next_version,
-               "locking shared objects");
-
-        // Make an iterator to update the last consensus index.
-
-        // Holding _tx_lock avoids the following race:
-        // - we check effects_exist, returns false
-        // - another task (starting from CheckpointExecutor) writes effects,
-        //    and then deletes locks from assigned_shared_object_versions
-        // - we write to assigned_object versions, re-creating the locks that were just deleted
-        // - now it's possible to run a new tx against old versions of the shared objects.
-        let _tx_lock = epoch_store.acquire_tx_lock(&transaction_digest).await;
-
-        // Note: if we crash here we are not in an inconsistent state since
-        //       it is ok to just update the pending list without updating the sequence.
-
-        epoch_store.finish_assign_shared_object_versions(
-            transaction.key(),
-            certificate,
-            consensus_index,
-            assigned_versions,
-            next_versions,
-        )
-    }
-
-    /// Returns transaction digests from consensus_message_order table in the "checkpoint range".
-    ///
-    /// Checkpoint range is defined from the last seen checkpoint(excluded) to the provided
-    /// to_height (included)
-    pub fn last_checkpoint(
-        &self,
-        to_height_included: u64,
-    ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
-        let epoch_tables = self.epoch_store();
-
-        let (index, from_height_excluded) = epoch_tables.get_last_checkpoint_boundary();
-
-        if let Some(from_height_excluded) = from_height_excluded {
-            if from_height_excluded >= to_height_included {
-                // Due to crash recovery we might enter this function twice for same boundary
-                debug!("Not returning last checkpoint - already processed");
-                return Ok(None);
-            }
-        }
-
-        let roots = epoch_tables
-            .get_transactions_in_checkpoint_range(from_height_excluded, to_height_included)?;
-
-        debug!(
-            "Selected {} roots between narwhal commit rounds {:?} and {}",
-            roots.len(),
-            from_height_excluded,
-            to_height_included
-        );
-
-        Ok(Some((index, roots)))
-    }
-
-    pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
-        self.epoch_store().final_epoch_checkpoint()
-    }
-
-    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
-        let epoch_tables = self.epoch_store();
-
-        let (index, height) = epoch_tables.get_last_checkpoint_boundary();
-
-        if let Some(height) = height {
-            if height >= commit_round {
-                // Due to crash recovery we might see same boundary twice
-                debug!("Not recording checkpoint boundary - already updated");
-                return Ok(());
-            }
-        }
-
-        let index = index + 1;
-        debug!(
-            "Recording checkpoint boundary {} at {}",
-            index, commit_round
-        );
-        epoch_tables.insert_checkpoint_boundary(index, commit_round)?;
-        Ok(())
     }
 
     pub fn transactions_in_seq_range(
@@ -1459,31 +1310,6 @@ impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
     }
 }
 
-// The primary key type for object storage.
-#[serde_as]
-#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
-pub struct ObjectKey(pub ObjectID, pub VersionNumber);
-
-impl ObjectKey {
-    pub const ZERO: ObjectKey = ObjectKey(ObjectID::ZERO, VersionNumber::MIN);
-
-    pub fn max_for_id(id: &ObjectID) -> Self {
-        Self(*id, VersionNumber::MAX)
-    }
-}
-
-impl From<ObjectRef> for ObjectKey {
-    fn from(object_ref: ObjectRef) -> Self {
-        ObjectKey::from(&object_ref)
-    }
-}
-
-impl From<&ObjectRef> for ObjectKey {
-    fn from(object_ref: &ObjectRef) -> Self {
-        Self(object_ref.0, object_ref.1)
-    }
-}
-
 pub enum UpdateType {
     Transaction(TxSequenceNumber, TransactionEffectsDigest),
     Genesis,
@@ -1506,23 +1332,4 @@ impl EffectsStore for Arc<AuthorityStore> {
             .executed_effects
             .multi_get(transactions)?)
     }
-}
-
-/// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
-/// and immutable objects as well as the gas objects, but not move packages or shared objects.
-fn certificate_input_object_keys(certificate: &VerifiedCertificate) -> SuiResult<Vec<ObjectKey>> {
-    Ok(certificate
-        .data()
-        .intent_message
-        .value
-        .input_objects()?
-        .into_iter()
-        .filter_map(|object| {
-            use InputObjectKind::*;
-            match object {
-                MovePackage(_) | SharedMoveObject { .. } => None,
-                ImmOrOwnedMoveObject(obj) => Some(obj.into()),
-            }
-        })
-        .collect())
 }

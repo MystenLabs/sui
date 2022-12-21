@@ -24,7 +24,7 @@ use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
     SignedTransactionEffects, TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::debug;
+use tracing::{debug, trace};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
@@ -34,6 +34,7 @@ use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use sui_types::message_envelope::TrustedEnvelope;
+use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -541,6 +542,98 @@ impl AuthorityPerEpochStore {
         self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
 
+    /// Caller is responsible to call consensus_message_processed before this method
+    pub async fn record_owned_object_cert_from_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        certificate: &VerifiedCertificate,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> Result<(), SuiError> {
+        let key = transaction.key();
+        self.finish_consensus_certificate_process(key, certificate, consensus_index)
+    }
+
+    /// Locks a sequence number for the shared objects of the input transaction. Also updates the
+    /// last consensus index, consensus_message_processed and pending_certificates tables.
+    /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
+    ///
+    /// Caller is responsible to call consensus_message_processed before this method
+    pub async fn record_shared_object_cert_from_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        certificate: &VerifiedCertificate,
+        consensus_index: ExecutionIndicesWithHash,
+        parent_sync_store: impl ParentSync,
+    ) -> Result<(), SuiError> {
+        // Make an iterator to save the certificate.
+        let transaction_digest = *certificate.digest();
+
+        // Make an iterator to update the locks of the transaction's shared objects.
+        let ids = certificate.shared_input_objects().map(|(id, _)| id);
+        let versions = self.multi_get_next_shared_object_versions(ids)?;
+
+        let mut input_object_keys = transaction_input_object_keys(certificate)?;
+        let mut assigned_versions = Vec::new();
+        for ((id, initial_shared_version), v) in
+            certificate.shared_input_objects().zip(versions.iter())
+        {
+            // On epoch changes, the `next_shared_object_versions` table will be empty, and we rely on
+            // parent sync to recover the current version of the object.  However, if an object was
+            // previously aware of the object as owned, and it was upgraded to shared, the version
+            // in parent sync may be out of date, causing a fork.  In that case, we know that the
+            // `initial_shared_version` will be greater than the version in parent sync, and we can
+            // use that.  It is the version that the object was shared at, and can be trusted
+            // because it has been checked and signed by a quorum of other validators when creating
+            // the certificate.
+            let version = match v {
+                Some(v) => *v,
+                None => *initial_shared_version.max(
+                    &parent_sync_store
+                        // TODO: if we use an eventually consistent object store in the future,
+                        // we must make this read strongly consistent somehow!
+                        .get_latest_parent_entry_ref(*id)?
+                        .map(|objref| objref.1)
+                        .unwrap_or_default(),
+                ),
+            };
+
+            assigned_versions.push((*id, version));
+            input_object_keys.push(ObjectKey(*id, version));
+        }
+
+        let next_version =
+            SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
+        let next_versions: Vec<_> = assigned_versions
+            .iter()
+            .map(|(id, _)| (*id, next_version))
+            .collect();
+
+        trace!(tx_digest = ?transaction_digest,
+               ?assigned_versions, ?next_version,
+               "locking shared objects");
+
+        // Make an iterator to update the last consensus index.
+
+        // Holding _tx_lock avoids the following race:
+        // - we check effects_exist, returns false
+        // - another task (starting from CheckpointExecutor) writes effects,
+        //    and then deletes locks from assigned_shared_object_versions
+        // - we write to assigned_object versions, re-creating the locks that were just deleted
+        // - now it's possible to run a new tx against old versions of the shared objects.
+        let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
+
+        // Note: if we crash here we are not in an inconsistent state since
+        //       it is ok to just update the pending list without updating the sequence.
+
+        self.finish_assign_shared_object_versions(
+            transaction.key(),
+            certificate,
+            consensus_index,
+            assigned_versions,
+            next_versions,
+        )
+    }
+
     pub fn finish_consensus_transaction_process(
         &self,
         key: ConsensusTransactionKey,
@@ -639,6 +732,56 @@ impl AuthorityPerEpochStore {
             .tables
             .final_epoch_checkpoint
             .get(&FINAL_EPOCH_CHECKPOINT_INDEX)?)
+    }
+
+    /// Returns transaction digests from consensus_message_order table in the "checkpoint range".
+    ///
+    /// Checkpoint range is defined from the last seen checkpoint(excluded) to the provided
+    /// to_height (included)
+    pub fn last_checkpoint(
+        &self,
+        to_height_included: u64,
+    ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
+        let (index, from_height_excluded) = self.get_last_checkpoint_boundary();
+
+        if let Some(from_height_excluded) = from_height_excluded {
+            if from_height_excluded >= to_height_included {
+                // Due to crash recovery we might enter this function twice for same boundary
+                debug!("Not returning last checkpoint - already processed");
+                return Ok(None);
+            }
+        }
+
+        let roots =
+            self.get_transactions_in_checkpoint_range(from_height_excluded, to_height_included)?;
+
+        debug!(
+            "Selected {} roots between narwhal commit rounds {:?} and {}",
+            roots.len(),
+            from_height_excluded,
+            to_height_included
+        );
+
+        Ok(Some((index, roots)))
+    }
+    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
+        let (index, height) = self.get_last_checkpoint_boundary();
+
+        if let Some(height) = height {
+            if height >= commit_round {
+                // Due to crash recovery we might see same boundary twice
+                debug!("Not recording checkpoint boundary - already updated");
+                return Ok(());
+            }
+        }
+
+        let index = index + 1;
+        debug!(
+            "Recording checkpoint boundary {} at {}",
+            index, commit_round
+        );
+        self.insert_checkpoint_boundary(index, commit_round)?;
+        Ok(())
     }
 
     pub fn get_reconfig_state_read_lock_guard(

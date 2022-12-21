@@ -18,7 +18,6 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::cmp::Ordering as CmpOrdering;
-use std::hash::Hash;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -62,7 +61,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::storage::WriteKind;
+use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -101,8 +100,6 @@ use crate::{
     transaction_manager::TransactionManager,
     transaction_streamer::TransactionStreamer,
 };
-
-use self::authority_store::ObjectKey;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -759,13 +756,7 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if certificate.contains_shared_object()
-            && !self
-                .database
-                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
-                    *certificate.digest(),
-                ))?
-        {
+        if certificate.contains_shared_object() && !self.consensus_message_processed(certificate)? {
             return Err(SuiError::CertificateNotSequencedError {
                 digest: *certificate.digest(),
             });
@@ -1946,8 +1937,16 @@ impl AuthorityState {
         self.database.clone()
     }
 
+    // TODO: Deprecate this once we replace all calls with load_epoch_store.
     pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
         self.database.epoch_store()
+    }
+
+    pub fn load_epoch_store(
+        &self,
+        intended_epoch: EpochId,
+    ) -> SuiResult<Guard<Arc<AuthorityPerEpochStore>>> {
+        self.database.load_epoch_store(intended_epoch)
     }
 
     pub fn clone_committee(&self) -> Committee {
@@ -2449,8 +2448,8 @@ impl AuthorityState {
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
-        self.database
-            .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+        self.epoch_store()
+            .is_consensus_message_processed(&ConsensusTransactionKey::Certificate(
                 *certificate.digest(),
             ))
     }
@@ -2514,12 +2513,19 @@ impl AuthorityState {
     /// This function returns unit error and is responsible for emitting log messages for internal errors
     pub(crate) fn verify_consensus_transaction(
         &self,
+        current_epoch: EpochId,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
-            .database
-            .consensus_message_processed(&transaction.transaction.key())
+            .load_epoch_store(current_epoch)
+            .map_err(|err| {
+                debug!(
+                    "Error loading epoch store in verify_consensus_transaction: {:?}",
+                    err
+                )
+            })?
+            .is_consensus_message_processed(&transaction.transaction.key())
             .expect("Storage error")
         {
             debug!(
@@ -2558,11 +2564,12 @@ impl AuthorityState {
     /// Errors returned by this call are treated as critical errors and cause node to panic.
     pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
+        current_epoch: EpochId,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
         if let Some(certificate) = self
-            .process_consensus_transaction(transaction, checkpoint_service)
+            .process_consensus_transaction(current_epoch, transaction, checkpoint_service)
             .await?
         {
             // The certificate has already been inserted into the pending_certificates table by
@@ -2578,6 +2585,7 @@ impl AuthorityState {
     /// - Or update the state for checkpoint or epoch change protocol. Returns None.
     pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
+        current_epoch: EpochId,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult<Option<VerifiedCertificate>> {
@@ -2588,10 +2596,30 @@ impl AuthorityState {
             transaction,
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
+        let epoch_store = match self.load_epoch_store(current_epoch) {
+            Ok(s) => s,
+            Err(err) => {
+                // Epoch has changed while this transaction is being processed. Ignore it.
+                debug!(
+                    "Error loading epoch store in process_consensus_transaction: {:?}",
+                    err
+                );
+                return Ok(None);
+            }
+        };
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                if certificate.epoch() != current_epoch {
+                    // Epoch has changed after this certificate was sequenced, ignore it.
+                    debug!(
+                        "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
+                        certificate.epoch(),
+                        current_epoch
+                    );
+                    return Ok(None);
+                }
                 let authority = (&consensus_output.header.author).into();
-                if self.database.sent_end_of_publish(&authority)? {
+                if epoch_store.has_sent_end_of_publish(&authority)? {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
@@ -2609,8 +2637,7 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
-                if !self
-                    .epoch_store()
+                if !epoch_store
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
                 {
@@ -2620,15 +2647,16 @@ impl AuthorityState {
                 }
 
                 if certificate.contains_shared_object() {
-                    self.database
+                    epoch_store
                         .record_shared_object_cert_from_consensus(
                             &transaction,
                             &certificate,
                             consensus_index,
+                            &self.database,
                         )
                         .await?;
                 } else {
-                    self.database
+                    epoch_store
                         .record_owned_object_cert_from_consensus(
                             &transaction,
                             &certificate,
@@ -2658,6 +2686,7 @@ impl AuthorityState {
 
     pub(crate) fn handle_commit_boundary<C: CheckpointServiceNotify>(
         &self,
+        current_epoch: EpochId,
         committed_dag: &Arc<CommittedSubDag>,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
@@ -2669,8 +2698,9 @@ impl AuthorityState {
         // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
-        if let Some((index, roots)) = self.database.last_checkpoint(round)? {
-            let final_checkpoint_round = self.database.final_epoch_checkpoint()?;
+        let epoch_store = self.load_epoch_store(current_epoch)?;
+        if let Some((index, roots)) = epoch_store.last_checkpoint(round)? {
+            let final_checkpoint_round = epoch_store.final_epoch_checkpoint()?;
             let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
                 Some(CmpOrdering::Less) => {
                     debug!(
@@ -2685,7 +2715,7 @@ impl AuthorityState {
             };
             checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
         }
-        self.database.record_checkpoint_boundary(round)
+        epoch_store.record_checkpoint_boundary(round)
     }
 
     pub async fn create_advance_epoch_tx_cert(
