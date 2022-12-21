@@ -1,0 +1,33 @@
+Sui indexer is an off-fullnode service to serve data from the protocol, including both data directly generated from chain and derivative data.
+
+## today's architecture (will be changed soon)
+![indexer_simple](https://user-images.githubusercontent.com/106119108/209000367-4c7d23d8-fef2-4485-8472-89c31f0e2d62.png)
+
+## local run instructions
+### Prerequisites
+- install local [Postgres server](https://www.postgresql.org/download/)
+- install Diesel CLI, you can follow this [guide](https://diesel.rs/guides/getting-started) until “write Rust” section
+- [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.
+
+### Steps
+1. DB setup
+  ```
+// DB setup, run below under /sui-indexer
+// .env file under /sui-indexer is required for diesel cmds
+// in .env file, DATABASE_URL should point to your local PG server
+// an example is:
+// DATABASE_URL=""postgres://postgres:postgres@localhost/gegao"
+diesel setup
+diesel migration run
+  ```
+2. cargo run under `/sui-indexer`
+  ```
+  cargo run --bin sui-indexer -- --db-url "<LOCAL_DB_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
+  ```
+  
+### Clean up and re-run
+  ```
+  // clean up all tables in the local DB, run below until no more tables are deleted
+  diesel migration revert
+  // then also delete "__diesel_schema_migrations", you can do that via Postico client
+  ```
