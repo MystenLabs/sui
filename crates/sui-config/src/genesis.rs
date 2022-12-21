@@ -589,7 +589,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&chain_id).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
