@@ -349,35 +349,41 @@ impl ValidatorService {
                 "Cannot execute system certificate via RPC interface! {certificate:?}"
             )));
         }
-        let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
+        // code block within reconfiguration lock
         let certificate = {
             let epoch_store = state.epoch_store();
-            certificate.verify(epoch_store.committee())?
-        };
-        cert_verif_metrics_guard.stop_and_record();
+            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            if !reconfiguration_lock.should_accept_user_certs() {
+                metrics.num_rejected_cert_in_epoch_boundary.inc();
+                return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
+            }
 
-        // 3) All certificates are sent to consensus (at least by some authorities)
-        // For shared objects this will wait until either timeout or we have heard back from consensus.
-        // For owned objects this will return without waiting for certificate to be sequenced
-        // First do quick dirty non-async check
-        if !state.consensus_message_processed(&certificate)? {
-            let _metrics_guard = if shared_object_tx {
-                Some(metrics.consensus_latency.start_timer())
-            } else {
-                None
+            let certificate = {
+                let _timer = metrics.cert_verification_latency.start_timer();
+                certificate.verify(epoch_store.committee())?
             };
-            let transaction = ConsensusTransaction::new_certificate_message(
-                &state.name,
-                certificate.clone().into(),
-            );
-            let _waiter = consensus_adapter.submit(transaction).tap_err(|e| {
-                if let SuiError::ValidatorHaltedAtEpochEnd = e {
-                    metrics.num_rejected_cert_in_epoch_boundary.inc();
-                }
-            })?;
-            // Do not wait for the result, because the transaction might have already executed.
-            // Instead, check or wait for the existence of certificate effects below.
-        }
+
+            // 3) All certificates are sent to consensus (at least by some authorities)
+            // For shared objects this will wait until either timeout or we have heard back from consensus.
+            // For owned objects this will return without waiting for certificate to be sequenced
+            // First do quick dirty non-async check
+            if !state.consensus_message_processed(&certificate)? {
+                let _metrics_guard = if shared_object_tx {
+                    Some(metrics.consensus_latency.start_timer())
+                } else {
+                    None
+                };
+                let transaction = ConsensusTransaction::new_certificate_message(
+                    &state.name,
+                    certificate.clone().into(),
+                );
+                consensus_adapter.submit(transaction, Some(&reconfiguration_lock))?;
+                // Do not wait for the result, because the transaction might have already executed.
+                // Instead, check or wait for the existence of certificate effects below.
+            }
+            drop(reconfiguration_lock);
+            certificate
+        };
 
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
