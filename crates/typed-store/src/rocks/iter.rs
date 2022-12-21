@@ -7,14 +7,12 @@ use rocksdb::Direction;
 
 use crate::metrics::{DBMetrics, SamplingInterval};
 
-use super::{be_fix_int_ser, errors::TypedStoreError};
+use super::{be_fix_int_ser, errors::TypedStoreError, RocksDBRawIter};
 use serde::{de::DeserializeOwned, Serialize};
-
-use super::DBRawIteratorMultiThreaded;
 
 /// An iterator over all key-value pairs in a data map.
 pub struct Iter<'a, K, V> {
-    db_iter: DBRawIteratorMultiThreaded<'a>,
+    db_iter: RocksDBRawIter<'a>,
     _phantom: PhantomData<(K, V)>,
     direction: Direction,
     cf: String,
@@ -24,7 +22,7 @@ pub struct Iter<'a, K, V> {
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
     pub(super) fn new(
-        db_iter: DBRawIteratorMultiThreaded<'a>,
+        db_iter: RocksDBRawIter<'a>,
         cf: String,
         db_metrics: &Arc<DBMetrics>,
         iter_bytes_sample_interval: &SamplingInterval,

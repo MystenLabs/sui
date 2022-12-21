@@ -129,9 +129,10 @@ async fn test_multi_get(#[values(true, false)] is_transactional: bool) {
     assert_eq!(result[2], None);
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_skip() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_skip(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123, &"123".to_string())
         .expect("Failed to insert");
@@ -170,9 +171,10 @@ async fn test_skip() {
     assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_skip_to_previous_simple() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123, &"123".to_string())
         .expect("Failed to insert");
@@ -211,9 +213,11 @@ async fn test_skip_to_previous_simple() {
     );
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_iter_skip_to_previous_gap() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_iter_skip_to_previous_gap(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
     for i in 1..100 {
         if i != 50 {
             db.insert(&i, &i.to_string()).unwrap();
@@ -252,10 +256,10 @@ async fn test_remove(#[values(true, false)] is_transactional: bool) {
     assert!(db.get(&123456789).expect("Failed to get").is_none());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_iter() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
-
+async fn test_iter(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
 
@@ -264,9 +268,10 @@ async fn test_iter() {
     assert_eq!(None, iter.next());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_iter_reverse() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_iter_reverse(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&1, &"1".to_string()).expect("Failed to insert");
     db.insert(&2, &"2".to_string()).expect("Failed to insert");
@@ -284,9 +289,10 @@ async fn test_iter_reverse() {
     assert_eq!(None, iter.next());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_keys() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_keys(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
@@ -296,9 +302,10 @@ async fn test_keys() {
     assert_eq!(None, keys.next());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_values() {
-    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_values(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
@@ -308,9 +315,10 @@ async fn test_values() {
     assert_eq!(None, values.next());
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_try_extend() {
-    let mut db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_try_extend(#[values(true, false)] is_transactional: bool) {
+    let mut db = open_map(temp_dir(), None, is_transactional);
     let mut keys_vals = (1..100).map(|i| (i, i.to_string()));
 
     db.try_extend(&mut keys_vals)
@@ -321,9 +329,10 @@ async fn test_try_extend() {
     }
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_try_extend_from_slice() {
-    let mut db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+async fn test_try_extend_from_slice(#[values(true, false)] is_transactional: bool) {
+    let mut db = open_map(temp_dir(), None, is_transactional);
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
 
     db.try_extend_from_slice(&keys_vals.clone().collect::<Vec<_>>()[..])
@@ -528,11 +537,12 @@ async fn test_multi_insert(#[values(true, false)] is_transactional: bool) {
     }
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_multi_remove() {
+async fn test_multi_remove(#[values(true, false)] is_transactional: bool) {
     // Init a DB
-    let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"))
-        .expect("Failed to open storage");
+    let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"), is_transactional);
+
     // Create kv pairs
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
 

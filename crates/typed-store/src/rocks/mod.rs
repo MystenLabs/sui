@@ -12,9 +12,8 @@ use crate::{
 use bincode::Options;
 use collectable::TryExtend;
 use rocksdb::{
-    properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBIteratorWithThreadMode,
-    DBWithThreadMode, IteratorMode, MultiThreaded, Transaction, WriteBatch,
-    WriteBatchWithTransaction,
+    properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
+    IteratorMode, MultiThreaded, Transaction, WriteBatch, WriteBatchWithTransaction,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -40,9 +39,6 @@ const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod tests;
-
-type DBRawIteratorMultiThreaded<'a> =
-    rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>;
 
 /// A helper macro to reopen multiple column families. The macro returns
 /// a tuple of DBMap structs in the same order that the column families
@@ -221,11 +217,11 @@ impl RocksDB {
     pub fn raw_iterator_cf<'a: 'b, 'b>(
         &'a self,
         cf_handle: &impl AsColumnFamilyRef,
-    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, DBWithThreadMode<MultiThreaded>> {
+    ) -> RocksDBRawIter<'b> {
         match self {
-            Self::DBWithThreadMode(db) => db.raw_iterator_cf(cf_handle),
-            Self::OptimisticTransactionDB(_) => {
-                panic!("iterator is not implemented for transactional db")
+            Self::DBWithThreadMode(db) => RocksDBRawIter::DB(db.raw_iterator_cf(cf_handle)),
+            Self::OptimisticTransactionDB(db) => {
+                RocksDBRawIter::OptimisticTransactionDB(db.raw_iterator_cf(cf_handle))
             }
         }
     }
@@ -234,11 +230,11 @@ impl RocksDB {
         &'a self,
         cf_handle: &impl AsColumnFamilyRef,
         mode: IteratorMode<'_>,
-    ) -> DBIteratorWithThreadMode<'b, DBWithThreadMode<MultiThreaded>> {
+    ) -> RocksDBIter<'b> {
         match self {
-            Self::DBWithThreadMode(db) => db.iterator_cf(cf_handle, mode),
-            Self::OptimisticTransactionDB(_) => {
-                panic!("iterator is not implemented for transactional db")
+            Self::DBWithThreadMode(db) => RocksDBIter::DB(db.iterator_cf(cf_handle, mode)),
+            Self::OptimisticTransactionDB(db) => {
+                RocksDBIter::OptimisticTransactionDB(db.iterator_cf(cf_handle, mode))
             }
         }
     }
@@ -422,9 +418,7 @@ impl<K, V> DBMap<K, V> {
             .expect("Map-keying column family should have been checked at DB creation")
     }
 
-    pub fn iterator_cf(
-        &self,
-    ) -> DBIteratorWithThreadMode<'_, rocksdb::DBWithThreadMode<MultiThreaded>> {
+    pub fn iterator_cf(&self) -> RocksDBIter<'_> {
         self.rocksdb.iterator_cf(&self.cf(), IteratorMode::Start)
     }
 
@@ -872,6 +866,69 @@ impl<'a> DBTransaction<'a> {
     pub fn commit(self) -> Result<(), TypedStoreError> {
         self.transaction.commit()?;
         Ok(())
+    }
+}
+
+macro_rules! delegate_iter_call {
+    ($self:ident.$method:ident($($args:ident),*)) => {
+        match $self {
+            Self::DB(db) => db.$method($($args),*),
+            Self::OptimisticTransactionDB(db) => db.$method($($args),*),
+        }
+    }
+}
+
+pub enum RocksDBRawIter<'a> {
+    DB(rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>),
+    OptimisticTransactionDB(
+        rocksdb::DBRawIteratorWithThreadMode<'a, rocksdb::OptimisticTransactionDB<MultiThreaded>>,
+    ),
+}
+
+impl<'a> RocksDBRawIter<'a> {
+    pub fn valid(&self) -> bool {
+        delegate_iter_call!(self.valid())
+    }
+    pub fn key(&self) -> Option<&[u8]> {
+        delegate_iter_call!(self.key())
+    }
+    pub fn value(&self) -> Option<&[u8]> {
+        delegate_iter_call!(self.value())
+    }
+    pub fn next(&mut self) {
+        delegate_iter_call!(self.next())
+    }
+    pub fn prev(&mut self) {
+        delegate_iter_call!(self.prev())
+    }
+    pub fn seek<K: AsRef<[u8]>>(&mut self, key: K) {
+        delegate_iter_call!(self.seek(key))
+    }
+    pub fn seek_to_last(&mut self) {
+        delegate_iter_call!(self.seek_to_last())
+    }
+    pub fn seek_to_first(&mut self) {
+        delegate_iter_call!(self.seek_to_first())
+    }
+    pub fn seek_for_prev<K: AsRef<[u8]>>(&mut self, key: K) {
+        delegate_iter_call!(self.seek_for_prev(key))
+    }
+}
+
+pub enum RocksDBIter<'a> {
+    DB(rocksdb::DBIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>),
+    OptimisticTransactionDB(
+        rocksdb::DBIteratorWithThreadMode<'a, rocksdb::OptimisticTransactionDB<MultiThreaded>>,
+    ),
+}
+
+impl<'a> Iterator for RocksDBIter<'a> {
+    type Item = Result<(Box<[u8]>, Box<[u8]>), Error>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::DB(db) => db.next(),
+            Self::OptimisticTransactionDB(db) => db.next(),
+        }
     }
 }
 
