@@ -17,8 +17,11 @@ Sui indexer is an off-fullnode service to serve data from the protocol, includin
 // in .env file, DATABASE_URL should point to your local PG server
 // an example is:
 // DATABASE_URL=""postgres://postgres:postgres@localhost/gegao"
-diesel setup
-diesel migration run
+`diesel setup`
+
+and then run 
+
+`diesel migration run`
   ```
 2. cargo run under `/sui-indexer`
   ```
