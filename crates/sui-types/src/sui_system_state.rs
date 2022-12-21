@@ -14,7 +14,7 @@ use crate::{
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use multiaddr::Multiaddr;
-use narwhal_config::{Committee as NarwhalCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
+use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -240,7 +240,7 @@ impl SuiSystemState {
     pub fn get_current_epoch_narwhal_worker_cache(
         &self,
         transactions_address: &Multiaddr,
-    ) -> SharedWorkerCache {
+    ) -> WorkerCache {
         let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
             .validators
             .active_validators
@@ -270,6 +270,5 @@ impl SuiSystemState {
             workers,
             epoch: self.epoch,
         }
-        .into()
     }
 }

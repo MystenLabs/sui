@@ -61,6 +61,7 @@ pub mod admin;
 mod handle;
 pub mod metrics;
 pub use handle::SuiNodeHandle;
+use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -518,7 +519,7 @@ impl SuiNode {
 
         let msg = NarwhalStartMessage {
             committee: committee.clone(),
-            shared_worker_cache: worker_cache,
+            shared_worker_cache: SharedWorkerCache::from(worker_cache),
             execution_state: consensus_handler,
         };
         narwhal_manager.tx_start.send(msg).await?;
@@ -658,7 +659,7 @@ impl SuiNode {
                         .tx_start
                         .send(NarwhalStartMessage {
                             committee: Arc::new(narwhal_committee),
-                            shared_worker_cache: worker_cache,
+                            shared_worker_cache: SharedWorkerCache::from(worker_cache),
                             execution_state: consensus_handler,
                         })
                         .await?;

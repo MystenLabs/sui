@@ -58,6 +58,7 @@ narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
+narwhal-test-utils = { path = "../../narwhal/test-utils" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
