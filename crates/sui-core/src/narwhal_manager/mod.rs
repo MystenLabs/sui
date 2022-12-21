@@ -12,37 +12,47 @@ use narwhal_node::{Node, NodeStorage};
 use narwhal_types::ReconfigureNotification;
 use narwhal_worker::TransactionValidator;
 use prometheus::Registry;
+use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_types::crypto::NetworkKeyPair;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
-pub struct NarwhalManager {
+pub struct NarwhalStartMessage<State> {
+    pub committee: Arc<Committee>,
+    pub shared_worker_cache: SharedWorkerCache,
+    pub execution_state: Arc<State>,
+}
+
+impl<State> Debug for NarwhalStartMessage<State> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.committee.fmt(f)?;
+        self.shared_worker_cache.fmt(f)
+    }
+}
+
+pub struct NarwhalManager<State> {
     pub join_handle: JoinHandle<()>,
-    pub tx_start: Sender<(Arc<Committee>, SharedWorkerCache)>,
+    pub tx_start: Sender<NarwhalStartMessage<State>>,
     pub tx_stop: Sender<()>,
 }
 
-pub struct NarwhalConfiguration<
-    State: ExecutionState + Send + Sync + 'static,
-    TxValidator: TransactionValidator,
-> {
+pub struct NarwhalConfiguration<TxValidator: TransactionValidator> {
     pub primary_keypair: bls12381::min_sig::BLS12381KeyPair,
     pub network_keypair: NetworkKeyPair,
     pub worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
 
     pub storage_base_path: PathBuf,
     pub parameters: Parameters,
-    pub execution_state: Arc<State>,
     pub tx_validator: TxValidator,
 
     pub registry_service: RegistryService,
 }
 
 pub async fn run_narwhal_manager<State, TxValidator>(
-    config: NarwhalConfiguration<State, TxValidator>,
-    mut tr_start: Receiver<(Arc<Committee>, SharedWorkerCache)>,
+    config: NarwhalConfiguration<TxValidator>,
+    mut tr_start: Receiver<NarwhalStartMessage<State>>,
     mut tr_stop: Receiver<()>,
 ) where
     State: ExecutionState + Send + Sync + 'static,
@@ -61,7 +71,11 @@ pub async fn run_narwhal_manager<State, TxValidator>(
         }
 
         // Wait for instruction to start an instance of narwhal
-        let (new_committee, worker_cache) = match tr_start.recv().await {
+        let NarwhalStartMessage {
+            committee,
+            shared_worker_cache,
+            execution_state,
+        } = match tr_start.recv().await {
             Some(m) => m,
             None => break,
         };
@@ -75,13 +89,18 @@ pub async fn run_narwhal_manager<State, TxValidator>(
             worker_ids_and_keypairs: id_keypair_copy,
             storage_base_path: config.storage_base_path.clone(),
             parameters: config.parameters.clone(),
-            execution_state: config.execution_state.clone(),
             tx_validator: config.tx_validator.clone(),
             registry_service: config.registry_service.clone(),
         };
 
-        let narwhal_handles =
-            start_narwhal(config_copy, new_committee, worker_cache, new_registry).await;
+        let narwhal_handles = start_narwhal(
+            config_copy,
+            committee,
+            shared_worker_cache,
+            execution_state,
+            new_registry,
+        )
+        .await;
 
         // Wait for instruction to stop the instance of narwhal
         match tr_stop.recv().await {
@@ -112,9 +131,10 @@ async fn shutdown_narwhal(port: u16, narwhal_handles: Vec<JoinHandle<()>>) {
 }
 
 async fn start_narwhal<State, TxValidator>(
-    config: NarwhalConfiguration<State, TxValidator>,
+    config: NarwhalConfiguration<TxValidator>,
     committee: Arc<Committee>,
     worker_cache: SharedWorkerCache,
+    execution_state: Arc<State>,
     registry: Registry,
 ) -> Vec<JoinHandle<()>>
 where
@@ -139,7 +159,7 @@ where
         &store,
         config.parameters.clone(),
         /* consensus */ true,
-        config.execution_state.clone(),
+        execution_state,
         &registry,
     )
     .await
