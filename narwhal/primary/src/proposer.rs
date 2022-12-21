@@ -309,11 +309,6 @@ impl Proposer {
 
         if let Some(leader) = self.last_leader.as_ref() {
             debug!("Got leader {} for round {}", leader.origin(), self.round);
-        } else {
-            debug!(
-                "Leader {} not valid for round {} because we are missing its parent certificate",
-                leader_name, self.round
-            );
         }
 
         self.last_leader.is_some()
