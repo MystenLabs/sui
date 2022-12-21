@@ -6,8 +6,6 @@
 //! 1. At one time, a transaction is only processed once.
 //! 2. When Fullnode crashes and restarts, the pending transaction will be loaded and retried.
 
-use crate::mutex_table::MutexTable;
-use crate::write_ahead_log::{MUTEX_TABLE_SHARD_SIZE, MUTEX_TABLE_SIZE};
 use std::path::PathBuf;
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::{SuiError, SuiResult};
@@ -25,16 +23,14 @@ struct WritePathPendingTransactionTable {
 
 pub struct WritePathPendingTransactionLog {
     pending_transactions: WritePathPendingTransactionTable,
-    mutex_table: MutexTable<TransactionDigest>,
 }
 
 impl WritePathPendingTransactionLog {
     pub fn new(path: PathBuf) -> Self {
         let pending_transactions =
-            WritePathPendingTransactionTable::open_tables_read_write(path, None, None);
+            WritePathPendingTransactionTable::open_tables_transactional(path, None, None);
         Self {
             pending_transactions,
-            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE, MUTEX_TABLE_SHARD_SIZE),
         }
     }
 
@@ -48,15 +44,20 @@ impl WritePathPendingTransactionLog {
         tx: &VerifiedTransaction,
     ) -> SuiResult<IsFirstRecord> {
         let tx_digest = tx.digest();
-        let _guard = self.mutex_table.acquire_lock(*tx_digest).await;
-        if self.pending_transactions.logs.contains_key(tx_digest)? {
-            Ok(false)
-        } else {
-            self.pending_transactions
-                .logs
-                .insert(tx_digest, tx.serializable_ref())?;
-            Ok(true)
+        let transaction = self.pending_transactions.logs.transaction()?;
+        if transaction
+            .get(&self.pending_transactions.logs, tx_digest)?
+            .is_some()
+        {
+            return Ok(false);
         }
+        let result = transaction
+            .insert_batch(
+                &self.pending_transactions.logs,
+                [(tx_digest, tx.serializable_ref())],
+            )?
+            .commit();
+        Ok(result.is_ok())
     }
 
     // This function does not need to be behind a lock because:
