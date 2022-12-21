@@ -23,7 +23,7 @@ import {
  * that uses the Sui Fullnode RPC API to serialize a transaction into BCS bytes. We will
  * deprecate this implementation once `LocalTxnDataSerializer` stabilizes.
  *
- * Prefer to use `LocalTxnDataSerializer` instead for better performance and safety, otherwise
+ * Prefer to use `LocalTxnDataSerializer` instead for better performance and *security*, otherwise
  * this needs to be used with a trusted fullnode and it is recommended to verify the returned
  * BCS bytes matches the input.
  */
