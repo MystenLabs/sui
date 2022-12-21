@@ -4,8 +4,8 @@
 use futures::future::{select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
-use parking_lot::Mutex;
 use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -419,14 +419,23 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    /// When submitting a certificate caller **must** provide a ReconfigState lock guard
+    /// and verify that it allows new user certificates
     pub fn insert_pending_consensus_transactions(
         &self,
         transaction: &ConsensusTransaction,
+        lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
         self.tables
             .pending_consensus_transactions
             .insert(&transaction.key(), transaction)?;
         if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+            let state = lock.expect("Must pass reconfiguration lock when storing certificate");
+            // Caller is responsible for performing graceful check
+            assert!(
+                state.should_accept_user_certs(),
+                "Reconfiguration state should allow accepting user transactions"
+            );
             self.pending_consensus_certificates
                 .lock()
                 .insert(*cert.digest());

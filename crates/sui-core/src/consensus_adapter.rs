@@ -8,6 +8,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use parking_lot::RwLockReadGuard;
 use prometheus::register_int_gauge_with_registry;
 use prometheus::IntCounter;
 use prometheus::IntGauge;
@@ -253,22 +254,16 @@ impl ConsensusAdapter {
     ///
     /// This method guarantees that once submit(but not returned async handle) returns,
     /// transaction is persisted and will eventually be sent to consensus even after restart
+    ///
+    /// When submitting a certificate caller **must** provide a ReconfigState lock guard
     pub fn submit(
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
+        lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult<JoinHandle<()>> {
         let epoch_store = self.authority.epoch_store().clone();
-        let _lock = if transaction.is_user_certificate() {
-            let lock = epoch_store.get_reconfig_state_read_lock_guard();
-            if !lock.should_accept_user_certs() {
-                return Err(SuiError::ValidatorHaltedAtEpochEnd);
-            }
-            Some(lock)
-        } else {
-            None
-        };
-        epoch_store.insert_pending_consensus_transactions(&transaction)?;
-        Ok(self.submit_unchecked(transaction, epoch_store.clone()))
+        epoch_store.insert_pending_consensus_transactions(&transaction, lock)?;
+        Ok(self.submit_unchecked(transaction, epoch_store))
     }
 
     fn submit_unchecked(
@@ -375,9 +370,10 @@ impl ConsensusAdapter {
             };
         if send_end_of_publish {
             // sending message outside of any locks scope
-            if let Err(err) = self.submit(ConsensusTransaction::new_end_of_publish(
-                self.authority.name,
-            )) {
+            if let Err(err) = self.submit(
+                ConsensusTransaction::new_end_of_publish(self.authority.name),
+                None,
+            ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
         }
@@ -400,9 +396,10 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             send_end_of_publish
         };
         if send_end_of_publish {
-            if let Err(err) = self.submit(ConsensusTransaction::new_end_of_publish(
-                self.authority.name,
-            )) {
+            if let Err(err) = self.submit(
+                ConsensusTransaction::new_end_of_publish(self.authority.name),
+                None,
+            ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
         }
@@ -442,12 +439,12 @@ impl<'a> Drop for InflightDropGuard<'a> {
 }
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::epoch::reconfiguration::ReconfigurationInitiator;
+use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
     async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
-        self.submit(transaction.clone()).map(|_| ())
+        self.submit(transaction.clone(), None).map(|_| ())
     }
 }
 

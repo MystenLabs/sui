@@ -123,7 +123,13 @@ async fn submit_transaction_to_consensus_adapter() {
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
     let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
-    adapter.submit(transaction.clone()).unwrap().await.unwrap();
+    let waiter = adapter
+        .submit(
+            transaction.clone(),
+            Some(&state.epoch_store().get_reconfig_state_read_lock_guard()),
+        )
+        .unwrap();
+    waiter.await.unwrap();
 }
 
 pub struct ConsensusMockServer {
