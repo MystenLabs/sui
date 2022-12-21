@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
+#[path = "../unit_tests/narwhal_manager_tests.rs"]
+pub mod narwhal_manager_tests;
+
 use arc_swap::ArcSwap;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
