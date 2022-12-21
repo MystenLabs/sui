@@ -106,6 +106,18 @@ export function DappTxApprovalPage() {
             );
         }
 
+        if (txRequest?.tx?.type === 'v2' && !txRequest.metadata) {
+            const reqData = txRequest.tx.data.data as MoveCallTransaction;
+            dispatch(
+                loadTransactionResponseMetadata({
+                    txRequestID: txRequest.id,
+                    objectId: reqData.packageObjectId,
+                    moduleName: reqData.module,
+                    functionName: reqData.function,
+                })
+            );
+        }
+
         if (
             txRequest?.tx?.type === 'serialized-move-call' &&
             !txRequest.unSerializedTxn &&
@@ -123,15 +135,20 @@ export function DappTxApprovalPage() {
     const metadata = useMemo(() => {
         if (
             (txRequest?.tx?.type !== 'move-call' &&
+                txRequest?.tx?.type !== 'v2' &&
                 txRequest?.tx?.type !== 'serialized-move-call' &&
                 !txRequest?.unSerializedTxn) ||
             !txRequest?.metadata
         ) {
             return null;
         }
+        const moveTxData =
+            txRequest?.tx?.type === 'v2'
+                ? txRequest.tx.data.data
+                : txRequest.tx.data;
         const txData =
             (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
-            txRequest.tx.data;
+            moveTxData;
 
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
@@ -139,7 +156,9 @@ export function DappTxApprovalPage() {
 
         txRequest.metadata.parameters.forEach((param, index) => {
             if (typeof param !== 'object') return;
-            const id = txData?.arguments[index] as string;
+            const id = txData?.arguments?.[index] as string;
+            if (!id) return;
+
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
@@ -172,12 +191,7 @@ export function DappTxApprovalPage() {
             modify,
             read,
         };
-    }, [
-        txRequest?.metadata,
-        txRequest?.tx.data,
-        txRequest?.tx?.type,
-        txRequest?.unSerializedTxn,
-    ]);
+    }, [txRequest]);
 
     useEffect(() => {
         if (
@@ -208,10 +222,11 @@ export function DappTxApprovalPage() {
     }[] = useMemo(() => {
         switch (txRequest?.tx.type) {
             case 'v2': {
+                const data = txRequest.tx.data;
                 return [
                     {
                         label: 'Transaction Type',
-                        content: txRequest.tx.data.kind,
+                        content: data.kind,
                     },
                 ];
             }

@@ -178,13 +178,17 @@ export function TransactionSummaryCard({
     txRequest: TransactionRequest;
     address: string;
 }) {
-    const txData: TransactionDryRun =
-        txRequest.tx.type === 'move-call'
+    const txData: TransactionDryRun = (
+        txRequest.tx.type === 'move-call' || txRequest.tx.type === 'v2'
             ? {
                   kind: 'moveCall',
-                  data: txRequest.tx.data,
+                  data:
+                      txRequest.tx.type === 'v2'
+                          ? txRequest.tx.data.data
+                          : txRequest.tx.data,
               }
-            : txRequest.tx.data;
+            : txRequest.tx.data
+    ) as TransactionDryRun;
 
     const txReqData = {
         txData: txData,
