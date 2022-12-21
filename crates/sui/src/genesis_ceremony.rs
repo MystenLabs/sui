@@ -275,6 +275,7 @@ mod test {
     use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn ceremony() -> Result<()> {
         let dir = tempfile::TempDir::new().unwrap();
 

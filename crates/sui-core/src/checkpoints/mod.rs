@@ -432,6 +432,14 @@ impl CheckpointBuilder {
         let contents = CheckpointContents::new_with_causally_ordered_transactions(
             effects.iter().map(TransactionEffects::execution_digests),
         );
+
+        let num_txns = contents.size() as u64;
+
+        let network_total_transactions = last_checkpoint
+            .as_ref()
+            .map(|(_, c)| c.network_total_transactions + num_txns)
+            .unwrap_or(num_txns);
+
         let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
         let sequence_number = last_checkpoint
             .as_ref()
@@ -440,6 +448,7 @@ impl CheckpointBuilder {
         let summary = CheckpointSummary::new(
             self.state.epoch(),
             sequence_number,
+            network_total_transactions,
             &contents,
             previous_digest,
             epoch_rolling_gas_cost_summary,
@@ -447,7 +456,6 @@ impl CheckpointBuilder {
                 Some(
                     self.state
                         .get_sui_system_state_object()
-                        .await
                         .unwrap()
                         .get_current_epoch_committee()
                         .committee,
@@ -496,7 +504,7 @@ impl CheckpointBuilder {
             .await?;
         let signed_effect = self
             .state
-            .execute_certificate(&cert)
+            .try_execute_immediately(&cert)
             .await?
             .signed_effects
             .unwrap();
@@ -831,7 +839,7 @@ impl CheckpointServiceNotify for CheckpointService {
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
             Hex::encode(info.summary.summary.digest()),
-            info.summary.auth_signature.authority
+            info.summary.auth_signature.authority.concise(),
         );
         // While it can be tempting to make last_signature_index into AtomicU64, this won't work
         // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions

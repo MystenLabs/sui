@@ -360,7 +360,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                     proxy_clone.reconfig().await;
                                                 } else {
                                                     error!("{}", err);
-                                                    metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), err.as_ref()]).inc();
+                                                    metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 }
                                                 NextOp::Retry(b)
                                             }

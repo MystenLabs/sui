@@ -10,8 +10,7 @@ use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
-pub use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
-use sui_framework_build::compiled_package::BuildConfig;
+pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::SuiTransactionEffects;
@@ -75,19 +74,14 @@ pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInf
     publish_package(gas_object, path, configs).await
 }
 
-pub fn compile_basics_package() -> Vec<Vec<u8>> {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sui_programmability/examples/basics");
-
-    let build_config = BuildConfig::default();
-    sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes()
-}
-
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
-    publish_package_with_wallet(context, sender, compile_basics_package()).await
+    publish_package_with_wallet(
+        context,
+        sender,
+        compile_basics_package().get_package_bytes(),
+    )
+    .await
 }
 
 /// Returns the published package's ObjectRef.

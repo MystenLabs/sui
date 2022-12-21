@@ -57,6 +57,7 @@ impl CommitteeFixture {
         let checkpoint = CheckpointSummary {
             epoch: 0,
             sequence_number: 0,
+            network_total_transactions: 0,
             content_digest: empty_contents().digest(),
             previous_digest: None,
             epoch_rolling_gas_cost_summary: Default::default(),
@@ -111,6 +112,7 @@ impl CommitteeFixture {
             let summary = CheckpointSummary {
                 epoch: self.epoch,
                 sequence_number: prev.summary.sequence_number + 1,
+                network_total_transactions: 0,
                 content_digest: empty_contents().digest(),
                 previous_digest: Some(prev.summary.digest()),
                 epoch_rolling_gas_cost_summary: Default::default(),
@@ -152,6 +154,7 @@ impl CommitteeFixture {
         let summary = CheckpointSummary {
             epoch: self.epoch,
             sequence_number: previous_checkpoint.summary.sequence_number + 1,
+            network_total_transactions: 0,
             content_digest: empty_contents().digest(),
             previous_digest: Some(previous_checkpoint.summary.digest()),
             epoch_rolling_gas_cost_summary: Default::default(),

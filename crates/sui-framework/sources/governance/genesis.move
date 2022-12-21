@@ -24,6 +24,9 @@ module sui::genesis {
     /// Initial storage gas price
     const INIT_STORAGE_GAS_PRICE: u64 = 1;
 
+    /// Stake subisidy to be given out in the very first epoch. Placeholder value.
+    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
+
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -31,6 +34,7 @@ module sui::genesis {
         chain_id: u8,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
+        validator_worker_pubkeys: vector<vector<u8>>,
         validator_proof_of_possessions: vector<vector<u8>>,
         validator_sui_addresses: vector<address>,
         validator_names: vector<vector<u8>>,
@@ -62,6 +66,7 @@ module sui::genesis {
             let sui_address = *vector::borrow(&validator_sui_addresses, i);
             let pubkey = *vector::borrow(&validator_pubkeys, i);
             let network_pubkey = *vector::borrow(&validator_network_pubkeys, i);
+            let worker_pubkey = *vector::borrow(&validator_worker_pubkeys, i);
             let proof_of_possession = *vector::borrow(&validator_proof_of_possessions, i);
             let name = *vector::borrow(&validator_names, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
@@ -74,6 +79,7 @@ module sui::genesis {
                 sui_address,
                 pubkey,
                 network_pubkey,
+                worker_pubkey,
                 proof_of_possession,
                 name,
                 net_address,
@@ -95,6 +101,7 @@ module sui::genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STORAGE_GAS_PRICE,
+            INIT_STAKE_SUBSIDY_AMOUNT,
         );
     }
 }

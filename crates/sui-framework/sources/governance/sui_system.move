@@ -13,6 +13,7 @@ module sui::sui_system {
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
     use sui::stake::Stake;
+    use sui::stake_subsidy::{Self, StakeSubsidy};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
     use std::option;
@@ -61,6 +62,8 @@ module sui::sui_system {
         /// them. If a validator has never been reported they don't have an entry in this map.
         /// This map resets every epoch.
         validator_report_records: VecMap<address, VecSet<address>>,
+        /// Schedule of stake subsidies given out each epoch.
+        stake_subsidy: StakeSubsidy,
     }
 
     // Errors
@@ -84,6 +87,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         storage_gas_price: u64,
+        initial_stake_subsidy_amount: u64,
     ) {
         assert!(chain_id >= 1 && chain_id <= 127, 1);
         let validators = validator_set::new(validators);
@@ -103,6 +107,7 @@ module sui::sui_system {
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
+            stake_subsidy: stake_subsidy::create(initial_stake_subsidy_amount),
         };
         transfer::share_object(state);
     }
@@ -118,6 +123,7 @@ module sui::sui_system {
         self: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
         network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
         proof_of_possession: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
@@ -141,6 +147,7 @@ module sui::sui_system {
             tx_context::sender(ctx),
             pubkey_bytes,
             network_pubkey_bytes,
+            worker_pubkey_bytes,
             proof_of_possession,
             name,
             net_address,
@@ -367,6 +374,10 @@ module sui::sui_system {
         let storage_reward = balance::create_staking_rewards(storage_charge);
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
+        // Include stake subsidy in the rewards given out to validators and delegators.
+        stake_subsidy::advance_epoch(&mut self.stake_subsidy, &mut self.sui_supply);
+        balance::join(&mut computation_reward, stake_subsidy::withdraw_all(&mut self.stake_subsidy));
+
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
         let storage_fund_balance = balance::value(&self.storage_fund);
@@ -411,16 +422,16 @@ module sui::sui_system {
         // Destroy the storage rebate.
         assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
         balance::destroy_storage_rebates(balance::split(&mut self.storage_fund, storage_rebate));
-        
+
         // Validator reports are only valid for the epoch.
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
     }
 
     spec advance_epoch {
-        /// Total supply of SUI shouldn't change.
+        /// Total supply of SUI increases by the amount of stake subsidy we minted.
         ensures balance::supply_value(self.sui_supply) 
-            == old(balance::supply_value(self.sui_supply));
+            == old(balance::supply_value(self.sui_supply)) + old(stake_subsidy::current_epoch_subsidy_amount(self.stake_subsidy));
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

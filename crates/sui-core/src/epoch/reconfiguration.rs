@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use sui_types::error::SuiResult;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ReconfigCertStatus {
@@ -45,6 +46,10 @@ impl ReconfigState {
     pub fn should_accept_consensus_certs(&self) -> bool {
         !matches!(self.status, ReconfigCertStatus::RejectAllCerts)
     }
+}
+
+pub trait ReconfigurationInitiator {
+    fn close_epoch(&self) -> SuiResult;
 }
 
 /*
@@ -127,7 +132,6 @@ where
             // in correct if the table can contain certificates from multiple epochs.
             // TODO: fix this during reconfiguration work.
             self.state.database.cleanup_pending_certificates()?;
-            // TODO: also clean up self.node_sync_store for epoch - 1.
 
             let (storage_charges, computation_charges, storage_rebates): (
                 Vec<u64>,
@@ -212,7 +216,7 @@ where
                 .process_transaction(advance_epoch_tx.clone().into_unsigned())
                 .await
             {
-                Ok(certificate) => match self.state.execute_certificate_internal(&certificate).await {
+                Ok(certificate) => match self.state.try_execute_immediately(&certificate).await {
                     Ok(_) => {
                         break;
                     }

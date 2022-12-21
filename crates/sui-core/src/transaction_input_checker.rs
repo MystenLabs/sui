@@ -30,7 +30,7 @@ async fn get_gas_status(
     };
     let extra_gas_object_refs = gas_object_refs.into_iter().skip(1).collect();
 
-    let mut gas_status = check_gas(
+    check_gas(
         store,
         gas_object_ref,
         transaction.gas_budget,
@@ -38,15 +38,7 @@ async fn get_gas_status(
         &transaction.kind,
         extra_gas_object_refs,
     )
-    .await?;
-
-    if transaction.contains_shared_object() {
-        // It's important that we do this here to make sure there is enough
-        // gas to cover shared objects, before we lock all objects.
-        gas_status.charge_consensus()?;
-    }
-
-    Ok(gas_status)
+    .await
 }
 
 #[instrument(level = "trace", skip_all)]

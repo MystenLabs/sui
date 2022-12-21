@@ -19,9 +19,9 @@ use sui_types::{
 #[tokio::test]
 async fn test_pay_sui_failure_empty_recipients() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1100);
 
-    let res = execute_pay_sui(vec![coin1], vec![], vec![], sender, sender_key, 100).await;
+    let res = execute_pay_sui(vec![coin1], vec![], vec![], sender, sender_key, 1100).await;
 
     let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
     assert_eq!(
@@ -35,7 +35,7 @@ async fn test_pay_sui_failure_arity_mismatch() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1110);
 
     let res = execute_pay_sui(
         vec![coin1],
@@ -43,7 +43,7 @@ async fn test_pay_sui_failure_arity_mismatch() {
         vec![10],
         sender,
         sender_key,
-        100,
+        1100,
     )
     .await;
 

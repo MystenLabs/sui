@@ -12,8 +12,8 @@ use crate::{
 use bincode::Options;
 use collectable::TryExtend;
 use rocksdb::{
-    properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBIteratorWithThreadMode,
-    DBWithThreadMode, IteratorMode, MultiThreaded, Transaction, WriteBatch,
+    properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
+    IteratorMode, MultiThreaded, Transaction, WriteBatch, WriteBatchWithTransaction,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -39,9 +39,6 @@ const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod tests;
-
-type DBRawIteratorMultiThreaded<'a> =
-    rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>;
 
 /// A helper macro to reopen multiple column families. The macro returns
 /// a tuple of DBMap structs in the same order that the column families
@@ -190,11 +187,18 @@ impl RocksDB {
         delegate_call!(self.try_catch_up_with_primary())
     }
 
-    pub fn write(&self, batch: rocksdb::WriteBatch) -> Result<(), TypedStoreError> {
-        match self {
-            RocksDB::DBWithThreadMode(db) => Ok(db.write(batch)?),
-            RocksDB::OptimisticTransactionDB(_) => Err(TypedStoreError::RocksDBError(
-                "operation not supported".to_string(),
+    pub fn write(&self, batch: RocksDBBatch) -> Result<(), TypedStoreError> {
+        match (self, batch) {
+            (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
+                db.write(batch)?;
+                Ok(())
+            }
+            (RocksDB::OptimisticTransactionDB(db), RocksDBBatch::Transactional(batch)) => {
+                db.write(batch)?;
+                Ok(())
+            }
+            _ => Err(TypedStoreError::RocksDBError(
+                "using invalid batch type for the database".to_string(),
             )),
         }
     }
@@ -213,11 +217,11 @@ impl RocksDB {
     pub fn raw_iterator_cf<'a: 'b, 'b>(
         &'a self,
         cf_handle: &impl AsColumnFamilyRef,
-    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, DBWithThreadMode<MultiThreaded>> {
+    ) -> RocksDBRawIter<'b> {
         match self {
-            Self::DBWithThreadMode(db) => db.raw_iterator_cf(cf_handle),
-            Self::OptimisticTransactionDB(_) => {
-                panic!("iterator is not implemented for transactional db")
+            Self::DBWithThreadMode(db) => RocksDBRawIter::DB(db.raw_iterator_cf(cf_handle)),
+            Self::OptimisticTransactionDB(db) => {
+                RocksDBRawIter::OptimisticTransactionDB(db.raw_iterator_cf(cf_handle))
             }
         }
     }
@@ -226,12 +230,61 @@ impl RocksDB {
         &'a self,
         cf_handle: &impl AsColumnFamilyRef,
         mode: IteratorMode<'_>,
-    ) -> DBIteratorWithThreadMode<'b, DBWithThreadMode<MultiThreaded>> {
+    ) -> RocksDBIter<'b> {
         match self {
-            Self::DBWithThreadMode(db) => db.iterator_cf(cf_handle, mode),
-            Self::OptimisticTransactionDB(_) => {
-                panic!("iterator is not implemented for transactional db")
+            Self::DBWithThreadMode(db) => RocksDBIter::DB(db.iterator_cf(cf_handle, mode)),
+            Self::OptimisticTransactionDB(db) => {
+                RocksDBIter::OptimisticTransactionDB(db.iterator_cf(cf_handle, mode))
             }
+        }
+    }
+}
+
+pub enum RocksDBBatch {
+    Regular(rocksdb::WriteBatch),
+    Transactional(rocksdb::WriteBatchWithTransaction<true>),
+}
+
+macro_rules! delegate_batch_call {
+    ($self:ident.$method:ident($($args:ident),*)) => {
+        match $self {
+            Self::Regular(b) => b.$method($($args),*),
+            Self::Transactional(b) => b.$method($($args),*),
+        }
+    }
+}
+
+impl RocksDBBatch {
+    fn size_in_bytes(&self) -> usize {
+        delegate_batch_call!(self.size_in_bytes())
+    }
+
+    pub fn delete_cf<K: AsRef<[u8]>>(&mut self, cf: &impl AsColumnFamilyRef, key: K) {
+        delegate_batch_call!(self.delete_cf(cf, key))
+    }
+
+    pub fn put_cf<K, V>(&mut self, cf: &impl AsColumnFamilyRef, key: K, value: V)
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        delegate_batch_call!(self.put_cf(cf, key, value))
+    }
+
+    pub fn delete_range_cf<K: AsRef<[u8]>>(
+        &mut self,
+        cf: &impl AsColumnFamilyRef,
+        from: K,
+        to: K,
+    ) -> Result<(), TypedStoreError> {
+        match self {
+            Self::Regular(batch) => {
+                batch.delete_range_cf(cf, from, to);
+                Ok(())
+            }
+            Self::Transactional(_) => Err(TypedStoreError::RocksDBError(
+                "operation not supported".to_string(),
+            )),
         }
     }
 }
@@ -345,7 +398,18 @@ impl<K, V> DBMap<K, V> {
     }
 
     pub fn batch(&self) -> DBBatch {
-        DBBatch::new(&self.rocksdb, &self.db_metrics, &self.write_sample_interval)
+        let batch = match *self.rocksdb {
+            RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
+            RocksDB::OptimisticTransactionDB(_) => {
+                RocksDBBatch::Transactional(WriteBatchWithTransaction::<true>::default())
+            }
+        };
+        DBBatch::new(
+            &self.rocksdb,
+            batch,
+            &self.db_metrics,
+            &self.write_sample_interval,
+        )
     }
 
     fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
@@ -354,9 +418,7 @@ impl<K, V> DBMap<K, V> {
             .expect("Map-keying column family should have been checked at DB creation")
     }
 
-    pub fn iterator_cf(
-        &self,
-    ) -> DBIteratorWithThreadMode<'_, rocksdb::DBWithThreadMode<MultiThreaded>> {
+    pub fn iterator_cf(&self) -> RocksDBIter<'_> {
         self.rocksdb.iterator_cf(&self.cf(), IteratorMode::Start)
     }
 
@@ -607,7 +669,7 @@ impl<K, V> DBMap<K, V> {
 ///
 pub struct DBBatch {
     rocksdb: Arc<RocksDB>,
-    batch: WriteBatch,
+    batch: RocksDBBatch,
     db_metrics: Arc<DBMetrics>,
     write_sample_interval: SamplingInterval,
 }
@@ -618,12 +680,13 @@ impl DBBatch {
     /// Use `open_cf` to get the DB reference or an existing open database.
     pub fn new(
         dbref: &Arc<RocksDB>,
+        batch: RocksDBBatch,
         db_metrics: &Arc<DBMetrics>,
         write_sample_interval: &SamplingInterval,
     ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),
-            batch: WriteBatch::default(),
+            batch,
             db_metrics: db_metrics.clone(),
             write_sample_interval: write_sample_interval.clone(),
         }
@@ -664,9 +727,7 @@ impl DBBatch {
         }
         Ok(())
     }
-}
 
-impl DBBatch {
     /// Deletes a set of keys given as an iterator
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
         mut self,
@@ -702,7 +763,7 @@ impl DBBatch {
         let from_buf = be_fix_int_ser(from)?;
         let to_buf = be_fix_int_ser(to)?;
 
-        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf);
+        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf)?;
         Ok(self)
     }
 
@@ -805,6 +866,69 @@ impl<'a> DBTransaction<'a> {
     pub fn commit(self) -> Result<(), TypedStoreError> {
         self.transaction.commit()?;
         Ok(())
+    }
+}
+
+macro_rules! delegate_iter_call {
+    ($self:ident.$method:ident($($args:ident),*)) => {
+        match $self {
+            Self::DB(db) => db.$method($($args),*),
+            Self::OptimisticTransactionDB(db) => db.$method($($args),*),
+        }
+    }
+}
+
+pub enum RocksDBRawIter<'a> {
+    DB(rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>),
+    OptimisticTransactionDB(
+        rocksdb::DBRawIteratorWithThreadMode<'a, rocksdb::OptimisticTransactionDB<MultiThreaded>>,
+    ),
+}
+
+impl<'a> RocksDBRawIter<'a> {
+    pub fn valid(&self) -> bool {
+        delegate_iter_call!(self.valid())
+    }
+    pub fn key(&self) -> Option<&[u8]> {
+        delegate_iter_call!(self.key())
+    }
+    pub fn value(&self) -> Option<&[u8]> {
+        delegate_iter_call!(self.value())
+    }
+    pub fn next(&mut self) {
+        delegate_iter_call!(self.next())
+    }
+    pub fn prev(&mut self) {
+        delegate_iter_call!(self.prev())
+    }
+    pub fn seek<K: AsRef<[u8]>>(&mut self, key: K) {
+        delegate_iter_call!(self.seek(key))
+    }
+    pub fn seek_to_last(&mut self) {
+        delegate_iter_call!(self.seek_to_last())
+    }
+    pub fn seek_to_first(&mut self) {
+        delegate_iter_call!(self.seek_to_first())
+    }
+    pub fn seek_for_prev<K: AsRef<[u8]>>(&mut self, key: K) {
+        delegate_iter_call!(self.seek_for_prev(key))
+    }
+}
+
+pub enum RocksDBIter<'a> {
+    DB(rocksdb::DBIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>),
+    OptimisticTransactionDB(
+        rocksdb::DBIteratorWithThreadMode<'a, rocksdb::OptimisticTransactionDB<MultiThreaded>>,
+    ),
+}
+
+impl<'a> Iterator for RocksDBIter<'a> {
+    type Item = Result<(Box<[u8]>, Box<[u8]>), Error>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::DB(db) => db.next(),
+            Self::OptimisticTransactionDB(db) => db.next(),
+        }
     }
 }
 

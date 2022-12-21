@@ -5,6 +5,7 @@
     "description": "A wallet for Sui",
     "main": "./dist/ui.js",
     "scripts": {
+        "build": "pnpm build:prod",
         "build:prod": "cross-env NODE_ENV=\"production\" TS_NODE_PROJECT=\"./configs/ts/tsconfig.webpack.json\" webpack --progress",
         "build:dev": "cross-env NODE_ENV=\"development\" TS_NODE_PROJECT=\"./configs/ts/tsconfig.webpack.json\" webpack --progress",
         "build:beta": "cross-env WALLET_BETA=true NODE_ENV=\"production\" TS_NODE_PROJECT=\"./configs/ts/tsconfig.webpack.json\" webpack --progress",

@@ -1,5 +1,5 @@
-name: Detect Changes in Pnpm Workspace
-description: Defines variables indicating the parts of the pnpm workspace have changed
+name: Detect Changes in Turbo Workspace
+description: Defines variables indicating the parts of the turbo workspace have changed
 outputs:
   packages:
     description: A list of packages that have changed.
@@ -16,7 +16,7 @@ runs:
     - id: changes
       name: Detect changes
       shell: bash
-      run: echo "packages=$(pnpm list --filter "...[origin/main]" --depth -1 --json | jq -c "[.[] | .name]")" >> $GITHUB_OUTPUT
+      run: echo "packages=$(pnpm --silent dlx turbo run build --filter="...[origin/main]" --dry=json | jq -c ".packages")" >> $GITHUB_OUTPUT
     - name: Print changes for easy debugging
       shell: bash
       run: echo ${{ steps.changes.outputs.packages }}

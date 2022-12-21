@@ -2200,8 +2200,6 @@ impl ConsensusTransaction {
 
 #[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
 pub enum ExecuteTransactionRequestType {
-    ImmediateReturn,
-    WaitForTxCert,
     WaitForEffectsCert,
     WaitForLocalExecution,
 }
@@ -2220,8 +2218,6 @@ pub type IsTransactionExecutedLocally = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
-    ImmediateReturn,
-    TxCert(Box<CertifiedTransaction>),
     EffectsCert(
         Box<(
             CertifiedTransaction,
@@ -2231,23 +2227,13 @@ pub enum ExecuteTransactionResponse {
     ),
 }
 
-#[derive(Clone, Debug, schemars::JsonSchema)]
-pub enum QuorumDriverRequestType {
-    ImmediateReturn,
-    WaitForTxCert,
-    WaitForEffectsCert,
-}
-
 #[derive(Clone, Debug)]
 pub struct QuorumDriverRequest {
     pub transaction: VerifiedTransaction,
-    pub request_type: QuorumDriverRequestType,
 }
 
 #[derive(Clone, Debug)]
 pub enum QuorumDriverResponse {
-    ImmediateReturn,
-    TxCert(Box<VerifiedCertificate>),
     EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
 }
 

@@ -6,11 +6,8 @@ use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
-use prometheus::core::{GenericCounter, GenericGauge};
-use prometheus::{
-    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
-    IntGaugeVec, Registry,
-};
+use prometheus::core::GenericCounter;
+use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use std::sync::Arc;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -41,7 +38,6 @@ macro_rules! check_error {
 pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
-    follower_streaming_from_seq_number_by_address: IntGaugeVec,
     latency: HistogramVec,
 }
 
@@ -59,13 +55,6 @@ impl SafeClientMetricsBase {
                 "safe_client_total_responses_by_address_method",
                 "Total good (OK) responses from validators group by address and method",
                 &["address", "method"],
-                registry,
-            )
-            .unwrap(),
-            follower_streaming_from_seq_number_by_address: register_int_gauge_vec_with_registry!(
-                "safe_client_follower_streaming_from_seq_number_by_address",
-                "The seq number with which to request follower streaming, group by address",
-                &["address"],
                 registry,
             )
             .unwrap(),
@@ -92,7 +81,6 @@ pub struct SafeClientMetrics {
     total_ok_responses_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_requests_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
     total_ok_responses_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
-    seq_number_to_handle_batch_stream: GenericGauge<prometheus::core::AtomicI64>,
     handle_transaction_latency: Histogram,
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
@@ -137,10 +125,6 @@ impl SafeClientMetrics {
             .total_responses_by_address_method
             .with_label_values(&[&validator_address, "handle_batch_stream"]);
 
-        let seq_number_to_handle_batch_stream = metrics_base
-            .follower_streaming_from_seq_number_by_address
-            .with_label_values(&[&validator_address]);
-
         let handle_transaction_latency = metrics_base
             .latency
             .with_label_values(&[&validator_address, "handle_transaction"]);
@@ -162,7 +146,6 @@ impl SafeClientMetrics {
             total_ok_responses_handle_object_info_request,
             total_requests_handle_batch_stream,
             total_ok_responses_handle_batch_stream,
-            seq_number_to_handle_batch_stream,
             handle_transaction_latency,
             handle_certificate_latency,
             handle_obj_info_latency,
@@ -783,11 +766,6 @@ where
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
         self.metrics.total_requests_handle_batch_stream.inc();
-        if let Some(start_seq) = request.start {
-            self.metrics
-                .seq_number_to_handle_batch_stream
-                .set(start_seq as i64);
-        }
         let batch_info_items = self
             .authority_client
             .handle_batch_stream(request.clone())

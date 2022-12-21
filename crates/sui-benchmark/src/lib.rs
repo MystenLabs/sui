@@ -16,9 +16,7 @@ use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
     error::SuiError,
-    messages::{
-        CertifiedTransactionEffects, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
-    },
+    messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
     object::{Object, ObjectRead},
 };
 use sui_types::{
@@ -140,22 +138,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         tx: Transaction,
     ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError> {
-        match self
+        let QuorumDriverResponse::EffectsCert(result) = self
             .qd
             .execute_transaction(QuorumDriverRequest {
                 transaction: tx.verify()?,
-                request_type: QuorumDriverRequestType::WaitForEffectsCert,
             })
-            .await?
-        {
-            QuorumDriverResponse::EffectsCert(result) => {
-                let (tx_cert, effects_cert) = *result;
-                let tx_cert: SuiCertifiedTransaction = tx_cert.try_into().unwrap();
-                let effects = ExecutionEffects::CertifiedTransactionEffects(effects_cert.into());
-                Ok((tx_cert, effects))
-            }
-            other => panic!("This should not happen, got: {:?}", other),
-        }
+            .await?;
+        let (tx_cert, effects_cert) = *result;
+        let tx_cert: SuiCertifiedTransaction = tx_cert.try_into().unwrap();
+        let effects = ExecutionEffects::CertifiedTransactionEffects(effects_cert.into());
+        Ok((tx_cert, effects))
     }
 
     async fn reconfig(&self) {

@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
-use crate::base_types::{AuthorityName, SuiAddress};
+use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::chain_id::ChainId;
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
-use crate::crypto::AuthorityPublicKeyBytes;
+use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::{
     balance::{Balance, Supply},
     id::UID,
@@ -15,9 +13,11 @@ use crate::{
 };
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-use narwhal_config::Committee as NarwhalCommittee;
+use multiaddr::Multiaddr;
+use narwhal_config::{Committee as NarwhalCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -43,6 +43,7 @@ pub struct ValidatorMetadata {
     pub sui_address: SuiAddress,
     pub pubkey_bytes: Vec<u8>,
     pub network_pubkey_bytes: Vec<u8>,
+    pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
@@ -96,6 +97,7 @@ impl Validator {
 pub struct PendingDelegationEntry {
     pub delegator: SuiAddress,
     pub sui_amount: u64,
+    pub staked_sui_id: ObjectID,
 }
 
 /// Rust version of the Move sui::staking_pool::PendingWithdrawEntry type.
@@ -150,7 +152,15 @@ pub struct SuiSystemState {
     pub parameters: SystemParameters,
     pub reference_gas_price: u64,
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
+    pub stake_subsidy: StakeSubsidy,
     // TODO: Use getters instead of all pub.
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct StakeSubsidy {
+    pub epoch_counter: u64,
+    pub balance: Balance,
+    pub current_epoch_amount: u64,
 }
 
 impl SuiSystemState {
@@ -195,12 +205,71 @@ impl SuiSystemState {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee {
-        // todo: we need the following to be added to the Validator Metadata
-        // todo: on the system state object in order to construct this:
-        // - protocol_key
-        // - network_key
-        // - narwhal_primary_address
-        todo!();
+        let narwhal_committee = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
+                    .expect("Can't get narwhal public key");
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+                let primary_address =
+                    Multiaddr::try_from(validator.metadata.consensus_address.clone())
+                        .expect("Can't get narwhal primary address");
+                let authority = narwhal_config::Authority {
+                    stake: validator.stake_amount as narwhal_config::Stake,
+                    primary_address,
+                    network_key,
+                };
+                (name, authority)
+            })
+            .collect();
+
+        narwhal_config::Committee {
+            authorities: narwhal_committee,
+            epoch: self.epoch as narwhal_config::Epoch,
+        }
+    }
+
+    #[allow(clippy::mutable_key_type)]
+    pub fn get_current_epoch_narwhal_worker_cache(
+        &self,
+        transactions_address: &Multiaddr,
+    ) -> SharedWorkerCache {
+        let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = narwhal_crypto::PublicKey::from_bytes(&validator.metadata.pubkey_bytes)
+                    .expect("Can't get narwhal public key");
+                let worker_address = Multiaddr::try_from(validator.metadata.worker_address.clone())
+                    .expect("Can't get worker address");
+                let workers = [(
+                    0,
+                    narwhal_config::WorkerInfo {
+                        name: NetworkPublicKey::from_bytes(&validator.metadata.worker_pubkey_bytes)
+                            .expect("Can't get worker key"),
+                        transactions: transactions_address.clone(),
+                        worker_address,
+                    },
+                )]
+                .into_iter()
+                .collect();
+                let worker_index = WorkerIndex(workers);
+
+                (name, worker_index)
+            })
+            .collect();
+        WorkerCache {
+            workers,
+            epoch: self.epoch,
+        }
+        .into()
     }
 }

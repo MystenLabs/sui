@@ -173,7 +173,7 @@
           "name": "APIs to execute transactions."
         }
       ],
-      "description": "Execute the transaction and wait for results if desired. Request types: 1. ImmediateReturn: immediately returns a response to client without waiting     for any execution results.  Note the transaction may fail without being     noticed by client in this mode. After getting the response, the client     may poll the node to check the result of the transaction. 2. WaitForTxCert: waits for TransactionCertificate and then return to client. 3. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 4. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
+      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
       "params": [
         {
           "name": "tx_bytes",
@@ -520,13 +520,13 @@
       ]
     },
     {
-      "name": "sui_getBalance",
+      "name": "sui_getAllBalances",
       "tags": [
         {
           "name": "Coin Query API"
         }
       ],
-      "description": "Return the total coin balance for each coin type.",
+      "description": "Return the total coin balance for all coin type, owned by the address owner.",
       "params": [
         {
           "name": "owner",
@@ -534,13 +534,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "coin_type",
-          "description": "fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
-          "schema": {
-            "type": "string"
           }
         }
       ],
@@ -552,6 +545,81 @@
           "items": {
             "$ref": "#/components/schemas/Balance"
           }
+        }
+      }
+    },
+    {
+      "name": "sui_getAllCoins",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return all Coin objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CoinPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
+        }
+      }
+    },
+    {
+      "name": "sui_getBalance",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return the total coin balance for one coin type, owned by the address owner.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_type",
+          "description": "optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "Balance",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Balance"
         }
       }
     },
@@ -588,7 +656,7 @@
           "name": "Coin Query API"
         }
       ],
-      "description": "Return the list of Coin objects owned by an address.",
+      "description": "Return all Coin<`coin_type`> objects owned by an address.",
       "params": [
         {
           "name": "owner",
@@ -600,7 +668,7 @@
         },
         {
           "name": "coin_type",
-          "description": "fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "description": "optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
           "schema": {
             "type": "string"
           }
@@ -3604,8 +3672,6 @@
       "ExecuteTransactionRequestType": {
         "type": "string",
         "enum": [
-          "ImmediateReturn",
-          "WaitForTxCert",
           "WaitForEffectsCert",
           "WaitForLocalExecution"
         ]
@@ -4345,11 +4411,15 @@
         "type": "object",
         "required": [
           "delegator",
+          "staked_sui_id",
           "sui_amount"
         ],
         "properties": {
           "delegator": {
             "$ref": "#/components/schemas/SuiAddress"
+          },
+          "staked_sui_id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "sui_amount": {
             "type": "integer",
@@ -4467,6 +4537,29 @@
           "Secp256r1",
           "BLS12381"
         ]
+      },
+      "StakeSubsidy": {
+        "type": "object",
+        "required": [
+          "balance",
+          "current_epoch_amount",
+          "epoch_counter"
+        ],
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/Balance"
+          },
+          "current_epoch_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_counter": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
       },
       "StakingPool": {
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
@@ -4591,46 +4684,6 @@
       },
       "SuiExecuteTransactionResponse": {
         "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "ImmediateReturn"
-            ],
-            "properties": {
-              "ImmediateReturn": {
-                "type": "object",
-                "required": [
-                  "tx_digest"
-                ],
-                "properties": {
-                  "tx_digest": {
-                    "$ref": "#/components/schemas/TransactionDigest"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "TxCert"
-            ],
-            "properties": {
-              "TxCert": {
-                "type": "object",
-                "required": [
-                  "certificate"
-                ],
-                "properties": {
-                  "certificate": {
-                    "$ref": "#/components/schemas/CertifiedTransaction"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
           {
             "type": "object",
             "required": [
@@ -5084,6 +5137,7 @@
           "info",
           "parameters",
           "reference_gas_price",
+          "stake_subsidy",
           "storage_fund",
           "treasury_cap",
           "validator_report_records",
@@ -5108,6 +5162,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "stake_subsidy": {
+            "$ref": "#/components/schemas/StakeSubsidy"
           },
           "storage_fund": {
             "$ref": "#/components/schemas/Balance"
@@ -5683,7 +5740,8 @@
           "proof_of_possession_bytes",
           "pubkey_bytes",
           "sui_address",
-          "worker_address"
+          "worker_address",
+          "worker_pubkey_bytes"
         ],
         "properties": {
           "consensus_address": {
@@ -5758,6 +5816,14 @@
             "$ref": "#/components/schemas/SuiAddress"
           },
           "worker_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "worker_pubkey_bytes": {
             "type": "array",
             "items": {
               "type": "integer",

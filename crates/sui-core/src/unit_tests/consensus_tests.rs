@@ -106,6 +106,7 @@ async fn submit_transaction_to_consensus_adapter() {
         async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
             self.0
                 .handle_consensus_transaction(
+                    0,
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
                 )

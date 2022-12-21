@@ -18,7 +18,6 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::cmp::Ordering as CmpOrdering;
-use std::hash::Hash;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -51,7 +50,6 @@ use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
-    node_sync_store::NodeSyncStore,
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
@@ -63,7 +61,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::storage::WriteKind;
+use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -102,8 +100,6 @@ use crate::{
     transaction_manager::TransactionManager,
     transaction_streamer::TransactionStreamer,
 };
-
-use self::authority_store::ObjectKey;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -160,11 +156,12 @@ pub struct AuthorityMetrics {
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
+    handle_transaction_latency: Histogram,
+    execute_certificate_latency: Histogram,
+    execute_certificate_with_effects_latency: Histogram,
+    internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
-    handle_transaction_latency: Histogram,
-    handle_certificate_latency: Histogram,
-    handle_node_sync_certificate_latency: Histogram,
 
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
@@ -288,37 +285,44 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            handle_transaction_latency: register_histogram_with_registry!(
+                "authority_state_handle_transaction_latency",
+                "Latency of handling transactions",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            execute_certificate_latency: register_histogram_with_registry!(
+                "authority_state_execute_certificate_latency",
+                "Latency of executing certificates, including waiting for inputs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            execute_certificate_with_effects_latency: register_histogram_with_registry!(
+                "authority_state_execute_certificate_with_effects_latency",
+                "Latency of executing certificates with effects, including waiting for inputs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            internal_execution_latency: register_histogram_with_registry!(
+                "authority_state_internal_execution_latency",
+                "Latency of actual certificate executions",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             prepare_certificate_latency: register_histogram_with_registry!(
-                "validator_prepare_certificate_latency",
-                "Latency of preparing certificate",
+                "authority_state_prepare_certificate_latency",
+                "Latency of executing certificates, before committing the results",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             commit_certificate_latency: register_histogram_with_registry!(
-                "validator_commit_certificate_latency",
-                "Latency of committing certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_transaction_latency: register_histogram_with_registry!(
-                "validator_handle_transaction_latency",
-                "Latency of committing certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_certificate_latency: register_histogram_with_registry!(
-                "validator_handle_certificate_latency",
-                "Latency of handling certificate",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_node_sync_certificate_latency: register_histogram_with_registry!(
-                "fullnode_handle_node_sync_certificate_latency",
-                "Latency of fullnode handling certificate from node sync",
+                "authority_state_commit_certificate_latency",
+                "Latency of committing certificate execution results",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -540,8 +544,6 @@ pub struct AuthorityState {
     /// The database
     pub database: Arc<AuthorityStore>, // TODO: remove pub
 
-    pub node_sync_store: Arc<NodeSyncStore>,
-
     indexes: Option<Arc<IndexStore>>,
 
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
@@ -697,7 +699,7 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = self
             .metrics
-            .handle_node_sync_certificate_latency
+            .execute_certificate_with_effects_latency
             .start_timer();
         let digest = *certificate.digest();
         debug!(tx_digest = ?digest, "execute_certificate_with_effects");
@@ -716,11 +718,8 @@ impl AuthorityState {
 
         let expected_effects_digest = effects.digest();
 
-        let certs = vec![certificate.clone()];
-        self.database
-            .epoch_store()
-            .insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()])
+            .await?;
 
         let observed_effects = self
             .database
@@ -747,31 +746,24 @@ impl AuthorityState {
 
     /// Executes a certificate for its effects.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate(
+    pub(crate) async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
 
-        if self.is_fullnode() {
-            return Err(SuiError::GenericStorageError(
-                "cannot execute cert without effects on fullnode".into(),
-            ));
+        if certificate.contains_shared_object() && !self.consensus_message_processed(certificate)? {
+            return Err(SuiError::CertificateNotSequencedError {
+                digest: *certificate.digest(),
+            });
         }
 
-        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
-            debug!("shared object cert has not been sequenced by narwhal");
-            return Err(SuiError::SharedObjectLockNotSetError);
-        }
-
-        let certs = vec![certificate.clone()];
-        self.database
-            .epoch_store()
-            .insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()])
+            .await?;
 
         self.notify_read_transaction_info(certificate).await
     }
@@ -779,23 +771,22 @@ impl AuthorityState {
     /// Internal logic to execute a certificate.
     ///
     /// Guarantees that
-    /// - If input objects are available, it should return no permanent failure.
-    /// - Execution and persisting output are atomic. i.e. outputs are only written to storage,
+    /// - If input objects are available, return no permanent failure.
+    /// - Execution and output commit are atomic. i.e. outputs are only written to storage,
     /// on successful execution; crashed execution has no observable effect and can be retried.
     ///
-    /// Since this function does not set locks or guarantee input objects are available, it should
-    /// only be called by the execution driver, for systems transactions, or in tests.
+    /// It is caller's responsibility to ensure input objects are available and locks are set.
+    /// If this cannot be satisfied by the caller, execute_certificate() should be called instead.
     ///
-    /// TODO: Reduce callsites and restrict visibility to pub(crate).
+    /// Should only be called within sui-core.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate_internal(
+    pub(crate) async fn try_execute_immediately(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate_internal");
-
-        let _metrics_guard = self.metrics.handle_certificate_latency.start_timer();
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -808,7 +799,7 @@ impl AuthorityState {
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
         let span = tracing::debug_span!(
-            "handle_certificate_tx_guard",
+            "execute_certificate_internal_guard",
             ?tx_digest,
             tx_kind = certificate.data().intent_message.value.kind_as_str()
         );
@@ -821,6 +812,15 @@ impl AuthorityState {
         self.process_certificate(tx_guard, certificate)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+    }
+
+    /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
+    /// pre-conditions are not satisfied, and executing change epoch transactions.
+    pub async fn try_execute_for_test(
+        &self,
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        self.try_execute_immediately(certificate).await
     }
 
     pub async fn notify_read_transaction_info(
@@ -1702,7 +1702,6 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        node_sync_store: Arc<NodeSyncStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
@@ -1734,7 +1733,6 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
-            node_sync_store,
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
@@ -1802,7 +1800,7 @@ impl AuthorityState {
 
         // unwrap ok - for testing only.
         let store = Arc::new(
-            AuthorityStore::open_with_committee(
+            AuthorityStore::open_with_committee_for_testing(
                 &path.join("store"),
                 None,
                 &genesis_committee,
@@ -1818,12 +1816,6 @@ impl AuthorityState {
             None,
         ));
 
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            path.join("node_sync_db"),
-            None,
-            None,
-        ));
-
         let index_store = Some(Arc::new(IndexStore::open_tables_read_write(
             path.join("indexes"),
             None,
@@ -1835,7 +1827,6 @@ impl AuthorityState {
             secret.public().into(),
             secret.clone(),
             store,
-            node_sync_store,
             epochs,
             index_store,
             None,
@@ -1850,10 +1841,10 @@ impl AuthorityState {
     }
 
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
-    /// Currently, only used in tests and deprecated callsites.
-    pub async fn add_pending_certificates(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
-        self.node_sync_store
-            .batch_store_certs(certs.iter().cloned())?;
+    pub async fn enqueue_certificates_for_execution(
+        &self,
+        certs: Vec<VerifiedCertificate>,
+    ) -> SuiResult<()> {
         self.epoch_store().insert_pending_certificates(&certs)?;
         self.transaction_manager.enqueue(certs).await
     }
@@ -1927,16 +1918,18 @@ impl AuthorityState {
         })
     }
 
-    pub fn reconfigure(&self, new_committee: Committee) -> SuiResult {
-        // TODO: We should move the committee into epoch db store, so that the operation below
-        // can become atomic.
+    pub async fn reconfigure(&self, new_committee: Committee) -> SuiResult {
         fp_ensure!(
             self.epoch() + 1 == new_committee.epoch,
-            SuiError::from("Invalid new epoch to sign and update")
+            SuiError::from("Invalid new epoch")
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        self.db().reopen_epoch_db(new_committee);
+        let db = self.db();
+        db.revert_uncommitted_epoch_transactions().await?;
+        db.perpetual_tables
+            .set_recovery_epoch(new_committee.epoch)?;
+        db.reopen_epoch_db(new_committee).await;
         Ok(())
     }
 
@@ -1944,8 +1937,16 @@ impl AuthorityState {
         self.database.clone()
     }
 
+    // TODO: Deprecate this once we replace all calls with load_epoch_store.
     pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
         self.database.epoch_store()
+    }
+
+    pub fn load_epoch_store(
+        &self,
+        intended_epoch: EpochId,
+    ) -> SuiResult<Guard<Arc<AuthorityPerEpochStore>>> {
+        self.database.load_epoch_store(intended_epoch)
     }
 
     pub fn clone_committee(&self) -> Committee {
@@ -1972,7 +1973,7 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    pub async fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
 
@@ -2441,30 +2442,14 @@ impl AuthorityState {
         Ok(seq)
     }
 
-    /// Returns true if certificate is a shared-object cert but has not been sequenced.
-    fn is_cert_awaiting_sequencing(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
-        // always an error to call this on fullnode.
-        assert!(!self.is_fullnode());
-
-        if !certificate.contains_shared_object() {
-            Ok(false)
-        } else {
-            self.database
-                .consensus_message_processed(&ConsensusTransactionKey::Certificate(
-                    *certificate.digest(),
-                ))
-                .map(|r| !r)
-        }
-    }
-
     /// Check whether certificate was processed by consensus.
     /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
     pub fn consensus_message_processed(
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
-        self.database
-            .consensus_message_processed(&ConsensusTransactionKey::Certificate(
+        self.epoch_store()
+            .is_consensus_message_processed(&ConsensusTransactionKey::Certificate(
                 *certificate.digest(),
             ))
     }
@@ -2528,12 +2513,19 @@ impl AuthorityState {
     /// This function returns unit error and is responsible for emitting log messages for internal errors
     pub(crate) fn verify_consensus_transaction(
         &self,
+        current_epoch: EpochId,
         transaction: SequencedConsensusTransaction,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
-            .database
-            .consensus_message_processed(&transaction.transaction.key())
+            .load_epoch_store(current_epoch)
+            .map_err(|err| {
+                debug!(
+                    "Error loading epoch store in verify_consensus_transaction: {:?}",
+                    err
+                )
+            })?
+            .is_consensus_message_processed(&transaction.transaction.key())
             .expect("Storage error")
         {
             debug!(
@@ -2572,11 +2564,12 @@ impl AuthorityState {
     /// Errors returned by this call are treated as critical errors and cause node to panic.
     pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
+        current_epoch: EpochId,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
         if let Some(certificate) = self
-            .process_consensus_transaction(transaction, checkpoint_service)
+            .process_consensus_transaction(current_epoch, transaction, checkpoint_service)
             .await?
         {
             // The certificate has already been inserted into the pending_certificates table by
@@ -2592,6 +2585,7 @@ impl AuthorityState {
     /// - Or update the state for checkpoint or epoch change protocol. Returns None.
     pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
+        current_epoch: EpochId,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult<Option<VerifiedCertificate>> {
@@ -2602,10 +2596,30 @@ impl AuthorityState {
             transaction,
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
+        let epoch_store = match self.load_epoch_store(current_epoch) {
+            Ok(s) => s,
+            Err(err) => {
+                // Epoch has changed while this transaction is being processed. Ignore it.
+                debug!(
+                    "Error loading epoch store in process_consensus_transaction: {:?}",
+                    err
+                );
+                return Ok(None);
+            }
+        };
         match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                if certificate.epoch() != current_epoch {
+                    // Epoch has changed after this certificate was sequenced, ignore it.
+                    debug!(
+                        "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
+                        certificate.epoch(),
+                        current_epoch
+                    );
+                    return Ok(None);
+                }
                 let authority = (&consensus_output.header.author).into();
-                if self.database.sent_end_of_publish(&authority)? {
+                if epoch_store.has_sent_end_of_publish(&authority)? {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
@@ -2623,8 +2637,7 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
-                if !self
-                    .epoch_store()
+                if !epoch_store
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
                 {
@@ -2634,15 +2647,16 @@ impl AuthorityState {
                 }
 
                 if certificate.contains_shared_object() {
-                    self.database
+                    epoch_store
                         .record_shared_object_cert_from_consensus(
                             &transaction,
                             &certificate,
                             consensus_index,
+                            &self.database,
                         )
                         .await?;
                 } else {
-                    self.database
+                    epoch_store
                         .record_owned_object_cert_from_consensus(
                             &transaction,
                             &certificate,
@@ -2672,6 +2686,7 @@ impl AuthorityState {
 
     pub(crate) fn handle_commit_boundary<C: CheckpointServiceNotify>(
         &self,
+        current_epoch: EpochId,
         committed_dag: &Arc<CommittedSubDag>,
         checkpoint_service: &Arc<C>,
     ) -> SuiResult {
@@ -2683,8 +2698,9 @@ impl AuthorityState {
         // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
         //
         // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
-        if let Some((index, roots)) = self.database.last_checkpoint(round)? {
-            let final_checkpoint_round = self.database.final_epoch_checkpoint()?;
+        let epoch_store = self.load_epoch_store(current_epoch)?;
+        if let Some((index, roots)) = epoch_store.last_checkpoint(round)? {
+            let final_checkpoint_round = epoch_store.final_epoch_checkpoint()?;
             let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
                 Some(CmpOrdering::Less) => {
                     debug!(
@@ -2699,7 +2715,7 @@ impl AuthorityState {
             };
             checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
         }
-        self.database.record_checkpoint_boundary(round)
+        epoch_store.record_checkpoint_boundary(round)
     }
 
     pub async fn create_advance_epoch_tx_cert(

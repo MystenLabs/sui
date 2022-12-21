@@ -103,6 +103,7 @@ importers:
       vite: ^4.0.0
       vite-plugin-svgr: ^2.4.0
       vitest: ^0.25.7
+      wait-on: ^6.0.1
       web-vitals: ^3.1.0
       zod: ^3.19.1
     dependencies:
@@ -183,6 +184,7 @@ importers:
       vite: 4.0.0_@types+node@18.11.13
       vite-plugin-svgr: 2.4.0_vite@4.0.0
       vitest: 0.25.7_@vitest+ui@0.25.7
+      wait-on: 6.0.1
 
   apps/wallet:
     specifiers:
@@ -422,7 +424,6 @@ importers:
       '@scure/bip39': ^1.1.0
       '@size-limit/preset-small-lib': ^7.0.8
       '@suchipi/femver': ^1.0.0
-      '@types/lossless-json': ^1.0.1
       axios: ^0.27.2
       bs58: ^5.0.0
       cross-fetch: ^3.1.5
@@ -433,7 +434,6 @@ importers:
       husky: ^7.0.4
       jayson: ^3.6.6
       js-sha3: ^0.8.0
-      lossless-json: ^1.0.5
       mockttp: ^2.7.0
       prettier: ^2.8.1
       rpc-websockets: ^7.5.0
@@ -460,12 +460,10 @@ importers:
       cross-fetch: 3.1.5
       jayson: 3.7.0
       js-sha3: 0.8.0
-      lossless-json: 1.0.5
       rpc-websockets: 7.5.0
       tweetnacl: 1.0.3
     devDependencies:
       '@size-limit/preset-small-lib': 7.0.8_size-limit@7.0.8
-      '@types/lossless-json': 1.0.1
       axios: 0.27.2
       eslint: 8.23.0
       eslint-config-prettier: 8.5.0_eslint@8.23.0
@@ -4292,7 +4290,7 @@ packages:
       '@motionone/types': 10.15.1
       '@motionone/utils': 10.15.1
       hey-listen: 1.0.8
-      tslib: 2.4.0
+      tslib: 2.4.1
     dev: false
 
   /@motionone/easing/10.15.1:
@@ -6325,10 +6323,6 @@ packages:
 
   /@types/lodash/4.14.183:
     resolution: {integrity: sha512-UXavyuxzXKMqJPEpFPri6Ku5F9af6ZJXUneHhvQJxavrEjuHkFp2YnDWHcxJiG7hk8ZkWqjcyNeW1s/smZv5cw==}
-
-  /@types/lossless-json/1.0.1:
-    resolution: {integrity: sha512-zPE8kmpeL5/6L5gtTQHSOkAW/OSYYNTDRt6/2oEgLO1Zd3Rj5WVDoMloTtLJxQJhZGLGbL4pktKSh3NbzdaWdw==}
-    dev: true
 
   /@types/mdx/2.0.2:
     resolution: {integrity: sha512-mJGfgj4aWpiKb8C0nnJJchs1sHBHn0HugkVfqqyQi7Wn6mBRksLeQsPOFvih/Pu8L1vlDzfe/LidhVHBeUk3aQ==}
@@ -13771,10 +13765,6 @@ packages:
     dependencies:
       js-tokens: 4.0.0
 
-  /lossless-json/1.0.5:
-    resolution: {integrity: sha512-RicKUuLwZVNZ6ZdJHgIZnSeA05p8qWc5NW0uR96mpPIjN9WDLUg9+kj1esQU1GkPn9iLZVKatSQK5gyiaFHgJA==}
-    dev: false
-
   /loupe/2.3.6:
     resolution: {integrity: sha512-RaPMZKiMy8/JruncMU5Bt6na1eftNoo++R4Y+N2FrxkDVTrGvcyzFTsaGif4QTeKESheMGegbhw6iUAq+5A8zA==}
     dependencies:
@@ -14168,10 +14158,6 @@ packages:
       arrify: 1.0.1
       is-plain-obj: 1.1.0
       kind-of: 6.0.3
-    dev: true
-
-  /minimist/1.2.6:
-    resolution: {integrity: sha512-Jsjnk4bw3YJqYzbdyBiNsPWHPfO++UGG749Cxs6peCu5Xg4nrena6OVxOYxrQTqww0Jmwt+Ref8rggumkTLz9Q==}
     dev: true
 
   /minimist/1.2.7:
@@ -19435,7 +19421,7 @@ packages:
       joi: 17.6.0
       lodash: 4.17.21
       minimist: 1.2.7
-      rxjs: 7.5.6
+      rxjs: 7.5.7
     transitivePeerDependencies:
       - debug
     dev: true
@@ -19448,8 +19434,8 @@ packages:
       axios: 0.25.0
       joi: 17.6.0
       lodash: 4.17.21
-      minimist: 1.2.6
-      rxjs: 7.5.6
+      minimist: 1.2.7
+      rxjs: 7.5.7
     transitivePeerDependencies:
       - debug
     dev: true

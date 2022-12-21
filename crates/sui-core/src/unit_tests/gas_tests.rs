@@ -18,6 +18,7 @@ use sui_types::{
     crypto::get_key_pair,
     gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
 };
+use sui_types::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -162,7 +163,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 50);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 110);
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
@@ -171,7 +172,7 @@ async fn test_transfer_sui_insufficient_gas() {
         recipient,
         amount: None,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 50, 1);
+    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 110, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
@@ -298,7 +299,14 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     gas_status.charge_storage_read(
         genesis_objects
             .iter()
-            .map(|o| o.object_size_for_gas_metering())
+            // do not charge for loads of the Sui Framework
+            .filter_map(|o| {
+                if o.id() != SUI_FRAMEWORK_OBJECT_ID && o.id() != MOVE_STDLIB_OBJECT_ID {
+                    Some(o.object_size_for_gas_metering())
+                } else {
+                    None
+                }
+            })
             .sum(),
     )?;
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;

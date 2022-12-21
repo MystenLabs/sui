@@ -199,6 +199,15 @@ impl CoinReadApi {
             .await?)
     }
 
+    pub async fn get_all_coins(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<CoinPage> {
+        Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
+    }
+
     pub fn get_coins_stream(
         &self,
         owner: SuiAddress,
@@ -225,12 +234,16 @@ impl CoinReadApi {
         )
     }
 
-    pub async fn get_balances(
+    pub async fn get_balance(
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-    ) -> SuiRpcResult<Vec<Balance>> {
-        Ok(self.api.http.get_balances(owner, coin_type).await?)
+    ) -> SuiRpcResult<Balance> {
+        Ok(self.api.http.get_balance(owner, coin_type).await?)
+    }
+
+    pub async fn get_all_balances(&self, owner: SuiAddress) -> SuiRpcResult<Vec<Balance>> {
+        Ok(self.api.http.get_all_balances(owner).await?)
     }
 
     pub async fn get_coin_metadata(&self, coin_type: String) -> SuiRpcResult<SuiCoinMetadata> {
@@ -347,28 +360,6 @@ impl QuorumDriver {
 
         Ok(match (request_type, resp) {
             (
-                ExecuteTransactionRequestType::ImmediateReturn,
-                SuiExecuteTransactionResponse::ImmediateReturn { tx_digest },
-            ) => TransactionExecutionResult {
-                tx_digest,
-                tx_cert: None,
-                effects: None,
-                confirmed_local_execution: false,
-                timestamp_ms: None,
-                parsed_data: None,
-            },
-            (
-                ExecuteTransactionRequestType::WaitForTxCert,
-                SuiExecuteTransactionResponse::TxCert { certificate },
-            ) => TransactionExecutionResult {
-                tx_digest: certificate.transaction_digest,
-                tx_cert: Some(certificate),
-                effects: None,
-                confirmed_local_execution: false,
-                timestamp_ms: None,
-                parsed_data: None,
-            },
-            (
                 ExecuteTransactionRequestType::WaitForEffectsCert,
                 SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
@@ -403,12 +394,6 @@ impl QuorumDriver {
                     timestamp_ms: None,
                     parsed_data: None,
                 }
-            }
-            (other_request_type, other_resp) => {
-                return Err(RpcError::InvalidTransactionResponse(
-                    other_resp,
-                    other_request_type,
-                ))
             }
         })
     }

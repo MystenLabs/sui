@@ -4,7 +4,6 @@
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
-import * as LosslessJSON from 'lossless-json';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -50,40 +49,11 @@ export class JsonRpcClient {
 
         try {
           let res: Response = await fetch(url, options);
-          const text = await res.text();
-          let result;
-          // wrapping this with try/catch because LosslessJSON
-          // returns error when parsing some struct.
-          // TODO: remove the usage of LosslessJSON once
-          // https://github.com/MystenLabs/sui/issues/2328 is done
-          try {
-            result = JSON.stringify(
-              LosslessJSON.parse(text, (key, value) => {
-                if (value == null) {
-                  return value;
-                }
-
-                // TODO: This is a bad hack, we really shouldn't be doing this here:
-                if (key === 'balance' && typeof value === 'number') {
-                  return value.toString();
-                }
-
-                try {
-                  if (value.isLosslessNumber) return value.valueOf();
-                } catch {
-                  return value.toString();
-                }
-                return value;
-              })
-            );
-          } catch (e) {
-            result = text;
-          }
-
+          const result = await res.text();
           if (res.ok) {
             callback(null, result);
           } else {
-            callback(new Error(`${res.status} ${res.statusText}: ${text}`));
+            callback(new Error(`${res.status} ${res.statusText}: ${result}`));
           }
         } catch (err) {
           if (err instanceof Error) callback(err);

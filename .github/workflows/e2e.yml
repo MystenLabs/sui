@@ -1,0 +1,108 @@
+name: End-to-end Tests
+on: pull_request
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    outputs:
+      isExplorer: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-explorer')) || steps.diff.outputs.isRust }}
+      isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) || steps.diff.outputs.isRust }}
+    steps:
+      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - name: Detect Changes (turbo)
+        uses: "./.github/actions/turbo-diffs"
+        id: turbo
+      - name: Detect Changes (diff)
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  static:
+    name: Static (Explorer)
+    needs: diff
+    if: needs.diff.outputs.isExplorer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
+        with:
+          version: 7
+      - name: Install Nodejs
+        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
+        with:
+          node-version: "18"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Cypress
+        run: pnpm explorer exec cypress install
+      - name: Run e2e tests
+        uses: cypress-io/github-action@c5724eda82337bcff977ce14509f47052c12e04c # pin@v5
+        with:
+          install: false
+          start: pnpm dev:static
+          working-directory: ./apps/explorer
+          spec: cypress/e2e/static/*
+
+  localnet:
+    name: Localnet
+    needs: diff
+    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'
+    runs-on: ubuntu-ghcloud
+    steps:
+      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
+        with:
+          version: 7
+      - run: cargo build --bin sui-test-validator --bin sui --profile dev
+      - name: Install Nodejs
+        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
+        with:
+          node-version: "18"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Cypress
+        run: pnpm explorer exec cypress install
+
+      - name: Run TS SDK e2e tests
+        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
+        run: pnpm dlx concurrently --kill-others --success command-1 'RUST_LOG="consensus=off" cargo run --bin sui-test-validator' 'pnpm sdk test:e2e'
+
+      - name: Run Explorer e2e tests
+        if: ${{ needs.diff.outputs.isExplorer == 'true' }}
+        uses: cypress-io/github-action@c5724eda82337bcff977ce14509f47052c12e04c # pin@v5
+        with:
+          install: false
+          start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
+          working-directory: ./apps/explorer
+          spec: cypress/e2e/localnet/*
+          wait-on: "pnpm test:wait-on"
+          wait-on-timeout: 120
+
+  devnet:
+    name: Devnet
+    needs: diff
+    if: needs.diff.outputs.isTypescriptSDK == 'true'
+    runs-on: [self-hosted, self-hosted-arc]
+    steps:
+      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
+        with:
+          version: 7
+      - run: cargo build --bin sui --profile dev
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run e2e tests
+        env:
+          VITE_FAUCET_URL: "https://faucet.devnet.sui.io:443/gas"
+          VITE_FULLNODE_URL: "https://fullnode.devnet.sui.io"
+        run: pnpm sdk test:e2e:nowait

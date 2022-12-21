@@ -13,7 +13,7 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = "1.0.47"
-quote = "1.0.9"
+quote = "1.0.23"
 syn = { version = "1.0.104", features = ["full"] }
 workspace-hack.workspace = true
 

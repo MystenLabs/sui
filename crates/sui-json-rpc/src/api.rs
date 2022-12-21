@@ -37,13 +37,13 @@ pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 #[open_rpc(namespace = "sui", tag = "Coin Query API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait CoinReadApi {
-    /// Return the list of Coin objects owned by an address.
+    /// Return all Coin<`coin_type`> objects owned by an address.
     #[method(name = "getCoins")]
     async fn get_coins(
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        /// optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
         /// optional paging cursor
         cursor: Option<ObjectID>,
@@ -51,14 +51,34 @@ pub trait CoinReadApi {
         limit: Option<usize>,
     ) -> RpcResult<CoinPage>;
 
-    /// Return the total coin balance for each coin type.
-    #[method(name = "getBalance")]
-    async fn get_balances(
+    /// Return all Coin objects owned by an address.
+    #[method(name = "getAllCoins")]
+    async fn get_all_coins(
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        /// optional paging cursor
+        cursor: Option<ObjectID>,
+        /// maximum number of items per page
+        limit: Option<usize>,
+    ) -> RpcResult<CoinPage>;
+
+    /// Return the total coin balance for one coin type, owned by the address owner.
+    #[method(name = "getBalance")]
+    async fn get_balance(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
+    ) -> RpcResult<Balance>;
+
+    /// Return the total coin balance for all coin type, owned by the address owner.
+    #[method(name = "getAllBalances")]
+    async fn get_all_balances(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
 
     /// Return metadata(e.g., symbol, decimals) for a coin
@@ -506,14 +526,9 @@ pub trait EventReadApi {
 pub trait TransactionExecutionApi {
     /// Execute the transaction and wait for results if desired.
     /// Request types:
-    /// 1. ImmediateReturn: immediately returns a response to client without waiting
-    ///     for any execution results.  Note the transaction may fail without being
-    ///     noticed by client in this mode. After getting the response, the client
-    ///     may poll the node to check the result of the transaction.
-    /// 2. WaitForTxCert: waits for TransactionCertificate and then return to client.
-    /// 3. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
+    /// 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
     ///     This mode is a proxy for transaction finality.
-    /// 4. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node
+    /// 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node
     ///     executed the transaction locally before returning the client. The local execution
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,

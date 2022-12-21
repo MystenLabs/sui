@@ -11,8 +11,8 @@ use sui_types::{
 };
 
 use futures::FutureExt;
+use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair, messages::VerifiedTransaction};
-use test_utils::messages::make_transfer_sui_transaction;
 use tracing::error;
 
 use rand::{prelude::*, rngs::OsRng};

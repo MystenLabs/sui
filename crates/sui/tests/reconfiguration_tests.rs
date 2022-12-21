@@ -89,7 +89,7 @@ async fn advance_epoch_tx_test_impl(
         .collect::<anyhow::Result<Vec<_>>>()
         .unwrap();
     for (state, cert) in states.iter().zip(results) {
-        let results = state.execute_certificate_internal(&cert).await.unwrap();
+        let results = state.try_execute_for_test(&cert).await.unwrap();
         assert!(results.signed_effects.unwrap().status.is_ok());
     }
 }
@@ -118,7 +118,8 @@ use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
 use sui_types::object::Object;
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use test_utils::authority::{get_object, start_node, test_authority_configs};
-use test_utils::messages::{make_transfer_sui_transaction, move_transaction};
+use test_utils::messages::move_transaction;
+use sui_core::test_utils::make_transfer_sui_transaction;
 use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
 use test_utils::test_account_keys;
 use test_utils::transaction::{
@@ -151,7 +152,7 @@ async fn reconfig_end_to_end_tests() {
         .with_async(|node| async move {
             let state = node.state();
 
-            let sui_system_state = state.get_sui_system_state_object().await.unwrap();
+            let sui_system_state = state.get_sui_system_state_object().unwrap();
             let mut net_addrs_from_chain: Vec<Multiaddr> = Vec::new();
             let old_committee_size = sui_system_state.validators.next_epoch_validators.len();
             for validator in sui_system_state.validators.active_validators {
@@ -189,7 +190,7 @@ async fn reconfig_end_to_end_tests() {
     let expected_committee = handles[0]
         .with_async(|node| async move {
             let state = node.state();
-            let sui_system_state = state.get_sui_system_state_object().await.unwrap();
+            let sui_system_state = state.get_sui_system_state_object().unwrap();
             let new_committee_size = sui_system_state.validators.next_epoch_validators.len();
             assert_eq!(old_committee_size + 1, new_committee_size);
             sui_system_state.get_next_epoch_committee().voting_rights
@@ -283,7 +284,7 @@ async fn reconfig_end_to_end_tests() {
     // refresh the system state and network addresses
     handles[0]
         .with_async(|node| async move {
-            let sui_system_state = node.state().get_sui_system_state_object().await.unwrap();
+            let sui_system_state = node.state().get_sui_system_state_object().unwrap();
             assert_eq!(sui_system_state.epoch, 1);
             // We should now have one more active validator.
             assert_eq!(sui_system_state.validators.active_validators.len(), 5);

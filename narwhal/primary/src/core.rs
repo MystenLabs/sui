@@ -25,13 +25,13 @@ use tokio::{
     sync::{oneshot, watch},
     task::{JoinHandle, JoinSet},
 };
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, enabled, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
     Certificate, CertificateDigest, Header, HeaderDigest, PrimaryToPrimaryClient,
-    ReconfigureNotification, RequestVoteRequest, Round, Timestamp, Vote,
+    ReconfigureNotification, RequestVoteRequest, Round, Vote,
 };
 
 #[cfg(test)]
@@ -366,7 +366,7 @@ impl Core {
                                 &header,
                             )?;
                         },
-                        Some(Err(e)) => debug!("failed to get vote for header {header}: {e:?}"),
+                        Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
                         None => break,
                     }
                 },
@@ -377,9 +377,28 @@ impl Core {
             }
         }
 
-        // Check if we successfully formed a certificate.
-        let certificate =
-            certificate.ok_or_else(|| DagError::CouldNotFormCertificate(header.digest()))?;
+        let certificate = certificate.ok_or_else(|| {
+            // Log detailed header info if we failed to form a certificate.
+            if enabled!(tracing::Level::WARN) {
+                let mut msg = format!(
+                    "Failed to form certificate from header {header:?} with parent certificates:\n"
+                );
+                for parent_digest in header.parents.iter() {
+                    let parent_msg = match certificate_store.read(*parent_digest) {
+                        Ok(Some(cert)) => format!("{cert:?}\n"),
+                        Ok(None) => {
+                            format!("!!!missing certificate for digest {parent_digest:?}!!!\n")
+                        }
+                        Err(e) => format!(
+                            "!!!error retrieving certificate for digest {parent_digest:?}: {e:?}\n"
+                        ),
+                    };
+                    msg.push_str(&parent_msg);
+                }
+                warn!(msg);
+            }
+            DagError::CouldNotFormCertificate(header.digest())
+        })?;
         debug!("Assembled {certificate:?}");
 
         Ok(certificate)
@@ -430,16 +449,19 @@ impl Core {
         // Broadcast the certificate.
         let epoch = certificate.epoch();
         let round = certificate.header.round;
-        let created_at = certificate.header.created_at;
+        let header_to_certificate_duration =
+            Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
+                .as_secs_f64();
         let network_keys = self
             .committee
             .others_primaries(&self.name)
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        let tasks = self
-            .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
+        let tasks = self.network.broadcast(
+            network_keys,
+            &PrimaryMessage::Certificate(certificate.clone()),
+        );
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,
@@ -459,7 +481,17 @@ impl Core {
         self.metrics
             .header_to_certificate_latency
             .with_label_values(&[&epoch.to_string()])
-            .observe(created_at.elapsed().as_secs_f64());
+            .observe(header_to_certificate_duration);
+
+        #[cfg(feature = "benchmark")]
+        // NOTE: This log entry is used to compute performance.
+        tracing::info!(
+            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            certificate.header.digest(),
+            header_to_certificate_duration,
+            certificate.digest()
+        );
+
         Ok(())
     }
 

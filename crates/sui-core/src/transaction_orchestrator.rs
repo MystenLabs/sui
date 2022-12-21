@@ -24,8 +24,8 @@ use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransactionEffects, ExecuteTransactionRequest, ExecuteTransactionRequestType,
-    ExecuteTransactionResponse, QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse,
-    VerifiedCertificate, VerifiedCertifiedTransactionEffects,
+    ExecuteTransactionResponse, QuorumDriverRequest, QuorumDriverResponse, VerifiedCertificate,
+    VerifiedCertifiedTransactionEffects,
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
@@ -103,7 +103,11 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request.transaction.verify()?;
+        let tx_digest = *request.transaction.digest();
+        let transaction = request
+            .transaction
+            .verify()
+            .tap_err(|e| debug!(?tx_digest, "Failed to verify user signature: {:?}", e))?;
 
         // We will shortly refactor the TransactionOrchestrator with a queue-based implementation.
         // TDOO: `should_enqueue` will be used to determine if the transaction should be enqueued.
@@ -116,23 +120,10 @@ where
             request.request_type,
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
-        let request_type = match request.request_type {
-            ExecuteTransactionRequestType::ImmediateReturn => {
-                QuorumDriverRequestType::ImmediateReturn
-            }
-            ExecuteTransactionRequestType::WaitForTxCert => QuorumDriverRequestType::WaitForTxCert,
-            ExecuteTransactionRequestType::WaitForEffectsCert
-            | ExecuteTransactionRequestType::WaitForLocalExecution => {
-                QuorumDriverRequestType::WaitForEffectsCert
-            }
-        };
-        let tx_digest = *transaction.digest();
+
         let execution_result = self
             .quorum_driver
-            .execute_transaction(QuorumDriverRequest {
-                transaction,
-                request_type,
-            })
+            .execute_transaction(QuorumDriverRequest { transaction })
             .await
             .tap_err(|err| {
                 debug!(
@@ -143,12 +134,6 @@ where
 
         good_response_metrics.inc();
         match execution_result {
-            QuorumDriverResponse::ImmediateReturn => {
-                Ok(ExecuteTransactionResponse::ImmediateReturn)
-            }
-            QuorumDriverResponse::TxCert(result) => Ok(ExecuteTransactionResponse::TxCert(
-                Box::new(result.into_inner()),
-            )),
             QuorumDriverResponse::EffectsCert(result) => {
                 let (tx_cert, effects_cert) = *result;
                 if !wait_for_local_execution {
@@ -287,20 +272,6 @@ where
         request_type: &ExecuteTransactionRequestType,
     ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
         let (in_flight, good_response) = match request_type {
-            ExecuteTransactionRequestType::ImmediateReturn => {
-                self.metrics.total_req_received_immediate_return.inc();
-                (
-                    &self.metrics.req_in_flight_immediate_return,
-                    &self.metrics.good_response_immediate_return,
-                )
-            }
-            ExecuteTransactionRequestType::WaitForTxCert => {
-                self.metrics.total_req_received_wait_for_tx_cert.inc();
-                (
-                    &self.metrics.req_in_flight_wait_for_tx_cert,
-                    &self.metrics.good_response_wait_for_tx_cert,
-                )
-            }
             ExecuteTransactionRequestType::WaitForEffectsCert => {
                 self.metrics.total_req_received_wait_for_effects_cert.inc();
                 (
@@ -335,18 +306,12 @@ where
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
 pub struct TransactionOrchestratorMetrics {
-    total_req_received_immediate_return: GenericCounter<AtomicU64>,
-    total_req_received_wait_for_tx_cert: GenericCounter<AtomicU64>,
     total_req_received_wait_for_effects_cert: GenericCounter<AtomicU64>,
     total_req_received_wait_for_local_execution: GenericCounter<AtomicU64>,
 
-    good_response_immediate_return: GenericCounter<AtomicU64>,
-    good_response_wait_for_tx_cert: GenericCounter<AtomicU64>,
     good_response_wait_for_effects_cert: GenericCounter<AtomicU64>,
     good_response_wait_for_local_execution: GenericCounter<AtomicU64>,
 
-    req_in_flight_immediate_return: GenericGauge<AtomicI64>,
-    req_in_flight_wait_for_tx_cert: GenericGauge<AtomicI64>,
     req_in_flight_wait_for_effects_cert: GenericGauge<AtomicI64>,
     req_in_flight_wait_for_local_execution: GenericGauge<AtomicI64>,
 
@@ -366,10 +331,6 @@ impl TransactionOrchestratorMetrics {
         )
         .unwrap();
 
-        let total_req_received_immediate_return =
-            total_req_received.with_label_values(&["immediate_return"]);
-        let total_req_received_wait_for_tx_cert =
-            total_req_received.with_label_values(&["wait_for_tx_cert"]);
         let total_req_received_wait_for_effects_cert =
             total_req_received.with_label_values(&["wait_for_effects_cert"]);
         let total_req_received_wait_for_local_execution =
@@ -383,8 +344,6 @@ impl TransactionOrchestratorMetrics {
         )
         .unwrap();
 
-        let good_response_immediate_return = good_response.with_label_values(&["immediate_return"]);
-        let good_response_wait_for_tx_cert = good_response.with_label_values(&["wait_for_tx_cert"]);
         let good_response_wait_for_effects_cert =
             good_response.with_label_values(&["wait_for_effects_cert"]);
         let good_response_wait_for_local_execution =
@@ -398,24 +357,16 @@ impl TransactionOrchestratorMetrics {
         )
         .unwrap();
 
-        let req_in_flight_immediate_return = req_in_flight.with_label_values(&["immediate_return"]);
-        let req_in_flight_wait_for_tx_cert = req_in_flight.with_label_values(&["wait_for_tx_cert"]);
         let req_in_flight_wait_for_effects_cert =
             req_in_flight.with_label_values(&["wait_for_effects_cert"]);
         let req_in_flight_wait_for_local_execution =
             req_in_flight.with_label_values(&["wait_for_local_execution"]);
 
         Self {
-            total_req_received_immediate_return,
-            total_req_received_wait_for_tx_cert,
             total_req_received_wait_for_effects_cert,
             total_req_received_wait_for_local_execution,
-            good_response_immediate_return,
-            good_response_wait_for_tx_cert,
             good_response_wait_for_effects_cert,
             good_response_wait_for_local_execution,
-            req_in_flight_immediate_return,
-            req_in_flight_wait_for_tx_cert,
             req_in_flight_wait_for_effects_cert,
             req_in_flight_wait_for_local_execution,
             local_execution_in_flight: register_int_gauge_with_registry!(

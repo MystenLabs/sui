@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::default_checkpoints_per_epoch;
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
@@ -306,12 +307,14 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
-                    admin_interface_port: utils::get_available_port(),
+                    // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
+                    // provide the entire socket address here to avoid confusion.
+                    admin_interface_port: utils::get_available_port("127.0.0.1"),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_checkpoint: false,
-                    enable_reconfig: false,
+                    checkpoints_per_epoch: default_checkpoints_per_epoch(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,

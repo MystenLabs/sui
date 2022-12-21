@@ -5,7 +5,6 @@ use std::path::Path;
 
 use std::str::FromStr;
 
-use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
@@ -34,11 +33,7 @@ use sui_macros::sim_test;
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
 
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
@@ -50,11 +45,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -85,22 +76,17 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    if let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response {
-        assert_eq!(
-            dryrun_response.transaction_digest,
-            effects.effects.transaction_digest
-        );
-    }
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    assert_eq!(
+        dryrun_response.transaction_digest,
+        effects.effects.transaction_digest
+    );
     Ok(())
 }
 
 #[sim_test]
 async fn test_publish() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -133,11 +119,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -187,11 +169,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -207,11 +185,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_coins() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -252,20 +226,15 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_get_balances() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+async fn test_get_balance() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let result: Vec<Balance> = http_client.get_balances(*address, None).await?;
-    assert_eq!(1, result.len());
-    assert_eq!("0x2::sui::SUI", result[0].coin_type);
-    assert_eq!(500000000000000, result[0].total_balance);
-    assert_eq!(5, result[0].coin_object_count);
+    let result: Balance = http_client.get_balance(*address, None).await?;
+    assert_eq!("0x2::sui::SUI", result.coin_type);
+    assert_eq!(500000000000000, result.total_balance);
+    assert_eq!(5, result.coin_object_count);
 
     Ok(())
 }
@@ -304,9 +273,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
-        panic!()
-    };
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -367,9 +334,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
-        panic!()
-    };
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -448,9 +413,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert {effects,..} = tx_response else {
-        panic!()
-    };
+    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
 
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
@@ -462,11 +425,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await?;
+    let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
@@ -517,12 +476,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
-    let mut cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
-        .build()
-        .await
-        .unwrap();
+    let mut cluster = TestClusterBuilder::new().build().await.unwrap();
 
     let context = &mut cluster.wallet;
 
@@ -659,7 +613,6 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(get_available_port())
         .enable_fullnode_events()
         .build()
         .await

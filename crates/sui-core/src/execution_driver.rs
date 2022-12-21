@@ -77,7 +77,7 @@ pub async fn execution_process(
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.execute_certificate_internal(&certificate).await;
+                let res = authority.try_execute_immediately(&certificate).await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
                         error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);

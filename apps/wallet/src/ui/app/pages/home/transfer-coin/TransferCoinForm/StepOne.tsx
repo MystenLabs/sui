@@ -5,13 +5,13 @@ import cl from 'classnames';
 import { Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
-import { parseAmount } from './utils';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import ActiveCoinsCard from '_components/active-coins-card';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import NumberInput from '_components/number-input';
+import { parseAmount } from '_helpers';
 import { useCoinDecimals } from '_hooks';
 
 import type { FormValues } from '../';
@@ -65,7 +65,7 @@ function StepOne({
         <Form
             className={cl(st.container, st.amount)}
             autoComplete="off"
-            noValidate={true}
+            noValidate
         >
             <Content>
                 <div className={st.group}>

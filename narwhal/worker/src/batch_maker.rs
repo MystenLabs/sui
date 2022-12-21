@@ -267,13 +267,22 @@ impl BatchMaker {
             return None;
         }
 
+        let batch_creation_duration = self.batch_start_timestamp.elapsed().as_secs_f64();
+
+        tracing::debug!(
+            "Batch {:?} took {} seconds to create due to {}",
+            batch.digest(),
+            batch_creation_duration,
+            reason
+        );
+
         // we are deliberately measuring this after the sending to the downstream
         // channel tx_message as the operation is blocking and affects any further
         // batch creation.
         self.node_metrics
             .created_batch_latency
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
-            .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
+            .observe(batch_creation_duration);
 
         // Clone things to not capture self
         let store = self.store.clone();

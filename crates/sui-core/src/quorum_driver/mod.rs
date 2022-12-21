@@ -23,8 +23,7 @@ use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedCertificate,
-    VerifiedTransaction,
+    QuorumDriverRequest, QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction,
 };
 
 const TASK_QUEUE_SIZE: usize = 5000;
@@ -53,6 +52,7 @@ pub struct QuorumDriverHandler<A> {
 /// committee, or to subscribe effects generated from the QuorumDriver.
 pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
+    #[allow(dead_code)]
     task_sender: Sender<QuorumTask>,
     effects_subscribe_sender:
         tokio::sync::broadcast::Sender<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>,
@@ -105,69 +105,18 @@ where
             metrics.current_requests_in_flight.dec();
         });
 
-        let QuorumDriverRequest {
-            transaction,
-            request_type,
-        } = request;
-        let (ok_metric, result) = match request_type {
-            QuorumDriverRequestType::ImmediateReturn => {
-                self.metrics.total_requests_immediate_return.inc();
-                let _timer = self.metrics.latency_sec_immediate_return.start_timer();
+        let QuorumDriverRequest { transaction } = request;
+        self.metrics.total_requests_wait_for_effects_cert.inc();
+        let _timer = self.metrics.latency_sec_wait_for_effects_cert.start_timer();
 
-                let res = self.execute_transaction_immediate_return(transaction).await;
+        let result = self
+            .execute_transaction_wait_for_effects_cert(transaction)
+            .await;
 
-                (&self.metrics.total_ok_responses_immediate_return, res)
-            }
-            QuorumDriverRequestType::WaitForTxCert => {
-                self.metrics.total_requests_wait_for_tx_cert.inc();
-                let _timer = self.metrics.latency_sec_wait_for_tx_cert.start_timer();
-
-                let res = self.execute_transaction_wait_for_tx_cert(transaction).await;
-
-                (&self.metrics.total_ok_responses_wait_for_tx_cert, res)
-            }
-            QuorumDriverRequestType::WaitForEffectsCert => {
-                self.metrics.total_requests_wait_for_effects_cert.inc();
-                let _timer = self.metrics.latency_sec_wait_for_effects_cert.start_timer();
-
-                let res = self
-                    .execute_transaction_wait_for_effects_cert(transaction)
-                    .await;
-
-                (&self.metrics.total_ok_responses_wait_for_effects_cert, res)
-            }
-        };
         if result.is_ok() {
-            ok_metric.inc()
+            self.metrics.total_ok_responses_wait_for_effects_cert.inc()
         }
         result
-    }
-
-    async fn execute_transaction_immediate_return(
-        &self,
-        transaction: VerifiedTransaction,
-    ) -> SuiResult<QuorumDriverResponse> {
-        self.task_sender
-            .send(QuorumTask::ProcessTransaction(transaction))
-            .await
-            .map_err(|err| SuiError::QuorumDriverCommunicationError {
-                error: err.to_string(),
-            })?;
-        Ok(QuorumDriverResponse::ImmediateReturn)
-    }
-
-    async fn execute_transaction_wait_for_tx_cert(
-        &self,
-        transaction: VerifiedTransaction,
-    ) -> SuiResult<QuorumDriverResponse> {
-        let certificate = self.process_transaction(transaction).await?;
-        self.task_sender
-            .send(QuorumTask::ProcessCertificate(certificate.clone()))
-            .await
-            .map_err(|err| SuiError::QuorumDriverCommunicationError {
-                error: err.to_string(),
-            })?;
-        Ok(QuorumDriverResponse::TxCert(Box::new(certificate)))
     }
 
     async fn execute_transaction_wait_for_effects_cert(

@@ -45,6 +45,16 @@ Initial value of the lower-bound on the amount of stake required to become a val
 
 
 
+<a name="0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT"></a>
+
+Stake subisidy to be given out in the very first epoch. Placeholder value.
+
+
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>: u64 = 1000000;
+</code></pre>
+
+
+
 <a name="0x2_genesis_INIT_STORAGE_FUND"></a>
 
 The initial amount of SUI locked in the storage fund.
@@ -75,7 +85,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(chain_id: u8, validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addressess: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_stakes: <a href="">vector</a>&lt;u64&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(chain_id: u8, validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;, validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_net_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_consensus_addresses: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_worker_addressess: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;, validator_stakes: <a href="">vector</a>&lt;u64&gt;, validator_gas_prices: <a href="">vector</a>&lt;u64&gt;, validator_commission_rates: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -88,6 +98,7 @@ all the information we need in the system.
     chain_id: u8,
     validator_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_network_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
+    validator_worker_pubkeys: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_proof_of_possessions: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
     validator_sui_addresses: <a href="">vector</a>&lt;<b>address</b>&gt;,
     validator_names: <a href="">vector</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;,
@@ -119,6 +130,7 @@ all the information we need in the system.
         <b>let</b> sui_address = *<a href="_borrow">vector::borrow</a>(&validator_sui_addresses, i);
         <b>let</b> pubkey = *<a href="_borrow">vector::borrow</a>(&validator_pubkeys, i);
         <b>let</b> network_pubkey = *<a href="_borrow">vector::borrow</a>(&validator_network_pubkeys, i);
+        <b>let</b> worker_pubkey = *<a href="_borrow">vector::borrow</a>(&validator_worker_pubkeys, i);
         <b>let</b> proof_of_possession = *<a href="_borrow">vector::borrow</a>(&validator_proof_of_possessions, i);
         <b>let</b> name = *<a href="_borrow">vector::borrow</a>(&validator_names, i);
         <b>let</b> net_address = *<a href="_borrow">vector::borrow</a>(&validator_net_addresses, i);
@@ -131,6 +143,7 @@ all the information we need in the system.
             sui_address,
             pubkey,
             network_pubkey,
+            worker_pubkey,
             proof_of_possession,
             name,
             net_address,
@@ -152,6 +165,7 @@ all the information we need in the system.
         <a href="genesis.md#0x2_genesis_INIT_MAX_VALIDATOR_COUNT">INIT_MAX_VALIDATOR_COUNT</a>,
         <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>,
         <a href="genesis.md#0x2_genesis_INIT_STORAGE_GAS_PRICE">INIT_STORAGE_GAS_PRICE</a>,
+        <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
     );
 }
 </code></pre>

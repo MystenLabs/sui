@@ -1,7 +1,8 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
-from datetime import datetime
+from datetime import datetime, timezone
+from itertools import chain
 from dateutil import parser
 from glob import glob
 from logging import exception
@@ -51,9 +52,24 @@ class LogParser:
         except (ValueError, IndexError, AttributeError) as e:
             exception(e)
             raise ParseError(f'Failed to parse nodes\' logs: {e}')
-        proposals, commits, self.configs, primary_ips = zip(*results)
+        proposals, commits, self.configs, primary_ips, batch_to_header_latencies, header_creation_latencies, header_to_cert_latencies, cert_commit_latencies, request_vote_outbound_latencies = zip(
+            *results)
         self.proposals = self._merge_results([x.items() for x in proposals])
         self.commits = self._merge_results([x.items() for x in commits])
+        self.batch_to_header_latencies = {
+            k: v for x in batch_to_header_latencies for k, v in x.items()
+        }
+        self.header_creation_latencies = {
+            k: v for x in header_creation_latencies for k, v in x.items()
+        }
+        self.header_to_cert_latencies = {
+            k: v for x in header_to_cert_latencies for k, v in x.items()
+        }
+        self.cert_commit_latencies = {
+            k: v for x in cert_commit_latencies for k, v in x.items()
+        }
+        self.request_vote_outbound_latencies = list(
+            chain(*request_vote_outbound_latencies))
 
         # Parse the workers logs.
         try:
@@ -62,9 +78,13 @@ class LogParser:
         except (ValueError, IndexError, AttributeError) as e:
             exception(e)
             raise ParseError(f'Failed to parse workers\' logs: {e}')
-        sizes, self.received_samples, workers_ips = zip(*results)
+        sizes, self.received_samples, workers_ips, batch_creation_latencies = zip(
+            *results)
         self.sizes = {
             k: v for x in sizes for k, v in x.items() if k in self.commits
+        }
+        self.batch_creation_latencies = {
+            k: v for x in batch_creation_latencies for k, v in x.items()
         }
 
         # Determine whether the primary and the workers are collocated.
@@ -114,6 +134,26 @@ class LogParser:
         tmp = [(d, self._to_posix(t)) for t, d in tmp]
         commits = self._merge_results([tmp])
 
+        tmp = findall(
+            r'.* Batch ([^ ]+) from worker \d+ took (\d+\.\d+) seconds from creation to be included in a proposed header', log)
+        batch_to_header_latencies = {d: float(t) for d, t in tmp}
+
+        tmp = findall(
+            r'.* Header ([^ ]+) was created in (\d+\.\d+) seconds', log)
+        header_creation_latencies = {d: float(t) for d, t in tmp}
+
+        tmp = findall(
+            r'.* Header ([^ ]+) took (\d+\.\d+) seconds to be materialized to a certificate [^ ]+', log)
+        header_to_cert_latencies = {d: float(t) for d, t in tmp}
+
+        tmp = findall(
+            r'.* Certificate ([^ ]+) took (\d+\.\d+) seconds to be committed at round \d+', log)
+        cert_commit_latencies = {d: float(t) for d, t in tmp}
+
+        tmp = findall(
+            r'\/narwhal\.PrimaryToPrimary\/RequestVote.*direction=outbound.*latency=(\d+) ms', log)
+        request_vote_outbound_latencies = [float(d) for d in tmp]
+
         configs = {
             'header_num_of_batches_threshold': int(
                 search(r'Header number of batches threshold .* (\d+)', log).group(1)
@@ -146,7 +186,7 @@ class LogParser:
 
         ip = search(r'booted on (/ip4/\d+.\d+.\d+.\d+)', log).group(1)
 
-        return proposals, commits, configs, ip
+        return proposals, commits, configs, ip, batch_to_header_latencies, header_creation_latencies, header_to_cert_latencies, cert_commit_latencies, request_vote_outbound_latencies
 
     def _parse_workers(self, log):
         if search(r'(?:panicked)', log) is not None:
@@ -158,12 +198,17 @@ class LogParser:
         tmp = findall(r'Batch ([^ ]+) contains sample tx (\d+)', log)
         samples = {int(s): d for d, s in tmp}
 
+        tmp = findall(
+            r'.* Batch ([^ ]+) took (\d+\.\d+) seconds to create due to .*', log)
+        batch_creation_latencies = {d: float(t) for d, t in tmp}
+
         ip = search(r'booted on (/ip4/\d+.\d+.\d+.\d+)', log).group(1)
 
-        return sizes, samples, ip
+        return sizes, samples, ip, batch_creation_latencies
 
     def _to_posix(self, string):
-        x = parser.isoparse(string[:24])
+        x = parser.parse(string[:24], ignoretz=True)
+        x = x.astimezone(timezone.utc)
         return datetime.timestamp(x)
 
     def _consensus_throughput(self):
@@ -216,6 +261,18 @@ class LogParser:
         consensus_tps, consensus_bps, _ = self._consensus_throughput()
         end_to_end_tps, end_to_end_bps, duration = self._end_to_end_throughput()
         end_to_end_latency = self._end_to_end_latency() * 1_000
+        batch_creation_latency = mean(
+            self.batch_creation_latencies.values()) * 1000
+        header_creation_latency = mean(
+            self.header_creation_latencies .values()) * 1000
+        batch_to_header_latency = mean(
+            self.batch_to_header_latencies.values()) * 1000
+        header_to_cert_latency = mean(
+            self.header_to_cert_latencies.values()) * 1000
+        cert_commit_latency = mean(
+            self.cert_commit_latencies.values()) * 1000
+        request_vote_outbound_latency = mean(
+            self.request_vote_outbound_latencies)
 
         return (
             '\n'
@@ -242,6 +299,13 @@ class LogParser:
             f' Max concurrent requests: {max_concurrent_requests:,} \n'
             '\n'
             ' + RESULTS:\n'
+            f' Batch creation avg latency: {round(batch_creation_latency):,} ms\n'
+            f' Header creation avg latency: {round(header_creation_latency):,} ms\n'
+            f' \tBatch to header avg latency: {round(batch_to_header_latency):,} ms\n'
+            f' Header to certificate avg latency: {round(header_to_cert_latency):,} ms\n'
+            f' \tRequest vote outbound avg latency: {round(request_vote_outbound_latency):,} ms\n'
+            f' Certificate commit avg latency: {round(cert_commit_latency):,} ms\n'
+            f'\n'
             f' Consensus TPS: {round(consensus_tps):,} tx/s\n'
             f' Consensus BPS: {round(consensus_bps):,} B/s\n'
             f' Consensus latency: {round(consensus_latency):,} ms\n'

@@ -63,40 +63,10 @@ impl Genesis {
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
-        Committee::new(
-            self.epoch(),
-            ValidatorInfo::voting_rights(self.validator_set()),
-        )
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee {
-        let narwhal_committee = self
-            .validator_set
-            .iter()
-            .map(|validator| {
-                // Strong requirement here for narwhal and sui to be on the same version of fastcrypto
-                // for AuthorityPublicBytes to cast to type alias PublicKey defined in narwhal to
-                // construct narwhal Committee struct.
-                let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
-                    .expect("Can't get narwhal public key");
-                let network_key =
-                    narwhal_crypto::NetworkPublicKey::from_bytes(validator.network_key().as_ref())
-                        .expect("Can't get narwhal public key");
-                let primary_address = validator.narwhal_primary_address.clone();
-                let authority = narwhal_config::Authority {
-                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
-                    primary_address,
-                    network_key,
-                };
-
-                (name, authority)
-            })
-            .collect();
-        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch() as narwhal_config::Epoch,
-        }))
+        Ok(self
+            .sui_system_object()
+            .get_current_epoch_committee()
+            .committee)
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
@@ -549,6 +519,7 @@ pub fn generate_genesis_system_object(
 
     let mut pubkeys = Vec::new();
     let mut network_pubkeys = Vec::new();
+    let mut worker_pubkeys = Vec::new();
     let mut proof_of_possessions = Vec::new();
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
@@ -565,7 +536,8 @@ pub fn generate_genesis_system_object(
     } in committee
     {
         pubkeys.push(validator.protocol_key());
-        network_pubkeys.push(validator.network_key());
+        network_pubkeys.push(validator.network_key().as_bytes().to_vec());
+        worker_pubkeys.push(validator.worker_key().as_bytes().to_vec());
         proof_of_possessions.push(proof_of_possession.as_ref().to_vec());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
@@ -587,6 +559,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&chain_id).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
@@ -637,6 +610,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn ceremony() {
         let dir = tempfile::TempDir::new().unwrap();
 
