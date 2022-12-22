@@ -253,7 +253,7 @@ impl PseudoBlockProvider {
                 index += 1;
                 let block_identifier = BlockIdentifier {
                     index,
-                    hash: digest.into(),
+                    hash: digest,
                 };
 
                 // update balance
@@ -358,7 +358,7 @@ impl PseudoBlockProvider {
 
         let transaction = Transaction {
             transaction_identifier: TransactionIdentifier { hash: digest },
-            operations: operations.clone(),
+            operations,
             related_transactions: vec![],
             metadata: None,
         };
@@ -456,7 +456,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
 
     BlockResponse {
         block: Block {
-            block_identifier: id.clone(),
+            block_identifier: id,
             parent_block_identifier: id,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
