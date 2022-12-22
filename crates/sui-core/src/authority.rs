@@ -73,8 +73,6 @@ use sui_types::{
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::TransactionCertifier;
-use crate::checkpoints::CheckpointServiceNotify;
-use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_driver::execution_process;
@@ -2166,26 +2164,6 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.database.get_latest_parent_entry(object_id)
-    }
-
-    /// The transaction passed here went through verification in verify_consensus_transaction.
-    /// This method is called in the exact sequence message are ordered in consensus.
-    /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: VerifiedSequencedConsensusTransaction,
-        checkpoint_service: &Arc<C>,
-    ) -> SuiResult {
-        if let Some(certificate) = epoch_store
-            .process_consensus_transaction(transaction, checkpoint_service, &self.database)
-            .await?
-        {
-            // The certificate has already been inserted into the pending_certificates table by
-            // process_consensus_transaction() above.
-            self.transaction_manager.enqueue(vec![certificate]).await?;
-        }
-        Ok(())
     }
 
     pub async fn create_advance_epoch_tx_cert(

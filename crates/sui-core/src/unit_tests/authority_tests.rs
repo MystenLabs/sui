@@ -31,7 +31,6 @@ use std::task::{Context, Poll};
 use sui_json_rpc_types::SuiExecutionResult;
 use sui_types::utils::to_sender_signed_transaction;
 
-use std::ops::Deref;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
@@ -3176,10 +3175,12 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         .verify_consensus_transaction(transaction)
     {
         authority
+            .epoch_store()
             .handle_consensus_transaction(
-                authority.epoch_store().deref(),
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
+                authority.transaction_manager(),
+                authority.db(),
             )
             .await
             .unwrap();

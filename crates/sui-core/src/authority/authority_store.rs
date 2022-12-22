@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, ExecutionIndicesWithHash,
-};
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use arc_swap::ArcSwap;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;

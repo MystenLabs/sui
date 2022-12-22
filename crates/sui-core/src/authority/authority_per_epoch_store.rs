@@ -38,6 +38,7 @@ use crate::consensus_handler::{
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
+use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -899,11 +900,32 @@ impl AuthorityPerEpochStore {
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
+    /// The transaction passed here went through verification in verify_consensus_transaction.
+    /// This method is called in the exact sequence message are ordered in consensus.
+    /// Errors returned by this call are treated as critical errors and cause node to panic.
+    pub async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
+        &self,
+        transaction: VerifiedSequencedConsensusTransaction,
+        checkpoint_service: &Arc<C>,
+        transaction_manager: &Arc<TransactionManager>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult {
+        if let Some(certificate) = self
+            .process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
+            .await?
+        {
+            // The certificate has already been inserted into the pending_certificates table by
+            // process_consensus_transaction() above.
+            transaction_manager.enqueue(vec![certificate]).await?;
+        }
+        Ok(())
+    }
+
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
     /// - Verify and initialize the state to execute the certificate.
     ///   Returns a VerifiedCertificate only if this succeeds.
     /// - Or update the state for checkpoint or epoch change protocol. Returns None.
-    pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
+    pub async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
