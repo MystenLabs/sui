@@ -20,7 +20,6 @@ use prometheus::{
     IntCounterVec, IntGauge, Registry,
 };
 use serde::de::DeserializeOwned;
-use std::cmp::Ordering as CmpOrdering;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;

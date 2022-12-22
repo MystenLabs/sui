@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use jsonrpsee::core::RpcResult;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::api::GovernanceReadApiServer;
@@ -13,7 +14,7 @@ use sui_core::authority::AuthorityState;
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
-use sui_types::governance::{Delegation, PendingDelegation, StakedSui};
+use sui_types::governance::{DelegatedStake, Delegation, DelegationStatus, StakedSui};
 use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
@@ -25,63 +26,58 @@ impl GovernanceReadApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
     }
+
+    async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
+        Ok(self
+            .state
+            .get_move_objects(owner, &StakedSui::type_())
+            .await?)
+    }
+    async fn get_delegations(&self, owner: SuiAddress) -> Result<Vec<Delegation>, Error> {
+        Ok(self
+            .state
+            .get_move_objects(owner, &Delegation::type_())
+            .await?)
+    }
 }
 
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApi {
-    async fn get_staked_sui(&self, owner: SuiAddress) -> RpcResult<Vec<StakedSui>> {
-        Ok(self
-            .state
-            .get_move_objects(owner, &StakedSui::type_())
-            .await
-            .map_err(Error::from)?)
-    }
-    async fn get_delegations(&self, owner: SuiAddress) -> RpcResult<Vec<Delegation>> {
-        Ok(self
-            .state
-            .get_move_objects(owner, &Delegation::type_())
-            .await
-            .map_err(Error::from)?)
-    }
+    async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
+        let delegation = self
+            .get_delegations(owner)
+            .await?
+            .into_iter()
+            .map(|d| (d.staked_sui_id.bytes, d))
+            .collect::<HashMap<_, _>>();
 
-    async fn get_pending_delegations(
-        &self,
-        owner: SuiAddress,
-    ) -> RpcResult<Vec<PendingDelegation>> {
-        let system_state: SuiSystemState = self.get_sui_system_state().await?;
-        let validators = system_state
-            .validators
-            .pending_validators
-            .iter()
-            .chain(system_state.validators.active_validators.iter());
-        Ok(validators
-            .flat_map(|v| {
-                v.delegation_staking_pool
-                    .pending_delegations
-                    .iter()
-                    .filter_map(|d| {
-                        if d.delegator == owner {
-                            Some(PendingDelegation {
-                                validator_address: v.metadata.sui_address,
-                                pool_starting_epoch: v.delegation_staking_pool.starting_epoch,
-                                principal_sui_amount: d.sui_amount,
-                            })
-                        } else {
-                            None
-                        }
-                    })
+        Ok(self
+            .get_staked_sui(owner)
+            .await?
+            .into_iter()
+            .map(|staked_sui| {
+                let id = staked_sui.id();
+                DelegatedStake {
+                    staked_sui,
+                    delegation_status: delegation
+                        .get(&id)
+                        .cloned()
+                        .map_or(DelegationStatus::Pending, DelegationStatus::Active),
+                }
             })
-            .collect::<Vec<_>>())
+            .collect())
     }
 
-    async fn next_epoch_validators(&self) -> RpcResult<Vec<ValidatorMetadata>> {
+    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>> {
+        // TODO: include pending validators as well when the necessary changes are made in move.
         Ok(self
-            .state
-            .get_sui_system_state_object()
-            .await
-            .map_err(Error::from)?
+            .get_sui_system_state()
+            .await?
             .validators
-            .next_epoch_validators)
+            .active_validators
+            .into_iter()
+            .map(|v| v.metadata)
+            .collect())
     }
 
     async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<CommitteeInfoResponse> {
@@ -95,7 +91,6 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         Ok(self
             .state
             .get_sui_system_state_object()
-            .await
             .map_err(Error::from)?)
     }
 }

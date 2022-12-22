@@ -8,7 +8,7 @@ use move_core_types::language_storage::StructTag;
 use crate::balance::Balance;
 use crate::base_types::{ObjectID, SuiAddress};
 use crate::committee::EpochId;
-use crate::id::UID;
+use crate::id::{ID, UID};
 use crate::SUI_FRAMEWORK_ADDRESS;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -28,17 +28,9 @@ pub const SWITCH_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_switch_del
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct Delegation {
-    id: UID,
-    validator_address: SuiAddress,
-    pool_starting_epoch: EpochId,
-    pool_tokens: Balance,
-    principal_sui_amount: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-pub struct PendingDelegation {
-    pub validator_address: SuiAddress,
-    pub pool_starting_epoch: EpochId,
+    pub id: UID,
+    pub staked_sui_id: ID,
+    pub pool_tokens: Balance,
     pub principal_sui_amount: u64,
 }
 
@@ -56,8 +48,11 @@ impl Delegation {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakedSui {
     id: UID,
+    validator_address: SuiAddress,
+    pool_starting_epoch: u64,
+    delegation_request_epoch: u64,
     principal: Balance,
-    locked_until_epoch: Option<EpochId>,
+    sui_token_lock: Option<EpochId>,
 }
 
 impl StakedSui {
@@ -78,7 +73,19 @@ impl StakedSui {
         self.principal.value()
     }
 
-    pub fn locked_until_epoch(&self) -> Option<EpochId> {
-        self.locked_until_epoch
+    pub fn sui_token_lock(&self) -> Option<EpochId> {
+        self.sui_token_lock
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+pub struct DelegatedStake {
+    pub staked_sui: StakedSui,
+    pub delegation_status: DelegationStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+pub enum DelegationStatus {
+    Pending,
+    Active(Delegation),
 }

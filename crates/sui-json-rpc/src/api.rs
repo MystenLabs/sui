@@ -25,7 +25,7 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
-use sui_types::governance::{Delegation, PendingDelegation, StakedSui};
+use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -286,22 +286,13 @@ pub trait RpcFullNodeReadApi {
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait GovernanceReadApi {
-    /// Return all [StakedSui] owned by the `owner` address.
-    #[method(name = "getStakedSui")]
-    async fn get_staked_sui(&self, owner: SuiAddress) -> RpcResult<Vec<StakedSui>>;
+    /// Return all [DelegatedStake].
+    #[method(name = "getDelegatedStakes")]
+    async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
 
-    /// Return all [Delegation] owned by the `owner` address.
-    #[method(name = "getDelegations")]
-    async fn get_delegations(&self, owner: SuiAddress) -> RpcResult<Vec<Delegation>>;
-
-    /// Return all [Delegation] owned by the `owner` address.
-    #[method(name = "getPendingDelegations")]
-    async fn get_pending_delegations(&self, owner: SuiAddress)
-        -> RpcResult<Vec<PendingDelegation>>;
-
-    /// Return all validators scheduled for next epoch.
-    #[method(name = "nextEpochValidators")]
-    async fn next_epoch_validators(&self) -> RpcResult<Vec<ValidatorMetadata>>;
+    /// Return all validators available for stake delegation.
+    #[method(name = "getValidators")]
+    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>>;
 
     /// Return the committee information for the asked `epoch`.
     #[method(name = "getCommitteeInfo")]
@@ -555,7 +546,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    // Switch delegation from the current validator to a new one.
+    /// Switch delegation from the current validator to a new one.
     #[method(name = "requestSwitchDelegation")]
     async fn request_switch_delegation(
         &self,

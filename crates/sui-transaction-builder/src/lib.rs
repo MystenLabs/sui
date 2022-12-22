@@ -701,9 +701,9 @@ impl TransactionBuilder {
         let object_type = object
             .data
             .type_()
-            .map(|type_| parse_sui_struct_tag(type_))
+            .map(parse_sui_struct_tag)
             .transpose()?
-            .map_or(ObjectType::Package, |type_| ObjectType::Struct(type_));
+            .map_or(ObjectType::Package, ObjectType::Struct);
 
         Ok((object.reference.to_object_ref(), object_type))
     }
