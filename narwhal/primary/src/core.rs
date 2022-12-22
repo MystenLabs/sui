@@ -483,9 +483,8 @@ impl Core {
             .with_label_values(&[&epoch.to_string()])
             .observe(header_to_certificate_duration);
 
-        #[cfg(feature = "benchmark")]
         // NOTE: This log entry is used to compute performance.
-        tracing::info!(
+        debug!(
             "Header {:?} took {} seconds to be materialized to a certificate {:?}",
             certificate.header.digest(),
             header_to_certificate_duration,
