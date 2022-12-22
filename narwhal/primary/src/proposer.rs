@@ -241,9 +241,11 @@ impl Proposer {
         self.proposed_headers.insert(this_round, header.clone());
 
         // Update metrics related to latency
+        let mut total_inclusion_duration = 0.0;
         for (_digest, _worker_id, created_at_timestamp) in digests.clone() {
             let batch_inclusion_duration =
                 Duration::from_millis(header.created_at - created_at_timestamp).as_secs_f64();
+            total_inclusion_duration += batch_inclusion_duration;
 
             #[cfg(feature = "benchmark")]
             {
@@ -261,12 +263,13 @@ impl Proposer {
                 .observe(batch_inclusion_duration);
         }
 
-        #[cfg(feature = "benchmark")]
         // NOTE: This log entry is used to compute performance.
-        tracing::info!(
-            "Header {:?} was created in {} seconds",
+        debug!(
+            "Header {:?} was created in {} seconds. Contains {} batches, with average delay {} seconds.",
             header.digest(),
-            Duration::from_millis(header.created_at - digests.first().unwrap().2).as_secs_f64()
+            Duration::from_millis(header.created_at - digests.first().unwrap().2).as_secs_f64(),
+            digests.len(),
+            total_inclusion_duration / digests.len() as f64,
         );
 
         Ok(header)
