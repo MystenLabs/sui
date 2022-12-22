@@ -92,7 +92,7 @@ impl KeyToolCommand {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
                 match res {
                     Ok(keypair) => {
-                        println!("Public Key: {}", Base64::encode(keypair.public()));
+                        println!("Public Key: {}", keypair.public().encode_base64());
                         println!("Flag: {}", keypair.public().flag());
                     }
                     Err(e) => {
@@ -114,7 +114,7 @@ impl KeyToolCommand {
                     println!(
                         " {0: ^42} | {1: ^45} | {2: ^6}",
                         Into::<SuiAddress>::into(&pub_key),
-                        Base64::encode(&pub_key),
+                        pub_key.encode_base64(),
                         pub_key.scheme().to_string()
                     );
                 }

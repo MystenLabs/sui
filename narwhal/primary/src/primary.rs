@@ -288,8 +288,9 @@ impl Primary {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set a default timeout of 30s for all outbound RPC requests
-            config.outbound_request_timeout_ms = Some(30_000);
+            // Set a default timeout of 300s for all RPC requests
+            config.inbound_request_timeout_ms = Some(300_000);
+            config.outbound_request_timeout_ms = Some(300_000);
             config
         };
 
@@ -901,6 +902,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                     match e {
                         // Report unretriable errors as 400 Bad Request.
                         DagError::InvalidSignature
+                        | DagError::InvalidEpoch { .. }
                         | DagError::InvalidHeaderDigest
                         | DagError::HeaderHasBadWorkerIds(_)
                         | DagError::HeaderHasInvalidParentRoundNumbers(_)

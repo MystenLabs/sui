@@ -14,13 +14,12 @@ AccountAddress:
       SIZE: 20
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
-BLS12381KeyPair:
-  STRUCT:
-    - name: STR
-    - secret: STR
 BLS12381Signature:
   STRUCT:
-    - sig: BYTES
+    - sig:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
 CallArg:
   ENUM:
     0:
@@ -64,10 +63,6 @@ DeleteKind:
       UnwrapThenDelete: UNIT
     2:
       Wrap: UNIT
-Ed25519KeyPair:
-  STRUCT:
-    - name: STR
-    - secret: STR
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8
