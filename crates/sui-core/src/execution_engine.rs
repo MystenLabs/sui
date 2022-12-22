@@ -7,10 +7,11 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::execution_mode::{self, ExecutionMode};
 use sui_types::base_types::{ObjectDigest, SequenceNumber};
+use sui_types::crypto::sha3_hash;
 use tracing::{debug, instrument};
 
 use sui_adapter::adapter;
-use sui_protocol_constants::STORAGE_FUND_REINVEST_RATE;
+use sui_protocol_constants::{MAX_TX_GAS, STORAGE_FUND_REINVEST_RATE};
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
@@ -21,7 +22,7 @@ use sui_types::id::UID;
 use sui_types::messages::ExecutionFailureStatus;
 #[cfg(test)]
 use sui_types::messages::InputObjects;
-use sui_types::messages::{ObjectArg, Pay, PayAllSui, PaySui};
+use sui_types::messages::{ObjectArg, Pay, PayAllSui, PaySui, TransactionKind};
 use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
@@ -640,6 +641,25 @@ fn transfer_sui<S>(
     Ok(())
 }
 
+const FAKE_GAS_OBJECT: ObjectRef = (
+    ObjectID::ZERO,
+    SequenceNumber::from_u64(0),
+    ObjectDigest::MIN,
+);
+
+pub(crate) fn manual_execute_move_call_fake_txn_digest(
+    sender: SuiAddress,
+    move_call: MoveCall,
+) -> TransactionDigest {
+    let txn_data = TransactionData::new(
+        TransactionKind::Single(SingleTransactionKind::Call(move_call)),
+        sender,
+        FAKE_GAS_OBJECT,
+        MAX_TX_GAS,
+    );
+    TransactionDigest::new(sha3_hash(&txn_data))
+}
+
 pub(crate) fn manual_execute_move_call<
     Mode: ExecutionMode,
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
@@ -694,7 +714,7 @@ pub(crate) fn manual_execute_move_call<
         transaction_dependencies.into_iter().collect(),
         gas_cost_summary,
         status,
-        (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
+        FAKE_GAS_OBJECT,
     );
     (effects, execution_result)
 }

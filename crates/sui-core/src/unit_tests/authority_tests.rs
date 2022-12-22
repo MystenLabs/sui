@@ -3534,10 +3534,7 @@ pub async fn call_dev_inspect_move_call(
         type_arguments,
         arguments,
     };
-    let transaction_digest = TransactionDigest::random();
-    authority
-        .dev_inspect_move_call(sender, move_call, transaction_digest)
-        .await
+    authority.dev_inspect_move_call(sender, move_call).await
 }
 
 #[cfg(test)]

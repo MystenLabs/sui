@@ -1010,7 +1010,6 @@ impl AuthorityState {
         &self,
         sender: SuiAddress,
         move_call: MoveCall,
-        transaction_digest: TransactionDigest,
     ) -> Result<DevInspectResults, anyhow::Error> {
         let input_objects = move_call.input_objects();
         let input_objects = transaction_input_checker::check_dev_inspect_input_objects(
@@ -1020,6 +1019,8 @@ impl AuthorityState {
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
+        let transaction_digest =
+            execution_engine::manual_execute_move_call_fake_txn_digest(sender, move_call.clone());
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
         let storage_gas_price = self
