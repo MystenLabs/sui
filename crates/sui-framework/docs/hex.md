@@ -8,6 +8,8 @@ HEX (Base16) encoding utility.
 
 -  [Constants](#@Constants_0)
 -  [Function `encode`](#0x2_hex_encode)
+-  [Function `decode`](#0x2_hex_decode)
+-  [Function `decode_byte`](#0x2_hex_decode_byte)
 -  [Module Specification](#@Module_Specification_1)
 
 
@@ -19,6 +21,24 @@ HEX (Base16) encoding utility.
 <a name="@Constants_0"></a>
 
 ## Constants
+
+
+<a name="0x2_hex_EInvalidHexLength"></a>
+
+
+
+<pre><code><b>const</b> <a href="hex.md#0x2_hex_EInvalidHexLength">EInvalidHexLength</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_hex_ENotValidHexCharacter"></a>
+
+
+
+<pre><code><b>const</b> <a href="hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>: u64 = 1;
+</code></pre>
+
 
 
 <a name="0x2_hex_HEX"></a>
@@ -57,6 +77,76 @@ Encode <code>bytes</code> in lowercase hex
         i = i + 1;
     };
     r
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_hex_decode"></a>
+
+## Function `decode`
+
+Decode hex into <code>bytes</code>
+Takes a hex string (no 0x prefix) (e.g. b"0f3a")
+Returns vector of <code>bytes</code> that represents the hex string (e.g. x"0f3a")
+Hex string can be case insensitive (e.g. b"0F3A" and b"0f3a" both return x"0f3a")
+Aborts if the hex string does not have an even number of characters (as each hex charater is 2 characters long)
+Aborts if the hex string contains non-valid hex characters (valid charaters are 0 - 9, a - f, A - F)
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="hex.md#0x2_hex_decode">decode</a>(<a href="hex.md#0x2_hex">hex</a>: <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="hex.md#0x2_hex_decode">decode</a>(<a href="hex.md#0x2_hex">hex</a>: <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt; {
+    <b>let</b> (i, r, l) = (0, <a href="">vector</a>[], <a href="_length">vector::length</a>(&<a href="hex.md#0x2_hex">hex</a>));
+    <b>assert</b>!(l % 2 == 0, <a href="hex.md#0x2_hex_EInvalidHexLength">EInvalidHexLength</a>);
+    <b>while</b> (i &lt; l) {
+        <b>let</b> decimal = (<a href="hex.md#0x2_hex_decode_byte">decode_byte</a>(*<a href="_borrow">vector::borrow</a>(&<a href="hex.md#0x2_hex">hex</a>, i)) * 16) +
+                      <a href="hex.md#0x2_hex_decode_byte">decode_byte</a>(*<a href="_borrow">vector::borrow</a>(&<a href="hex.md#0x2_hex">hex</a>, i + 1));
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> r, decimal);
+        i = i + 2;
+    };
+    r
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_hex_decode_byte"></a>
+
+## Function `decode_byte`
+
+
+
+<pre><code><b>fun</b> <a href="hex.md#0x2_hex_decode_byte">decode_byte</a>(<a href="hex.md#0x2_hex">hex</a>: u8): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="hex.md#0x2_hex_decode_byte">decode_byte</a>(<a href="hex.md#0x2_hex">hex</a>: u8): u8 {
+    <b>if</b> (/* 0 .. 9 */ 48 &lt;= <a href="hex.md#0x2_hex">hex</a> && <a href="hex.md#0x2_hex">hex</a> &lt; 58) {
+        <a href="hex.md#0x2_hex">hex</a> - 48
+    } <b>else</b> <b>if</b> (/* A .. F */ 65 &lt;= <a href="hex.md#0x2_hex">hex</a> && <a href="hex.md#0x2_hex">hex</a> &lt; 71) {
+        10 + <a href="hex.md#0x2_hex">hex</a> - 65
+    } <b>else</b> <b>if</b> (/* a .. f */ 97 &lt;= <a href="hex.md#0x2_hex">hex</a> && <a href="hex.md#0x2_hex">hex</a> &lt; 103) {
+        10 + <a href="hex.md#0x2_hex">hex</a> - 97
+    } <b>else</b> {
+        <b>abort</b> <a href="hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>
+    }
 }
 </code></pre>
 
