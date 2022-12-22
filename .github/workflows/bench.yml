@@ -77,6 +77,7 @@ jobs:
     - name: Retrieve benchmark results
       id: get-comment-body
       run: |
+        set -o pipefail
         delimiter="$(openssl rand -hex 8)"
 
         owned="$(cat artifacts/owned.txt | grep -e 'Benchmark Report:' -A 1000)"
