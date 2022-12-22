@@ -12,29 +12,8 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
-AuthorityBatch:
-  STRUCT:
-    - next_sequence_number: U64
-    - initial_sequence_number: U64
-    - size: U64
-    - previous_digest:
-        OPTION:
-          TUPLEARRAY:
-            CONTENT: U8
-            SIZE: 32
-    - transactions_digest:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 32
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
-AuthoritySignInfo:
-  STRUCT:
-    - epoch: U64
-    - authority:
-        TYPENAME: AuthorityPublicKeyBytes
-    - signature:
-        TYPENAME: BLS12381Signature
 BLS12381KeyPair:
   STRUCT:
     - name: STR
@@ -123,18 +102,6 @@ EntryTypeArgumentErrorKind:
       ArityMismatch: UNIT
     3:
       ConstraintNotSatisfied: UNIT
-Envelope:
-  STRUCT:
-    - data:
-        TYPENAME: AuthorityBatch
-    - auth_signature:
-        TYPENAME: AuthoritySignInfo
-ExecutionDigests:
-  STRUCT:
-    - transaction:
-        TYPENAME: TransactionDigest
-    - effects:
-        TYPENAME: TransactionEffectsDigest
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -584,16 +551,4 @@ TypedStoreError:
       CrossDBBatch: UNIT
     4:
       MetricsReporting: UNIT
-UpdateItem:
-  ENUM:
-    0:
-      Transaction:
-        NEWTYPE:
-          TUPLE:
-            - U64
-            - TYPENAME: ExecutionDigests
-    1:
-      Batch:
-        NEWTYPE:
-          TYPENAME: Envelope
 

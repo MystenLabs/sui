@@ -4,7 +4,6 @@
 pub mod authority;
 pub mod authority_active;
 pub mod authority_aggregator;
-pub mod authority_batch;
 pub mod authority_client;
 pub mod authority_server;
 pub mod checkpoints;
@@ -20,7 +19,6 @@ pub mod metrics;
 mod module_cache_gauge;
 pub mod narwhal_manager;
 mod notify_once;
-mod query_helpers;
 pub mod quorum_driver;
 pub mod safe_client;
 mod stake_aggregator;

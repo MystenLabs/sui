@@ -7,6 +7,7 @@ use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
+    test_utils::init_state_parameters_from_rng,
 };
 use bcs;
 use move_binary_format::{
@@ -2218,11 +2219,34 @@ async fn test_account_state_unknown_account() {
 
 #[tokio::test]
 async fn test_authority_persist() {
+    async fn init_state(
+        committee: Committee,
+        authority_key: AuthorityKeyPair,
+        store: Arc<AuthorityStore>,
+    ) -> Arc<AuthorityState> {
+        let name = authority_key.public().into();
+        let secrete = Arc::pin(authority_key);
+        let dir = env::temp_dir();
+        let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
+        fs::create_dir(&epoch_path).unwrap();
+        let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
+
+        AuthorityState::new(
+            name,
+            secrete,
+            store,
+            committee_store,
+            None,
+            None,
+            None,
+            &prometheus::Registry::new(),
+        )
+        .await
+    }
+
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
-        crate::authority_batch::batch_tests::init_state_parameters_from_rng(
-            &mut StdRng::from_seed(seed),
-        );
+        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -2240,8 +2264,7 @@ async fn test_authority_persist() {
         .await
         .unwrap(),
     );
-    let authority =
-        crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
+    let authority = init_state(committee, authority_key, store).await;
 
     // Create an object
     let recipient = dbg_addr(2);
@@ -2261,9 +2284,7 @@ async fn test_authority_persist() {
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
-        crate::authority_batch::batch_tests::init_state_parameters_from_rng(
-            &mut StdRng::from_seed(seed),
-        );
+        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
         AuthorityStore::open_with_committee_for_testing(
             &path,
@@ -2274,8 +2295,7 @@ async fn test_authority_persist() {
         .await
         .unwrap(),
     );
-    let authority2 =
-        crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
+    let authority2 = init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present

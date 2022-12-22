@@ -6,7 +6,6 @@ use crate::authority::AuthorityState;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::traits::ToFromBytes;
-use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::config::Config;
@@ -58,11 +57,6 @@ pub trait AuthorityAPI {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
-    async fn handle_batch_stream(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, SuiError>;
-
     async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
@@ -73,8 +67,6 @@ pub trait AuthorityAPI {
         request: CommitteeInfoRequest,
     ) -> Result<CommitteeInfoResponse, SuiError>;
 }
-
-pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
@@ -164,21 +156,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
-    }
-
-    /// Handle Batch information requests for this authority.
-    async fn handle_batch_stream(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        let stream = self
-            .client()
-            .batch_info(request)
-            .await
-            .map(tonic::Response::into_inner)?
-            .map_err(Into::into);
-
-        Ok(Box::pin(stream))
     }
 
     /// Handle Object information requests for this account.
@@ -356,17 +333,6 @@ impl AuthorityAPI for LocalAuthorityClient {
             .handle_transaction_info_request(request)
             .await
             .map(|r| r.into())
-    }
-
-    /// Handle Batch information requests for this authority.
-    async fn handle_batch_stream(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        let state = self.state.clone();
-
-        let update_items = state.handle_batch_streaming(request).await?;
-        Ok(Box::pin(update_items))
     }
 
     async fn handle_checkpoint(

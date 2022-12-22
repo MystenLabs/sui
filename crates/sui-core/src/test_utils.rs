@@ -15,7 +15,6 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
-use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
@@ -25,9 +24,12 @@ use sui_types::messages::{TransactionData, VerifiedTransaction};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName, ExecutionDigests, TransactionDigest},
+    base_types::{
+        random_object_ref, AuthorityName, ExecutionDigests, ObjectRef, SuiAddress,
+        TransactionDigest,
+    },
     committee::Committee,
-    crypto::{AuthoritySignInfo, AuthoritySignature},
+    crypto::{get_key_pair_from_rng, AuthoritySignInfo, AuthoritySignature},
     gas::GasCostSummary,
     message_envelope::Message,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
@@ -39,6 +41,26 @@ use tracing::{info, warn};
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
+
+// note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
+// adding #[cfg(test)] causes other targets to fail
+#[allow(dead_code)]
+pub(crate) fn init_state_parameters_from_rng<R>(
+    rng: &mut R,
+) -> (Committee, SuiAddress, AuthorityKeyPair)
+where
+    R: rand::CryptoRng + rand::RngCore,
+{
+    let (authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair_from_rng(rng);
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    authorities.insert(
+        /* address */ authority_key.public().into(),
+        /* voting right */ 1,
+    );
+    let committee = Committee::new(0, authorities).unwrap();
+
+    (committee, authority_address, authority_key)
+}
 
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(

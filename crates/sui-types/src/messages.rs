@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
@@ -1003,23 +1003,6 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
 }
-
-/// An information Request for batches, and their associated transactions
-///
-/// This reads historic data and sends the batch and transactions in the
-/// database starting at the batch that includes `start`,
-/// and then listens to new transactions until a batch equal or
-/// is over the batch end marker.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct BatchInfoRequest {
-    // The sequence number at which to start the sequence to return, or None for the latest.
-    pub start: Option<TxSequenceNumber>,
-    // The total number of items to receive. Could receive a bit more or a bit less.
-    pub length: u64,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct BatchInfoResponseItem(pub UpdateItem);
 
 /// Subscribe to notifications when new checkpoint certificates are available.
 ///

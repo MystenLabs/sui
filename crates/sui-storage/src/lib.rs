@@ -5,7 +5,7 @@ pub mod lock_service;
 pub use lock_service::LockService;
 
 pub mod indexes;
-pub use indexes::IndexStore;
+pub use indexes::{IndexStore, IndexStoreTables};
 
 pub mod event_store;
 pub mod mutex_table;

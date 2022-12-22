@@ -18,7 +18,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
@@ -88,8 +88,6 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_components: ArcSwapOption<ValidatorComponents>,
     _json_rpc_service: Option<ServerHandle>,
-    _batch_subsystem_handle: tokio::task::JoinHandle<()>,
-    _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -154,17 +152,20 @@ impl SuiNode {
         let index_store = if is_validator {
             None
         } else {
-            Some(Arc::new(IndexStore::open_tables_read_write(
-                config.db_path().join("indexes"),
-                None,
-                None,
-            )))
+            Some(Arc::new(IndexStore::new(config.db_path().join("indexes"))))
         };
 
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
             let db = SqlEventStore::new_from_file(&path).await?;
             db.initialize().await?;
+
+            if index_store.is_none() {
+                return Err(anyhow!(
+                    "event storage requires that IndexStore be enabled as well"
+                ));
+            }
+
             Some(Arc::new(EventStoreType::SqlEventStore(db)))
         } else {
             None
@@ -205,11 +206,7 @@ impl SuiNode {
         )
         .start()?;
 
-        let active_authority = Arc::new(ActiveAuthority::new(
-            state.clone(),
-            net.clone(),
-            &prometheus_registry,
-        )?);
+        let active_authority = Arc::new(ActiveAuthority::new(state.clone(), net.clone())?);
 
         let arc_net = active_authority.agg_aggregator();
 
@@ -223,29 +220,6 @@ impl SuiNode {
         } else {
             None
         };
-
-        let batch_subsystem_handle = {
-            // Start batch system so that this node can be followed
-            let batch_state = state.clone();
-            spawn_monitored_task!(async move {
-                batch_state
-                    .run_batch_service(1000, Duration::from_secs(1))
-                    .await
-            })
-        };
-
-        let post_processing_subsystem_handle =
-            if index_store.is_some() || config.enable_event_processing {
-                let indexing_state = state.clone();
-                Some(spawn_monitored_task!(async move {
-                    indexing_state
-                        .run_tx_post_processing_process()
-                        .await
-                        .map_err(Into::into)
-                }))
-            } else {
-                None
-            };
 
         let json_rpc_service = build_server(
             state.clone(),
@@ -274,8 +248,6 @@ impl SuiNode {
             config: config.clone(),
             validator_components: ArcSwapOption::new(validator_components),
             _json_rpc_service: json_rpc_service,
-            _batch_subsystem_handle: batch_subsystem_handle,
-            _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
             active: active_authority,
             transaction_orchestrator,
