@@ -632,11 +632,14 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn finish_consensus_transaction_process(
+    pub fn record_consensus_transaction_processed(
         &self,
-        key: ConsensusTransactionKey,
+        transaction: &ConsensusTransaction,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult {
+    ) -> Result<(), SuiError> {
+        // user certificates need to use record_(shared|owned)_object_cert_from_consensus
+        assert!(!transaction.is_user_certificate());
+        let key = transaction.key();
         let write_batch = self.tables.last_consensus_index.batch();
         self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }

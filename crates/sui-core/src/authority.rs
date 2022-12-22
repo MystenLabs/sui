@@ -2329,16 +2329,17 @@ impl AuthorityState {
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
                 checkpoint_service.notify_checkpoint_signature(info)?;
-                self.database
-                    .record_consensus_transaction_processed(&transaction, consensus_index)
-                    .await?;
+                epoch_store
+                    .record_consensus_transaction_processed(&transaction, consensus_index)?;
                 Ok(None)
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 debug!("Received EndOfPublish from {:?}", authority.concise());
-                self.database
-                    .record_end_of_publish(*authority, &transaction, consensus_index)
-                    .await?;
+                epoch_store.record_end_of_publish(
+                    *authority,
+                    transaction.key(),
+                    consensus_index,
+                )?;
                 Ok(None)
             }
         }
