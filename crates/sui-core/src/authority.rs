@@ -673,7 +673,7 @@ impl AuthorityState {
 
     #[instrument(level = "trace", skip_all)]
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.database.check_owned_locks(owned_object_refs).await
+        self.database.check_locks_exist(owned_object_refs)
     }
 
     #[instrument(level = "trace", skip_all)]
