@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
+use sui_protocol_constants::MAX_TX_GAS;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{debug, error, instrument, warn, Instrument};
@@ -50,7 +51,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
-use sui_types::gas::GasCostSummary;
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -1002,6 +1003,47 @@ impl AuthorityState {
                 gas_status,
                 self.epoch(),
             );
+        DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
+    }
+
+    pub async fn dev_inspect_move_call(
+        &self,
+        sender: SuiAddress,
+        move_call: MoveCall,
+    ) -> Result<DevInspectResults, anyhow::Error> {
+        let input_objects = move_call.input_objects();
+        let input_objects = transaction_input_checker::check_dev_inspect_input_objects(
+            &self.database,
+            input_objects,
+        )?;
+        let shared_object_refs = input_objects.filter_shared_objects();
+
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let transaction_digest =
+            execution_engine::manual_execute_move_call_fake_txn_digest(sender, move_call.clone());
+        let temporary_store =
+            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+        let storage_gas_price = self
+            .database
+            .get_sui_system_state_object()?
+            .parameters
+            .storage_gas_price
+            .into();
+        let gas_status =
+            SuiGasStatus::new_with_budget(MAX_TX_GAS, storage_gas_price, storage_gas_price);
+        let (effects, execution_result) =
+            execution_engine::manual_execute_move_call::<execution_mode::DevInspect, _>(
+                shared_object_refs,
+                temporary_store,
+                sender,
+                move_call,
+                transaction_digest,
+                transaction_dependencies,
+                &self.move_vm,
+                gas_status,
+                self.epoch(),
+            );
+
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
     }
 

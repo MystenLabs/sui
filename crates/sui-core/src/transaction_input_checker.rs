@@ -66,6 +66,17 @@ pub(crate) async fn check_dev_inspect_input(
     transaction.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
+    let input_objects = check_dev_inspect_input_objects(store, input_objects)?;
+    Ok((gas_status, input_objects))
+}
+
+#[instrument(level = "trace", skip_all)]
+/// WARNING! This should only be used for the dev-inspect transaction. This transaction type
+/// bypasses many of the normal object checks
+pub(crate) fn check_dev_inspect_input_objects(
+    store: &AuthorityStore,
+    input_objects: Vec<InputObjectKind>,
+) -> SuiResult<InputObjects> {
     let objects = store.check_input_objects(&input_objects)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
@@ -78,8 +89,9 @@ pub(crate) async fn check_dev_inspect_input(
             );
         }
     }
-    let input_objects = InputObjects::new(input_objects.into_iter().zip(objects).collect());
-    Ok((gas_status, input_objects))
+    Ok(InputObjects::new(
+        input_objects.into_iter().zip(objects).collect(),
+    ))
 }
 
 pub async fn check_certificate_input(
