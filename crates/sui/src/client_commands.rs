@@ -23,7 +23,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_framework::build_move_package;
-use sui_source_validation::BytecodeSourceVerifier;
+use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -137,7 +137,7 @@ pub enum SuiClientCommands {
         verify_dependencies: bool,
     },
 
-    /// Verify the local Move modules against on-chain modules. By default, dependencies are verified
+    /// Verify local Move packages against on-chain packages, and optionally their dependencies.
     #[clap(name = "verify-source")]
     VerifySource {
         /// Path to directory containing a Move package
@@ -153,13 +153,18 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// Do not verify on-chain dependencies.
+        /// Verify on-chain dependencies.
         #[clap(long)]
-        no_deps: bool,
+        verify_deps: bool,
 
-        /// If specified, the root is verified against the package at this address.
+        /// Don't verify source (only valid if --verify-deps is enabled).
         #[clap(long)]
-        addr: Option<ObjectID>,
+        skip_source: bool,
+
+        /// If specified, override the addresses for the package's own modules with this address.
+        /// Only works for unpublished modules (whose addresses are currently 0x0).
+        #[clap(long)]
+        address_override: Option<ObjectID>,
     },
 
     /// Call Move function
@@ -945,9 +950,16 @@ impl SuiClientCommands {
             SuiClientCommands::VerifySource {
                 package_path,
                 build_config,
-                no_deps,
-                addr,
+                verify_deps,
+                skip_source,
+                address_override,
             } => {
+                if skip_source && !verify_deps {
+                    return Err(anyhow!(
+                        "Source skipped and not verifying deps: Nothing to verify."
+                    ));
+                }
+
                 let compiled_package = build_move_package(
                     &package_path,
                     BuildConfig {
@@ -958,15 +970,20 @@ impl SuiClientCommands {
                 )?;
 
                 let client = context.get_client().await?;
-                SuiClientCommandResult::VerifySource(
-                    match BytecodeSourceVerifier::new(client.read_api(), false)
-                        .verify_package(&compiled_package.package, !no_deps, addr.map(|q| q.into()))
-                        .await
-                    {
-                        Ok(_) => "Ok".to_string(),
-                        Err(e) => format!("{}", e).red().to_string(),
-                    },
-                )
+
+                BytecodeSourceVerifier::new(client.read_api(), false)
+                    .verify_package(
+                        &compiled_package.package,
+                        verify_deps,
+                        match (skip_source, address_override) {
+                            (true, _) => SourceMode::Skip,
+                            (false, None) => SourceMode::Verify,
+                            (false, Some(addr)) => SourceMode::VerifyAt(addr.into()),
+                        },
+                    )
+                    .await?;
+
+                SuiClientCommandResult::VerifySource
             }
         });
         ret
@@ -1318,9 +1335,8 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer)?;
                 }
             }
-            SuiClientCommandResult::VerifySource(res) => {
-                write!(writer, "{}", res)?;
-                writeln!(writer)?;
+            SuiClientCommandResult::VerifySource => {
+                writeln!(writer, "Source verification succeeded!")?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -1436,7 +1452,7 @@ impl SuiClientCommandResult {
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
-    VerifySource(String),
+    VerifySource,
     Object(GetObjectDataResponse, bool),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(

@@ -51,6 +51,19 @@ pub enum SourceVerificationError {
     InvalidModuleFailure { name: String, message: String },
 }
 
+/// How to handle package source during bytecode verification.
+#[derive(PartialEq, Eq)]
+pub enum SourceMode {
+    /// Don't verify source.
+    Skip,
+
+    /// Verify source at the address specified in its manifest.
+    Verify,
+
+    /// Verify source at an overridden address (only works if the package is not published)
+    VerifyAt(AccountAddress),
+}
+
 pub struct BytecodeSourceVerifier<'a> {
     pub verbose: bool,
     rpc_client: &'a ReadApi,
@@ -78,7 +91,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         self.verify_package(
             compiled_package,
             /* verify_deps */ true,
-            Some(root_on_chain_address),
+            SourceMode::VerifyAt(root_on_chain_address),
         )
         .await
     }
@@ -92,8 +105,8 @@ impl<'a> BytecodeSourceVerifier<'a> {
     ) -> Result<(), SourceVerificationError> {
         self.verify_package(
             compiled_package,
-            /* do not verify_deps */ false,
-            Some(root_on_chain_address),
+            /* verify_deps */ false,
+            SourceMode::VerifyAt(root_on_chain_address),
         )
         .await
     }
@@ -104,33 +117,36 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &self,
         compiled_package: &CompiledPackage,
     ) -> Result<(), SourceVerificationError> {
-        self.verify_package(compiled_package, /* verify_deps */ true, None)
-            .await
+        self.verify_package(
+            compiled_package,
+            /* verify_deps */ true,
+            SourceMode::Skip,
+        )
+        .await
     }
 
-    /// Verify that all local Move package dependencies' and/or root bytecode matches
-    /// the bytecode at the address specified on the Sui network we are publishing to.
-    /// If `verify_deps` is true, the dependencies are verified
-    /// If `root_on_chain_address` is specified, the root is verified against a package at `root_on_chain_address`
+    /// Verify that all local Move package dependencies' and/or root bytecode matches the bytecode
+    /// at the address specified on the Sui network we are publishing to.  If `verify_deps` is true,
+    /// the dependencies are verified.  If `root_on_chain_address` is specified, the root is
+    /// verified against a package at `root_on_chain_address`.
     pub async fn verify_package(
         &self,
         compiled_package: &CompiledPackage,
         verify_deps: bool,
-        root_on_chain_address: Option<AccountAddress>,
+        source_mode: SourceMode,
     ) -> Result<(), SourceVerificationError> {
         // On-chain address for matching root package cannot be zero
-        if let Some(root_address) = &root_on_chain_address {
+        if let SourceMode::VerifyAt(root_address) = &source_mode {
             if *root_address == AccountAddress::ZERO {
                 return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure);
             }
         }
 
-        let compiled_dep_map =
-            get_module_bytes_map(compiled_package, verify_deps, root_on_chain_address)?;
+        let compiled_dep_map = get_module_bytes_map(compiled_package, verify_deps, source_mode)?;
 
         for ((address, package), local_modules) in compiled_dep_map {
-            // if `root_on_chain_address` is None, then Zero address is the package we're checking dependencies for, it does not need to (and
-            // cannot) be verified.
+            // if `root_on_chain_address` is None, then Zero address is the package we're checking
+            // dependencies for, it does not need to (and cannot) be verified.
             if address == AccountAddress::ZERO {
                 continue;
             }
@@ -210,7 +226,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
 fn get_module_bytes_map(
     compiled_package: &CompiledPackage,
     include_deps: bool,
-    root_address: Option<AccountAddress>,
+    source_mode: SourceMode,
 ) -> Result<ModuleBytesMap, SourceVerificationError> {
     let mut map: ModuleBytesMap = HashMap::new();
 
@@ -220,39 +236,45 @@ fn get_module_bytes_map(
         named_compiled_module: &NamedCompiledModule,
         subst_addr: Option<AccountAddress>,
     ) -> Result<((AccountAddress, Symbol), (Symbol, Vec<u8>)), SourceVerificationError> {
-        let mut named_compiled_module = named_compiled_module.clone();
         let module = named_compiled_module.name;
         let address = subst_addr.unwrap_or_else(|| named_compiled_module.address.into_inner());
-
-        // in the future, this probably needs to use `serialize_for_version`.
         let mut bytes = vec![];
 
-        // Replace the Zero address entries in the module if needed
+        // Replace the zero address entries in the module if needed
         if let Some(new_address) = subst_addr {
-            let self_handle = named_compiled_module.module.self_handle().clone();
+            let mut compiled_module = named_compiled_module.module.clone();
+            let self_handle = compiled_module.self_handle().clone();
             let self_address_idx = self_handle.address;
 
-            let addrs = &mut named_compiled_module.module.address_identifiers;
+            let addrs = &mut compiled_module.address_identifiers;
             let Some(address_mut) = addrs.get_mut(self_address_idx.0 as usize) else {
-                let name = named_compiled_module.module.identifier_at(self_handle.name);
-                return Err(SourceVerificationError::InvalidModuleFailure {name: name.to_string(), message: "Self address field missing".to_string()});
+                let name = compiled_module.identifier_at(self_handle.name);
+                return Err(SourceVerificationError::InvalidModuleFailure {
+                    name: name.to_string(),
+                    message: "Self address field missing".to_string()
+                });
             };
 
             if *address_mut != AccountAddress::ZERO {
-                let name = named_compiled_module.module.identifier_at(self_handle.name);
+                let name = compiled_module.identifier_at(self_handle.name);
                 return Err(SourceVerificationError::InvalidModuleFailure {
                     name: name.to_string(),
                     message: "Self address already populated".to_string(),
                 });
             };
-            *address_mut = new_address;
-        };
 
-        named_compiled_module.module.serialize(&mut bytes).unwrap();
+            *address_mut = new_address;
+
+            // TODO: in the future, this probably needs to use `serialize_for_version`.
+            compiled_module.serialize(&mut bytes).unwrap();
+        } else {
+            // TODO: in the future, this probably needs to use `serialize_for_version`.
+            named_compiled_module.module.serialize(&mut bytes).unwrap();
+        }
+
         Ok(((address, *package), (module, bytes)))
     }
 
-    // TODO: consolidate loops
     if include_deps {
         for (package, local_unit) in &compiled_package.deps_compiled_units {
             let CompiledUnitEnum::Module(m) = &local_unit.unit else {
@@ -265,20 +287,25 @@ fn get_module_bytes_map(
         }
     }
 
-    if let Some(addr) = root_address {
-        for (package, local_unit) in compiled_package
-            .root_compiled_units
-            .iter()
-            .map(|q| (compiled_package.compiled_package_info.package_name, q))
-        {
-            let CompiledUnitEnum::Module(m) = &local_unit.unit else {
-                continue;
-            };
-
-            let (k, v) = make_map_entry(&package, m, Some(addr))?;
-
-            map.entry(k).or_default().insert(v.0, v.1);
-        }
+    if source_mode == SourceMode::Skip {
+        return Ok(map);
     }
+
+    let subst_addr = if let SourceMode::VerifyAt(root_address) = source_mode {
+        Some(root_address)
+    } else {
+        None
+    };
+
+    let root_package = compiled_package.compiled_package_info.package_name;
+    for local_unit in &compiled_package.root_compiled_units {
+        let CompiledUnitEnum::Module(m) = &local_unit.unit else {
+            continue;
+        };
+
+        let (package, (module, bytes)) = make_map_entry(&root_package, m, subst_addr)?;
+        map.entry(package).or_default().insert(module, bytes);
+    }
+
     Ok(map)
 }

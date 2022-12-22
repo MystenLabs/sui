@@ -3,11 +3,7 @@
 
 use move_core_types::account_address::AccountAddress;
 use std::io::Write;
-use std::{
-    fs,
-    io::{self},
-    path::Path,
-};
+use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
 use sui::client_commands::WalletContext;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
@@ -18,7 +14,7 @@ use sui_types::{
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::publish_package_with_wallet;
 
-use crate::{BytecodeSourceVerifier, SourceVerificationError};
+use crate::{BytecodeSourceVerifier, SourceMode, SourceVerificationError};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
@@ -30,6 +26,12 @@ async fn successful_verification() -> anyhow::Result<()> {
         let fixtures = tempfile::tempdir()?;
         let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
         publish_package(context, sender, b_src).await
+    };
+
+    let b_pkg = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_package(&fixtures, "b", [("b", b_ref.0.into())]).await?;
+        compile_package(b_src)
     };
 
     let (a_pkg, a_ref) = {
@@ -50,8 +52,18 @@ async fn successful_verification() -> anyhow::Result<()> {
     verifier
         .verify_package(
             &a_pkg.package,
-            /* do not verify_deps */ false,
-            /* no root subst addr */ None,
+            /* verify_deps */ false,
+            SourceMode::Skip,
+        )
+        .await
+        .unwrap();
+
+    // Verify root without updating the address
+    verifier
+        .verify_package(
+            &b_pkg.package,
+            /* verify_deps */ false,
+            SourceMode::Verify,
         )
         .await
         .unwrap();
