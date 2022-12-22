@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::consensus_handler::SequencedConsensusTransaction;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
@@ -30,6 +31,7 @@ use std::task::{Context, Poll};
 use sui_json_rpc_types::SuiExecutionResult;
 use sui_types::utils::to_sender_signed_transaction;
 
+use std::ops::Deref;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
@@ -3175,7 +3177,7 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
     {
         authority
             .handle_consensus_transaction(
-                cert.epoch(),
+                authority.epoch_store().deref(),
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
             )
@@ -3200,10 +3202,11 @@ pub(crate) async fn send_consensus_no_execution(
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.
         authority
+            .epoch_store()
             .process_consensus_transaction(
-                cert.epoch(),
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
+                &authority.db(),
             )
             .await
             .unwrap();

@@ -10,6 +10,7 @@ use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::messages::ConsensusTransaction;
@@ -144,7 +145,7 @@ impl ExecutionState for ConsensusHandler {
 
             self.state
                 .handle_consensus_transaction(
-                    self.epoch,
+                    epoch_store.deref(),
                     verified_transaction,
                     &self.checkpoint_service,
                 )
