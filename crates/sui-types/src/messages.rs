@@ -193,6 +193,56 @@ pub enum SingleTransactionKind {
     // .. more transaction types go here
 }
 
+impl MoveCall {
+    pub fn input_objects(&self) -> Vec<InputObjectKind> {
+        let MoveCall {
+            arguments, package, ..
+        } = self;
+        arguments
+            .iter()
+            .filter_map(|arg| match arg {
+                CallArg::Pure(_) => None,
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
+                    Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
+                }
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                }) => {
+                    let id = *id;
+                    let initial_shared_version = *initial_shared_version;
+                    Some(vec![InputObjectKind::SharedMoveObject {
+                        id,
+                        initial_shared_version,
+                    }])
+                }
+                CallArg::ObjVec(vec) => Some(
+                    vec.iter()
+                        .map(|obj_arg| match obj_arg {
+                            ObjectArg::ImmOrOwnedObject(object_ref) => {
+                                InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
+                            }
+                            ObjectArg::SharedObject {
+                                id,
+                                initial_shared_version,
+                            } => {
+                                let id = *id;
+                                let initial_shared_version = *initial_shared_version;
+                                InputObjectKind::SharedMoveObject {
+                                    id,
+                                    initial_shared_version,
+                                }
+                            }
+                        })
+                        .collect(),
+                ),
+            })
+            .flatten()
+            .chain([InputObjectKind::MovePackage(package.0)])
+            .collect()
+    }
+}
+
 impl SingleTransactionKind {
     pub fn contains_shared_object(&self) -> bool {
         self.shared_input_objects().next().is_some()
@@ -268,50 +318,7 @@ impl SingleTransactionKind {
             Self::TransferObject(TransferObject { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
-            Self::Call(MoveCall {
-                arguments, package, ..
-            }) => arguments
-                .iter()
-                .filter_map(|arg| match arg {
-                    CallArg::Pure(_) => None,
-                    CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                        Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
-                    }
-                    CallArg::Object(ObjectArg::SharedObject {
-                        id,
-                        initial_shared_version,
-                    }) => {
-                        let id = *id;
-                        let initial_shared_version = *initial_shared_version;
-                        Some(vec![InputObjectKind::SharedMoveObject {
-                            id,
-                            initial_shared_version,
-                        }])
-                    }
-                    CallArg::ObjVec(vec) => Some(
-                        vec.iter()
-                            .map(|obj_arg| match obj_arg {
-                                ObjectArg::ImmOrOwnedObject(object_ref) => {
-                                    InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
-                                }
-                                ObjectArg::SharedObject {
-                                    id,
-                                    initial_shared_version,
-                                } => {
-                                    let id = *id;
-                                    let initial_shared_version = *initial_shared_version;
-                                    InputObjectKind::SharedMoveObject {
-                                        id,
-                                        initial_shared_version,
-                                    }
-                                }
-                            })
-                            .collect(),
-                    ),
-                })
-                .flatten()
-                .chain([InputObjectKind::MovePackage(package.0)])
-                .collect(),
+            Self::Call(move_call) => move_call.input_objects(),
             Self::Publish(MoveModulePublish { modules }) => {
                 // For module publishing, all the dependent packages are implicit input objects
                 // because they must all be on-chain in order for the package to publish.

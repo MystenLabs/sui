@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::execution_mode::{self, ExecutionMode};
-use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{ObjectDigest, SequenceNumber};
 use tracing::{debug, instrument};
 
 use sui_adapter::adapter;
@@ -638,6 +638,65 @@ fn transfer_sui<S>(
     temporary_store.write_object(&ctx, object, WriteKind::Mutate);
 
     Ok(())
+}
+
+pub(crate) fn manual_execute_move_call<
+    Mode: ExecutionMode,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+>(
+    shared_object_refs: Vec<ObjectRef>,
+    mut temporary_store: TemporaryStore<S>,
+    sender: SuiAddress,
+    move_call: MoveCall,
+    transaction_digest: TransactionDigest,
+    mut transaction_dependencies: BTreeSet<TransactionDigest>,
+    move_vm: &Arc<MoveVM>,
+    mut gas_status: SuiGasStatus,
+    epoch: EpochId,
+) -> (
+    TransactionEffects,
+    Result<Mode::ExecutionResults, ExecutionError>,
+) {
+    let mut tx_ctx = TxContext::new(&sender, &transaction_digest, epoch);
+
+    let MoveCall {
+        package,
+        module,
+        function,
+        type_arguments,
+        arguments,
+    } = move_call;
+    let module_id = ModuleId::new(package.0.into(), module);
+    let execution_result = adapter::execute::<Mode, _, _>(
+        move_vm,
+        &mut temporary_store,
+        module_id,
+        &function,
+        type_arguments,
+        arguments,
+        gas_status.create_move_gas_status(),
+        &mut tx_ctx,
+    )
+    .map(|result| {
+        let mut results = Mode::empty_results();
+        Mode::add_result(&mut results, 0, result);
+        results
+    });
+    let gas_cost_summary = gas_status.summary(execution_result.is_ok());
+    let status = match &execution_result {
+        Ok(_) => ExecutionStatus::Success,
+        Err(error) => ExecutionStatus::new_failure(error.to_execution_status()),
+    };
+    transaction_dependencies.remove(&TransactionDigest::genesis());
+    let (_inner, effects) = temporary_store.to_effects(
+        shared_object_refs,
+        &transaction_digest,
+        transaction_dependencies.into_iter().collect(),
+        gas_cost_summary,
+        status,
+        (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
+    );
+    (effects, execution_result)
 }
 
 #[test]
