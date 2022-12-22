@@ -42,6 +42,7 @@
 -  [Function `compute_reward_distribution`](#0x2_validator_set_compute_reward_distribution)
 -  [Function `distribute_reward`](#0x2_validator_set_distribute_reward)
 -  [Function `derive_next_epoch_validators`](#0x2_validator_set_derive_next_epoch_validators)
+-  [Function `active_validators`](#0x2_validator_set_active_validators)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -89,7 +90,7 @@
 <code>total_delegation_stake: u64</code>
 </dt>
 <dd>
- Total amount of stake from delegation, at the beginning of the epoch.
+ Total amount of stake from delegation, at the   beginning of the epoch.
 </dd>
 <dt>
 <code>quorum_stake_threshold: u64</code>
@@ -1478,6 +1479,31 @@ TODO: If we want to enforce a % on stake threshold, this is the function to do i
         i = i + 1;
     };
     result
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_active_validators"></a>
+
+## Function `active_validators`
+
+Return the active validators in <code>self</code>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_active_validators">active_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_active_validators">active_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): &<a href="">vector</a>&lt;Validator&gt; {
+    &self.active_validators
 }
 </code></pre>
 

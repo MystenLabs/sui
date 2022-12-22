@@ -28,7 +28,7 @@ module sui::validator_set {
         /// at the beginning of the epoch.
         total_validator_stake: u64,
 
-        /// Total amount of stake from delegation, at the beginning of the epoch.
+        /// Total amount of stake from delegation, at the   beginning of the epoch.
         total_delegation_stake: u64,
 
         /// The amount of accumulated stake to reach a quorum among all active validators.
@@ -681,6 +681,11 @@ module sui::validator_set {
             i = i + 1;
         };
         result
+    }
+
+    /// Return the active validators in `self`
+    public fun active_validators(self: &ValidatorSet): &vector<Validator> {
+        &self.active_validators
     }
 
     #[test_only]
