@@ -97,7 +97,7 @@ export type EventQuery =
     | { "TimeRange": { "start_time": number, "end_time": number } };
 
 export type EventId = {
-  txSeq: number,
+  txDigest: TransactionDigest,
   eventSeq: number,
 }
 
