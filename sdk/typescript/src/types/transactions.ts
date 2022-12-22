@@ -107,6 +107,39 @@ export type OwnedObjectRef = {
   reference: SuiObjectRef;
 };
 
+export type DevInspectResults = {
+  effects: TransactionEffects;
+  results: DevInspectResultsType;
+};
+
+export type ResultType = 'Ok' | 'Err;';
+export type DevInspectResultsType = {
+  result: ResultType;
+  contents?: DevInspectResultTupleType[];
+  error?: string;
+};
+
+export type DevInspectResultTupleType = {
+  index: number;
+  executionResult: ExecutionResultType;
+};
+
+export type ExecutionResultType = {
+  mutableReferenceOutputs: MutableReferenceOutputType[];
+  returnValues: ReturnValueType[];
+};
+
+export type MutableReferenceOutputType = {
+  index: number;
+  bytes: number[];
+  type_tag: string;
+};
+
+export type ReturnValueType = {
+  bytes: number[];
+  type_tag: string;
+};
+
 export type TransactionEffects = {
   /** The status of the execution */
   status: ExecutionStatus;
@@ -148,7 +181,7 @@ export type SuiTransactionResponse = {
 };
 
 export type SuiTransactionAuthSignersResponse = {
-  signers: AuthorityName[]
+  signers: AuthorityName[];
 };
 
 // TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207

@@ -16,8 +16,8 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType,
-    ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
+    MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
     SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
@@ -220,6 +220,17 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
+    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults> {
+        let tx_data =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+        let intent_msg = IntentMessage::new(Intent::default(), tx_data);
+        let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
+        Ok(self
+            .state
+            .dev_inspect_transaction(intent_msg.value, txn_digest)
+            .await?)
+    }
+
     async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
         let tx_data =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
