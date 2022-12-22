@@ -794,7 +794,7 @@
             {
               "name": "cursor",
               "value": {
-                "txSeq": 500,
+                "txDigest": "BEq7zDLoAQYesW7napSoEwAaurhRRuzJ5hfjaHcsGi63",
                 "eventSeq": 10
               }
             },
@@ -815,7 +815,7 @@
                   "timestamp": 0,
                   "txDigest": "BEq7zDLoAQYesW7napSoEwAaurhRRuzJ5hfjaHcsGi63",
                   "id": {
-                    "txSeq": 0,
+                    "txDigest": "BEq7zDLoAQYesW7napSoEwAaurhRRuzJ5hfjaHcsGi63",
                     "eventSeq": 0
                   },
                   "event": {
@@ -834,7 +834,7 @@
                 }
               ],
               "nextCursor": {
-                "txSeq": 1000,
+                "txDigest": "6vgyuXazM6HBXoeALuVEo2XDCwgKeXrhp9Shjt4UXrqb",
                 "eventSeq": 5
               }
             }
@@ -3370,16 +3370,15 @@
         "type": "object",
         "required": [
           "eventSeq",
-          "txSeq"
+          "txDigest"
         ],
         "properties": {
           "eventSeq": {
             "type": "integer",
             "format": "int64"
           },
-          "txSeq": {
-            "type": "integer",
-            "format": "int64"
+          "txDigest": {
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },
