@@ -608,7 +608,7 @@ export function isEventId(obj: any, _argumentName?: string): obj is EventId {
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isSuiMoveTypeParameterIndex(obj.txSeq) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.txDigest) as boolean &&
         isSuiMoveTypeParameterIndex(obj.eventSeq) as boolean
     )
 }

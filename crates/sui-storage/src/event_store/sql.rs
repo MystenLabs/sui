@@ -335,8 +335,10 @@ impl From<SqliteRow> for StoredEvent {
         let recipient = SqlEventStore::try_extract_recipient(&row)
             .expect("Error converting stored recipient address to Owner");
 
+        let tx_dig = tx_digest.unwrap_or(TransactionDigest::random());
+        
         StoredEvent {
-            id: (tx_digest.unwrap(), event_num).into(),
+            id: (tx_dig, event_num).into(),
             timestamp: timestamp as u64,
             seq_num,
             tx_digest,
