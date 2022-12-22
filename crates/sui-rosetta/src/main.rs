@@ -47,6 +47,8 @@ pub enum RosettaServerCommand {
         full_node_url: String,
         #[clap(long, default_value = "genesis.blob")]
         genesis_path: PathBuf,
+        #[clap(long, default_value = "data")]
+        data_path: PathBuf,
     },
     StartOnlineServer {
         #[clap(long, default_value = "localnet")]
@@ -55,6 +57,8 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         node_config: Option<PathBuf>,
+        #[clap(long, default_value = "data")]
+        data_path: PathBuf,
     },
     StartOfflineServer {
         #[clap(long, default_value = "localnet")]
@@ -135,13 +139,18 @@ impl RosettaServerCommand {
                 addr,
                 full_node_url,
                 genesis_path,
+                data_path,
             } => {
                 info!(
                     "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
                 );
                 let sui_client = wait_for_sui_client(full_node_url).await;
-                let rosetta =
-                    RosettaOnlineServer::new(env, sui_client, &Genesis::load(genesis_path)?);
+                let rosetta = RosettaOnlineServer::new(
+                    env,
+                    sui_client,
+                    Genesis::load(&genesis_path)?,
+                    &data_path,
+                );
                 rosetta.serve(addr).await??;
             }
 
@@ -149,6 +158,7 @@ impl RosettaServerCommand {
                 env,
                 addr,
                 node_config,
+                data_path,
             } => {
                 info!("Starting Rosetta Online Server with embedded Sui full node.");
 
@@ -165,7 +175,7 @@ impl RosettaServerCommand {
                 let _node = SuiNode::start(&config, registry_service).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &genesis);
+                let rosetta = RosettaOnlineServer::new(env, sui_client, genesis, &data_path);
                 rosetta.serve(addr).await??;
             }
         };

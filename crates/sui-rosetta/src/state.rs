@@ -1,31 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::operations::Operation;
+use crate::types::{
+    AccountIdentifier, Amount, Block, BlockHash, BlockHeight, BlockIdentifier, BlockResponse,
+    CoinAction, CoinChange, CoinID, CoinIdentifier, OperationStatus, OperationType, SignedValue,
+    Transaction, TransactionIdentifier,
+};
+use crate::{Error, SUI};
 use anyhow::anyhow;
 use async_trait::async_trait;
+use mysten_metrics::spawn_monitored_task;
+use rocksdb::Options;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
-use tracing::{debug, error};
-
-use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_sdk::SuiClient;
+use sui_storage::default_db_options;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::query::TransactionQuery;
-
-use crate::operations::Operation;
-use crate::types::{
-    AccountIdentifier, Amount, Block, BlockHash, BlockIdentifier, BlockResponse, CoinAction,
-    CoinChange, CoinID, CoinIdentifier, OperationStatus, OperationType, SignedValue, Transaction,
-    TransactionIdentifier,
-};
-use crate::{Error, SUI};
+use tracing::{debug, error, info};
+use typed_store::rocks::{DBMap, DBOptions};
+use typed_store::traits::TypedStoreDebug;
+use typed_store::Map;
+use typed_store_derive::DBMapUtils;
 
 #[cfg(test)]
 #[path = "unit_tests/balance_changing_tx_tests.rs"]
@@ -67,63 +73,70 @@ pub trait BlockProvider {
 
 #[derive(Clone)]
 pub struct PseudoBlockProvider {
-    blocks: Arc<RwLock<Vec<BlockResponse>>>,
-    balance: Arc<RwLock<BTreeMap<SuiAddress, Vec<HistoricBalance>>>>,
+    database: Arc<BlockProviderTables>,
+    client: SuiClient,
+    genesis: Genesis,
 }
 
 #[async_trait]
 impl BlockProvider for PseudoBlockProvider {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error> {
-        self.blocks
-            .read()
-            .await
-            .iter()
-            .find(|b| b.block.block_identifier.index == index)
-            .cloned()
-            .ok_or(Error::BlockNotFound {
-                index: Some(index),
-                hash: None,
-            })
+        let (block_id, parent, timestamp) =
+            &self
+                .database
+                .blocks
+                .get(&index)?
+                .ok_or(Error::BlockNotFound {
+                    index: Some(index),
+                    hash: None,
+                })?;
+
+        Ok(self
+            .create_block_response(*block_id, *parent, *timestamp)
+            .await?)
     }
 
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
-        self.blocks
-            .read()
-            .await
-            .iter()
-            .find(|b| b.block.block_identifier.hash == hash)
-            .cloned()
+        let height = self
+            .database
+            .block_heights
+            .get(&hash)?
             .ok_or(Error::BlockNotFound {
                 index: None,
                 hash: Some(hash),
-            })
+            })?;
+        self.get_block_by_index(height).await
     }
 
     async fn current_block(&self) -> Result<BlockResponse, Error> {
-        self.blocks
-            .read()
-            .await
-            .last()
+        let (_, (block_id, parent, timestamp)) = self
+            .database
+            .blocks
+            .iter()
+            .skip_prior_to(&BlockHeight::MAX)?
+            .next()
             .ok_or(Error::BlockNotFound {
                 index: None,
                 hash: None,
-            })
-            .cloned()
+            })?;
+        Ok(self
+            .create_block_response(block_id, parent, timestamp)
+            .await?)
     }
 
     fn genesis_block_identifier(&self) -> BlockIdentifier {
         BlockIdentifier {
             index: 0,
-            hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
+            hash: BlockHash::new([0u8; TRANSACTION_DIGEST_LENGTH]),
         }
     }
 
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.blocks
-            .read()
-            .await
-            .first()
-            .map(|b| b.block.block_identifier.clone())
+        self.database
+            .blocks
+            .iter()
+            .next()
+            .map(|(_, (id, _, _))| id)
             .ok_or(Error::BlockNotFound {
                 index: None,
                 hash: None,
@@ -139,33 +152,29 @@ impl BlockProvider for PseudoBlockProvider {
         addr: SuiAddress,
         block_height: u64,
     ) -> Result<u128, Error> {
-        if let Some(balances) = self.balance.read().await.get(&addr) {
-            for HistoricBalance {
-                block_height: blk_idx,
-                balance,
-            } in balances.iter().rev()
-            {
-                if blk_idx <= &block_height {
-                    return Ok(*balance);
+        Ok(self
+            .database
+            .balances
+            .iter()
+            .skip_prior_to(&(addr, block_height))?
+            .next()
+            .and_then(|((address, _), balance)| {
+                if address == addr {
+                    Some(balance.balance)
+                } else {
+                    None
                 }
-            }
-        };
-        Ok(0)
+            })
+            .unwrap_or_default())
     }
 }
 
 impl PseudoBlockProvider {
-    pub fn spawn(client: SuiClient, genesis: &Genesis) -> Self {
-        let genesis = genesis_block(genesis);
-        let genesis_txs = genesis
-            .block
-            .transactions
-            .iter()
-            .flat_map(|tx| tx.operations.clone())
-            .collect();
+    pub fn spawn(client: SuiClient, genesis: Genesis, db_path: &Path) -> Self {
         let blocks = Self {
-            blocks: Arc::new(RwLock::new(vec![genesis])),
-            balance: Arc::new(Default::default()),
+            database: Arc::new(BlockProviderTables::open(db_path, None)),
+            client: client.clone(),
+            genesis,
         };
 
         let block_interval = option_env!("SUI_BLOCK_INTERVAL")
@@ -176,9 +185,28 @@ impl PseudoBlockProvider {
 
         let f = blocks.clone();
         spawn_monitored_task!(async move {
-            if let Err(e) = f.update_balance(0, genesis_txs).await {
-                error!("Error updating balance, cause: {e:?}")
-            }
+            if f.database.is_empty() {
+                info!("Database is empty, indexing genesis block...");
+                let genesis = genesis_block(&f.genesis);
+                let genesis_txs = genesis
+                    .block
+                    .transactions
+                    .iter()
+                    .flat_map(|tx| tx.operations.clone())
+                    .collect();
+
+                f.add_block_index(
+                    &genesis.block.block_identifier,
+                    &genesis.block.parent_block_identifier,
+                )
+                .unwrap();
+                if let Err(e) = f.update_balance(0, genesis_txs).await {
+                    error!("Error updating balance, cause: {e:?}")
+                }
+            } else {
+                let current_block = f.current_block_identifier().await.unwrap();
+                info!("Resuming from block {}", current_block.index);
+            };
             loop {
                 if let Err(e) = f.create_next_block(&client).await {
                     error!("Error creating block, cause: {e:?}")
@@ -204,7 +232,7 @@ impl PseudoBlockProvider {
                     .await?
                     .data
             } else {
-                let cursor = TransactionDigest::new(current_block.hash.0);
+                let cursor = current_block.hash;
                 let mut tx_digests = client
                     .read_api()
                     .get_transactions(TransactionQuery::All, Some(cursor), None, false)
@@ -237,28 +265,7 @@ impl PseudoBlockProvider {
                     &response.effects.events,
                 )?;
 
-                let transaction = Transaction {
-                    transaction_identifier: TransactionIdentifier { hash: digest },
-                    operations: operations.clone(),
-                    related_transactions: vec![],
-                    metadata: None,
-                };
-
-                let new_block = BlockResponse {
-                    block: Block {
-                        block_identifier: block_identifier.clone(),
-                        parent_block_identifier: parent_block_identifier.clone(),
-                        timestamp: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as u64,
-                        transactions: vec![transaction],
-                        metadata: None,
-                    },
-                    other_transactions: vec![],
-                };
-
-                self.blocks.write().await.push(new_block);
+                self.add_block_index(&block_identifier, &parent_block_identifier)?;
                 self.update_balance(index, operations).await.map_err(|e| {
                     anyhow!(
                         "Failed to update balance, tx: {}, effect:{}, cause : {e}",
@@ -275,22 +282,31 @@ impl PseudoBlockProvider {
         Ok(())
     }
 
+    fn add_block_index(
+        &self,
+        block_id: &BlockIdentifier,
+        parent: &BlockIdentifier,
+    ) -> Result<(), Error> {
+        let index = &block_id.index;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        self.database.block_heights.insert(&block_id.hash, index)?;
+        self.database
+            .blocks
+            .insert(index, &(*block_id, *parent, timestamp))?;
+        Ok(())
+    }
+
     async fn update_balance(
         &self,
         block_height: u64,
         ops: Vec<Operation>,
     ) -> Result<(), anyhow::Error> {
         let balance_changes = extract_balance_changes_from_ops(ops)?;
-
-        let mut balances = self.balance.write().await;
-
         for (addr, value) in balance_changes {
-            let balance = balances.entry(addr).or_default();
-            let current_balance = balance
-                .iter()
-                .last()
-                .map(|HistoricBalance { balance, .. }| *balance)
-                .unwrap_or_default();
+            let current_balance = self.get_balance_at_block(addr, block_height).await?;
             let new_balance = if value.is_negative() {
                 if current_balance < value.abs() {
                     // This can happen due to missing transactions data due to unstable validators, causing balance to
@@ -305,16 +321,63 @@ impl PseudoBlockProvider {
             } else {
                 current_balance + value.abs()
             };
-            balance.push(HistoricBalance {
-                block_height,
-                balance: new_balance,
-            });
+
+            self.database.balances.insert(
+                &(addr, block_height),
+                &HistoricBalance {
+                    block_height,
+                    balance: new_balance,
+                },
+            )?;
         }
         Ok(())
     }
+
+    async fn create_block_response(
+        &self,
+        block_identifier: BlockIdentifier,
+        parent_block_identifier: BlockIdentifier,
+        timestamp: u64,
+    ) -> Result<BlockResponse, Error> {
+        if block_identifier.index == 0 {
+            return Ok(genesis_block(&self.genesis));
+        }
+
+        let tx = self
+            .client
+            .read_api()
+            .get_transaction(block_identifier.hash)
+            .await?;
+
+        let digest = tx.certificate.transaction_digest;
+        let operations = Operation::from_data_and_events(
+            &tx.certificate.data,
+            &tx.effects.status,
+            &tx.effects.events,
+        )?;
+
+        let transaction = Transaction {
+            transaction_identifier: TransactionIdentifier { hash: digest },
+            operations: operations.clone(),
+            related_transactions: vec![],
+            metadata: None,
+        };
+
+        Ok(BlockResponse {
+            block: Block {
+                block_identifier,
+                parent_block_identifier,
+                timestamp,
+                transactions: vec![transaction],
+                metadata: None,
+            },
+            other_transactions: vec![],
+        })
+    }
 }
 
-struct HistoricBalance {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct HistoricBalance {
     block_height: u64,
     balance: u128,
 }
@@ -347,7 +410,7 @@ fn extract_balance_changes_from_ops(
 fn genesis_block(genesis: &Genesis) -> BlockResponse {
     let id = BlockIdentifier {
         index: 0,
-        hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
+        hash: BlockHash::new([0u8; TRANSACTION_DIGEST_LENGTH]),
     };
 
     let operations = genesis
@@ -404,4 +467,28 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
         },
         other_transactions: vec![],
     }
+}
+
+#[derive(DBMapUtils)]
+pub struct BlockProviderTables {
+    #[default_options_override_fn = "default_config"]
+    blocks: DBMap<BlockHeight, (BlockIdentifier, BlockIdentifier, u64)>,
+    #[default_options_override_fn = "default_config"]
+    block_heights: DBMap<BlockHash, BlockHeight>,
+    #[default_options_override_fn = "default_config"]
+    balances: DBMap<(SuiAddress, u64), HistoricBalance>,
+}
+
+impl BlockProviderTables {
+    pub fn open(db_dir: &Path, db_options: Option<Options>) -> Self {
+        Self::open_tables_read_write(db_dir.to_path_buf(), db_options, None)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
+}
+
+fn default_config() -> DBOptions {
+    default_db_options(None, None).1
 }
