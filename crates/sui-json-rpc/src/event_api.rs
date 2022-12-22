@@ -56,7 +56,10 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
         let stream = self.event_handler.subscribe(filter);
         let stream = stream.map(move |e: EventEnvelope| {
             let event = SuiEvent::try_from(e.event, state.module_cache.as_ref());
-            let tx_dig = e.tx_digest.unwrap_or(TransactionDigest::random());
+            let tx_dig = match e.tx_digest {
+              Some(opt) => opt,  
+              None => TransactionDigest::random()
+            };
             event.map(|event| SuiEventEnvelope {
                 timestamp: e.timestamp,
                 tx_digest: e.tx_digest,
