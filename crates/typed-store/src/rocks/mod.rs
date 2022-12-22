@@ -851,13 +851,13 @@ impl<'a> DBTransaction<'a> {
     pub fn get_for_update<K: Serialize, V: DeserializeOwned>(
         &self,
         db: &DBMap<K, V>,
-        key: K,
+        key: &K,
     ) -> Result<Option<V>, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
         let k_buf = be_fix_int_ser(key.borrow())?;
-        match self.transaction.get_for_update(k_buf, true)? {
+        match self.transaction.get_for_update_cf(&db.cf(), k_buf, true)? {
             Some(data) => Ok(Some(bincode::deserialize(&data)?)),
             None => Ok(None),
         }
