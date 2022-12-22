@@ -10,7 +10,6 @@ import CardLayout from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Alert from '_components/alert';
-import CopyToClipboard from '_components/copy-to-clipboard';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
@@ -93,13 +92,6 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                     )}
                                 >
                                     {mnemonic}
-                                    <CopyToClipboard
-                                        txt={mnemonic}
-                                        className="mt-2.5 text-steel-dark text-subtitleSmall self-end cursor-pointer leading-100"
-                                        mode="plain"
-                                    >
-                                        COPY
-                                    </CopyToClipboard>
                                 </div>
                             ) : (
                                 <Alert>{error}</Alert>
