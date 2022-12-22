@@ -277,20 +277,6 @@ pub struct CheckpointSignatureAggregator {
     signatures: StakeAggregator<AuthoritySignInfo, false>,
 }
 
-impl CheckpointSignatureAggregator {
-    pub fn sequence_number(&self) -> CheckpointSequenceNumber {
-        self.summary.sequence_number
-    }
-
-    pub fn next_index(&self) -> u64 {
-        self.next_index
-    }
-
-    pub fn update_next_index(&mut self, new_index: u64) {
-        self.next_index = new_index;
-    }
-}
-
 impl CheckpointBuilder {
     fn new(
         state: Arc<AuthorityState>,
@@ -607,7 +593,7 @@ impl CheckpointAggregator {
     async fn run_inner(&mut self) -> SuiResult {
         let _scope = monitored_scope("CheckpointAggregator");
         let epoch_store = self.state.epoch_store();
-        loop {
+        'outer: loop {
             let current = if let Some(current) = &mut self.current {
                 current
             } else {
@@ -621,23 +607,48 @@ impl CheckpointAggregator {
                 });
                 self.current.as_mut().unwrap()
             };
-            if let Some(auth_signature) = epoch_store.aggregate_pending_checkpoint_signatures(
-                current,
-                &self.metrics.checkpoint_participation,
-            )? {
-                let summary = CertifiedCheckpointSummary {
-                    summary: current.summary.clone(),
-                    auth_signature,
-                };
-                self.tables.insert_certified_checkpoint(&summary)?;
+            let iter = epoch_store.get_pending_checkpoint_signatures_iter(
+                current.summary.sequence_number,
+                current.next_index,
+            )?;
+            for ((seq, index), data) in iter {
+                if seq != current.summary.sequence_number {
+                    debug!(
+                        "Not enough checkpoint signatures on height {}",
+                        current.summary.sequence_number
+                    );
+                    // No more signatures (yet) for this checkpoint
+                    return Ok(());
+                }
+                debug!(
+                    "Processing signature for checkpoint {} from {:?}",
+                    current.summary.sequence_number,
+                    data.summary.auth_signature.authority.concise()
+                );
                 self.metrics
-                    .last_certified_checkpoint
-                    .set(current.summary.sequence_number as i64);
-                self.output.certified_checkpoint_created(&summary).await?;
-                self.current = None;
-            } else {
-                break;
+                    .checkpoint_participation
+                    .with_label_values(&[&format!(
+                        "{:?}",
+                        data.summary.auth_signature.authority.concise()
+                    )])
+                    .inc();
+                if let Ok(auth_signature) = current.try_aggregate(data) {
+                    let summary = CertifiedCheckpointSummary {
+                        summary: current.summary.clone(),
+                        auth_signature,
+                    };
+                    self.tables.insert_certified_checkpoint(&summary)?;
+                    self.metrics
+                        .last_certified_checkpoint
+                        .set(current.summary.sequence_number as i64);
+                    self.output.certified_checkpoint_created(&summary).await?;
+                    self.current = None;
+                    continue 'outer;
+                } else {
+                    current.next_index = index + 1;
+                }
             }
+            break;
         }
         Ok(())
     }

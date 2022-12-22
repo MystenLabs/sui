@@ -1085,44 +1085,20 @@ impl AuthorityPerEpochStore {
         self.tables.digest_to_checkpoint.contains_key(digest)
     }
 
-    pub fn aggregate_pending_checkpoint_signatures(
+    pub fn get_pending_checkpoint_signatures_iter(
         &self,
-        aggregator: &mut CheckpointSignatureAggregator,
-        checkpoint_participation_metric: &IntCounterVec,
-    ) -> Result<Option<AuthorityWeakQuorumSignInfo>, TypedStoreError> {
-        let key = (aggregator.sequence_number(), aggregator.next_index());
+        checkpoint_seq: CheckpointSequenceNumber,
+        starting_index: u64,
+    ) -> Result<
+        impl Iterator<Item = ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage)> + '_,
+        TypedStoreError,
+    > {
+        let key = (checkpoint_seq, starting_index);
         debug!("Scanning pending checkpoint signatures from {:?}", key);
-        let iter = self
-            .tables
+        self.tables
             .pending_checkpoint_signatures
             .iter()
-            .skip_to(&key)?;
-        for ((seq, index), data) in iter {
-            if seq != aggregator.sequence_number() {
-                debug!(
-                    "Not enough checkpoint signatures on height {}",
-                    aggregator.sequence_number()
-                );
-                // No more signatures (yet) for this checkpoint
-                return Ok(None);
-            }
-            debug!(
-                "Processing signature for checkpoint {} from {:?}",
-                aggregator.sequence_number(),
-                data.summary.auth_signature.authority.concise()
-            );
-            checkpoint_participation_metric
-                .with_label_values(&[&format!(
-                    "{:?}",
-                    data.summary.auth_signature.authority.concise()
-                )])
-                .inc();
-            if let Ok(auth_signature) = aggregator.try_aggregate(data) {
-                return Ok(Some(auth_signature));
-            }
-            aggregator.update_next_index(index + 1);
-        }
-        Ok(None)
+            .skip_to(&key)
     }
 
     pub fn get_last_checkpoint_signature_index(&self) -> u64 {
