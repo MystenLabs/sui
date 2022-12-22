@@ -1065,12 +1065,21 @@ impl PerEpochCheckpointStore for AuthorityPerEpochStore {
         self.tables.pending_checkpoints.insert(index, transactions)
     }
 
-    fn delete_pending_checkpoints_return_batch(
+    fn process_pending_checkpoint(
         &self,
-        commits: &[CheckpointCommitHeight],
-    ) -> Result<DBBatch, TypedStoreError> {
-        let batch = self.tables.pending_checkpoints.batch();
-        batch.delete_batch(&self.tables.pending_checkpoints, commits)
+        commit_height: CheckpointCommitHeight,
+        content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
+    ) -> Result<(), TypedStoreError> {
+        let mut batch = self.tables.pending_checkpoints.batch();
+        batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
+        if let Some((seq, transactions)) = content_info {
+            batch = batch.insert_batch(
+                &self.tables.digest_to_checkpoint,
+                transactions.iter().map(|tx| (*tx, seq)),
+            )?;
+        }
+
+        batch.write()
     }
 
     fn tx_checkpointed_in_current_epoch(
@@ -1078,18 +1087,6 @@ impl PerEpochCheckpointStore for AuthorityPerEpochStore {
         digest: &TransactionDigest,
     ) -> Result<bool, TypedStoreError> {
         self.tables.digest_to_checkpoint.contains_key(digest)
-    }
-
-    fn record_checkpointed_tx_with_batch(
-        &self,
-        digest: &TransactionDigest,
-        checkpoint_seq: CheckpointSequenceNumber,
-        batch: DBBatch,
-    ) -> Result<DBBatch, TypedStoreError> {
-        batch.insert_batch(
-            &self.tables.digest_to_checkpoint,
-            [(digest, checkpoint_seq)],
-        )
     }
 
     fn aggregate_pending_signatures(

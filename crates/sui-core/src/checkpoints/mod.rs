@@ -40,7 +40,7 @@ use sui_types::messages_checkpoint::{
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tracing::{debug, error, info, warn};
-use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
+use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -83,22 +83,16 @@ pub trait PerEpochCheckpointStore {
         transactions: &(Vec<TransactionDigest>, bool),
     ) -> Result<(), TypedStoreError>;
 
-    fn delete_pending_checkpoints_return_batch(
+    fn process_pending_checkpoint(
         &self,
-        commits: &[CheckpointCommitHeight],
-    ) -> Result<DBBatch, TypedStoreError>;
+        commit_height: CheckpointCommitHeight,
+        content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
+    ) -> Result<(), TypedStoreError>;
 
     fn tx_checkpointed_in_current_epoch(
         &self,
         digest: &TransactionDigest,
     ) -> Result<bool, TypedStoreError>;
-
-    fn record_checkpointed_tx_with_batch(
-        &self,
-        digest: &TransactionDigest,
-        checkpoint_seq: CheckpointSequenceNumber,
-        batch: DBBatch,
-    ) -> Result<DBBatch, TypedStoreError>;
 
     fn aggregate_pending_signatures(
         &self,
@@ -430,40 +424,38 @@ impl CheckpointBuilder {
         height: CheckpointCommitHeight,
         new_checkpoint: Option<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
-        let mut epoch_batch = epoch_store.delete_pending_checkpoints_return_batch(&[height])?;
-        if let Some((summary, contents)) = new_checkpoint {
-            // Only create checkpoint if content is not empty
-            self.output.checkpoint_created(&summary, &contents).await?;
+        let content_info = match new_checkpoint {
+            Some((summary, contents)) => {
+                // Only create checkpoint if content is not empty
+                self.output.checkpoint_created(&summary, &contents).await?;
 
-            self.metrics
-                .transactions_included_in_checkpoint
-                .inc_by(contents.size() as u64);
-            let sequence_number = summary.sequence_number;
-            self.metrics
-                .last_constructed_checkpoint
-                .set(sequence_number as i64);
+                self.metrics
+                    .transactions_included_in_checkpoint
+                    .inc_by(contents.size() as u64);
+                let sequence_number = summary.sequence_number;
+                self.metrics
+                    .last_constructed_checkpoint
+                    .set(sequence_number as i64);
 
-            for txn in contents.iter() {
-                epoch_batch = epoch_store.record_checkpointed_tx_with_batch(
-                    &txn.transaction,
-                    sequence_number,
-                    epoch_batch,
+                let transactions: Vec<_> = contents.iter().map(|tx| tx.transaction).collect();
+
+                let mut batch = self.tables.checkpoint_content.batch();
+                batch = batch.insert_batch(
+                    &self.tables.checkpoint_content,
+                    [(contents.digest(), contents)],
                 )?;
-            }
-            let mut batch = self.tables.checkpoint_content.batch();
-            batch = batch.insert_batch(
-                &self.tables.checkpoint_content,
-                [(contents.digest(), contents)],
-            )?;
-            batch = batch.insert_batch(
-                &self.tables.checkpoint_summary,
-                [(sequence_number, summary)],
-            )?;
-            batch.write()?;
+                batch = batch.insert_batch(
+                    &self.tables.checkpoint_summary,
+                    [(sequence_number, summary)],
+                )?;
+                batch.write()?;
 
-            self.notify_aggregator.notify_waiters();
-        }
-        epoch_batch.write()?;
+                self.notify_aggregator.notify_waiters();
+                Some((sequence_number, transactions))
+            }
+            None => None,
+        };
+        epoch_store.process_pending_checkpoint(height, content_info)?;
         Ok(())
     }
 
