@@ -825,9 +825,7 @@ export function isPayAllSui(obj: any, _argumentName?: string): obj is PayAllSui 
 
 export function isExecuteTransactionRequestType(obj: any, _argumentName?: string): obj is ExecuteTransactionRequestType {
     return (
-        (obj === "ImmediateReturn" ||
-            obj === "WaitForTxCert" ||
-            obj === "WaitForEffectsCert" ||
+        (obj === "WaitForEffectsCert" ||
             obj === "WaitForLocalExecution")
     )
 }
@@ -1077,13 +1075,6 @@ export function isSuiExecuteTransactionResponse(obj: any, _argumentName?: string
         ((obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-            (obj.ImmediateReturn !== null &&
-                typeof obj.ImmediateReturn === "object" ||
-                typeof obj.ImmediateReturn === "function") &&
-            isTransactionDigest(obj.ImmediateReturn.tx_digest) as boolean ||
-            (obj !== null &&
-                typeof obj === "object" ||
-                typeof obj === "function") &&
             (obj.TxCert !== null &&
                 typeof obj.TxCert === "object" ||
                 typeof obj.TxCert === "function") &&
