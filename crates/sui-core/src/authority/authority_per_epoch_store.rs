@@ -31,7 +31,7 @@ use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
-use crate::checkpoints::CheckpointServiceNotify;
+use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -43,6 +43,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::Map;
@@ -161,6 +162,26 @@ pub struct AuthorityEpochTables {
     /// Records narwhal consensus output index of the final checkpoint in epoch
     /// This is a single entry table with key FINAL_EPOCH_CHECKPOINT_INDEX
     final_epoch_checkpoint: DBMap<u64, u64>,
+
+    /// This table has information for the checkpoints for which we constructed all the data
+    /// from consensus, but not yet constructed actual checkpoint.
+    ///
+    /// Key in this table is the narwhal commit height and not a checkpoint sequence number.
+    ///
+    /// Non-empty list of transactions here might result in empty list when we are forming checkpoint.
+    /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
+    /// the sequence number of checkpoint does not match height here.
+    ///
+    /// The boolean value indicates whether this is the last checkpoint of the epoch.
+    pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
+
+    /// Lists all transaction digests included in checkpoints
+    digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+
+    /// Stores pending signatures
+    /// The key in this table is checkpoint sequence number and an arbitrary integer
+    pending_checkpoint_signatures:
+        DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
 }
 
 impl AuthorityEpochTables {
@@ -998,7 +1019,7 @@ impl AuthorityPerEpochStore {
                 Ok(Some(certificate))
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
-                checkpoint_service.notify_checkpoint_signature(info)?;
+                checkpoint_service.notify_checkpoint_signature(self, info)?;
                 self.record_consensus_transaction_processed(&transaction, consensus_index)?;
                 Ok(None)
             }
@@ -1037,9 +1058,91 @@ impl AuthorityPerEpochStore {
                 Some(CmpOrdering::Greater) => false,
                 None => false,
             };
-            checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
+            checkpoint_service.notify_checkpoint(self, index, roots, final_checkpoint)?;
         }
         self.record_checkpoint_boundary(round)
+    }
+
+    pub fn get_pending_checkpoints(
+        &self,
+    ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))> {
+        self.tables.pending_checkpoints.iter().collect()
+    }
+
+    pub fn get_pending_checkpoint(
+        &self,
+        index: &CheckpointCommitHeight,
+    ) -> Result<Option<(Vec<TransactionDigest>, bool)>, TypedStoreError> {
+        self.tables.pending_checkpoints.get(index)
+    }
+
+    pub fn insert_pending_checkpoint(
+        &self,
+        index: &CheckpointCommitHeight,
+        transactions: &(Vec<TransactionDigest>, bool),
+    ) -> Result<(), TypedStoreError> {
+        self.tables.pending_checkpoints.insert(index, transactions)
+    }
+
+    pub fn process_pending_checkpoint(
+        &self,
+        commit_height: CheckpointCommitHeight,
+        content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
+    ) -> Result<(), TypedStoreError> {
+        let mut batch = self.tables.pending_checkpoints.batch();
+        batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
+        if let Some((seq, transactions)) = content_info {
+            batch = batch.insert_batch(
+                &self.tables.digest_to_checkpoint,
+                transactions.iter().map(|tx| (*tx, seq)),
+            )?;
+        }
+
+        batch.write()
+    }
+
+    pub fn tx_checkpointed_in_current_epoch(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, TypedStoreError> {
+        self.tables.digest_to_checkpoint.contains_key(digest)
+    }
+
+    pub fn get_pending_checkpoint_signatures_iter(
+        &self,
+        checkpoint_seq: CheckpointSequenceNumber,
+        starting_index: u64,
+    ) -> Result<
+        impl Iterator<Item = ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage)> + '_,
+        TypedStoreError,
+    > {
+        let key = (checkpoint_seq, starting_index);
+        debug!("Scanning pending checkpoint signatures from {:?}", key);
+        self.tables
+            .pending_checkpoint_signatures
+            .iter()
+            .skip_to(&key)
+    }
+
+    pub fn get_last_checkpoint_signature_index(&self) -> u64 {
+        self.tables
+            .pending_checkpoint_signatures
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|((_, index), _)| index)
+            .unwrap_or_default()
+    }
+
+    pub fn insert_checkpoint_signature(
+        &self,
+        checkpoint_seq: CheckpointSequenceNumber,
+        index: u64,
+        info: &CheckpointSignatureMessage,
+    ) -> Result<(), TypedStoreError> {
+        self.tables
+            .pending_checkpoint_signatures
+            .insert(&(checkpoint_seq, index), info)
     }
 }
 
