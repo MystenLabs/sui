@@ -1041,6 +1041,9 @@ impl AuthorityPerEpochStore {
 }
 
 impl PerEpochCheckpointStore for AuthorityPerEpochStore {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch()
+    }
     fn get_pending_checkpoints(
         &self,
     ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))> {

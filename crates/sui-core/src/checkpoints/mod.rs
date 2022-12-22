@@ -66,6 +66,8 @@ pub struct CheckpointStore {
 }
 
 pub trait PerEpochCheckpointStore {
+    fn get_epoch(&self) -> EpochId;
+
     fn get_pending_checkpoints(
         &self,
     ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))>;
@@ -415,7 +417,7 @@ impl CheckpointBuilder {
         let unsorted = self.complete_checkpoint_effects(epoch_store, roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
         let new_checkpoint = self
-            .create_checkpoint(sorted, last_checkpoint_of_epoch)
+            .create_checkpoint(epoch_store.get_epoch(), sorted, last_checkpoint_of_epoch)
             .await?;
         self.write_checkpoint(epoch_store, height, new_checkpoint)
             .await?;
@@ -467,6 +469,7 @@ impl CheckpointBuilder {
 
     async fn create_checkpoint(
         &self,
+        epoch: EpochId,
         mut effects: Vec<TransactionEffects>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<Option<(CheckpointSummary, CheckpointContents)>> {
@@ -474,11 +477,15 @@ impl CheckpointBuilder {
         let epoch_rolling_gas_cost_summary = Self::get_epoch_total_gas_cost(
             last_checkpoint.as_ref().map(|(_, c)| c),
             &effects,
-            self.state.epoch(),
+            epoch,
         );
         if last_checkpoint_of_epoch {
-            self.augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
-                .await?;
+            self.augment_epoch_last_checkpoint(
+                epoch,
+                &epoch_rolling_gas_cost_summary,
+                &mut effects,
+            )
+            .await?;
         }
         if effects.is_empty() {
             return Ok(None);
@@ -500,7 +507,7 @@ impl CheckpointBuilder {
             .map(|(_, c)| c.sequence_number + 1)
             .unwrap_or_default();
         let summary = CheckpointSummary::new(
-            self.state.epoch(),
+            epoch,
             sequence_number,
             network_total_transactions,
             &contents,
@@ -544,13 +551,14 @@ impl CheckpointBuilder {
 
     async fn augment_epoch_last_checkpoint(
         &self,
+        epoch: EpochId,
         epoch_total_gas_cost: &GasCostSummary,
         effects: &mut Vec<TransactionEffects>,
     ) -> anyhow::Result<()> {
         let cert = self
             .state
             .create_advance_epoch_tx_cert(
-                self.state.epoch() + 1,
+                epoch + 1,
                 epoch_total_gas_cost,
                 Duration::from_secs(60), // TODO: Is 60s enough?
                 self.transaction_certifier.deref(),
