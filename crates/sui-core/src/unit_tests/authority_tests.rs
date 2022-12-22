@@ -3169,7 +3169,10 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority.verify_consensus_transaction(cert.epoch(), transaction) {
+    if let Ok(transaction) = authority
+        .epoch_store()
+        .verify_consensus_transaction(transaction)
+    {
         authority
             .handle_consensus_transaction(
                 cert.epoch(),
@@ -3190,7 +3193,10 @@ pub(crate) async fn send_consensus_no_execution(
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority.verify_consensus_transaction(cert.epoch(), transaction) {
+    if let Ok(transaction) = authority
+        .epoch_store()
+        .verify_consensus_transaction(transaction)
+    {
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.
         authority

@@ -131,14 +131,16 @@ impl ExecutionState for ConsensusHandler {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
+        let Ok(epoch_store) = self.state.load_epoch_store(self.epoch) else {
+            return;
+        };
+
         for sequenced_transaction in sequenced_transactions {
-            let verified_transaction = match self
-                .state
-                .verify_consensus_transaction(self.epoch, sequenced_transaction)
-            {
-                Ok(verified_transaction) => verified_transaction,
-                Err(()) => continue,
-            };
+            let verified_transaction =
+                match epoch_store.verify_consensus_transaction(sequenced_transaction) {
+                    Ok(verified_transaction) => verified_transaction,
+                    Err(()) => continue,
+                };
 
             self.state
                 .handle_consensus_transaction(
@@ -150,12 +152,8 @@ impl ExecutionState for ConsensusHandler {
                 .expect("Unrecoverable error in consensus handler");
         }
 
-        self.state
-            .handle_commit_boundary(
-                self.epoch,
-                &consensus_output.sub_dag,
-                &self.checkpoint_service,
-            )
+        epoch_store
+            .handle_commit_boundary(&consensus_output.sub_dag, &self.checkpoint_service)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 

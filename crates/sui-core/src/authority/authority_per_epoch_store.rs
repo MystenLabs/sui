@@ -4,6 +4,7 @@
 use futures::future::{select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
+use narwhal_types::CommittedSubDag;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
@@ -24,15 +25,21 @@ use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
     SignedTransactionEffects, TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
+use crate::checkpoints::CheckpointServiceNotify;
+use crate::consensus_handler::{
+    SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
+};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
+use mysten_metrics::monitored_scope;
+use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -845,6 +852,83 @@ impl AuthorityPerEpochStore {
             Either::Left((_, _f)) => Err(()),
             Either::Right((result, _)) => Ok(result),
         }
+    }
+
+    /// Verifies transaction signatures and other data
+    /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
+    /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
+    /// This function returns unit error and is responsible for emitting log messages for internal errors
+    pub(crate) fn verify_consensus_transaction(
+        &self,
+        transaction: SequencedConsensusTransaction,
+    ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
+        let _scope = monitored_scope("VerifyConsensusTransaction");
+        if self
+            .is_consensus_message_processed(&transaction.transaction.key())
+            .expect("Storage error")
+        {
+            debug!(
+                consensus_index=?transaction.consensus_index.index.transaction_index,
+                tracking_id=?transaction.transaction.tracking_id,
+                "handle_consensus_transaction UserTransaction [skip]",
+            );
+            // TODO: Add metrics back.
+            // self.metrics.skipped_consensus_txns.inc();
+            return Err(());
+        }
+        // Signatures are verified as part of narwhal payload verification in SuiTxValidator
+        match &transaction.transaction.kind {
+            ConsensusTransactionKind::UserTransaction(_certificate) => {}
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                if transaction.sender_authority() != data.summary.auth_signature.authority {
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, transaction.certificate.origin() );
+                    return Err(());
+                }
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                if &transaction.sender_authority() != authority {
+                    warn!(
+                        "EndOfPublish authority {} does not match narwhal certificate source {}",
+                        authority,
+                        transaction.certificate.origin()
+                    );
+                    return Err(());
+                }
+            }
+        }
+        Ok(VerifiedSequencedConsensusTransaction(transaction))
+    }
+
+    pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
+        &self,
+        committed_dag: &Arc<CommittedSubDag>,
+        checkpoint_service: &Arc<C>,
+    ) -> SuiResult {
+        let round = committed_dag.round();
+        debug!("Commit boundary at {}", round);
+        // This exchange is restart safe because of following:
+        //
+        // We try to read last checkpoint content and send it to the checkpoint service
+        // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
+        //
+        // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
+        if let Some((index, roots)) = self.last_checkpoint(round)? {
+            let final_checkpoint_round = self.final_epoch_checkpoint()?;
+            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
+                Some(CmpOrdering::Less) => {
+                    debug!(
+                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
+                        round, final_checkpoint_round
+                    );
+                    return Ok(());
+                }
+                Some(CmpOrdering::Equal) => true,
+                Some(CmpOrdering::Greater) => false,
+                None => false,
+            };
+            checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
+        }
+        self.record_checkpoint_boundary(round)
     }
 }
 
