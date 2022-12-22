@@ -1099,6 +1099,32 @@ impl AuthorityStore {
         Ok(write_batch.delete_batch(&self.perpetual_tables.transaction_lock, objects.iter())?)
     }
 
+    #[cfg(test)]
+    pub(crate) fn reset_locks_for_test(
+        &self,
+        transactions: &[TransactionDigest],
+        objects: &[ObjectRef],
+    ) {
+        for tx in transactions {
+            self.epoch_store().reset_transaction_for_test(tx);
+        }
+
+        self.perpetual_tables
+            .transaction_lock
+            .batch()
+            .delete_batch(&self.perpetual_tables.transaction_lock, objects.iter())
+            .unwrap()
+            .write()
+            .unwrap();
+
+        let write_batch = self.perpetual_tables.transaction_lock.batch();
+
+        self.initialize_locks_impl(write_batch, objects, false)
+            .unwrap()
+            .write()
+            .unwrap();
+    }
+
     /// This function is called at the end of epoch for each transaction that's
     /// executed locally on the validator but didn't make to the last checkpoint.
     /// The effects of the execution is reverted here.
