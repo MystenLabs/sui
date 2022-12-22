@@ -207,7 +207,7 @@ module sui::coin {
         let split_amount = value(self) / n;
         while ({
             spec {
-                invariant i <= n-1;
+                invariant i <= n - 1;
                 invariant self.balance.value == old(self).balance.value - (i * split_amount);
                 invariant ctx.ids_created == old(ctx).ids_created + i;
             };
@@ -360,6 +360,23 @@ module sui::coin {
 
     spec burn_ {
         include Burn<T>;
+    }
+
+    // === Get coin metadata ===
+
+    /// Get name of the coin in `CoinMetadata`
+    public fun name<T>(metadata: &CoinMetadata<T>): string::String {
+        metadata.name
+    }
+
+    /// Get symbol of the coin in `CoinMetadata`
+    public fun symbol<T>(metadata: &CoinMetadata<T>): ascii::String {
+        metadata.symbol
+    }
+
+    /// Get decimals of the coin in `CoinMetadata`
+    public fun decimals<T>(metadata: &CoinMetadata<T>): u8 {
+        metadata.decimals
     }
 
     // === Update coin metadata ===
