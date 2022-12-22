@@ -31,6 +31,7 @@
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
 -  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
+-  [Function `validators`](#0x2_sui_system_validators)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -1104,13 +1105,13 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
         <b>let</b> amount = <a href="_destroy_some">option::destroy_some</a>(amount);
         <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> total_balance, amount);
         // <a href="transfer.md#0x2_transfer">transfer</a> back the remainder <b>if</b> non zero.
-        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&total_balance) &gt; 0){
+        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&total_balance) &gt; 0) {
             <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(total_balance, ctx), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
-        }<b>else</b>{
+        } <b>else</b> {
             <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(total_balance);
         };
         <a href="balance.md#0x2_balance">balance</a>
-    }<b>else</b> {
+    } <b>else</b> {
         total_balance
     }
 }
@@ -1157,15 +1158,40 @@ Extract required Balance from vector of LockedCoin<SUI>, transfer the remainder 
     <b>if</b> (<a href="_is_some">option::is_some</a>(&amount)){
         <b>let</b> amount = <a href="_destroy_some">option::destroy_some</a>(amount);
         <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> total_balance, amount);
-        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&total_balance) &gt; 0){
+        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&total_balance) &gt; 0) {
             <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(total_balance, first_lock, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
-        }<b>else</b>{
+        } <b>else</b> {
             <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(total_balance);
         };
         (<a href="balance.md#0x2_balance">balance</a>, first_lock)
-    }<b>else</b>{
+    } <b>else</b>{
         (total_balance, first_lock)
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_validators"></a>
+
+## Function `validators`
+
+Return the current validator set
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validators">validators</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validators">validators</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &ValidatorSet {
+    &self.validators
 }
 </code></pre>
 
