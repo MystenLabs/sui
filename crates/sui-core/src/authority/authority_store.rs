@@ -895,9 +895,8 @@ impl AuthorityStore {
                 UpdateType::Transaction(_) => {
                     // After this call completes, new txes can run on the output locks, so all
                     // output objects must be written already.
-                    // XXX rename
                     self.lock_service
-                        .sequence_transaction(transaction_digest, owned_inputs, new_locks_to_init)
+                        .commit_transaction(transaction_digest, owned_inputs, new_locks_to_init)
                         .await?;
                 }
                 UpdateType::Genesis => {

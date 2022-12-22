@@ -52,7 +52,7 @@ enum LockServiceCommands {
         is_force_reset: bool,
         resp: oneshot::Sender<SuiResult>,
     },
-    SequenceTransaction {
+    CommitTransaction {
         tx: TransactionDigest,
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
@@ -237,7 +237,7 @@ impl LockServiceImpl {
         Ok(())
     }
 
-    fn sequence_transaction(
+    fn commit_transaction(
         &self,
         tx: TransactionDigest,
         // The objects that we must have locks for.
@@ -473,13 +473,13 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
-                LockServiceCommands::SequenceTransaction {
+                LockServiceCommands::CommitTransaction {
                     tx,
                     inputs,
                     outputs,
                     resp,
                 } => {
-                    if let Err(_e) = resp.send(self.sequence_transaction(tx, &inputs, &outputs)) {
+                    if let Err(_e) = resp.send(self.commit_transaction(tx, &inputs, &outputs)) {
                         warn!("Could not respond to sender!");
                     }
                 }
@@ -702,18 +702,15 @@ impl LockService {
         .await
     }
 
-    /// Attempts to sequence the given tx. Sequencing consists of:
+    /// Attempts to commit lock updates for the given tx:
     ///
-    /// 1. Check if the tx has been previously sequenced under a different sequence number,
-    ///    if so, return it.
-    /// 2. If not, atomically record the tx->sequence number assignment and initialize locks for
-    ///    the output objects of this tx.
-    /// 3. Delete locks for the tx input objects (this step is not atomic).
+    /// 1. Initialize locks for the output objects of this tx.
+    /// 2. Delete locks for the tx input objects (this step is not atomic).
     ///
     /// Return value:
     /// - The sequence number that was assigned to tx - may differ from the `seq` parameter if the
     ///   tx was previously sequenced.
-    pub async fn sequence_transaction(
+    pub async fn commit_transaction(
         &self,
         tx: TransactionDigest,
         inputs: Vec<ObjectRef>,
@@ -723,7 +720,7 @@ impl LockService {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
             self.inner
                 .sender()
-                .send(LockServiceCommands::SequenceTransaction {
+                .send(LockServiceCommands::CommitTransaction {
                     tx,
                     inputs,
                     outputs,
