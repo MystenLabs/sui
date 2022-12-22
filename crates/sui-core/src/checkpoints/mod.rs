@@ -21,8 +21,8 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::TransactionCertifier;
-use prometheus::IntCounterVec;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::path::Path;
@@ -63,51 +63,6 @@ pub struct CheckpointStore {
     /// Watermarks used to determine the highest verified, fully synced, and
     /// fully executed checkpoints
     watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
-}
-
-pub trait PerEpochCheckpointStore {
-    fn get_epoch(&self) -> EpochId;
-
-    fn get_pending_checkpoints(
-        &self,
-    ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))>;
-
-    fn get_pending_checkpoint(
-        &self,
-        index: &CheckpointCommitHeight,
-    ) -> Result<Option<(Vec<TransactionDigest>, bool)>, TypedStoreError>;
-
-    fn insert_pending_checkpoint(
-        &self,
-        index: &CheckpointCommitHeight,
-        transactions: &(Vec<TransactionDigest>, bool),
-    ) -> Result<(), TypedStoreError>;
-
-    fn process_pending_checkpoint(
-        &self,
-        commit_height: CheckpointCommitHeight,
-        content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
-    ) -> Result<(), TypedStoreError>;
-
-    fn tx_checkpointed_in_current_epoch(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<bool, TypedStoreError>;
-
-    fn aggregate_pending_signatures(
-        &self,
-        aggregator: &mut CheckpointSignatureAggregator,
-        checkpoint_participation_metric: &IntCounterVec,
-    ) -> Result<Option<AuthorityWeakQuorumSignInfo>, TypedStoreError>;
-
-    fn get_last_checkpoint_signature_index(&self) -> u64;
-
-    fn insert_checkpoint_signature(
-        &self,
-        checkpoint_seq: CheckpointSequenceNumber,
-        index: u64,
-        info: &CheckpointSignatureMessage,
-    ) -> Result<(), TypedStoreError>;
 }
 
 impl CheckpointStore {
@@ -367,12 +322,7 @@ impl CheckpointBuilder {
             for (height, (roots, last_checkpoint_of_epoch)) in epoch_store.get_pending_checkpoints()
             {
                 if let Err(e) = self
-                    .make_checkpoint(
-                        epoch_store.deref().deref(),
-                        height,
-                        roots,
-                        last_checkpoint_of_epoch,
-                    )
+                    .make_checkpoint(epoch_store.deref(), height, roots, last_checkpoint_of_epoch)
                     .await
                 {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
@@ -394,7 +344,7 @@ impl CheckpointBuilder {
 
     async fn make_checkpoint(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         height: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
@@ -411,7 +361,7 @@ impl CheckpointBuilder {
         let unsorted = self.complete_checkpoint_effects(epoch_store, roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
         let new_checkpoint = self
-            .create_checkpoint(epoch_store.get_epoch(), sorted, last_checkpoint_of_epoch)
+            .create_checkpoint(epoch_store.epoch(), sorted, last_checkpoint_of_epoch)
             .await?;
         self.write_checkpoint(epoch_store, height, new_checkpoint)
             .await?;
@@ -420,7 +370,7 @@ impl CheckpointBuilder {
 
     async fn write_checkpoint(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         height: CheckpointCommitHeight,
         new_checkpoint: Option<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
@@ -570,7 +520,7 @@ impl CheckpointBuilder {
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already
     fn complete_checkpoint_effects(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         mut roots: Vec<SignedTransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let mut results = vec![];
@@ -671,9 +621,10 @@ impl CheckpointAggregator {
                 });
                 self.current.as_mut().unwrap()
             };
-            if let Some(auth_signature) = epoch_store
-                .aggregate_pending_signatures(current, &self.metrics.checkpoint_participation)?
-            {
+            if let Some(auth_signature) = epoch_store.aggregate_pending_checkpoint_signatures(
+                current,
+                &self.metrics.checkpoint_participation,
+            )? {
                 let summary = CertifiedCheckpointSummary {
                     summary: current.summary.clone(),
                     auth_signature,
@@ -753,13 +704,13 @@ impl CheckpointSignatureAggregator {
 pub trait CheckpointServiceNotify {
     fn notify_checkpoint_signature(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
     fn notify_checkpoint(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         index: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
@@ -849,7 +800,7 @@ impl CheckpointService {
 impl CheckpointServiceNotify for CheckpointService {
     fn notify_checkpoint_signature(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         info: &CheckpointSignatureMessage,
     ) -> SuiResult {
         let sequence = info.summary.summary.sequence_number;
@@ -885,7 +836,7 @@ impl CheckpointServiceNotify for CheckpointService {
 
     fn notify_checkpoint(
         &self,
-        epoch_store: &impl PerEpochCheckpointStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         index: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
@@ -916,7 +867,7 @@ pub struct CheckpointServiceNoop {}
 impl CheckpointServiceNotify for CheckpointServiceNoop {
     fn notify_checkpoint_signature(
         &self,
-        _: &impl PerEpochCheckpointStore,
+        _: &Arc<AuthorityPerEpochStore>,
         _: &CheckpointSignatureMessage,
     ) -> SuiResult {
         Ok(())
@@ -924,7 +875,7 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
 
     fn notify_checkpoint(
         &self,
-        _: &impl PerEpochCheckpointStore,
+        _: &Arc<AuthorityPerEpochStore>,
         _: CheckpointCommitHeight,
         _: Vec<TransactionDigest>,
         _: bool,
@@ -1041,7 +992,7 @@ mod tests {
             CheckpointMetrics::new_for_tests(),
         );
         let epoch_store_guard = state.epoch_store();
-        let epoch_store = epoch_store_guard.deref().deref();
+        let epoch_store = epoch_store_guard.deref();
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
         checkpoint_service
             .notify_checkpoint(epoch_store, 0, vec![d(4)], false)

@@ -178,7 +178,8 @@ pub struct AuthorityEpochTables {
 
     /// Stores pending signatures
     /// The key in this table is checkpoint sequence number and an arbitrary integer
-    pending_signatures: DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
+    pending_checkpoint_signatures:
+        DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
 }
 
 impl AuthorityEpochTables {
@@ -1038,26 +1039,21 @@ impl AuthorityPerEpochStore {
         }
         self.record_checkpoint_boundary(round)
     }
-}
 
-impl PerEpochCheckpointStore for AuthorityPerEpochStore {
-    fn get_epoch(&self) -> EpochId {
-        self.epoch()
-    }
-    fn get_pending_checkpoints(
+    pub fn get_pending_checkpoints(
         &self,
     ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))> {
         self.tables.pending_checkpoints.iter().collect()
     }
 
-    fn get_pending_checkpoint(
+    pub fn get_pending_checkpoint(
         &self,
         index: &CheckpointCommitHeight,
     ) -> Result<Option<(Vec<TransactionDigest>, bool)>, TypedStoreError> {
         self.tables.pending_checkpoints.get(index)
     }
 
-    fn insert_pending_checkpoint(
+    pub fn insert_pending_checkpoint(
         &self,
         index: &CheckpointCommitHeight,
         transactions: &(Vec<TransactionDigest>, bool),
@@ -1065,7 +1061,7 @@ impl PerEpochCheckpointStore for AuthorityPerEpochStore {
         self.tables.pending_checkpoints.insert(index, transactions)
     }
 
-    fn process_pending_checkpoint(
+    pub fn process_pending_checkpoint(
         &self,
         commit_height: CheckpointCommitHeight,
         content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
@@ -1082,21 +1078,25 @@ impl PerEpochCheckpointStore for AuthorityPerEpochStore {
         batch.write()
     }
 
-    fn tx_checkpointed_in_current_epoch(
+    pub fn tx_checkpointed_in_current_epoch(
         &self,
         digest: &TransactionDigest,
     ) -> Result<bool, TypedStoreError> {
         self.tables.digest_to_checkpoint.contains_key(digest)
     }
 
-    fn aggregate_pending_signatures(
+    pub fn aggregate_pending_checkpoint_signatures(
         &self,
         aggregator: &mut CheckpointSignatureAggregator,
         checkpoint_participation_metric: &IntCounterVec,
     ) -> Result<Option<AuthorityWeakQuorumSignInfo>, TypedStoreError> {
         let key = (aggregator.sequence_number(), aggregator.next_index());
         debug!("Scanning pending checkpoint signatures from {:?}", key);
-        let iter = self.tables.pending_signatures.iter().skip_to(&key)?;
+        let iter = self
+            .tables
+            .pending_checkpoint_signatures
+            .iter()
+            .skip_to(&key)?;
         for ((seq, index), data) in iter {
             if seq != aggregator.sequence_number() {
                 debug!(
@@ -1125,9 +1125,9 @@ impl PerEpochCheckpointStore for AuthorityPerEpochStore {
         Ok(None)
     }
 
-    fn get_last_checkpoint_signature_index(&self) -> u64 {
+    pub fn get_last_checkpoint_signature_index(&self) -> u64 {
         self.tables
-            .pending_signatures
+            .pending_checkpoint_signatures
             .iter()
             .skip_to_last()
             .next()
@@ -1135,14 +1135,14 @@ impl PerEpochCheckpointStore for AuthorityPerEpochStore {
             .unwrap_or_default()
     }
 
-    fn insert_checkpoint_signature(
+    pub fn insert_checkpoint_signature(
         &self,
         checkpoint_seq: CheckpointSequenceNumber,
         index: u64,
         info: &CheckpointSignatureMessage,
     ) -> Result<(), TypedStoreError> {
         self.tables
-            .pending_signatures
+            .pending_checkpoint_signatures
             .insert(&(checkpoint_seq, index), info)
     }
 }
