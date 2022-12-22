@@ -14,7 +14,6 @@
     overflow: auto;
 
     &.box {
-        background: $color;
         max-width: sizing.$popup-width;
         max-height: sizing.$popup-height;
         border: 1px solid $color;

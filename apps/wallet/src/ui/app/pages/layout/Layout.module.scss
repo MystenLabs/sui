@@ -7,7 +7,9 @@
     align-items: center;
     justify-content: center;
     flex-flow: column nowrap;
+    background: url('_assets/images/welcome_bg.svg') no-repeat center center;
     background-color: v.use(v.$colors-main-content-background);
+    background-size: cover;
 
     @include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
 

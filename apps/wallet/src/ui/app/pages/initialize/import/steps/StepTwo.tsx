@@ -35,7 +35,7 @@ export default function StepTwo({ next, data, mode }: StepProps) {
                         <Button
                             type="button"
                             disabled={isSubmitting}
-                            className={st.btn}
+                            className="flex-1 !text-steel-dark"
                             mode="neutral"
                             size="large"
                             onClick={() => next(values, -1)}
@@ -50,7 +50,7 @@ export default function StepTwo({ next, data, mode }: StepProps) {
                             type="submit"
                             disabled={isSubmitting || !isValid}
                             mode="primary"
-                            className={st.btn}
+                            className="flex-1"
                             size="large"
                         >
                             <Loading loading={isSubmitting}>

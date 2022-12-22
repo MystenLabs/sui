@@ -3,7 +3,9 @@
 
 import cn from 'classnames';
 
+import { Heading } from '_app/shared/heading';
 import PageTitle from '_app/shared/page-title';
+import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 
 import type { ReactNode } from 'react';
@@ -56,10 +58,30 @@ export default function CardLayout({
                 </div>
             ) : null}
             {headerCaption ? (
-                <h3 className={st.caption}>{headerCaption}</h3>
+                <Text variant="caption" color="steel-dark" weight="semibold">
+                    {headerCaption}
+                </Text>
             ) : null}
-            {title ? <h1 className={st.headerTitle}>{title}</h1> : null}
-            {subtitle ? <h1 className={st.subTitle}>{subtitle}</h1> : null}
+            {title ? (
+                <div className="text-center mt-1.25">
+                    <Heading
+                        variant="heading1"
+                        color="gray-90"
+                        as="h1"
+                        weight="bold"
+                        leading="none"
+                    >
+                        {title}
+                    </Heading>
+                </div>
+            ) : null}
+            {subtitle ? (
+                <div className="text-center mb-3.75">
+                    <Text variant="caption" color="steel-darker" weight="bold">
+                        {subtitle}
+                    </Text>
+                </div>
+            ) : null}
             {children}
         </div>
     );

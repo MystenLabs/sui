@@ -4,6 +4,8 @@
 import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
+import { Heading } from '_app/shared/heading';
+import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 
 import st from './Select.module.scss';
@@ -28,17 +30,38 @@ const selections = [
 const SelectPage = () => {
     return (
         <>
-            <h1 className={st.headerTitle}>New to Sui Wallet?</h1>
-            <div className={st.selector}>
+            <Heading variant="heading2" color="gray-90" as="h1" weight="bold">
+                New to Sui Wallet?
+            </Heading>
+            <div className="flex flex-col flex-nowrap gap-7.5 mt-7.5">
                 {selections.map((aSelection) => (
-                    <div className={st.card} key={aSelection.url}>
-                        <h3 className={st.title}>{aSelection.title}</h3>
-                        <div className={st.desc}>{aSelection.desc}</div>
+                    <div
+                        className={cl(
+                            st.card,
+                            'bg-aliceBlue flex flex-col flex-nowrap items-center gap-3 text-center'
+                        )}
+                        key={aSelection.url}
+                    >
+                        <Heading
+                            variant="heading3"
+                            color="gray-90"
+                            as="h3"
+                            weight="semibold"
+                        >
+                            {aSelection.title}
+                        </Heading>
+                        <Text variant="p1" color="gray-85" weight="medium">
+                            {aSelection.desc}
+                        </Text>
+
                         <Link
                             to={aSelection.url}
-                            className={cl('btn', st.action)}
+                            className={cl('btn mt-7.5', st.action)}
                         >
-                            <Icon icon={aSelection.icon} className={st.icon} />
+                            <Icon
+                                icon={aSelection.icon}
+                                className={cl(st.icon, 'font-normal')}
+                            />
                             {aSelection.action}
                         </Link>
                     </div>

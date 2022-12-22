@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Button from '_app/shared/button';
 import CardLayout from '_app/shared/card-layout';
+import { Text } from '_app/shared/text';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Alert from '_components/alert';
 import CopyToClipboard from '_components/copy-to-clipboard';
@@ -59,17 +61,41 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                 title={`Wallet ${
                     mode === 'imported' ? 'Imported' : 'Created'
                 } Successfully!`}
-                subtitle={mode === 'created' ? 'Recovery Phrase' : undefined}
+                className="bg-aliceBlue"
             >
                 {mode === 'created' ? (
                     <>
+                        <div className="mb-1 mt-7.5">
+                            <Text
+                                variant="caption"
+                                color="steel-darker"
+                                weight="bold"
+                            >
+                                Recovery phrase
+                            </Text>
+                        </div>
+                        <div className="mb-3.5 mt-2 text-center">
+                            <Text
+                                variant="p2"
+                                color="steel-dark"
+                                weight="normal"
+                            >
+                                Your recovery phrase makes it easy to back up
+                                and restore your account.
+                            </Text>
+                        </div>
                         <Loading loading={loading}>
                             {mnemonic ? (
-                                <div className={st.mnemonic}>
+                                <div
+                                    className={cl(
+                                        st.mnemonic,
+                                        'text-steel-dark'
+                                    )}
+                                >
                                     {mnemonic}
                                     <CopyToClipboard
                                         txt={mnemonic}
-                                        className={st.copy}
+                                        className="mt-2.5 text-steel-dark text-subtitleSmall self-end cursor-pointer leading-100"
                                         mode="plain"
                                     >
                                         COPY
@@ -79,15 +105,25 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                 <Alert>{error}</Alert>
                             )}
                         </Loading>
-                        <div className={st.info}>
-                            Your recovery phrase makes it easy to back up and
-                            restore your account.
+                        <div className="mt-3.75 mb-1 text-center">
+                            <Text
+                                variant="caption"
+                                color="steel-dark"
+                                weight="semibold"
+                            >
+                                WARNING
+                            </Text>
                         </div>
-                        <div className={st.info}>
-                            <div className={st.infoCaption}>WARNING</div>
-                            Never disclose your secret recovery phrase. Anyone
-                            with the passphrase can take over your account
-                            forever.
+                        <div className="mb-1 text-center">
+                            <Text
+                                variant="p2"
+                                color="steel-dark"
+                                weight="normal"
+                            >
+                                Never disclose your secret recovery phrase.
+                                Anyone with the passphrase can take over your
+                                account forever.
+                            </Text>
                         </div>
                     </>
                 ) : null}

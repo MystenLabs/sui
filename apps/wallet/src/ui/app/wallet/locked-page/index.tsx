@@ -78,7 +78,7 @@ export default function LockedPage() {
                             }}
                         >
                             {({ touched, errors, isSubmitting, isValid }) => (
-                                <Form className={st.form}>
+                                <Form className="flex flex-col flex-nowrap mt-7.5 flex-grow w-full">
                                     <FieldLabel txt="Enter Password">
                                         <Field
                                             name="password"

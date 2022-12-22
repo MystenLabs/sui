@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { Formik, Form } from 'formik';
 import { useNavigate } from 'react-router-dom';
 import * as Yup from 'yup';
@@ -42,7 +43,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                 setFieldValue,
                 handleBlur,
             }) => (
-                <Form className={st.form}>
+                <Form className="flex flex-col flex-nowrap items-stretch flex-1 flex-grow">
                     <FieldLabel txt="Enter Recovery Phrase">
                         <textarea
                             id="importMnemonicTxt"
@@ -60,7 +61,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                 );
                                 handleBlur(e);
                             }}
-                            className={st.mnemonic}
+                            className={cl(st.mnemonic, 'text-steel-dark')}
                             placeholder="Enter your 12-word recovery phrase"
                             name="mnemonic"
                             disabled={isSubmitting}

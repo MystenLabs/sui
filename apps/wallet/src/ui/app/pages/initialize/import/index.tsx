@@ -67,23 +67,26 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
             }
             headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
             mode={mode === 'import' ? 'box' : 'plain'}
+            className="bg-aliceBlue"
         >
             {StepForm ? (
-                <StepForm
-                    next={async (data, stepIncrement) => {
-                        const nextStep = step + stepIncrement;
-                        if (nextStep >= totalSteps) {
-                            await onHandleSubmit(data);
-                        }
-                        setData(data);
-                        if (nextStep < 0) {
-                            return;
-                        }
-                        setStep(nextStep);
-                    }}
-                    data={data}
-                    mode={mode}
-                />
+                <div className="mt-7.5 flex flex-col flex-nowrap items-stretch flex-1 flex-grow w-full">
+                    <StepForm
+                        next={async (data, stepIncrement) => {
+                            const nextStep = step + stepIncrement;
+                            if (nextStep >= totalSteps) {
+                                await onHandleSubmit(data);
+                            }
+                            setData(data);
+                            if (nextStep < 0) {
+                                return;
+                            }
+                            setStep(nextStep);
+                        }}
+                        data={data}
+                        mode={mode}
+                    />
+                </div>
             ) : null}
         </CardLayout>
     );

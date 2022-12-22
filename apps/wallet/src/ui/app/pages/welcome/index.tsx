@@ -5,6 +5,8 @@ import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import { Heading } from '_app/shared/heading';
+import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
@@ -18,38 +20,61 @@ const WelcomePage = () => {
     return (
         <PageLayout forceFullscreen={true}>
             <Loading loading={checkingInitialized}>
-                <div className={st.container}>
+                <div className="flex flex-col flex-nowrap items-center justify-center">
                     <div className={st.content}>
                         <BottomMenuLayout>
-                            <Content className={st.welcome}>
+                            <Content className="flex flex-col flex-nowrap items-center p-7.5 pb-0">
                                 <Logo
-                                    size="bigger"
-                                    className={st.suiBlue}
+                                    size="normal"
+                                    className="text-hero mt-7.5"
                                     txt={true}
                                 />
-
-                                <div className={st.description}>
-                                    <h1 className={st.title}>
+                                <div className="mx-auto text-center w-11/12 mt-12">
+                                    <Heading
+                                        variant="heading2"
+                                        color="gray-90"
+                                        as="h1"
+                                        weight="bold"
+                                    >
                                         Welcome to Sui Wallet
-                                    </h1>
-                                    <p>
-                                        Connecting you to the decentralized web
-                                        and SUI network.
-                                    </p>
-                                    <ul className={st.features}>
-                                        <li>
-                                            <Icon icon={SuiIcons.Checkmark} />
+                                    </Heading>
+                                    <div className="mt-5">
+                                        <Text
+                                            variant="p1"
+                                            color="steel-dark"
+                                            weight="medium"
+                                        >
+                                            Connecting you to the decentralized
+                                            web and SUI network.
+                                        </Text>
+                                    </div>
+                                    <div className="flex gap-2 mt-10 items-center">
+                                        <Icon
+                                            icon={SuiIcons.Checkmark}
+                                            className="text-success text-extraSmall"
+                                        />
+
+                                        <Text
+                                            variant="body"
+                                            color="steel-dark"
+                                            weight="medium"
+                                        >
                                             Buy, store, send and swap tokens
-                                        </li>
-                                        <li>
-                                            <Icon icon={SuiIcons.Checkmark} />
+                                        </Text>
+                                    </div>
+                                    <div className="flex gap-2 mt-3">
+                                        <Icon
+                                            icon={SuiIcons.Checkmark}
+                                            className="text-success text-extraSmall"
+                                        />
+                                        <Text
+                                            variant="body"
+                                            color="steel-dark"
+                                            weight="medium"
+                                        >
                                             Explore blockchain apps
-                                        </li>
-                                        <li>
-                                            <Icon icon={SuiIcons.Checkmark} />
-                                            Find the best price every time
-                                        </li>
-                                    </ul>
+                                        </Text>
+                                    </div>
                                 </div>
                             </Content>
                             <div className={st.getStarted}>
