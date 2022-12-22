@@ -1170,7 +1170,7 @@ where
                     Box::pin(async move {
                         match result {
                             // If we are given back a certificate, then we do not need
-                            // to re-submit this transaction, we just returned the ready made
+                            // to re-submit this transaction, we just returned the already made
                             // certificate. A certificate is only valid if it's formed in the
                             // current epoch.
                             Ok(VerifiedTransactionInfoResponse {

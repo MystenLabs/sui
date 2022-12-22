@@ -2222,9 +2222,10 @@ pub struct QuorumDriverRequest {
     pub transaction: VerifiedTransaction,
 }
 
-#[derive(Clone, Debug)]
-pub enum QuorumDriverResponse {
-    EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
+#[derive(Debug, Clone)]
+pub struct QuorumDriverResponse {
+    pub tx_cert: VerifiedCertificate,
+    pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

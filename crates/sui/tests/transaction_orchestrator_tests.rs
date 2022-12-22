@@ -4,11 +4,11 @@
 use prometheus::Registry;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
-use sui_types::error::SuiResult;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverRequest, VerifiedTransaction,
+    VerifiedTransaction,
 };
+use sui_types::quorum_driver_types::QuorumDriverError;
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::wait_for_tx;
@@ -39,9 +39,8 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let digest = *txn.digest();
     orchestrator
         .quorum_driver()
-        .execute_transaction(QuorumDriverRequest { transaction: txn })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+        .submit_transaction_no_ticket(txn)
+        .await?;
 
     // Wait for data sync to catch up
     wait_for_tx(digest, node.state().clone()).await;
@@ -145,7 +144,7 @@ async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
     txn: VerifiedTransaction,
     request_type: ExecuteTransactionRequestType,
-) -> SuiResult<ExecuteTransactionResponse> {
+) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
         .execute_transaction(ExecuteTransactionRequest {
             transaction: txn.into(),
