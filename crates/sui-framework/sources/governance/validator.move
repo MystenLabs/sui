@@ -146,7 +146,7 @@ module sui::validator {
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
-            delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1),
+            delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1, ctx),
             commission_rate,
         }
     }
@@ -353,7 +353,7 @@ module sui::validator {
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
-            delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1),
+            delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1, ctx),
             commission_rate,
         }
     }
