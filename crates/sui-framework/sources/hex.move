@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// HEX (Base16) encoding utility.
-module ethos::hex {
+module sui::hex {
     use std::vector;
 
     const EInvalidHexLength: u64 = 0;
@@ -27,6 +27,11 @@ module ethos::hex {
     }
 
     /// Decode hex into `bytes`
+    /// Takes a hex string (no 0x prefix) (e.g. b"0f3a")
+    /// Returns vector of `bytes` that represents the hex string (e.g. x"0f3a")
+    /// Hex string can be case insensitive (e.g. b"0F3A" and b"0f3a" both return x"0f3a")
+    /// Aborts if the hex string does not have an even number of characters (as each hex charater is 2 characters long)
+    /// Aborts if the hex string contains non-valid hex characters (valid charaters are 0 - 9, a - f, A - F)
     public fun decode(hex: vector<u8>): vector<u8> {
         let (i, r, l) = (0, vector[], vector::length(&hex));
         assert!(l % 2 == 0, EInvalidHexLength); 
