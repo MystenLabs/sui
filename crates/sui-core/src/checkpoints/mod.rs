@@ -715,13 +715,13 @@ impl CheckpointSignatureAggregator {
 pub trait CheckpointServiceNotify {
     fn notify_checkpoint_signature(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &AuthorityPerEpochStore,
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
     fn notify_checkpoint(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &AuthorityPerEpochStore,
         index: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
@@ -811,7 +811,7 @@ impl CheckpointService {
 impl CheckpointServiceNotify for CheckpointService {
     fn notify_checkpoint_signature(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &AuthorityPerEpochStore,
         info: &CheckpointSignatureMessage,
     ) -> SuiResult {
         let sequence = info.summary.summary.sequence_number;
@@ -847,7 +847,7 @@ impl CheckpointServiceNotify for CheckpointService {
 
     fn notify_checkpoint(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: &AuthorityPerEpochStore,
         index: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
@@ -878,7 +878,7 @@ pub struct CheckpointServiceNoop {}
 impl CheckpointServiceNotify for CheckpointServiceNoop {
     fn notify_checkpoint_signature(
         &self,
-        _: &Arc<AuthorityPerEpochStore>,
+        _: &AuthorityPerEpochStore,
         _: &CheckpointSignatureMessage,
     ) -> SuiResult {
         Ok(())
@@ -886,7 +886,7 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
 
     fn notify_checkpoint(
         &self,
-        _: &Arc<AuthorityPerEpochStore>,
+        _: &AuthorityPerEpochStore,
         _: CheckpointCommitHeight,
         _: Vec<TransactionDigest>,
         _: bool,

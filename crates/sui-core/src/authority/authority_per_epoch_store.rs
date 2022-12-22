@@ -19,7 +19,7 @@ use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
-use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
@@ -31,7 +31,7 @@ use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
-use crate::checkpoints::CheckpointServiceNotify;
+use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -996,7 +996,7 @@ impl AuthorityPerEpochStore {
                 Ok(Some(certificate))
             }
             ConsensusTransactionKind::CheckpointSignature(info) => {
-                checkpoint_service.notify_checkpoint_signature(info)?;
+                checkpoint_service.notify_checkpoint_signature(self, info)?;
                 self.record_consensus_transaction_processed(&transaction, consensus_index)?;
                 Ok(None)
             }
@@ -1035,7 +1035,7 @@ impl AuthorityPerEpochStore {
                 Some(CmpOrdering::Greater) => false,
                 None => false,
             };
-            checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
+            checkpoint_service.notify_checkpoint(self, index, roots, final_checkpoint)?;
         }
         self.record_checkpoint_boundary(round)
     }
