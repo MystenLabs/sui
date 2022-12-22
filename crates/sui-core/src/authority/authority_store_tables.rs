@@ -5,8 +5,7 @@ use super::*;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
-use sui_types::base_types::{ExecutionDigests, SequenceNumber};
-use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;
@@ -61,26 +60,6 @@ pub struct AuthorityPerpetualTables {
 
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
-
-    // Tables used for authority batch structure
-    // TODO: executed_sequence and batches both conceptually belong in AuthorityEpochTables,
-    // but we currently require that effects and executed_sequence are written atomically.
-    // See https://github.com/MystenLabs/sui/pull/4395 for the reason why.
-    //
-    // This can be addressed when we do the WAL rework. Something similar to the following flow
-    // would be required:
-    // 1. First execute the tx and store the outputs in an intermediate location.
-    // 2. Note that execution has finished (e.g. in the WAL.)
-    // 3. Write intermediate outputs to their permanent locations.
-    // 4. Mark the tx as finished in the WAL.
-    // 5. Crucially: If step 3 is interrupted, we must restart at step 3 based solely on the fact
-    //    that the WAL indicates the tx is not written yet. This fixes the root cause of the issue,
-    //    which is that we currently exit early if effects have been written.
-    /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
-
-    /// A sequence of batches indexing into the sequence of executed transactions.
-    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because

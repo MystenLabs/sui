@@ -14,20 +14,15 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::{
-    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::cmp::Ordering as CmpOrdering;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
-use std::{
-    collections::{HashMap, VecDeque},
-    pin::Pin,
-    sync::{atomic::Ordering, Arc},
-};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 use tap::TapFallible;
-use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{debug, error, instrument, warn, Instrument};
 use typed_store::Map;
@@ -67,7 +62,6 @@ use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::*,
-    batch::{TxSequenceNumber, UpdateItem},
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
@@ -78,7 +72,6 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::TransactionCertifier;
@@ -90,15 +83,9 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
-use crate::scoped_counter;
 use crate::{
-    authority_batch::{BroadcastReceiver, BroadcastSender},
-    event_handler::EventHandler,
-    execution_engine,
-    query_helpers::QueryHelpers,
-    transaction_input_checker,
-    transaction_manager::TransactionManager,
-    transaction_streamer::TransactionStreamer,
+    event_handler::EventHandler, execution_engine, transaction_input_checker,
+    transaction_manager::TransactionManager, transaction_streamer::TransactionStreamer,
 };
 
 #[cfg(test)]
@@ -125,12 +112,8 @@ pub mod authority_per_epoch_store;
 
 pub mod authority_store_tables;
 
-pub mod authority_notifier;
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
-
-pub const MAX_ITEMS_LIMIT: u64 = 1_000;
-const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> =
@@ -173,36 +156,11 @@ pub struct AuthorityMetrics {
 
     skipped_consensus_txns: IntCounter,
 
-    pub follower_items_streamed: IntCounter,
-    pub follower_items_loaded: IntCounter,
-    pub follower_connections: IntCounter,
-    pub follower_connections_concurrent: IntGauge,
-    pub follower_txes_streamed: IntCounter,
-    pub follower_batches_streamed: IntCounter,
-    pub follower_start_seq_num: Histogram,
-
-    // TODO: consolidate these into GossipMetrics
-    // (issue: https://github.com/MystenLabs/sui/issues/3926)
-    pub gossip_queued_count: IntCounter,
-    pub gossip_sync_count: IntCounter,
-    pub gossip_task_success_count: IntCounter,
-    pub gossip_task_error_count: IntCounter,
-
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
     post_processing_total_tx_indexed: IntCounter,
     post_processing_total_tx_added_to_streamer: IntCounter,
     post_processing_total_tx_had_event_processed: IntCounter,
-    post_processing_total_tx_sent_to_post_processing: IntCounter,
-    post_processing_latest_seq_seen: IntGauge,
-
-    pub num_post_processing_tasks: IntGauge,
-    pub num_batch_service_tasks: IntGauge,
-
-    /// Batch service metrics
-    pub(crate) batch_service_total_tx_broadcasted: IntCounter,
-    pub(crate) batch_service_latest_seq_broadcasted: IntGauge,
-    pub(crate) batch_svc_is_running: IntCounter,
 
     pending_notify_read: IntGauge,
 
@@ -222,9 +180,6 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
-        // buckets are: 100, 10k, 1M, 100M, 10B, 1T, 100T, 10Q
-        // Safe to unwarp because the values are all valid.
-        let follower_seq_num_buckets = exponential_buckets(100., 100., 8).unwrap();
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -369,73 +324,6 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            follower_items_streamed: register_int_counter_with_registry!(
-                "follower_items_streamed",
-                "Number of transactions/signed batches streamed to followers",
-                registry,
-            )
-            .unwrap(),
-            follower_items_loaded: register_int_counter_with_registry!(
-                "follower_items_loaded",
-                "Number of transactions/signed batches loaded from db to be streamed to followers",
-                registry,
-            )
-            .unwrap(),
-            follower_connections: register_int_counter_with_registry!(
-                "follower_connections",
-                "Number of follower connections initiated",
-                registry,
-            )
-            .unwrap(),
-            follower_connections_concurrent: register_int_gauge_with_registry!(
-                "follower_connections_concurrent",
-                "Current number of concurrent follower connections",
-                registry,
-            )
-            .unwrap(),
-            follower_batches_streamed: register_int_counter_with_registry!(
-                "follower_batches_streamed",
-                "Number of signed batches streamed to followers",
-                registry,
-            )
-            .unwrap(),
-            follower_txes_streamed: register_int_counter_with_registry!(
-                "follower_txes_streamed",
-                "Number of transactions streamed to followers",
-                registry,
-            )
-            .unwrap(),
-            follower_start_seq_num: register_histogram_with_registry!(
-                "follower_start_seq_num",
-                "The start seq number this validator receives from fullnodes node_sync/follower process",
-                follower_seq_num_buckets,
-                registry,
-            )
-            .unwrap(),
-            gossip_queued_count: register_int_counter_with_registry!(
-                "gossip_queued_count",
-                "Number of digests queued from gossip peers",
-                registry,
-            )
-            .unwrap(),
-            gossip_sync_count: register_int_counter_with_registry!(
-                "gossip_sync_count",
-                "Number of certificates downloaded from gossip peers",
-                registry,
-            )
-            .unwrap(),
-            gossip_task_success_count: register_int_counter_with_registry!(
-                "gossip_task_success_count",
-                "Number of gossip tasks that completed successfully",
-                registry,
-            )
-            .unwrap(),
-            gossip_task_error_count: register_int_counter_with_registry!(
-                "gossip_task_error_count",
-                "Number of gossip tasks that completed with errors",
-                registry,
-            )
-            .unwrap(),
             post_processing_total_events_emitted: register_int_counter_with_registry!(
                 "post_processing_total_events_emitted",
                 "Total number of events emitted in post processing",
@@ -460,47 +348,6 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            post_processing_total_tx_sent_to_post_processing: register_int_counter_with_registry!(
-                "post_processing_total_tx_sent_to_post_processing",
-                "Total number of txes sent to post processing",
-                registry,
-            )
-            .unwrap(),
-            post_processing_latest_seq_seen: register_int_gauge_with_registry!(
-                "post_processing_latest_seq_seen",
-                "The latest seq number of tx that is seen in post processing",
-                registry,
-            )
-            .unwrap(),
-            num_post_processing_tasks: register_int_gauge_with_registry!(
-                "num_post_processing_tasks",
-                "Number of post processing tasks currently running.",
-                registry,
-            )
-            .unwrap(),
-            num_batch_service_tasks: register_int_gauge_with_registry!(
-                "num_batch_service_tasks",
-                "Number of batch service tasks currently running.",
-                registry,
-            )
-            .unwrap(),
-            batch_service_total_tx_broadcasted: register_int_counter_with_registry!(
-                "batch_service_total_tx_broadcasted",
-                "Total number of txes broadcasted in batch service",
-                registry,
-            )
-            .unwrap(),
-            batch_service_latest_seq_broadcasted: register_int_gauge_with_registry!(
-                "batch_service_latest_seq_broadcasted",
-                "The latest seq number of tx that is broadcasted in batch service",
-                registry,
-            )
-            .unwrap(),
-            batch_svc_is_running: register_int_counter_with_registry!(
-                "batch_svc_is_running",
-                "Sanity check to ensure batch service is running",
-                registry,
-            ).unwrap(),
             pending_notify_read: register_int_gauge_with_registry!(
                 "pending_notify_read",
                 "Pending notify read requests",
@@ -556,15 +403,6 @@ pub struct AuthorityState {
     /// Manages pending certificates and their missing input objects.
     pub(crate) transaction_manager: Arc<TransactionManager>,
 
-    // Structures needed for handling batching and notifications.
-    /// The sender to notify of new transactions
-    /// and create batches for this authority.
-    /// Keep as None if there is no need for this.
-    pub(crate) batch_channels: BroadcastSender, // TODO: remove pub
-
-    // The Transaction notifier ticketing engine.
-    pub(crate) batch_notifier: Arc<authority_notifier::TransactionNotifier>, // TODO: remove pub
-
     pub metrics: Arc<AuthorityMetrics>,
 }
 
@@ -581,11 +419,6 @@ impl AuthorityState {
 
     pub fn is_fullnode(&self) -> bool {
         !self.is_validator()
-    }
-
-    /// Get a broadcast receiver for updates
-    pub fn subscribe_batch(&self) -> BroadcastReceiver {
-        self.batch_channels.subscribe()
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -989,69 +822,14 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let notifier_ticket = self.batch_notifier.ticket()?;
-        let ticket_seq = notifier_ticket.seq();
         let output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
             .map(|(_, ((id, seq, _), _, _))| ObjectKey(*id, *seq))
             .collect();
-        let res = self
-            .commit_certificate(
-                inner_temporary_store,
-                certificate,
-                &signed_effects,
-                notifier_ticket,
-            )
-            .await;
-        let seq = match res {
-            Err(err) => {
-                error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
-                // Check if we were able to sequence the tx at all
-                match self.db().get_tx_sequence(*certificate.digest()).await {
-                    Err(db_err) => {
-                        // TODO: Add retries on failing to read from db because
-                        // this still stalls the batch maker
-                        error!(
-                            ?digest,
-                            seq=?ticket_seq,
-                            "validator failed to read if db has locked the tx sequence: {}", db_err
-                        );
-                    }
-                    Ok(None) => {
-                        debug!(?digest, seq=?ticket_seq, "Closing the notifier ticket because we couldn't lock the tx sequence");
-                        self.batch_notifier.notify(ticket_seq);
-                    }
-                    Ok(Some(tx_seq)) => {
-                        if tx_seq < ticket_seq {
-                            debug!(
-                                ?digest,
-                                ?tx_seq,
-                                ?ticket_seq,
-                                "Notifying during retry failure, current low watermark {:?}",
-                                self.batch_notifier.low_watermark()
-                            );
-                            // Notify if we failed during a retry after sequencing
-                            self.batch_notifier.notify(ticket_seq);
-                        };
-                    }
-                }
-                return Err(err);
-            }
-            Ok(seq) => {
-                if seq < ticket_seq {
-                    debug!(
-                        ?digest,
-                        ?seq,
-                        ?ticket_seq,
-                        "Notifying during retry, current low watermark {:?}",
-                        self.batch_notifier.low_watermark()
-                    );
-                    self.batch_notifier.notify(seq);
-                };
-                seq
-            }
-        };
+
+        self.commit_certificate(inner_temporary_store, certificate, &signed_effects)
+            .await?;
 
         // Notifies transaction manager about available input objects. This allows the transaction
         // manager to schedule ready transactions.
@@ -1071,7 +849,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(seq, &digest)
+            .post_process_one_tx(&digest)
             .await
             .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
 
@@ -1246,16 +1024,15 @@ impl AuthorityState {
         }
     }
 
-    #[instrument(level = "debug", skip_all, fields(seq = ?seq, tx_digest =? digest), err)]
+    #[instrument(level = "debug", skip_all, fields(tx_digest =? digest), err)]
     fn index_tx(
         &self,
         indexes: &IndexStore,
-        seq: TxSequenceNumber,
         digest: &TransactionDigest,
         cert: &VerifiedCertificate,
         effects: &SignedTransactionEffects,
         timestamp_ms: u64,
-    ) -> SuiResult {
+    ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects)
             .tap_err(|e| warn!("{e}"))?;
@@ -1279,7 +1056,6 @@ impl AuthorityState {
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             changes,
-            seq,
             digest,
             timestamp_ms,
         )
@@ -1435,12 +1211,8 @@ impl AuthorityState {
         }))
     }
 
-    #[instrument(level = "debug", skip_all, fields(seq=?seq, tx_digest=?digest), err)]
-    async fn post_process_one_tx(
-        &self,
-        seq: TxSequenceNumber,
-        digest: &TransactionDigest,
-    ) -> SuiResult {
+    #[instrument(level = "debug", skip_all, fields(tx_digest=?digest), err)]
+    async fn post_process_one_tx(&self, digest: &TransactionDigest) -> SuiResult {
         if self.indexes.is_none()
             && self.transaction_streamer.is_none()
             && self.event_handler.is_none()
@@ -1466,12 +1238,15 @@ impl AuthorityState {
         let timestamp_ms = Self::unixtime_now_ms();
 
         // Index tx
-        if let Some(indexes) = &self.indexes {
-            let _ = self
-                .index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
+        let seq = if let Some(indexes) = &self.indexes {
+            let res = self
+                .index_tx(indexes.as_ref(), digest, &cert, &effects, timestamp_ms)
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
-        }
+            res.ok()
+        } else {
+            None
+        };
 
         // Stream transaction
         if let Some(transaction_streamer) = &self.transaction_streamer {
@@ -1485,6 +1260,9 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
+            // This is enforced in sui-node/src/lib.rs
+            let seq = seq.expect("IndexStore must be enabled for events to work");
+
             event_handler
                 .process_events(effects.data(), timestamp_ms, seq)
                 .await
@@ -1494,59 +1272,6 @@ impl AuthorityState {
             self.metrics
                 .post_processing_total_events_emitted
                 .inc_by(effects.data().events.len() as u64);
-        }
-
-        Ok(())
-    }
-
-    // TODO: This should persist the last successfully-processed sequence to disk, and upon
-    // starting up, look for any sequences in the store since then and process them.
-    #[instrument(level = "debug", skip_all)]
-    pub async fn run_tx_post_processing_process(&self) -> SuiResult {
-        let mut subscriber = self.subscribe_batch();
-        let _guard = scoped_counter!(self.metrics, num_post_processing_tasks);
-        debug!("subscribed to batch service");
-
-        loop {
-            match subscriber.recv().await {
-                Ok(item) => match item {
-                    UpdateItem::Batch(batch) => {
-                        debug!(
-                            batch_seq = ?batch.data().next_sequence_number,
-                            "post process received batch"
-                        );
-                    }
-                    UpdateItem::Transaction((seq, ExecutionDigests { .. })) => {
-                        self.metrics.post_processing_latest_seq_seen.set(seq as i64);
-                        self.metrics
-                            .post_processing_total_tx_sent_to_post_processing
-                            .inc();
-                        /*
-                         * TODO: we are temporarily not processing txes here because the batch
-                         * system is flaky somehow. The metrics above are left alone so that we can
-                         * continue debugging.
-                        if let Err(e) = self.post_process_one_tx(seq, &digest).await {
-                            warn!(?digest, "Couldn't process tx: {e}");
-                        }
-                        */
-                    }
-                },
-                Err(RecvError::Closed) => {
-                    // This shall not happen because the sender of batch notifier should not be closed.
-                    error!("run_tx_post_processing_process receiver channel closed. If this happens there is a bug");
-                    break;
-                }
-                // Today if post processing is too slow we will skip indexing some txes.
-                // TODO: https://github.com/MystenLabs/sui/issues/5025
-                // Automatically restart the task, which in combination with the todo above,
-                // will process any skipped txes and then begin listening for new ones.
-                Err(RecvError::Lagged(number_skipped)) => {
-                    error!(
-                        "run_tx_post_processing_process too slow, skipped {} txes",
-                        number_skipped
-                    );
-                }
-            }
         }
 
         Ok(())
@@ -1708,7 +1433,6 @@ impl AuthorityState {
         transaction_streamer: Option<Arc<TransactionStreamer>>,
         prometheus_registry: &Registry,
     ) -> Arc<Self> {
-        let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
         let move_vm = Arc::new(
@@ -1741,11 +1465,6 @@ impl AuthorityState {
             transaction_streamer,
             committee_store,
             transaction_manager: transaction_manager.clone(),
-            batch_channels: tx,
-            batch_notifier: Arc::new(
-                authority_notifier::TransactionNotifier::new(store.clone(), prometheus_registry)
-                    .expect("Notifier cannot start."),
-            ),
             metrics,
         });
 
@@ -1753,16 +1472,12 @@ impl AuthorityState {
             .register(Box::new(ModuleCacheGauge::new(&state.module_cache)))
             .unwrap();
 
-        // Process tx recovery log first, so that the batch and checkpoint recovery (below)
-        // don't observe partially-committed txes.
+        // Process tx recovery log first, so that checkpoint recovery (below)
+        // doesn't observe partially-committed txes.
         state
             .process_tx_recovery_log(None)
             .await
             .expect("Could not fully process recovery log at startup!");
-
-        state
-            .init_batches_from_database()
-            .expect("Init batches failed!");
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
@@ -1816,11 +1531,7 @@ impl AuthorityState {
             None,
         ));
 
-        let index_store = Some(Arc::new(IndexStore::open_tables_read_write(
-            path.join("indexes"),
-            None,
-            None,
-        )));
+        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
 
         // add the object_basics module
         let state = AuthorityState::new(
@@ -2124,7 +1835,7 @@ impl AuthorityState {
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
-        QueryHelpers::get_total_transaction_number(&self.database)
+        Ok(self.get_indexes()?.next_sequence_number())
     }
 
     pub fn get_transactions_in_range(
@@ -2132,21 +1843,28 @@ impl AuthorityState {
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        QueryHelpers::get_transactions_in_range(&self.database, start, end)
+        self.get_indexes()?.get_transactions_in_range(start, end)
     }
 
     pub fn get_recent_transactions(
         &self,
         count: u64,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        QueryHelpers::get_recent_transactions(&self.database, count)
+        self.get_indexes()?.get_recent_transactions(count)
     }
 
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<(VerifiedCertificate, TransactionEffects), anyhow::Error> {
-        QueryHelpers::get_transaction(&self.database, &digest)
+        let opt = self.database.get_certified_transaction(&digest)?;
+        match opt {
+            Some(certificate) => Ok((
+                certificate,
+                AuthorityStore::get_effects(&self.database, &digest)?,
+            )),
+            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+        }
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -2165,60 +1883,8 @@ impl AuthorityState {
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
-        // Lookup TransactionDigest sequence number,
-        // also default cursor to 0 or the current sequence number depends on ordering.
-        let cursor = if let Some(cursor) = cursor {
-            self.get_indexes()?
-                .get_transaction_seq(&cursor)?
-                .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?
-        } else if reverse {
-            TxSequenceNumber::MAX
-        } else {
-            TxSequenceNumber::MIN
-        };
-
-        Ok(match query {
-            TransactionQuery::MoveFunction {
-                package,
-                module,
-                function,
-            } => self.get_indexes()?.get_transactions_by_move_function(
-                package, module, function, cursor, limit, reverse,
-            )?,
-            TransactionQuery::InputObject(object_id) => self
-                .get_indexes()?
-                .get_transactions_by_input_object(object_id, cursor, limit, reverse)?,
-            TransactionQuery::MutatedObject(object_id) => self
-                .get_indexes()?
-                .get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?,
-            TransactionQuery::FromAddress(address) => self
-                .get_indexes()?
-                .get_transactions_from_addr(address, cursor, limit, reverse)?,
-            TransactionQuery::ToAddress(address) => self
-                .get_indexes()?
-                .get_transactions_to_addr(address, cursor, limit, reverse)?,
-            TransactionQuery::All => {
-                let iter = self.database.perpetual_tables.executed_sequence.iter();
-                if reverse {
-                    let iter = iter
-                        .skip_prior_to(&cursor)?
-                        .reverse()
-                        .map(|(_, digest)| digest.transaction);
-                    if let Some(limit) = limit {
-                        iter.take(limit).collect()
-                    } else {
-                        iter.collect()
-                    }
-                } else {
-                    let iter = iter.skip_to(&cursor)?.map(|(_, digest)| digest.transaction);
-                    if let Some(limit) = limit {
-                        iter.take(limit).collect()
-                    } else {
-                        iter.collect()
-                    }
-                }
-            }
-        })
+        self.get_indexes()?
+            .get_transactions(query, cursor, limit, reverse)
     }
 
     pub async fn get_timestamp_ms(
@@ -2404,28 +2070,22 @@ impl AuthorityState {
             .await
     }
 
-    /// Update state and signals that a new transactions has been processed
-    /// to the batch maker service.
+    /// Commit effects of transaction execution to data store.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
         signed_effects: &SignedTransactionEffects,
-        notifier_ticket: TransactionNotifierTicket,
-    ) -> SuiResult<TxSequenceNumber> {
+    ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
-
-        let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
         let effects_digest = &signed_effects.digest();
-        let seq = self
-            .database
+        self.database
             .update_state(
                 inner_temporary_store,
                 certificate,
-                seq,
                 signed_effects,
                 effects_digest,
             )
@@ -2433,13 +2093,13 @@ impl AuthorityState {
             .tap_ok(|_| {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
             })?;
+
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
         self.metrics
             .pending_notify_read
             .set(self.database.effects_notify_read.num_pending() as i64);
-        // We only notify i.e. update low watermark once database changes are committed
-        notifier_ticket.notify();
-        Ok(seq)
+
+        Ok(())
     }
 
     /// Check whether certificate was processed by consensus.

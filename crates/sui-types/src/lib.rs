@@ -22,7 +22,6 @@ pub mod error;
 pub mod accumulator;
 pub mod balance;
 pub mod base_types;
-pub mod batch;
 pub mod certificate_proof;
 pub mod chain_id;
 pub mod coin;

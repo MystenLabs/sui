@@ -54,6 +54,8 @@ mod base_types_tests;
 )]
 pub struct SequenceNumber(u64);
 
+pub type TxSequenceNumber = u64;
+
 impl fmt::Display for SequenceNumber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#x}", self.0)

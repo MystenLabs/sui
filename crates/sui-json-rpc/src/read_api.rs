@@ -23,8 +23,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::batch::TxSequenceNumber;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};

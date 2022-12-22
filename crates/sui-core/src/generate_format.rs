@@ -13,7 +13,6 @@ use signature::Signer;
 use std::{fs::File, io::Write};
 use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
-    batch::UpdateItem,
     crypto::{
         get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
         AuthoritySignature, KeypairTraits, Signature,
@@ -89,7 +88,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
-    tracer.trace_type::<UpdateItem>(&samples)?;
     tracer.trace_type::<DeleteKind>(&samples)?;
 
     tracer.registry()

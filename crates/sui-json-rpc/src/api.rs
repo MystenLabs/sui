@@ -19,8 +19,9 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::batch::TxSequenceNumber;
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::committee::EpochId;
 use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;

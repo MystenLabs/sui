@@ -18,9 +18,9 @@ use sui_storage::{
     LockService,
 };
 use sui_types::object::Owner;
+use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
-use sui_types::{batch::TxSequenceNumber, object::PACKAGE_VERSION};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
@@ -228,25 +228,6 @@ impl AuthorityStore {
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         self.perpetual_tables.database_is_empty()
-    }
-
-    pub fn next_sequence_number(&self) -> Result<TxSequenceNumber, SuiError> {
-        Ok(self
-            .perpetual_tables
-            .executed_sequence
-            .iter()
-            .skip_prior_to(&TxSequenceNumber::MAX)?
-            .next()
-            .map(|(v, _)| v + 1u64)
-            .unwrap_or(0))
-    }
-
-    #[cfg(test)]
-    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &ExecutionDigests) {
-        self.perpetual_tables
-            .executed_sequence
-            .insert(&seq, digest)
-            .unwrap();
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
@@ -470,13 +451,6 @@ impl AuthorityStore {
         } else {
             Ok(result)
         }
-    }
-
-    pub async fn get_tx_sequence(
-        &self,
-        tx: TransactionDigest,
-    ) -> SuiResult<Option<TxSequenceNumber>> {
-        self.lock_service.get_tx_sequence(tx).await
     }
 
     /// Get the TransactionEnvelope that currently locks the given object, if any.
@@ -708,10 +682,9 @@ impl AuthorityStore {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
-        proposed_seq: TxSequenceNumber,
         effects: &SignedTransactionEffects,
         effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult<TxSequenceNumber> {
+    ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.perpetual_tables.certificates.batch();
@@ -723,20 +696,18 @@ impl AuthorityStore {
             iter::once((transaction_digest, certificate.serializable_ref())),
         )?;
 
-        let seq = self
-            .sequence_tx(
-                write_batch,
-                inner_temporary_store,
-                transaction_digest,
-                proposed_seq,
-                effects,
-                effects_digest,
-            )
-            .await?;
+        self.sequence_tx(
+            write_batch,
+            inner_temporary_store,
+            transaction_digest,
+            effects,
+            effects_digest,
+        )
+        .await?;
 
         self.effects_notify_read.notify(transaction_digest, effects);
 
-        Ok(seq)
+        Ok(())
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -762,20 +733,17 @@ impl AuthorityStore {
         write_batch: DBBatch,
         inner_temporary_store: InnerTemporaryStore,
         transaction_digest: &TransactionDigest,
-        proposed_seq: TxSequenceNumber,
         effects: &SignedTransactionEffects,
         effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult<TxSequenceNumber> {
+    ) -> SuiResult {
         // Safe to unwrap since UpdateType::Transaction ensures we get a sequence number back.
-        let assigned_seq = self
-            .batch_update_objects(
-                write_batch,
-                inner_temporary_store,
-                *transaction_digest,
-                UpdateType::Transaction(proposed_seq, *effects_digest),
-            )
-            .await?
-            .unwrap();
+        self.batch_update_objects(
+            write_batch,
+            inner_temporary_store,
+            *transaction_digest,
+            UpdateType::Transaction(*effects_digest),
+        )
+        .await?;
 
         // Store the signed effects of the transaction
         // We can't write this until after sequencing succeeds (which happens in
@@ -792,35 +760,9 @@ impl AuthorityStore {
                 [(effects_digest, effects.data())],
             )?;
 
-        // Writing to executed_sequence must be done *after* writing to effects, so that we never
-        // broadcast a sequenced transaction (via the batch system) for which no effects can be
-        // retrieved.
-        //
-        // Currently we write both effects and executed_sequence in the same batch to avoid
-        // consistency issues between the two (see #4395 for more details).
-        //
-        // Note that this write may be done repeatedly when retrying a tx. The
-        // sequence_transaction call in batch_update_objects assigns a sequence number to
-        // the transaction the first time it is called and will return that same sequence
-        // on subsequent calls.
-        trace!(
-            ?assigned_seq,
-            tx_digest = ?transaction_digest,
-            ?effects_digest,
-            "storing sequence number to executed_sequence"
-        );
-        let batch = batch.insert_batch(
-            &self.perpetual_tables.executed_sequence,
-            [(
-                assigned_seq,
-                ExecutionDigests::new(*transaction_digest, *effects_digest),
-            )]
-            .into_iter(),
-        )?;
-
         batch.write()?;
 
-        Ok(assigned_seq)
+        Ok(())
     }
 
     /// Helper function for updating the objects in the state
@@ -830,7 +772,7 @@ impl AuthorityStore {
         inner_temporary_store: InnerTemporaryStore,
         transaction_digest: TransactionDigest,
         update_type: UpdateType,
-    ) -> SuiResult<Option<TxSequenceNumber>> {
+    ) -> SuiResult {
         let InnerTemporaryStore {
             objects,
             mutable_inputs: active_inputs,
@@ -927,7 +869,7 @@ impl AuthorityStore {
         // certs which may overwrite newer objects with older ones.  This can be removed once we have
         // an object storage supporting multiple object versions at once, then there is idempotency and
         // old writes would be OK.
-        let assigned_seq = {
+        {
             // Acquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.acquire_locks(&owned_inputs[..]).await;
 
@@ -950,36 +892,25 @@ impl AuthorityStore {
                 .collect();
 
             match update_type {
-                UpdateType::Transaction(seq, _) => {
-                    // sequence_transaction atomically assigns a sequence number to the tx and
-                    // initializes locks for the output objects.
-                    // It also (not atomically) deletes the locks for input objects.
+                UpdateType::Transaction(_) => {
                     // After this call completes, new txes can run on the output locks, so all
                     // output objects must be written already.
-                    Some(
-                        self.lock_service
-                            .sequence_transaction(
-                                transaction_digest,
-                                seq,
-                                owned_inputs,
-                                new_locks_to_init,
-                            )
-                            .await?,
-                    )
+                    self.lock_service
+                        .commit_transaction(transaction_digest, owned_inputs, new_locks_to_init)
+                        .await?;
                 }
                 UpdateType::Genesis => {
                     info!("Creating locks for genesis objects");
                     self.lock_service
                         .create_locks_for_genesis_objects(new_locks_to_init)
                         .await?;
-                    None
                 }
             }
 
             // implicit: drop(_mutexes);
-        };
+        }
 
-        Ok(assigned_seq)
+        Ok(())
     }
 
     /// This function is called at the end of epoch for each transaction that's
@@ -1151,20 +1082,6 @@ impl AuthorityStore {
             .finish_consensus_transaction_process(key, consensus_index)
     }
 
-    pub fn transactions_in_seq_range(
-        &self,
-        start: u64,
-        end: u64,
-    ) -> SuiResult<Vec<(u64, ExecutionDigests)>> {
-        Ok(self
-            .perpetual_tables
-            .executed_sequence
-            .iter()
-            .skip_to(&start)?
-            .take_while(|(seq, _tx)| *seq < end)
-            .collect())
-    }
-
     /// Return the latest consensus index. It is used to bootstrap the consensus client.
     pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
         self.epoch_store().get_last_consensus_index()
@@ -1311,7 +1228,7 @@ impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
 }
 
 pub enum UpdateType {
-    Transaction(TxSequenceNumber, TransactionEffectsDigest),
+    Transaction(TransactionEffectsDigest),
     Genesis,
 }
 

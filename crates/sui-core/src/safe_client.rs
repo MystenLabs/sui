@@ -2,14 +2,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
-use futures::StreamExt;
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use std::sync::Arc;
-use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
@@ -79,8 +77,6 @@ pub struct SafeClientMetrics {
     total_ok_responses_handle_transaction_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_ok_responses_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
-    total_requests_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
-    total_ok_responses_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
     handle_transaction_latency: Histogram,
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
@@ -118,13 +114,6 @@ impl SafeClientMetrics {
             .total_responses_by_address_method
             .with_label_values(&[&validator_address, "handle_object_info_request"]);
 
-        let total_requests_handle_batch_stream = metrics_base
-            .total_requests_by_address_method
-            .with_label_values(&[&validator_address, "handle_batch_stream"]);
-        let total_ok_responses_handle_batch_stream = metrics_base
-            .total_responses_by_address_method
-            .with_label_values(&[&validator_address, "handle_batch_stream"]);
-
         let handle_transaction_latency = metrics_base
             .latency
             .with_label_values(&[&validator_address, "handle_transaction"]);
@@ -144,8 +133,6 @@ impl SafeClientMetrics {
             total_ok_responses_handle_transaction_info_request,
             total_requests_handle_object_info_request,
             total_ok_responses_handle_object_info_request,
-            total_requests_handle_batch_stream,
-            total_ok_responses_handle_batch_stream,
             handle_transaction_latency,
             handle_certificate_latency,
             handle_obj_info_latency,
@@ -427,63 +414,6 @@ impl<C> SafeClient<C> {
         })
     }
 
-    fn check_update_item_batch_response(
-        &self,
-        _request: BatchInfoRequest,
-        signed_batch: &SignedBatch,
-        transactions_and_last_batch: &Option<(
-            Vec<(TxSequenceNumber, ExecutionDigests)>,
-            AuthorityBatch,
-        )>,
-    ) -> SuiResult {
-        // check the signature of the batch
-        let epoch = signed_batch.epoch();
-        signed_batch.verify_signature(&self.get_committee(&epoch)?)?;
-
-        // ensure transactions enclosed match requested range
-
-        // TODO: check that the batch is within bounds given that the
-        //      bounds may now not be known by the requester.
-        //
-        // if let Some(start) = &request.start {
-        //    fp_ensure!(
-        //        signed_batch.batch.initial_sequence_number >= *start
-        //            && signed_batch.batch.next_sequence_number
-        //                <= (*start + request.length + signed_batch.batch.size),
-        //        SuiError::ByzantineAuthoritySuspicion {
-        //            authority: self.address
-        //        }
-        //    );
-        // }
-
-        // If we have seen a previous batch, use it to make sure the next batch
-        // is constructed correctly:
-
-        if let Some((transactions, prev_batch)) = transactions_and_last_batch {
-            fp_ensure!(
-                !transactions.is_empty(),
-                SuiError::GenericAuthorityError {
-                    error: "Safe Client: Batches must have some contents.".to_string()
-                }
-            );
-            let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
-
-            fp_ensure!(
-                &reconstructed_batch == signed_batch.data(),
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: format!(
-                        "Inconsistent batch. signed: {:?}, reconstructed: {:?}",
-                        signed_batch.data(),
-                        reconstructed_batch
-                    )
-                }
-            );
-        }
-
-        Ok(())
-    }
-
     pub fn address(&self) -> &AuthorityPublicKeyBytes {
         &self.address
     }
@@ -758,76 +688,5 @@ where
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
-    }
-
-    /// Handle Batch information requests for this authority.
-    pub async fn handle_batch_stream(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        self.metrics.total_requests_handle_batch_stream.inc();
-        let batch_info_items = self
-            .authority_client
-            .handle_batch_stream(request.clone())
-            .await?;
-        self.metrics.total_ok_responses_handle_batch_stream.inc();
-        let client = self.clone();
-        let address = self.address;
-        let count: u64 = 0;
-        let stream = Box::pin(batch_info_items.scan(
-            (None, count),
-            move |(txs_and_last_batch, count), batch_info_item| {
-                let req_clone = request.clone();
-                let client = client.clone();
-
-                // We check if we have exceeded the batch boundary for this request.
-                // This is to protect against server DoS
-                if *count > 10 * request.length {
-                    // If we exceed it return None to end stream
-                    return futures::future::ready(None);
-                }
-                let result = match &batch_info_item {
-                    Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
-                        if let Err(err) = client.check_update_item_batch_response(
-                            req_clone,
-                            signed_batch,
-                            txs_and_last_batch,
-                        ) {
-                            error!(?err, authority=?address, "Client error in handle_batch_stream");
-                            Some(Err(err))
-                        } else {
-                            // Insert a fresh vector for the new batch of transactions
-                            let _ = txs_and_last_batch
-                                .insert((Vec::new(), signed_batch.data().clone()));
-                            Some(batch_info_item)
-                        }
-                    }
-                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
-                        // A stream always starts with a batch, so the previous should have initialized it.
-                        // And here we insert the tuple into the batch.
-                        match txs_and_last_batch {
-                            None => {
-                                let err = SuiError::ByzantineAuthoritySuspicion {
-                                    authority: address,
-                                    reason: "Stream does not start with a batch".to_string(),
-                                };
-                                error!(?err, authority=?address, "Client error in handle_batch_stream");
-                                Some(Err(err))
-                            }
-                            Some(txs) => {
-                                txs.0.push((*seq, *digest));
-
-                                *count += 1;
-                                Some(batch_info_item)
-                            }
-                        }
-                    }
-                    Err(e) => Some(Err(e.clone())),
-                };
-
-                futures::future::ready(result)
-            },
-        ));
-        Ok(Box::pin(stream))
     }
 }

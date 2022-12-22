@@ -1364,8 +1364,6 @@ where
 mod bcs_signable {
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
-    impl BcsSignable for crate::batch::TransactionBatch {}
-    impl BcsSignable for crate::batch::AuthorityBatch {}
     impl BcsSignable for crate::committee::Committee {}
     impl BcsSignable for crate::committee::CommitteeWithNetAddresses {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointSummary {}
