@@ -12,6 +12,7 @@ module sui::staking_pool {
     use sui::locked_coin;
     use sui::coin;
     use std::vector;
+    use sui::table_vec::{Self, TableVec};
 
     friend sui::validator;
     friend sui::validator_set;
@@ -42,10 +43,10 @@ module sui::staking_pool {
         /// Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
         /// and distribute staking pool tokens at the end-of-epoch exchange rate after the rewards for the current epoch
         /// have been deposited.
-        pending_delegations: vector<PendingDelegationEntry>,
+        pending_delegations: TableVec<PendingDelegationEntry>,
         /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
         /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in. 
-        pending_withdraws: vector<PendingWithdrawEntry>,
+        pending_withdraws: TableVec<PendingWithdrawEntry>,
     }
 
     /// An inactive staking pool associated with an inactive validator.
@@ -104,15 +105,15 @@ module sui::staking_pool {
     // ==== initializer ====
 
     /// Create a new, empty staking pool.
-    public(friend) fun new(validator_address: address, starting_epoch: u64) : StakingPool {
+    public(friend) fun new(validator_address: address, starting_epoch: u64, ctx: &mut TxContext) : StakingPool {
         StakingPool {
             validator_address,
             starting_epoch,
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
-            pending_delegations: vector::empty(),
-            pending_withdraws: vector::empty(),
+            pending_delegations: table_vec::empty(ctx),
+            pending_withdraws: table_vec::empty(ctx),
         }
     }
 
@@ -139,8 +140,8 @@ module sui::staking_pool {
             principal: stake,
             sui_token_lock,
         };
-        // insert delegation info into the pendng_delegations vector.
-        vector::push_back(
+        // insert delegation info into the pending_delegations table.
+        table_vec::push_back(
             &mut pool.pending_delegations,
             PendingDelegationEntry { delegator, sui_amount, staked_sui_id: object::id(&staked_sui) }
         );
@@ -163,7 +164,7 @@ module sui::staking_pool {
             withdraw_from_principal(pool, delegation, staked_sui, principal_withdraw_amount);
         
         let delegator = tx_context::sender(ctx);
-        vector::push_back(&mut pool.pending_withdraws, PendingWithdrawEntry { 
+        table_vec::push_back(&mut pool.pending_withdraws, PendingWithdrawEntry {
             delegator, principal_withdraw_amount, withdrawn_pool_tokens });
 
         // TODO: implement withdraw bonding period here.
@@ -232,8 +233,8 @@ module sui::staking_pool {
     public(friend) fun process_pending_delegation_withdraws(pool: &mut StakingPool, ctx: &mut TxContext) : u64 {
         let total_reward_withdraw = 0;
 
-        while (!vector::is_empty(&pool.pending_withdraws)) {
-            let PendingWithdrawEntry { delegator, principal_withdraw_amount, withdrawn_pool_tokens } = vector::pop_back(&mut pool.pending_withdraws);
+        while (!table_vec::is_empty(&pool.pending_withdraws)) {
+            let PendingWithdrawEntry { delegator, principal_withdraw_amount, withdrawn_pool_tokens } = table_vec::pop_back(&mut pool.pending_withdraws);
             let reward_withdraw = withdraw_rewards_and_burn_pool_tokens(pool, principal_withdraw_amount, withdrawn_pool_tokens);
             total_reward_withdraw = total_reward_withdraw + balance::value(&reward_withdraw);
             transfer::transfer(coin::from_balance(reward_withdraw, ctx), delegator);
@@ -245,9 +246,9 @@ module sui::staking_pool {
     /// New delegators include both entirely new delegations and delegations switched to this staking pool
     /// during the previous epoch.
     public(friend) fun process_pending_delegations(pool: &mut StakingPool, ctx: &mut TxContext) {
-        while (!vector::is_empty(&pool.pending_delegations)) {
+        while (!table_vec::is_empty(&pool.pending_delegations)) {
             let PendingDelegationEntry { delegator, sui_amount, staked_sui_id } =
-                vector::pop_back(&mut pool.pending_delegations);
+                table_vec::pop_back(&mut pool.pending_delegations);
             mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount;
         };
@@ -263,18 +264,18 @@ module sui::staking_pool {
     /// into the new validator's staking pool.
     public(friend) fun batch_withdraw_rewards_and_burn_pool_tokens(
         pool: &mut StakingPool,
-        entries: vector<PendingWithdrawEntry>,
+        entries: TableVec<PendingWithdrawEntry>,
     ) : (vector<address>, vector<Balance<SUI>>, u64) {
         let (delegators, rewards, total_rewards_withdraw_amount) = (vector::empty(), vector::empty(), 0);
-        while (!vector::is_empty(&mut entries)) {
+        while (!table_vec::is_empty(&mut entries)) {
             let PendingWithdrawEntry { delegator, principal_withdraw_amount, withdrawn_pool_tokens } 
-                = vector::pop_back(&mut entries);
+                = table_vec::pop_back(&mut entries);
             let reward = withdraw_rewards_and_burn_pool_tokens(pool, principal_withdraw_amount, withdrawn_pool_tokens);
             total_rewards_withdraw_amount = total_rewards_withdraw_amount + balance::value(&reward);
             vector::push_back(&mut delegators, delegator);
             vector::push_back(&mut rewards, reward);
         };
-        vector::destroy_empty(entries);
+        table_vec::destroy_empty(entries);
         (delegators, rewards, total_rewards_withdraw_amount)
     }
 
