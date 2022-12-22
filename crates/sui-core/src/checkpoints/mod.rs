@@ -308,7 +308,7 @@ impl CheckpointBuilder {
             for (height, (roots, last_checkpoint_of_epoch)) in epoch_store.get_pending_checkpoints()
             {
                 if let Err(e) = self
-                    .make_checkpoint(epoch_store.deref(), height, roots, last_checkpoint_of_epoch)
+                    .make_checkpoint(&epoch_store, height, roots, last_checkpoint_of_epoch)
                     .await
                 {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
@@ -1002,18 +1002,17 @@ mod tests {
             Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new_for_tests(),
         );
-        let epoch_store_guard = state.epoch_store();
-        let epoch_store = epoch_store_guard.deref();
+        let epoch_store = state.epoch_store();
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
         checkpoint_service
-            .notify_checkpoint(epoch_store, 0, vec![d(4)], false)
+            .notify_checkpoint(&epoch_store, 0, vec![d(4)], false)
             .unwrap();
         // Verify that sending same digests at same height is noop
         checkpoint_service
-            .notify_checkpoint(epoch_store, 0, vec![d(4)], false)
+            .notify_checkpoint(&epoch_store, 0, vec![d(4)], false)
             .unwrap();
         checkpoint_service
-            .notify_checkpoint(epoch_store, 1, vec![d(1), d(3)], false)
+            .notify_checkpoint(&epoch_store, 1, vec![d(1), d(3)], false)
             .unwrap();
 
         let (c1c, c1s) = result.recv().await.unwrap();
@@ -1043,10 +1042,16 @@ mod tests {
             SignedCheckpointSummary::new_from_summary(c2s, keypair.public().into(), &keypair);
 
         checkpoint_service
-            .notify_checkpoint_signature(epoch_store, &CheckpointSignatureMessage { summary: c2ss })
+            .notify_checkpoint_signature(
+                &epoch_store,
+                &CheckpointSignatureMessage { summary: c2ss },
+            )
             .unwrap();
         checkpoint_service
-            .notify_checkpoint_signature(epoch_store, &CheckpointSignatureMessage { summary: c1ss })
+            .notify_checkpoint_signature(
+                &epoch_store,
+                &CheckpointSignatureMessage { summary: c1ss },
+            )
             .unwrap();
 
         let c1sc = certified_result.recv().await.unwrap();
