@@ -1060,11 +1060,6 @@ impl AuthorityStore {
         )
     }
 
-    /// Return the latest consensus index. It is used to bootstrap the consensus client.
-    pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
-        self.epoch_store().get_last_consensus_index()
-    }
-
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,

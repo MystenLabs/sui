@@ -467,7 +467,11 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
             .address;
         let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
-        let consensus_handler = Arc::new(ConsensusHandler::new(state.clone(), checkpoint_service));
+        let consensus_handler = Arc::new(ConsensusHandler::new(
+            state.clone(),
+            state.epoch_store().clone(),
+            checkpoint_service,
+        ));
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair.copy(),
@@ -624,6 +628,7 @@ impl SuiNode {
                         system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
                     let consensus_handler = Arc::new(ConsensusHandler::new(
                         self.state.clone(),
+                        self.state.epoch_store().clone(),
                         validator_components.checkpoint_service.clone(),
                     ));
                     validator_components

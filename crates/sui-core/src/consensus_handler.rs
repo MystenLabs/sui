@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::ExecutionIndicesWithHash;
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, ExecutionIndicesWithHash,
+};
 use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
 use async_trait::async_trait;
@@ -12,22 +14,26 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use sui_types::base_types::{AuthorityName, EpochId};
+use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransaction;
 use tracing::{debug, instrument, warn};
 
 pub struct ConsensusHandler {
-    epoch: EpochId,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     state: Arc<AuthorityState>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, checkpoint_service: Arc<CheckpointService>) -> Self {
+    pub fn new(
+        state: Arc<AuthorityState>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_service: Arc<CheckpointService>,
+    ) -> Self {
         let last_seen = Mutex::new(Default::default());
         Self {
-            epoch: state.epoch(),
+            epoch_store,
             state,
             last_seen,
             checkpoint_service,
@@ -132,20 +138,18 @@ impl ExecutionState for ConsensusHandler {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
-        let Ok(epoch_store) = self.state.load_epoch_store(self.epoch) else {
-            return;
-        };
-
         for sequenced_transaction in sequenced_transactions {
-            let verified_transaction =
-                match epoch_store.verify_consensus_transaction(sequenced_transaction) {
-                    Ok(verified_transaction) => verified_transaction,
-                    Err(()) => continue,
-                };
+            let verified_transaction = match self
+                .epoch_store
+                .verify_consensus_transaction(sequenced_transaction)
+            {
+                Ok(verified_transaction) => verified_transaction,
+                Err(()) => continue,
+            };
 
             self.state
                 .handle_consensus_transaction(
-                    epoch_store.deref(),
+                    &self.epoch_store,
                     verified_transaction,
                     &self.checkpoint_service,
                 )
@@ -153,16 +157,15 @@ impl ExecutionState for ConsensusHandler {
                 .expect("Unrecoverable error in consensus handler");
         }
 
-        epoch_store
+        self.epoch_store
             .handle_commit_boundary(&consensus_output.sub_dag, &self.checkpoint_service)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {
         let index_with_hash = self
-            .state
-            .database
-            .last_consensus_index()
+            .epoch_store
+            .get_last_consensus_index()
             .expect("Failed to load consensus indices");
 
         index_with_hash.index.sub_dag_index
