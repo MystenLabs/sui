@@ -2243,20 +2243,18 @@ impl AuthorityState {
     ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
 
-        let tx_digest = Some(cursor.clone().unwrap().tx_digest);
-        let event_num = cursor.unwrap().event_seq;
-
-        //Get the tx_seq from tx_digest
-        let tx_num = if let Some(tx_digest) = tx_digest {
-            self.get_indexes()?
-                .get_transaction_seq(&tx_digest)?
-                .ok_or_else(|| anyhow!("Transaction [{tx_digest:?}] not found."))?
+        //Get the tx_num from tx_digest
+        let (tx_num, event_num) = if let Some(cursor) = cursor {
+            let tx_seq = self
+                .get_indexes()?
+                .get_transaction_seq(&cursor.tx_digest)?
+                .ok_or_else(|| anyhow!("Transaction [{:?}] not found.", cursor.tx_digest))?;
+            (tx_seq as i64, cursor.event_seq)
         } else if descending {
-            TxSequenceNumber::MAX
+            (i64::MAX, i64::MAX)
         } else {
-            TxSequenceNumber::MIN
+            (0, 0)
         };
-        let tx_num = i64::try_from(tx_num)?;
 
         let stored_events = match query {
             EventQuery::All => es.all_events(tx_num, event_num, limit, descending).await?,

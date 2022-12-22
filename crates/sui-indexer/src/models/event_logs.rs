@@ -13,7 +13,7 @@ use diesel::result::Error;
 #[diesel(primary_key(id))]
 pub struct EventLog {
     pub id: i32,
-    pub next_cursor_tx_seq: Option<i64>,
+    pub next_cursor_tx_dig: Option<String>,
     pub next_cursor_event_seq: Option<i64>,
 }
 
@@ -34,7 +34,7 @@ pub fn read_event_log(pg_pool_conn: &mut PgPoolConnection) -> Result<EventLog, I
 
 pub fn commit_event_log(
     pg_pool_conn: &mut PgPoolConnection,
-    tx_seq: Option<i64>,
+    tx_digest: Option<String>,
     event_seq: Option<i64>,
 ) -> Result<usize, IndexerError> {
     let event_log_commit_result: Result<usize, Error> = pg_pool_conn
@@ -43,7 +43,7 @@ pub fn commit_event_log(
         .run::<_, Error, _>(|conn| {
             diesel::update(event_logs::table)
                 .set((
-                    next_cursor_tx_seq.eq(tx_seq),
+                    next_cursor_tx_dig.eq(tx_digest.clone()),
                     next_cursor_event_seq.eq(event_seq),
                 ))
                 .execute(conn)
@@ -52,7 +52,7 @@ pub fn commit_event_log(
     event_log_commit_result.map_err(|e|
         IndexerError::PostgresWriteError(format!(
             "Failed updating event log in PostgresDB with tx seq {:?}, event seq {:?} and error {:?}",
-            tx_seq, event_seq, e
+            tx_digest.clone(), event_seq, e
         ))
     )
 }

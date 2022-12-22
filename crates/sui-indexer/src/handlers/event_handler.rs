@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::EventPage;
 use sui_sdk::SuiClient;
+use sui_types::base_types::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::query::EventQuery;
 use tokio::time::sleep;
@@ -36,12 +38,16 @@ impl EventHandler {
 
         let mut next_cursor = None;
         let event_log = read_event_log(&mut pg_pool_conn)?;
-        let (tx_seq_opt, event_seq_opt) = (
-            event_log.next_cursor_tx_seq,
+        let (tx_dig_opt, event_seq_opt) = (
+            event_log.next_cursor_tx_dig,
             event_log.next_cursor_event_seq,
         );
-        if let (Some(tx_seq), Some(event_seq)) = (tx_seq_opt, event_seq_opt) {
-            next_cursor = Some(EventID { tx_seq, event_seq });
+        if let (Some(tx_dig), Some(event_seq)) = (tx_dig_opt, event_seq_opt) {
+            let tx_digest = TransactionDigest::from_str(&tx_dig).unwrap();
+            next_cursor = Some(EventID {
+                tx_digest,
+                event_seq,
+            });
         }
 
         loop {
@@ -50,7 +56,10 @@ impl EventHandler {
             commit_events(&mut pg_pool_conn, event_page.clone())?;
             commit_event_log(
                 &mut pg_pool_conn,
-                event_page.next_cursor.clone().map(|c| c.tx_seq),
+                event_page
+                    .next_cursor
+                    .clone()
+                    .map(|c| TransactionDigest::to_string(&c.tx_digest)),
                 event_page.next_cursor.clone().map(|c| c.event_seq),
             )?;
             next_cursor = event_page.next_cursor;

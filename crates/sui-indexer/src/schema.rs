@@ -28,7 +28,7 @@ diesel::table! {
 diesel::table! {
     event_logs (id) {
         id -> Int4,
-        next_cursor_tx_seq -> Nullable<Int8>,
+        next_cursor_tx_dig -> Nullable<Varchar>,
         next_cursor_event_seq -> Nullable<Int8>,
     }
 }
