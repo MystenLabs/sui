@@ -235,7 +235,7 @@ impl CheckpointExecutorEventLoop {
     }
 
     /// Executes all checkpoints for the current epoch. At epoch boundary,
-    /// awaits the queue of scheduled checkpoints and returns the committe
+    /// awaits the queue of scheduled checkpoints and returns the committee
     /// of the next epoch.
     pub async fn execute_checkpoints_for_epoch(
         &mut self,
@@ -362,7 +362,7 @@ impl CheckpointExecutorEventLoop {
         // Note that either of these can be higher. If the node crashes with many
         // scheduled tasks, then the in-memory watermark starts as None, but the
         // persistent watermark is set, hence we start there. If we get a new
-        // messsage with checkpoints tasks scheduled, then the in-memory watermark
+        // message with checkpoints tasks scheduled, then the in-memory watermark
         // will be greater, and hence we start from there.
         let next_to_exec = std::cmp::max(
             highest_executed_seq_num
@@ -548,7 +548,7 @@ async fn execute_transactions(
         .insert_pending_certificates(&synced_txns)?;
 
     authority_state
-        .transaction_manager
+        .transaction_manager()
         .enqueue(synced_txns)
         .await?;
 

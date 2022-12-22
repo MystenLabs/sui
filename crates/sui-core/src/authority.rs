@@ -398,7 +398,7 @@ pub struct AuthorityState {
     committee_store: Arc<CommitteeStore>,
 
     /// Manages pending certificates and their missing input objects.
-    pub(crate) transaction_manager: Arc<TransactionManager>,
+    transaction_manager: Arc<TransactionManager>,
 
     pub metrics: Arc<AuthorityMetrics>,
 }
@@ -1461,7 +1461,7 @@ impl AuthorityState {
             event_handler,
             transaction_streamer,
             committee_store,
-            transaction_manager: transaction_manager.clone(),
+            transaction_manager,
             metrics,
         });
 
@@ -1546,6 +1546,10 @@ impl AuthorityState {
         state.create_owner_index_if_empty().unwrap();
 
         state
+    }
+
+    pub fn transaction_manager(&self) -> &Arc<TransactionManager> {
+        &self.transaction_manager
     }
 
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
