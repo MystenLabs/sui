@@ -10,6 +10,7 @@ use multiaddr::Multiaddr;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
+use std::ops::Deref;
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
 use sui_types::utils::to_sender_signed_transaction;
@@ -106,7 +107,7 @@ async fn submit_transaction_to_consensus_adapter() {
         async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
             self.0
                 .handle_consensus_transaction(
-                    0,
+                    self.0.epoch_store().deref(),
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
                 )

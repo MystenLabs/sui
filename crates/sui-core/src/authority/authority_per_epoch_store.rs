@@ -4,6 +4,7 @@
 use futures::future::{select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
+use narwhal_types::CommittedSubDag;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
@@ -24,15 +25,21 @@ use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
     SignedTransactionEffects, TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::TypedStoreDebug;
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
+use crate::checkpoints::CheckpointServiceNotify;
+use crate::consensus_handler::{
+    SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
+};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
+use mysten_metrics::monitored_scope;
+use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -632,11 +639,14 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn finish_consensus_transaction_process(
+    pub fn record_consensus_transaction_processed(
         &self,
-        key: ConsensusTransactionKey,
+        transaction: &ConsensusTransaction,
         consensus_index: ExecutionIndicesWithHash,
-    ) -> SuiResult {
+    ) -> Result<(), SuiError> {
+        // user certificates need to use record_(shared|owned)_object_cert_from_consensus
+        assert!(!transaction.is_user_certificate());
+        let key = transaction.key();
         let write_batch = self.tables.last_consensus_index.batch();
         self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
@@ -842,6 +852,171 @@ impl AuthorityPerEpochStore {
             Either::Left((_, _f)) => Err(()),
             Either::Right((result, _)) => Ok(result),
         }
+    }
+
+    /// Verifies transaction signatures and other data
+    /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
+    /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
+    /// This function returns unit error and is responsible for emitting log messages for internal errors
+    pub(crate) fn verify_consensus_transaction(
+        &self,
+        transaction: SequencedConsensusTransaction,
+    ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
+        let _scope = monitored_scope("VerifyConsensusTransaction");
+        if self
+            .is_consensus_message_processed(&transaction.transaction.key())
+            .expect("Storage error")
+        {
+            debug!(
+                consensus_index=?transaction.consensus_index.index.transaction_index,
+                tracking_id=?transaction.transaction.tracking_id,
+                "handle_consensus_transaction UserTransaction [skip]",
+            );
+            // TODO: Add metrics back.
+            // self.metrics.skipped_consensus_txns.inc();
+            return Err(());
+        }
+        // Signatures are verified as part of narwhal payload verification in SuiTxValidator
+        match &transaction.transaction.kind {
+            ConsensusTransactionKind::UserTransaction(_certificate) => {}
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                if transaction.sender_authority() != data.summary.auth_signature.authority {
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, transaction.certificate.origin() );
+                    return Err(());
+                }
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                if &transaction.sender_authority() != authority {
+                    warn!(
+                        "EndOfPublish authority {} does not match narwhal certificate source {}",
+                        authority,
+                        transaction.certificate.origin()
+                    );
+                    return Err(());
+                }
+            }
+        }
+        Ok(VerifiedSequencedConsensusTransaction(transaction))
+    }
+
+    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
+    /// - Verify and initialize the state to execute the certificate.
+    ///   Returns a VerifiedCertificate only if this succeeds.
+    /// - Or update the state for checkpoint or epoch change protocol. Returns None.
+    pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
+        &self,
+        transaction: VerifiedSequencedConsensusTransaction,
+        checkpoint_service: &Arc<C>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Option<VerifiedCertificate>> {
+        let _scope = monitored_scope("HandleConsensusTransaction");
+        let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
+            certificate: consensus_output,
+            consensus_index,
+            transaction,
+        }) = transaction;
+        let tracking_id = transaction.get_tracking_id();
+        match &transaction.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                if certificate.epoch() != self.epoch() {
+                    // Epoch has changed after this certificate was sequenced, ignore it.
+                    debug!(
+                        "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
+                        certificate.epoch(),
+                        self.epoch()
+                    );
+                    return Ok(None);
+                }
+                let authority = (&consensus_output.header.author).into();
+                if self.has_sent_end_of_publish(&authority)? {
+                    // This can not happen with valid authority
+                    // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
+                    // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
+                    // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
+                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
+                    return Ok(None);
+                }
+                // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
+                // is constructed.
+                let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
+
+                debug!(
+                    ?tracking_id,
+                    tx_digest = ?certificate.digest(),
+                    "handle_consensus_transaction UserTransaction",
+                );
+
+                if !self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
+                    certificate.digest());
+                    return Ok(None);
+                }
+
+                if certificate.contains_shared_object() {
+                    self.record_shared_object_cert_from_consensus(
+                        &transaction,
+                        &certificate,
+                        consensus_index,
+                        parent_sync_store,
+                    )
+                    .await?;
+                } else {
+                    self.record_owned_object_cert_from_consensus(
+                        &transaction,
+                        &certificate,
+                        consensus_index,
+                    )
+                    .await?;
+                }
+
+                Ok(Some(certificate))
+            }
+            ConsensusTransactionKind::CheckpointSignature(info) => {
+                checkpoint_service.notify_checkpoint_signature(info)?;
+                self.record_consensus_transaction_processed(&transaction, consensus_index)?;
+                Ok(None)
+            }
+            ConsensusTransactionKind::EndOfPublish(authority) => {
+                debug!("Received EndOfPublish from {:?}", authority.concise());
+                self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
+                Ok(None)
+            }
+        }
+    }
+
+    pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
+        &self,
+        committed_dag: &Arc<CommittedSubDag>,
+        checkpoint_service: &Arc<C>,
+    ) -> SuiResult {
+        let round = committed_dag.round();
+        debug!("Commit boundary at {}", round);
+        // This exchange is restart safe because of following:
+        //
+        // We try to read last checkpoint content and send it to the checkpoint service
+        // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
+        //
+        // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
+        if let Some((index, roots)) = self.last_checkpoint(round)? {
+            let final_checkpoint_round = self.final_epoch_checkpoint()?;
+            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
+                Some(CmpOrdering::Less) => {
+                    debug!(
+                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
+                        round, final_checkpoint_round
+                    );
+                    return Ok(());
+                }
+                Some(CmpOrdering::Equal) => true,
+                Some(CmpOrdering::Greater) => false,
+                None => false,
+            };
+            checkpoint_service.notify_checkpoint(index, roots, final_checkpoint)?;
+        }
+        self.record_checkpoint_boundary(round)
     }
 }
 
