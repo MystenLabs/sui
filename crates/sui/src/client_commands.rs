@@ -24,6 +24,7 @@ use serde::Serialize;
 use serde_json::json;
 use sui_framework::build_move_package;
 use sui_source_validation::BytecodeSourceVerifier;
+use sui_types::error::SuiError;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -424,6 +425,19 @@ impl SuiClientCommands {
                         print_diags_to_stderr: true,
                     },
                 )?;
+
+                if !compiled_package.is_framework() {
+                    if let Some(already_published) = compiled_package.published_root_module() {
+                        return Err(SuiError::ModulePublishFailure {
+                            error: format!(
+                                "Modules must all have 0x0 as their addresses. \
+                                 Violated by module {:?}",
+                                already_published.self_id(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
 
                 let compiled_modules = compiled_package.get_package_bytes();
 
