@@ -904,7 +904,7 @@ impl AuthorityPerEpochStore {
     /// The transaction passed here went through verification in verify_consensus_transaction.
     /// This method is called in the exact sequence message are ordered in consensus.
     /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
+    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
@@ -926,7 +926,7 @@ impl AuthorityPerEpochStore {
     /// - Verify and initialize the state to execute the certificate.
     ///   Returns a VerifiedCertificate only if this succeeds.
     /// - Or update the state for checkpoint or epoch change protocol. Returns None.
-    pub async fn process_consensus_transaction<C: CheckpointServiceNotify>(
+    pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
