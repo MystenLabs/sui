@@ -52,7 +52,7 @@ module sui::hex {
         } else if (/* a .. f */ 97 <= hex && hex < 103) {
             10 + hex - 97
         } else {
-            abort(ENotValidHexCharacter)
+            abort ENotValidHexCharacter
         }
     }
 
