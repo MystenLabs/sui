@@ -148,8 +148,7 @@ pub struct AuthorityMetrics {
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_execution_failures: IntCounter,
 
-    // TODO: Add this back for use.
-    _skipped_consensus_txns: IntCounter,
+    pub(crate) skipped_consensus_txns: IntCounter,
 
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
@@ -313,7 +312,7 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            _skipped_consensus_txns: register_int_counter_with_registry!(
+            skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
                 registry,

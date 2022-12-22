@@ -145,10 +145,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .inc_by(bytes as u64);
 
         for sequenced_transaction in sequenced_transactions {
-            let verified_transaction = match self
-                .epoch_store
-                .verify_consensus_transaction(sequenced_transaction)
-            {
+            let verified_transaction = match self.epoch_store.verify_consensus_transaction(
+                sequenced_transaction,
+                &self.metrics.skipped_consensus_txns,
+            ) {
                 Ok(verified_transaction) => verified_transaction,
                 Err(()) => continue,
             };

@@ -3172,7 +3172,7 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
 
     if let Ok(transaction) = authority
         .epoch_store()
-        .verify_consensus_transaction(transaction)
+        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
         authority
             .epoch_store()
@@ -3198,7 +3198,7 @@ pub(crate) async fn send_consensus_no_execution(
 
     if let Ok(transaction) = authority
         .epoch_store()
-        .verify_consensus_transaction(transaction)
+        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.

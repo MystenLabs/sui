@@ -40,6 +40,7 @@ use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
+use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
@@ -862,6 +863,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn verify_consensus_transaction(
         &self,
         transaction: SequencedConsensusTransaction,
+        skipped_consensus_txns: &IntCounter,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
@@ -873,8 +875,7 @@ impl AuthorityPerEpochStore {
                 tracking_id=?transaction.transaction.tracking_id,
                 "handle_consensus_transaction UserTransaction [skip]",
             );
-            // TODO: Add metrics back.
-            // self.metrics.skipped_consensus_txns.inc();
+            skipped_consensus_txns.inc();
             return Err(());
         }
         // Signatures are verified as part of narwhal payload verification in SuiTxValidator
