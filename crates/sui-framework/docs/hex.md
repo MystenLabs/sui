@@ -145,7 +145,7 @@ Aborts if the hex string contains non-valid hex characters (valid charaters are 
     } <b>else</b> <b>if</b> (/* a .. f */ 97 &lt;= <a href="hex.md#0x2_hex">hex</a> && <a href="hex.md#0x2_hex">hex</a> &lt; 103) {
         10 + <a href="hex.md#0x2_hex">hex</a> - 97
     } <b>else</b> {
-        <b>abort</b>(<a href="hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>)
+        <b>abort</b> <a href="hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>
     }
 }
 </code></pre>
