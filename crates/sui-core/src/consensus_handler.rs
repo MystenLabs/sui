@@ -6,6 +6,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointService;
+use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
 use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
@@ -23,6 +24,7 @@ pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
+    transaction_manager: Arc<TransactionManager>,
 }
 
 impl ConsensusHandler {
@@ -30,6 +32,7 @@ impl ConsensusHandler {
         state: Arc<AuthorityState>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<CheckpointService>,
+        transaction_manager: Arc<TransactionManager>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
         Self {
@@ -37,6 +40,7 @@ impl ConsensusHandler {
             state,
             last_seen,
             checkpoint_service,
+            transaction_manager,
         }
     }
 

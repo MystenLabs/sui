@@ -471,6 +471,7 @@ impl SuiNode {
             state.clone(),
             state.epoch_store().clone(),
             checkpoint_service,
+            state.transaction_manager().clone(),
         ));
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
@@ -630,6 +631,7 @@ impl SuiNode {
                         self.state.clone(),
                         self.state.epoch_store().clone(),
                         validator_components.checkpoint_service.clone(),
+                        self.state.transaction_manager().clone(),
                     ));
                     validator_components
                         .narwhal_manager
