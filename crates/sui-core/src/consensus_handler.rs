@@ -20,11 +20,17 @@ use sui_types::storage::ParentSync;
 use tracing::{debug, instrument, warn};
 
 pub struct ConsensusHandler<T> {
+    /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
+    /// corresponding store. This store is also used to get the current epoch ID.
     epoch_store: Arc<AuthorityPerEpochStore>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
+    /// transaction_manager is needed to schedule certificates execution received from Narwhal.
     transaction_manager: Arc<TransactionManager>,
+    /// parent_sync_store is needed when determining the next version to assign for shared objects.
     parent_sync_store: T,
+    // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
+    // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
 }
 
