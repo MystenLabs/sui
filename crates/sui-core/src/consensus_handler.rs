@@ -1,71 +1,90 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::ExecutionIndicesWithHash;
-use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, ExecutionIndicesWithHash,
+};
+use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointService;
+use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
 use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use sui_types::base_types::{AuthorityName, EpochId};
+use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransaction;
+use sui_types::storage::ParentSync;
 use tracing::{debug, instrument, warn};
 
-pub struct ConsensusHandler {
-    epoch: EpochId,
-    state: Arc<AuthorityState>,
+pub struct ConsensusHandler<T> {
+    /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
+    /// corresponding store. This store is also used to get the current epoch ID.
+    epoch_store: Arc<AuthorityPerEpochStore>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
+    /// transaction_manager is needed to schedule certificates execution received from Narwhal.
+    transaction_manager: Arc<TransactionManager>,
+    /// parent_sync_store is needed when determining the next version to assign for shared objects.
+    parent_sync_store: T,
+    // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
+    // a new metrics type here if we want to.
+    metrics: Arc<AuthorityMetrics>,
 }
 
-impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, checkpoint_service: Arc<CheckpointService>) -> Self {
+impl<T> ConsensusHandler<T> {
+    pub fn new(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_service: Arc<CheckpointService>,
+        transaction_manager: Arc<TransactionManager>,
+        parent_sync_store: T,
+        metrics: Arc<AuthorityMetrics>,
+    ) -> Self {
         let last_seen = Mutex::new(Default::default());
         Self {
-            epoch: state.epoch(),
-            state,
+            epoch_store,
             last_seen,
             checkpoint_service,
+            transaction_manager,
+            parent_sync_store,
+            metrics,
         }
     }
+}
 
-    fn update_hash(
-        last_seen: &Mutex<ExecutionIndicesWithHash>,
-        index: ExecutionIndices,
-        v: &[u8],
-    ) -> Option<ExecutionIndicesWithHash> {
-        let mut last_seen_guard = last_seen
-            .try_lock()
-            .expect("Should not have contention on ExecutionState::update_hash");
-        if last_seen_guard.index >= index {
-            return None;
-        }
-
-        let previous_hash = last_seen_guard.hash;
-        let mut hasher = DefaultHasher::new();
-        previous_hash.hash(&mut hasher);
-        v.hash(&mut hasher);
-        let hash = hasher.finish();
-        // Log hash for every sub dag
-        if index.sub_dag_index == 1 && last_seen_guard.index.sub_dag_index == 1 {
-            debug!(
-                "Integrity hash for consensus output at subdag {} is {:016x}",
-                index.sub_dag_index, hash
-            );
-        }
-        let last_seen = ExecutionIndicesWithHash { index, hash };
-        *last_seen_guard = last_seen.clone();
-        Some(last_seen)
+fn update_hash(
+    last_seen: &Mutex<ExecutionIndicesWithHash>,
+    index: ExecutionIndices,
+    v: &[u8],
+) -> Option<ExecutionIndicesWithHash> {
+    let mut last_seen_guard = last_seen
+        .try_lock()
+        .expect("Should not have contention on ExecutionState::update_hash");
+    if last_seen_guard.index >= index {
+        return None;
     }
+
+    let previous_hash = last_seen_guard.hash;
+    let mut hasher = DefaultHasher::new();
+    previous_hash.hash(&mut hasher);
+    v.hash(&mut hasher);
+    let hash = hasher.finish();
+    // Log hash for every sub dag
+    if index.sub_dag_index == 1 && last_seen_guard.index.sub_dag_index == 1 {
+        debug!(
+            "Integrity hash for consensus output at subdag {} is {:016x}",
+            index.sub_dag_index, hash
+        );
+    }
+    let last_seen = ExecutionIndicesWithHash { index, hash };
+    *last_seen_guard = last_seen.clone();
+    Some(last_seen)
 }
 
 #[async_trait]
-impl ExecutionState for ConsensusHandler {
+impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_output(
@@ -83,7 +102,7 @@ impl ExecutionState for ConsensusHandler {
             let author = cert.header.author.clone();
             let output_cert = Arc::new(cert);
             for batch in batches {
-                self.state.metrics.consensus_handler_processed_batches.inc();
+                self.metrics.consensus_handler_processed_batches.inc();
                 for serialized_transaction in batch.transactions {
                     bytes += serialized_transaction.len();
 
@@ -106,7 +125,7 @@ impl ExecutionState for ConsensusHandler {
                     };
 
                     let index_with_hash =
-                        match Self::update_hash(&self.last_seen, index, &serialized_transaction) {
+                        match update_hash(&self.last_seen, index, &serialized_transaction) {
                             Some(i) => i,
                             None => {
                                 debug!(
@@ -127,42 +146,39 @@ impl ExecutionState for ConsensusHandler {
             }
         }
 
-        self.state
-            .metrics
+        self.metrics
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
-        let Ok(epoch_store) = self.state.load_epoch_store(self.epoch) else {
-            return;
-        };
-
         for sequenced_transaction in sequenced_transactions {
-            let verified_transaction =
-                match epoch_store.verify_consensus_transaction(sequenced_transaction) {
-                    Ok(verified_transaction) => verified_transaction,
-                    Err(()) => continue,
-                };
+            let verified_transaction = match self.epoch_store.verify_consensus_transaction(
+                sequenced_transaction,
+                &self.metrics.skipped_consensus_txns,
+            ) {
+                Ok(verified_transaction) => verified_transaction,
+                Err(()) => continue,
+            };
 
-            self.state
+            self.epoch_store
                 .handle_consensus_transaction(
-                    epoch_store.deref(),
                     verified_transaction,
                     &self.checkpoint_service,
+                    &self.transaction_manager,
+                    &self.parent_sync_store,
                 )
                 .await
                 .expect("Unrecoverable error in consensus handler");
         }
 
-        epoch_store
+        self.epoch_store
             .handle_commit_boundary(&consensus_output.sub_dag, &self.checkpoint_service)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {
         let index_with_hash = self
-            .state
-            .database
-            .last_consensus_index()
+            .epoch_store
+            .get_last_consensus_index()
             .expect("Failed to load consensus indices");
 
         index_with_hash.index.sub_dag_index
@@ -226,7 +242,7 @@ pub fn test_update_hash() {
 
     let last_seen = Mutex::new(last_seen);
     let tx = &[0];
-    assert!(ConsensusHandler::update_hash(&last_seen, index0, tx).is_none());
-    assert!(ConsensusHandler::update_hash(&last_seen, index1, tx).is_none());
-    assert!(ConsensusHandler::update_hash(&last_seen, index2, tx).is_some());
+    assert!(update_hash(&last_seen, index0, tx).is_none());
+    assert!(update_hash(&last_seen, index1, tx).is_none());
+    assert!(update_hash(&last_seen, index2, tx).is_some());
 }

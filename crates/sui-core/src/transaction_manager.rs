@@ -19,7 +19,7 @@ use crate::authority::{AuthorityMetrics, AuthorityStore};
 /// subscribes to the stream of ready certificates published by the TransactionManager, and can
 /// execute them in parallel.
 /// TODO: use TransactionManager for fullnode.
-pub(crate) struct TransactionManager {
+pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,

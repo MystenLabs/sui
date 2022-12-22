@@ -38,7 +38,9 @@ use crate::consensus_handler::{
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
+use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
+use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
@@ -861,6 +863,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn verify_consensus_transaction(
         &self,
         transaction: SequencedConsensusTransaction,
+        skipped_consensus_txns: &IntCounter,
     ) -> Result<VerifiedSequencedConsensusTransaction, ()> {
         let _scope = monitored_scope("VerifyConsensusTransaction");
         if self
@@ -872,8 +875,7 @@ impl AuthorityPerEpochStore {
                 tracking_id=?transaction.transaction.tracking_id,
                 "handle_consensus_transaction UserTransaction [skip]",
             );
-            // TODO: Add metrics back.
-            // self.metrics.skipped_consensus_txns.inc();
+            skipped_consensus_txns.inc();
             return Err(());
         }
         // Signatures are verified as part of narwhal payload verification in SuiTxValidator
@@ -897,6 +899,27 @@ impl AuthorityPerEpochStore {
             }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
+    }
+
+    /// The transaction passed here went through verification in verify_consensus_transaction.
+    /// This method is called in the exact sequence message are ordered in consensus.
+    /// Errors returned by this call are treated as critical errors and cause node to panic.
+    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
+        &self,
+        transaction: VerifiedSequencedConsensusTransaction,
+        checkpoint_service: &Arc<C>,
+        transaction_manager: &Arc<TransactionManager>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult {
+        if let Some(certificate) = self
+            .process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
+            .await?
+        {
+            // The certificate has already been inserted into the pending_certificates table by
+            // process_consensus_transaction() above.
+            transaction_manager.enqueue(vec![certificate]).await?;
+        }
+        Ok(())
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,

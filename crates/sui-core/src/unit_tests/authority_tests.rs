@@ -31,7 +31,6 @@ use std::task::{Context, Poll};
 use sui_json_rpc_types::SuiExecutionResult;
 use sui_types::utils::to_sender_signed_transaction;
 
-use std::ops::Deref;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
@@ -3303,13 +3302,15 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
 
     if let Ok(transaction) = authority
         .epoch_store()
-        .verify_consensus_transaction(transaction)
+        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
         authority
+            .epoch_store()
             .handle_consensus_transaction(
-                authority.epoch_store().deref(),
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
+                authority.transaction_manager(),
+                authority.db(),
             )
             .await
             .unwrap();
@@ -3327,7 +3328,7 @@ pub(crate) async fn send_consensus_no_execution(
 
     if let Ok(transaction) = authority
         .epoch_store()
-        .verify_consensus_transaction(transaction)
+        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.

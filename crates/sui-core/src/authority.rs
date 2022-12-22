@@ -74,8 +74,6 @@ use sui_types::{
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::TransactionCertifier;
-use crate::checkpoints::CheckpointServiceNotify;
-use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_driver::execution_process;
@@ -151,8 +149,7 @@ pub struct AuthorityMetrics {
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_execution_failures: IntCounter,
 
-    // TODO: Add this back for use.
-    _skipped_consensus_txns: IntCounter,
+    pub(crate) skipped_consensus_txns: IntCounter,
 
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
@@ -316,7 +313,7 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            _skipped_consensus_txns: register_int_counter_with_registry!(
+            skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
                 registry,
@@ -399,7 +396,7 @@ pub struct AuthorityState {
     committee_store: Arc<CommitteeStore>,
 
     /// Manages pending certificates and their missing input objects.
-    pub(crate) transaction_manager: Arc<TransactionManager>,
+    transaction_manager: Arc<TransactionManager>,
 
     pub metrics: Arc<AuthorityMetrics>,
 }
@@ -1503,7 +1500,7 @@ impl AuthorityState {
             event_handler,
             transaction_streamer,
             committee_store,
-            transaction_manager: transaction_manager.clone(),
+            transaction_manager,
             metrics,
         });
 
@@ -1588,6 +1585,10 @@ impl AuthorityState {
         state.create_owner_index_if_empty().unwrap();
 
         state
+    }
+
+    pub fn transaction_manager(&self) -> &Arc<TransactionManager> {
+        &self.transaction_manager
     }
 
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
@@ -2204,26 +2205,6 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.database.get_latest_parent_entry(object_id)
-    }
-
-    /// The transaction passed here went through verification in verify_consensus_transaction.
-    /// This method is called in the exact sequence message are ordered in consensus.
-    /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: VerifiedSequencedConsensusTransaction,
-        checkpoint_service: &Arc<C>,
-    ) -> SuiResult {
-        if let Some(certificate) = epoch_store
-            .process_consensus_transaction(transaction, checkpoint_service, &self.database)
-            .await?
-        {
-            // The certificate has already been inserted into the pending_certificates table by
-            // process_consensus_transaction() above.
-            self.transaction_manager.enqueue(vec![certificate]).await?;
-        }
-        Ok(())
     }
 
     pub async fn create_advance_epoch_tx_cert(
