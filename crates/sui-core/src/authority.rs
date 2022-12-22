@@ -849,7 +849,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(seq, &digest)
+            .post_process_one_tx(&digest)
             .await
             .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
 
@@ -1024,16 +1024,15 @@ impl AuthorityState {
         }
     }
 
-    #[instrument(level = "debug", skip_all, fields(seq = ?seq, tx_digest =? digest), err)]
+    #[instrument(level = "debug", skip_all, fields(tx_digest =? digest), err)]
     fn index_tx(
         &self,
         indexes: &IndexStore,
-        seq: TxSequenceNumber,
         digest: &TransactionDigest,
         cert: &VerifiedCertificate,
         effects: &SignedTransactionEffects,
         timestamp_ms: u64,
-    ) -> SuiResult {
+    ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects)
             .tap_err(|e| warn!("{e}"))?;
@@ -1057,7 +1056,6 @@ impl AuthorityState {
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             changes,
-            seq,
             digest,
             timestamp_ms,
         )
@@ -1213,12 +1211,8 @@ impl AuthorityState {
         }))
     }
 
-    #[instrument(level = "debug", skip_all, fields(seq=?seq, tx_digest=?digest), err)]
-    async fn post_process_one_tx(
-        &self,
-        seq: TxSequenceNumber,
-        digest: &TransactionDigest,
-    ) -> SuiResult {
+    #[instrument(level = "debug", skip_all, fields(tx_digest=?digest), err)]
+    async fn post_process_one_tx(&self, digest: &TransactionDigest) -> SuiResult {
         if self.indexes.is_none()
             && self.transaction_streamer.is_none()
             && self.event_handler.is_none()
@@ -1244,12 +1238,15 @@ impl AuthorityState {
         let timestamp_ms = Self::unixtime_now_ms();
 
         // Index tx
-        if let Some(indexes) = &self.indexes {
-            let _ = self
-                .index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
+        let seq = if let Some(indexes) = &self.indexes {
+            let res = self
+                .index_tx(indexes.as_ref(), digest, &cert, &effects, timestamp_ms)
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
-        }
+            res.ok()
+        } else {
+            None
+        };
 
         // Stream transaction
         if let Some(transaction_streamer) = &self.transaction_streamer {
@@ -1263,6 +1260,9 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
+            // This is enforced in sui-node/src/lib.rs
+            let seq = seq.expect("IndexStore must be enabled for events to work");
+
             event_handler
                 .process_events(effects.data(), timestamp_ms, seq)
                 .await
@@ -1531,11 +1531,7 @@ impl AuthorityState {
             None,
         ));
 
-        let index_store = Some(Arc::new(IndexStore::open_tables_read_write(
-            path.join("indexes"),
-            None,
-            None,
-        )));
+        let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
 
         // add the object_basics module
         let state = AuthorityState::new(
