@@ -34,6 +34,7 @@ import {
   Order,
   TransactionEffects,
   CoinMetadata,
+  DevInspectResults
 } from '../types';
 import { Provider } from './provider';
 
@@ -114,6 +115,10 @@ export class VoidProvider extends Provider {
     _requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
+  }
+
+  devInspectTransaction(_txBytes: string): Promise<DevInspectResults> {
+    throw this.newError('devInspectTransaction');
   }
 
   dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {

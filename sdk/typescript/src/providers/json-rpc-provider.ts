@@ -17,6 +17,7 @@ import {
   isSuiMoveNormalizedStruct,
   isSuiTransactionResponse,
   isTransactionEffects,
+  isDevInspectResults,
   isCoinMetadata,
   isSuiTransactionAuthSignersResponse,
 } from '../types/index.guard';
@@ -53,6 +54,7 @@ import {
   FaucetResponse,
   Order,
   TransactionEffects,
+  DevInspectResults,
   CoinMetadata,
   versionToString,
   isValidTransactionDigest,
@@ -692,6 +694,22 @@ export class JsonRpcProvider extends Provider {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     return this.wsClient.unsubscribeEvent(id);
+  }
+
+  async devInspectTransaction(txBytes: string): Promise<DevInspectResults> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_devInspectTransaction',
+        [txBytes],
+        isDevInspectResults,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error dev inspect transaction with request type: ${err}`
+      );
+    }
   }
 
   async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {

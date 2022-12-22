@@ -16,6 +16,7 @@ import {
   PublishTransaction,
   TxnDataSerializer,
   UnserializedSignableTransaction,
+  TransactionBuilderMode,
 } from './txn-data-serializer';
 
 /**
@@ -48,7 +49,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
 
   async serializeToBytes(
     signerAddress: string,
-    unserializedTxn: UnserializedSignableTransaction
+    unserializedTxn: UnserializedSignableTransaction,
+    mode: TransactionBuilderMode = 'Commit'
   ): Promise<Base64DataBuffer> {
     let endpoint: string;
     let args: Array<any>;
@@ -120,6 +122,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           moveCall.arguments,
           moveCall.gasPayment,
           moveCall.gasBudget,
+          mode,
         ];
         break;
       case 'mergeCoin':

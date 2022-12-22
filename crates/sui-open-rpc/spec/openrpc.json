@@ -59,6 +59,13 @@
             "format": "uint64",
             "minimum": 0.0
           }
+        },
+        {
+          "name": "txn_builder_mode",
+          "description": "Whether this is a regular transaction or a Dev Inspect Transaction",
+          "schema": {
+            "$ref": "#/components/schemas/SuiTransactionBuilderMode"
+          }
         }
       ],
       "result": {
@@ -107,6 +114,10 @@
             {
               "name": "gas_budget",
               "value": 1000
+            },
+            {
+              "name": "txn_builder_mode",
+              "value": "Commit"
             }
           ],
           "result": {
@@ -143,12 +154,38 @@
       ]
     },
     {
+      "name": "sui_devInspectTransaction",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return dev-inpsect results of the transaction, including both the transaction effects and return values of the transaction.",
+      "params": [
+        {
+          "name": "tx_bytes",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        }
+      ],
+      "result": {
+        "name": "DevInspectResults",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/DevInspectResults"
+        }
+      }
+    },
+    {
       "name": "sui_dryRunTransaction",
       "tags": [
         {
           "name": "Full Node API"
         }
       ],
+      "description": "Return transaction execution effects including the gas cost summary, while the effects are not committed to the chain.",
       "params": [
         {
           "name": "tx_bytes",
@@ -1912,6 +1949,13 @@
             "format": "uint64",
             "minimum": 0.0
           }
+        },
+        {
+          "name": "execution_mode",
+          "description": "Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBuilderMode::Commit` when it's None.",
+          "schema": {
+            "$ref": "#/components/schemas/SuiTransactionBuilderMode"
+          }
         }
       ],
       "result": {
@@ -2781,6 +2825,32 @@
             }
           }
         ]
+      },
+      "DevInspectResults": {
+        "description": "The response from processing a dev inspect transaction",
+        "type": "object",
+        "required": [
+          "effects",
+          "results"
+        ],
+        "properties": {
+          "effects": {
+            "description": "Summary of effects that likely would be generated if the transaction is actually run. Note however, that not all dev-inspect transactions are actually usable as transactions so it might not be possible actually generate these effects from a normal transaction.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionEffects"
+              }
+            ]
+          },
+          "results": {
+            "description": "Execution results (including return values) from executing the transactions Currently contains only return values from Move calls",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String"
+              }
+            ]
+          }
+        }
       },
       "DynamicFieldInfo": {
         "type": "object",
@@ -4478,6 +4548,47 @@
           }
         ]
       },
+      "Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Ok"
+            ],
+            "properties": {
+              "Ok": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "integer",
+                      "format": "uint",
+                      "minimum": 0.0
+                    },
+                    {
+                      "$ref": "#/components/schemas/SuiExecutionResult"
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "Err"
+            ],
+            "properties": {
+              "Err": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
       "Secp256k1SuiSignature": {
         "$ref": "#/components/schemas/Base64"
       },
@@ -4713,6 +4824,60 @@
             "additionalProperties": false
           }
         ]
+      },
+      "SuiExecutionResult": {
+        "type": "object",
+        "properties": {
+          "mutableReferenceOutputs": {
+            "description": "The value of any arguments that were mutably borrowed. Non-mut borrowed values are not included",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "minimum": 0.0
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/TypeTag"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
+            }
+          },
+          "returnValues": {
+            "description": "The return values from the function",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "minimum": 0.0
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/TypeTag"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
       },
       "SuiJsonValue": {},
       "SuiMoveAbility": {
@@ -5193,6 +5358,24 @@
             }
           }
         }
+      },
+      "SuiTransactionBuilderMode": {
+        "oneOf": [
+          {
+            "description": "Regular Sui Transactions that are committed on chain",
+            "type": "string",
+            "enum": [
+              "Commit"
+            ]
+          },
+          {
+            "description": "Simulated transaction that allows calling any Move function with arbitrary values.",
+            "type": "string",
+            "enum": [
+              "DevInspect"
+            ]
+          }
+        ]
       },
       "SuiTransactionResponse": {
         "type": "object",

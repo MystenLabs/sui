@@ -32,6 +32,7 @@ import {
   PayAllSuiTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
+  TransactionBuilderMode,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
@@ -46,11 +47,13 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
   async serializeToBytes(
     signerAddress: string,
-    txn: UnserializedSignableTransaction
+    txn: UnserializedSignableTransaction,
+    _mode: TransactionBuilderMode = 'Commit'
   ): Promise<Base64DataBuffer> {
     try {
       const version = await this.provider.getRpcApiVersion();
-      const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
+      const useIntentSigning =
+        version != null && version.major >= 0 && version.minor > 18;
       return await this.serializeTransactionData(
         useIntentSigning,
         await this.constructTransactionData(signerAddress, txn)
@@ -334,7 +337,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         TRANSACTION_DATA_TYPE_TAG.length + dataBytes.length
       );
       serialized.set(TRANSACTION_DATA_TYPE_TAG);
-      serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);  
+      serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);
       return new Base64DataBuffer(serialized);
     }
   }

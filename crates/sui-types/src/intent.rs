@@ -40,9 +40,9 @@ pub enum IntentScope {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]
 pub struct Intent {
-    scope: IntentScope,
-    version: IntentVersion,
-    app_id: AppId,
+    pub scope: IntentScope,
+    pub version: IntentVersion,
+    pub app_id: AppId,
 }
 
 impl Intent {

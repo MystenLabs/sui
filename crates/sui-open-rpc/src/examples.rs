@@ -159,6 +159,7 @@ impl RpcExampleProvider {
                     ("single_transaction_params", json!(tx_params)),
                     ("gas", json!(gas_id)),
                     ("gas_budget", json!(1000)),
+                    ("txn_builder_mode", json!("Commit")),
                 ],
                 json!(result),
             )],
