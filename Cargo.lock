@@ -8931,7 +8931,6 @@ dependencies = [
  "async-trait",
  "axum 0.5.17",
  "bcs",
- "bincode",
  "clap 3.2.23",
  "eyre",
  "fastcrypto",
