@@ -13,7 +13,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
-use move_compiler::compiled_unit::CompiledUnitEnum;
+use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -69,24 +69,6 @@ impl BuildConfig {
             Ok(package) => package,
         };
         let compiled_modules = package.root_modules_map();
-        let package_name = package.compiled_package_info.package_name.as_str();
-        let is_framework =
-            package_name == SUI_PACKAGE_NAME || package_name == MOVE_STDLIB_PACKAGE_NAME;
-        if !is_framework {
-            if let Some(m) = compiled_modules
-                .iter_modules()
-                .iter()
-                .find(|m| m.self_id().address() != &AccountAddress::ZERO)
-            {
-                // TODO: this should be a generic build failure, not a Sui module publish failure
-                return Err(SuiError::ModulePublishFailure {
-                    error: format!(
-                        "Modules must all have 0x0 as their addresses. Violated by module {:?}",
-                        m.self_id()
-                    ),
-                });
-            }
-        }
         if self.run_bytecode_verifier {
             for m in compiled_modules.iter_modules() {
                 move_bytecode_verifier::verify_module(m).map_err(|err| {
@@ -325,6 +307,28 @@ impl CompiledPackage {
             layout_builder.build_struct_layout(typ).unwrap();
         }
         layout_builder.into_registry()
+    }
+
+    /// Checks whether this package corresponds to a built-in framework
+    pub fn is_framework(&self) -> bool {
+        let package_name = self.package.compiled_package_info.package_name.as_str();
+        package_name == SUI_PACKAGE_NAME || package_name == MOVE_STDLIB_PACKAGE_NAME
+    }
+
+    /// Checks for root modules with non-zero package addresses.  Returns an arbitrary one, if one
+    /// can can be found, otherwise returns `None`.
+    pub fn published_root_module(&self) -> Option<&CompiledModule> {
+        self.package
+            .root_compiled_units
+            .iter()
+            .find_map(|unit| match &unit.unit {
+                CompiledUnitEnum::Module(NamedCompiledModule { module, .. })
+                    if module.self_id().address() != &AccountAddress::ZERO =>
+                {
+                    Some(module)
+                }
+                _ => None,
+            })
     }
 }
 
