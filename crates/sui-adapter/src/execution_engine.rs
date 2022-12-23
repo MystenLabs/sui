@@ -325,6 +325,9 @@ fn execution_loop<
                     tx_ctx,
                 )?;
             }
+            SingleTransactionKind::Genesis(_) => {
+                panic!("BUG: genesis transactions cannot be executed")
+            }
         };
     }
     Ok(results)

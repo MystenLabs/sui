@@ -341,6 +341,7 @@ fn parse_operations(
             SuiTransactionKind::Pay(tx) => (OperationType::Pay, json!(tx)),
             SuiTransactionKind::PayAllSui(tx) => (OperationType::PayAllSui, json!(tx)),
             SuiTransactionKind::ChangeEpoch(tx) => (OperationType::EpochChange, json!(tx)),
+            SuiTransactionKind::Genesis(tx) => (OperationType::Genesis, json!(tx)),
             SuiTransactionKind::PaySui(_) => unreachable!(),
         };
         generic_operation(counter, type_, status, sender, metadata)

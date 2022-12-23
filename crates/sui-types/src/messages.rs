@@ -164,6 +164,11 @@ pub struct ChangeEpoch {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct GenesisTransaction {
+    pub objects: Vec<Object>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -190,6 +195,7 @@ pub enum SingleTransactionKind {
     /// A validator will not sign a transaction of this kind from outside. It only
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
+    Genesis(GenesisTransaction),
     // .. more transaction types go here
 }
 
@@ -358,6 +364,9 @@ impl SingleTransactionKind {
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                 }]
             }
+            Self::Genesis(_) => {
+                vec![]
+            }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -458,6 +467,9 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
                 writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
+            Self::Genesis(_) => {
+                writeln!(writer, "Transaction Kind: Genesis")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -530,6 +542,7 @@ impl TransactionKind {
         matches!(
             self,
             TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
+                | TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
     }
 
@@ -558,6 +571,7 @@ impl TransactionKind {
                     | SingleTransactionKind::PaySui(_)
                     | SingleTransactionKind::PayAllSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
                     | SingleTransactionKind::Publish(_) => false,
                 });
                 fp_ensure!(
@@ -575,7 +589,8 @@ impl TransactionKind {
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
                 | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_) => (),
+                | SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::Genesis(_) => (),
             },
         }
         Ok(())
@@ -803,7 +818,8 @@ impl TransactionData {
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
                 | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_) => (),
+                | SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::Genesis(_) => (),
                 SingleTransactionKind::PaySui(p) => {
                     fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
                     fp_ensure!(

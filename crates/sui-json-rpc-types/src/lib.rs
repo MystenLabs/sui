@@ -1554,6 +1554,11 @@ impl TryFrom<TransactionData> for SuiTransactionData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SuiGenesisTransaction {
+    pub objects: Vec<ObjectID>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
@@ -1574,6 +1579,8 @@ pub enum SuiTransactionKind {
     TransferSui(SuiTransferSui),
     /// A system transaction that will update epoch information on-chain.
     ChangeEpoch(SuiChangeEpoch),
+    /// A system transaction used for initializing the initial state of the chain.
+    Genesis(SuiGenesisTransaction),
     // .. more transaction types go here
 }
 
@@ -1661,6 +1668,9 @@ impl Display for SuiTransactionKind {
                 writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
             }
+            Self::Genesis(_) => {
+                writeln!(writer, "Transaction Kind: Genesis Transaction")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -1714,6 +1724,9 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 epoch: e.epoch,
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
+            }),
+            SingleTransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
+                objects: g.objects.iter().map(Object::id).collect(),
             }),
         })
     }
