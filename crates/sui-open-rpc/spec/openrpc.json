@@ -4875,6 +4875,20 @@
           }
         }
       },
+      "SuiGenesisTransaction": {
+        "type": "object",
+        "required": [
+          "objects"
+        ],
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
+      },
       "SuiJsonValue": {},
       "SuiMoveAbility": {
         "type": "string",
@@ -5723,6 +5737,19 @@
             "properties": {
               "ChangeEpoch": {
                 "$ref": "#/components/schemas/SuiChangeEpoch"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "A system transaction used for initializing the initial state of the chain.",
+            "type": "object",
+            "required": [
+              "Genesis"
+            ],
+            "properties": {
+              "Genesis": {
+                "$ref": "#/components/schemas/SuiGenesisTransaction"
               }
             },
             "additionalProperties": false

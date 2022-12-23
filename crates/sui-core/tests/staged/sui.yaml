@@ -217,6 +217,20 @@ ExecutionStatus:
         STRUCT:
           - error:
               TYPENAME: ExecutionFailureStatus
+GenesisObject:
+  ENUM:
+    0:
+      RawObject:
+        STRUCT:
+          - data:
+              TYPENAME: Data
+          - owner:
+              TYPENAME: Owner
+GenesisTransaction:
+  STRUCT:
+    - objects:
+        SEQ:
+          TYPENAME: GenesisObject
 Identifier:
   NEWTYPESTRUCT: STR
 InvalidChildObjectArgument:
@@ -462,6 +476,10 @@ SingleTransactionKind:
       ChangeEpoch:
         NEWTYPE:
           TYPENAME: ChangeEpoch
+    8:
+      Genesis:
+        NEWTYPE:
+          TYPENAME: GenesisTransaction
 StructTag:
   STRUCT:
     - address:
