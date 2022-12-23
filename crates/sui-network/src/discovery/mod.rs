@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
-use sui_config::p2p::{P2pConfig, SeedPeer};
+use sui_config::p2p::{DiscoveryConfig, P2pConfig, SeedPeer};
 use tap::{Pipe, TapFallible};
 use tokio::{
     sync::oneshot,
@@ -20,10 +20,7 @@ use tokio::{
 use tracing::{debug, info, trace};
 
 const TIMEOUT: Duration = Duration::from_secs(1);
-const MAX_NUMBER_OF_CONNECTIONS: usize = 20;
-const DISCOVERY_INTERVAL_PERIOD: Duration = Duration::from_millis(5_000);
 const ONE_DAY_MILLISECONDS: u64 = 24 * 60 * 60 * 1_000;
-const NUMBER_OF_CONCURRENT_REQUESTS: usize = 20;
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Discovery.rs"));
@@ -65,6 +62,7 @@ pub struct NodeInfo {
 
 struct DiscoveryEventLoop {
     config: P2pConfig,
+    discovery_config: DiscoveryConfig,
     network: Network,
     tasks: JoinSet<()>,
     pending_dials: HashMap<PeerId, AbortHandle>,
@@ -80,7 +78,7 @@ impl DiscoveryEventLoop {
         self.construct_our_info();
         self.configure_preferred_peers();
 
-        let mut interval = tokio::time::interval(DISCOVERY_INTERVAL_PERIOD);
+        let mut interval = tokio::time::interval(self.discovery_config.interval_period());
         let mut peer_events = {
             let (subscriber, _peers) = self.network.subscribe().unwrap();
             subscriber
@@ -207,6 +205,7 @@ impl DiscoveryEventLoop {
         self.tasks
             .spawn(query_connected_peers_for_their_known_peers(
                 self.network.clone(),
+                self.discovery_config.clone(),
                 self.state.clone(),
             ));
 
@@ -243,7 +242,9 @@ impl DiscoveryEventLoop {
         let number_of_connections = state.connected_peers.len();
         let number_to_dial = std::cmp::min(
             eligible.len(),
-            MAX_NUMBER_OF_CONNECTIONS.saturating_sub(number_of_connections),
+            self.discovery_config
+                .target_concurrent_connections()
+                .saturating_sub(number_of_connections),
         );
 
         // randomize the order
@@ -268,6 +269,7 @@ impl DiscoveryEventLoop {
         {
             let abort_handle = self.tasks.spawn(try_to_connect_to_seed_peers(
                 self.network.clone(),
+                self.discovery_config.clone(),
                 self.config.seed_peers.clone(),
             ));
 
@@ -323,14 +325,18 @@ async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
     }
 }
 
-async fn try_to_connect_to_seed_peers(network: Network, seed_peers: Vec<SeedPeer>) {
+async fn try_to_connect_to_seed_peers(
+    network: Network,
+    config: DiscoveryConfig,
+    seed_peers: Vec<SeedPeer>,
+) {
     let network = &network;
 
     futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
         multiaddr_to_anemo_address(&seed.address).map(|address| (seed, address))
     }))
     .for_each_concurrent(
-        NUMBER_OF_CONCURRENT_REQUESTS,
+        config.target_concurrent_connections(),
         |(seed, address)| async move {
             // Ignore the result and just log the error  if there is one
             let _ = if let Some(peer_id) = seed.peer_id {
@@ -367,11 +373,21 @@ async fn query_peer_for_their_known_peers(peer: Peer, state: Arc<RwLock<State>>)
     }
 }
 
-async fn query_connected_peers_for_their_known_peers(network: Network, state: Arc<RwLock<State>>) {
-    let found_peers = network
+async fn query_connected_peers_for_their_known_peers(
+    network: Network,
+    config: DiscoveryConfig,
+    state: Arc<RwLock<State>>,
+) {
+    use rand::seq::IteratorRandom;
+
+    let peers_to_query = network
         .peers()
         .into_iter()
         .flat_map(|id| network.peer(id))
+        .choose_multiple(&mut rand::thread_rng(), config.peers_to_query());
+
+    let found_peers = peers_to_query
+        .into_iter()
         .map(DiscoveryClient::new)
         .map(|mut client| async move {
             let request = Request::new(()).with_timeout(TIMEOUT);
@@ -391,7 +407,7 @@ async fn query_connected_peers_for_their_known_peers(network: Network, state: Ar
                 )
         })
         .pipe(futures::stream::iter)
-        .buffer_unordered(NUMBER_OF_CONCURRENT_REQUESTS)
+        .buffer_unordered(config.peers_to_query())
         .filter_map(std::future::ready)
         .flat_map(futures::stream::iter)
         .collect::<Vec<_>>()
