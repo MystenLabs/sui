@@ -19,9 +19,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let node = &test_cluster.fullnode_handle.sui_node;
 
-    let active = node.active();
-
-    let net = active.agg_aggregator();
+    let net = node.clone_authority_aggregator().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
     let orchestrator =
         TransactiondOrchestrator::new(net, node.state(), temp_dir.path(), &Registry::new());
@@ -73,8 +71,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     let node = &test_cluster.fullnode_handle.sui_node;
 
-    let active = node.active();
-    let net = active.agg_aggregator();
+    let net = node.clone_authority_aggregator().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
     let orchestrator =
         TransactiondOrchestrator::new(net, node.state(), temp_dir.path(), &Registry::new());

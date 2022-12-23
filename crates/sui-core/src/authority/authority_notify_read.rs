@@ -49,12 +49,6 @@ pub(crate) struct NotifyRead<K, V> {
     count_pending: AtomicUsize,
 }
 
-impl<K: Eq + Hash + Clone, V: Clone> Default for NotifyRead<K, V> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     pub fn new() -> Self {
         let pending = (0..255).map(|_| Default::default()).collect();

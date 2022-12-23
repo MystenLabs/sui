@@ -107,7 +107,7 @@ async fn verify_ticket_response<'a>(
 async fn test_quorum_driver_with_given_notify_read() {
     let (aggregator, tx) = setup().await;
     let digest = *tx.digest();
-    let notifier = Arc::new(NotifyRead::default());
+    let notifier = Arc::new(NotifyRead::new());
     let quorum_driver_handler = Arc::new(QuorumDriverHandler::new_with_notify_read(
         Arc::new(aggregator),
         notifier.clone(),
