@@ -33,6 +33,7 @@ import {
   Order,
   TransactionEffects,
   CoinMetadata,
+  DevInspectResults,
 } from '../types';
 
 ///////////////////////////////
@@ -247,7 +248,9 @@ export abstract class Provider {
    * @param id - subscription id to unsubscribe from (previously received from subscribeEvent)
    */
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
-  // TODO: add more interface methods
+
+  abstract devInspectTransaction(txBytes: string): Promise<DevInspectResults>;
 
   abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+  // TODO: add more interface methods
 }

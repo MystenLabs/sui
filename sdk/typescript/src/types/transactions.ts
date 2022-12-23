@@ -105,6 +105,26 @@ export type OwnedObjectRef = {
   reference: SuiObjectRef;
 };
 
+export type DevInspectResults = {
+  effects: TransactionEffects;
+  results: DevInspectResultsType;
+};
+
+export type DevInspectResultsType =
+  | { Ok: DevInspectResultTupleType[] }
+  | { Err: string };
+
+export type DevInspectResultTupleType = [number, ExecutionResultType];
+
+export type ExecutionResultType = {
+  mutableReferenceOutputs?: MutableReferenceOutputType[];
+  returnValues?: ReturnValueType[];
+};
+
+export type MutableReferenceOutputType = [number, number[], string];
+
+export type ReturnValueType = [number[], string];
+
 export type TransactionEffects = {
   /** The status of the execution */
   status: ExecutionStatus;

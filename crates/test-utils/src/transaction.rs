@@ -8,6 +8,7 @@ use tracing::{debug, info};
 
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_adapter::execution_mode;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
@@ -142,7 +143,7 @@ pub async fn submit_move_transaction(
     let client = context.get_client().await.unwrap();
     let data = client
         .transaction_builder()
-        .move_call(
+        .move_call::<execution_mode::Normal>(
             sender,
             package_ref.0,
             module,

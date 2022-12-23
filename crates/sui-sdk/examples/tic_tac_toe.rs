@@ -13,6 +13,7 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use sui_adapter::execution_mode;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
@@ -74,7 +75,7 @@ impl TicTacToe {
         let create_game_call = self
             .client
             .transaction_builder()
-            .move_call(
+            .move_call::<execution_mode::Normal>(
                 player_x,
                 self.game_package_id,
                 "shared_tic_tac_toe",
@@ -170,7 +171,7 @@ impl TicTacToe {
             let place_mark_call = self
                 .client
                 .transaction_builder()
-                .move_call(
+                .move_call::<execution_mode::Normal>(
                     my_identity,
                     self.game_package_id,
                     "shared_tic_tac_toe",

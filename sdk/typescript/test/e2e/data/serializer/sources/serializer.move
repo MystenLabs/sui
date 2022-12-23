@@ -11,4 +11,14 @@ module serializer::serializer_tests {
     ) {
         transfer::transfer(item, tx_context::sender(ctx))
     }
+
+    public fun return_struct<T: key + store>(
+        item: T,
+    ): T {
+        item
+    }
+
+    public fun test_abort() {
+        abort 0
+    }
 }

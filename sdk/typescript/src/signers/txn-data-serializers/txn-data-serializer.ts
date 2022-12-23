@@ -171,6 +171,8 @@ export interface PublishTransaction {
   gasBudget: number;
 }
 
+export type TransactionBuilderMode = 'Commit' | 'DevInspect';
+
 ///////////////////////////////
 // Exported Abstracts
 /**
@@ -179,6 +181,7 @@ export interface PublishTransaction {
 export interface TxnDataSerializer {
   serializeToBytes(
     signerAddress: SuiAddress,
-    txn: UnserializedSignableTransaction
+    txn: UnserializedSignableTransaction,
+    mode: TransactionBuilderMode
   ): Promise<Base64DataBuffer>;
 }

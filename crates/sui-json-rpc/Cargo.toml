@@ -29,6 +29,7 @@ bcs = "0.1.4"
 
 tap = "1.0"
 
+sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }

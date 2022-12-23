@@ -29,6 +29,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
+use sui_adapter::execution_mode;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -1359,7 +1360,7 @@ pub async fn call_move(
     let client = context.get_client().await?;
     let data = client
         .transaction_builder()
-        .move_call(
+        .move_call::<execution_mode::Normal>(
             sender,
             package,
             module,
