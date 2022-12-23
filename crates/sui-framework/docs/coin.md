@@ -39,6 +39,11 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
 -  [Function `update_description`](#0x2_coin_update_description)
 -  [Function `update_icon_url`](#0x2_coin_update_icon_url)
+-  [Function `get_decimals`](#0x2_coin_get_decimals)
+-  [Function `get_name`](#0x2_coin_get_name)
+-  [Function `get_symbol`](#0x2_coin_get_symbol)
+-  [Function `get_description`](#0x2_coin_get_description)
+-  [Function `get_icon_url`](#0x2_coin_get_icon_url)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -1122,6 +1127,136 @@ Update the url of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">Coin
     _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>
 ) {
     metadata.icon_url = <a href="_some">option::some</a>(<a href="url.md#0x2_url_new_unsafe">url::new_unsafe</a>(<a href="url.md#0x2_url">url</a>));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_get_decimals"></a>
+
+## Function `get_decimals`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_decimals">get_decimals</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_decimals">get_decimals</a>&lt;T&gt;(
+    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
+): u8 {
+    metadata.decimals
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_get_name"></a>
+
+## Function `get_name`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_name">get_name</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_String">string::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_name">get_name</a>&lt;T&gt;(
+    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
+): <a href="_String">string::String</a> {
+    metadata.name
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_get_symbol"></a>
+
+## Function `get_symbol`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_symbol">get_symbol</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_String">ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_symbol">get_symbol</a>&lt;T&gt;(
+    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
+): <a href="_String">ascii::String</a> {
+    metadata.symbol
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_get_description"></a>
+
+## Function `get_description`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_description">get_description</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_String">string::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_description">get_description</a>&lt;T&gt;(
+    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
+): <a href="_String">string::String</a> {
+    metadata.description
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_get_icon_url"></a>
+
+## Function `get_icon_url`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(
+    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
+): Option&lt;Url&gt; {
+    metadata.icon_url
 }
 </code></pre>
 
