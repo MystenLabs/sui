@@ -21,7 +21,7 @@ multiaddr = "0.17.0"
 once_cell = "1.16"
 tracing = "0.1.36"
 
-fastcrypto.workspace = true
+fastcrypto = { workspace = true, features = ["copy_key"] }
 move-binary-format.workspace = true
 move-package.workspace = true
 move-core-types.workspace = true

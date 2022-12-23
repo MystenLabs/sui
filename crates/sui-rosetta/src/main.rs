@@ -162,7 +162,7 @@ impl RosettaServerCommand {
                 // Staring a full node for the rosetta server.
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
                 let genesis = config.genesis.genesis()?.clone();
-                let _node = SuiNode::start(&config, registry_service).await?;
+                let _node = SuiNode::start(config, registry_service).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
                 let rosetta = RosettaOnlineServer::new(env, sui_client, &genesis);

@@ -107,7 +107,7 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(
-        config: &NodeConfig,
+        config: NodeConfig,
         registry_service: RegistryService,
     ) -> Result<Arc<SuiNode>> {
         // TODO: maybe have a config enum that takes care of this for us.
@@ -172,7 +172,7 @@ impl SuiNode {
         };
 
         let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
 
         let net = AuthorityAggregator::new_from_system_state(
             &store,
@@ -224,7 +224,7 @@ impl SuiNode {
         let json_rpc_service = build_server(
             state.clone(),
             &transaction_orchestrator.clone(),
-            config,
+            &config,
             &prometheus_registry,
         )
         .await?;
@@ -370,7 +370,7 @@ impl SuiNode {
     }
 
     async fn construct_validator_components(
-        config: &NodeConfig,
+        config: NodeConfig,
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
@@ -387,7 +387,7 @@ impl SuiNode {
         );
 
         let validator_server_handle = Self::start_grpc_validator_service(
-            config,
+            &config,
             state.clone(),
             consensus_adapter.clone(),
             &registry_service.default_registry(),
@@ -395,7 +395,7 @@ impl SuiNode {
         .await?;
 
         let checkpoint_service = Self::start_checkpoint_service(
-            config,
+            &config,
             consensus_adapter.clone(),
             checkpoint_store.clone(),
             state.clone(),
@@ -404,7 +404,7 @@ impl SuiNode {
         );
 
         let narwhal_manager = Self::construct_and_run_narwhal_manager(
-            config,
+            config.clone(),
             consensus_config,
             state.clone(),
             checkpoint_service.clone(),
@@ -449,7 +449,7 @@ impl SuiNode {
     }
 
     async fn construct_and_run_narwhal_manager(
-        config: &NodeConfig,
+        config: NodeConfig,
         consensus_config: &ConsensusConfig,
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
@@ -474,9 +474,9 @@ impl SuiNode {
             state.metrics.clone(),
         ));
         let narwhal_config = NarwhalConfiguration {
-            primary_keypair: config.protocol_key_pair(),
-            network_keypair: config.network_key_pair(),
-            worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
+            primary_keypair: config.clone().protocol_key_pair(),
+            network_keypair: config.clone().network_key_pair(),
+            worker_ids_and_keypairs: vec![(0, config.clone().worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
             tx_validator: SuiTxValidator::new(state.clone(), &registry_service.default_registry()),
@@ -652,7 +652,7 @@ impl SuiNode {
                 info!("Promoting the node from fullnode to validator, starting grpc server");
 
                 let validator_components = Self::construct_validator_components(
-                    &self.config,
+                    self.config.clone(),
                     self.state.clone(),
                     self.checkpoint_store.clone(),
                     self.state_sync.clone(),

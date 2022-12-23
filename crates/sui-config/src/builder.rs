@@ -12,11 +12,12 @@ use crate::{
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
 use rand::rngs::OsRng;
+use std::sync::Arc;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
 };
-use sui_keys::keypair_util::{write_authority_keypair_to_file, write_keypair_to_file};
+// use sui_keys::keypair_util::{write_authority_keypair_to_file, write_keypair_to_file};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
@@ -267,8 +268,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
         let validator_configs = validators
             .into_iter()
-            .enumerate()
-            .map(|(i, validator)| {
+            // .enumerate()
+            .map(|validator| {
                 let public_key: AuthorityPublicKeyBytes =
                     validator.genesis_info.key_pair.public().into();
                 let db_path = self
@@ -298,37 +299,43 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     external_address: Some(validator.genesis_info.p2p_address),
                     ..Default::default()
                 };
-                let protocol_key_pair_path = PathBuf::from(format!("protocol-{}.key", i));
-                let worker_key_pair_path = PathBuf::from(format!("worker-{}.key", i));
-                let account_key_pair_path = PathBuf::from(format!("account-{}.key", i));
-                let network_key_pair_path = PathBuf::from(format!("network-{}.key", i));
+                // let protocol_key_pair_path = PathBuf::from(format!("protocol-{}.key", i));
+                // let worker_key_pair_path = PathBuf::from(format!("worker-{}.key", i));
+                // let account_key_pair_path = PathBuf::from(format!("account-{}.key", i));
+                // let network_key_pair_path = PathBuf::from(format!("network-{}.key", i));
 
-                write_authority_keypair_to_file(
-                    &validator.genesis_info.key_pair,
-                    &protocol_key_pair_path,
-                )
-                .expect("Fail to write protocol keypair to file");
-                write_keypair_to_file(
-                    &SuiKeyPair::Ed25519(validator.genesis_info.worker_key_pair),
-                    &worker_key_pair_path,
-                )
-                .expect("Fail to write worker keypair to file");
-                write_keypair_to_file(
-                    &validator.genesis_info.account_key_pair,
-                    &account_key_pair_path,
-                )
-                .expect("Fail to write account keypair to file");
-                write_keypair_to_file(
-                    &SuiKeyPair::Ed25519(validator.genesis_info.network_key_pair),
-                    &network_key_pair_path,
-                )
-                .expect("Fail to write network keypair to file");
+                // write_authority_keypair_to_file(
+                //     &validator.genesis_info.key_pair,
+                //     &protocol_key_pair_path,
+                // )
+                // .expect("Fail to write protocol keypair to file");
+                // write_keypair_to_file(
+                //     &SuiKeyPair::Ed25519(validator.genesis_info.worker_key_pair),
+                //     &worker_key_pair_path,
+                // )
+                // .expect("Fail to write worker keypair to file");
+                // write_keypair_to_file(
+                //     &validator.genesis_info.account_key_pair,
+                //     &account_key_pair_path,
+                // )
+                // .expect("Fail to write account keypair to file");
+                // write_keypair_to_file(
+                //     &SuiKeyPair::Ed25519(validator.genesis_info.network_key_pair),
+                //     &network_key_pair_path,
+                // )
+                // .expect("Fail to write network keypair to file");
 
                 NodeConfig {
-                    protocol_key_pair_path,
-                    worker_key_pair_path,
-                    account_key_pair_path,
-                    network_key_pair_path,
+                    protocol_key_pair: Some(Arc::new(validator.genesis_info.key_pair)),
+                    worker_key_pair: Some(Arc::new(validator.genesis_info.worker_key_pair)),
+                    account_key_pair: Some(Arc::new(validator.genesis_info.account_key_pair)),
+                    network_key_pair: Some(Arc::new(validator.genesis_info.network_key_pair)),
+                    // The paths here does not matter because the keypairs are already loaded to values above.
+                    protocol_key_pair_path: PathBuf::from(""),
+                    worker_key_pair_path: PathBuf::from(""),
+                    account_key_pair_path: PathBuf::from(""),
+                    network_key_pair_path: PathBuf::from(""),
+
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
