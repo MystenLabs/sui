@@ -94,7 +94,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                             type="submit"
                             disabled={isSubmitting || !isValid}
                             mode="primary"
-                            className={st.btn}
+                            className="flex-1"
                             size="large"
                         >
                             <Loading loading={isSubmitting}>

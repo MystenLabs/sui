@@ -150,7 +150,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                     className="flex flex-nowrap self-stretch px-3.5 py-5"
                     size="large"
                     mode="primary"
-                    disabled={!passwordCopied}
+                    disabled={mode === 'created' && !passwordCopied}
                     onClick={() => navigate('/')}
                 >
                     Open Sui Wallet

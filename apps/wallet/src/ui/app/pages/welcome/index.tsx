@@ -45,7 +45,7 @@ const WelcomePage = () => {
                                             weight="medium"
                                         >
                                             Connecting you to the decentralized
-                                            web and SUI network.
+                                            web and Sui network.
                                         </Text>
                                     </div>
                                     <div className="flex gap-2 mt-10 items-center">
@@ -62,7 +62,7 @@ const WelcomePage = () => {
                                             Buy, store, send and swap tokens
                                         </Text>
                                     </div>
-                                    <div className="flex gap-2 mt-3">
+                                    <div className="flex gap-2 mt-3 items-center">
                                         <Icon
                                             icon={SuiIcons.Checkmark}
                                             className="text-success text-extraSmall"
