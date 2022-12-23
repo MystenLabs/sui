@@ -38,8 +38,8 @@ pub struct AuthorityPerpetualTables {
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    #[default_options_override_fn = "transaction_lock_table_default_config"]
-    pub(crate) transaction_lock: DBMap<ObjectRef, Option<LockDetails>>,
+    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
+    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -200,7 +200,7 @@ impl AuthorityPerpetualTables {
 }
 
 // These functions are used to initialize the DB tables
-fn transaction_lock_table_default_config() -> DBOptions {
+fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn objects_table_default_config() -> DBOptions {

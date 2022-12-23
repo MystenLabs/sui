@@ -310,7 +310,7 @@ impl AuthorityPerEpochStore {
     }
 
     #[cfg(test)]
-    pub fn reset_transaction_for_test(&self, transaction: &TransactionDigest) {
+    pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
         self.tables.transactions.remove(transaction).unwrap();
     }
 
