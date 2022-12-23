@@ -5,6 +5,7 @@ use crate::node::default_checkpoints_per_epoch;
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
+    node::AuthorityStorePruningConfig,
     p2p::P2pConfig,
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME,
@@ -319,6 +320,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
+                    authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
                 }
             })
             .collect();

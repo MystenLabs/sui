@@ -84,6 +84,9 @@ pub struct NodeConfig {
     pub p2p_config: P2pConfig,
 
     pub genesis: Genesis,
+
+    #[serde(default = "default_authority_store_pruning_config")]
+    pub authority_store_pruning_config: AuthorityStorePruningConfig,
 }
 
 fn default_key_pair() -> Arc<AuthorityKeyPair> {
@@ -96,6 +99,10 @@ fn default_worker_key_pair() -> Arc<NetworkKeyPair> {
 
 fn default_sui_key_pair() -> Arc<SuiKeyPair> {
     Arc::new((sui_types::crypto::get_key_pair::<AccountKeyPair>().1).into())
+}
+
+fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
+    AuthorityStorePruningConfig::default()
 }
 
 fn default_grpc_address() -> Multiaddr {
@@ -202,6 +209,41 @@ impl ConsensusConfig {
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct AuthorityStorePruningConfig {
+    pub objects_num_latest_versions_to_retain: u64,
+    pub objects_pruning_period_secs: u64,
+    pub objects_pruning_initial_delay_secs: u64,
+}
+
+impl Default for AuthorityStorePruningConfig {
+    fn default() -> Self {
+        Self {
+            objects_num_latest_versions_to_retain: u64::MAX,
+            objects_pruning_period_secs: u64::MAX,
+            objects_pruning_initial_delay_secs: u64::MAX,
+        }
+    }
+}
+
+impl AuthorityStorePruningConfig {
+    pub fn validator_config() -> Self {
+        Self {
+            objects_num_latest_versions_to_retain: 2,
+            objects_pruning_period_secs: 12 * 60 * 60,
+            objects_pruning_initial_delay_secs: 60 * 60,
+        }
+    }
+    pub fn fullnode_config() -> Self {
+        Self {
+            objects_num_latest_versions_to_retain: 5,
+            objects_pruning_period_secs: 24 * 60 * 60,
+            objects_pruning_initial_delay_secs: 60 * 60,
+        }
     }
 }
 

@@ -211,6 +211,7 @@ flume = { version = "0.10", default-features = false, features = ["async", "futu
 fnv = { version = "1", features = ["std"] }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
+fs_extra = { version = "1", default-features = false }
 funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "executor", "futures-executor", "std", "unstable"] }
 futures-channel = { version = "0.3", features = ["alloc", "futures-sink", "sink", "std", "unstable"] }
@@ -318,6 +319,7 @@ miniz_oxide-d8f496e17d97b5cb = { package = "miniz_oxide", version = "0.5", defau
 miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
+more-asserts = { version = "0.3", default-features = false }
 move-abigen = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851", default-features = false }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
 move-borrow-graph = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851", default-features = false }
@@ -874,6 +876,7 @@ flume = { version = "0.10", default-features = false, features = ["async", "futu
 fnv = { version = "1", features = ["std"] }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
+fs_extra = { version = "1", default-features = false }
 funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "executor", "futures-executor", "std", "unstable"] }
 futures-channel = { version = "0.3", features = ["alloc", "futures-sink", "sink", "std", "unstable"] }
@@ -994,6 +997,7 @@ miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", defau
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
+more-asserts = { version = "0.3", default-features = false }
 move-abigen = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851", default-features = false }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
 move-borrow-graph = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851", default-features = false }
@@ -1439,7 +1443,6 @@ debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 errno = { version = "0.2", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
-fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
 io-lifetimes = { version = "1", default-features = false, features = ["close", "libc", "windows-sys"] }
@@ -1525,7 +1528,6 @@ encoding_rs = { version = "0.8", features = ["alloc"] }
 findshlibs = { version = "0.10", default-features = false }
 foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
-fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["indexmap", "nameattr"] }
 io-lifetimes = { version = "1", default-features = false, features = ["close", "libc", "windows-sys"] }

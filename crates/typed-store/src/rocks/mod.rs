@@ -238,6 +238,19 @@ impl RocksDB {
             }
         }
     }
+
+    pub fn compact_range_cf<K: AsRef<[u8]>>(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        start: Option<K>,
+        end: Option<K>,
+    ) {
+        delegate_call!(self.compact_range_cf(cf, start, end))
+    }
+
+    pub fn flush(&self) -> Result<(), rocksdb::Error> {
+        delegate_call!(self.flush())
+    }
 }
 
 pub enum RocksDBBatch {
@@ -412,7 +425,15 @@ impl<K, V> DBMap<K, V> {
         )
     }
 
-    fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
+    pub fn compact_range<J: Serialize>(&self, start: &J, end: &J) -> Result<(), TypedStoreError> {
+        let from_buf = be_fix_int_ser(start.borrow())?;
+        let to_buf = be_fix_int_ser(end.borrow())?;
+        self.rocksdb
+            .compact_range_cf(&self.cf(), Some(from_buf), Some(to_buf));
+        Ok(())
+    }
+
+    pub fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
         self.rocksdb
             .cf_handle(&self.cf)
             .expect("Map-keying column family should have been checked at DB creation")

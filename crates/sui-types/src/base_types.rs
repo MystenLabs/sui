@@ -753,6 +753,7 @@ impl ObjectID {
     pub const LENGTH: usize = AccountAddress::LENGTH;
     /// Hex address: 0x0
     pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
+    pub const MAX: Self = Self::new([0xff; Self::LENGTH]);
     /// Creates a new ObjectID
     pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
         Self(AccountAddress::new(obj_id))

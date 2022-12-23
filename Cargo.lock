@@ -4182,6 +4182,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "more-asserts"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
+
+[[package]]
 name = "move-abigen"
 version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=265e8792ff2935db8246ddb308b36b893d507851#265e8792ff2935db8246ddb308b36b893d507851"
@@ -8485,8 +8491,10 @@ dependencies = [
  "either",
  "eyre",
  "fastcrypto",
+ "fs_extra",
  "futures",
  "itertools",
+ "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -11212,6 +11220,7 @@ dependencies = [
  "mio 0.8.5",
  "mockall",
  "mockall_derive",
+ "more-asserts",
  "move-abigen",
  "move-binary-format",
  "move-borrow-graph",

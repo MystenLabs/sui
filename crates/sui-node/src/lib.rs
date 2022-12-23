@@ -138,6 +138,7 @@ impl SuiNode {
                 None,
                 genesis,
                 &committee_store,
+                &config.authority_store_pruning_config,
             )
             .await?,
         );
