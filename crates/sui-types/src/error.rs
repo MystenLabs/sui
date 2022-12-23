@@ -606,10 +606,7 @@ impl SuiError {
         match self {
             SuiError::QuorumFailedToProcessTransaction { errors, .. }
             | SuiError::QuorumFailedToExecuteCertificate { errors, .. } => {
-                errors.iter().any(|err| {
-                    matches!(err, SuiError::ValidatorHaltedAtEpochEnd)
-                        || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
-                })
+                errors.iter().any(|err| err.indicates_epoch_change())
             }
             SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
             _ => false,
