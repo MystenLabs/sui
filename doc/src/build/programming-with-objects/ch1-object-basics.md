@@ -173,7 +173,7 @@ Transaction Kind : Publish
  Mutated Objects:
    - ID: 0x91dfb762ebd7acd718828d72898ab8977d75b0eb , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 ```
- Note that the exact data you see will be different. One of the **Immutable** object in **Created Objects** is the package object ID (`0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69` in this case). And the other object ID in **Mutated Objects** is your gas coin object ID (`0x91dfb762ebd7acd718828d72898ab8977d75b0eb` in this case) which is owned by your account address.
+ Note that the exact data you see will be different. One of the **Immutable** objects in **Created Objects** is the package object ID (`0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69` in this case). And the other object ID in **Mutated Objects** is your gas coin object ID (`0x91dfb762ebd7acd718828d72898ab8977d75b0eb` in this case) which is owned by your account address.
 
  For convenience, let's save it to an environment variable:
 ```
