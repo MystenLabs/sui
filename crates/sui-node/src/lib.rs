@@ -29,7 +29,6 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
@@ -89,7 +88,6 @@ pub struct SuiNode {
     validator_components: ArcSwapOption<ValidatorComponents>,
     _json_rpc_service: Option<ServerHandle>,
     state: Arc<AuthorityState>,
-    active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
 
@@ -174,7 +172,7 @@ impl SuiNode {
         let (p2p_network, discovery_handle, state_sync_handle) =
             Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
 
-        let net = AuthorityAggregator::new_from_system_state(
+        let arc_net = AuthorityAggregator::new_from_system_state(
             &store,
             &committee_store,
             &prometheus_registry,
@@ -206,13 +204,9 @@ impl SuiNode {
         )
         .start()?;
 
-        let active_authority = Arc::new(ActiveAuthority::new(state.clone(), net.clone())?);
-
-        let arc_net = active_authority.agg_aggregator();
-
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(TransactiondOrchestrator::new(
-                arc_net,
+                Arc::new(arc_net),
                 state.clone(),
                 config.db_path(),
                 &prometheus_registry,
@@ -249,7 +243,6 @@ impl SuiNode {
             validator_components: ArcSwapOption::new(validator_components),
             _json_rpc_service: json_rpc_service,
             state,
-            active: active_authority,
             transaction_orchestrator,
             registry_service,
 
@@ -552,10 +545,6 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
-    }
-
-    pub fn active(&self) -> &Arc<ActiveAuthority<NetworkAuthorityClient>> {
-        &self.active
     }
 
     pub fn transaction_orchestrator(

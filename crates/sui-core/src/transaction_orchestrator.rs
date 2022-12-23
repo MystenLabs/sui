@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::access::Access;
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
@@ -259,6 +260,10 @@ where
 
     pub fn quorum_driver(&self) -> &Arc<QuorumDriver<A>> {
         &self.quorum_driver
+    }
+
+    pub fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.quorum_driver.authority_aggregator().load()
     }
 
     pub fn subscribe_to_effects_queue(

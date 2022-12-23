@@ -4,7 +4,6 @@
 mod metrics;
 pub use metrics::*;
 
-use arc_swap::ArcSwap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,7 +50,7 @@ pub struct QuorumDriverHandler<A> {
 /// Another copy will be held by a QuorumDriverHandler to either send signal to update the
 /// committee, or to subscribe effects generated from the QuorumDriver.
 pub struct QuorumDriver<A> {
-    validators: ArcSwap<AuthorityAggregator<A>>,
+    validators: Arc<AuthorityAggregator<A>>,
     #[allow(dead_code)]
     task_sender: Sender<QuorumTask>,
     effects_subscribe_sender:
@@ -70,23 +69,27 @@ impl<A> QuorumDriver<A> {
         metrics: Arc<QuorumDriverMetrics>,
     ) -> Self {
         Self {
-            validators: ArcSwap::from(validators),
+            validators: validators,
             task_sender,
             effects_subscribe_sender,
             metrics,
         }
     }
 
-    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
+    pub fn authority_aggregator(&self) -> &Arc<AuthorityAggregator<A>> {
         &self.validators
     }
 
+    pub fn committee(&self) -> &Committee {
+        &self.validators.committee
+    }
+
     pub fn clone_committee(&self) -> Committee {
-        self.validators.load().committee.clone()
+        self.validators.committee.clone()
     }
 
     pub fn current_epoch(&self) -> EpochId {
-        self.validators.load().committee.epoch
+        self.validators.committee.epoch
     }
 }
 
@@ -137,7 +140,6 @@ where
         let tx_digest = *transaction.digest();
         let result = self
             .validators
-            .load()
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx", ?tx_digest))
             .await;
@@ -206,7 +208,6 @@ where
     ) -> SuiResult<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)> {
         let effects = self
             .validators
-            .load()
             .process_certificate(certificate.clone().into_inner())
             .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
             .await?;
@@ -220,11 +221,10 @@ where
     }
 
     pub async fn update_validators(
-        &self,
+        &mut self,
         new_validators: Arc<AuthorityAggregator<A>>,
-    ) -> SuiResult {
-        self.validators.store(new_validators);
-        Ok(())
+    ) {
+        self.validators = new_validators;
     }
 
     // TODO currently this function is not epoch-boundary-safe. We need to make it so.
@@ -242,7 +242,7 @@ where
         >,
         original_tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<(TransactionDigest, bool)>> {
-        let validity = self.validators.load().committee.validity_threshold();
+        let validity = self.committee().validity_threshold();
 
         let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
         conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
@@ -308,7 +308,6 @@ where
     ) -> SuiResult<bool> {
         let (signed_transaction, certified_transaction) = self
             .validators
-            .load()
             .handle_transaction_info_request_from_some_validators(
                 tx_digest,
                 &validators,
@@ -325,7 +324,6 @@ where
             // known to the rest of them (e.g. when *this* validator is bad).
             let result = self
                 .validators
-                .load()
                 .process_certificate(certified_transaction.into_inner())
                 .await
                 .tap_ok(|_resp| {
@@ -352,7 +350,6 @@ where
             // Now ask validators to execute this transaction.
             let result = self
                 .validators
-                .load()
                 .execute_transaction(&verified_transaction)
                 .await
                 .tap_ok(|_resp| {
@@ -414,9 +411,9 @@ where
     pub fn clone_new(&self) -> Self {
         let (task_sender, task_rx) = mpsc::channel::<QuorumTask>(TASK_QUEUE_SIZE);
         let (effects_subscribe_sender, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
-        let validators = ArcSwap::new(self.quorum_driver.authority_aggregator().load_full());
+        let validators = self.quorum_driver.authority_aggregator();
         let quorum_driver = Arc::new(QuorumDriver {
-            validators,
+            validators: validators.clone(),
             task_sender,
             effects_subscribe_sender,
             metrics: self.quorum_driver_metrics.clone(),
@@ -506,11 +503,7 @@ mod tests {
             QuorumDriverMetrics::new_for_tests(),
         );
         let quorum_driver = quorum_driver_handler.clone_quorum_driver();
-        let validity = quorum_driver
-            .authority_aggregator()
-            .load()
-            .committee
-            .validity_threshold();
+        let validity = quorum_driver.committee().validity_threshold();
 
         assert_eq!(auth_agg.clone_inner_clients().keys().cloned().count(), 4);
 
