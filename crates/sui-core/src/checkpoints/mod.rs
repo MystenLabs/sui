@@ -41,7 +41,7 @@ use sui_types::messages_checkpoint::{
 use tokio::sync::{mpsc, watch, Notify};
 use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, TypedStoreError};
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
 

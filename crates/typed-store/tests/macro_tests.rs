@@ -15,6 +15,7 @@ use typed_store::rocks::be_fix_int_ser;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::traits::Map;
+use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Store;
 use typed_store_derive::DBMapUtils;
@@ -117,14 +118,14 @@ async fn macro_test() {
     assert_eq!(7, tbls_secondary.count_keys("table2").unwrap());
 
     // check raw byte sizes of key and values
-    let (count, key_bytes, value_bytes) = tbls_secondary.table_summary("table1").unwrap();
-    assert_eq!(9, count);
-    assert_eq!(raw_key_bytes1, key_bytes);
-    assert_eq!(raw_value_bytes1, value_bytes);
-    let (count, key_bytes, value_bytes) = tbls_secondary.table_summary("table2").unwrap();
-    assert_eq!(7, count);
-    assert_eq!(raw_key_bytes2, key_bytes);
-    assert_eq!(raw_value_bytes2, value_bytes);
+    let summary1 = tbls_secondary.table_summary("table1").unwrap();
+    assert_eq!(9, summary1.num_keys);
+    assert_eq!(raw_key_bytes1, summary1.key_bytes_total);
+    assert_eq!(raw_value_bytes1, summary1.value_bytes_total);
+    let summary2 = tbls_secondary.table_summary("table2").unwrap();
+    assert_eq!(7, summary2.num_keys);
+    assert_eq!(raw_key_bytes2, summary2.key_bytes_total);
+    assert_eq!(raw_value_bytes2, summary2.value_bytes_total);
 
     // Test all entries
     let m = tbls_secondary.dump("table1", 100, 0).unwrap();

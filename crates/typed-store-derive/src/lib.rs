@@ -172,6 +172,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
+/// use typed_store::traits::TableSummary;
 /// use core::fmt::Error;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
@@ -230,6 +231,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// use core::fmt::Error;
+/// use typed_store::traits::TableSummary;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
 /// fn custom_fn_name1() -> DBOptions {DBOptions::default()}
@@ -559,26 +561,20 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
 
             /// Get key value sizes from the db
             /// Tables must be opened in read only mode using `open_tables_read_only`
-            pub fn table_summary(&self, table_name: &str) -> eyre::Result<(usize, usize, usize)> {
+            pub fn table_summary(&self, table_name: &str) -> eyre::Result<typed_store::traits::TableSummary> {
                 let mut count = 0;
                 let mut key_bytes = 0;
                 let mut value_bytes = 0;
-                Ok(match table_name {
+                match table_name {
                     #(
                         stringify!(#field_names) => {
                             typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
-                            let mut iter = self.#field_names.iterator_cf().map(Result::unwrap);
-                            for (key, value) in iter {
-                                count += 1;
-                                key_bytes += key.len();
-                                value_bytes += value.len();
-                            }
-                            (count, key_bytes, value_bytes)
+                            self.#field_names.table_summary()
                         }
                     )*
 
                     _ => eyre::bail!("No such table name: {}", table_name),
-                })
+                }
             }
 
             /// Count the keys in this table
@@ -628,6 +624,11 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 fn count_table_keys(&self, table_name: String) -> eyre::Result<usize> {
                     self.count_keys(table_name.as_str())
                 }
+
+                fn table_summary(&self, table_name: String) -> eyre::Result<TableSummary> {
+                    self.table_summary(table_name.as_str())
+                }
+
 
         }
 

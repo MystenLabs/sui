@@ -17,6 +17,7 @@ use sui_storage::{lock_service::LockServiceImpl, IndexStoreTables};
 use sui_types::base_types::EpochId;
 use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
 use sui_types::temporary_store::InnerTemporaryStore;
+use typed_store::traits::TableSummary;
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -58,7 +59,7 @@ pub fn table_summary(
     epoch: Option<EpochId>,
     db_path: PathBuf,
     table_name: &str,
-) -> anyhow::Result<(usize, usize, usize)> {
+) -> anyhow::Result<TableSummary> {
     match store_name {
         StoreName::Validator => {
             let epoch_tables = AuthorityEpochTables::describe_tables();
