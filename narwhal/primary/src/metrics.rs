@@ -14,8 +14,9 @@ use std::time::Duration;
 use tonic::Code;
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180.,
-    300.,
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
+    1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
+    12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
 ];
 
 #[derive(Clone)]
@@ -325,6 +326,8 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
+    /// count number of duplicate certificates that the node processed (others + own)
+    pub duplicate_certificates_processed: IntCounterVec,
     /// Latency to perform a garbage collection in core module
     pub gc_core_latency: HistogramVec,
     /// The current Narwhal round in proposer
@@ -401,6 +404,13 @@ impl PrimaryMetrics {
                 "certificates_suspended",
                 "Number of certificates that node suspended processing of",
                 &["epoch", "reason"],
+                registry
+            )
+            .unwrap(),
+            duplicate_certificates_processed: register_int_counter_vec_with_registry!(
+                "duplicate_certificates_processed",
+                "Number of certificates that node processed (others + own)",
+                &["epoch"],
                 registry
             )
             .unwrap(),

@@ -11,8 +11,8 @@
         "link": "https://github.com/MystenLabs/sui/releases"
       },
       {
-        "label": "Satoshi Flip on Sui",
-        "link": "https://satoshi-flip.sui.io/",
+        "label": "Sui Developer Forums",
+        "link": "https://forums.sui.io/",
         "external": true
       }
     ]

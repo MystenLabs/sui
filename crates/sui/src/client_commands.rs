@@ -23,7 +23,8 @@ use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_framework::build_move_package;
-use sui_source_validation::BytecodeSourceVerifier;
+use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_types::error::SuiError;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -134,6 +135,36 @@ pub enum SuiClientCommands {
         /// dependency found on-chain.
         #[clap(long)]
         verify_dependencies: bool,
+    },
+
+    /// Verify local Move packages against on-chain packages, and optionally their dependencies.
+    #[clap(name = "verify-source")]
+    VerifySource {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+
+        /// Verify on-chain dependencies.
+        #[clap(long)]
+        verify_deps: bool,
+
+        /// Don't verify source (only valid if --verify-deps is enabled).
+        #[clap(long)]
+        skip_source: bool,
+
+        /// If specified, override the addresses for the package's own modules with this address.
+        /// Only works for unpublished modules (whose addresses are currently 0x0).
+        #[clap(long)]
+        address_override: Option<ObjectID>,
     },
 
     /// Call Move function
@@ -425,12 +456,25 @@ impl SuiClientCommands {
                     },
                 )?;
 
+                if !compiled_package.is_framework() {
+                    if let Some(already_published) = compiled_package.published_root_module() {
+                        return Err(SuiError::ModulePublishFailure {
+                            error: format!(
+                                "Modules must all have 0x0 as their addresses. \
+                                 Violated by module {:?}",
+                                already_published.self_id(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
+
                 let compiled_modules = compiled_package.get_package_bytes();
 
                 let client = context.get_client().await?;
                 if verify_dependencies {
                     BytecodeSourceVerifier::new(client.read_api(), false)
-                        .verify_deployed_dependencies(&compiled_package.package)
+                        .verify_package_deps(&compiled_package.package)
                         .await?;
                     println!("Successfully verified dependencies on-chain against source.");
                 }
@@ -903,6 +947,44 @@ impl SuiClientCommands {
                 context.config.envs.clone(),
                 context.config.active_env.clone(),
             ),
+            SuiClientCommands::VerifySource {
+                package_path,
+                build_config,
+                verify_deps,
+                skip_source,
+                address_override,
+            } => {
+                if skip_source && !verify_deps {
+                    return Err(anyhow!(
+                        "Source skipped and not verifying deps: Nothing to verify."
+                    ));
+                }
+
+                let compiled_package = build_move_package(
+                    &package_path,
+                    BuildConfig {
+                        config: build_config,
+                        run_bytecode_verifier: true,
+                        print_diags_to_stderr: true,
+                    },
+                )?;
+
+                let client = context.get_client().await?;
+
+                BytecodeSourceVerifier::new(client.read_api(), false)
+                    .verify_package(
+                        &compiled_package.package,
+                        verify_deps,
+                        match (skip_source, address_override) {
+                            (true, _) => SourceMode::Skip,
+                            (false, None) => SourceMode::Verify,
+                            (false, Some(addr)) => SourceMode::VerifyAt(addr.into()),
+                        },
+                    )
+                    .await?;
+
+                SuiClientCommandResult::VerifySource
+            }
         });
         ret
     }
@@ -1253,6 +1335,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer)?;
                 }
             }
+            SuiClientCommandResult::VerifySource => {
+                writeln!(writer, "Source verification succeeded!")?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1367,6 +1452,7 @@ impl SuiClientCommandResult {
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
+    VerifySource,
     Object(GetObjectDataResponse, bool),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(

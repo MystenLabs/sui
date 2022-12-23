@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_metrics::spawn_monitored_task;
 use narwhal_types::TransactionsClient;
@@ -12,7 +11,7 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
@@ -31,9 +30,6 @@ use crate::{
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
-
-const MIN_BATCH_SIZE: u64 = 1000;
-const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -69,8 +65,6 @@ pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    min_batch_size: u64,
-    max_delay: Duration,
     pub metrics: Arc<ValidatorServiceMetrics>,
 }
 
@@ -96,25 +90,8 @@ impl AuthorityServer {
             address,
             state,
             consensus_adapter,
-            min_batch_size: MIN_BATCH_SIZE,
-            max_delay: Duration::from_millis(MAX_DELAY_MILLIS),
             metrics,
         }
-    }
-
-    /// Create a batch subsystem, register it with the authority state, and
-    /// launch a task that manages it. Return the join handle of this task.
-    pub async fn spawn_batch_subsystem(
-        &self,
-        min_batch_size: u64,
-        max_delay: Duration,
-    ) -> SuiResult<JoinHandle<()>> {
-        // Start the batching subsystem, and register the handles with the authority.
-        let state = self.state.clone();
-        let batch_join_handle =
-            spawn_monitored_task!(state.run_batch_service(min_batch_size, max_delay));
-
-        Ok(batch_join_handle)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -126,11 +103,6 @@ impl AuthorityServer {
         self,
         address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
-        // Start the batching subsystem
-        let _join_handle = self
-            .spawn_batch_subsystem(self.min_batch_size, self.max_delay)
-            .await;
-
         let mut server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
@@ -349,35 +321,41 @@ impl ValidatorService {
                 "Cannot execute system certificate via RPC interface! {certificate:?}"
             )));
         }
-        let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
+        // code block within reconfiguration lock
         let certificate = {
             let epoch_store = state.epoch_store();
-            certificate.verify(epoch_store.committee())?
-        };
-        cert_verif_metrics_guard.stop_and_record();
+            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            if !reconfiguration_lock.should_accept_user_certs() {
+                metrics.num_rejected_cert_in_epoch_boundary.inc();
+                return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
+            }
 
-        // 3) All certificates are sent to consensus (at least by some authorities)
-        // For shared objects this will wait until either timeout or we have heard back from consensus.
-        // For owned objects this will return without waiting for certificate to be sequenced
-        // First do quick dirty non-async check
-        if !state.consensus_message_processed(&certificate)? {
-            let _metrics_guard = if shared_object_tx {
-                Some(metrics.consensus_latency.start_timer())
-            } else {
-                None
+            let certificate = {
+                let _timer = metrics.cert_verification_latency.start_timer();
+                certificate.verify(epoch_store.committee())?
             };
-            let transaction = ConsensusTransaction::new_certificate_message(
-                &state.name,
-                certificate.clone().into(),
-            );
-            let _waiter = consensus_adapter.submit(transaction).tap_err(|e| {
-                if let SuiError::ValidatorHaltedAtEpochEnd = e {
-                    metrics.num_rejected_cert_in_epoch_boundary.inc();
-                }
-            })?;
-            // Do not wait for the result, because the transaction might have already executed.
-            // Instead, check or wait for the existence of certificate effects below.
-        }
+
+            // 3) All certificates are sent to consensus (at least by some authorities)
+            // For shared objects this will wait until either timeout or we have heard back from consensus.
+            // For owned objects this will return without waiting for certificate to be sequenced
+            // First do quick dirty non-async check
+            if !state.consensus_message_processed(&certificate)? {
+                let _metrics_guard = if shared_object_tx {
+                    Some(metrics.consensus_latency.start_timer())
+                } else {
+                    None
+                };
+                let transaction = ConsensusTransaction::new_certificate_message(
+                    &state.name,
+                    certificate.clone().into(),
+                );
+                consensus_adapter.submit(transaction, Some(&reconfiguration_lock))?;
+                // Do not wait for the result, because the transaction might have already executed.
+                // Instead, check or wait for the existence of certificate effects below.
+            }
+            drop(reconfiguration_lock);
+            certificate
+        };
 
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
@@ -462,21 +440,6 @@ impl Validator for ValidatorService {
         let response = self.state.handle_transaction_info_request(request).await?;
 
         Ok(tonic::Response::new(response.into()))
-    }
-
-    type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
-
-    async fn batch_info(
-        &self,
-        request: tonic::Request<BatchInfoRequest>,
-    ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
-        let request = request.into_inner();
-
-        let xstream = self.state.handle_batch_streaming(request).await?;
-
-        let response = xstream.map_err(tonic::Status::from);
-
-        Ok(tonic::Response::new(Box::pin(response)))
     }
 
     async fn checkpoint(

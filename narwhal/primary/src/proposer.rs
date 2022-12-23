@@ -241,9 +241,11 @@ impl Proposer {
         self.proposed_headers.insert(this_round, header.clone());
 
         // Update metrics related to latency
+        let mut total_inclusion_secs = 0.0;
         for (_digest, _worker_id, created_at_timestamp) in digests.clone() {
-            let batch_inclusion_duration =
+            let batch_inclusion_secs =
                 Duration::from_millis(header.created_at - created_at_timestamp).as_secs_f64();
+            total_inclusion_secs += batch_inclusion_secs;
 
             #[cfg(feature = "benchmark")]
             {
@@ -252,21 +254,30 @@ impl Proposer {
                     "Batch {:?} from worker {} took {} seconds from creation to be included in a proposed header",
                     _digest,
                     _worker_id,
-                    batch_inclusion_duration
+                    batch_inclusion_secs
                 );
             }
 
             self.metrics
                 .proposer_batch_latency
-                .observe(batch_inclusion_duration);
+                .observe(batch_inclusion_secs);
         }
 
-        #[cfg(feature = "benchmark")]
         // NOTE: This log entry is used to compute performance.
-        tracing::info!(
-            "Header {:?} was created in {} seconds",
+        let (header_creation_secs, avg_inclusion_secs) = if let Some(digest) = digests.first() {
+            (
+                Duration::from_millis(header.created_at - digest.2).as_secs_f64(),
+                total_inclusion_secs / digests.len() as f64,
+            )
+        } else {
+            (self.max_header_delay.as_secs_f64(), 0.0)
+        };
+        debug!(
+            "Header {:?} was created in {} seconds. Contains {} batches, with average delay {} seconds.",
             header.digest(),
-            Duration::from_millis(header.created_at - digests.first().unwrap().2).as_secs_f64()
+            header_creation_secs,
+            digests.len(),
+            avg_inclusion_secs,
         );
 
         Ok(header)

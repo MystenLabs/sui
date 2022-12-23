@@ -31,7 +31,6 @@ use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
 
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest};
-use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::{fp_bail, fp_ensure};
@@ -53,12 +52,11 @@ enum LockServiceCommands {
         is_force_reset: bool,
         resp: oneshot::Sender<SuiResult>,
     },
-    SequenceTransaction {
+    CommitTransaction {
         tx: TransactionDigest,
-        seq: TxSequenceNumber,
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
-        resp: oneshot::Sender<SuiResult<TxSequenceNumber>>,
+        resp: oneshot::Sender<SuiResult>,
     },
     CreateLocksForGenesisObjects {
         objects: Vec<ObjectRef>,
@@ -83,10 +81,6 @@ enum LockServiceQueries {
     GetMissingLocks {
         objects: Vec<ObjectRef>,
         resp: oneshot::Sender<SuiResult<Vec<ObjectRef>>>,
-    },
-    GetTxSequence {
-        tx: TransactionDigest,
-        resp: oneshot::Sender<Result<Option<TxSequenceNumber>, SuiError>>,
     },
 }
 
@@ -158,30 +152,16 @@ pub struct LockServiceImpl {
     /// forgotten.
     #[default_options_override_fn = "transaction_lock_table_default_config"]
     transaction_lock: DBMap<ObjectRef, Option<LockDetails>>,
-
-    /// The semantics of transaction_lock ensure that certificates are always processed
-    /// in causal order - that is, certificates naturally form a partial order. tx_sequence
-    /// records a total ordering among all processed certificates (which is naturally local
-    /// to this authority).
-    #[default_options_override_fn = "tx_sequence_table_default_config"]
-    tx_sequence: DBMap<TransactionDigest, TxSequenceNumber>,
 }
 
 // These functions are used to initialize the DB tables
 fn transaction_lock_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
-fn tx_sequence_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
-}
 
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority
 // If not for multiple authorities per process, it should really be one per process.
 impl LockServiceImpl {
-    fn get_tx_sequence(&self, tx: TransactionDigest) -> SuiResult<Option<TxSequenceNumber>> {
-        self.tx_sequence.get(&tx).map_err(SuiError::StorageError)
-    }
-
     /// Gets ObjectLockInfo that represents state of lock on an object.
     /// Returns SuiError::ObjectNotFound if cannot find lock record for this object
     fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
@@ -257,86 +237,50 @@ impl LockServiceImpl {
         Ok(())
     }
 
-    fn sequence_transaction_impl(
+    fn commit_transaction(
         &self,
         tx: TransactionDigest,
-        seq: TxSequenceNumber,
-        inputs: &[ObjectRef],
-        outputs: &[ObjectRef],
-    ) -> SuiResult<TxSequenceNumber> {
-        // Assert that this tx has not been sequenced under a different number.
-        match self.get_tx_sequence(tx)? {
-            // tx has already been sequenced
-            Some(prev_seq) => Ok(prev_seq),
-
-            None => {
-                // Assert that the tx locks exist.
-                //
-                // Note that the locks may not be set to this particular tx:
-                //
-                // 1. Lock existence prevents re-execution of old certs when objects have been
-                //    upgraded
-                // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-                //    (But the lock should exist which means previous transactions finished)
-                // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX
-                //    its fine
-                //
-                // TODO: it should be impossible for this to fail unless the store has been
-                // corrupted. Remove this check when we feel confident enough.
-                if let Err(e) = self.locks_exist(inputs) {
-                    error!(tx_digest = ?tx, "Locks did not exist for unsequenced transaction! \
-                                         possible data store corruption");
-                    Err(e)
-                } else {
-                    // Locks exist - safe to assign the sequence number and initialize new locks.
-                    // This step must be done atomically.
-                    //
-                    // If it was not atomic, we would have to choose either:
-                    //
-                    // 1. sequence assigned before locks initialized.
-                    //
-                    //    This would mean that, during recovery, we would have to retry lock
-                    //    creation if sequence had already been assigned. But there are two reasons
-                    //    the locks might not exist: We could have failed before creating them, or
-                    //    they could have been deleted by a subsequent transaction in which case we
-                    //    should not recreate them. We can't easily distinguish these two cases,
-                    //    so this does not work.
-                    //
-                    // 2. locks initialized before sequence assigned.
-                    //
-                    //    This would allow subsequent transactions to run before we assign the
-                    //    sequence number to this transaction, which could result in transactions
-                    //    being sequenced out of causal order.
-                    let write_batch = self.tx_sequence.batch();
-                    let write_batch =
-                        write_batch.insert_batch(&self.tx_sequence, std::iter::once((tx, seq)))?;
-
-                    let write_batch = self.initialize_locks_impl(write_batch, outputs, false)?;
-                    write_batch.write()?;
-                    Ok(seq)
-                }
-            }
-        }
-    }
-
-    fn sequence_transaction(
-        &self,
-        tx: TransactionDigest,
-        seq: TxSequenceNumber,
         // The objects that we must have locks for.
         inputs: &[ObjectRef],
         // The objects that we must create new locks for.
         outputs: &[ObjectRef],
-    ) -> SuiResult<TxSequenceNumber> {
-        let seq = self.sequence_transaction_impl(tx, seq, inputs, outputs)?;
+    ) -> SuiResult {
+        // Assert that the tx locks exist.
+        //
+        // Note that the locks may not be set to this particular tx:
+        //
+        // 1. Lock existence prevents re-execution of old certs when objects have been
+        //    upgraded
+        // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+        //    (But the lock should exist which means previous transactions finished)
+        // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX
+        //    its fine
+        //
+        // TODO: it should be impossible for this to fail unless the store has been
+        // corrupted. Remove this check when we feel confident enough.
+        if let Err(e) = self.locks_exist(inputs) {
+            // If the locks do not exist, perhaps we already created the output locks and deleted
+            // the input locks.
+            //
+            // TODO: this could actually fail if there are multiple transactions committed ahead of
+            // a partially executed tx, in which case both the inputs and outputs could both be
+            // deleted. Since we will be deleting lockservice soon and simplifying all of this,
+            // this is not worth worrying about for now.
+            if self.locks_exist(outputs).is_ok() {
+                return Ok(());
+            }
 
-        // delete_locks need not be atomic with sequence_transaction_impl
-        // - lock deletion is idempotent
-        // - this tx will not read the locks again if re-executed, as it will fail the
-        //   has-it-been-sequenced check.
-        // - no other certificate can exist that reads these locks.
-        self.delete_locks(inputs)?;
-        Ok(seq)
+            error!(tx_digest = ?tx, "Locks did not exist for partially executed transaction! \
+                                         possible data store corruption");
+            Err(e)
+        } else {
+            let write_batch = self.transaction_lock.batch();
+            let write_batch = self.initialize_locks_impl(write_batch, outputs, false)?;
+            let write_batch = self.delete_locks(write_batch, inputs)?;
+
+            write_batch.write()?;
+            Ok(())
+        }
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
@@ -466,9 +410,15 @@ impl LockServiceImpl {
     }
 
     /// Removes locks for a given list of ObjectRefs.
-    fn delete_locks(&self, objects: &[ObjectRef]) -> SuiResult {
+    fn delete_locks(&self, write_batch: DBBatch, objects: &[ObjectRef]) -> SuiResult<DBBatch> {
         debug!(?objects, "delete_locks");
-        self.transaction_lock.multi_remove(objects)?;
+        Ok(write_batch.delete_batch(&self.transaction_lock, objects.iter())?)
+    }
+
+    #[cfg(test)]
+    fn delete_locks_for_test(&self, objects: &[ObjectRef]) -> SuiResult {
+        let batch = self.delete_locks(self.transaction_lock.batch(), objects)?;
+        batch.write()?;
         Ok(())
     }
 
@@ -523,16 +473,13 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
-                LockServiceCommands::SequenceTransaction {
+                LockServiceCommands::CommitTransaction {
                     tx,
-                    seq,
                     inputs,
                     outputs,
                     resp,
                 } => {
-                    if let Err(_e) =
-                        resp.send(self.sequence_transaction(tx, seq, &inputs, &outputs))
-                    {
+                    if let Err(_e) = resp.send(self.commit_transaction(tx, &inputs, &outputs)) {
                         warn!("Could not respond to sender!");
                     }
                 }
@@ -568,11 +515,6 @@ impl LockServiceImpl {
                 }
                 LockServiceQueries::GetMissingLocks { objects, resp } => {
                     if let Err(_e) = resp.send(self.get_missing_locks(&objects)) {
-                        warn!("Could not respond to sender, sender dropped!");
-                    }
-                }
-                LockServiceQueries::GetTxSequence { tx, resp } => {
-                    if let Err(_e) = resp.send(self.get_tx_sequence(tx)) {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
@@ -742,28 +684,6 @@ impl LockService {
         .await
     }
 
-    pub async fn get_tx_sequence(
-        &self,
-        tx: TransactionDigest,
-    ) -> SuiResult<Option<TxSequenceNumber>> {
-        block_on_future_in_sim(async move {
-            let (os_sender, os_receiver) =
-                oneshot::channel::<Result<Option<TxSequenceNumber>, SuiError>>();
-            self.inner
-                .query_sender()
-                .send(LockServiceQueries::GetTxSequence {
-                    tx,
-                    resp: os_sender,
-                })
-                .await
-                .expect("Could not send message to inner LockService");
-            os_receiver
-                .await
-                .expect("Response from lockservice was cancelled, should not happen!")
-        })
-        .await
-    }
-
     pub async fn create_locks_for_genesis_objects(&self, objects: Vec<ObjectRef>) -> SuiResult {
         block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
@@ -782,31 +702,26 @@ impl LockService {
         .await
     }
 
-    /// Attempts to sequence the given tx. Sequencing consists of:
+    /// Attempts to commit lock updates for the given tx:
     ///
-    /// 1. Check if the tx has been previously sequenced under a different sequence number,
-    ///    if so, return it.
-    /// 2. If not, atomically record the tx->sequence number assignment and initialize locks for
-    ///    the output objects of this tx.
-    /// 3. Delete locks for the tx input objects (this step is not atomic).
+    /// 1. Initialize locks for the output objects of this tx.
+    /// 2. Delete locks for the tx input objects (this step is not atomic).
     ///
     /// Return value:
     /// - The sequence number that was assigned to tx - may differ from the `seq` parameter if the
     ///   tx was previously sequenced.
-    pub async fn sequence_transaction(
+    pub async fn commit_transaction(
         &self,
         tx: TransactionDigest,
-        seq: TxSequenceNumber,
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
-    ) -> SuiResult<TxSequenceNumber> {
+    ) -> SuiResult {
         block_on_future_in_sim(async move {
-            let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
             self.inner
                 .sender()
-                .send(LockServiceCommands::SequenceTransaction {
+                .send(LockServiceCommands::CommitTransaction {
                     tx,
-                    seq,
                     inputs,
                     outputs,
                     resp: os_sender,
@@ -980,7 +895,7 @@ mod tests {
         ));
 
         // Now delete lock for ref2
-        ls.delete_locks(&[ref2]).unwrap();
+        ls.delete_locks_for_test(&[ref2]).unwrap();
         // Confirm the deletion succeeded
         assert_eq!(
             ls.get_lock(ref2, 0),
@@ -1069,7 +984,7 @@ mod tests {
         ));
 
         // Now remove the locks
-        ls.delete_locks(&[ref1, ref2]).unwrap();
+        ls.delete_locks_for_test(&[ref1, ref2]).unwrap();
         assert_eq!(
             ls.get_lock(ref2, 0),
             Err(SuiError::ObjectNotFound {

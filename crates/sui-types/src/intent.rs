@@ -33,7 +33,8 @@ pub trait SecureIntent: Serialize + private::SealedIntent {}
 pub enum IntentScope {
     TransactionData = 0,
     TransactionEffects = 1,
-    AuthorityBatch = 2,
+    // deleted
+    // AuthorityBatch = 2,
     CheckpointSummary = 3,
     PersonalMessage = 4,
 }

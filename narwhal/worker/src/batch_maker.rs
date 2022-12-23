@@ -56,8 +56,8 @@ pub struct BatchMaker {
     tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
-    /// The timestamp of the first transaction received
-    /// to be included on the next batch
+    /// The timestamp of the batch creation.
+    /// Average resident time in the batch would be ~ (batch seal time - creation time) / 2
     batch_start_timestamp: Instant,
     /// The batch store to store our own batches.
     store: Store<BatchDigest, Batch>,
@@ -119,15 +119,6 @@ impl BatchMaker {
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
                 Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
-
-                    if current_batch.transactions.is_empty() {
-                        // We are interested to measure the time to seal a batch
-                        // only when we do have transactions to include. Thus we reset
-                        // the timer on the first transaction we receive to include on
-                        // an empty batch.
-                        self.batch_start_timestamp = Instant::now();
-                    }
-
                     current_batch_size += transaction.len();
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
@@ -137,10 +128,12 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                         current_batch = Batch::default();
                         current_responses = Vec::new();
                         current_batch_size = 0;
+
+                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                        self.batch_start_timestamp = Instant::now();
                     }
                 },
 
@@ -157,6 +150,7 @@ impl BatchMaker {
                         current_batch_size = 0;
                     }
                     timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                    self.batch_start_timestamp = Instant::now();
                 }
 
                 // TODO: duplicated code in quorum_waiter.rs

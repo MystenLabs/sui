@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -94,6 +95,29 @@ async fn advance_epoch_tx_test_impl(
     }
 }
 
+#[tokio::test]
+async fn basic_reconfig_end_to_end_test() {
+    let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
+    // Close epoch on 3 (2f+1) validators.
+    for handle in authorities.iter().skip(1) {
+        handle.with(|node| node.close_epoch().unwrap());
+    }
+    // Wait for all nodes to reach the next epoch.
+    let handles: Vec<_> = authorities
+        .iter()
+        .map(|handle| {
+            handle.with_async(|node| async {
+                loop {
+                    if node.state().epoch() == 1 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            })
+        })
+        .collect();
+    join_all(handles).await;
+}
 /*
 
 use futures::future::join_all;

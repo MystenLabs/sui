@@ -23,8 +23,7 @@ use test_utils::messages::make_random_certified_transaction;
 
 use super::*;
 use crate::authority_client::{
-    AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
-    LocalAuthorityClientFaultConfig,
+    AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig,
 };
 use crate::test_utils::init_local_authorities;
 use sui_types::utils::to_sender_signed_transaction;
@@ -667,13 +666,6 @@ impl AuthorityAPI for MockAuthorityApi {
             signed_effects: None,
         };
         Ok(res)
-    }
-
-    async fn handle_batch_stream(
-        &self,
-        _request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        unreachable!();
     }
 
     async fn handle_checkpoint(

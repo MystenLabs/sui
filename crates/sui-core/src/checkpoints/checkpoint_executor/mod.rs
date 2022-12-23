@@ -235,7 +235,7 @@ impl CheckpointExecutorEventLoop {
     }
 
     /// Executes all checkpoints for the current epoch. At epoch boundary,
-    /// awaits the queue of scheduled checkpoints and returns the committe
+    /// awaits the queue of scheduled checkpoints and returns the committee
     /// of the next epoch.
     pub async fn execute_checkpoints_for_epoch(
         &mut self,
@@ -362,7 +362,7 @@ impl CheckpointExecutorEventLoop {
         // Note that either of these can be higher. If the node crashes with many
         // scheduled tasks, then the in-memory watermark starts as None, but the
         // persistent watermark is set, hence we start there. If we get a new
-        // messsage with checkpoints tasks scheduled, then the in-memory watermark
+        // message with checkpoints tasks scheduled, then the in-memory watermark
         // will be greater, and hence we start from there.
         let next_to_exec = std::cmp::max(
             highest_executed_seq_num
@@ -548,20 +548,27 @@ async fn execute_transactions(
         .insert_pending_certificates(&synced_txns)?;
 
     authority_state
-        .transaction_manager
+        .transaction_manager()
         .enqueue(synced_txns)
         .await?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
-    let effects_future = authority_state.database.notify_read_effects(all_tx_digests);
-    match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
-        Err(_elapsed) => {
-            panic!(
-                "Transaction effects for checkpoint not present within {:?}",
-                LOCAL_EXECUTION_TIMEOUT
-            )
+    let mut periods = 1;
+    loop {
+        let effects_future = authority_state
+            .database
+            .notify_read_effects(all_tx_digests.clone());
+
+        match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
+            Err(_elapsed) => {
+                warn!(
+                    "Transaction effects for checkpoint not present within {:?}. ",
+                    LOCAL_EXECUTION_TIMEOUT * periods
+                );
+                periods += 1;
+            }
+            Ok(Err(err)) => return Err(err),
+            Ok(Ok(_)) => return Ok(()),
         }
-        Ok(Err(err)) => Err(err),
-        Ok(Ok(_)) => Ok(()),
     }
 }

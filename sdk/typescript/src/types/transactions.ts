@@ -40,8 +40,6 @@ export type PayAllSui = {
 };
 
 export type ExecuteTransactionRequestType =
-  | 'ImmediateReturn'
-  | 'WaitForTxCert'
   | 'WaitForEffectsCert'
   | 'WaitForLocalExecution';
 
@@ -148,7 +146,7 @@ export type SuiTransactionResponse = {
 };
 
 export type SuiTransactionAuthSignersResponse = {
-  signers: AuthorityName[]
+  signers: AuthorityName[];
 };
 
 // TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207
@@ -157,11 +155,6 @@ export type SuiCertifiedTransactionEffects = {
 };
 
 export type SuiExecuteTransactionResponse =
-  | {
-      ImmediateReturn: {
-        tx_digest: string;
-      };
-    }
   | { TxCert: { certificate: CertifiedTransaction } }
   | {
       EffectsCert: {
@@ -272,9 +265,6 @@ export function getTransactionDigest(
     | SuiTransactionResponse
     | SuiExecuteTransactionResponse
 ): TransactionDigest {
-  if ('ImmediateReturn' in tx) {
-    return tx.ImmediateReturn.tx_digest;
-  }
   if ('transactionDigest' in tx) {
     return tx.transactionDigest;
   }

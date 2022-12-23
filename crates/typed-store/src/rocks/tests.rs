@@ -592,6 +592,51 @@ async fn test_transactional() {
 }
 
 #[tokio::test]
+async fn test_transaction_read_your_write() {
+    let key1 = "key1";
+    let key2 = "key2";
+    let path = temp_dir();
+    let opt = rocksdb::Options::default();
+    let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
+    let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
+    db.insert(&key1.to_string(), &"1".to_string()).unwrap();
+    let mut tx = db.transaction().expect("failed to initiate transaction");
+    tx = tx
+        .insert_batch(
+            &db,
+            vec![
+                (key1.to_string(), "11".to_string()),
+                (key2.to_string(), "2".to_string()),
+            ],
+        )
+        .unwrap();
+    assert_eq!(db.get(&key1.to_string()).unwrap(), Some("1".to_string()));
+    assert_eq!(db.get(&key2.to_string()).unwrap(), None);
+
+    assert_eq!(
+        tx.get(&db, &key1.to_string()).unwrap(),
+        Some("11".to_string())
+    );
+    assert_eq!(
+        tx.get(&db, &key2.to_string()).unwrap(),
+        Some("2".to_string())
+    );
+
+    tx = tx.delete_batch(&db, vec![(key2.to_string())]).unwrap();
+
+    assert_eq!(
+        tx.multi_get(&db, vec![key1.to_string(), key2.to_string()])
+            .unwrap(),
+        vec![Some("11".to_string()), None]
+    );
+    let keys: Vec<String> = tx.keys(&db).into_iter().collect();
+    assert_eq!(keys, vec![key1.to_string()]);
+    let values: Vec<_> = tx.values(&db).into_iter().collect();
+    assert_eq!(values, vec!["11".to_string()]);
+    assert!(tx.commit().is_ok());
+}
+
+#[tokio::test]
 async fn open_as_secondary_test() {
     let primary_path = temp_dir();
 
