@@ -27,6 +27,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     const [loading, setLoading] = useState(true);
     const [mnemonic, setLocalMnemonic] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [passwordCopied, setPasswordCopied] = useState(false);
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
     useEffect(() => {
@@ -117,14 +118,39 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                 account forever.
                             </Text>
                         </div>
+                        <div className="w-full text-left flex">
+                            <label
+                                className={cl(
+                                    st.passwordCopied,
+                                    'flex items-center justify-center h-5 mb-0'
+                                )}
+                            >
+                                <input
+                                    type="checkbox"
+                                    name="agree"
+                                    onChange={() =>
+                                        setPasswordCopied(!passwordCopied)
+                                    }
+                                />
+                                <span className={st.checkBox}></span>
+                                <Text
+                                    variant="bodySmall"
+                                    color="steel-dark"
+                                    weight="normal"
+                                >
+                                    I saved my recovery passphrase
+                                </Text>
+                            </label>
+                        </div>
                     </>
                 ) : null}
                 <div className={st.fill} />
                 <Button
                     type="button"
-                    className={st.btn}
+                    className="flex flex-nowrap self-stretch px-3.5 py-5"
                     size="large"
                     mode="primary"
+                    disabled={!passwordCopied}
                     onClick={() => navigate('/')}
                 >
                     Open Sui Wallet
