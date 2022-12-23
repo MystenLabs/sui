@@ -240,7 +240,7 @@ impl DiscoveryEventLoop {
             .collect::<Vec<_>>();
 
         // No need to connect to any more peers if we're already connected to a bunch
-        let number_of_connections = self.state.read().unwrap().connected_peers.len();
+        let number_of_connections = state.connected_peers.len();
         let number_to_dial = std::cmp::min(
             eligible.len(),
             MAX_NUMBER_OF_CONNECTIONS.saturating_sub(number_of_connections),
