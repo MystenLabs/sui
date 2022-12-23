@@ -161,7 +161,7 @@ This will tell you the current client address.
 
 First, we need to publish the code on-chain. Assuming the path to the root of the repository containing Sui source code is $ROOT:
 ```
-$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
 You can find the published package object ID in the **Transaction Effects** output:
 ```
