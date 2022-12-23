@@ -580,7 +580,7 @@ impl AuthorityState {
     pub(crate) async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate");
@@ -614,7 +614,7 @@ impl AuthorityState {
     pub(crate) async fn try_execute_immediately(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate_internal");
@@ -650,26 +650,21 @@ impl AuthorityState {
     pub async fn try_execute_for_test(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         self.try_execute_immediately(certificate).await
     }
 
     pub async fn notify_read_transaction_info(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let tx_digest = *certificate.digest();
-        let effects = self
+        Ok(self
             .database
             .notify_read_effects(vec![tx_digest])
             .await?
             .pop()
-            .expect("notify_read_effects should return exactly 1 element");
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.database.get_transaction(&tx_digest)?,
-            certified_transaction: Some(certificate.clone()),
-            signed_effects: Some(effects),
-        })
+            .expect("notify_read_effects should return exactly 1 element"))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -739,15 +734,15 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         // If the cert is finalized in a previous epoch, it will be re-signed
         // with current epoch info and returned.
-        if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
+        if let Some(signed_effects) = self.database.get_signed_effects(&digest)? {
             tx_guard.release();
-            return Ok(info);
+            return Ok(signed_effects);
         }
         let execution_guard = self
             .database
@@ -832,7 +827,7 @@ impl AuthorityState {
         signed_effects: SignedTransactionEffects,
         tx_guard: CertTxGuard<'_>,
         _execution_guard: ExecutionLockReadGuard<'_>,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.data().shared_objects.len();
@@ -888,11 +883,7 @@ impl AuthorityState {
             .batch_size
             .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
 
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.database.get_transaction(&digest)?,
-            certified_transaction: Some(certificate.clone()),
-            signed_effects: Some(signed_effects),
-        })
+        Ok(signed_effects)
     }
 
     /// prepare_certificate validates the transaction input, and executes the certificate,

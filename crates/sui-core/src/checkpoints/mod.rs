@@ -495,12 +495,7 @@ impl CheckpointBuilder {
                 self.transaction_certifier.deref(),
             )
             .await?;
-        let signed_effect = self
-            .state
-            .try_execute_immediately(&cert)
-            .await?
-            .signed_effects
-            .unwrap();
+        let signed_effect = self.state.try_execute_immediately(&cert).await?;
         effects.push(signed_effect.into_data());
         Ok(())
     }

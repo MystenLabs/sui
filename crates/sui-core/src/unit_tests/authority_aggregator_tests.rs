@@ -225,7 +225,6 @@ where
         .await
         .unwrap()
         .signed_effects
-        .unwrap()
         .into_data()
 }
 
@@ -624,7 +623,7 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_certificate(
         &self,
         _certificate: CertifiedTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<HandleCertificateResponse, SuiError> {
         unreachable!()
     }
 

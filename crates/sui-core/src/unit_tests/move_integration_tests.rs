@@ -1822,7 +1822,7 @@ pub async fn build_and_try_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
-) -> VerifiedTransactionInfoResponse {
+) -> (Transaction, SignedTransactionEffects) {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
@@ -1837,9 +1837,12 @@ pub async fn build_and_try_publish_test_package(
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
     let transaction = to_sender_signed_transaction(data, sender_key);
 
-    send_and_confirm_transaction(authority, transaction)
-        .await
-        .unwrap()
+    (
+        transaction.clone().into_inner(),
+        send_and_confirm_transaction(authority, transaction)
+            .await
+            .unwrap(),
+    )
 }
 
 async fn build_and_publish_test_package(
@@ -1858,8 +1861,7 @@ async fn build_and_publish_test_package(
         MAX_GAS,
     )
     .await
-    .signed_effects
-    .unwrap()
+    .1
     .into_data();
     assert!(
         matches!(effects.status, ExecutionStatus::Success { .. }),

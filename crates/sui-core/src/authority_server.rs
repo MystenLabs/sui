@@ -291,7 +291,7 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
         let certificate = request.into_inner();
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -305,8 +305,10 @@ impl ValidatorService {
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
-        if let Some(response) = state.get_tx_info_already_executed(&tx_digest).await? {
-            return Ok(tonic::Response::new(response.into()));
+        if let Some(signed_effects) = state.database.get_signed_effects(&tx_digest)? {
+            return Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects,
+            }));
         }
 
         // 2) Validate if cert can be executed, and verify the cert.
@@ -367,7 +369,9 @@ impl ValidatorService {
             state.execute_certificate(&certificate).await
         };
         match res {
-            Ok(response) => Ok(tonic::Response::new(response.into())),
+            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects,
+            })),
             Err(e) => Err(tonic::Status::from(e)),
         }
     }
@@ -392,7 +396,7 @@ impl Validator for ValidatorService {
     async fn handle_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
         let state = self.state.clone();
         let consensus_adapter = self.consensus_adapter.clone();
 

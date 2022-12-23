@@ -218,6 +218,16 @@ impl AuthorityStore {
         Ok(store)
     }
 
+    pub fn get_signed_effects(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<SignedTransactionEffects>> {
+        Ok(self
+            .perpetual_tables
+            .executed_effects
+            .get(transaction_digest)?)
+    }
+
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
     pub fn get_effects(
         &self,

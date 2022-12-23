@@ -1439,12 +1439,11 @@ where
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
-                            Ok(VerifiedTransactionInfoResponse {
-                                signed_effects: Some(inner_effects),
-                                ..
+                            Ok(VerifiedHandleCertificateResponse {
+                                signed_effects,
                             }) => {
                                 // Note: here we aggregate votes by the hash of the effects structure
-                                if state.effects_map.add(inner_effects, weight, &self.committee) {
+                                if state.effects_map.add(signed_effects, weight, &self.committee) {
                                     debug!(
                                         tx_digest = ?tx_digest,
                                         "Got quorum for validators handle_certificate."
@@ -1462,7 +1461,6 @@ where
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
-                            _ => { unreachable!("SafeClient should have ruled out this case") }
                         }
                         Ok(ReduceOutput::Continue(state))
                     })
@@ -1786,25 +1784,21 @@ where
                     Box::pin(async move {
                         state.cumulative_weight += weight;
                         match result {
-                            Ok(TransactionInfoResponse {
-                                signed_effects: Some(effects),
-                                ..
+                            Ok(VerifiedHandleCertificateResponse {
+                                signed_effects,
                             }) => {
                                 state.good_weight += weight;
                                 trace!(name=?name.concise(), ?weight, "successfully executed cert on peer");
-                                let entry = state.digests.entry(*effects.digest()).or_insert(0);
+                                let entry = state.digests.entry(*signed_effects.digest()).or_insert(0);
                                 *entry += weight;
 
                                 if *entry >= validity {
-                                    state.true_effects = Some(effects);
+                                    state.true_effects = Some(signed_effects);
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
                             Err(e) => {
                                 state.errors.push((name, e));
-                            }
-                            _ => {
-                                unreachable!("SafeClient should have ruled out this case")
                             }
                         }
 

@@ -187,6 +187,42 @@ impl<C> SafeClient<C> {
             .ok_or(SuiError::MissingCommitteeAtEpoch(*epoch_id))
     }
 
+    fn check_signed_effects(
+        &self,
+        digest: &TransactionDigest,
+        signed_effects: &SignedTransactionEffects,
+        expected_effects_digest: Option<&TransactionEffectsDigest>,
+    ) -> SuiResult {
+        // Check it has the right signer
+        fp_ensure!(
+            signed_effects.auth_sig().authority == self.address,
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "Unexpected validator address in the signed effects signature".to_string()
+            }
+        );
+        // Checks it concerns the right tx
+        fp_ensure!(
+            signed_effects.data().transaction_digest == *digest,
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "Unexpected tx digest in the signed effects".to_string()
+            }
+        );
+        // check that the effects digest is correct.
+        if let Some(effects_digest) = expected_effects_digest {
+            fp_ensure!(
+                signed_effects.digest() == effects_digest,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                    reason: "Effects digest does not match with expected digest".to_string()
+                }
+            );
+        }
+        let committee = self.get_committee(&signed_effects.epoch())?;
+        signed_effects.verify_signature(&committee)
+    }
+
     // Here we centralize all checks for transaction info responses
     fn check_transaction_response(
         &self,
@@ -248,38 +284,7 @@ impl<C> SafeClient<C> {
         };
 
         if let Some(signed_effects) = &signed_effects {
-            if committee.is_none() {
-                committee = Some(self.get_committee(&signed_effects.epoch())?);
-            }
-            // Check signature
-            signed_effects.verify_signature(committee.as_ref().unwrap())?;
-            // Check it has the right signer
-            fp_ensure!(
-                signed_effects.auth_sig().authority == self.address,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: "Unexpected validator address in the signed effects signature"
-                        .to_string()
-                }
-            );
-            // Checks it concerns the right tx
-            fp_ensure!(
-                signed_effects.data().transaction_digest == *digest,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: "Unexpected tx digest in the signed effects".to_string()
-                }
-            );
-            // check that the effects digest is correct.
-            if let Some(effects_digest) = effects_digest {
-                fp_ensure!(
-                    signed_effects.digest() == effects_digest,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Effects digest does not match with expected digest".to_string()
-                    }
-                );
-            }
+            self.check_signed_effects(digest, signed_effects, effects_digest)?;
         }
 
         Ok(VerifiedTransactionInfoResponse {
@@ -445,37 +450,32 @@ where
     fn verify_certificate_response(
         &self,
         digest: &TransactionDigest,
-        response: TransactionInfoResponse,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        fp_ensure!(
-            response.signed_effects.is_some(),
-            SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address,
-                reason: "An Ok response from handle_certificate must contain signed effects"
-                    .to_string()
-            }
-        );
-        self.check_transaction_response(digest, None, response)
+        response: HandleCertificateResponse,
+    ) -> SuiResult<VerifiedHandleCertificateResponse> {
+        self.check_signed_effects(digest, &response.signed_effects, None)?;
+        Ok(VerifiedHandleCertificateResponse {
+            signed_effects: response.signed_effects,
+        })
     }
 
     /// Execute a certificate.
     pub async fn handle_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+    ) -> Result<VerifiedHandleCertificateResponse, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let transaction_info = self
+        let response = self
             .authority_client
             .handle_certificate(certificate)
             .await?;
 
-        let transaction_info = check_error!(
+        let verified = check_error!(
             self.address,
-            self.verify_certificate_response(&digest, transaction_info),
+            self.verify_certificate_response(&digest, response),
             "Client error in handle_certificate"
         )?;
-        Ok(transaction_info)
+        Ok(verified)
     }
 
     pub async fn handle_account_info_request(
