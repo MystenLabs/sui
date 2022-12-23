@@ -23,7 +23,6 @@ import {
 import {
   Coin,
   ExecuteTransactionRequestType,
-  GatewayTxSeqNumber,
   GetObjectDataResponse,
   getObjectReference,
   GetTxnDigestsResponse,
@@ -628,8 +627,8 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getTransactionDigestsInRange(
-    start: GatewayTxSeqNumber,
-    end: GatewayTxSeqNumber
+    start: TransactionDigest,
+    end: TransactionDigest
   ): Promise<GetTxnDigestsResponse> {
     try {
       return await this.client.requestWithType(

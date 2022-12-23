@@ -7,7 +7,6 @@ import { Base64DataBuffer } from '../serialization/base64';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
-  GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
@@ -141,8 +140,8 @@ export abstract class Provider {
    * NOTE: this method may get deprecated after DevNet
    */
   abstract getTransactionDigestsInRange(
-    start: GatewayTxSeqNumber,
-    end: GatewayTxSeqNumber
+    start: TransactionDigest,
+    end: TransactionDigest
   ): Promise<GetTxnDigestsResponse>;
 
   /**

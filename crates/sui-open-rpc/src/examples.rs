@@ -536,7 +536,8 @@ impl RpcExampleProvider {
 
     fn get_events(&mut self) -> Examples {
         let (_, _, _, _, result, events) = self.get_transfer_data_response();
-        let tx_dig = TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
+        let tx_dig =
+            TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
         let page = EventPage {
             data: events.clone(),
             next_cursor: Some((tx_dig, 5).into()),

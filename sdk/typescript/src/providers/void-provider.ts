@@ -8,7 +8,6 @@ import {
   CertifiedTransaction,
   TransactionDigest,
   GetTxnDigestsResponse,
-  GatewayTxSeqNumber,
   SuiObjectInfo,
   GetObjectDataResponse,
   SuiObjectRef,
@@ -125,8 +124,8 @@ export class VoidProvider extends Provider {
   }
 
   async getTransactionDigestsInRange(
-    _start: GatewayTxSeqNumber,
-    _end: GatewayTxSeqNumber
+    _start: TransactionDigest,
+    _end: TransactionDigest
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
   }
