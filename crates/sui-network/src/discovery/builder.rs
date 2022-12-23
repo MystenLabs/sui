@@ -81,9 +81,12 @@ impl UnstartedDiscovery {
             state,
         } = self;
 
+        let discovery_config = config.discovery.clone().unwrap_or_default();
+
         (
             DiscoveryEventLoop {
                 config,
+                discovery_config,
                 network,
                 tasks: JoinSet::new(),
                 pending_dials: Default::default(),
