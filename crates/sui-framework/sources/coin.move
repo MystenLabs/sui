@@ -270,6 +270,13 @@ module sui::coin {
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
         burn(c, coin);
     }
+    
+    // === Read coin metadata ===
+    public fun decimals<T>(
+        metadata: &CoinMetadata<T>
+    ): u8 {
+        metadata.decimals
+    }
 
     // === Update coin metadata ===
 
