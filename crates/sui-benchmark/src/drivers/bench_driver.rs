@@ -66,7 +66,7 @@ impl BenchMetrics {
             num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
-                &["workload", "error_type"],
+                &["workload"],
                 registry,
             )
             .unwrap(),
