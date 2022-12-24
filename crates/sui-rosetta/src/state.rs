@@ -29,6 +29,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::query::TransactionQuery;
 use tracing::{debug, error, info};
 use typed_store::rocks::{DBMap, DBOptions};
+use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
