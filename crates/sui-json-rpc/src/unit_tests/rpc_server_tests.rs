@@ -774,6 +774,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
             ],
             None,
             1000,
+            None,
         )
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -857,6 +858,78 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(5, coins.data.len());
+
+    let genesis_coin_amount = coins.data[0].balance;
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![
+                coins.data[0].coin_object_id,
+                coins.data[1].coin_object_id,
+                coins.data[2].coin_object_id,
+            ],
+            Some(1000000),
+            validators[0].sui_address,
+            None,
+            10000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction_serialized_sig(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
+
+    // Coins should be merged into one and returned to the sender.
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(3, coins.data.len());
+
+    // Find the new coin
+    let new_coin = coins
+        .data
+        .iter()
+        .find(|coin| coin.balance > genesis_coin_amount)
+        .unwrap();
+    assert_eq!((genesis_coin_amount * 3) - 1000000, new_coin.balance);
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
@@ -881,6 +954,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
             ],
             None,
             1000,
+            None,
         )
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);

@@ -27,7 +27,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
+use sui_types::messages::TransactionData;
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;

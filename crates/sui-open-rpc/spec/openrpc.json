@@ -813,10 +813,10 @@
       "name": "sui_getCommitteeInfo",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Governance Read API"
         }
       ],
-      "description": "Return the committee information for the asked epoch",
+      "description": "Return the committee information for the asked `epoch`.",
       "params": [
         {
           "name": "epoch",
@@ -833,6 +833,34 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/CommitteeInfoResponse"
+        }
+      }
+    },
+    {
+      "name": "sui_getDelegatedStakes",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return all [DelegatedStake].",
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
         }
       }
     },
@@ -1503,10 +1531,10 @@
       "name": "sui_getSuiSystemState",
       "tags": [
         {
-          "name": "Full Node API"
+          "name": "Governance Read API"
         }
       ],
-      "description": "Return SuiSystemState",
+      "description": "Return [SuiSystemState]",
       "params": [],
       "result": {
         "name": "SuiSystemState",
@@ -1882,6 +1910,26 @@
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getValidators",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return all validators available for stake delegation.",
+      "params": [],
+      "result": {
+        "name": "Vec<ValidatorMetadata>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ValidatorMetadata"
           }
         }
       }
@@ -2271,6 +2319,223 @@
             "items": {
               "$ref": "#/components/schemas/Base64"
             }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_requestAddDelegation",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Add delegated stake to a validator's staking pool using multiple coins and amount.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coins",
+          "description": "Coin<SUI> or LockedCoin<SUI> object to delegate",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "description": "delegation amount",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "validator",
+          "description": "the validator's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_requestSwitchDelegation",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Switch delegation from the current validator to a new one.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "delegation",
+          "description": "Delegation object ID",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "staked_sui",
+          "description": "StakedSui object ID",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "new_validator_address",
+          "description": "Validator to switch to",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "switch_pool_token_amount",
+          "description": "Switching stake amount",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_requestWithdrawDelegation",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Withdraw some portion of a delegation from a validator's staking pool.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "delegation",
+          "description": "Delegation object ID",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "staked_sui",
+          "description": "StakedSui object ID",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "principal_withdraw_amount",
+          "description": "Principal amount to withdraw",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         },
         {
@@ -2803,6 +3068,14 @@
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
           },
+          "lockedUntilEpoch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "version": {
             "$ref": "#/components/schemas/SequenceNumber"
           }
@@ -2898,6 +3171,68 @@
                 }
               }
             }
+          }
+        ]
+      },
+      "DelegatedStake": {
+        "type": "object",
+        "required": [
+          "delegation_status",
+          "staked_sui"
+        ],
+        "properties": {
+          "delegation_status": {
+            "$ref": "#/components/schemas/DelegationStatus"
+          },
+          "staked_sui": {
+            "$ref": "#/components/schemas/StakedSui"
+          }
+        }
+      },
+      "Delegation": {
+        "type": "object",
+        "required": [
+          "id",
+          "pool_tokens",
+          "principal_sui_amount",
+          "staked_sui_id"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UID"
+          },
+          "pool_tokens": {
+            "$ref": "#/components/schemas/Balance"
+          },
+          "principal_sui_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "staked_sui_id": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      },
+      "DelegationStatus": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Pending"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "Active"
+            ],
+            "properties": {
+              "Active": {
+                "$ref": "#/components/schemas/Delegation"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -4674,6 +5009,45 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          }
+        }
+      },
+      "StakedSui": {
+        "type": "object",
+        "required": [
+          "delegation_request_epoch",
+          "id",
+          "pool_starting_epoch",
+          "principal",
+          "validator_address"
+        ],
+        "properties": {
+          "delegation_request_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "id": {
+            "$ref": "#/components/schemas/UID"
+          },
+          "pool_starting_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "principal": {
+            "$ref": "#/components/schemas/Balance"
+          },
+          "sui_token_lock": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validator_address": {
+            "$ref": "#/components/schemas/SuiAddress"
           }
         }
       },
