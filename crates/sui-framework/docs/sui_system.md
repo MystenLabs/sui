@@ -39,6 +39,7 @@
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="pay.md#0x2_pay">0x2::pay</a>;
 <b>use</b> <a href="stake.md#0x2_stake">0x2::stake</a>;
 <b>use</b> <a href="stake_subsidy.md#0x2_stake_subsidy">0x2::stake_subsidy</a>;
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
@@ -1094,15 +1095,10 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
 
 
 <pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_extract_coin_balance">extract_coin_balance</a>(coins: <a href="">vector</a>&lt;Coin&lt;SUI&gt;&gt;, amount: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext): Balance&lt;SUI&gt; {
-    <b>let</b> total_balance = <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins));
-    <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&coins));
-    <b>while</b> (i &lt; len) {
-        <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
-        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> total_balance, <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="coin.md#0x2_coin">coin</a>));
-        i = i + 1
-    };
-    <a href="_destroy_empty">vector::destroy_empty</a>(coins);
+    <b>let</b> merged_coin = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
+    <a href="pay.md#0x2_pay_join_vec">pay::join_vec</a>(&<b>mut</b> merged_coin, coins);
 
+    <b>let</b> total_balance = <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(merged_coin);
     // <b>return</b> the full amount <b>if</b> amount is not specified
     <b>if</b> (<a href="_is_some">option::is_some</a>(&amount)) {
         <b>let</b> amount = <a href="_destroy_some">option::destroy_some</a>(amount);

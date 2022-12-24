@@ -20,6 +20,7 @@ module sui::sui_system {
     use std::vector;
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::epoch_time_lock;
+    use sui::pay;
 
     friend sui::genesis;
 
@@ -496,15 +497,10 @@ module sui::sui_system {
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
     fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
-        let total_balance = coin::into_balance(vector::pop_back(&mut coins));
-        let (i, len) = (0, vector::length(&coins));
-        while (i < len) {
-            let coin = vector::pop_back(&mut coins);
-            balance::join(&mut total_balance, coin::into_balance(coin));
-            i = i + 1
-        };
-        vector::destroy_empty(coins);
+        let merged_coin = vector::pop_back(&mut coins);
+        pay::join_vec(&mut merged_coin, coins);
 
+        let total_balance = coin::into_balance(merged_coin);
         // return the full amount if amount is not specified
         if (option::is_some(&amount)) {
             let amount = option::destroy_some(amount);
